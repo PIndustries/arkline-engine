@@ -1,8 +1,12 @@
 #!/bin/bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-OUTPUT="${1:?Usage: tools/package-macos.sh OUTPUT_DIRECTORY [debug|release]}"
+OUTPUT="${1:?Usage: tools/package-macos.sh OUTPUT_DIRECTORY [debug|release] [build-number]}"
 PROFILE="${2:-release}"
+BUILD_NUMBER="${3:-1}"
+case "$BUILD_NUMBER" in
+  ''|*[!0-9]*) echo "Build number must be numeric" >&2; exit 2 ;;
+esac
 case "$PROFILE" in
   release|debug) ;;
   *) echo "Profile must be debug or release" >&2; exit 2 ;;
@@ -20,7 +24,7 @@ cp -f "target/$PROFILE/arkline-server" "$APP/Contents/MacOS/arkline-server"
 cp -f "target/$PROFILE/arkline" "$OUTPUT/command-tools/arkline"
 cp -f "target/$PROFILE/arkline-verifier" "$OUTPUT/command-tools/arkline-verifier"
 cp -f README.md LICENSE "$OUTPUT/"
-cat > "$APP/Contents/Info.plist" <<'PLIST'
+cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
@@ -30,7 +34,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <key>CFBundleExecutable</key><string>Arkline</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleShortVersionString</key><string>0.1.0</string>
-<key>CFBundleVersion</key><string>1</string>
+<key>CFBundleVersion</key><string>$BUILD_NUMBER</string>
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 PLIST

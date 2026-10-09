@@ -7,7 +7,8 @@ This document records evidence for the initial Rust model, not approval to publi
 On the development Apple Silicon Mac with Rust 1.89.0:
 
 - Workspace compilation, formatting and Clippy with warnings denied.
-- 17 tests: private client credential persistence/resume; server authorization,
+- 20 tests: private client credential persistence/resume, shared trajectory math,
+  stable pilot placement and geometry normals; server authorization,
   failed-operation rollback, concurrent fill, lifetime DB ownership, in-memory
   isolation, persisted travel/cooldown; TCP two-pilot journey; nine verifier rule
   and tamper checks; checkpoint CLI persistence on failure.
@@ -17,6 +18,13 @@ On the development Apple Silicon Mac with Rust 1.89.0:
 
 This is not a stress test, distributed failure test, or simulated interruption
 during an active SQLite commit. CI logs supply separate hosted-run evidence.
+
+The first preview passed hosted macOS and Linux CI. Native macOS inspection of the
+3D update confirmed GPU-rendered hulls, station, asteroids and the detailed planet;
+the 2D toggle preserved pilot location, balance, cargo and ledger head. Restart
+resumed the test pilot at the saved belt. Cmd+Q was checked to terminate both the
+hosting cockpit and its child server. Runtime inspection caught and resolved a
+GLSL built-in name collision that Rust compilation alone could not detect.
 
 ## Owner validation journey
 

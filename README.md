@@ -57,6 +57,22 @@ Warp takes three seconds. Mining is limited to 100 units per command and a
 one-second cooldown. Cargo holds 1,000 units; escrow is separate. Cancelling an
 order requires room to return its ore. The initial belt holds 100,000 ore.
 
+## Tactical and flight views
+
+Use **2D Tactical / 3D Flight** at the top of the cockpit. Both display the same
+live ships and authoritative warp timeline; switching views changes no game state.
+The 3D mode uses native GPU geometry and perspective lighting with procedural ship,
+station, asteroid and planet assets.
+
+- Drag inside the 3D viewport to orbit the camera.
+- Scroll inside it to zoom.
+- **Focus my ship** tracks your pilot; **Sector overview** frames the region.
+- **Reset camera** restores the default viewpoint.
+
+Flight buttons still control travel. The camera does not move your ship or affect
+the economy. This is an early 3D rendering foundation with procedural assets, not
+the final art direction or a full free-flight/combat simulation.
+
 ## Independently audit the economy
 
 ```sh

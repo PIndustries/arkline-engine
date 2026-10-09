@@ -1,4 +1,5 @@
 //! Native Arkline cockpit. All displayed world data originates from the server.
+mod flight3d;
 use arkline_protocol::*;
 use eframe::egui::{self, Color32, Pos2, Stroke, Vec2};
 use sha2::{Digest, Sha256};
@@ -160,6 +161,11 @@ struct Cockpit {
     price: u64,
     buy_amount: u64,
     notice: String,
+    three_dimensional: bool,
+    flight_view: flight3d::FlightView,
+    frozen_time: Option<u64>,
+    focus_on_first_frame: bool,
+    local_server: Option<LocalServer>,
 }
 impl Cockpit {
     fn new(
@@ -193,13 +199,27 @@ impl Cockpit {
             price: 10,
             buy_amount: 1,
             notice: String::new(),
+            three_dimensional: true,
+            flight_view: flight3d::FlightView::new(cc.gl.as_ref()),
+            frozen_time: None,
+            focus_on_first_frame: true,
+            local_server: None,
         }
     }
     fn log(&mut self, text: String, error: bool) {
         self.feed.push_front((text, error));
         self.feed.truncate(60);
     }
+    fn presentation_time(&self) -> u64 {
+        self.frozen_time.unwrap_or_else(|| {
+            self.snapshot.as_ref().map_or(0, |s| {
+                s.server_time_ms
+                    .saturating_add(self.observed.elapsed().as_millis() as u64)
+            })
+        })
+    }
     fn connect(&mut self) {
+        self.frozen_time = None;
         self.pilot = self.pilot.trim().to_string();
         self.snapshot = None;
         let (tx, rx) = mpsc::channel();
@@ -256,6 +276,7 @@ impl Cockpit {
                     self.notice.clear();
                 }
                 Update::Failure(error) => {
+                    self.frozen_time = Some(self.presentation_time());
                     self.connected = false;
                     self.connecting = false;
                     self.commands = None;
@@ -531,48 +552,19 @@ impl Cockpit {
             AMBER,
         );
         if let Some(snapshot) = &self.snapshot {
-            let server_now = snapshot
-                .server_time_ms
-                .saturating_add(self.observed.elapsed().as_millis() as u64);
-            for (i, pilot) in snapshot.pilots.iter().enumerate() {
-                let t = match pilot.location {
-                    Location::Docked | Location::Station => 0.0,
-                    Location::Belt => 1.0,
-                    Location::InTransit {
-                        destination,
-                        arrives_at_ms,
-                    } => {
-                        let progress = 1.0
-                            - arrives_at_ms
-                                .saturating_sub(server_now)
-                                .min(WARP_DURATION_MS) as f32
-                                / WARP_DURATION_MS as f32;
-                        if destination == Destination::Belt {
-                            progress
-                        } else {
-                            1.0 - progress
-                        }
-                    }
-                };
+            let server_now = self.presentation_time();
+            for pilot in &snapshot.pilots {
+                let t = flight3d::route_progress(&pilot.location, server_now);
                 let position = station.lerp(belt, t)
-                    + Vec2::new((i % 3) as f32 * 18.0 - 18.0, -56.0 - (i / 3) as f32 * 29.0);
+                    + Vec2::new(0.0, -56.0 - flight3d::lane(&pilot.name) * 14.0);
+                let heading = flight3d::heading(&pilot.location);
                 let color = if pilot.name == self.pilot {
                     TEAL
                 } else {
                     AMBER
                 };
                 if matches!(pilot.location, Location::InTransit { .. }) {
-                    let dir = if matches!(
-                        pilot.location,
-                        Location::InTransit {
-                            destination: Destination::Belt,
-                            ..
-                        }
-                    ) {
-                        -1.0
-                    } else {
-                        1.0
-                    };
+                    let dir = -heading;
                     paint.line_segment(
                         [position, position + Vec2::new(dir * 28.0, 0.0)],
                         Stroke::new(2.0, color.gamma_multiply(0.4)),
@@ -580,9 +572,9 @@ impl Cockpit {
                 }
                 paint.add(egui::Shape::convex_polygon(
                     vec![
-                        position + Vec2::new(0.0, -8.0),
-                        position + Vec2::new(-5.0, 6.0),
-                        position + Vec2::new(5.0, 6.0),
+                        position + Vec2::new(heading * 8.0, 0.0),
+                        position + Vec2::new(-heading * 6.0, -5.0),
+                        position + Vec2::new(-heading * 6.0, 5.0),
                     ],
                     color,
                     Stroke::NONE,
@@ -623,7 +615,17 @@ fn location_label(location: &Location) -> &'static str {
     }
 }
 impl eframe::App for Cockpit {
+    fn on_exit(&mut self, _: Option<&eframe::glow::Context>) {
+        // macOS application termination may bypass unwinding main's stack.
+        // Shut down only this cockpit's owned host inside the lifecycle callback.
+        drop(self.local_server.take());
+        self.flight_view.destroy();
+    }
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
+        if self.focus_on_first_frame {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+            self.focus_on_first_frame = false;
+        }
         self.poll();
         ctx.request_repaint_after(Duration::from_millis(33));
         egui::TopBottomPanel::top("brand").show(ctx, |ui| {
@@ -635,7 +637,10 @@ impl eframe::App for Cockpit {
                         .color(TEAL)
                         .strong(),
                 );
-                ui.colored_label(MUTED, "COMMUNITY UNIVERSE  /  PRIVATE PROTOTYPE");
+                ui.colored_label(MUTED, "PRIVATE PREVIEW");
+                ui.separator();
+                ui.selectable_value(&mut self.three_dimensional, false, "2D Tactical");
+                ui.selectable_value(&mut self.three_dimensional, true, "3D Flight");
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.colored_label(
                         if self.connected { TEAL } else { AMBER },
@@ -751,7 +756,15 @@ impl eframe::App for Cockpit {
                 });
             });
         egui::CentralPanel::default().show(ctx, |ui| {
-            self.scene(ui);
+            if self.three_dimensional {
+                let now = self.presentation_time();
+                if let Some(snapshot) = &self.snapshot {
+                    self.flight_view
+                        .ui(ui, snapshot, &self.pilot, now, self.connected);
+                }
+            } else {
+                self.scene(ui);
+            }
         });
     }
 }
@@ -834,11 +847,12 @@ fn main() -> eframe::Result<()> {
         PathBuf::from("data/client")
     };
     let mut credential_scope = None;
+    let mut startup_pilot = None;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--help" | "-h" => {
-                println!("Arkline native client\n\nUsage: arkline-client [--local | --remote-only] [--server HOST:PORT] [--data-dir PATH]\n\n--local starts a sibling arkline-server on a private loopback port.\nA macOS app bundle starts locally by default and saves in ~/Library/Application Support/Arkline/Preview.\n--server selects an existing server; --remote-only prevents bundle auto-hosting.\nCLI defaults: 127.0.0.1:7777, data/client.\n--credential-scope NAME selects a stable credential namespace (used by local preview cockpits).\nResume credentials are private local files. Development TCP requires a secure tunnel for remote use.");
+                println!("Arkline native client\n\nUsage: arkline-client [--local | --remote-only] [--server HOST:PORT] [--data-dir PATH] [--pilot NAME]\n\n--pilot creates or resumes the named pilot immediately.\n--local starts a sibling arkline-server on a private loopback port.\nA macOS app bundle starts locally by default and saves in ~/Library/Application Support/Arkline/Preview.\n--server selects an existing server; --remote-only prevents bundle auto-hosting.\nCLI defaults: 127.0.0.1:7777, data/client.\n--credential-scope NAME selects a stable credential namespace (used by local preview cockpits).\nResume credentials are private local files. Development TCP requires a secure tunnel for remote use.");
                 return Ok(());
             }
             "--local" => local = true,
@@ -856,6 +870,12 @@ fn main() -> eframe::Result<()> {
                     std::process::exit(2)
                 }))
             }
+            "--pilot" => {
+                startup_pilot = Some(args.next().unwrap_or_else(|| {
+                    eprintln!("--pilot requires NAME");
+                    std::process::exit(2)
+                }));
+            }
             "--credential-scope" => {
                 credential_scope = Some(args.next().unwrap_or_else(|| {
                     eprintln!("--credential-scope requires NAME");
@@ -870,7 +890,7 @@ fn main() -> eframe::Result<()> {
     }
     local = local && !remote_only && !explicit_server;
     let mut startup_error = None;
-    let _local_server = if local {
+    let local_server = if local {
         match start_local_server(&data_dir) {
             Ok((guard, address)) => {
                 server = address;
@@ -887,6 +907,8 @@ fn main() -> eframe::Result<()> {
         None
     };
     let options = eframe::NativeOptions {
+        depth_buffer: 24,
+        renderer: eframe::Renderer::Glow,
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1200.0, 800.0])
             .with_min_inner_size([960.0, 680.0]),
@@ -897,8 +919,14 @@ fn main() -> eframe::Result<()> {
         options,
         Box::new(move |cc| {
             let mut cockpit = Cockpit::new(cc, server, data_dir, credential_scope);
+            cockpit.local_server = local_server;
             if let Some(error) = startup_error {
                 cockpit.notice = error;
+            } else if let Some(pilot) = startup_pilot {
+                if !pilot.trim().is_empty() {
+                    cockpit.pilot = pilot;
+                    cockpit.connect();
+                }
             }
             Ok(Box::new(cockpit))
         }),

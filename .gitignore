@@ -3,5 +3,7 @@
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+*.sqlite.lock
 *.credentials.json
+*.token
 .DS_Store
