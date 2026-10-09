@@ -69,6 +69,13 @@ station, asteroid and planet assets.
 - **Focus my ship** tracks your pilot; **Sector overview** frames the region.
 - **Reset camera** restores the default viewpoint.
 
+Confirmed extraction produces a short mining beam, impact sparks and returning ore
+particles in both views. A confirmation cue reports the units already credited by
+the server. Warp effects follow the authoritative travel interval; docking and
+undocking produce short arrival/departure cues. These effects are presentation,
+not additional mining commands or delayed inventory updates. Reconnecting does
+not replay old extraction effects.
+
 Flight buttons still control travel. The camera does not move your ship or affect
 the economy. This is an early 3D rendering foundation with procedural assets, not
 the final art direction or a full free-flight/combat simulation.

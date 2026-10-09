@@ -7,8 +7,9 @@ This document records evidence for the initial Rust model, not approval to publi
 On the development Apple Silicon Mac with Rust 1.89.0:
 
 - Workspace compilation, formatting and Clippy with warnings denied.
-- 23 tests: private client credential persistence/resume, shared trajectory math,
-  stable pilot placement and geometry normals; GUI audit checkpoint persistence,
+- 27 tests: private client credential persistence/resume, shared trajectory math,
+  stable pilot placement, geometry normals, beam endpoints and asteroid impacts;
+  confirmed extraction cues, expiration and purchase/arrival exclusion; GUI audit checkpoint persistence,
   rejection and concurrent-cockpit locking; server authorization,
   failed-operation rollback, concurrent fill, lifetime DB ownership, in-memory
   isolation, persisted travel/cooldown and unchanged-poll write suppression; TCP two-pilot journey; nine verifier rule
@@ -52,3 +53,15 @@ Mutating commands are gated while awaiting a response. This prevents accidental
 queueing from repeated clicks; it does not replace server-side command IDs or
 resolve an interrupted request whose result is unknown. The existing two-pilot TCP
 journey continues to cover partial trades, restart and independent replay.
+
+## Animated feedback preview
+
+Mining effects are derived from confirmed increases in the current pilot's belt
+cargo. Purchases at the station and arrival snapshots do not trigger extraction.
+Repeated snapshots do not replay effects; effects expire and clear on reconnect or
+connection loss. Tests cover these transitions and verify 3D beam geometry and
+asteroid impact points across all pilot lanes.
+
+The animation QA app launched, but macOS ScreenCaptureKit returned capture error
+-3811 during inspection. Visual sign-off of this animation update remains pending;
+the earlier cockpit inspection above does not establish animation appearance.

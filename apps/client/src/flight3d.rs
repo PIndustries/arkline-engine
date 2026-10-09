@@ -90,6 +90,7 @@ impl FlightView {
         pilot_name: &str,
         now: u64,
         connected: bool,
+        effects: &super::effects::Effects,
     ) {
         ui.horizontal(|ui| {
             ui.label(
@@ -162,6 +163,22 @@ impl FlightView {
                     own: pilot_name.to_string(),
                     yaw: self.yaw,
                     pitch: self.pitch,
+                    mining: connected.then(|| effects.mining(now)).flatten(),
+                    docking: effects.events.iter().rev().find_map(|event| {
+                        let age = now.saturating_sub(event.started_ms);
+                        if !connected || age >= super::effects::EFFECT_DURATION_MS {
+                            return None;
+                        }
+                        let docking = match event.kind {
+                            super::effects::EffectKind::Docking => true,
+                            super::effects::EffectKind::Undocking => false,
+                            _ => return None,
+                        };
+                        Some((
+                            age as f32 / super::effects::EFFECT_DURATION_MS as f32,
+                            docking,
+                        ))
+                    }),
                 };
                 ui.painter().add(egui::PaintCallback {
                     rect,
@@ -245,6 +262,8 @@ struct Frame {
     own: String,
     yaw: f32,
     pitch: f32,
+    mining: Option<(f32, u64)>,
+    docking: Option<(f32, bool)>,
 }
 #[derive(Clone, Copy)]
 struct Vertex {
@@ -576,25 +595,7 @@ impl Renderer {
             );
         }
         for i in 0..115 {
-            let f = i as f32;
-            let angle = f * 2.39996;
-            let radius = 6.0 + (i % 13) as f32 * 2.9;
-            let p = Vec3::new(
-                62.0 + angle.cos() * radius,
-                (f * 1.71).sin() * 7.0,
-                angle.sin() * radius,
-            );
-            let scale = 0.6 + (i % 7) as f32 * 0.28;
-            self.draw(
-                3,
-                transform(
-                    p,
-                    Vec3::new(scale, scale * 0.76, scale * 1.3),
-                    Quat::from_euler(glam::EulerRot::XYZ, f * 0.2, f * 0.4, f),
-                ),
-                Vec3::new(0.31, 0.27, 0.24),
-                0.0,
-            );
+            self.draw(3, asteroid_model(i), Vec3::new(0.31, 0.27, 0.24), 0.0);
         }
         for pilot in &frame.pilots {
             let own = pilot.name == frame.own;
@@ -657,12 +658,18 @@ impl Renderer {
                     accent,
                     3.0,
                 );
-                let warp = matches!(pilot.location, Location::InTransit { .. });
+                let warp = in_warp(&pilot.location, frame.now);
+                let pulse =
+                    1.0 + 0.16 * ((frame.now % 10_000) as f32 * 0.024 + lane(&pilot.name)).sin();
                 self.draw(
                     2,
                     ship * transform(
                         Vec3::new(if warp { -5.0 } else { -3.5 }, 0.0, side * 1.5),
-                        Vec3::new(if warp { 2.1 } else { 0.7 }, 0.16, 0.16),
+                        Vec3::new(
+                            if warp { 2.1 * pulse } else { 0.7 },
+                            0.16 * pulse,
+                            0.16 * pulse,
+                        ),
                         Quat::IDENTITY,
                     ),
                     Vec3::new(0.3, 0.65, 1.0),
@@ -670,10 +677,143 @@ impl Renderer {
                 );
             }
         }
+        self.paint_effects(frame);
         gl.disable(glow::DEPTH_TEST);
         gl.depth_mask(false);
         gl.bind_vertex_array(None);
         gl.use_program(None);
+    }
+    /// Additive, depth-tested effects do not write depth or obscure UI meshes.
+    unsafe fn paint_effects(&self, frame: &Frame) {
+        let gl = &self.gl;
+        gl.enable(glow::BLEND);
+        gl.blend_func_separate(glow::ONE, glow::ONE, glow::ZERO, glow::ONE);
+        gl.depth_mask(false);
+        for pilot in &frame.pilots {
+            let ship_position = position(pilot, frame.now);
+            let rotation = Quat::from_rotation_y(if heading(&pilot.location) < 0.0 {
+                std::f32::consts::PI
+            } else {
+                0.0
+            });
+            let ship = transform(ship_position, Vec3::ONE, rotation);
+            if in_warp(&pilot.location, frame.now) {
+                for i in 0..14 {
+                    let phase = ((frame.now % 1_200) as f32 / 1_200.0 + i as f32 / 14.0).fract();
+                    let alpha = (1.0 - phase).powi(2);
+                    for side in [-1.0, 1.0] {
+                        self.draw(
+                            2,
+                            ship * transform(
+                                Vec3::new(
+                                    -3.5 - phase * 24.0,
+                                    0.15 * (phase * 9.0).sin(),
+                                    side * (1.5 + phase * 0.65),
+                                ),
+                                Vec3::new(0.45 + phase, 0.10, 0.10),
+                                Quat::IDENTITY,
+                            ),
+                            Vec3::new(0.06, 0.22, 0.52) * alpha,
+                            1.2,
+                        );
+                    }
+                }
+            }
+            if pilot.name != frame.own {
+                continue;
+            }
+            if let Some((progress, units)) =
+                frame.mining.filter(|_| pilot.location == Location::Belt)
+            {
+                let source = ship.transform_point3(Vec3::new(0.4, 1.05, 0.0));
+                if let Some(impact) = mining_impact(source) {
+                    let fade = (progress * 12.0).min(1.0) * (1.0 - progress).powf(0.6);
+                    let pulse = 0.8 + 0.2 * ((frame.now % 10_000) as f32 * 0.047).sin();
+                    let color = Vec3::new(0.09, 0.74, 0.68) * fade;
+                    if let Some(beam) = segment_model(source, impact, 0.052 * pulse) {
+                        self.draw(0, beam, color, 1.8);
+                    }
+                    if let Some(halo) = segment_model(source, impact, 0.15 * pulse) {
+                        self.draw(0, halo, color * 0.08, 0.5);
+                    }
+                    self.draw(
+                        2,
+                        transform(impact, Vec3::splat(0.32 * pulse), Quat::IDENTITY),
+                        color,
+                        1.8,
+                    );
+                    let toward_ship = (source - impact).normalize_or_zero();
+                    for i in 0..16 {
+                        let seed = i as f32;
+                        let age = (progress * 3.0 + seed * 0.38197).fract();
+                        let direction = (toward_ship
+                            + Vec3::new(
+                                (seed * 2.4).cos(),
+                                (seed * 1.7).sin(),
+                                (seed * 3.1).sin(),
+                            ) * 0.8)
+                            .normalize_or_zero();
+                        let spark = impact + direction * (0.15 + age * 2.8);
+                        self.draw(
+                            2,
+                            transform(
+                                spark,
+                                Vec3::splat(0.05 + (1.0 - age) * 0.05),
+                                Quat::IDENTITY,
+                            ),
+                            Vec3::new(0.8, 0.45, 0.10) * fade * (1.0 - age),
+                            1.0,
+                        );
+                    }
+                    for i in 0..units.clamp(8, 24) {
+                        let seed = i as f32;
+                        let travel = (progress * 1.65 + seed * 0.61803).fract();
+                        let arc = Vec3::Y
+                            * (std::f32::consts::PI * travel).sin()
+                            * (0.5 + (i % 4) as f32 * 0.25);
+                        let ore = impact.lerp(source, travel) + arc;
+                        let scale = 0.07 + (i % 3) as f32 * 0.025;
+                        self.draw(
+                            3,
+                            transform(
+                                ore,
+                                Vec3::splat(scale),
+                                Quat::from_rotation_y(progress * 8.0 + seed),
+                            ),
+                            Vec3::new(0.42, 0.66, 0.37) * fade,
+                            0.7,
+                        );
+                    }
+                }
+            }
+            if let Some((progress, docking)) = frame
+                .docking
+                .filter(|_| matches!(pilot.location, Location::Docked | Location::Station))
+            {
+                let radius = if docking {
+                    9.0 - progress * 5.0
+                } else {
+                    4.0 + progress * 7.0
+                };
+                let color = if docking {
+                    Vec3::new(0.08, 0.70, 0.58)
+                } else {
+                    Vec3::new(0.70, 0.38, 0.10)
+                };
+                self.draw(
+                    1,
+                    transform(
+                        ship_position - Vec3::Y * 1.2,
+                        Vec3::new(radius, 0.55, radius),
+                        Quat::IDENTITY,
+                    ),
+                    color * (1.0 - progress),
+                    0.8,
+                );
+            }
+        }
+        gl.disable(glow::BLEND);
+        gl.depth_mask(true);
     }
     unsafe fn destroy(&mut self) {
         if self.destroyed {
@@ -691,6 +831,77 @@ impl Renderer {
 }
 fn transform(p: Vec3, scale: Vec3, rotation: Quat) -> Mat4 {
     Mat4::from_scale_rotation_translation(scale, rotation, p)
+}
+fn in_warp(location: &Location, now: u64) -> bool {
+    matches!(location, Location::InTransit { arrives_at_ms, .. } if now < *arrives_at_ms)
+}
+fn asteroid_model(i: usize) -> Mat4 {
+    let f = i as f32;
+    let angle = f * 2.39996;
+    let radius = 6.0 + (i % 13) as f32 * 2.9;
+    let p = Vec3::new(
+        62.0 + angle.cos() * radius,
+        (f * 1.71).sin() * 7.0,
+        angle.sin() * radius,
+    );
+    let scale = 0.6 + (i % 7) as f32 * 0.28;
+    transform(
+        p,
+        Vec3::new(scale, scale * 0.76, scale * 1.3),
+        Quat::from_euler(glam::EulerRot::XYZ, f * 0.2, f * 0.4, f),
+    )
+}
+/// Intersect the same displayed asteroid triangles, rather than ending the beam
+/// at an invented point or behind the rock. This is presentation targeting only.
+fn mining_impact(source: Vec3) -> Option<Vec3> {
+    let model = (0..115).map(asteroid_model).min_by(|a, b| {
+        a.transform_point3(Vec3::ZERO)
+            .distance_squared(source)
+            .total_cmp(&b.transform_point3(Vec3::ZERO).distance_squared(source))
+    })?;
+    let origin = model.inverse().transform_point3(source);
+    let direction = -origin.normalize_or_zero();
+    let mut nearest = f32::INFINITY;
+    for triangle in sphere(true).chunks_exact(3) {
+        let a = triangle[0].p;
+        let edge1 = triangle[1].p - a;
+        let edge2 = triangle[2].p - a;
+        let h = direction.cross(edge2);
+        let determinant = edge1.dot(h);
+        if determinant.abs() < 1e-7 {
+            continue;
+        }
+        let inverse = determinant.recip();
+        let s = origin - a;
+        let u = inverse * s.dot(h);
+        if !(0.0..=1.0).contains(&u) {
+            continue;
+        }
+        let q = s.cross(edge1);
+        let v = inverse * direction.dot(q);
+        if v < 0.0 || u + v > 1.0 {
+            continue;
+        }
+        let distance = inverse * edge2.dot(q);
+        if distance > 0.0 {
+            nearest = nearest.min(distance);
+        }
+    }
+    nearest
+        .is_finite()
+        .then(|| model.transform_point3(origin + direction * nearest))
+}
+fn segment_model(start: Vec3, end: Vec3, radius: f32) -> Option<Mat4> {
+    let delta = end - start;
+    let length = delta.length();
+    if !length.is_finite() || length < 0.0001 || radius <= 0.0 {
+        return None;
+    }
+    Some(transform(
+        (start + end) * 0.5,
+        Vec3::new(length * 0.5, radius, radius),
+        Quat::from_rotation_arc(Vec3::X, delta / length),
+    ))
 }
 unsafe fn compile(
     gl: &glow::Context,
@@ -777,6 +988,32 @@ vec2 sun=p-vec2(0.84,0.82);float flare=0.0018/(dot(sun,sun)+0.006);c+=vec3(0.17,
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn beam_transform_ends_on_requested_points_and_rejects_empty_segments() {
+        let start = Vec3::new(8.0, -3.0, 2.0);
+        let end = Vec3::new(-4.0, 1.5, 7.0);
+        let model = segment_model(start, end, 0.05).unwrap();
+        assert!(model.transform_point3(-Vec3::X).distance(start) < 0.0001);
+        assert!(model.transform_point3(Vec3::X).distance(end) < 0.0001);
+        assert!(segment_model(start, start, 0.05).is_none());
+    }
+    #[test]
+    fn mining_targets_visible_asteroid_geometry_for_every_pilot_lane() {
+        for lane in -5..=5 {
+            let source = Vec3::new(59.6, lane as f32 * 1.8 + 1.05, 20.0 + lane as f32 * 2.0);
+            let impact = mining_impact(source).expect("each belt lane has an asteroid target");
+            assert!(impact.is_finite());
+            assert!(source.distance(impact) > 0.01 && source.distance(impact) < 25.0);
+            assert!(segment_model(source, impact, 0.05).unwrap().is_finite());
+        }
+        assert!(!in_warp(&Location::Belt, 3000));
+        let transit = Location::InTransit {
+            destination: Destination::Belt,
+            arrives_at_ms: 3000,
+        };
+        assert!(in_warp(&transit, 2999));
+        assert!(!in_warp(&transit, 3000));
+    }
     #[test]
     fn warp_routes_match_both_directions_and_clamp() {
         let out = Location::InTransit {

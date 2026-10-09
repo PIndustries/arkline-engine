@@ -1,5 +1,6 @@
 //! Native Arkline cockpit. All displayed world data originates from the server.
 mod audit;
+mod effects;
 mod flight3d;
 use arkline_protocol::*;
 use eframe::egui::{self, Color32, Pos2, Stroke, Vec2};
@@ -187,6 +188,7 @@ struct Cockpit {
     audit_updates: Option<Receiver<Result<String, String>>>,
     audit_result: Option<Result<String, String>>,
     request_pending: bool,
+    effects: effects::Effects,
 }
 impl Cockpit {
     fn new(
@@ -231,6 +233,7 @@ impl Cockpit {
             audit_updates: None,
             audit_result: None,
             request_pending: false,
+            effects: effects::Effects::default(),
         }
     }
     fn log(&mut self, text: String, error: bool) {
@@ -246,6 +249,7 @@ impl Cockpit {
         })
     }
     fn connect(&mut self) {
+        self.effects.clear();
         self.feed.clear();
         self.selected_object = SelectedObject::Station;
         self.audit_result = None;
@@ -329,6 +333,7 @@ impl Cockpit {
                     self.notice.clear();
                 }
                 Update::Failure(error) => {
+                    self.effects.clear();
                     self.request_pending = false;
                     self.frozen_time = Some(self.presentation_time());
                     self.connected = false;
@@ -342,6 +347,16 @@ impl Cockpit {
                         self.request_pending = false;
                     }
                     if let Some(snapshot) = response.snapshot {
+                        if self.connected && response.ok {
+                            if let Some(previous) = &self.snapshot {
+                                self.effects.observe(
+                                    previous,
+                                    &snapshot,
+                                    &self.pilot,
+                                    snapshot.server_time_ms,
+                                );
+                            }
+                        }
                         self.snapshot = Some(snapshot);
                         self.observed = Instant::now();
                     }
@@ -399,6 +414,37 @@ impl Cockpit {
                         .unwrap_or(0);
                     ui.small(format!("{} ore listed on exchange", escrow));
                 });
+            if let Some((progress, units)) = self
+                .effects
+                .mining(self.presentation_time())
+                .filter(|_| pilot.location == Location::Belt)
+            {
+                ui.add_space(6.0);
+                ui.colored_label(TEAL, format!("Extraction confirmed · +{units} ore"));
+                ui.add(
+                    egui::ProgressBar::new(progress)
+                        .fill(TEAL)
+                        .desired_height(5.0),
+                );
+                ui.small("Cargo already credited by server");
+            }
+            if let Some(event) = self
+                .effects
+                .events
+                .iter()
+                .rev()
+                .find(|event| !matches!(event.kind, effects::EffectKind::Mining { .. }))
+            {
+                match event.kind {
+                    effects::EffectKind::Docking if pilot.location == Location::Docked => {
+                        ui.colored_label(TEAL, "Docking confirmed · station services available");
+                    }
+                    effects::EffectKind::Undocking if pilot.location == Location::Station => {
+                        ui.colored_label(AMBER, "Undocking confirmed · navigation available");
+                    }
+                    _ => {}
+                }
+            }
             ui.add_space(8.0);
             ui.label(
                 egui::RichText::new("FLIGHT OPERATIONS")
@@ -952,6 +998,78 @@ impl Cockpit {
                 } else {
                     AMBER
                 };
+                if pilot.name == self.pilot {
+                    if let Some((progress, units)) = self.effects.mining(server_now) {
+                        if pilot.location == Location::Belt {
+                            // Same deterministic asteroid placement as the visible belt above.
+                            let angle: f32 = 6.0 * 2.399;
+                            let target = belt + Vec2::angled(angle) * 23.0;
+                            let intensity =
+                                ((progress * std::f32::consts::PI).sin() * 1.8).min(1.0);
+                            paint.line_segment(
+                                [position, target],
+                                Stroke::new(9.0, TEAL.gamma_multiply(0.10 * intensity)),
+                            );
+                            paint.line_segment(
+                                [position, target],
+                                Stroke::new(3.0, TEAL.gamma_multiply(0.65 * intensity)),
+                            );
+                            paint.line_segment(
+                                [position, target],
+                                Stroke::new(
+                                    1.0,
+                                    Color32::from_rgb(218, 255, 244).gamma_multiply(intensity),
+                                ),
+                            );
+                            for i in 0..12 {
+                                let travel = (progress * 2.8 + i as f32 / 12.0).fract();
+                                let drift =
+                                    Vec2::new((i as f32 * 2.4).sin(), (i as f32 * 3.7).cos())
+                                        * (1.0 - travel)
+                                        * 9.0;
+                                let particle = target.lerp(position, travel) + drift;
+                                paint.circle_filled(
+                                    particle,
+                                    1.2 + (i % 3) as f32 * 0.5,
+                                    AMBER.gamma_multiply(intensity * (1.0 - travel * 0.5)),
+                                );
+                            }
+                            paint.circle_stroke(
+                                target,
+                                7.0 + (progress * 13.0).fract() * 6.0,
+                                Stroke::new(1.0, TEAL.gamma_multiply(intensity)),
+                            );
+                            paint.text(
+                                position + Vec2::new(0.0, 18.0),
+                                egui::Align2::CENTER_TOP,
+                                format!("+{units} ore · confirmed"),
+                                egui::FontId::proportional(12.0),
+                                TEAL,
+                            );
+                        }
+                    }
+                    for event in &self.effects.events {
+                        let ring_color = match event.kind {
+                            effects::EffectKind::Docking if pilot.location == Location::Docked => {
+                                TEAL
+                            }
+                            effects::EffectKind::Undocking
+                                if pilot.location == Location::Station =>
+                            {
+                                AMBER
+                            }
+                            _ => continue,
+                        };
+                        let phase = server_now.saturating_sub(event.started_ms) as f32 / 1800.0;
+                        if phase < 1.0 {
+                            paint.circle_stroke(
+                                position,
+                                10.0 + phase * 34.0,
+                                Stroke::new(2.0, ring_color.gamma_multiply(1.0 - phase)),
+                            );
+                        }
+                    }
+                }
                 if matches!(pilot.location, Location::InTransit { .. }) {
                     let dir = -heading;
                     paint.line_segment(
@@ -1016,6 +1134,7 @@ impl eframe::App for Cockpit {
             self.focus_on_first_frame = false;
         }
         self.poll();
+        self.effects.retain(self.presentation_time());
         ctx.request_repaint_after(Duration::from_millis(33));
         egui::TopBottomPanel::top("brand").show(ctx, |ui| {
             ui.add_space(8.0);
@@ -1115,6 +1234,7 @@ impl eframe::App for Cockpit {
                                 self.updates = None;
                                 self.connected = false;
                                 self.snapshot = None;
+                                self.effects.clear();
                             }
                         } else {
                             ui.colored_label(AMBER, &self.notice);
@@ -1126,6 +1246,7 @@ impl eframe::App for Cockpit {
                             }
                             if ui.button("Change pilot / server").clicked() {
                                 self.snapshot = None;
+                                self.effects.clear();
                                 self.commands = None;
                                 self.updates = None;
                             }
@@ -1176,8 +1297,14 @@ impl eframe::App for Cockpit {
             if self.three_dimensional {
                 let now = self.presentation_time();
                 if let Some(snapshot) = &self.snapshot {
-                    self.flight_view
-                        .ui(ui, snapshot, &self.pilot, now, self.connected);
+                    self.flight_view.ui(
+                        ui,
+                        snapshot,
+                        &self.pilot,
+                        now,
+                        self.connected,
+                        &self.effects,
+                    );
                 }
             } else {
                 self.scene(ui);
