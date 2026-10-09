@@ -1,0 +1,8 @@
+/target/
+/data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.credentials.json
+.DS_Store
+
