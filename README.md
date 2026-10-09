@@ -73,6 +73,22 @@ Flight buttons still control travel. The camera does not move your ship or affec
 the economy. This is an early 3D rendering foundation with procedural assets, not
 the final art direction or a full free-flight/combat simulation.
 
+## Cockpit services
+
+The right-hand overview selects the station, belt or a known pilot. Its selected
+object panel gives the available travel or station action. Known pilots are saved
+identities, not a live presence list. The left ship panel keeps your cargo, balance
+and next flight operation visible.
+
+Use the bottom services tabs to inspect **Cargo**, trade in **Exchange**, review
+**Activity**, or independently check the economic history in **Ledger**. Cargo
+separates held ore from sell-order escrow. Exchange actions require docking.
+
+The Ledger audit runs separately from the flight connection and pins a local
+checkpoint after successful replay. Its result describes the exported history at
+the time of that audit; later transactions require another audit. Keep checkpoint
+files with your client data to retain rollback detection across restarts.
+
 ## Independently audit the economy
 
 ```sh
@@ -115,6 +131,9 @@ docs/                    Architecture, migration rationale, validation
 This first workspace implements a small complete journey. Editor, advanced engine,
 content, and community-node crates will be introduced when they have functioning
 behavior. Rendering currently uses eframe/egui; the game rules and server are ours.
+
+The [ecosystem milestones](docs/ecosystem.md) describe the next complete player,
+creator, operator and community-observer journeys and their acceptance checks.
 
 ## Check the build
 

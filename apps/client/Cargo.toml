@@ -6,6 +6,7 @@ publish.workspace = true
 
 [dependencies]
 arkline-protocol.workspace = true
+arkline-verifier = { path = "../verifier" }
 serde_json.workspace = true
 sha2.workspace = true
 hex.workspace = true

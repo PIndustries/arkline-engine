@@ -383,10 +383,13 @@ impl Server {
             )?;
             entries.push(entry);
         }
-        tx.execute(
-            "UPDATE world SET json=?1 WHERE id=1",
-            [serde_json::to_string(&world)?],
-        )?;
+        // Snapshot polling must not rewrite and fsync the entire world unless
+        // it resolves a due arrival. Economic updates still commit with their
+        // ledger entry in this same transaction.
+        let updated_json = serde_json::to_string(&world)?;
+        if updated_json != json {
+            tx.execute("UPDATE world SET json=?1 WHERE id=1", [updated_json])?;
+        }
         let snapshot = Snapshot {
             server_time_ms: now,
             pilots: world.pilots.values().map(|p| p.view.clone()).collect(),
@@ -439,4 +442,56 @@ fn validate(world: &World) -> Result<()> {
         bail!("economic conservation invariant failed");
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn polling_writes_only_when_a_persisted_arrival_changes_state() {
+        let mut server = Server::open(":memory:").unwrap();
+        let mut session = None;
+        let connected = server.handle_at(
+            &mut session,
+            Request::Connect {
+                protocol_version: PROTOCOL_VERSION,
+                pilot: "Traveler".into(),
+                resume_token: None,
+            },
+            100,
+        );
+        assert!(connected.ok);
+        assert!(server.handle_at(&mut session, Request::Undock, 101).ok);
+        assert!(
+            server
+                .handle_at(
+                    &mut session,
+                    Request::Warp {
+                        destination: Destination::Belt
+                    },
+                    102
+                )
+                .ok
+        );
+        let before = server.db.total_changes();
+        for time in [103, 1000, 3101] {
+            assert!(server.handle_at(&mut None, Request::Snapshot, time).ok);
+            assert!(server.handle_at(&mut None, Request::ExportLedger, time).ok);
+        }
+        assert_eq!(
+            server.db.total_changes(),
+            before,
+            "polling unchanged state must not write"
+        );
+        let arrived = server.handle_at(&mut None, Request::Snapshot, 3102);
+        assert_eq!(arrived.snapshot.unwrap().pilots[0].location, Location::Belt);
+        assert_eq!(
+            server.db.total_changes(),
+            before + 1,
+            "arrival must persist once"
+        );
+        assert!(server.handle_at(&mut None, Request::Snapshot, 3103).ok);
+        assert_eq!(server.db.total_changes(), before + 1);
+    }
 }

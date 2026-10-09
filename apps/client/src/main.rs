@@ -1,4 +1,5 @@
 //! Native Arkline cockpit. All displayed world data originates from the server.
+mod audit;
 mod flight3d;
 use arkline_protocol::*;
 use eframe::egui::{self, Color32, Pos2, Stroke, Vec2};
@@ -145,6 +146,20 @@ fn worker(
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ServiceTab {
+    Cargo,
+    Exchange,
+    Activity,
+    Ledger,
+}
+#[derive(Clone, PartialEq, Eq)]
+enum SelectedObject {
+    Station,
+    Belt,
+    Pilot(String),
+}
+
 struct Cockpit {
     server: String,
     pilot: String,
@@ -166,6 +181,12 @@ struct Cockpit {
     frozen_time: Option<u64>,
     focus_on_first_frame: bool,
     local_server: Option<LocalServer>,
+    service_tab: ServiceTab,
+    selected_object: SelectedObject,
+    sell_amount: u64,
+    audit_updates: Option<Receiver<Result<String, String>>>,
+    audit_result: Option<Result<String, String>>,
+    request_pending: bool,
 }
 impl Cockpit {
     fn new(
@@ -204,6 +225,12 @@ impl Cockpit {
             frozen_time: None,
             focus_on_first_frame: true,
             local_server: None,
+            service_tab: ServiceTab::Cargo,
+            selected_object: SelectedObject::Station,
+            sell_amount: 25,
+            audit_updates: None,
+            audit_result: None,
+            request_pending: false,
         }
     }
     fn log(&mut self, text: String, error: bool) {
@@ -219,6 +246,11 @@ impl Cockpit {
         })
     }
     fn connect(&mut self) {
+        self.feed.clear();
+        self.selected_object = SelectedObject::Station;
+        self.audit_result = None;
+        self.audit_updates = None;
+        self.request_pending = false;
         self.frozen_time = None;
         self.pilot = self.pilot.trim().to_string();
         self.snapshot = None;
@@ -257,12 +289,33 @@ impl Cockpit {
             Err(error) => self.log(format!("Could not open second cockpit: {error}"), true),
         }
     }
+    fn can_operate(&self) -> bool {
+        self.connected && !self.request_pending
+    }
     fn send(&mut self, request: Request) {
+        if !self.can_operate() {
+            return;
+        }
         if let Some(tx) = &self.commands {
-            let _ = tx.send(request);
+            if tx.send(request).is_ok() {
+                self.request_pending = true;
+            } else {
+                self.log(
+                    "Command was not sent: connection worker unavailable.".into(),
+                    true,
+                );
+            }
         }
     }
     fn poll(&mut self) {
+        if let Some(result) = self
+            .audit_updates
+            .as_ref()
+            .and_then(|rx| rx.try_recv().ok())
+        {
+            self.audit_result = Some(result);
+            self.audit_updates = None;
+        }
         let updates: Vec<_> = self
             .updates
             .as_ref()
@@ -276,6 +329,7 @@ impl Cockpit {
                     self.notice.clear();
                 }
                 Update::Failure(error) => {
+                    self.request_pending = false;
                     self.frozen_time = Some(self.presentation_time());
                     self.connected = false;
                     self.connecting = false;
@@ -284,6 +338,9 @@ impl Cockpit {
                     self.log(error, true);
                 }
                 Update::Response(response, visible) => {
+                    if visible {
+                        self.request_pending = false;
+                    }
                     if let Some(snapshot) = response.snapshot {
                         self.snapshot = Some(snapshot);
                         self.observed = Instant::now();
@@ -304,123 +361,455 @@ impl Cockpit {
             .cloned()
     }
     fn flight(&mut self, ui: &mut egui::Ui) {
-        ui.label(egui::RichText::new("FLIGHT CONTROL").color(TEAL).strong());
+        ui.label(egui::RichText::new("PILOT / VESSEL").color(TEAL).strong());
         if let Some(pilot) = self.own() {
             ui.heading(&pilot.name);
             ui.colored_label(MUTED, location_label(&pilot.location));
-            ui.add_space(12.0);
+            ui.add_space(8.0);
+            egui::Frame::group(ui.style())
+                .fill(Color32::from_rgb(18, 33, 47))
+                .show(ui, |ui| {
+                    ui.set_min_width(ui.available_width());
+                    ui.small("AVAILABLE BALANCE");
+                    ui.label(
+                        egui::RichText::new(format!("{} CR", pilot.credits))
+                            .size(25.0)
+                            .color(AMBER),
+                    );
+                    ui.separator();
+                    ui.horizontal(|ui| {
+                        ui.label("ORE HOLD");
+                        ui.colored_label(TEAL, format!("{} / {}", pilot.ore, CARGO_CAPACITY));
+                    });
+                    ui.add(
+                        egui::ProgressBar::new(pilot.ore as f32 / CARGO_CAPACITY as f32)
+                            .fill(TEAL)
+                            .desired_height(6.0),
+                    );
+                    let escrow: u64 = self
+                        .snapshot
+                        .as_ref()
+                        .map(|s| {
+                            s.orders
+                                .iter()
+                                .filter(|o| o.seller == self.pilot)
+                                .map(|o| o.units)
+                                .sum()
+                        })
+                        .unwrap_or(0);
+                    ui.small(format!("{} ore listed on exchange", escrow));
+                });
+            ui.add_space(8.0);
             ui.label(
-                egui::RichText::new(format!("{}  CR", pilot.credits))
-                    .size(25.0)
-                    .color(AMBER),
+                egui::RichText::new("FLIGHT OPERATIONS")
+                    .color(TEAL)
+                    .strong(),
             );
-            ui.label(format!("Cargo   {} / {} ore", pilot.ore, CARGO_CAPACITY));
-            ui.add(egui::ProgressBar::new(pilot.ore as f32 / CARGO_CAPACITY as f32).fill(TEAL));
-            ui.separator();
-            let active = self.connected;
+            if self.request_pending {
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.small("Awaiting server confirmation");
+                });
+            }
+            let active = self.can_operate();
+            let (guidance, primary) = match pilot.location {
+                Location::Docked if pilot.ore > 0 => (
+                    "Ore secured. Open the exchange to list cargo for another pilot.",
+                    "Undock",
+                ),
+                Location::Docked => (
+                    "Undock, travel to the belt, then mine your first cargo.",
+                    "Undock",
+                ),
+                Location::Station => (
+                    "Station perimeter. Dock for market access or travel to the belt.",
+                    "Dock at station",
+                ),
+                Location::Belt => (
+                    "Extract ore here, then return to the station to trade.",
+                    "Return to station",
+                ),
+                Location::InTransit { .. } => (
+                    "Transit is in progress. Navigation resumes after server-confirmed arrival.",
+                    "In transit",
+                ),
+            };
+            ui.colored_label(MUTED, guidance);
+            let can_navigate = active && !matches!(pilot.location, Location::InTransit { .. });
             if ui
                 .add_enabled(
-                    active && pilot.location == Location::Docked,
-                    egui::Button::new("Undock").min_size(Vec2::new(210.0, 34.0)),
+                    can_navigate,
+                    egui::Button::new(primary).min_size(Vec2::new(ui.available_width(), 34.0)),
                 )
                 .clicked()
             {
-                self.send(Request::Undock);
+                self.send(match pilot.location {
+                    Location::Docked => Request::Undock,
+                    Location::Station => Request::Dock,
+                    _ => Request::Warp {
+                        destination: Destination::Station,
+                    },
+                });
             }
-            if ui
-                .add_enabled(
-                    active && pilot.location == Location::Station,
-                    egui::Button::new("Warp to asteroid belt").min_size(Vec2::new(210.0, 34.0)),
-                )
-                .clicked()
+            if matches!(pilot.location, Location::Station)
+                && ui
+                    .add_enabled(
+                        active,
+                        egui::Button::new("Warp to asteroid belt")
+                            .min_size(Vec2::new(ui.available_width(), 30.0)),
+                    )
+                    .clicked()
             {
                 self.send(Request::Warp {
                     destination: Destination::Belt,
                 });
             }
-            if ui
-                .add_enabled(
-                    active && pilot.location == Location::Belt,
-                    egui::Button::new("Warp to station").min_size(Vec2::new(210.0, 34.0)),
-                )
-                .clicked()
-            {
-                self.send(Request::Warp {
-                    destination: Destination::Station,
-                });
-            }
-            if ui
-                .add_enabled(
-                    active && pilot.location == Location::Station,
-                    egui::Button::new("Dock at station").min_size(Vec2::new(210.0, 34.0)),
-                )
-                .clicked()
-            {
-                self.send(Request::Dock);
+            if let Location::InTransit { arrives_at_ms, .. } = pilot.location {
+                let remaining = arrives_at_ms.saturating_sub(self.presentation_time());
+                ui.add(
+                    egui::ProgressBar::new(
+                        1.0 - remaining.min(WARP_DURATION_MS) as f32 / WARP_DURATION_MS as f32,
+                    )
+                    .fill(TEAL)
+                    .text(format!("{:.1}s estimated", remaining as f32 / 1000.0)),
+                );
             }
             ui.separator();
             ui.horizontal(|ui| {
-                ui.label("Ore units");
+                ui.label("Mine units");
                 ui.add(egui::DragValue::new(&mut self.amount).range(1..=MAX_MINE_UNITS));
             });
-            let can_mine = self.amount <= MAX_MINE_UNITS
-                && active
-                && pilot.location == Location::Belt
-                && pilot.ore.saturating_add(self.amount) <= CARGO_CAPACITY
-                && self
-                    .snapshot
-                    .as_ref()
-                    .is_some_and(|s| s.belt_ore >= self.amount);
             if ui
                 .add_enabled(
-                    can_mine,
-                    egui::Button::new("Mine ore").min_size(Vec2::new(210.0, 34.0)),
+                    self.can_mine(&pilot),
+                    egui::Button::new("Extract ore")
+                        .min_size(Vec2::new(ui.available_width(), 32.0)),
                 )
                 .clicked()
             {
                 self.send(Request::Mine { units: self.amount });
             }
-            ui.colored_label(MUTED, "Mine at the belt. Dock to trade.");
+            if pilot.location != Location::Belt {
+                ui.small("Extraction requires arrival at the belt.");
+            }
+            if ui.button("Inspect cargo").clicked() {
+                self.service_tab = ServiceTab::Cargo;
+            }
+            if ui.button("Open exchange").clicked() {
+                self.service_tab = ServiceTab::Exchange;
+            }
         }
-        ui.add_space(18.0);
+    }
+    fn can_mine(&self, pilot: &PilotView) -> bool {
+        self.can_operate()
+            && self.amount > 0
+            && self.amount <= MAX_MINE_UNITS
+            && pilot.location == Location::Belt
+            && pilot.ore.saturating_add(self.amount) <= CARGO_CAPACITY
+            && self
+                .snapshot
+                .as_ref()
+                .is_some_and(|s| s.belt_ore >= self.amount)
+    }
+    fn overview(&mut self, ui: &mut egui::Ui) {
+        ui.label(egui::RichText::new("SECTOR OVERVIEW").color(TEAL).strong());
+        ui.small("01 / Arkline orbital region");
         ui.separator();
-        ui.label(egui::RichText::new("LOCAL PILOTS").color(TEAL));
-        if let Some(snapshot) = &self.snapshot {
-            egui::ScrollArea::vertical()
-                .max_height(190.0)
-                .show(ui, |ui| {
-                    for pilot in &snapshot.pilots {
-                        ui.label(format!(
-                            "{} {}",
-                            if pilot.name == self.pilot {
-                                "◆"
-                            } else {
-                                "◇"
-                            },
-                            pilot.name
-                        ));
-                        ui.small(location_label(&pilot.location));
+        ui.selectable_value(
+            &mut self.selected_object,
+            SelectedObject::Station,
+            "◇  Arkline Station",
+        );
+        ui.selectable_value(
+            &mut self.selected_object,
+            SelectedObject::Belt,
+            "◆  Asteroid Belt",
+        );
+        ui.add_space(8.0);
+        let pilots = self
+            .snapshot
+            .as_ref()
+            .map(|s| s.pilots.clone())
+            .unwrap_or_default();
+        ui.label(
+            egui::RichText::new(format!("KNOWN PILOTS  /  {}", pilots.len()))
+                .size(11.0)
+                .color(MUTED),
+        );
+        egui::ScrollArea::vertical()
+            .id_salt("overview-roster")
+            .max_height(150.0)
+            .show(ui, |ui| {
+                for pilot in &pilots {
+                    let label = format!(
+                        "{} {}",
+                        if pilot.name == self.pilot {
+                            "●"
+                        } else {
+                            "○"
+                        },
+                        pilot.name
+                    );
+                    ui.selectable_value(
+                        &mut self.selected_object,
+                        SelectedObject::Pilot(pilot.name.clone()),
+                        label,
+                    );
+                }
+            });
+        ui.small("Registered pilots; presence is not tracked.");
+        ui.add_space(10.0);
+        ui.separator();
+        ui.label(egui::RichText::new("SELECTED OBJECT").color(TEAL).strong());
+        let own = self.own();
+        match self.selected_object.clone() {
+            SelectedObject::Station => {
+                ui.heading("Arkline Station");
+                ui.colored_label(MUTED, "Orbital trade facility");
+                ui.label("Dock to exchange ore, settle trades, or manage sell orders.");
+                if let Some(pilot) = &own {
+                    match pilot.location {
+                        Location::Docked => {
+                            ui.colored_label(TEAL, "You are docked here");
+                            if ui.button("Station exchange").clicked() {
+                                self.service_tab = ServiceTab::Exchange;
+                            }
+                        }
+                        Location::Station => {
+                            if ui
+                                .add_enabled(self.can_operate(), egui::Button::new("Dock"))
+                                .clicked()
+                            {
+                                self.send(Request::Dock);
+                            }
+                        }
+                        Location::Belt => {
+                            if ui
+                                .add_enabled(
+                                    self.can_operate(),
+                                    egui::Button::new("Warp to station"),
+                                )
+                                .clicked()
+                            {
+                                self.send(Request::Warp {
+                                    destination: Destination::Station,
+                                });
+                            }
+                        }
+                        Location::InTransit { .. } => {
+                            ui.small("Navigation locked during transit");
+                        }
                     }
-                });
+                }
+            }
+            SelectedObject::Belt => {
+                ui.heading("Asteroid Belt");
+                ui.colored_label(MUTED, "Ore extraction site");
+                if let Some(s) = &self.snapshot {
+                    ui.label(
+                        egui::RichText::new(format!("{} ore remaining", s.belt_ore)).color(AMBER),
+                    );
+                }
+                ui.label(format!("Extraction batches: up to {} units. Cargo is credited after server confirmation.", MAX_MINE_UNITS));
+                if let Some(pilot) = &own {
+                    match pilot.location {
+                        Location::Docked => {
+                            ui.small("Undock before entering the route.");
+                            if ui
+                                .add_enabled(self.can_operate(), egui::Button::new("Undock"))
+                                .clicked()
+                            {
+                                self.send(Request::Undock);
+                            }
+                        }
+                        Location::Station => {
+                            if ui
+                                .add_enabled(self.can_operate(), egui::Button::new("Warp to belt"))
+                                .clicked()
+                            {
+                                self.send(Request::Warp {
+                                    destination: Destination::Belt,
+                                });
+                            }
+                        }
+                        Location::Belt => {
+                            if ui
+                                .add_enabled(
+                                    self.can_mine(pilot),
+                                    egui::Button::new(format!("Extract {} ore", self.amount)),
+                                )
+                                .clicked()
+                            {
+                                self.send(Request::Mine { units: self.amount });
+                            }
+                        }
+                        Location::InTransit { .. } => {
+                            ui.small("Navigation locked during transit");
+                        }
+                    }
+                }
+            }
+            SelectedObject::Pilot(name) => {
+                if let Some(pilot) = pilots.iter().find(|p| p.name == name) {
+                    ui.heading(&pilot.name);
+                    ui.colored_label(MUTED, location_label(&pilot.location));
+                    ui.separator();
+                    ui.label(format!("{} CR", pilot.credits));
+                    ui.label(format!("{} ore in cargo", pilot.ore));
+                    let order_count = self
+                        .snapshot
+                        .as_ref()
+                        .map_or(0, |s| s.orders.iter().filter(|o| o.seller == name).count());
+                    ui.label(format!("{} active sell orders", order_count));
+                    if ui.button("View exchange").clicked() {
+                        self.service_tab = ServiceTab::Exchange;
+                    }
+                } else {
+                    ui.small("Pilot unavailable in current snapshot.");
+                }
+            }
         }
+        ui.add_space(12.0);
+        ui.separator();
+        if let Some((message, error)) = self.feed.front() {
+            ui.label(egui::RichText::new("LATEST UPDATE").size(11.0).color(MUTED));
+            ui.colored_label(if *error { AMBER } else { TEAL }, message);
+        }
+    }
+    fn cargo_panel(&mut self, ui: &mut egui::Ui) {
+        if let Some(pilot) = self.own() {
+            let escrow: u64 = self
+                .snapshot
+                .as_ref()
+                .map(|s| {
+                    s.orders
+                        .iter()
+                        .filter(|o| o.seller == self.pilot)
+                        .map(|o| o.units)
+                        .sum()
+                })
+                .unwrap_or(0);
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("ORE INVENTORY").color(TEAL).strong());
+                ui.colored_label(MUTED, "Server-confirmed holdings");
+            });
+            egui::Grid::new("cargo-grid")
+                .num_columns(3)
+                .spacing([45.0, 10.0])
+                .striped(true)
+                .show(ui, |ui| {
+                    ui.strong("Location");
+                    ui.strong("Units");
+                    ui.strong("Availability");
+                    ui.end_row();
+                    ui.label("Vessel cargo");
+                    ui.colored_label(TEAL, pilot.ore.to_string());
+                    ui.label("Available to list while docked");
+                    ui.end_row();
+                    ui.label("Exchange escrow");
+                    ui.colored_label(AMBER, escrow.to_string());
+                    ui.label("Reserved by your active sell orders");
+                    ui.end_row();
+                    ui.label("Free hold capacity");
+                    ui.label(CARGO_CAPACITY.saturating_sub(pilot.ore).to_string());
+                    ui.label("Mining, purchases, and cancellations need room");
+                    ui.end_row();
+                });
+            ui.add_space(8.0);
+            ui.horizontal_wrapped(|ui| {
+                if ui.button("Manage sell orders").clicked() {
+                    self.service_tab = ServiceTab::Exchange;
+                }
+                ui.colored_label(
+                    MUTED,
+                    if pilot.ore == 0 {
+                        "Select the belt in Overview to begin gathering cargo."
+                    } else {
+                        "Dock at the station to offer this cargo to other pilots."
+                    },
+                );
+            });
+        }
+    }
+    fn ledger_panel(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal_wrapped(|ui| {
+            ui.label(egui::RichText::new("ECONOMIC LEDGER").color(TEAL).strong());
+            if ui
+                .add_enabled(
+                    self.connected && self.audit_updates.is_none(),
+                    egui::Button::new("Audit current ledger"),
+                )
+                .clicked()
+            {
+                let server = self.server.clone();
+                let scope = self.credential_scope.as_deref().unwrap_or(&server);
+                let path = self.data_dir.join(format!(
+                    "audit-{}.json",
+                    hex::encode(Sha256::digest(scope.as_bytes()))
+                ));
+                let (tx, rx) = mpsc::channel();
+                self.audit_updates = Some(rx);
+                std::thread::spawn(move || {
+                    let _ = tx.send(audit::audit(&server, &path));
+                });
+            }
+            if self.audit_updates.is_some() {
+                ui.spinner();
+                ui.small("Checking independent export…");
+            }
+        });
+        if let Some(snapshot) = &self.snapshot {
+            ui.small(format!(
+                "Latest server checkpoint: #{}",
+                snapshot.ledger_sequence
+            ));
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(&snapshot.ledger_hash)
+                        .monospace()
+                        .color(MUTED),
+                )
+                .wrap(),
+            );
+        }
+        ui.separator();
+        ui.label(
+            egui::RichText::new("LAST COMPLETED AUDIT")
+                .size(11.0)
+                .color(MUTED),
+        );
+        match &self.audit_result {
+            Some(Ok(result)) => {
+                ui.colored_label(TEAL, result);
+            }
+            Some(Err(error)) => {
+                ui.colored_label(AMBER, format!("Audit failed: {error}"));
+            }
+            None => {
+                ui.colored_label(MUTED, "No independent audit in this cockpit session. The first successful audit pins a local checkpoint; later audits must preserve its history.");
+            }
+        }
+        ui.small("Server history may advance after this audit. A successful result applies to its reported head, not automatically to the latest checkpoint.");
+        ui.small("An audit checks the exported economic rules and history. It does not prove every gameplay event occurred or certify server honesty.");
     }
     fn market(&mut self, ui: &mut egui::Ui) {
         ui.label(egui::RichText::new("STATION EXCHANGE").color(TEAL).strong());
         let own = self.own();
-        let docked = self.connected && own.as_ref().is_some_and(|p| p.location == Location::Docked);
+        let docked =
+            self.can_operate() && own.as_ref().is_some_and(|p| p.location == Location::Docked);
         ui.small("Player sell orders · ore · credits per unit");
         ui.horizontal(|ui| {
             ui.label("Sell");
-            ui.add(egui::DragValue::new(&mut self.amount).range(1..=CARGO_CAPACITY));
+            ui.add(egui::DragValue::new(&mut self.sell_amount).range(1..=CARGO_CAPACITY));
             ui.label("at");
             ui.add(egui::DragValue::new(&mut self.price).range(1..=1_000_000));
-            let can_sell = docked && own.as_ref().is_some_and(|p| p.ore >= self.amount);
+            let can_sell = docked && own.as_ref().is_some_and(|p| p.ore >= self.sell_amount);
             if ui
                 .add_enabled(can_sell, egui::Button::new("List ore"))
                 .clicked()
             {
                 self.send(Request::PlaceSell {
-                    units: self.amount,
+                    units: self.sell_amount,
                     unit_price: self.price,
                 });
             }
@@ -666,10 +1055,7 @@ impl eframe::App for Cockpit {
                         s.ledger_sequence,
                         s.ledger_hash.chars().take(16).collect::<String>()
                     ));
-                    ui.colored_label(
-                        MUTED,
-                        "Server record · independent verification via arkline-verifier",
-                    );
+                    ui.colored_label(MUTED, "Server checkpoint · Audit in Ledger");
                 }
             });
         });
@@ -706,54 +1092,85 @@ impl eframe::App for Cockpit {
             return;
         }
         egui::SidePanel::left("flight")
-            .exact_width(250.0)
+            .exact_width(220.0)
             .resizable(false)
             .show(ctx, |ui| {
-                ui.add_space(12.0);
-                self.flight(ui);
-                ui.separator();
-                if self.connected {
-                    if ui.button("Open second cockpit").clicked() {
-                        self.second_cockpit();
-                    }
-                    if ui.button("Disconnect").clicked() {
-                        self.commands = None;
-                        self.updates = None;
-                        self.connected = false;
-                        self.snapshot = None;
-                    }
-                } else {
-                    ui.colored_label(AMBER, &self.notice);
-                    if ui
-                        .add_enabled(!self.connecting, egui::Button::new("Reconnect"))
-                        .clicked()
-                    {
-                        self.connect();
-                    }
-                    if ui.button("Change pilot / server").clicked() {
-                        self.snapshot = None;
-                        self.commands = None;
-                        self.updates = None;
-                    }
-                }
+                egui::ScrollArea::vertical()
+                    .id_salt("flight-scroll")
+                    .show(ui, |ui| {
+                        ui.add_space(10.0);
+                        self.flight(ui);
+                        ui.add_space(12.0);
+                        ui.separator();
+                        ui.label(egui::RichText::new("CONNECTION").size(11.0).color(MUTED));
+                        if self.connected {
+                            if ui.button("Open second cockpit").clicked() {
+                                self.second_cockpit();
+                            }
+                            if ui
+                                .add_enabled(!self.request_pending, egui::Button::new("Disconnect"))
+                                .clicked()
+                            {
+                                self.commands = None;
+                                self.updates = None;
+                                self.connected = false;
+                                self.snapshot = None;
+                            }
+                        } else {
+                            ui.colored_label(AMBER, &self.notice);
+                            if ui
+                                .add_enabled(!self.connecting, egui::Button::new("Reconnect"))
+                                .clicked()
+                            {
+                                self.connect();
+                            }
+                            if ui.button("Change pilot / server").clicked() {
+                                self.snapshot = None;
+                                self.commands = None;
+                                self.updates = None;
+                            }
+                        }
+                    });
             });
-        egui::TopBottomPanel::bottom("economy")
-            .min_height(230.0)
+        egui::SidePanel::right("overview")
+            .exact_width(230.0)
+            .resizable(false)
+            .show(ctx, |ui| {
+                egui::ScrollArea::vertical()
+                    .id_salt("overview-scroll")
+                    .show(ui, |ui| {
+                        ui.add_space(10.0);
+                        self.overview(ui);
+                    });
+            });
+        egui::TopBottomPanel::bottom("services")
+            .default_height(235.0)
+            .min_height(185.0)
             .resizable(true)
             .show(ctx, |ui| {
-                ui.add_space(8.0);
-                ui.columns(2, |columns| {
-                    self.market(&mut columns[0]);
-                    columns[1].label(egui::RichText::new("ACTIVITY").color(TEAL).strong());
-                    egui::ScrollArea::vertical()
-                        .max_height(205.0)
-                        .show(&mut columns[1], |ui| {
+                ui.add_space(4.0);
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(egui::RichText::new("SERVICES").color(MUTED).size(11.0));
+                    ui.selectable_value(&mut self.service_tab, ServiceTab::Cargo, "Cargo");
+                    ui.selectable_value(&mut self.service_tab, ServiceTab::Exchange, "Exchange");
+                    ui.selectable_value(&mut self.service_tab, ServiceTab::Activity, "Activity");
+                    ui.selectable_value(&mut self.service_tab, ServiceTab::Ledger, "Ledger");
+                });
+                ui.separator();
+                egui::ScrollArea::vertical()
+                    .id_salt("service-content")
+                    .show(ui, |ui| match self.service_tab {
+                        ServiceTab::Cargo => self.cargo_panel(ui),
+                        ServiceTab::Exchange => self.market(ui),
+                        ServiceTab::Ledger => self.ledger_panel(ui),
+                        ServiceTab::Activity => {
+                            ui.label(egui::RichText::new("SERVER ACTIVITY").color(TEAL).strong());
                             for (entry, error) in &self.feed {
                                 ui.colored_label(if *error { AMBER } else { MUTED }, entry);
                                 ui.separator();
                             }
-                        });
-                });
+                        }
+                    });
             });
         egui::CentralPanel::default().show(ctx, |ui| {
             if self.three_dimensional {

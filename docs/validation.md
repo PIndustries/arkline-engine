@@ -7,10 +7,11 @@ This document records evidence for the initial Rust model, not approval to publi
 On the development Apple Silicon Mac with Rust 1.89.0:
 
 - Workspace compilation, formatting and Clippy with warnings denied.
-- 20 tests: private client credential persistence/resume, shared trajectory math,
-  stable pilot placement and geometry normals; server authorization,
+- 23 tests: private client credential persistence/resume, shared trajectory math,
+  stable pilot placement and geometry normals; GUI audit checkpoint persistence,
+  rejection and concurrent-cockpit locking; server authorization,
   failed-operation rollback, concurrent fill, lifetime DB ownership, in-memory
-  isolation, persisted travel/cooldown; TCP two-pilot journey; nine verifier rule
+  isolation, persisted travel/cooldown and unchanged-poll write suppression; TCP two-pilot journey; nine verifier rule
   and tamper checks; checkpoint CLI persistence on failure.
 - The TCP journey checks mining and a partial trade, abruptly kills the process,
   resumes both saved identities after restart, checks balances/escrow, cancels the
@@ -37,3 +38,17 @@ shown in the cockpit.
 Owner acceptance is pending. Neither a build nor an automated journey constitutes
 that acceptance. Keep repository visibility private; selecting a license and
 publishing require explicit owner approval.
+
+## Cockpit services preview
+
+Native macOS inspection in an isolated world confirmed the sector overview,
+selected-belt warp action, mining with cargo/ledger updates, and independent audit
+from the Ledger tab. Repeating the audit matched the locally pinned history.
+The expanded shell keeps the real GPU viewport between pilot status and object
+information; Cargo, Exchange, Activity and Ledger share that shell. Known pilots
+are explicitly labelled as saved identities rather than live presence.
+
+Mutating commands are gated while awaiting a response. This prevents accidental
+queueing from repeated clicks; it does not replace server-side command IDs or
+resolve an interrupted request whose result is unknown. The existing two-pilot TCP
+journey continues to cover partial trades, restart and independent replay.
