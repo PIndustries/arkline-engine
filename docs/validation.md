@@ -269,3 +269,20 @@ is throttled. The header measures actual frame intervals. Native focused station
 and mining scenes measured roughly 116-120 FPS (8.3-8.6 ms) on this Mac; this is not a
 cross-hardware guarantee or a measured before/after FPS ratio. The separate ignored
 CPU preparation benchmark is synthetic and must not be reported as an FPS result.
+
+
+## Ship-centered 3D tactical overlay — 26.10.10.6
+
+Adds a separate wide-angle 3D Tactical mode alongside the 2D map, external camera,
+and cockpit. Range rings use the same camera matrix and ship-relative meter scale
+as scene objects. Default rings are spaced every 5 km; zoom changes spacing to 1 or
+25 km with a bounded maximum of ten rings and 128 segments per ring. The selected
+object guide shows horizontal projection, signed height and full center distance.
+The overlay can be hidden, and tactical zoom/orbit is retained across view changes.
+
+Client tests pass (54 passed, one ignored profiling test), including ring geometry,
+ship-center projection at astronomical origins, and pointer-based switching among
+all four views without navigation side effects. Strict workspace Clippy passes.
+Native visual appearance and frame rate for this new mode have not been validated:
+the development Mac was locked during this run. The prior build's measured FPS does
+not establish this mode's performance. Detached tactical panning is not implemented.

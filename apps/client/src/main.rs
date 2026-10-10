@@ -28,6 +28,7 @@ const MUTED: Color32 = Color32::from_rgb(138, 157, 180);
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ViewMode {
     Tactical,
+    Tactical3d,
     External,
     Cockpit,
 }
@@ -759,6 +760,7 @@ impl Cockpit {
     }
     fn view_selector(&mut self, ui: &mut egui::Ui) {
         ui.selectable_value(&mut self.view_mode, ViewMode::Tactical, "2D Tactical");
+        ui.selectable_value(&mut self.view_mode, ViewMode::Tactical3d, "3D Tactical");
         ui.selectable_value(&mut self.view_mode, ViewMode::External, "3D External");
         ui.selectable_value(&mut self.view_mode, ViewMode::Cockpit, "Cockpit");
         if self.view_mode == ViewMode::Tactical {
@@ -3050,6 +3052,7 @@ mod tests {
         let before = serde_json::to_string(cockpit.snapshot.as_ref().unwrap()).unwrap();
         for (label, mode) in [
             ("2D Tactical", ViewMode::Tactical),
+            ("3D Tactical", ViewMode::Tactical3d),
             ("3D External", ViewMode::External),
             ("Cockpit", ViewMode::Cockpit),
         ] {

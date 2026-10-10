@@ -146,9 +146,25 @@ member removal, ownership transfer, and corporation dissolution are not included
 Inventory currently contains ore and the four preview hull classes. General item
 types, fitting, blueprints, manufacturing and repair services remain future work.
 
+## 3D tactical camera
+
+Choose **3D Tactical** in the view selector for a wide-angle, ship-centered 3D
+range overlay. Drag empty space to orbit and scroll to zoom. At the default zoom,
+rings mark 5, 10, 15 km and onward; close/far zoom uses 1/25 km spacing to keep the
+plane readable. Ring dimensions use the same meter coordinates as ships and objects.
+The selected object has a horizontal range guide and a vertical height line; its
+label reports the full 3D center-to-center distance and signed height. Module range
+checks continue to use the server's surface-distance rules.
+
+**Flight controls** can hide the overlay or reset the tactical camera. The tactical
+camera follows your ship through movement and warp and retains its own zoom/orbit
+when switching to external or cockpit views. **2D Tactical** remains the local/system
+map. This version anchors the tactical camera to your ship; detached panning and
+linked-window groups are not implemented.
+
 ## Cockpit layout and services
 
-Space fills the entire gameplay window in all three views. Session controls, overview,
+Space fills the entire gameplay window in all four views. Session controls, overview,
 ship controls and camera controls float above it instead of reserving fixed rows
 or columns. Move or collapse panels to make room around your ship. Use **F11**
 or **Fullscreen** to toggle fullscreen mode. Services open

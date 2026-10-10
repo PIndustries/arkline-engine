@@ -202,6 +202,9 @@ pub struct FlightView {
     context_object: Option<super::SelectedObject>,
     input_surface: Option<(egui::Rect, egui::LayerId)>,
     camera_ship_class: Option<ShipClass>,
+    tactical: bool,
+    other_camera: (f32, f32, f32),
+    tactical_overlay: bool,
     space: Space,
 }
 impl FlightView {
@@ -224,6 +227,9 @@ impl FlightView {
             context_object: None,
             input_surface: None,
             camera_ship_class: None,
+            tactical: false,
+            other_camera: (0.72, 0.65, 350.0),
+            tactical_overlay: true,
             space: Space::default(),
         }
     }
@@ -258,7 +264,7 @@ impl FlightView {
         let ship_distance = (camera_length * 2.5).max(1.8);
         if own_pilot.map(|p| p.ship_class) != self.camera_ship_class {
             self.camera_ship_class = own_pilot.map(|p| p.ship_class);
-            if self.follow {
+            if self.follow && !self.tactical {
                 self.distance = ship_distance;
             }
         }
@@ -270,6 +276,19 @@ impl FlightView {
         self.target = rebased_camera_target(self.target, self.space, space, warp_tracking);
         self.space = space;
         let cockpit = matches!(mode, super::ViewMode::Cockpit);
+        let tactical = mode == super::ViewMode::Tactical3d;
+        if tactical != self.tactical {
+            let next = self.other_camera;
+            self.other_camera = (self.yaw, self.pitch, self.distance);
+            (self.yaw, self.pitch, self.distance) = next;
+            self.tactical = tactical;
+            self.follow = true;
+            self.focus_selection = false;
+        }
+        if tactical {
+            self.follow = true;
+            self.focus_selection = false;
+        }
 
         let bounds = ui.ctx().screen_rect();
         let (camera_position, camera_size) = layout.position(
@@ -307,6 +326,19 @@ impl FlightView {
                     ui.small("W/S: thrust · A/D: strafe · Space/C: vertical");
                     ui.small("Q/E: roll · Arrows: aim · RMB + mouse: aim");
                     ui.small("Left-click: select · Release controls: neutral");
+                    camera_content = Some(ui.max_rect().size());
+                    return;
+                }
+                if tactical {
+                    ui.label("3D Tactical · ship-centered range plane");
+                    ui.checkbox(&mut self.tactical_overlay, "Range rings and target guide");
+                    if ui.button("Reset tactical camera").clicked() {
+                        self.yaw = 0.72;
+                        self.pitch = 0.65;
+                        self.distance = 350.0;
+                    }
+                    ui.small("Drag: orbit · Scroll: zoom · Distances in meters/km");
+                    ui.small("Double-click space: fly · Right-click: actions");
                     camera_content = Some(ui.max_rect().size());
                     return;
                 }
@@ -365,9 +397,15 @@ impl FlightView {
             self.pitch = (self.pitch + delta.y * 0.006).clamp(-1.25, 1.25);
         }
         if !cockpit && world_input && response.hovered() {
-            self.distance = (self.distance
-                * (-ui.input(|i| i.smooth_scroll_delta.y) * 0.002).exp())
-            .clamp((camera_length * 0.8).max(0.5), 260.0);
+            self.distance =
+                (self.distance * (-ui.input(|i| i.smooth_scroll_delta.y) * 0.002).exp()).clamp(
+                    if tactical {
+                        15.0
+                    } else {
+                        (camera_length * 0.8).max(0.5)
+                    },
+                    if tactical { 2500.0 } else { 260.0 },
+                );
         }
         let system_id = snapshot
             .pilots
@@ -422,7 +460,7 @@ impl FlightView {
             Vec3::ZERO
         };
         let dt = ui.input(|i| i.stable_dt).min(0.1);
-        self.target = if warp_tracking {
+        self.target = if warp_tracking || tactical {
             Vec3::ZERO
         } else {
             self.target.lerp(desired, 1.0 - (-dt * 8.0).exp())
@@ -455,10 +493,16 @@ impl FlightView {
             )
         };
         let projection = Mat4::perspective_rh_gl(
-            if cockpit { 1.05 } else { 0.85 },
+            if tactical {
+                1.22
+            } else if cockpit {
+                1.05
+            } else {
+                0.85
+            },
             rect.width() / rect.height().max(1.0),
             0.03,
-            1200.0,
+            if tactical { 10000.0 } else { 1200.0 },
         );
         let vp = projection * view;
         let cockpit_vp =
@@ -512,6 +556,15 @@ impl FlightView {
                         }
                     })),
                 });
+                if tactical && self.tactical_overlay {
+                    paint_tactical_overlay(
+                        ui.painter_at(rect),
+                        vp,
+                        rect,
+                        self.distance,
+                        selected_world.map(|p| space.scene(p)),
+                    );
+                }
                 for pilot in snapshot.pilots.iter().filter(|p| {
                     p.system_id == system_id
                         && p.location != Location::Docked
@@ -1972,6 +2025,101 @@ fn cockpit_camera(ship: Vec3, rotation: Quat) -> (Vec3, Mat4) {
         Mat4::look_at_rh(eye, eye + rotation * Vec3::X, rotation * Vec3::Y),
     )
 }
+/// Scene units are exactly 100 meters; the plane stays horizontal through the ship.
+fn tactical_radii(distance: f32) -> Vec<f32> {
+    let step = if distance < 100.0 {
+        10.0
+    } else if distance < 800.0 {
+        50.0
+    } else {
+        250.0
+    };
+    let count = ((distance * 0.8 / step).ceil() as usize).clamp(2, 10);
+    (1..=count).map(|i| i as f32 * step).collect()
+}
+
+fn tactical_ring_point(radius: f32, angle: f32) -> Vec3 {
+    Vec3::new(radius * angle.cos(), 0.0, radius * angle.sin())
+}
+
+fn paint_tactical_overlay(
+    painter: egui::Painter,
+    vp: Mat4,
+    rect: egui::Rect,
+    distance: f32,
+    selected: Option<Vec3>,
+) {
+    let project = |p| project_point(vp, rect, p);
+    let line = |a, b, color| {
+        if let (Some(a), Some(b)) = (project(a), project(b)) {
+            painter.line_segment([a, b], egui::Stroke::new(1.0, color));
+        }
+    };
+    let radii = tactical_radii(distance);
+    let grid = super::TEAL.gamma_multiply(0.30);
+    for &radius in &radii {
+        // Fixed, bounded tessellation keeps cost independent of zoom and world extent.
+        for segment in 0..128 {
+            let angle = segment as f32 * std::f32::consts::TAU / 128.0;
+            let next = (segment + 1) as f32 * std::f32::consts::TAU / 128.0;
+            line(
+                tactical_ring_point(radius, angle),
+                tactical_ring_point(radius, next),
+                grid,
+            );
+        }
+        for angle in [
+            0.0,
+            std::f32::consts::PI,
+            std::f32::consts::FRAC_PI_2,
+            -std::f32::consts::FRAC_PI_2,
+        ] {
+            if let Some(at) = project(tactical_ring_point(radius, angle)) {
+                painter.text(
+                    at,
+                    egui::Align2::CENTER_BOTTOM,
+                    format!("{:.0} km", radius / 10.0),
+                    egui::FontId::monospace(11.0),
+                    super::TEAL,
+                );
+            }
+        }
+    }
+    if let Some(&radius) = radii.last() {
+        line(-Vec3::X * radius, Vec3::X * radius, grid);
+        line(-Vec3::Z * radius, Vec3::Z * radius, grid);
+    }
+    if let Some(center) = project(Vec3::ZERO) {
+        painter.circle_stroke(center, 5.0, egui::Stroke::new(1.5, super::TEAL));
+        painter.text(
+            center + egui::vec2(8.0, 8.0),
+            egui::Align2::LEFT_TOP,
+            "YOUR SHIP · 0 m",
+            egui::FontId::monospace(10.0),
+            super::TEAL,
+        );
+    }
+    if let Some(target) = selected.filter(|p| p.is_finite()) {
+        let foot = Vec3::new(target.x, 0.0, target.z);
+        line(Vec3::ZERO, foot, super::AMBER.gamma_multiply(0.65));
+        line(foot, target, super::AMBER);
+        if let Some(at) = project(target) {
+            painter.circle_stroke(at, 7.0, egui::Stroke::new(1.0, super::AMBER));
+            painter.text(
+                at + egui::vec2(10.0, -10.0),
+                egui::Align2::LEFT_BOTTOM,
+                format!(
+                    "{:.2} km center range · height {:+.2} km",
+                    target.length() / 10.0,
+                    target.y / 10.0
+                ),
+                egui::FontId::monospace(11.0),
+                super::AMBER,
+            );
+        }
+    }
+}
+
 fn project_point(vp: Mat4, rect: egui::Rect, point: Vec3) -> Option<egui::Pos2> {
     let clip = vp * point.extend(1.0);
     if !clip.is_finite() || clip.w <= 0.0 {
@@ -2683,6 +2831,45 @@ vec2 sun=p-vec2(0.84,0.82);float flare=0.0018/(dot(sun,sun)+0.006);c+=vec3(0.17,
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn tactical_rings_use_real_kilometers_and_bounded_geometry() {
+        let rings = tactical_radii(350.0);
+        assert_eq!(rings[0] * 100.0, 5000.0);
+        assert_eq!(rings[1] * 100.0, 10000.0);
+        for distance in [15.0, 99.0, 100.0, 350.0, 800.0, 2500.0] {
+            let radii = tactical_radii(distance);
+            assert!((2..=10).contains(&radii.len()));
+            for radius in radii {
+                for angle in [0.0, 0.3, 1.2, 3.8, 6.0] {
+                    let point = tactical_ring_point(radius, angle);
+                    assert_eq!(point.y, 0.0);
+                    assert!((point.length() - radius).abs() < 0.001);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn tactical_ship_center_and_meter_scale_survive_astronomical_rebase() {
+        let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 900.0));
+        let view = Mat4::look_at_rh(Vec3::new(200.0, 200.0, 200.0), Vec3::ZERO, Vec3::Y);
+        let vp = Mat4::perspective_rh_gl(1.22, 1600.0 / 900.0, 0.03, 10000.0) * view;
+        let origin = [149_597_870_700.0, 8000.0, -149_597_870_700.0];
+        let space = Space { origin };
+        assert!(
+            project_point(vp, rect, space.scene(origin))
+                .unwrap()
+                .distance(rect.center())
+                < 0.001
+        );
+        let target = space.scene([origin[0] + 3000.0, origin[1] + 4000.0, origin[2]]);
+        assert_eq!(target.length() * 100.0, 5000.0);
+        assert_eq!(target.y * 100.0, 4000.0);
+        let near = project_point(vp, rect, Vec3::X * 50.0).unwrap();
+        let far = project_point(vp, rect, Vec3::X * 100.0).unwrap();
+        assert!(far.distance(rect.center()) > near.distance(rect.center()));
+    }
+
     #[test]
     #[ignore]
     fn render_preparation_profile() {
