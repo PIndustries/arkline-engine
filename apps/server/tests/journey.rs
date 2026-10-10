@@ -336,3 +336,140 @@ fn transport_presence_counts_sessions_without_removing_persistent_ships() {
     drop(server);
     fs::remove_dir_all(directory).unwrap();
 }
+
+#[test]
+fn gates_connect_three_systems_survive_restart_and_preserve_targeted_mining() {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let directory =
+        std::env::temp_dir().join(format!("arkline-gates-{}-{unique}", std::process::id()));
+    fs::create_dir_all(&directory).unwrap();
+    let db = directory.join("world.sqlite");
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap().to_string();
+    drop(listener);
+    let server = Server::start(&db, address.clone());
+    let mut traveler = Client::new(&address);
+    let token = traveler.login("GateTraveler", None).resume_token.unwrap();
+    traveler.ok(Request::Undock);
+    assert!(
+        !traveler.send(Request::Jump { gate_id: 101 }).ok,
+        "gate requires proximity"
+    );
+    assert!(
+        !traveler
+            .send(Request::Navigate {
+                mode: NavigationMode::Approach {
+                    target: NavigationTarget::Asteroid { id: 73 }
+                }
+            })
+            .ok
+    );
+    traveler.travel(Destination::Gate { id: 101 }, "GateTraveler");
+    let charging = traveler
+        .ok(Request::Jump { gate_id: 101 })
+        .snapshot
+        .unwrap();
+    assert!(matches!(
+        charging.pilots[0].location,
+        Location::Jumping { .. }
+    ));
+    assert_eq!(charging.pilots[0].system_id, 1);
+    drop(traveler);
+    drop(server);
+    let server = Server::start(&db, address.clone());
+    let mut traveler = Client::new(&address);
+    traveler.login("GateTraveler", Some(token.clone()));
+    fn arrive(client: &mut Client, system: u32) {
+        let deadline = Instant::now() + Duration::from_secs(6);
+        loop {
+            let s = client.ok(Request::Snapshot).snapshot.unwrap();
+            if s.pilots
+                .iter()
+                .find(|p| p.name == "GateTraveler")
+                .unwrap()
+                .system_id
+                == system
+            {
+                break;
+            }
+            assert!(Instant::now() < deadline, "gate jump did not complete");
+            thread::sleep(Duration::from_millis(50));
+        }
+    }
+    arrive(&mut traveler, 2);
+    traveler.travel(Destination::Gate { id: 202 }, "GateTraveler");
+    traveler.ok(Request::Jump { gate_id: 202 });
+    arrive(&mut traveler, 3);
+    traveler.travel(Destination::Belt, "GateTraveler");
+    let s = traveler.ok(Request::Snapshot).snapshot.unwrap();
+    let asteroid = s
+        .asteroids
+        .iter()
+        .find(|a| a.system_id == 3 && a.ore >= 10)
+        .unwrap()
+        .clone();
+    traveler.ok(Request::LockAsteroid { id: asteroid.id });
+    let mined = traveler
+        .ok(Request::MineAsteroid {
+            id: asteroid.id,
+            units: 10,
+        })
+        .snapshot
+        .unwrap();
+    assert_eq!(
+        mined
+            .asteroids
+            .iter()
+            .find(|a| a.id == asteroid.id)
+            .unwrap()
+            .ore,
+        asteroid.ore - 10
+    );
+    let mut home = Client::new(&address);
+    home.login("HomePilot", None);
+    home.ok(Request::Undock);
+    assert!(!home.send(Request::LockAsteroid { id: asteroid.id }).ok);
+    assert!(
+        !home
+            .send(Request::Navigate {
+                mode: NavigationMode::Approach {
+                    target: NavigationTarget::Pilot {
+                        pilot: "GateTraveler".into()
+                    }
+                }
+            })
+            .ok
+    );
+    let export = traveler.ok(Request::ExportLedger).ledger.unwrap();
+    arkline_verifier::verify(&export, None).unwrap();
+    assert_eq!(
+        export.snapshot.asteroids.iter().map(|a| a.ore).sum::<u64>(),
+        export.snapshot.belt_ore
+    );
+    drop(home);
+    drop(traveler);
+    drop(server);
+    let server = Server::start(&db, address.clone());
+    let mut traveler = Client::new(&address);
+    let s = traveler
+        .login("GateTraveler", Some(token))
+        .snapshot
+        .unwrap();
+    let pilot = s.pilots.iter().find(|p| p.name == "GateTraveler").unwrap();
+    assert_eq!(pilot.system_id, 3);
+    assert_eq!(pilot.ore, 10);
+    assert_eq!(
+        s.asteroids
+            .iter()
+            .find(|a| a.id == asteroid.id)
+            .unwrap()
+            .ore,
+        asteroid.ore - 10
+    );
+    drop(traveler);
+    drop(server);
+    fs::remove_dir_all(directory).unwrap();
+}

@@ -33,9 +33,20 @@ Credits are integer quantities, and multiplication/addition are checked for over
 Total credits are `pilot count * starter issuance` in this ruleset. There are no
 implicit NPC mints, fees, taxes, or operator rewards.
 
-Travel is a persistent destination and wall-clock arrival time. GUI positions are a
-visual interpolation of that state, not a physical trajectory. The client polls
-snapshots; this is not the eventual high-frequency regional simulation transport.
+The server integrates manual flight at 10 Hz and persists position, velocity and
+heading. Warp and gate jumps use durable arrival timestamps. A gate transition
+moves the ship to its paired gate in another system. All three systems currently
+run in the same process and database; this is not distributed authority handoff.
+The client polls snapshots and applies bounded visual prediction.
+
+Asteroids have persistent IDs and individual remaining ore. Their reserves sum
+to the legacy global belt reserve. Migration splits only the existing reserve,
+without changing cargo, credits or ledger history. Mining checks system, target
+lock, surface distance, cooldown, cargo capacity and remaining resource before
+atomically updating the selected rock, global reserve, cargo and economic event.
+The backward-compatible event records quantity and pilot; it does not attest to
+the historical asteroid ID. The verifier checks the aggregate asteroid reserve,
+not physical mining truth or per-rock historical allocation.
 
 SQLite contains a serialized world record and ordered economic events. A single
 server writer serializes access. Restart restores committed world state, while the

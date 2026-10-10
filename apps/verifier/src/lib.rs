@@ -201,6 +201,17 @@ pub fn verify(export: &LedgerExport, pinned: Option<&Checkpoint>) -> Result<Repo
         "snapshot head mismatch"
     );
     ensure!(snapshot.belt_ore == belt, "snapshot belt mismatch");
+    // Older exports omit individual rocks. New exports conserve the same global
+    // reserve; this proves aggregate consistency, not which rock was mined.
+    if !snapshot.asteroids.is_empty() {
+        let mut ids = BTreeSet::new();
+        let mut reserve = 0;
+        for asteroid in &snapshot.asteroids {
+            ensure!(ids.insert(asteroid.id), "duplicate asteroid ID");
+            reserve = add(reserve, asteroid.ore)?;
+        }
+        ensure!(reserve == belt, "asteroid reserve mismatch");
+    }
     ensure!(
         snapshot.pilots.len() == accounts.len(),
         "snapshot pilot count mismatch"
@@ -258,6 +269,17 @@ pub fn verify(export: &LedgerExport, pinned: Option<&Checkpoint>) -> Result<Repo
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn individual_reserves_match_legacy_economic_total() {
+        let mut export = fixture();
+        export.snapshot.asteroids = asteroid_catalog(export.snapshot.belt_ore);
+        verify(&export, None).unwrap();
+        export.snapshot.asteroids[0].ore += 1;
+        assert!(verify(&export, None).is_err());
+        export.snapshot.asteroids[0].ore -= 1;
+        export.snapshot.asteroids[1].id = export.snapshot.asteroids[0].id;
+        assert!(verify(&export, None).is_err());
+    }
     fn fixture() -> LedgerExport {
         let events = vec![
             EconomicEvent::PilotCreated {
@@ -304,10 +326,13 @@ mod tests {
         LedgerExport {
             protocol_version: PROTOCOL_VERSION,
             snapshot: Snapshot {
+                asteroids: vec![],
                 online_pilots: vec![],
                 server_time_ms: 6000,
                 pilots: vec![
                     PilotView {
+                        system_id: HOME_SYSTEM_ID,
+                        locked_asteroid: None,
                         name: "Alice".into(),
                         credits: 1020,
                         ore: 6,
@@ -315,6 +340,8 @@ mod tests {
                         flight: None,
                     },
                     PilotView {
+                        system_id: HOME_SYSTEM_ID,
+                        locked_asteroid: None,
                         name: "Bob".into(),
                         credits: 980,
                         ore: 4,

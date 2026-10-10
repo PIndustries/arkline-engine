@@ -158,9 +158,19 @@ enum ServiceTab {
 }
 #[derive(Clone, PartialEq, Eq)]
 pub(crate) enum SelectedObject {
+    Asteroid(u64),
+    Gate(u64),
     Station,
     Belt,
     Pilot(String),
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum OverviewFilter {
+    All,
+    Mining,
+    Travel,
+    Pilots,
 }
 
 struct Cockpit {
@@ -195,6 +205,9 @@ struct Cockpit {
     settings_notice: String,
     navigation_range: f64,
     context_fly_to: Option<[f64; 3]>,
+    overview_filter: OverviewFilter,
+    services_open: bool,
+    overview_nearest_first: bool,
 }
 impl Cockpit {
     fn new(
@@ -237,6 +250,9 @@ impl Cockpit {
             settings_notice: String::new(),
             navigation_range: 500.0,
             context_fly_to: None,
+            overview_filter: OverviewFilter::All,
+            services_open: false,
+            overview_nearest_first: true,
         }
     }
     fn accent(&self) -> Color32 {
@@ -335,7 +351,10 @@ impl Cockpit {
         self.can_operate()
             && self.own().is_some_and(|p| {
                 p.flight.is_some()
-                    && !matches!(p.location, Location::Docked | Location::InTransit { .. })
+                    && !matches!(
+                        p.location,
+                        Location::Docked | Location::InTransit { .. } | Location::Jumping { .. }
+                    )
             })
     }
     fn can_operate(&self) -> bool {
@@ -402,6 +421,15 @@ impl Cockpit {
                                 );
                             }
                         }
+                        let previous_system = self.own().map(|p| p.system_id);
+                        if snapshot
+                            .pilots
+                            .iter()
+                            .find(|p| p.name == self.pilot)
+                            .is_some_and(|p| previous_system.is_some_and(|old| old != p.system_id))
+                        {
+                            self.selected_object = SelectedObject::Station;
+                        }
                         self.snapshot = Some(snapshot);
                         self.observed = Instant::now();
                     }
@@ -429,7 +457,11 @@ impl Cockpit {
                     "OFFLINE"
                 }
                 .into(),
-                "Waiting for a live server connection".into(),
+                if self.notice.is_empty() {
+                    "Waiting for a live server connection".into()
+                } else {
+                    self.notice.clone()
+                },
                 None,
                 AMBER,
             );
@@ -456,10 +488,14 @@ impl Cockpit {
             arrives_at_ms,
         } = pilot.location
         {
-            let destination = if destination == Destination::Belt {
-                "asteroid belt"
-            } else {
-                "station"
+            let destination = match destination {
+                Destination::Belt => "asteroid belt".to_string(),
+                Destination::Station => "station".to_string(),
+                Destination::Gate { id } => gates()
+                    .into_iter()
+                    .find(|g| g.id == id)
+                    .map(|g| g.name)
+                    .unwrap_or_else(|| "stargate".into()),
             };
             if let Some((phase, progress)) = flight3d::warp_phase(&pilot.location, now) {
                 return (
@@ -479,7 +515,25 @@ impl Cockpit {
                 self.accent(),
             );
         }
-        if in_navigation_range(&pilot, BELT_POSITION, MINING_RANGE) {
+        if let Location::Jumping {
+            gate_id,
+            arrives_at_ms,
+        } = pilot.location
+        {
+            let remaining = arrives_at_ms.saturating_sub(now);
+            let route = gates()
+                .into_iter()
+                .find(|g| g.id == gate_id)
+                .map(|g| system_name(g.destination_system_id))
+                .unwrap_or_else(|| "destination area".into());
+            return (
+                "STARGATE TRANSIT".into(),
+                format!("To {route} · {:.1}s", remaining as f32 / 1000.0),
+                Some(1.0 - remaining.min(JUMP_DURATION_MS) as f32 / JUMP_DURATION_MS as f32),
+                self.accent(),
+            );
+        }
+        if self.mining_effect_target().is_some() {
             if let Some((progress, units)) = self.effects.mining(now) {
                 return (
                     "MINING LASER ACTIVE".into(),
@@ -553,79 +607,33 @@ impl Cockpit {
                 None,
                 self.accent(),
             ),
-            Location::InTransit { .. } => unreachable!(),
+            Location::InTransit { .. } | Location::Jumping { .. } => unreachable!(),
         }
     }
-    fn flight(&mut self, ui: &mut egui::Ui) {
-        ui.label(
-            egui::RichText::new("PILOT / VESSEL")
-                .color(self.accent())
-                .strong(),
-        );
-        if let Some(pilot) = self.own() {
-            ui.heading(&pilot.name);
-            ui.colored_label(MUTED, location_label(&pilot.location));
-            ui.add_space(8.0);
-            egui::Frame::group(ui.style())
-                .fill(self.theme.panel())
-                .show(ui, |ui| {
-                    ui.set_min_width(ui.available_width());
-                    ui.small("AVAILABLE BALANCE");
-                    ui.label(
-                        egui::RichText::new(format!("{} CR", pilot.credits))
-                            .size(25.0)
-                            .color(AMBER),
-                    );
-                    ui.separator();
-                    ui.horizontal(|ui| {
-                        ui.label("ORE HOLD");
-                        ui.colored_label(
-                            self.accent(),
-                            format!("{} / {}", pilot.ore, CARGO_CAPACITY),
-                        );
-                    });
-                    ui.add(
-                        egui::ProgressBar::new(pilot.ore as f32 / CARGO_CAPACITY as f32)
-                            .fill(self.accent())
-                            .desired_height(6.0),
-                    );
-                    let escrow: u64 = self
-                        .snapshot
-                        .as_ref()
-                        .map(|s| {
-                            s.orders
-                                .iter()
-                                .filter(|o| o.seller == self.pilot)
-                                .map(|o| o.units)
-                                .sum()
-                        })
-                        .unwrap_or(0);
-                    ui.small(format!("{} ore listed on exchange", escrow));
-                });
-            ui.add_space(6.0);
-            let (status, detail, progress, color) = self.operation_status();
-            // Every state reserves the same space, so cues never move action buttons.
-            ui.allocate_ui_with_layout(
-                Vec2::new(ui.available_width(), 108.0),
-                egui::Layout::top_down(egui::Align::Min),
-                |ui| {
-                    ui.label(egui::RichText::new("VESSEL STATUS").size(11.0).color(MUTED));
-                    ui.colored_label(color, egui::RichText::new(status).strong());
-                    ui.small(detail);
-                    ui.add(
-                        egui::ProgressBar::new(progress.unwrap_or(0.0))
-                            .fill(color)
-                            .desired_height(5.0),
-                    );
-                },
+    fn flight_deck(&mut self, ui: &mut egui::Ui) {
+        let Some(pilot) = self.own() else {
+            return;
+        };
+        ui.columns(3, |columns| {
+            columns[0].horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new(&pilot.name)
+                        .color(self.accent())
+                        .strong(),
+                );
+                ui.small(format!("{} CR", pilot.credits));
+            });
+            let speed = pilot
+                .flight
+                .as_ref()
+                .map_or(0.0, |f| distance_m(f.velocity, [0.0; 3]));
+            columns[0].small(format!("{speed:.0} m/s  /  {} ore aboard", pilot.ore));
+            columns[0].add(
+                egui::ProgressBar::new(pilot.ore as f32 / CARGO_CAPACITY as f32)
+                    .fill(self.accent())
+                    .desired_height(5.0),
             );
-            ui.label(
-                egui::RichText::new("FLIGHT OPERATIONS")
-                    .color(self.accent())
-                    .strong(),
-            );
-            ui.small("Select an object to approach, orbit, keep range, or warp. Double-click empty space to fly there.");
-            ui.horizontal(|ui| {
+            columns[1].horizontal(|ui| {
                 if ui
                     .add_enabled(
                         self.can_operate() && pilot.location == Location::Docked,
@@ -650,47 +658,101 @@ impl Cockpit {
                     });
                 }
             });
-            if let Some(flight) = &pilot.flight {
-                ui.colored_label(
-                    self.accent(),
-                    format!(
-                        "Speed {:.0} / {:.0} m/s",
-                        distance_m(flight.velocity, [0.0; 3]),
-                        MAX_SHIP_SPEED
-                    ),
+            columns[1].small("Ctrl+Space stop · Double-click space to fly");
+            let asteroid = self.selected_asteroid().cloned();
+            columns[2].small(
+                asteroid
+                    .as_ref()
+                    .map(|a| a.name.as_str())
+                    .unwrap_or("Select an asteroid to mine"),
+            );
+            columns[2].horizontal(|ui| {
+                ui.add(
+                    egui::DragValue::new(&mut self.amount)
+                        .range(1..=MAX_MINE_UNITS)
+                        .suffix(" ore"),
                 );
-                ui.small(format!(
-                    "Station {} · Belt {}",
-                    format_distance(distance_m(flight.position, STATION_POSITION)),
-                    format_distance(distance_m(flight.position, BELT_POSITION))
-                ));
-            }
-            ui.separator();
-            ui.horizontal(|ui| {
-                ui.label("Mine units");
-                ui.add(egui::DragValue::new(&mut self.amount).range(1..=MAX_MINE_UNITS));
+                if ui
+                    .add_enabled(self.can_lock_selected(), egui::Button::new("Lock"))
+                    .clicked()
+                {
+                    if let Some(a) = &asteroid {
+                        self.send(Request::LockAsteroid { id: a.id });
+                    }
+                }
+                if ui
+                    .add_enabled(self.can_mine(&pilot), egui::Button::new("Extract"))
+                    .clicked()
+                {
+                    self.extract_selected();
+                }
             });
-            if ui
-                .add_enabled(
-                    self.can_mine(&pilot),
-                    egui::Button::new("Extract ore")
-                        .min_size(Vec2::new(ui.available_width(), 32.0)),
-                )
-                .clicked()
-            {
-                self.send(Request::Mine { units: self.amount });
-            }
-            ui.small(format!(
-                "Extraction requires undocked range ≤ {}.",
-                format_distance(MINING_RANGE)
-            ));
-            if ui.button("Inspect cargo").clicked() {
-                self.service_tab = ServiceTab::Cargo;
-            }
-            if ui.button("Open exchange").clicked() {
-                self.service_tab = ServiceTab::Exchange;
+        });
+    }
+    fn current_system(&self) -> u32 {
+        self.own().map_or(HOME_SYSTEM_ID, |p| p.system_id)
+    }
+    fn selected_asteroid(&self) -> Option<&Asteroid> {
+        let SelectedObject::Asteroid(id) = self.selected_object else {
+            return None;
+        };
+        self.snapshot
+            .as_ref()?
+            .asteroids
+            .iter()
+            .find(|a| a.id == id && a.system_id == self.current_system())
+    }
+    fn selected_gate(&self) -> Option<Stargate> {
+        let SelectedObject::Gate(id) = self.selected_object else {
+            return None;
+        };
+        gates()
+            .into_iter()
+            .find(|g| g.id == id && g.system_id == self.current_system())
+    }
+    fn can_lock_selected(&self) -> bool {
+        self.can_fly()
+            && self.own().is_some_and(|p| {
+                self.selected_asteroid().is_some_and(|a| {
+                    a.ore > 0
+                        && p.locked_asteroid != Some(a.id)
+                        && p.flight.as_ref().is_some_and(|f| {
+                            (distance_m(f.position, a.position) - a.radius).max(0.0) <= LOCK_RANGE
+                        })
+                })
+            })
+    }
+    fn can_jump_selected(&self) -> bool {
+        self.can_fly()
+            && self.own().is_some_and(|p| {
+                self.selected_gate().is_some_and(|g| {
+                    p.flight
+                        .as_ref()
+                        .is_some_and(|f| distance_m(f.position, g.position) <= GATE_RANGE)
+                })
+            })
+    }
+    fn extract_selected(&mut self) {
+        if self.own().is_some_and(|p| self.can_mine(&p)) {
+            if let Some(a) = self.selected_asteroid() {
+                self.send(Request::MineAsteroid {
+                    id: a.id,
+                    units: self.amount,
+                });
             }
         }
+    }
+    fn mining_effect_target(&self) -> Option<&Asteroid> {
+        let id = self.effects.mining_target(self.presentation_time())?;
+        let asteroid = self
+            .snapshot
+            .as_ref()?
+            .asteroids
+            .iter()
+            .find(|a| a.id == id)?;
+        self.own()
+            .filter(|p| effects::can_extract_target(p, asteroid))
+            .map(|_| asteroid)
     }
     fn can_dock(&self, pilot: &PilotView) -> bool {
         self.can_operate() && in_navigation_range(pilot, STATION_POSITION, DOCK_RANGE)
@@ -699,15 +761,19 @@ impl Cockpit {
         self.can_operate()
             && self.amount > 0
             && self.amount <= MAX_MINE_UNITS
-            && in_navigation_range(pilot, BELT_POSITION, MINING_RANGE)
             && pilot.ore.saturating_add(self.amount) <= CARGO_CAPACITY
             && self
-                .snapshot
-                .as_ref()
-                .is_some_and(|s| s.belt_ore >= self.amount)
+                .selected_asteroid()
+                .is_some_and(|a| a.ore >= self.amount && effects::can_extract_target(pilot, a))
     }
     fn selected_target(&self) -> Option<NavigationTarget> {
         match &self.selected_object {
+            SelectedObject::Asteroid(id) => self
+                .selected_asteroid()
+                .map(|_| NavigationTarget::Asteroid { id: *id }),
+            SelectedObject::Gate(id) => self
+                .selected_gate()
+                .map(|_| NavigationTarget::Gate { id: *id }),
             SelectedObject::Station => Some(NavigationTarget::Station),
             SelectedObject::Belt => Some(NavigationTarget::Belt),
             SelectedObject::Pilot(name) => self
@@ -717,6 +783,7 @@ impl Cockpit {
                     s.pilots.iter().find(|p| {
                         p.name == *name
                             && p.name != self.pilot
+                            && p.system_id == self.current_system()
                             && p.location != Location::Docked
                             && p.flight.is_some()
                     })
@@ -728,6 +795,8 @@ impl Cockpit {
     }
     fn selected_position(&self) -> Option<[f64; 3]> {
         match &self.selected_object {
+            SelectedObject::Asteroid(_) => self.selected_asteroid().map(|a| a.position),
+            SelectedObject::Gate(_) => self.selected_gate().map(|g| g.position),
             SelectedObject::Station => Some(STATION_POSITION),
             SelectedObject::Belt => Some(BELT_POSITION),
             SelectedObject::Pilot(name) => self
@@ -735,7 +804,7 @@ impl Cockpit {
                 .as_ref()?
                 .pilots
                 .iter()
-                .find(|p| p.name == *name)?
+                .find(|p| p.name == *name && p.system_id == self.current_system())?
                 .flight
                 .as_ref()
                 .map(|f| f.position),
@@ -749,10 +818,19 @@ impl Cockpit {
             {
                 ui.colored_label(
                     self.accent(),
-                    format!(
-                        "Range {}",
-                        format_distance(distance_m(flight.position, position))
-                    ),
+                    if let Some(asteroid) = self.selected_asteroid() {
+                        format!(
+                            "Surface {}",
+                            format_distance(
+                                (distance_m(flight.position, position) - asteroid.radius).max(0.0)
+                            )
+                        )
+                    } else {
+                        format!(
+                            "Range {}",
+                            format_distance(distance_m(flight.position, position))
+                        )
+                    },
                 );
             }
         }
@@ -816,12 +894,22 @@ impl Cockpit {
         });
         let destination = match self.selected_object {
             SelectedObject::Station => Some(Destination::Station),
-            SelectedObject::Belt => Some(Destination::Belt),
+            SelectedObject::Belt | SelectedObject::Asteroid(_) => Some(Destination::Belt),
+            SelectedObject::Gate(id) => Some(Destination::Gate { id }),
             _ => None,
         };
         if let Some(destination) = destination {
             if ui
-                .add_enabled(self.can_fly(), egui::Button::new("Warp to selected"))
+                .add_enabled(
+                    self.can_fly(),
+                    egui::Button::new(
+                        if matches!(self.selected_object, SelectedObject::Asteroid(_)) {
+                            "Warp to belt"
+                        } else {
+                            "Warp to selected"
+                        },
+                    ),
+                )
                 .clicked()
             {
                 self.send(Request::Warp { destination });
@@ -837,20 +925,51 @@ impl Cockpit {
             }
             ui.small(format!("Docking range: {}", format_distance(DOCK_RANGE)));
         }
-        if self.selected_object == SelectedObject::Belt {
-            let can_mine = self.own().is_some_and(|p| self.can_mine(&p));
+        if let Some(asteroid) = self.selected_asteroid().cloned() {
+            let locked = self
+                .own()
+                .is_some_and(|p| p.locked_asteroid == Some(asteroid.id));
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        self.can_lock_selected(),
+                        egui::Button::new(if locked { "Locked" } else { "Lock target" }),
+                    )
+                    .clicked()
+                {
+                    self.send(Request::LockAsteroid { id: asteroid.id });
+                }
+                if ui
+                    .add_enabled(
+                        self.own().is_some_and(|p| self.can_mine(&p)),
+                        egui::Button::new("Extract selected"),
+                    )
+                    .clicked()
+                {
+                    self.extract_selected();
+                }
+            });
+            ui.small(format!(
+                "Surface range ≤ {} to extract",
+                format_distance(MINING_RANGE)
+            ));
+        }
+        if let Some(gate) = self.selected_gate() {
             if ui
                 .add_enabled(
-                    can_mine,
-                    egui::Button::new(format!("Extract {} ore", self.amount)),
+                    self.can_jump_selected(),
+                    egui::Button::new(format!(
+                        "Jump to {}",
+                        system_name(gate.destination_system_id)
+                    )),
                 )
                 .clicked()
             {
-                self.send(Request::Mine { units: self.amount });
+                self.send(Request::Jump { gate_id: gate.id });
             }
             ui.small(format!(
-                "Extraction range: {}",
-                format_distance(MINING_RANGE)
+                "Gate activation range {}",
+                format_distance(GATE_RANGE)
             ));
         }
         if matches!(&self.selected_object, SelectedObject::Pilot(name) if name == &self.pilot) {
@@ -859,107 +978,192 @@ impl Cockpit {
         ui.small("Ctrl+Space: stop · Double-click empty space: fly there");
     }
     fn overview(&mut self, ui: &mut egui::Ui) {
+        let system = self.current_system();
         ui.label(
-            egui::RichText::new("SECTOR OVERVIEW")
+            egui::RichText::new(system_name(system))
+                .size(19.0)
                 .color(self.accent())
                 .strong(),
         );
-        ui.small("01 / Arkline orbital region");
+        ui.small("Connected space / local objects");
         ui.separator();
-        ui.selectable_value(
-            &mut self.selected_object,
-            SelectedObject::Station,
-            "◇  Arkline Station",
-        );
-        ui.selectable_value(
-            &mut self.selected_object,
-            SelectedObject::Belt,
-            "◆  Asteroid Belt",
-        );
-        let pilots = self
-            .snapshot
-            .as_ref()
-            .map(|s| s.pilots.clone())
-            .unwrap_or_default();
         ui.label(
-            egui::RichText::new(format!("KNOWN PILOTS / {}", pilots.len()))
+            egui::RichText::new("SELECTED OBJECT")
                 .size(11.0)
                 .color(MUTED),
         );
-        egui::ScrollArea::vertical()
-            .id_salt("overview-roster")
-            .max_height(110.0)
-            .show(ui, |ui| {
-                for pilot in &pilots {
-                    let online = if pilot.name == self.pilot {
-                        self.connected
-                    } else {
-                        self.snapshot
-                            .as_ref()
-                            .is_some_and(|s| s.online_pilots.contains(&pilot.name))
-                    };
-                    ui.selectable_value(
-                        &mut self.selected_object,
-                        SelectedObject::Pilot(pilot.name.clone()),
-                        format!("{} {}", if online { "●" } else { "○" }, pilot.name),
-                    )
-                    .on_hover_text(if online {
+        match self.selected_object.clone() {
+            SelectedObject::Station => {
+                ui.heading("Arkline Station");
+                ui.small("Docking and exchange services");
+            }
+            SelectedObject::Belt => {
+                ui.heading("Asteroid field");
+                ui.small("Select an individual asteroid, lock it, then extract.");
+            }
+            SelectedObject::Asteroid(id) => {
+                if let Some(a) = self.selected_asteroid() {
+                    ui.heading(&a.name);
+                    ui.colored_label(
+                        if a.ore > 0 { self.accent() } else { AMBER },
+                        format!("{} ore remaining · #{}", a.ore, id),
+                    );
+                    if self.own().is_some_and(|p| p.locked_asteroid == Some(id)) {
+                        ui.colored_label(self.accent(), "TARGET LOCK CONFIRMED");
+                    }
+                }
+            }
+            SelectedObject::Gate(_) => {
+                if let Some(g) = self.selected_gate() {
+                    ui.heading(&g.name);
+                    ui.small(format!("Route to {}", system_name(g.destination_system_id)));
+                }
+            }
+            SelectedObject::Pilot(name) => {
+                ui.heading(&name);
+                if let Some(p) = self
+                    .snapshot
+                    .as_ref()
+                    .and_then(|s| s.pilots.iter().find(|p| p.name == name))
+                {
+                    ui.small(location_label(&p.location));
+                    let online = self
+                        .snapshot
+                        .as_ref()
+                        .is_some_and(|s| s.online_pilots.contains(&name));
+                    ui.small(if online {
                         "Connected"
                     } else {
                         "Disconnected; vessel persists"
                     });
                 }
-            });
-        ui.small(if self.connected {
-            "Live presence; undocked ships persist."
-        } else {
-            "Last known presence; connection lost."
-        });
-        ui.separator();
-        ui.label(
-            egui::RichText::new("SELECTED OBJECT")
-                .color(self.accent())
-                .strong(),
-        );
-        match self.selected_object.clone() {
-            SelectedObject::Station => {
-                ui.heading("Arkline Station");
-                ui.small("Dock to trade cargo and manage orders.");
-            }
-            SelectedObject::Belt => {
-                ui.heading("Asteroid Belt");
-                if let Some(snapshot) = &self.snapshot {
-                    ui.colored_label(AMBER, format!("{} ore remaining", snapshot.belt_ore));
-                }
-            }
-            SelectedObject::Pilot(name) => {
-                if let Some(pilot) = pilots.iter().find(|p| p.name == name) {
-                    ui.heading(&pilot.name);
-                    ui.small(location_label(&pilot.location));
-                    let online = if name == self.pilot {
-                        self.connected
-                    } else {
-                        self.snapshot
-                            .as_ref()
-                            .is_some_and(|s| s.online_pilots.contains(&name))
-                    };
-                    ui.colored_label(
-                        if online { self.accent() } else { MUTED },
-                        if online { "Connected" } else { "Disconnected" },
-                    );
-                    ui.small(format!("{} CR · {} ore", pilot.credits, pilot.ore));
-                }
             }
         }
         self.navigation_controls(ui);
         ui.separator();
-        if ui.button("Station exchange").clicked() {
-            self.service_tab = ServiceTab::Exchange;
+        ui.horizontal(|ui| {
+            ui.selectable_value(&mut self.overview_filter, OverviewFilter::All, "All");
+            ui.selectable_value(&mut self.overview_filter, OverviewFilter::Mining, "Mining");
+            ui.selectable_value(&mut self.overview_filter, OverviewFilter::Travel, "Travel");
+            ui.selectable_value(&mut self.overview_filter, OverviewFilter::Pilots, "Pilots");
+        });
+        let mut rows: Vec<(SelectedObject, String, &str, Option<[f64; 3]>)> = vec![];
+        if matches!(
+            self.overview_filter,
+            OverviewFilter::All | OverviewFilter::Travel
+        ) {
+            rows.push((
+                SelectedObject::Station,
+                "Arkline Station".into(),
+                "Station",
+                Some(STATION_POSITION),
+            ));
+            rows.push((
+                SelectedObject::Belt,
+                "Asteroid field".into(),
+                "Field",
+                Some(BELT_POSITION),
+            ));
+            for gate in gates().into_iter().filter(|g| g.system_id == system) {
+                rows.push((
+                    SelectedObject::Gate(gate.id),
+                    gate.name,
+                    "Gate",
+                    Some(gate.position),
+                ));
+            }
         }
-        if let Some((message, error)) = self.feed.front() {
-            ui.label(egui::RichText::new("LATEST UPDATE").size(11.0).color(MUTED));
-            ui.colored_label(if *error { AMBER } else { self.accent() }, message);
+        if matches!(
+            self.overview_filter,
+            OverviewFilter::All | OverviewFilter::Mining
+        ) {
+            if let Some(s) = &self.snapshot {
+                for a in s.asteroids.iter().filter(|a| a.system_id == system) {
+                    rows.push((
+                        SelectedObject::Asteroid(a.id),
+                        a.name.clone(),
+                        if a.ore > 0 { "Ore" } else { "Empty" },
+                        Some(a.position),
+                    ));
+                }
+            }
         }
+        if matches!(
+            self.overview_filter,
+            OverviewFilter::All | OverviewFilter::Pilots
+        ) {
+            if let Some(s) = &self.snapshot {
+                for p in s.pilots.iter().filter(|p| p.system_id == system) {
+                    rows.push((
+                        SelectedObject::Pilot(p.name.clone()),
+                        p.name.clone(),
+                        if p.location == Location::Docked {
+                            "Docked"
+                        } else {
+                            "Ship"
+                        },
+                        p.flight.as_ref().map(|f| f.position),
+                    ));
+                }
+            }
+        }
+        let own_position = self.own().and_then(|p| p.flight.map(|f| f.position));
+        rows.sort_by(|a, b| {
+            let da = own_position
+                .zip(a.3)
+                .map_or(f64::INFINITY, |(own, p)| distance_m(own, p));
+            let db = own_position
+                .zip(b.3)
+                .map_or(f64::INFINITY, |(own, p)| distance_m(own, p));
+            let ordering = da.total_cmp(&db).then_with(|| a.1.cmp(&b.1));
+            if self.overview_nearest_first {
+                ordering
+            } else {
+                ordering.reverse()
+            }
+        });
+        egui::ScrollArea::vertical()
+            .id_salt("overview-table")
+            .show(ui, |ui| {
+                egui::Grid::new("overview-grid")
+                    .striped(true)
+                    .spacing([8.0, 3.0])
+                    .show(ui, |ui| {
+                        ui.small("NAME");
+                        ui.small("TYPE");
+                        if ui
+                            .small_button(if self.overview_nearest_first {
+                                "RANGE ↑"
+                            } else {
+                                "RANGE ↓"
+                            })
+                            .on_hover_text("Sort by distance")
+                            .clicked()
+                        {
+                            self.overview_nearest_first = !self.overview_nearest_first;
+                        }
+                        ui.end_row();
+                        for (object, name, kind, position) in rows {
+                            if ui
+                                .selectable_label(
+                                    self.selected_object == object,
+                                    egui::RichText::new(name).size(12.0),
+                                )
+                                .clicked()
+                            {
+                                self.selected_object = object;
+                            }
+                            ui.small(kind);
+                            ui.small(
+                                own_position
+                                    .zip(position)
+                                    .map(|(a, b)| format_distance(distance_m(a, b)))
+                                    .unwrap_or_else(|| "—".into()),
+                            );
+                            ui.end_row();
+                        }
+                    });
+            });
     }
     fn cargo_panel(&mut self, ui: &mut egui::Ui) {
         if let Some(pilot) = self.own() {
@@ -1008,6 +1212,7 @@ impl Cockpit {
             ui.horizontal_wrapped(|ui| {
                 if ui.button("Manage sell orders").clicked() {
                     self.service_tab = ServiceTab::Exchange;
+                    self.services_open = true;
                 }
                 ui.colored_label(
                     MUTED,
@@ -1186,6 +1391,16 @@ impl Cockpit {
             .then(|| response.interact_pointer_pos())
             .flatten();
         let mut selected = None;
+        let mut hit_score = f32::INFINITY;
+        let mut pick = |center: Pos2, radius: f32, object: SelectedObject| {
+            if let Some(point) = clicked {
+                let score = point.distance(center) / radius;
+                if score <= 1.0 && score < hit_score {
+                    hit_score = score;
+                    selected = Some(object);
+                }
+            }
+        };
         let paint = ui.painter_at(rect);
         paint.rect_filled(rect, 9.0, Color32::from_rgb(2, 6, 4));
         for i in 0..150 {
@@ -1202,12 +1417,8 @@ impl Cockpit {
         }
         let station = tactical_project(rect, STATION_POSITION);
         let belt = tactical_project(rect, BELT_POSITION);
-        if clicked.is_some_and(|p| p.distance(station) <= 43.0) {
-            selected = Some(SelectedObject::Station);
-        }
-        if clicked.is_some_and(|p| p.distance(belt) <= 50.0) {
-            selected = Some(SelectedObject::Belt);
-        }
+        pick(station, 43.0, SelectedObject::Station);
+        pick(belt, 50.0, SelectedObject::Belt);
         if self.selected_object == SelectedObject::Station {
             selection_brackets(&paint, station, 44.0, self.accent());
         }
@@ -1241,33 +1452,90 @@ impl Cockpit {
             egui::FontId::proportional(13.0),
             self.accent(),
         );
-        for i in 0..15 {
-            let angle = i as f32 * 2.399;
-            let distance = 15.0 + (i % 5) as f32 * 8.0;
-            paint.circle_filled(
-                belt + Vec2::angled(angle) * distance,
-                3.0 + (i % 4) as f32,
-                Color32::from_rgb(121, 105, 91),
-            );
-        }
-        paint.text(
-            belt + Vec2::new(0.0, 60.0),
-            egui::Align2::CENTER_TOP,
-            "ASTEROID BELT",
-            egui::FontId::proportional(13.0),
-            AMBER,
+        paint.circle_stroke(
+            belt,
+            2100.0 * tactical_scale(rect),
+            Stroke::new(1.0, MUTED.gamma_multiply(0.2)),
         );
+        if let Some(snapshot) = &self.snapshot {
+            for asteroid in snapshot
+                .asteroids
+                .iter()
+                .filter(|a| a.system_id == self.current_system())
+            {
+                let center = tactical_project(rect, asteroid.position);
+                let radius = (asteroid.radius as f32 * tactical_scale(rect)).max(3.0);
+                let tint = if asteroid.ore > 0 {
+                    Color32::from_rgb(135, 116, 88)
+                } else {
+                    Color32::from_gray(50)
+                };
+                paint.add(egui::Shape::convex_polygon(
+                    vec![
+                        center + Vec2::new(-radius, -radius * 0.45),
+                        center + Vec2::new(radius * 0.3, -radius),
+                        center + Vec2::new(radius, radius * 0.5),
+                        center + Vec2::new(-radius * 0.4, radius),
+                    ],
+                    tint,
+                    Stroke::new(0.7, MUTED),
+                ));
+                pick(center, radius + 5.0, SelectedObject::Asteroid(asteroid.id));
+                if self.selected_object == SelectedObject::Asteroid(asteroid.id) {
+                    selection_brackets(&paint, center, radius + 6.0, self.accent());
+                    paint.text(
+                        center + Vec2::new(0.0, -radius - 10.0),
+                        egui::Align2::CENTER_BOTTOM,
+                        &asteroid.name,
+                        egui::FontId::proportional(11.0),
+                        self.accent(),
+                    );
+                }
+                if self
+                    .own()
+                    .is_some_and(|p| p.locked_asteroid == Some(asteroid.id))
+                {
+                    paint.circle_stroke(center, radius + 4.0, Stroke::new(1.5, self.accent()));
+                }
+            }
+        }
+        for gate in gates()
+            .into_iter()
+            .filter(|g| g.system_id == self.current_system())
+        {
+            let center = tactical_project(rect, gate.position);
+            let radius = (gate.radius as f32 * tactical_scale(rect)).max(8.0);
+            paint.circle_stroke(center, radius, Stroke::new(2.5, self.accent()));
+            paint.circle_stroke(
+                center,
+                radius * 0.55,
+                Stroke::new(1.0, self.accent().gamma_multiply(0.4)),
+            );
+            paint.text(
+                center + Vec2::new(0.0, radius + 8.0),
+                egui::Align2::CENTER_TOP,
+                format!(
+                    "{} → {}",
+                    gate.name,
+                    system_name(gate.destination_system_id)
+                ),
+                egui::FontId::proportional(11.0),
+                self.accent(),
+            );
+            pick(center, radius + 7.0, SelectedObject::Gate(gate.id));
+            if self.selected_object == SelectedObject::Gate(gate.id) {
+                selection_brackets(&paint, center, radius + 8.0, self.accent());
+            }
+        }
         if let Some(snapshot) = &self.snapshot {
             let server_now = self.presentation_time();
             for pilot in &snapshot.pilots {
-                if pilot.location == Location::Docked {
+                if pilot.system_id != self.current_system() || pilot.location == Location::Docked {
                     continue;
                 }
                 let position =
                     tactical_project(rect, flight3d::display_position(pilot, server_now));
-                if clicked.is_some_and(|p| p.distance(position) < 20.0) {
-                    selected = Some(SelectedObject::Pilot(pilot.name.clone()));
-                }
+                pick(position, 20.0, SelectedObject::Pilot(pilot.name.clone()));
                 if self.selected_object == SelectedObject::Pilot(pilot.name.clone()) {
                     selection_brackets(&paint, position, 15.0, self.accent());
                 }
@@ -1286,10 +1554,8 @@ impl Cockpit {
                 };
                 if pilot.name == self.pilot {
                     if let Some((progress, units)) = self.effects.mining(server_now) {
-                        if in_navigation_range(pilot, BELT_POSITION, MINING_RANGE) {
-                            // Same deterministic asteroid placement as the visible belt above.
-                            let angle: f32 = 6.0 * 2.399;
-                            let target = belt + Vec2::angled(angle) * 23.0;
+                        if let Some(asteroid) = self.mining_effect_target() {
+                            let target = tactical_project(rect, asteroid.position);
                             let intensity =
                                 ((progress * std::f32::consts::PI).sin() * 1.8).min(1.0);
                             paint.line_segment(
@@ -1433,7 +1699,15 @@ impl Cockpit {
             paint.text(
                 rect.left_top() + Vec2::new(18.0, 18.0),
                 egui::Align2::LEFT_TOP,
-                format!("SECTOR 01   /   {} ore remaining", snapshot.belt_ore),
+                format!(
+                    "{} / {} local asteroids",
+                    system_name(self.current_system()),
+                    snapshot
+                        .asteroids
+                        .iter()
+                        .filter(|a| a.system_id == self.current_system())
+                        .count()
+                ),
                 egui::FontId::monospace(12.0),
                 MUTED,
             );
@@ -1492,6 +1766,46 @@ impl Cockpit {
                     ui.close_menu();
                 }
             }
+            if let Some(asteroid) = self.selected_asteroid().cloned() {
+                if ui
+                    .add_enabled(self.can_lock_selected(), egui::Button::new("Lock asteroid"))
+                    .clicked()
+                {
+                    self.send(Request::LockAsteroid { id: asteroid.id });
+                    ui.close_menu();
+                }
+                if ui
+                    .add_enabled(
+                        self.own().is_some_and(|p| self.can_mine(&p)),
+                        egui::Button::new("Extract selected"),
+                    )
+                    .clicked()
+                {
+                    self.extract_selected();
+                    ui.close_menu();
+                }
+            }
+            if let Some(gate) = self.selected_gate() {
+                if ui
+                    .add_enabled(self.can_fly(), egui::Button::new("Warp to gate"))
+                    .clicked()
+                {
+                    self.send(Request::Warp {
+                        destination: Destination::Gate { id: gate.id },
+                    });
+                    ui.close_menu();
+                }
+                if ui
+                    .add_enabled(
+                        self.can_jump_selected(),
+                        egui::Button::new("Jump through gate"),
+                    )
+                    .clicked()
+                {
+                    self.send(Request::Jump { gate_id: gate.id });
+                    ui.close_menu();
+                }
+            }
             if ui
                 .add_enabled(self.can_fly(), egui::Button::new("Stop ship"))
                 .clicked()
@@ -1523,11 +1837,18 @@ impl Cockpit {
 fn in_navigation_range(pilot: &PilotView, target: [f64; 3], range: f64) -> bool {
     !matches!(
         pilot.location,
-        Location::Docked | Location::InTransit { .. }
+        Location::Docked | Location::InTransit { .. } | Location::Jumping { .. }
     ) && pilot
         .flight
         .as_ref()
         .is_some_and(|f| distance_m(f.position, target) <= range)
+}
+fn system_name(id: u32) -> String {
+    systems()
+        .into_iter()
+        .find(|s| s.id == id)
+        .map(|s| s.name)
+        .unwrap_or_else(|| format!("Area {id}"))
 }
 fn distance_m(a: [f64; 3], b: [f64; 3]) -> f64 {
     a.into_iter()
@@ -1543,19 +1864,23 @@ fn format_distance(value: f64) -> String {
         format!("{value:.0} m")
     }
 }
+fn tactical_scale(rect: egui::Rect) -> f32 {
+    (rect.width() / 32000.0)
+        .min(rect.height() / 22000.0)
+        .max(0.0001)
+}
 fn tactical_project(rect: egui::Rect, position: [f64; 3]) -> Pos2 {
-    let scale = rect.width() * 0.55 / (BELT_POSITION[0] - STATION_POSITION[0]) as f32;
+    let scale = tactical_scale(rect);
     Pos2::new(
-        rect.left() + rect.width() * 0.23 + (position[0] - STATION_POSITION[0]) as f32 * scale,
+        rect.center().x + position[0] as f32 * scale,
         rect.center().y + position[2] as f32 * scale,
     )
 }
 fn tactical_unproject(rect: egui::Rect, position: Pos2, altitude: f64) -> [f64; 3] {
-    let scale = rect.width() * 0.55 / (BELT_POSITION[0] - STATION_POSITION[0]) as f32;
+    let scale = tactical_scale(rect);
     [
-        (((position.x - rect.left() - rect.width() * 0.23) / scale) as f64 + STATION_POSITION[0])
-            .clamp(-SPACE_BOUND, SPACE_BOUND),
-        altitude.clamp(-SPACE_BOUND, SPACE_BOUND),
+        ((position.x - rect.center().x) / scale) as f64,
+        altitude,
         ((position.y - rect.center().y) / scale) as f64,
     ]
     .map(|v| v.clamp(-SPACE_BOUND, SPACE_BOUND))
@@ -1578,8 +1903,9 @@ fn selection_brackets(painter: &egui::Painter, center: Pos2, radius: f32, color:
 fn location_label(location: &Location) -> &'static str {
     match location {
         Location::Docked => "Docked · Arkline Station",
-        Location::Station => "Space · Station perimeter",
-        Location::Belt => "Space · Asteroid belt",
+        Location::Jumping { .. } => "Stargate transfer in progress",
+        Location::Station => "In space",
+        Location::Belt => "In space",
         Location::InTransit { .. } => "Warp in progress",
     }
 }
@@ -1621,6 +1947,40 @@ impl eframe::App for Cockpit {
                         .strong(),
                 );
                 ui.colored_label(MUTED, "PRIVATE");
+                ui.menu_button("Session", |ui| {
+                    if self.connected {
+                        if ui.button("Open second cockpit").clicked() {
+                            self.second_cockpit();
+                            ui.close_menu();
+                        }
+                        if ui
+                            .add_enabled(!self.request_pending, egui::Button::new("Disconnect"))
+                            .clicked()
+                        {
+                            self.commands = None;
+                            self.updates = None;
+                            self.connected = false;
+                            self.snapshot = None;
+                            self.effects.clear();
+                            ui.close_menu();
+                        }
+                    } else {
+                        if ui
+                            .add_enabled(!self.connecting, egui::Button::new("Reconnect"))
+                            .clicked()
+                        {
+                            self.connect();
+                            ui.close_menu();
+                        }
+                        if ui.button("Change pilot / server").clicked() {
+                            self.snapshot = None;
+                            self.commands = None;
+                            self.updates = None;
+                            self.effects.clear();
+                            ui.close_menu();
+                        }
+                    }
+                });
                 ui.separator();
                 ui.selectable_value(&mut self.three_dimensional, false, "2D Tactical");
                 ui.selectable_value(&mut self.three_dimensional, true, "3D Flight");
@@ -1692,51 +2052,8 @@ impl eframe::App for Cockpit {
             });
             return;
         }
-        egui::SidePanel::left("flight")
-            .exact_width(220.0)
-            .resizable(false)
-            .show(ctx, |ui| {
-                egui::ScrollArea::vertical()
-                    .id_salt("flight-scroll")
-                    .show(ui, |ui| {
-                        ui.add_space(10.0);
-                        self.flight(ui);
-                        ui.add_space(12.0);
-                        ui.separator();
-                        ui.label(egui::RichText::new("CONNECTION").size(11.0).color(MUTED));
-                        if self.connected {
-                            if ui.button("Open second cockpit").clicked() {
-                                self.second_cockpit();
-                            }
-                            if ui
-                                .add_enabled(!self.request_pending, egui::Button::new("Disconnect"))
-                                .clicked()
-                            {
-                                self.commands = None;
-                                self.updates = None;
-                                self.connected = false;
-                                self.snapshot = None;
-                                self.effects.clear();
-                            }
-                        } else {
-                            ui.colored_label(AMBER, &self.notice);
-                            if ui
-                                .add_enabled(!self.connecting, egui::Button::new("Reconnect"))
-                                .clicked()
-                            {
-                                self.connect();
-                            }
-                            if ui.button("Change pilot / server").clicked() {
-                                self.snapshot = None;
-                                self.effects.clear();
-                                self.commands = None;
-                                self.updates = None;
-                            }
-                        }
-                    });
-            });
         egui::SidePanel::right("overview")
-            .exact_width(230.0)
+            .exact_width(310.0)
             .resizable(false)
             .show(ctx, |ui| {
                 egui::ScrollArea::vertical()
@@ -1746,20 +2063,36 @@ impl eframe::App for Cockpit {
                         self.overview(ui);
                     });
             });
-        egui::TopBottomPanel::bottom("services")
-            .default_height(235.0)
-            .min_height(185.0)
-            .resizable(true)
-            .show(ctx, |ui| {
-                ui.add_space(4.0);
-                ui.horizontal_wrapped(|ui| {
-                    ui.label(egui::RichText::new("SERVICES").color(MUTED).size(11.0));
-                    ui.selectable_value(&mut self.service_tab, ServiceTab::Cargo, "Cargo");
-                    ui.selectable_value(&mut self.service_tab, ServiceTab::Exchange, "Exchange");
-                    ui.selectable_value(&mut self.service_tab, ServiceTab::Activity, "Activity");
-                    ui.selectable_value(&mut self.service_tab, ServiceTab::Ledger, "Ledger");
-                    ui.selectable_value(&mut self.service_tab, ServiceTab::Settings, "Settings");
-                });
+        let services = egui::TopBottomPanel::bottom("services");
+        let services = if self.services_open {
+            services
+                .default_height(195.0)
+                .min_height(145.0)
+                .resizable(true)
+        } else {
+            services.exact_height(35.0).resizable(false)
+        };
+        services.show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                for (tab, label) in [
+                    (ServiceTab::Cargo, "Cargo"),
+                    (ServiceTab::Exchange, "Exchange"),
+                    (ServiceTab::Activity, "Activity"),
+                    (ServiceTab::Ledger, "Ledger"),
+                    (ServiceTab::Settings, "Settings"),
+                ] {
+                    if ui
+                        .selectable_value(&mut self.service_tab, tab, label)
+                        .clicked()
+                    {
+                        self.services_open = true;
+                    }
+                }
+                if self.services_open && ui.small_button("Collapse").clicked() {
+                    self.services_open = false;
+                }
+            });
+            if self.services_open {
                 ui.separator();
                 egui::ScrollArea::vertical()
                     .id_salt("service-content")
@@ -1769,17 +2102,19 @@ impl eframe::App for Cockpit {
                         ServiceTab::Ledger => self.ledger_panel(ui),
                         ServiceTab::Settings => self.settings_panel(ui),
                         ServiceTab::Activity => {
-                            ui.label(
-                                egui::RichText::new("SERVER ACTIVITY")
-                                    .color(self.accent())
-                                    .strong(),
-                            );
                             for (entry, error) in &self.feed {
                                 ui.colored_label(if *error { AMBER } else { MUTED }, entry);
                                 ui.separator();
                             }
                         }
                     });
+            }
+        });
+        egui::TopBottomPanel::bottom("flight-deck")
+            .exact_height(72.0)
+            .show(ctx, |ui| {
+                ui.add_space(5.0);
+                self.flight_deck(ui);
             });
         egui::CentralPanel::default().show(ctx, |ui| {
             if self.three_dimensional {
@@ -1796,6 +2131,7 @@ impl eframe::App for Cockpit {
                     ) {
                         match selected {
                             flight3d::ViewAction::Select(object) => self.selected_object = object,
+                            flight3d::ViewAction::Command(command) => self.send(command),
                             flight3d::ViewAction::FlyTo(position) => {
                                 if self.can_fly() {
                                     self.send(Request::Navigate {
@@ -2007,6 +2343,8 @@ mod tests {
     fn action_range_uses_physical_position_and_rejects_docked_or_transit() {
         let mut pilot = PilotView {
             name: "Range test".into(),
+            system_id: HOME_SYSTEM_ID,
+            locked_asteroid: None,
             credits: 0,
             ore: 0,
             location: Location::Station,

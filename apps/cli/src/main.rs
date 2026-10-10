@@ -58,7 +58,7 @@ fn run() -> Result<()> {
                 credentials_path = Some(args.next().context("--credentials needs a path")?.into())
             }
             "--help" | "-h" => {
-                println!("Arkline command client\n\narkline [--server HOST:PORT] [--pilot NAME] [--credentials PATH] COMMAND\n\nCommands:\n  status                 Read the live universe\n  connect                Create a pilot or resume with saved credentials\n  undock                 Leave Junction Station\n  warp belt|station      Begin a six-second warp (2s warmup)\n  dock                   Dock at the station\n  mine UNITS             Mine up to 100 ore units\n  stop                   Stop manual navigation\n  approach TARGET SECS   Approach station, belt or pilot:NAME\n  orbit TARGET METERS SECS   Orbit for 1-300 seconds\n  range TARGET METERS SECS   Keep distance for 1-300 seconds\n  fly X Y Z SECS         Fly to meter coordinates for 1-300 seconds\n  sell UNITS PRICE       Escrow ore in a sell order\n  buy ORDER_ID UNITS     Buy ore from another pilot\n  cancel ORDER_ID        Cancel your order and reclaim ore\n  export PATH            Save an economic audit export\n\nCommands return JSON snapshots. Credentials are saved locally with restricted\npermissions. Keep that file to resume the same pilot. This prototype uses\nunencrypted TCP: keep it on loopback or an authenticated private tunnel.");
+                println!("Arkline command client\n\narkline [--server HOST:PORT] [--pilot NAME] [--credentials PATH] COMMAND\n\nCommands:\n  status                 Read the live universe\n  connect                Create a pilot or resume with saved credentials\n  undock                 Leave Junction Station\n  warp belt|station|gate:ID Begin a six-second warp (2s warmup)\n  dock                   Dock at the station\n  mine UNITS             Mine up to 100 ore units\n  lock ASTEROID_ID       Lock a specific local asteroid\n  extract ASTEROID_ID UNITS Mine the locked asteroid\n  jump GATE_ID           Jump through a nearby local gate\n  stop                   Stop manual navigation\n  approach TARGET SECS   Approach station, belt or pilot:NAME\n  orbit TARGET METERS SECS   Orbit for 1-300 seconds\n  range TARGET METERS SECS   Keep distance for 1-300 seconds\n  fly X Y Z SECS         Fly to meter coordinates for 1-300 seconds\n  sell UNITS PRICE       Escrow ore in a sell order\n  buy ORDER_ID UNITS     Buy ore from another pilot\n  cancel ORDER_ID        Cancel your order and reclaim ore\n  export PATH            Save an economic audit export\n\nCommands return JSON snapshots. Credentials are saved locally with restricted\npermissions. Keep that file to resume the same pilot. This prototype uses\nunencrypted TCP: keep it on loopback or an authenticated private tunnel.");
                 return Ok(());
             }
             x if x.starts_with('-') => bail!("unknown option: {x}"),
@@ -93,7 +93,13 @@ fn run() -> Result<()> {
                     pilot: value[6..].into(),
                 })
             }
-            _ => bail!("target must be station, belt or pilot:NAME"),
+            Some(value) if value.starts_with("asteroid:") => Ok(NavigationTarget::Asteroid {
+                id: value[9..].parse().context("invalid asteroid ID")?,
+            }),
+            Some(value) if value.starts_with("gate:") => Ok(NavigationTarget::Gate {
+                id: value[5..].parse().context("invalid gate ID")?,
+            }),
+            _ => bail!("target must be station, belt, pilot:NAME, asteroid:ID or gate:ID"),
         }
     };
     let hold_index = match verb {
@@ -142,10 +148,21 @@ fn run() -> Result<()> {
             destination: match command.get(1).map(String::as_str) {
                 Some("belt") => Destination::Belt,
                 Some("station") => Destination::Station,
-                _ => bail!("warp destination must be belt or station"),
+                Some(value) if value.starts_with("gate:") => Destination::Gate {
+                    id: value[5..].parse().context("invalid gate ID")?,
+                },
+                _ => bail!("warp destination must be belt, station or gate:ID"),
             },
         },
         "mine" => Request::Mine { units: number(1)? },
+        "lock" => Request::LockAsteroid { id: number(1)? },
+        "extract" => Request::MineAsteroid {
+            id: number(1)?,
+            units: number(2)?,
+        },
+        "jump" => Request::Jump {
+            gate_id: number(1)?,
+        },
         "sell" => Request::PlaceSell {
             units: number(1)?,
             unit_price: number(2)?,

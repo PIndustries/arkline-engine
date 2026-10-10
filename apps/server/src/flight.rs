@@ -48,6 +48,10 @@ pub(super) fn berth(name: &str, destination: Destination) -> [f64; 3] {
         match destination {
             Destination::Station => STATION_POSITION,
             Destination::Belt => BELT_POSITION,
+            Destination::Gate { id } => gates()
+                .into_iter()
+                .find(|g| g.id == id)
+                .map_or(STATION_POSITION, |g| g.position),
         },
         [x, y, 1000.0],
     )
@@ -106,11 +110,32 @@ pub(super) fn validate_mode(mode: &NavigationMode, name: &str, world: &World) ->
         ensure!(pilot != name, "cannot navigate relative to yourself");
         let p = world.pilots.get(pilot).context("target pilot not found")?;
         ensure!(
+            p.view.system_id == world.pilots[name].view.system_id,
+            "target pilot is in another system"
+        );
+        ensure!(
             !matches!(
                 p.view.location,
-                Location::Docked | Location::InTransit { .. }
+                Location::Docked | Location::InTransit { .. } | Location::Jumping { .. }
             ),
             "target ship is not in normal space"
+        );
+    }
+    if let Some(NavigationTarget::Asteroid { id }) = target {
+        let a = world
+            .asteroids
+            .iter()
+            .find(|a| a.id == *id)
+            .context("asteroid not found")?;
+        ensure!(
+            a.system_id == world.pilots[name].view.system_id,
+            "asteroid is in another system"
+        );
+    }
+    if let Some(NavigationTarget::Gate { id }) = target {
+        ensure!(
+            universe::gate(*id)?.system_id == world.pilots[name].view.system_id,
+            "gate is in another system"
         );
     }
     Ok(())
@@ -118,15 +143,32 @@ pub(super) fn validate_mode(mode: &NavigationMode, name: &str, world: &World) ->
 fn target(
     target: &NavigationTarget,
     views: &BTreeMap<String, Pilot>,
+    asteroids: &[Asteroid],
+    system: u32,
 ) -> Option<([f64; 3], [f64; 3])> {
     match target {
         NavigationTarget::Station => Some((STATION_POSITION, [0.0; 3])),
         NavigationTarget::Belt => Some((BELT_POSITION, [0.0; 3])),
+        NavigationTarget::Asteroid { id } => {
+            let a = asteroids
+                .iter()
+                .find(|a| a.id == *id && a.system_id == system)?;
+            Some((a.position, [0.0; 3]))
+        }
+        NavigationTarget::Gate { id } => {
+            let g = gates()
+                .into_iter()
+                .find(|g| g.id == *id && g.system_id == system)?;
+            Some((g.position, [0.0; 3]))
+        }
         NavigationTarget::Pilot { pilot } => {
             let p = views.get(pilot)?;
+            if p.view.system_id != system {
+                return None;
+            }
             if matches!(
                 p.view.location,
-                Location::Docked | Location::InTransit { .. }
+                Location::Docked | Location::InTransit { .. } | Location::Jumping { .. }
             ) {
                 return None;
             }
@@ -153,6 +195,29 @@ pub(super) fn advance(world: &mut World, now: u64) {
     let views = world.pilots.clone();
     for p in world.pilots.values_mut() {
         let f = p.view.flight.as_mut().unwrap();
+        if let Location::Jumping {
+            gate_id,
+            arrives_at_ms,
+        } = p.view.location
+        {
+            if now >= arrives_at_ms {
+                if let Ok(gate) = universe::gate(gate_id) {
+                    p.view.system_id = gate.destination_system_id;
+                    f.position = berth(
+                        &p.view.name,
+                        Destination::Gate {
+                            id: gate.arrival_gate_id,
+                        },
+                    );
+                    f.velocity = [0.0; 3];
+                    f.mode = NavigationMode::Stop;
+                    f.updated_at_ms = now;
+                    p.view.location = Location::Station;
+                    p.view.locked_asteroid = None;
+                }
+            }
+            continue;
+        }
         if let Location::InTransit {
             destination,
             arrives_at_ms,
@@ -183,6 +248,7 @@ pub(super) fn advance(world: &mut World, now: u64) {
                 p.view.location = match destination {
                     Destination::Station => Location::Station,
                     Destination::Belt => Location::Belt,
+                    Destination::Gate { .. } => Location::Station,
                 };
             }
             continue;
@@ -219,7 +285,9 @@ pub(super) fn advance(world: &mut World, now: u64) {
                         }
                         _ => unreachable!(),
                     };
-                    if let Some((point, target_velocity)) = target(selected, &views) {
+                    if let Some((point, target_velocity)) =
+                        target(selected, &views, &world.asteroids, p.view.system_id)
+                    {
                         let away = sub(f.position, point);
                         let radial = unit(away);
                         let error = length(away) - radius;

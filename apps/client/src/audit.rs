@@ -215,6 +215,7 @@ mod tests {
             protocol_version: PROTOCOL_VERSION,
             entries: vec![],
             snapshot: Snapshot {
+                asteroids: vec![],
                 server_time_ms: 0,
                 online_pilots: vec![],
                 pilots: vec![],

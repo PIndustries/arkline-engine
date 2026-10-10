@@ -23,6 +23,7 @@ fn checkpoint_advances_only_after_full_verification() {
         protocol_version: PROTOCOL_VERSION,
         entries: vec![],
         snapshot: Snapshot {
+            asteroids: vec![],
             online_pilots: vec![],
             server_time_ms: 0,
             pilots: vec![],
@@ -70,6 +71,8 @@ fn checkpoint_advances_only_after_full_verification() {
     entry.hash = entry.calculate_hash();
     export.snapshot.belt_ore = INITIAL_BELT_ORE;
     export.snapshot.pilots.push(PilotView {
+        system_id: HOME_SYSTEM_ID,
+        locked_asteroid: None,
         name: "Alice".into(),
         credits: STARTER_CREDITS,
         ore: 0,

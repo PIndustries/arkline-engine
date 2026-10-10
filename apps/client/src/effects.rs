@@ -1,32 +1,32 @@
-//! Short presentation cues derived from confirmed snapshot transitions.
-use arkline_protocol::{Location, PilotView, Snapshot, BELT_POSITION, MINING_RANGE};
+//! Short presentation cues derived from confirmed, explicitly targeted actions.
+use arkline_protocol::{Asteroid, Location, PilotView, Snapshot, MINING_RANGE};
 
 pub fn can_extract(pilot: &PilotView) -> bool {
-    if matches!(
+    !matches!(
         pilot.location,
-        Location::Docked | Location::InTransit { .. }
-    ) {
-        return false;
-    }
-    pilot
-        .flight
-        .as_ref()
-        .map_or(pilot.location == Location::Belt, |flight| {
-            flight
+        Location::Docked | Location::InTransit { .. } | Location::Jumping { .. }
+    ) && pilot.flight.is_some()
+        && pilot.locked_asteroid.is_some()
+}
+pub fn can_extract_target(pilot: &PilotView, asteroid: &Asteroid) -> bool {
+    can_extract(pilot)
+        && pilot.system_id == asteroid.system_id
+        && pilot.locked_asteroid == Some(asteroid.id)
+        && pilot.flight.as_ref().is_some_and(|flight| {
+            let center = flight
                 .position
                 .iter()
-                .zip(BELT_POSITION)
+                .zip(asteroid.position)
                 .map(|(a, b)| (a - b).powi(2))
                 .sum::<f64>()
-                .sqrt()
-                <= MINING_RANGE
+                .sqrt();
+            (center - asteroid.radius).max(0.0) <= MINING_RANGE
         })
 }
-
 pub const EFFECT_DURATION_MS: u64 = 6000;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum EffectKind {
-    Mining { units: u64 },
+    Mining { units: u64, asteroid_id: u64 },
     Docking,
     Undocking,
 }
@@ -53,17 +53,31 @@ impl Effects {
         let (Some(before), Some(after)) = (before, after) else {
             return;
         };
-        let kind = if can_extract(before) && can_extract(after) && after.ore > before.ore {
-            Some(EffectKind::Mining {
-                units: after.ore - before.ore,
-            })
-        } else if before.location == Location::Station && after.location == Location::Docked {
-            Some(EffectKind::Docking)
-        } else if before.location == Location::Docked && after.location == Location::Station {
-            Some(EffectKind::Undocking)
-        } else {
-            None
-        };
+        if before.system_id != after.system_id {
+            self.clear();
+            return;
+        }
+        let mined = before.locked_asteroid.and_then(|id| {
+            let before_rock = previous.asteroids.iter().find(|a| a.id == id)?;
+            let after_rock = next.asteroids.iter().find(|a| a.id == id)?;
+            let units = after.ore.checked_sub(before.ore).filter(|u| *u > 0)?;
+            (can_extract_target(before, before_rock)
+                && can_extract_target(after, after_rock)
+                && before_rock.ore.saturating_sub(after_rock.ore) >= units)
+                .then_some(EffectKind::Mining {
+                    units,
+                    asteroid_id: id,
+                })
+        });
+        let kind = mined.or_else(|| {
+            if before.location != Location::Docked && after.location == Location::Docked {
+                Some(EffectKind::Docking)
+            } else if before.location == Location::Docked && after.location != Location::Docked {
+                Some(EffectKind::Undocking)
+            } else {
+                None
+            }
+        });
         self.retain(now_ms);
         if let Some(kind) = kind {
             self.events.push(Effect {
@@ -76,14 +90,26 @@ impl Effects {
         }
     }
     pub fn mining(&self, now: u64) -> Option<(f32, u64)> {
-        self.events.iter().rev().find_map(|event| {
-            let age = now.saturating_sub(event.started_ms);
-            match event.kind {
-                EffectKind::Mining { units } if age < EFFECT_DURATION_MS => {
-                    Some((age as f32 / EFFECT_DURATION_MS as f32, units))
-                }
-                _ => None,
+        self.events.iter().rev().find_map(|e| match e.kind {
+            EffectKind::Mining { units, .. }
+                if now.saturating_sub(e.started_ms) < EFFECT_DURATION_MS =>
+            {
+                Some((
+                    now.saturating_sub(e.started_ms) as f32 / EFFECT_DURATION_MS as f32,
+                    units,
+                ))
             }
+            _ => None,
+        })
+    }
+    pub fn mining_target(&self, now: u64) -> Option<u64> {
+        self.events.iter().rev().find_map(|e| match e.kind {
+            EffectKind::Mining { asteroid_id, .. }
+                if now.saturating_sub(e.started_ms) < EFFECT_DURATION_MS =>
+            {
+                Some(asteroid_id)
+            }
+            _ => None,
         })
     }
 }
@@ -91,78 +117,86 @@ impl Effects {
 mod tests {
     use super::*;
     use arkline_protocol::*;
-    fn snapshot(location: Location, ore: u64) -> Snapshot {
+    fn snapshot(ore: u64, remaining: u64) -> Snapshot {
         Snapshot {
             server_time_ms: 100,
             online_pilots: vec![],
+            asteroids: vec![Asteroid {
+                id: 7,
+                system_id: 1,
+                name: "Target seven".into(),
+                position: BELT_POSITION,
+                radius: 100.0,
+                ore: remaining,
+            }],
             pilots: vec![PilotView {
                 name: "Pilot".into(),
                 credits: 1000,
                 ore,
-                location,
-                flight: None,
+                location: Location::Belt,
+                system_id: 1,
+                locked_asteroid: Some(7),
+                flight: Some(FlightState {
+                    position: BELT_POSITION,
+                    velocity: [0.0; 3],
+                    heading: [1.0, 0.0, 0.0],
+                    mode: NavigationMode::Stop,
+                    updated_at_ms: 100,
+                }),
             }],
             orders: vec![],
-            belt_ore: INITIAL_BELT_ORE - ore,
+            belt_ore: remaining,
             ledger_sequence: 0,
             ledger_hash: GENESIS_HASH.into(),
         }
     }
     #[test]
-    fn confirmed_extraction_animates_once_and_expires() {
+    fn confirmed_target_extraction_animates_once_and_expires() {
         let mut effects = Effects::default();
-        let before = snapshot(Location::Belt, 0);
-        let after = snapshot(Location::Belt, 25);
+        let before = snapshot(0, 25);
+        let after = snapshot(25, 0);
         effects.observe(&before, &after, "Pilot", 100);
         effects.observe(&after, &after, "Pilot", 101);
         assert_eq!(effects.events.len(), 1);
         assert_eq!(effects.mining(100), Some((0.0, 25)));
-        assert_eq!(effects.mining(6100), None);
+        assert_eq!(effects.mining_target(100), Some(7));
+        assert_eq!(effects.mining_target(6100), None);
         effects.retain(6100);
         assert!(effects.events.is_empty());
     }
     #[test]
-    fn mining_feedback_uses_physical_range_after_manual_flight() {
-        let mut before = snapshot(Location::Station, 0);
-        before.pilots[0].flight = Some(FlightState {
-            position: BELT_POSITION,
-            velocity: [0.0; 3],
-            heading: [1.0, 0.0, 0.0],
-            mode: NavigationMode::Stop,
-            updated_at_ms: 100,
-        });
-        let mut after = before.clone();
-        after.pilots[0].ore = 25;
+    fn unrelated_ore_updates_and_changed_targets_do_not_create_beams() {
+        let before = snapshot(0, 100);
+        let mut after = snapshot(25, 100);
         let mut effects = Effects::default();
         effects.observe(&before, &after, "Pilot", 100);
-        assert_eq!(effects.mining(100), Some((0.0, 25)));
-        after.pilots[0].flight.as_mut().unwrap().position = STATION_POSITION;
-        assert!(!can_extract(&after.pilots[0]));
+        assert!(effects.events.is_empty());
+        after.asteroids[0].ore = 75;
+        after.pilots[0].locked_asteroid = Some(8);
+        effects.observe(&before, &after, "Pilot", 100);
+        assert!(effects.events.is_empty());
+        after.pilots[0].locked_asteroid = Some(7);
+        after.pilots[0].system_id = 2;
+        effects.observe(&before, &after, "Pilot", 100);
+        assert!(effects.events.is_empty());
     }
     #[test]
-    fn purchases_and_arrival_do_not_look_like_extraction() {
-        let mut effects = Effects::default();
-        effects.observe(
-            &snapshot(Location::Docked, 0),
-            &snapshot(Location::Docked, 25),
-            "Pilot",
-            100,
-        );
-        effects.observe(
-            &snapshot(Location::Station, 0),
-            &snapshot(Location::Belt, 25),
-            "Pilot",
-            100,
-        );
-        assert!(effects.events.is_empty());
-        effects.observe(
-            &snapshot(Location::Station, 25),
-            &snapshot(Location::Docked, 25),
-            "Pilot",
-            100,
-        );
-        assert_eq!(effects.events[0].kind, EffectKind::Docking);
-        effects.clear();
-        assert!(effects.events.is_empty());
+    fn surface_range_and_system_gate_the_exact_target() {
+        let mut state = snapshot(0, 100);
+        let rock = &state.asteroids[0];
+        let pilot = &mut state.pilots[0];
+        pilot.flight.as_mut().unwrap().position =
+            [rock.position[0] + rock.radius + MINING_RANGE, 0.0, 0.0];
+        assert!(can_extract_target(pilot, rock));
+        pilot.flight.as_mut().unwrap().position[0] += 0.1;
+        assert!(!can_extract_target(pilot, rock));
+        pilot.flight.as_mut().unwrap().position = rock.position;
+        pilot.location = Location::Docked;
+        assert!(!can_extract_target(pilot, rock));
+        pilot.location = Location::Jumping {
+            gate_id: 101,
+            arrives_at_ms: 1000,
+        };
+        assert!(!can_extract_target(pilot, rock));
     }
 }

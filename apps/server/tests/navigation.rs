@@ -64,7 +64,7 @@ fn flight_accelerates_brakes_validates_and_last_logout_stops() {
         &mut p,
         Request::Navigate {
             mode: NavigationMode::FlyTo {
-                position: [8000.0, 0.0, 1000.0],
+                position: [-20000.0, 0.0, 1000.0],
             },
         },
         0,

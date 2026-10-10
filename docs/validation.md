@@ -97,3 +97,26 @@ Native macOS inspection confirmed build identity, orbit speed/range feedback,
 Ctrl+Space braking to zero, and double-click flight acceptance with acceleration
 and changing distance in the 3D cockpit. This does not establish collision or
 combat behavior: neither is implemented. Warp cannot yet be cancelled.
+
+## Object targeting and connected systems — 26.10.9.3
+
+The runtime TCP acceptance journey mined asteroid ID 1, checked that only its
+reserve decreased, travelled Junction → Ember Reach → Glassway → Ember Reach →
+Junction, restarted, and confirmed saved system, cargo, credits and ore depletion.
+Gate travel left the economic head unchanged; the independent verifier accepted
+the final export. Server tests additionally restart during a pending jump and
+reject cross-system targets, unlocked mining and exhausted rocks. Migration
+allocates only the old remaining reserve and preserves existing economic history.
+
+The independent verifier also rejects mismatched summed asteroid reserves and
+duplicate asteroid IDs. It cannot prove historical per-rock allocation because
+legacy economic events contain pilot and quantity, not asteroid ID.
+
+Native macOS inspection confirmed the gate charge state, arrival in Ember Reach
+with a different local object list, selecting and locking asteroid #37, and its
+reserve decreasing from 926 to 901 after extraction. Scene captures showed the
+new gate geometry, individual asteroid field and expanded viewport. Capture of
+the transient beam failed with ScreenCaptureKit error -3811, so beam appearance
+was not visually signed off by that attempt. Geometry tests verify its exact
+asteroid endpoint. The final overview defaults to nearest-first and can reverse
+the range sort.

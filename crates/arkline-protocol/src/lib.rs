@@ -24,6 +24,89 @@ pub const SHIP_ACCELERATION: f64 = 150.0;
 pub const DOCK_RANGE: f64 = 1800.0;
 pub const MINING_RANGE: f64 = 4500.0;
 pub const SPACE_BOUND: f64 = 50000.0;
+pub const HOME_SYSTEM_ID: u32 = 1;
+pub const GATE_RANGE: f64 = 1800.0;
+pub const JUMP_DURATION_MS: u64 = 3000;
+pub const LOCK_RANGE: f64 = 12000.0;
+pub fn default_system_id() -> u32 {
+    HOME_SYSTEM_ID
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct StarSystem {
+    pub id: u32,
+    pub name: String,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Stargate {
+    pub id: u64,
+    pub system_id: u32,
+    pub destination_system_id: u32,
+    pub arrival_gate_id: u64,
+    pub name: String,
+    pub position: [f64; 3],
+    pub radius: f64,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Asteroid {
+    pub id: u64,
+    pub system_id: u32,
+    pub name: String,
+    pub position: [f64; 3],
+    pub radius: f64,
+    pub ore: u64,
+}
+pub fn systems() -> Vec<StarSystem> {
+    [(1, "Junction"), (2, "Ember Reach"), (3, "Glassway")]
+        .into_iter()
+        .map(|(id, name)| StarSystem {
+            id,
+            name: name.into(),
+        })
+        .collect()
+}
+pub fn gates() -> Vec<Stargate> {
+    [
+        (101, 1, 2, 201, "Ember Gate", [12000.0, 0.0, -8000.0]),
+        (201, 2, 1, 101, "Junction Gate", [-12000.0, 0.0, -8000.0]),
+        (202, 2, 3, 301, "Glassway Gate", [12000.0, 0.0, 8000.0]),
+        (301, 3, 2, 202, "Ember Gate", [-12000.0, 0.0, 8000.0]),
+    ]
+    .into_iter()
+    .map(
+        |(id, system_id, destination_system_id, arrival_gate_id, name, position)| Stargate {
+            id,
+            system_id,
+            destination_system_id,
+            arrival_gate_id,
+            name: name.into(),
+            position,
+            radius: 400.0,
+        },
+    )
+    .collect()
+}
+/// Allocate exactly the supplied remaining global reserve during initial migration.
+pub fn asteroid_catalog(total_ore: u64) -> Vec<Asteroid> {
+    (0..108u64)
+        .map(|index| {
+            let local = index % 36;
+            let angle = local as f64 * 2.399963;
+            let ring = 500.0 + (local % 6) as f64 * 300.0;
+            Asteroid {
+                id: index + 1,
+                system_id: (index / 36 + 1) as u32,
+                name: format!("Ore asteroid {}", index + 1),
+                position: [
+                    BELT_POSITION[0] + angle.cos() * ring,
+                    ((local * 7) % 9) as f64 * 100.0 - 400.0,
+                    angle.sin() * ring,
+                ],
+                radius: 80.0 + (local % 5) as f64 * 25.0,
+                ore: total_ore / 108 + u64::from(index < total_ore % 108),
+            }
+        })
+        .collect()
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -31,6 +114,8 @@ pub enum NavigationTarget {
     Station,
     Belt,
     Pilot { pilot: String },
+    Asteroid { id: u64 },
+    Gate { id: u64 },
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "mode", rename_all = "snake_case")]
@@ -71,6 +156,16 @@ pub enum Request {
         resume_token: Option<String>,
     },
     Snapshot,
+    LockAsteroid {
+        id: u64,
+    },
+    MineAsteroid {
+        id: u64,
+        units: u64,
+    },
+    Jump {
+        gate_id: u64,
+    },
     Navigate {
         mode: NavigationMode,
     },
@@ -101,12 +196,17 @@ pub enum Request {
 pub enum Destination {
     Station,
     Belt,
+    Gate { id: u64 },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Location {
     Docked,
+    Jumping {
+        gate_id: u64,
+        arrives_at_ms: u64,
+    },
     Station,
     Belt,
     InTransit {
@@ -123,6 +223,10 @@ pub struct PilotView {
     pub location: Location,
     #[serde(default)]
     pub flight: Option<FlightState>,
+    #[serde(default = "default_system_id")]
+    pub system_id: u32,
+    #[serde(default)]
+    pub locked_asteroid: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -139,6 +243,8 @@ pub struct Snapshot {
     /// Ephemeral authenticated transport presence; excluded from economic replay.
     #[serde(default)]
     pub online_pilots: Vec<String>,
+    #[serde(default)]
+    pub asteroids: Vec<Asteroid>,
     pub pilots: Vec<PilotView>,
     pub orders: Vec<SellOrder>,
     pub belt_ore: u64,

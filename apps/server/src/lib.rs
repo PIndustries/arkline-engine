@@ -1,4 +1,5 @@
 mod flight;
+mod universe;
 use anyhow::{bail, ensure, Context, Result};
 use arkline_protocol::*;
 use fs2::FileExt;
@@ -26,6 +27,8 @@ struct World {
     orders: BTreeMap<u64, SellOrder>,
     belt_ore: u64,
     next_order: u64,
+    #[serde(default)]
+    asteroids: Vec<Asteroid>,
 }
 impl Default for World {
     fn default() -> Self {
@@ -34,6 +37,7 @@ impl Default for World {
             orders: BTreeMap::new(),
             belt_ore: INITIAL_BELT_ORE,
             next_order: 1,
+            asteroids: asteroid_catalog(INITIAL_BELT_ORE),
         }
     }
 }
@@ -103,8 +107,12 @@ impl Server {
         )?;
         let json: String = db.query_row("SELECT json FROM world WHERE id=1", [], |r| r.get(0))?;
         let mut world: World = serde_json::from_str(&json)?;
+        universe::ensure_asteroids(&mut world);
         for pilot in world.pilots.values_mut() {
-            if !matches!(pilot.view.location, Location::InTransit { .. }) {
+            if !matches!(
+                pilot.view.location,
+                Location::InTransit { .. } | Location::Jumping { .. }
+            ) {
                 if let Some(flight) = &mut pilot.view.flight {
                     flight.mode = NavigationMode::Stop;
                     flight.velocity = [0.0; 3];
@@ -180,6 +188,7 @@ impl Server {
         let tx = self.db.transaction()?;
         let json: String = tx.query_row("SELECT json FROM world WHERE id=1", [], |r| r.get(0))?;
         let mut world: World = serde_json::from_str(&json)?;
+        universe::ensure_asteroids(&mut world);
         flight::advance(&mut world, now);
         let next = serde_json::to_string(&world)?;
         if next != json {
@@ -192,8 +201,12 @@ impl Server {
         let tx = self.db.transaction()?;
         let json: String = tx.query_row("SELECT json FROM world WHERE id=1", [], |r| r.get(0))?;
         let mut world: World = serde_json::from_str(&json)?;
+        universe::ensure_asteroids(&mut world);
         if let Some(p) = world.pilots.get_mut(name) {
-            if !matches!(p.view.location, Location::InTransit { .. }) {
+            if !matches!(
+                p.view.location,
+                Location::InTransit { .. } | Location::Jumping { .. }
+            ) {
                 if let Some(f) = &mut p.view.flight {
                     f.mode = NavigationMode::Stop;
                     f.velocity = [0.0; 3];
@@ -218,6 +231,7 @@ impl Server {
             .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         let json: String = tx.query_row("SELECT json FROM world WHERE id=1", [], |r| r.get(0))?;
         let mut world: World = serde_json::from_str(&json).context("invalid durable world")?;
+        universe::ensure_asteroids(&mut world);
         flight::advance(&mut world, now);
         let mut token = None;
         let mut event = None;
@@ -268,6 +282,8 @@ impl Server {
                                 ore: 0,
                                 location: Location::Docked,
                                 flight: None,
+                                system_id: HOME_SYSTEM_ID,
+                                locked_asteroid: None,
                             },
                             token_hash: token_hash(&issued),
                             last_mine_ms: None,
@@ -293,14 +309,78 @@ impl Server {
                 if let Request::Navigate { mode } = &request {
                     flight::validate_mode(mode, &name, &world)?;
                 }
+                let mining_id = match &request {
+                    Request::Mine { units } => {
+                        Some(universe::mining_target(&world, &name, None, *units)?)
+                    }
+                    Request::MineAsteroid { id, units } => {
+                        Some(universe::mining_target(&world, &name, Some(*id), *units)?)
+                    }
+                    _ => None,
+                };
+                if let Request::Warp {
+                    destination: Destination::Gate { id },
+                } = &request
+                {
+                    let gate = universe::gate(*id)?;
+                    ensure!(
+                        gate.system_id == world.pilots[&name].view.system_id,
+                        "gate is in another system"
+                    );
+                }
                 let pilot = world.pilots.get_mut(&name).context("pilot missing")?;
                 flight::ensure_flight(pilot, now);
                 match request {
+                    Request::LockAsteroid { id } => {
+                        ensure!(universe::normal(pilot), "target lock requires normal space");
+                        let asteroid = world
+                            .asteroids
+                            .iter()
+                            .find(|a| a.id == id)
+                            .context("asteroid not found")?;
+                        ensure!(
+                            asteroid.system_id == pilot.view.system_id,
+                            "asteroid is in another system"
+                        );
+                        ensure!(asteroid.ore > 0, "asteroid depleted");
+                        ensure!(
+                            universe::surface(pilot, asteroid) <= LOCK_RANGE,
+                            "asteroid outside lock range"
+                        );
+                        pilot.view.locked_asteroid = Some(id);
+                        message = "Asteroid locked";
+                    }
+                    Request::Jump { gate_id } => {
+                        ensure!(universe::normal(pilot), "jump requires normal space");
+                        let gate = universe::gate(gate_id)?;
+                        ensure!(
+                            gate.system_id == pilot.view.system_id,
+                            "gate is in another system"
+                        );
+                        let f = pilot.view.flight.as_mut().unwrap();
+                        ensure!(
+                            flight::distance(f.position, gate.position) <= GATE_RANGE,
+                            "outside gate activation range"
+                        );
+                        f.mode = NavigationMode::Stop;
+                        f.velocity = [0.0; 3];
+                        f.updated_at_ms = now;
+                        pilot.view.locked_asteroid = None;
+                        pilot.view.location = Location::Jumping {
+                            gate_id,
+                            arrives_at_ms: now
+                                .checked_add(JUMP_DURATION_MS)
+                                .context("clock overflow")?,
+                        };
+                        message = "Gate jump charging";
+                    }
                     Request::Navigate { mode } => {
                         ensure!(
                             !matches!(
                                 pilot.view.location,
-                                Location::Docked | Location::InTransit { .. }
+                                Location::Docked
+                                    | Location::InTransit { .. }
+                                    | Location::Jumping { .. }
                             ),
                             "navigation requires undocked normal space"
                         );
@@ -331,6 +411,7 @@ impl Server {
                             ) > 100.0,
                             "already at destination"
                         );
+                        pilot.view.locked_asteroid = None;
                         flight::begin_warp(pilot, destination, now);
                         pilot.view.location = Location::InTransit {
                             destination,
@@ -344,13 +425,16 @@ impl Server {
                         ensure!(
                             !matches!(
                                 pilot.view.location,
-                                Location::Docked | Location::InTransit { .. }
+                                Location::Docked
+                                    | Location::InTransit { .. }
+                                    | Location::Jumping { .. }
                             ) && flight::distance(
                                 pilot.view.flight.as_ref().unwrap().position,
                                 STATION_POSITION
                             ) <= DOCK_RANGE,
                             "must be within docking range in normal space"
                         );
+                        pilot.view.locked_asteroid = None;
                         pilot.view.location = Location::Docked;
                         let f = pilot.view.flight.as_mut().unwrap();
                         f.position = STATION_POSITION;
@@ -359,17 +443,7 @@ impl Server {
                         f.updated_at_ms = now;
                         message = "Docked";
                     }
-                    Request::Mine { units } => {
-                        ensure!(
-                            !matches!(
-                                pilot.view.location,
-                                Location::Docked | Location::InTransit { .. }
-                            ) && flight::distance(
-                                pilot.view.flight.as_ref().unwrap().position,
-                                BELT_POSITION
-                            ) <= MINING_RANGE,
-                            "must be within mining range in normal space"
-                        );
+                    Request::Mine { units } | Request::MineAsteroid { id: _, units } => {
                         ensure!(
                             (1..=MAX_MINE_UNITS).contains(&units),
                             "mine quantity must be 1-100"
@@ -383,6 +457,12 @@ impl Server {
                         ensure!(world.belt_ore >= units, "insufficient belt ore");
                         pilot.view.ore = add_cargo(pilot.view.ore, units)?;
                         world.belt_ore -= units;
+                        world
+                            .asteroids
+                            .iter_mut()
+                            .find(|a| Some(a.id) == mining_id)
+                            .unwrap()
+                            .ore -= units;
                         pilot.last_mine_ms = Some(now);
                         event = Some(EconomicEvent::OreMined { pilot: name, units });
                         message = "Ore mined";
@@ -518,6 +598,7 @@ impl Server {
         let snapshot = Snapshot {
             server_time_ms: now,
             online_pilots: self.online_sessions.keys().cloned().collect(),
+            asteroids: world.asteroids.clone(),
             pilots: world.pilots.values().map(|p| p.view.clone()).collect(),
             orders: world.orders.values().cloned().collect(),
             belt_ore: world.belt_ore,
@@ -554,6 +635,10 @@ fn add_cargo(current: u64, units: u64) -> Result<u64> {
     Ok(next)
 }
 fn validate(world: &World) -> Result<()> {
+    ensure!(
+        world.asteroids.iter().map(|a| a.ore as u128).sum::<u128>() == world.belt_ore as u128,
+        "asteroid reserve mismatch"
+    );
     let credits: u128 = world.pilots.values().map(|p| p.view.credits as u128).sum();
     let ore = world.belt_ore as u128
         + world

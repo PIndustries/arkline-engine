@@ -1,7 +1,7 @@
 # Arkline
 
 A Rust space-universe prototype by P.Industries. Pilots share a server-authoritative
-region, mine finite ore, trade through escrow, and independently audit the economy.
+universe of three connected test systems, mine finite ore, trade through escrow, and independently audit the economy.
 
 **Private validation preview, v0.1.0.** Keep this repository private until the owner
 has played the model, validated the direction, and explicitly approved publication.
@@ -46,7 +46,8 @@ pilot name in both clients unless you deliberately transfer its credential.
 ## First flight
 
 1. Create two pilots, each issued 1,000 prototype credits.
-2. Undock one pilot, warp to the belt, then mine 100 ore.
+2. Undock one pilot, warp to the belt, select an individual asteroid, lock it,
+   then extract up to 100 ore.
 3. Warp back to the station and dock.
 4. List 60 ore at 7 credits each. From the other pilot, buy 35.
 5. Observe the remaining 25 ore in escrow and the updated balances.
@@ -55,7 +56,7 @@ pilot name in both clients unless you deliberately transfer its credential.
 
 Warp takes six seconds, including a two-second drive warm-up. Mining is limited to 100 units per command and a
 one-second cooldown. Cargo holds 1,000 units; escrow is separate. Cancelling an
-order requires room to return its ore. The initial belt holds 100,000 ore.
+order requires room to return its ore. The initial global reserve is 100,000 ore, divided across 108 rocks in three systems.
 
 ## Tactical and flight views
 
@@ -82,8 +83,9 @@ the final art direction or a full free-flight/combat simulation.
 
 ## Cockpit services
 
-The right-hand overview selects the station, belt or a known pilot. Its selected
-object panel gives the available travel or station action. Pilot records include live connection status. Undocked ships remain in space
+The right-hand overview lists local stations, belts, individual asteroids, gates
+and ships, with category filters and distances. Its selected-object panel gives
+the available navigation, targeting, mining and jump actions. Pilot records include live connection status. Undocked ships remain in space
 after disconnect; docked ships are omitted from the space view. The left ship panel keeps your cargo, balance
 and next flight operation visible.
 
@@ -181,8 +183,10 @@ and includes the original Arkline orbital icon.
 
 Click a station, asteroid belt or visible ship in either viewport to select it.
 The right panel shows contextual actions; **Focus selected** moves the 3D camera.
-Clicking an asteroid selects its shared belt resource. Use **Approach**, **Orbit**, or **Keep range** to move the ship around the selected
-object. Double-click empty space to fly to a point; **Ctrl+Space** brakes to a stop.
+Clicking an asteroid selects that individual rock and its remaining ore. Use **Approach**, **Orbit**, or **Keep range** to move the ship around the selected
+object. Asteroid extraction requires locking that rock first. The Travel overview
+contains gates connecting Junction, Ember Reach and Glassway; warp to a gate and
+jump when in range. Double-click empty space to fly to a point; **Ctrl+Space** brakes to a stop.
 Both views share server-controlled positions, speed and range. Camera dragging
 only changes the view. See [flight controls](docs/flight-controls.md) for limits.
 
