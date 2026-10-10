@@ -226,48 +226,64 @@ impl FlightView {
         selected: &super::SelectedObject,
     ) -> Option<ViewAction> {
         let mut picked = None;
-        ui.horizontal(|ui| {
-            ui.label(
-                egui::RichText::new("FLIGHT CAMERA")
-                    .color(super::TEAL)
-                    .strong(),
-            );
-            if ui.button("Focus my ship").clicked() {
-                self.follow = true;
-                self.focus_selection = false;
-                self.distance = 27.0;
-            }
-            if ui.button("Sector overview").clicked() {
-                self.follow = false;
-                self.focus_selection = false;
-                self.distance = 150.0;
-                self.yaw = 0.25;
-                self.pitch = 0.65;
-            }
-            if ui.button("Focus selected").clicked() {
-                self.focus_selection = true;
-                self.follow = false;
-                self.distance = 42.0;
-            }
-            if ui.button("Reset camera").clicked() {
-                self.follow = true;
-                self.focus_selection = false;
-                self.distance = 27.0;
-                self.yaw = 0.72;
-                self.pitch = 0.35;
-            }
-        });
-        ui.small("Drag: orbit camera · Scroll: zoom · Double-click empty space: fly there · Right-click: navigation");
+        egui::Window::new("Flight camera")
+            .id(egui::Id::new("flight_camera_overlay"))
+            .default_pos(ui.max_rect().left_bottom() + egui::vec2(16.0, -260.0))
+            .default_size(egui::vec2(280.0, 95.0))
+            .constrain_to(ui.ctx().screen_rect().shrink(8.0))
+            .frame(
+                egui::Frame::window(&ui.ctx().style())
+                    .fill(egui::Color32::from_rgba_unmultiplied(3, 9, 6, 212))
+                    .stroke(egui::Stroke::new(1.0, super::TEAL.gamma_multiply(0.32)))
+                    .inner_margin(8.0),
+            )
+            .resizable(false)
+            .collapsible(true)
+            .show(ui.ctx(), |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    if ui.button("Focus my ship").clicked() {
+                        self.follow = true;
+                        self.focus_selection = false;
+                        self.distance = 27.0;
+                    }
+                    if ui.button("Sector overview").clicked() {
+                        self.follow = false;
+                        self.focus_selection = false;
+                        self.distance = 150.0;
+                        self.yaw = 0.25;
+                        self.pitch = 0.65;
+                    }
+                    if ui.button("Focus selected").clicked() {
+                        self.focus_selection = true;
+                        self.follow = false;
+                        self.distance = 42.0;
+                    }
+                    if ui.button("Reset camera").clicked() {
+                        self.follow = true;
+                        self.focus_selection = false;
+                        self.distance = 27.0;
+                        self.yaw = 0.72;
+                        self.pitch = 0.35;
+                    }
+                });
+                ui.small("Drag: orbit · Scroll: zoom");
+                ui.small("Double-click space: fly · Right-click: actions");
+            });
         let (rect, response) = ui.allocate_exact_size(
             ui.available_size().max(egui::vec2(100.0, 150.0)),
             egui::Sense::click_and_drag(),
         );
-        if response.dragged_by(egui::PointerButton::Primary) {
+        // Foreground panels own their pointer input, including transparent
+        // panel margins. Checking the layer also blocks a drag crossing a HUD.
+        let world_input = ui.input(|i| i.pointer.hover_pos()).is_some_and(|pointer| {
+            rect.contains(pointer) && ui.ctx().layer_id_at(pointer) == Some(ui.layer_id())
+        });
+        if world_input && response.dragged_by(egui::PointerButton::Primary) {
             let delta = ui.input(|i| i.pointer.delta());
             self.yaw -= delta.x * 0.007;
             self.pitch = (self.pitch + delta.y * 0.006).clamp(-1.25, 1.25);
         }
-        if response.hovered() {
+        if world_input && response.hovered() {
             self.distance = (self.distance
                 * (-ui.input(|i| i.smooth_scroll_delta.y) * 0.002).exp())
             .clamp(9.0, 260.0);
@@ -419,7 +435,7 @@ impl FlightView {
                                     | Location::InTransit { .. }
                             )
                     });
-                if response.clicked() || response.secondary_clicked() {
+                if world_input && (response.clicked() || response.secondary_clicked()) {
                     if let Some(pointer) = response.interact_pointer_pos() {
                         let mut targets = Vec::new();
                         for asteroid in &asteroids {
@@ -487,91 +503,100 @@ impl FlightView {
                         }
                     }
                 }
-                response.context_menu(|ui| {
-                    ui.label("Navigation");
-                    match &self.context_object {
-                        Some(super::SelectedObject::Asteroid(id)) => {
-                            if let Some(asteroid) = asteroids.iter().find(|a| a.id == *id) {
-                                ui.label(format!("{} · {} ore", asteroid.name, asteroid.ore));
-                                let lockable = can_navigate
-                                    && own_pilot.is_some_and(|p| {
-                                        position(p, now).distance(scene_position(asteroid.position))
-                                            * 100.0
-                                            <= arkline_protocol::LOCK_RANGE as f32
-                                    });
-                                if ui
-                                    .add_enabled(lockable, egui::Button::new("Lock asteroid"))
-                                    .clicked()
-                                {
-                                    picked = Some(ViewAction::Command(
-                                        arkline_protocol::Request::LockAsteroid { id: *id },
-                                    ));
-                                    ui.close_menu();
-                                }
-                                if ui
-                                    .add_enabled(
-                                        can_navigate,
-                                        egui::Button::new("Approach asteroid"),
-                                    )
-                                    .clicked()
-                                {
-                                    picked = Some(ViewAction::Command(
-                                        arkline_protocol::Request::Navigate {
-                                            mode: NavigationMode::Approach {
-                                                target: NavigationTarget::Asteroid { id: *id },
+                if world_input || response.context_menu_opened() {
+                    response.context_menu(|ui| {
+                        ui.label("Navigation");
+                        match &self.context_object {
+                            Some(super::SelectedObject::Asteroid(id)) => {
+                                if let Some(asteroid) = asteroids.iter().find(|a| a.id == *id) {
+                                    ui.label(format!("{} · {} ore", asteroid.name, asteroid.ore));
+                                    let lockable = can_navigate
+                                        && own_pilot.is_some_and(|p| {
+                                            position(p, now)
+                                                .distance(scene_position(asteroid.position))
+                                                * 100.0
+                                                <= arkline_protocol::LOCK_RANGE as f32
+                                        });
+                                    if ui
+                                        .add_enabled(lockable, egui::Button::new("Lock asteroid"))
+                                        .clicked()
+                                    {
+                                        picked = Some(ViewAction::Command(
+                                            arkline_protocol::Request::LockAsteroid { id: *id },
+                                        ));
+                                        ui.close_menu();
+                                    }
+                                    if ui
+                                        .add_enabled(
+                                            can_navigate,
+                                            egui::Button::new("Approach asteroid"),
+                                        )
+                                        .clicked()
+                                    {
+                                        picked = Some(ViewAction::Command(
+                                            arkline_protocol::Request::Navigate {
+                                                mode: NavigationMode::Approach {
+                                                    target: NavigationTarget::Asteroid { id: *id },
+                                                },
                                             },
-                                        },
-                                    ));
-                                    ui.close_menu();
+                                        ));
+                                        ui.close_menu();
+                                    }
                                 }
                             }
-                        }
-                        Some(super::SelectedObject::Gate(id)) => {
-                            if let Some(gate) = local_gates.iter().find(|g| g.id == *id) {
-                                ui.label(&gate.name);
-                                if ui
-                                    .add_enabled(can_navigate, egui::Button::new("Warp to gate"))
-                                    .clicked()
-                                {
-                                    picked = Some(ViewAction::Command(
-                                        arkline_protocol::Request::Warp {
-                                            destination: Destination::Gate { id: *id },
-                                        },
-                                    ));
-                                    ui.close_menu();
-                                }
-                                let in_range = can_navigate
-                                    && own_pilot.is_some_and(|p| {
-                                        position(p, now).distance(scene_position(gate.position))
-                                            * 100.0
-                                            <= arkline_protocol::GATE_RANGE as f32
-                                    });
-                                if ui
-                                    .add_enabled(in_range, egui::Button::new("Jump through gate"))
-                                    .clicked()
-                                {
-                                    picked = Some(ViewAction::Command(
-                                        arkline_protocol::Request::Jump { gate_id: *id },
-                                    ));
-                                    ui.close_menu();
+                            Some(super::SelectedObject::Gate(id)) => {
+                                if let Some(gate) = local_gates.iter().find(|g| g.id == *id) {
+                                    ui.label(&gate.name);
+                                    if ui
+                                        .add_enabled(
+                                            can_navigate,
+                                            egui::Button::new("Warp to gate"),
+                                        )
+                                        .clicked()
+                                    {
+                                        picked = Some(ViewAction::Command(
+                                            arkline_protocol::Request::Warp {
+                                                destination: Destination::Gate { id: *id },
+                                            },
+                                        ));
+                                        ui.close_menu();
+                                    }
+                                    let in_range = can_navigate
+                                        && own_pilot.is_some_and(|p| {
+                                            position(p, now).distance(scene_position(gate.position))
+                                                * 100.0
+                                                <= arkline_protocol::GATE_RANGE as f32
+                                        });
+                                    if ui
+                                        .add_enabled(
+                                            in_range,
+                                            egui::Button::new("Jump through gate"),
+                                        )
+                                        .clicked()
+                                    {
+                                        picked = Some(ViewAction::Command(
+                                            arkline_protocol::Request::Jump { gate_id: *id },
+                                        ));
+                                        ui.close_menu();
+                                    }
                                 }
                             }
+                            _ => {}
                         }
-                        _ => {}
-                    }
 
-                    if ui
-                        .add_enabled(
-                            can_navigate && self.context_target.is_some(),
-                            egui::Button::new("Fly here"),
-                        )
-                        .clicked()
-                    {
-                        picked = self.context_target.map(ViewAction::FlyTo);
-                        ui.close_menu();
-                    }
-                    ui.small("Destination lies on your ship's horizontal plane.");
-                });
+                        if ui
+                            .add_enabled(
+                                can_navigate && self.context_target.is_some(),
+                                egui::Button::new("Fly here"),
+                            )
+                            .clicked()
+                        {
+                            picked = self.context_target.map(ViewAction::FlyTo);
+                            ui.close_menu();
+                        }
+                        ui.small("Destination lies on your ship's horizontal plane.");
+                    });
+                }
                 let painter = ui.painter_at(rect);
                 for gate in &local_gates {
                     if let Some(point) = project(

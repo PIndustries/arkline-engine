@@ -81,15 +81,22 @@ Flight buttons still control travel. The camera does not move your ship or affec
 the economy. This is an early 3D rendering foundation with procedural assets, not
 the final art direction or a full free-flight/combat simulation.
 
-## Cockpit services
+## Cockpit layout and services
+
+Space fills the entire gameplay window in both views. Session controls, overview,
+ship controls and camera controls float above it instead of reserving fixed rows
+or columns. Move or collapse panels to make room around your ship. Use **F11**
+or **Fullscreen** to toggle fullscreen mode. Services open
+in a floating window only when requested. Foreground panels consume pointer input
+so manipulating a panel does not issue a navigation command behind it.
+
 
 The right-hand overview lists local stations, belts, individual asteroids, gates
 and ships, with category filters and distances. Its selected-object panel gives
 the available navigation, targeting, mining and jump actions. Pilot records include live connection status. Undocked ships remain in space
-after disconnect; docked ships are omitted from the space view. The left ship panel keeps your cargo, balance
-and next flight operation visible.
+after disconnect; docked ships are omitted from the space view. A floating ship HUD keeps cargo, balance and flight controls visible.
 
-Use the bottom services tabs to inspect **Cargo**, trade in **Exchange**, review
+Use the service launcher to inspect **Cargo**, trade in **Exchange**, review
 **Activity**, independently check the economic history in **Ledger**, or save an Emerald, Teal
 or Amber appearance in **Settings**. Emerald uses the default black-and-green theme. Cargo
 separates held ore from sell-order escrow. Exchange actions require docking.

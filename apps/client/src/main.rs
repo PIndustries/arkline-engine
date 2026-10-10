@@ -208,6 +208,7 @@ struct Cockpit {
     overview_filter: OverviewFilter,
     services_open: bool,
     overview_nearest_first: bool,
+    overview_open: bool,
 }
 impl Cockpit {
     fn new(
@@ -253,6 +254,7 @@ impl Cockpit {
             overview_filter: OverviewFilter::All,
             services_open: false,
             overview_nearest_first: true,
+            overview_open: true,
         }
     }
     fn accent(&self) -> Color32 {
@@ -1382,12 +1384,56 @@ impl Cockpit {
                 }
             });
     }
+    fn overlay_frame(&self, ctx: &egui::Context) -> egui::Frame {
+        egui::Frame::window(&ctx.style())
+            .fill(Color32::from_rgba_unmultiplied(3, 9, 6, 212))
+            .stroke(Stroke::new(1.0, self.accent().gamma_multiply(0.32)))
+            .inner_margin(8.0)
+    }
+    fn session_menu(&mut self, ui: &mut egui::Ui) {
+        ui.menu_button("Session", |ui| {
+            ui.small(&self.server);
+            if self.connected {
+                if ui.button("Open second cockpit").clicked() {
+                    self.second_cockpit();
+                    ui.close_menu();
+                }
+                if ui
+                    .add_enabled(!self.request_pending, egui::Button::new("Disconnect"))
+                    .clicked()
+                {
+                    self.commands = None;
+                    self.updates = None;
+                    self.connected = false;
+                    self.snapshot = None;
+                    self.effects.clear();
+                    ui.close_menu();
+                }
+            } else {
+                if ui
+                    .add_enabled(!self.connecting, egui::Button::new("Reconnect"))
+                    .clicked()
+                {
+                    self.connect();
+                    ui.close_menu();
+                }
+                if ui.button("Change pilot / server").clicked() {
+                    self.snapshot = None;
+                    self.commands = None;
+                    self.updates = None;
+                    self.effects.clear();
+                    ui.close_menu();
+                }
+            }
+        });
+    }
     fn scene(&mut self, ui: &mut egui::Ui) {
         let (rect, response) = ui.allocate_exact_size(
             Vec2::new(ui.available_width(), ui.available_height().max(220.0)),
             egui::Sense::click(),
         );
-        let clicked = (response.clicked() || response.secondary_clicked())
+        let world_input = scene_pointer_allowed(ui.ctx(), ui.layer_id(), rect);
+        let clicked = (world_input && (response.clicked() || response.secondary_clicked()))
             .then(|| response.interact_pointer_pos())
             .flatten();
         let mut selected = None;
@@ -1402,7 +1448,7 @@ impl Cockpit {
             }
         };
         let paint = ui.painter_at(rect);
-        paint.rect_filled(rect, 9.0, Color32::from_rgb(2, 6, 4));
+        paint.rect_filled(rect, 0.0, Color32::from_rgb(2, 6, 4));
         for i in 0..150 {
             let x = ((i * 7919 + 67) % 1000) as f32 / 1000.0;
             let y = ((i * 3571 + 239) % 1000) as f32 / 1000.0;
@@ -1716,7 +1762,7 @@ impl Cockpit {
         if let Some(selected) = selected {
             self.selected_object = selected;
         }
-        if response.double_clicked() && !hit_object && self.can_fly() {
+        if world_input && response.double_clicked() && !hit_object && self.can_fly() {
             if let Some(point) = response.interact_pointer_pos() {
                 let altitude = self
                     .own()
@@ -1729,7 +1775,7 @@ impl Cockpit {
                 });
             }
         }
-        if response.secondary_clicked() {
+        if world_input && response.secondary_clicked() {
             self.context_fly_to =
                 response
                     .interact_pointer_pos()
@@ -1744,78 +1790,80 @@ impl Cockpit {
                         )
                     });
         }
-        response.context_menu(|ui| {
-            if let Some(position) = self.context_fly_to {
+        if world_input || response.context_menu_opened() {
+            response.context_menu(|ui| {
+                if let Some(position) = self.context_fly_to {
+                    if ui
+                        .add_enabled(self.can_fly(), egui::Button::new("Fly here"))
+                        .clicked()
+                    {
+                        self.send(Request::Navigate {
+                            mode: NavigationMode::FlyTo { position },
+                        });
+                        ui.close_menu();
+                    }
+                } else if let Some(target) = self.selected_target() {
+                    if ui
+                        .add_enabled(self.can_fly(), egui::Button::new("Approach selected"))
+                        .clicked()
+                    {
+                        self.send(Request::Navigate {
+                            mode: NavigationMode::Approach { target },
+                        });
+                        ui.close_menu();
+                    }
+                }
+                if let Some(asteroid) = self.selected_asteroid().cloned() {
+                    if ui
+                        .add_enabled(self.can_lock_selected(), egui::Button::new("Lock asteroid"))
+                        .clicked()
+                    {
+                        self.send(Request::LockAsteroid { id: asteroid.id });
+                        ui.close_menu();
+                    }
+                    if ui
+                        .add_enabled(
+                            self.own().is_some_and(|p| self.can_mine(&p)),
+                            egui::Button::new("Extract selected"),
+                        )
+                        .clicked()
+                    {
+                        self.extract_selected();
+                        ui.close_menu();
+                    }
+                }
+                if let Some(gate) = self.selected_gate() {
+                    if ui
+                        .add_enabled(self.can_fly(), egui::Button::new("Warp to gate"))
+                        .clicked()
+                    {
+                        self.send(Request::Warp {
+                            destination: Destination::Gate { id: gate.id },
+                        });
+                        ui.close_menu();
+                    }
+                    if ui
+                        .add_enabled(
+                            self.can_jump_selected(),
+                            egui::Button::new("Jump through gate"),
+                        )
+                        .clicked()
+                    {
+                        self.send(Request::Jump { gate_id: gate.id });
+                        ui.close_menu();
+                    }
+                }
                 if ui
-                    .add_enabled(self.can_fly(), egui::Button::new("Fly here"))
+                    .add_enabled(self.can_fly(), egui::Button::new("Stop ship"))
                     .clicked()
                 {
                     self.send(Request::Navigate {
-                        mode: NavigationMode::FlyTo { position },
+                        mode: NavigationMode::Stop,
                     });
                     ui.close_menu();
                 }
-            } else if let Some(target) = self.selected_target() {
-                if ui
-                    .add_enabled(self.can_fly(), egui::Button::new("Approach selected"))
-                    .clicked()
-                {
-                    self.send(Request::Navigate {
-                        mode: NavigationMode::Approach { target },
-                    });
-                    ui.close_menu();
-                }
-            }
-            if let Some(asteroid) = self.selected_asteroid().cloned() {
-                if ui
-                    .add_enabled(self.can_lock_selected(), egui::Button::new("Lock asteroid"))
-                    .clicked()
-                {
-                    self.send(Request::LockAsteroid { id: asteroid.id });
-                    ui.close_menu();
-                }
-                if ui
-                    .add_enabled(
-                        self.own().is_some_and(|p| self.can_mine(&p)),
-                        egui::Button::new("Extract selected"),
-                    )
-                    .clicked()
-                {
-                    self.extract_selected();
-                    ui.close_menu();
-                }
-            }
-            if let Some(gate) = self.selected_gate() {
-                if ui
-                    .add_enabled(self.can_fly(), egui::Button::new("Warp to gate"))
-                    .clicked()
-                {
-                    self.send(Request::Warp {
-                        destination: Destination::Gate { id: gate.id },
-                    });
-                    ui.close_menu();
-                }
-                if ui
-                    .add_enabled(
-                        self.can_jump_selected(),
-                        egui::Button::new("Jump through gate"),
-                    )
-                    .clicked()
-                {
-                    self.send(Request::Jump { gate_id: gate.id });
-                    ui.close_menu();
-                }
-            }
-            if ui
-                .add_enabled(self.can_fly(), egui::Button::new("Stop ship"))
-                .clicked()
-            {
-                self.send(Request::Navigate {
-                    mode: NavigationMode::Stop,
-                });
-                ui.close_menu();
-            }
-        });
+            });
+        }
         paint.text(
             rect.right_bottom() + Vec2::new(-12.0, -12.0),
             egui::Align2::RIGHT_BOTTOM,
@@ -1833,6 +1881,10 @@ impl Cockpit {
             );
         }
     }
+}
+fn scene_pointer_allowed(ctx: &egui::Context, layer: egui::LayerId, rect: egui::Rect) -> bool {
+    ctx.input(|i| i.pointer.hover_pos())
+        .is_some_and(|point| rect.contains(point) && ctx.layer_id_at(point) == Some(layer))
 }
 fn in_navigation_range(pilot: &PilotView, target: [f64; 3], range: f64) -> bool {
     !matches!(
@@ -1932,95 +1984,14 @@ impl eframe::App for Cockpit {
             });
         }
         ctx.request_repaint_after(Duration::from_millis(33));
-        egui::TopBottomPanel::top("brand").show(ctx, |ui| {
-            ui.add_space(8.0);
-            ui.horizontal(|ui| {
-                ui.label(
-                    egui::RichText::new("A R K L I N E")
-                        .size(25.0)
-                        .color(self.accent())
-                        .strong(),
-                );
-                ui.label(
-                    egui::RichText::new(BUILD_VERSION.trim())
-                        .color(AMBER)
-                        .strong(),
-                );
-                ui.colored_label(MUTED, "PRIVATE");
-                ui.menu_button("Session", |ui| {
-                    if self.connected {
-                        if ui.button("Open second cockpit").clicked() {
-                            self.second_cockpit();
-                            ui.close_menu();
-                        }
-                        if ui
-                            .add_enabled(!self.request_pending, egui::Button::new("Disconnect"))
-                            .clicked()
-                        {
-                            self.commands = None;
-                            self.updates = None;
-                            self.connected = false;
-                            self.snapshot = None;
-                            self.effects.clear();
-                            ui.close_menu();
-                        }
-                    } else {
-                        if ui
-                            .add_enabled(!self.connecting, egui::Button::new("Reconnect"))
-                            .clicked()
-                        {
-                            self.connect();
-                            ui.close_menu();
-                        }
-                        if ui.button("Change pilot / server").clicked() {
-                            self.snapshot = None;
-                            self.commands = None;
-                            self.updates = None;
-                            self.effects.clear();
-                            ui.close_menu();
-                        }
-                    }
-                });
-                ui.separator();
-                ui.selectable_value(&mut self.three_dimensional, false, "2D Tactical");
-                ui.selectable_value(&mut self.three_dimensional, true, "3D Flight");
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.colored_label(
-                        if self.connected { self.accent() } else { AMBER },
-                        if self.connected {
-                            "● ONLINE"
-                        } else if self.connecting {
-                            "○ CONNECTING"
-                        } else {
-                            "○ OFFLINE"
-                        },
-                    );
-                });
-            });
-            ui.separator();
-            let (status, detail, _, color) = self.operation_status();
-            ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("VESSEL").size(11.0).color(MUTED));
-                ui.colored_label(color, egui::RichText::new(status).strong());
-                ui.colored_label(MUTED, detail);
-            });
-            ui.add_space(4.0);
-        });
-        egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
-            ui.horizontal_wrapped(|ui| {
-                ui.small(&self.server);
-                if let Some(s) = &self.snapshot {
-                    ui.separator();
-                    ui.small(format!(
-                        "Ledger #{} · {}",
-                        s.ledger_sequence,
-                        s.ledger_hash.chars().take(16).collect::<String>()
-                    ));
-                    ui.colored_label(MUTED, "Server checkpoint · Audit in Ledger");
-                }
-            });
-        });
         if !self.connected && self.snapshot.is_none() {
+            egui::TopBottomPanel::top("login-brand").show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.heading(egui::RichText::new("ARKLINE").color(self.accent()));
+                    ui.colored_label(AMBER, BUILD_VERSION.trim());
+                    ui.small("PRIVATE");
+                });
+            });
             egui::CentralPanel::default().show(ctx, |ui| {
                 ui.add_space((ui.available_height() * 0.13).max(20.0));
                 ui.vertical_centered(|ui| {
@@ -2052,51 +2023,148 @@ impl eframe::App for Cockpit {
             });
             return;
         }
-        egui::SidePanel::right("overview")
-            .exact_width(310.0)
-            .resizable(false)
+        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::F11)) {
+            let fullscreen = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
+            ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!fullscreen));
+        }
+        let bounds = ctx.screen_rect().shrink(8.0);
+        // Floating layers are registered before the background consumes pointer input.
+        egui::Area::new(egui::Id::new("cockpit_identity_overlay"))
+            .order(egui::Order::Foreground)
+            .default_pos(bounds.left_top() + Vec2::new(8.0, 6.0))
+            .movable(true)
+            .constrain_to(bounds)
             .show(ctx, |ui| {
-                egui::ScrollArea::vertical()
-                    .id_salt("overview-scroll")
-                    .show(ui, |ui| {
-                        ui.add_space(10.0);
-                        self.overview(ui);
+                self.overlay_frame(ctx).show(ui, |ui| {
+                    ui.set_max_width(440.0);
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            egui::RichText::new("A R K L I N E")
+                                .size(21.0)
+                                .color(self.accent())
+                                .strong(),
+                        );
+                        ui.colored_label(AMBER, BUILD_VERSION.trim());
+                        ui.small("PRIVATE");
+                        self.session_menu(ui);
                     });
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(egui::RichText::new(system_name(self.current_system())).strong());
+                        ui.colored_label(
+                            if self.connected { self.accent() } else { AMBER },
+                            if self.connected {
+                                "● Connected"
+                            } else {
+                                "○ Offline"
+                            },
+                        );
+                        ui.selectable_value(&mut self.three_dimensional, false, "2D");
+                        ui.selectable_value(&mut self.three_dimensional, true, "3D");
+                        let fullscreen = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
+                        if ui
+                            .small_button(if fullscreen {
+                                "Windowed (F11)"
+                            } else {
+                                "Fullscreen (F11)"
+                            })
+                            .clicked()
+                        {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!fullscreen));
+                        }
+                    });
+                    let (status, detail, _, color) = self.operation_status();
+                    ui.colored_label(color, egui::RichText::new(status).size(12.0).strong());
+                    ui.small(detail);
+                });
             });
-        let services = egui::TopBottomPanel::bottom("services");
-        let services = if self.services_open {
-            services
-                .default_height(195.0)
-                .min_height(145.0)
-                .resizable(true)
-        } else {
-            services.exact_height(35.0).resizable(false)
-        };
-        services.show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                for (tab, label) in [
-                    (ServiceTab::Cargo, "Cargo"),
-                    (ServiceTab::Exchange, "Exchange"),
-                    (ServiceTab::Activity, "Activity"),
-                    (ServiceTab::Ledger, "Ledger"),
-                    (ServiceTab::Settings, "Settings"),
-                ] {
-                    if ui
-                        .selectable_value(&mut self.service_tab, tab, label)
-                        .clicked()
-                    {
-                        self.services_open = true;
+        egui::Area::new(egui::Id::new("service_launcher_overlay"))
+            .default_pos(bounds.left_top() + Vec2::new(8.0, 156.0))
+            .movable(true)
+            .constrain_to(bounds)
+            .show(ctx, |ui| {
+                self.overlay_frame(ctx).show(ui, |ui| {
+                    ui.label(egui::RichText::new("SERVICES").size(10.0).color(MUTED));
+                    if ui.small_button("Overview").clicked() {
+                        self.overview_open = true;
                     }
-                }
-                if self.services_open && ui.small_button("Collapse").clicked() {
-                    self.services_open = false;
-                }
+                    for (tab, label) in [
+                        (ServiceTab::Cargo, "Cargo"),
+                        (ServiceTab::Exchange, "Exchange"),
+                        (ServiceTab::Activity, "Activity"),
+                        (ServiceTab::Ledger, "Ledger"),
+                        (ServiceTab::Settings, "Settings"),
+                    ] {
+                        if ui
+                            .selectable_label(self.services_open && self.service_tab == tab, label)
+                            .clicked()
+                        {
+                            self.service_tab = tab;
+                            self.services_open = true;
+                        }
+                    }
+                });
             });
-            if self.services_open {
-                ui.separator();
-                egui::ScrollArea::vertical()
-                    .id_salt("service-content")
-                    .show(ui, |ui| match self.service_tab {
+        let mut overview_open = self.overview_open;
+        egui::Window::new("Overview")
+            .id(egui::Id::new("cockpit_overview_overlay"))
+            .open(&mut overview_open)
+            .default_pos(Pos2::new(bounds.right() - 326.0, bounds.top() + 10.0))
+            .default_size(Vec2::new(310.0, (bounds.height() - 220.0).max(300.0)))
+            .min_width(275.0)
+            .max_height(bounds.height() - 24.0)
+            .resizable(true)
+            .collapsible(true)
+            .constrain_to(bounds)
+            .frame(self.overlay_frame(ctx))
+            .vscroll(true)
+            .show(ctx, |ui| {
+                self.overview(ui);
+            });
+        self.overview_open = overview_open;
+        let ship_width = (bounds.width() - 70.0).min(760.0);
+        egui::Window::new("Ship controls")
+            .id(egui::Id::new("ship_controls_overlay"))
+            .default_pos(Pos2::new(
+                bounds.center().x - ship_width * 0.5,
+                bounds.bottom() - 104.0,
+            ))
+            .default_size(Vec2::new(ship_width, 80.0))
+            .min_width(570.0)
+            .resizable(true)
+            .collapsible(true)
+            .constrain_to(bounds)
+            .frame(self.overlay_frame(ctx))
+            .show(ctx, |ui| {
+                self.flight_deck(ui);
+            });
+        if self.services_open {
+            let mut open = true;
+            egui::Window::new("Services")
+                .id(egui::Id::new("cockpit_services_overlay"))
+                .open(&mut open)
+                .default_pos(bounds.left_top() + Vec2::new(110.0, 164.0))
+                .default_size(Vec2::new(620.0, 310.0))
+                .min_width(400.0)
+                .max_height(bounds.height() - 30.0)
+                .resizable(true)
+                .collapsible(true)
+                .constrain_to(bounds)
+                .frame(self.overlay_frame(ctx))
+                .vscroll(true)
+                .show(ctx, |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        for (tab, label) in [
+                            (ServiceTab::Cargo, "Cargo"),
+                            (ServiceTab::Exchange, "Exchange"),
+                            (ServiceTab::Activity, "Activity"),
+                            (ServiceTab::Ledger, "Ledger"),
+                            (ServiceTab::Settings, "Settings"),
+                        ] {
+                            ui.selectable_value(&mut self.service_tab, tab, label);
+                        }
+                    });
+                    ui.separator();
+                    match self.service_tab {
                         ServiceTab::Cargo => self.cargo_panel(ui),
                         ServiceTab::Exchange => self.market(ui),
                         ServiceTab::Ledger => self.ledger_panel(ui),
@@ -2107,45 +2175,44 @@ impl eframe::App for Cockpit {
                                 ui.separator();
                             }
                         }
-                    });
-            }
-        });
-        egui::TopBottomPanel::bottom("flight-deck")
-            .exact_height(72.0)
+                    }
+                });
+            self.services_open = open;
+        }
+        egui::CentralPanel::default()
+            .frame(egui::Frame::NONE)
             .show(ctx, |ui| {
-                ui.add_space(5.0);
-                self.flight_deck(ui);
-            });
-        egui::CentralPanel::default().show(ctx, |ui| {
-            if self.three_dimensional {
-                let now = self.presentation_time();
-                if let Some(snapshot) = &self.snapshot {
-                    if let Some(selected) = self.flight_view.ui(
-                        ui,
-                        snapshot,
-                        &self.pilot,
-                        now,
-                        self.connected,
-                        &self.effects,
-                        &self.selected_object,
-                    ) {
-                        match selected {
-                            flight3d::ViewAction::Select(object) => self.selected_object = object,
-                            flight3d::ViewAction::Command(command) => self.send(command),
-                            flight3d::ViewAction::FlyTo(position) => {
-                                if self.can_fly() {
-                                    self.send(Request::Navigate {
-                                        mode: NavigationMode::FlyTo { position },
-                                    });
+                if self.three_dimensional {
+                    let now = self.presentation_time();
+                    if let Some(snapshot) = &self.snapshot {
+                        if let Some(action) = self.flight_view.ui(
+                            ui,
+                            snapshot,
+                            &self.pilot,
+                            now,
+                            self.connected,
+                            &self.effects,
+                            &self.selected_object,
+                        ) {
+                            match action {
+                                flight3d::ViewAction::Select(object) => {
+                                    self.selected_object = object
+                                }
+                                flight3d::ViewAction::Command(command) => self.send(command),
+                                flight3d::ViewAction::FlyTo(position) => {
+                                    if self.can_fly() {
+                                        self.send(Request::Navigate {
+                                            mode: NavigationMode::FlyTo { position },
+                                        });
+                                    }
                                 }
                             }
                         }
                     }
+                } else {
+                    self.scene(ui);
                 }
-            } else {
-                self.scene(ui);
-            }
-        });
+            });
     }
 }
 /// Only the process that spawned a local host owns its lifetime.
@@ -2302,7 +2369,7 @@ fn main() -> eframe::Result<()> {
                 .expect("embedded Arkline icon must be valid PNG"),
             )
             .with_inner_size([1200.0, 800.0])
-            .with_min_inner_size([960.0, 680.0]),
+            .with_min_inner_size([900.0, 650.0]),
         ..Default::default()
     };
     eframe::run_native(
@@ -2328,6 +2395,47 @@ fn main() -> eframe::Result<()> {
 mod tests {
     use super::*;
     use std::net::TcpListener;
+
+    #[test]
+    fn floating_overlay_blocks_scene_pointer_but_empty_space_allows_it() {
+        let ctx = egui::Context::default();
+        let screen = egui::Rect::from_min_size(Pos2::ZERO, Vec2::new(900.0, 650.0));
+        for (pointer, expected) in [
+            (Pos2::new(60.0, 60.0), false),
+            (Pos2::new(600.0, 400.0), true),
+        ] {
+            // Two frames establish and then test the same interactive layout.
+            for _ in 0..2 {
+                let _ = ctx.run(
+                    egui::RawInput {
+                        screen_rect: Some(screen),
+                        events: vec![egui::Event::PointerMoved(pointer)],
+                        ..Default::default()
+                    },
+                    |ctx| {
+                        egui::Area::new(egui::Id::new("test_overlay"))
+                            .order(egui::Order::Foreground)
+                            .fixed_pos(Pos2::new(20.0, 20.0))
+                            .show(ctx, |ui| {
+                                ui.allocate_exact_size(
+                                    Vec2::new(180.0, 100.0),
+                                    egui::Sense::click_and_drag(),
+                                );
+                            });
+                        egui::CentralPanel::default()
+                            .frame(egui::Frame::NONE)
+                            .show(ctx, |ui| {
+                                assert_eq!(
+                                    scene_pointer_allowed(ctx, ui.layer_id(), screen),
+                                    expected
+                                );
+                                assert_eq!(ui.max_rect(), screen);
+                            });
+                    },
+                );
+            }
+        }
+    }
 
     #[test]
     fn tactical_pointer_projection_preserves_meter_coordinates() {

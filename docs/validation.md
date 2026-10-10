@@ -120,3 +120,17 @@ the transient beam failed with ScreenCaptureKit error -3811, so beam appearance
 was not visually signed off by that attempt. Geometry tests verify its exact
 asteroid endpoint. The final overview defaults to nearest-first and can reverse
 the range sort.
+
+## Full-window cockpit — 26.10.9.4
+
+Native captures confirm that both tactical and flight scenes reach the gameplay
+window edges, with the cockpit drawn on floating translucent panels. Cargo opens
+in an optional floating Services window. Opening and closing Cargo and switching
+to tactical view preserved the exact saved flight state, cargo and credits in an
+isolated world. An egui frame test verifies that the CentralPanel spans the screen
+and foreground panels block scene pointer input while uncovered space accepts it.
+Initial native inspection caught an implicit default-height issue that placed the
+ship HUD too high; ship and camera windows now specify compact initial sizes.
+
+Fullscreen is available through F11 or the session overlay. This layout update does
+not change the existing physical scale or fixed warp timing.
