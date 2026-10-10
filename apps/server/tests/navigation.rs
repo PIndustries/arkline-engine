@@ -216,7 +216,13 @@ fn warp_holds_source_during_warmup_and_arrives_in_range() {
     );
     let arrived = flight(&mut s, "WarpPilot", route_ms());
     assert!(dist(arrived.position, BELT_POSITION) < MINING_RANGE);
-    run(&mut s, &mut p, Request::Mine { units: 1 }, route_ms());
+    acquire(&mut s, &mut p, route_ms());
+    run(
+        &mut s,
+        &mut p,
+        Request::Mine { units: 1 },
+        route_ms() + 8000,
+    );
     // Docking remains permitted from the separated station berth.
     run(&mut s, &mut other, Request::Dock, route_ms());
 }
@@ -240,7 +246,13 @@ fn legacy_world_gains_flight_without_changing_inventory_or_history() {
             },
             0,
         );
-        before = run(&mut s, &mut p, Request::Mine { units: 25 }, route_ms());
+        acquire(&mut s, &mut p, route_ms());
+        before = run(
+            &mut s,
+            &mut p,
+            Request::Mine { units: 25 },
+            route_ms() + 8000,
+        );
     }
     {
         let db = rusqlite::Connection::open(&path).unwrap();
@@ -305,7 +317,13 @@ fn astronomical_migration_preserves_local_offset_and_economic_history() {
             },
             0,
         );
-        before = run(&mut s, &mut p, Request::Mine { units: 25 }, route_ms());
+        acquire(&mut s, &mut p, route_ms());
+        before = run(
+            &mut s,
+            &mut p,
+            Request::Mine { units: 25 },
+            route_ms() + 8000,
+        );
     }
     {
         let db = rusqlite::Connection::open(&path).unwrap();
@@ -385,4 +403,30 @@ fn persisted_public_trajectory_samples_exactly_after_restart() {
     let mut lock = path.as_os_str().to_os_string();
     lock.push(".lock");
     std::fs::remove_file(lock).unwrap();
+}
+
+fn acquire(s: &mut Server, p: &mut Option<String>, now: u64) {
+    let snapshot = run(s, p, Request::Snapshot, now);
+    let position = snapshot
+        .pilots
+        .iter()
+        .find(|v| Some(&v.name) == p.as_ref())
+        .unwrap()
+        .flight
+        .as_ref()
+        .unwrap()
+        .position;
+    let asteroid = snapshot
+        .asteroids
+        .iter()
+        .filter(|a| a.system_id == HOME_SYSTEM_ID)
+        .min_by(|a, b| dist(position, a.position).total_cmp(&dist(position, b.position)))
+        .unwrap();
+    run(s, p, Request::LockAsteroid { id: asteroid.id }, now);
+    run(
+        s,
+        p,
+        Request::Snapshot,
+        now + lock_duration_ms(ShipClass::Pioneer, asteroid.radius),
+    );
 }

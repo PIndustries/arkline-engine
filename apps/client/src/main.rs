@@ -26,6 +26,7 @@ const MUTED: Color32 = Color32::from_rgb(138, 157, 180);
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ViewMode {
     Tactical,
+    External,
     Cockpit,
 }
 
@@ -672,6 +673,108 @@ impl Cockpit {
             Location::InTransit { .. } | Location::Jumping { .. } => unreachable!(),
         }
     }
+    fn view_selector(&mut self, ui: &mut egui::Ui) {
+        ui.selectable_value(&mut self.view_mode, ViewMode::Tactical, "2D Tactical");
+        ui.selectable_value(&mut self.view_mode, ViewMode::External, "3D External");
+        ui.selectable_value(&mut self.view_mode, ViewMode::Cockpit, "Cockpit");
+        if self.view_mode == ViewMode::Tactical {
+            ui.selectable_value(&mut self.tactical_system, false, "Local");
+            ui.selectable_value(&mut self.tactical_system, true, "System");
+        }
+    }
+    fn mining_status(&self) -> (String, Option<f32>) {
+        let Some(pilot) = self.own() else {
+            return ("Idle · select an asteroid".into(), None);
+        };
+        if !self.connected {
+            return ("Offline · last known state".into(), None);
+        }
+        if let Some(lock) = &pilot.target_lock {
+            let now = self.presentation_time();
+            let remaining = lock.completes_at_ms.saturating_sub(now);
+            let name = self
+                .snapshot
+                .as_ref()
+                .and_then(|s| s.asteroids.iter().find(|a| a.id == lock.asteroid_id))
+                .map_or_else(
+                    || format!("asteroid #{}", lock.asteroid_id),
+                    |a| a.name.clone(),
+                );
+            let progress = (now.saturating_sub(lock.started_at_ms) as f32
+                / lock
+                    .completes_at_ms
+                    .saturating_sub(lock.started_at_ms)
+                    .max(1) as f32)
+                .clamp(0.0, 1.0);
+            return (
+                if remaining == 0 {
+                    format!("Acquiring {name} · confirming…")
+                } else {
+                    format!("Acquiring {name} · {:.1}s", remaining as f64 / 1000.0)
+                },
+                Some(progress),
+            );
+        }
+        let Some(id) = pilot.locked_asteroid else {
+            return ("Idle · select an asteroid and lock".into(), None);
+        };
+        let Some(asteroid) = self
+            .snapshot
+            .as_ref()
+            .and_then(|s| s.asteroids.iter().find(|a| a.id == id))
+        else {
+            return ("Target unavailable".into(), None);
+        };
+        if asteroid.ore == 0 {
+            return (format!("Depleted · {}", asteroid.name), None);
+        }
+        if !effects::can_extract_target(&pilot, asteroid) {
+            return (format!("Out of extraction range · {}", asteroid.name), None);
+        }
+        if self.effects.mining_target(self.presentation_time()) == Some(id) {
+            if let Some((progress, units)) = self.effects.mining(self.presentation_time()) {
+                return (
+                    format!("Extracting · +{units} ore already credited"),
+                    Some(progress),
+                );
+            }
+        }
+        (format!("Locked · {}", asteroid.name), None)
+    }
+    fn mining_module(&mut self, ui: &mut egui::Ui) {
+        ui.small(
+            egui::RichText::new("MINING MODULE")
+                .strong()
+                .color(self.accent()),
+        );
+        let (status, progress) = self.mining_status();
+        ui.small(status);
+        if let Some(progress) = progress {
+            ui.add(
+                egui::ProgressBar::new(progress)
+                    .desired_height(4.0)
+                    .fill(self.accent()),
+            );
+        }
+        if let Some(pilot) = self.own() {
+            if (pilot.target_lock.is_some() || pilot.locked_asteroid.is_some())
+                && ui
+                    .add_enabled(
+                        self.can_operate(),
+                        egui::Button::new(if pilot.target_lock.is_some() {
+                            "Cancel lock"
+                        } else {
+                            "Unlock target"
+                        })
+                        .small(),
+                    )
+                    .clicked()
+            {
+                self.send(Request::UnlockTarget);
+            }
+        }
+    }
+
     fn flight_deck(&mut self, ui: &mut egui::Ui) {
         let Some(pilot) = self.own() else {
             return;
@@ -735,6 +838,7 @@ impl Cockpit {
             });
             columns[1].small("W/S thrust · A/D strafe · Space/C vertical");
             let asteroid = self.selected_asteroid().cloned();
+            self.mining_module(&mut columns[2]);
             columns[2].small(
                 asteroid
                     .as_ref()
@@ -790,6 +894,7 @@ impl Cockpit {
             && self.own().is_some_and(|p| {
                 self.selected_asteroid().is_some_and(|a| {
                     a.ore > 0
+                        && p.target_lock.is_none()
                         && p.locked_asteroid != Some(a.id)
                         && p.flight.as_ref().is_some_and(|f| {
                             (distance_m(f.position, a.position) - a.radius).max(0.0) <= LOCK_RANGE
@@ -834,6 +939,7 @@ impl Cockpit {
     }
     fn can_mine(&self, pilot: &PilotView) -> bool {
         self.can_operate()
+            && pilot.target_lock.is_none()
             && self.amount > 0
             && self.amount <= MAX_MINE_UNITS
             && pilot.ore.saturating_add(self.amount) <= CARGO_CAPACITY
@@ -1002,6 +1108,7 @@ impl Cockpit {
             ));
         }
         if let Some(asteroid) = self.selected_asteroid().cloned() {
+            self.mining_module(ui);
             let locked = self
                 .own()
                 .is_some_and(|p| p.locked_asteroid == Some(asteroid.id));
@@ -2258,7 +2365,7 @@ impl eframe::App for Cockpit {
                                 "○ Offline"
                             },
                         );
-                        ui.small("COCKPIT · DIRECT FLIGHT");
+                        self.view_selector(ui);
                         let fullscreen = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
                         if ui
                             .small_button(if fullscreen {
@@ -2417,14 +2524,23 @@ impl eframe::App for Cockpit {
                     self.scene(ui);
                 }
             });
-        let flight_allowed = self.connected
+        if self.view_mode != ViewMode::Cockpit {
+            self.pilot_input.release_mouse(ctx);
+        }
+        let flight_allowed = self.view_mode != ViewMode::Tactical
+            && self.connected
             && self.own().is_some_and(|p| {
                 p.flight.is_some() && matches!(p.location, Location::Station | Location::Belt)
             });
-        if let Some(control) =
-            self.pilot_input
-                .sample(ctx, flight_allowed, self.flight_view.input_surface())
-        {
+        if let Some(control) = self.pilot_input.sample(
+            ctx,
+            flight_allowed,
+            if self.view_mode == ViewMode::Cockpit {
+                self.flight_view.input_surface()
+            } else {
+                None
+            },
+        ) {
             *self.controls.lock().unwrap() = Some(control);
         }
     }
@@ -2610,6 +2726,183 @@ mod tests {
     use super::*;
     use std::net::TcpListener;
 
+    fn view_test_cockpit(ctx: &egui::Context) -> Cockpit {
+        let cc = eframe::CreationContext::_new_kittest(ctx.clone());
+        let mut cockpit = Cockpit::new(
+            &cc,
+            "fixture".into(),
+            std::env::temp_dir().join("arkline-headless-view-unused"),
+            None,
+        );
+        cockpit.connected = true;
+        cockpit.pilot = "pilot".into();
+        cockpit.snapshot = Some(Snapshot {
+            server_time_ms: 1000,
+            asteroids: vec![Asteroid {
+                id: 7,
+                system_id: HOME_SYSTEM_ID,
+                name: "Test rock".into(),
+                position: BELT_POSITION,
+                radius: 100.0,
+                ore: 1000,
+            }],
+            online_pilots: vec![],
+            orders: vec![],
+            belt_ore: 1000,
+            ledger_sequence: 9,
+            ledger_hash: "fixture".into(),
+            pilots: vec![PilotView {
+                name: "pilot".into(),
+                system_id: HOME_SYSTEM_ID,
+                ship_class: ShipClass::Pioneer,
+                target_lock: None,
+                locked_asteroid: None,
+                credits: 100,
+                ore: 25,
+                location: Location::Belt,
+                flight: Some(FlightState {
+                    position: BELT_POSITION,
+                    velocity: [0.0; 3],
+                    heading: [1.0, 0.0, 0.0],
+                    orientation: [0.0, 0.0, 0.0, 1.0],
+                    angular_velocity: [0.0; 3],
+                    mode: NavigationMode::Stop,
+                    updated_at_ms: 1000,
+                    warp: None,
+                }),
+            }],
+        });
+        cockpit.selected_object = SelectedObject::Asteroid(7);
+        cockpit.timeline_origin = Some(1000);
+        cockpit
+    }
+    fn ui_test_frame(
+        ctx: &egui::Context,
+        cockpit: &mut Cockpit,
+        events: Vec<egui::Event>,
+        selector: bool,
+    ) -> Vec<(String, Pos2)> {
+        let output = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    Pos2::ZERO,
+                    Vec2::new(1000.0, 650.0),
+                )),
+                events,
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    if selector {
+                        ui.horizontal(|ui| cockpit.view_selector(ui));
+                    } else {
+                        cockpit.flight_deck(ui);
+                    }
+                });
+            },
+        );
+        output
+            .shapes
+            .into_iter()
+            .filter_map(|s| {
+                if let egui::Shape::Text(t) = s.shape {
+                    Some((
+                        t.galley.job.text.clone(),
+                        t.pos + t.galley.rect.center().to_vec2(),
+                    ))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+    fn ui_test_click(ctx: &egui::Context, cockpit: &mut Cockpit, point: Pos2, selector: bool) {
+        ui_test_frame(
+            ctx,
+            cockpit,
+            vec![
+                egui::Event::PointerMoved(point),
+                egui::Event::PointerButton {
+                    pos: point,
+                    button: egui::PointerButton::Primary,
+                    pressed: true,
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ],
+            selector,
+        );
+        ui_test_frame(
+            ctx,
+            cockpit,
+            vec![egui::Event::PointerButton {
+                pos: point,
+                button: egui::PointerButton::Primary,
+                pressed: false,
+                modifiers: egui::Modifiers::NONE,
+            }],
+            selector,
+        );
+    }
+    #[test]
+    fn view_buttons_switch_without_mutating_navigation_or_selection() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        let (tx, rx) = mpsc::channel();
+        cockpit.commands = Some(tx);
+        let before = serde_json::to_string(cockpit.snapshot.as_ref().unwrap()).unwrap();
+        for (label, mode) in [
+            ("2D Tactical", ViewMode::Tactical),
+            ("3D External", ViewMode::External),
+            ("Cockpit", ViewMode::Cockpit),
+        ] {
+            let labels = ui_test_frame(&ctx, &mut cockpit, vec![], true);
+            let point = labels.iter().find(|(t, _)| t == label).unwrap().1;
+            ui_test_click(&ctx, &mut cockpit, point, true);
+            assert_eq!(cockpit.view_mode, mode);
+            assert!(cockpit.selected_object == SelectedObject::Asteroid(7));
+            assert_eq!(
+                serde_json::to_string(cockpit.snapshot.as_ref().unwrap()).unwrap(),
+                before
+            );
+            assert!(rx.try_recv().is_err());
+        }
+    }
+    #[test]
+    fn acquiring_lock_blocks_duplicate_and_extract_until_server_confirmation() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        let (tx, rx) = mpsc::channel();
+        cockpit.commands = Some(tx);
+        cockpit.snapshot.as_mut().unwrap().pilots[0].target_lock = Some(TargetLock {
+            asteroid_id: 7,
+            started_at_ms: 1000,
+            completes_at_ms: 5000,
+        });
+        assert!(!cockpit.can_lock_selected());
+        assert!(!cockpit.can_mine(&cockpit.own().unwrap()));
+        let labels = ui_test_frame(&ctx, &mut cockpit, vec![], false);
+        assert!(labels
+            .iter()
+            .any(|(text, _)| text.contains("Acquiring Test rock")));
+        for label in ["Lock", "Extract"] {
+            let point = labels.iter().find(|(t, _)| t == label).unwrap().1;
+            ui_test_click(&ctx, &mut cockpit, point, false);
+            assert!(rx.try_recv().is_err());
+        }
+        cockpit.frozen_time = Some(6000);
+        assert!(cockpit.mining_status().0.contains("confirming"));
+        assert!(!cockpit.can_mine(&cockpit.own().unwrap()));
+        let labels = ui_test_frame(&ctx, &mut cockpit, vec![], false);
+        let cancel = labels.iter().find(|(t, _)| t == "Cancel lock").unwrap().1;
+        ui_test_click(&ctx, &mut cockpit, cancel, false);
+        assert!(matches!(rx.try_recv().unwrap(), Request::UnlockTarget));
+        cockpit.request_pending = false;
+        let pilot = &mut cockpit.snapshot.as_mut().unwrap().pilots[0];
+        pilot.target_lock = None;
+        pilot.locked_asteroid = Some(7);
+        assert!(cockpit.can_mine(&cockpit.own().unwrap()));
+    }
+
     #[test]
     fn hangar_boards_docked_hull_and_waits_for_confirmation_but_disables_in_space() {
         let ctx = egui::Context::default();
@@ -2635,6 +2928,7 @@ mod tests {
                 system_id: HOME_SYSTEM_ID,
                 ship_class: ShipClass::Pioneer,
                 locked_asteroid: None,
+                target_lock: None,
                 credits: 100,
                 ore: 25,
                 location: Location::Docked,
@@ -2823,6 +3117,7 @@ mod tests {
             ship_class: ShipClass::default(),
             system_id: HOME_SYSTEM_ID,
             locked_asteroid: None,
+            target_lock: None,
             credits: 0,
             ore: 0,
             location: Location::Station,

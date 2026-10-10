@@ -58,11 +58,13 @@ Warp includes a two-second alignment/warm-up, visible local launch, acceleration
 one-second cooldown. Cargo holds 1,000 units; escrow is separate. Cancelling an
 order requires room to return its ore. The initial global reserve is 100,000 ore, divided across 108 rocks in three systems.
 
-## First-person flight
+## Views and direct flight
 
-Gameplay uses the pilot's cockpit with a full-window view outside and live ship
-instruments. Direct flight moves the authoritative ship in all six degrees of
-freedom; the camera follows its complete orientation, including roll.
+Use **2D Tactical**, **3D External**, or **Cockpit** in the header to switch views.
+They share selection, authoritative position, navigation and target lock. Cockpit
+shows live ship instruments and follows the complete ship attitude, including roll.
+The external view lets you orbit the ship to inspect its hull and turret mounts.
+Direct flight moves the authoritative ship in all six degrees of freedom.
 
 | Controls | Action |
 |---|---|
@@ -79,7 +81,15 @@ while typing, unfocused, docked or traveling in warp. A short server input lease
 prevents lost input from leaving thrust or rotation active. Left-click objects to
 select them; overview actions still provide approach, orbit, warp, mining and docking.
 
-Confirmed extraction produces a mining beam and impact feedback. Warp effects follow
+Locking an asteroid starts a server-timed acquisition, lasting 2–8 seconds according
+to the hull's sensors and target radius. The interface shows acquisition progress;
+mining becomes available only after lock confirmation and within mining range.
+Cancel/unlock releases the target. Retargeting starts a new acquisition, and leaving
+range, warping, docking or jumping invalidates the target. A pending acquisition
+is cancelled on server restart or loss of the pilot's last connection.
+
+Hull-mounted mining turrets track the acquiring/locked asteroid. Confirmed
+extraction produces a beam from the turret muzzle and impact feedback. Warp effects follow
 the authoritative route. These effects do not issue extra mining commands or change
 inventory. Procedural cockpit/world assets remain a prototype.
 
@@ -105,7 +115,7 @@ production, hull ownership markets and physical collisions are not implemented.
 
 ## Cockpit layout and services
 
-Space fills the entire gameplay window behind the cockpit. Session controls, overview,
+Space fills the entire gameplay window in all three views. Session controls, overview,
 ship controls and camera controls float above it instead of reserving fixed rows
 or columns. Move or collapse panels to make room around your ship. Use **F11**
 or **Fullscreen** to toggle fullscreen mode. Services open

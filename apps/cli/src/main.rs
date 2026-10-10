@@ -58,7 +58,7 @@ fn run() -> Result<()> {
                 credentials_path = Some(args.next().context("--credentials needs a path")?.into())
             }
             "--help" | "-h" => {
-                println!("Arkline command client\n\narkline [--server HOST:PORT] [--pilot NAME] [--credentials PATH] COMMAND\n\nCommands:\n  status                 Read the live universe\n  connect                Create a pilot or resume with saved credentials\n  undock                 Leave Junction Station\n  warp belt|station|gate:ID Begin distance-based warp (2s warmup)\n  dock                   Dock at the station\n  mine UNITS             Mine up to 100 ore units\n  lock ASTEROID_ID       Lock a specific local asteroid\n  extract ASTEROID_ID UNITS Mine the locked asteroid\n  jump GATE_ID           Jump through a nearby local gate\n  stop                   Stop manual navigation\n  approach TARGET SECS   Approach station, belt or pilot:NAME\n  orbit TARGET METERS SECS   Orbit for 1-300 seconds\n  range TARGET METERS SECS   Keep distance for 1-300 seconds\n  fly X Y Z SECS         Fly to meter coordinates for 1-300 seconds\n  sell UNITS PRICE       Escrow ore in a sell order\n  buy ORDER_ID UNITS     Buy ore from another pilot\n  cancel ORDER_ID        Cancel your order and reclaim ore\n  export PATH            Save an economic audit export\n\nCommands return JSON snapshots. Credentials are saved locally with restricted\npermissions. Keep that file to resume the same pilot. This prototype uses\nunencrypted TCP: keep it on loopback or an authenticated private tunnel.");
+                println!("Arkline command client\n\narkline [--server HOST:PORT] [--pilot NAME] [--credentials PATH] COMMAND\n\nCommands:\n  status                 Read the live universe\n  connect                Create a pilot or resume with saved credentials\n  undock                 Leave Junction Station\n  warp belt|station|gate:ID Begin distance-based warp (2s warmup)\n  dock                   Dock at the station\n  mine UNITS             Mine up to 100 ore from confirmed target\n  lock ASTEROID_ID       Acquire and wait for a specific asteroid lock\n  unlock                 Cancel acquisition or release target\n  extract ASTEROID_ID UNITS Mine the locked asteroid\n  jump GATE_ID           Jump through a nearby local gate\n  stop                   Stop manual navigation\n  approach TARGET SECS   Approach station, belt or pilot:NAME\n  orbit TARGET METERS SECS   Orbit for 1-300 seconds\n  range TARGET METERS SECS   Keep distance for 1-300 seconds\n  fly X Y Z SECS         Fly to meter coordinates for 1-300 seconds\n  sell UNITS PRICE       Escrow ore in a sell order\n  buy ORDER_ID UNITS     Buy ore from another pilot\n  cancel ORDER_ID        Cancel your order and reclaim ore\n  export PATH            Save an economic audit export\n\nCommands return JSON snapshots. Credentials are saved locally with restricted\npermissions. Keep that file to resume the same pilot. This prototype uses\nunencrypted TCP: keep it on loopback or an authenticated private tunnel.");
                 return Ok(());
             }
             x if x.starts_with('-') => bail!("unknown option: {x}"),
@@ -156,6 +156,7 @@ fn run() -> Result<()> {
         },
         "mine" => Request::Mine { units: number(1)? },
         "lock" => Request::LockAsteroid { id: number(1)? },
+        "unlock" => Request::UnlockTarget,
         "extract" => Request::MineAsteroid {
             id: number(1)?,
             units: number(2)?,
@@ -187,6 +188,7 @@ fn run() -> Result<()> {
     stream.set_read_timeout(Some(Duration::from_secs(10)))?;
     stream.set_write_timeout(Some(Duration::from_secs(10)))?;
     let mut stream = BufReader::new(stream);
+    let pilot_name = pilot.clone();
     if let Some(pilot) = pilot {
         if pilot.is_empty()
             || !pilot
@@ -248,6 +250,36 @@ fn run() -> Result<()> {
         bail!("this command needs --pilot NAME");
     }
     let mut response = exchange(&mut stream, &request)?;
+    if let Request::LockAsteroid { id } = request {
+        let deadline = std::time::Instant::now() + Duration::from_secs(15);
+        loop {
+            let own = response
+                .snapshot
+                .as_ref()
+                .and_then(|snapshot| {
+                    snapshot
+                        .pilots
+                        .iter()
+                        .find(|p| Some(&p.name) == pilot_name.as_ref())
+                })
+                .context("server did not return the targeting pilot")?;
+            if own.locked_asteroid == Some(id) {
+                break;
+            }
+            if own
+                .target_lock
+                .as_ref()
+                .is_none_or(|lock| lock.asteroid_id != id)
+            {
+                bail!("target acquisition was cancelled before confirmation");
+            }
+            if std::time::Instant::now() >= deadline {
+                bail!("target acquisition timed out");
+            }
+            std::thread::sleep(Duration::from_millis(100));
+            response = exchange(&mut stream, &Request::Snapshot)?;
+        }
+    }
     if hold_seconds > 0 {
         let deadline = std::time::Instant::now() + Duration::from_secs(hold_seconds);
         while std::time::Instant::now() < deadline {

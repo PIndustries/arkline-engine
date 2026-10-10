@@ -420,6 +420,7 @@ pub enum Request {
         resume_token: Option<String>,
     },
     Snapshot,
+    UnlockTarget,
     LockAsteroid {
         id: u64,
     },
@@ -529,8 +530,35 @@ impl ShipClass {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TargetLock {
+    pub asteroid_id: u64,
+    pub started_at_ms: u64,
+    pub completes_at_ms: u64,
+}
+
+/// Larger signatures acquire faster; heavier hull sensors acquire more slowly.
+pub fn lock_duration_ms(ship: ShipClass, radius: f64) -> u64 {
+    let sensor_ms = match ship {
+        ShipClass::Pioneer => 4000.0,
+        ShipClass::Prospector => 3200.0,
+        ShipClass::Hauler => 5600.0,
+        ShipClass::Vanguard => 6400.0,
+    };
+    let radius = if radius.is_finite() {
+        radius.max(1.0)
+    } else {
+        1.0
+    };
+    (sensor_ms * (100.0 / radius).sqrt())
+        .clamp(2000.0, 8000.0)
+        .ceil() as u64
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PilotView {
+    #[serde(default)]
+    pub target_lock: Option<TargetLock>,
     #[serde(default)]
     pub ship_class: ShipClass,
     pub name: String,

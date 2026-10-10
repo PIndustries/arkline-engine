@@ -201,6 +201,7 @@ pub struct FlightView {
     context_target: Option<[f64; 3]>,
     context_object: Option<super::SelectedObject>,
     input_surface: Option<(egui::Rect, egui::LayerId)>,
+    camera_ship_class: Option<ShipClass>,
     space: Space,
 }
 impl FlightView {
@@ -222,6 +223,7 @@ impl FlightView {
             context_target: None,
             context_object: None,
             input_surface: None,
+            camera_ship_class: None,
             space: Space::default(),
         }
     }
@@ -251,6 +253,14 @@ impl FlightView {
     ) -> Option<ViewAction> {
         let mut picked = None;
         let own_pilot = snapshot.pilots.iter().find(|p| p.name == pilot_name);
+        let camera_length = own_pilot.map_or(72.0, |p| p.ship_class.spec().length_m) as f32 / 100.0;
+        let ship_distance = (camera_length * 2.5).max(1.8);
+        if own_pilot.map(|p| p.ship_class) != self.camera_ship_class {
+            self.camera_ship_class = own_pilot.map(|p| p.ship_class);
+            if self.follow {
+                self.distance = ship_distance;
+            }
+        }
         let space = Space {
             origin: own_pilot.map_or(STATION_POSITION, |p| display_position(p, now)),
         };
@@ -285,7 +295,7 @@ impl FlightView {
                     if ui.button("Focus my ship").clicked() {
                         self.follow = true;
                         self.focus_selection = false;
-                        self.distance = 27.0;
+                        self.distance = ship_distance;
                     }
                     if ui.button("Sector overview").clicked() {
                         self.follow = false;
@@ -302,7 +312,7 @@ impl FlightView {
                     if ui.button("Reset camera").clicked() {
                         self.follow = true;
                         self.focus_selection = false;
-                        self.distance = 27.0;
+                        self.distance = ship_distance;
                         self.yaw = 0.72;
                         self.pitch = 0.35;
                     }
@@ -328,7 +338,7 @@ impl FlightView {
         if !cockpit && world_input && response.hovered() {
             self.distance = (self.distance
                 * (-ui.input(|i| i.smooth_scroll_delta.y) * 0.002).exp())
-            .clamp(9.0, 260.0);
+            .clamp((camera_length * 0.8).max(0.5), 260.0);
         }
         let system_id = snapshot
             .pilots
@@ -566,6 +576,21 @@ impl FlightView {
                                     mesh,
                                     part,
                                 ));
+                            }
+                            if let Ok(renderer) = &self.renderer {
+                                if let Ok(renderer) = renderer.lock() {
+                                    if let Some(state) = renderer.turrets.get(&pilot.name) {
+                                        for (mesh, part, _, _) in
+                                            turret_parts(pilot.ship_class, state.rotation)
+                                        {
+                                            targets.push((
+                                                super::SelectedObject::Pilot(pilot.name.clone()),
+                                                mesh_vertices(mesh),
+                                                model * part,
+                                            ));
+                                        }
+                                    }
+                                }
                             }
                         }
                         let object =
@@ -884,6 +909,61 @@ impl FlightView {
                         }
                     }
                 }
+                if let Some(own) = own_pilot {
+                    let target = own
+                        .target_lock
+                        .as_ref()
+                        .map(|lock| lock.asteroid_id)
+                        .or(own.locked_asteroid);
+                    if let Some(asteroid) =
+                        target.and_then(|id| asteroids.iter().find(|a| a.id == id))
+                    {
+                        if let Some(point) = project(space.scene(asteroid.position)) {
+                            let (label, progress) = if let Some(lock) = &own.target_lock {
+                                let duration = lock
+                                    .completes_at_ms
+                                    .saturating_sub(lock.started_at_ms)
+                                    .max(1);
+                                (
+                                    format!(
+                                        "ACQUIRING {:.1}s",
+                                        lock.completes_at_ms.saturating_sub(now) as f64 / 1000.0
+                                    ),
+                                    (now.saturating_sub(lock.started_at_ms) as f32
+                                        / duration as f32)
+                                        .clamp(0.0, 1.0),
+                                )
+                            } else {
+                                ("LOCKED".into(), 1.0)
+                            };
+                            let color = if own.target_lock.is_some() {
+                                super::AMBER
+                            } else {
+                                super::TEAL
+                            };
+                            painter.circle_stroke(
+                                point,
+                                35.0,
+                                egui::Stroke::new(1.0, color.gamma_multiply(0.35)),
+                            );
+                            let points: Vec<_> = (0..=64)
+                                .map(|i| {
+                                    let a = -std::f32::consts::FRAC_PI_2
+                                        + i as f32 / 64.0 * std::f32::consts::TAU * progress;
+                                    point + egui::vec2(a.cos(), a.sin()) * 35.0
+                                })
+                                .collect();
+                            painter.add(egui::Shape::line(points, egui::Stroke::new(2.0, color)));
+                            painter.text(
+                                point + egui::vec2(0.0, 49.0),
+                                egui::Align2::CENTER_TOP,
+                                label,
+                                egui::FontId::monospace(12.0),
+                                color,
+                            );
+                        }
+                    }
+                }
                 let selected_visible = match selected {
                     super::SelectedObject::Asteroid(id) => asteroids.iter().any(|a| a.id == *id),
                     super::SelectedObject::Gate(id) => local_gates.iter().any(|g| g.id == *id),
@@ -1174,6 +1254,7 @@ struct Renderer {
     empty: glow::VertexArray,
     meshes: Vec<Mesh>,
     destroyed: bool,
+    turrets: std::collections::HashMap<String, TurretState>,
 }
 impl Renderer {
     unsafe fn new(gl: Arc<glow::Context>) -> Result<Self, String> {
@@ -1218,6 +1299,7 @@ impl Renderer {
             empty,
             meshes,
             destroyed: false,
+            turrets: std::collections::HashMap::new(),
         })
     }
     unsafe fn draw(&self, mesh: usize, model: Mat4, color: Vec3, emission: f32) {
@@ -1242,6 +1324,45 @@ impl Renderer {
     }
     unsafe fn paint(&mut self, frame: &Frame) {
         let space = frame.space;
+        self.turrets
+            .retain(|name, _| frame.pilots.iter().any(|p| &p.name == name));
+        for pilot in &frame.pilots {
+            let state = self
+                .turrets
+                .entry(pilot.name.clone())
+                .or_insert(TurretState {
+                    rotation: Quat::IDENTITY,
+                    last_ms: frame.now,
+                });
+            let target = pilot
+                .target_lock
+                .as_ref()
+                .map(|lock| lock.asteroid_id)
+                .or(pilot.locked_asteroid);
+            let ship = transform(
+                space.position(pilot, frame.now),
+                Vec3::ONE,
+                ship_orientation_at(pilot, frame.now),
+            );
+            let desired = target
+                .and_then(|id| {
+                    frame
+                        .asteroids
+                        .iter()
+                        .find(|a| a.id == id && a.system_id == pilot.system_id)
+                })
+                .and_then(|a| {
+                    let direction = ship.inverse().transform_point3(space.scene(a.position))
+                        - turret_mount(pilot.ship_class).0;
+                    direction
+                        .try_normalize()
+                        .map(|d| Quat::from_rotation_arc(Vec3::X, d))
+                })
+                .unwrap_or(Quat::IDENTITY);
+            let seconds = frame.now.saturating_sub(state.last_ms).min(250) as f32 / 1000.0;
+            state.rotation = slew_rotation(state.rotation, desired, 1.4 * seconds);
+            state.last_ms = frame.now;
+        }
         if self.destroyed {
             return;
         }
@@ -1347,6 +1468,12 @@ impl Renderer {
             );
             for (mesh, model, color, emission) in ship_parts(pilot.ship_class) {
                 self.draw(mesh, ship * model, color, emission);
+            }
+            if let Some(state) = self.turrets.get(&pilot.name) {
+                for (mesh, model, color, emission) in turret_parts(pilot.ship_class, state.rotation)
+                {
+                    self.draw(mesh, ship * model, color, emission);
+                }
             }
         }
         self.paint_effects(frame);
@@ -1655,17 +1782,27 @@ impl Renderer {
                         && super::effects::can_extract_target(pilot, a)
                 })
             }) {
-                let source = ship_position
-                    + ship_orientation_at(pilot, frame.now)
-                        * Vec3::new(
-                            spec.length_m as f32 * 0.004,
-                            spec.height_m as f32 * 0.004,
-                            0.0,
-                        );
+                let Some(turret) = self.turrets.get(&pilot.name) else {
+                    continue;
+                };
+                let pose = transform(
+                    ship_position,
+                    Vec3::ONE,
+                    ship_orientation_at(pilot, frame.now),
+                );
+                let source =
+                    pose.transform_point3(turret_muzzle(pilot.ship_class, turret.rotation));
+                let forward = pose.transform_vector3(turret.rotation * Vec3::X);
                 if let Some(impact) = frame
                     .asteroids
                     .iter()
                     .find(|a| Some(a.id) == frame.mining_target)
+                    .filter(|a| {
+                        (space.scene(a.position) - source)
+                            .normalize_or_zero()
+                            .dot(forward)
+                            > 0.995
+                    })
                     .and_then(|a| mining_impact(source, a, space))
                 {
                     let fade = (progress * 30.0).min(1.0) * ((1.0 - progress) * 5.0).min(1.0);
@@ -1861,6 +1998,106 @@ fn transform(p: Vec3, scale: Vec3, rotation: Quat) -> Mat4 {
 #[cfg(test)]
 fn in_warp(location: &Location, now: u64) -> bool {
     matches!(location, Location::InTransit { arrives_at_ms, .. } if now < *arrives_at_ms)
+}
+struct TurretState {
+    rotation: Quat,
+    last_ms: u64,
+}
+fn slew_rotation(current: Quat, mut target: Quat, max_radians: f32) -> Quat {
+    if current.dot(target) < 0.0 {
+        target = -target;
+    }
+    let angle = 2.0 * current.dot(target).clamp(-1.0, 1.0).acos();
+    if angle < 1e-6 {
+        target
+    } else {
+        current
+            .slerp(target, (max_radians.max(0.0) / angle).min(1.0))
+            .normalize()
+    }
+}
+fn turret_mount(class: ShipClass) -> (Vec3, f32, f32) {
+    let spec = class.spec();
+    let radius = (spec.length_m as f32 * 0.012).clamp(0.6, 5.0) / 100.0;
+    let barrel = (spec.length_m as f32 * 0.06).clamp(3.0, 24.0) / 100.0;
+    (
+        Vec3::new(
+            spec.length_m as f32 * 0.0015,
+            spec.height_m as f32 / 200.0 + radius,
+            0.0,
+        ),
+        radius,
+        barrel,
+    )
+}
+fn turret_muzzle(class: ShipClass, rotation: Quat) -> Vec3 {
+    let (mount, radius, barrel) = turret_mount(class);
+    mount + rotation * Vec3::X * (radius + barrel)
+}
+fn turret_deck(class: ShipClass) -> f32 {
+    static DECKS: std::sync::OnceLock<[f32; 4]> = std::sync::OnceLock::new();
+    let decks = DECKS.get_or_init(|| {
+        arkline_protocol::ALL_SHIP_CLASSES.map(|class| {
+            let (mount, radius, _) = turret_mount(class);
+            let origin = mount + Vec3::Y * radius;
+            let distance = ship_geometry(class, Mat4::IDENTITY)
+                .iter()
+                .filter_map(|(mesh, model)| ray_mesh_hit(origin, -Vec3::Y, *model, mesh))
+                .min_by(f32::total_cmp)
+                .expect("mining turret pedestal must intersect its hull");
+            origin.y - distance
+        })
+    });
+    decks[match class {
+        ShipClass::Pioneer => 0,
+        ShipClass::Prospector => 1,
+        ShipClass::Hauler => 2,
+        ShipClass::Vanguard => 3,
+    }]
+}
+fn turret_parts(class: ShipClass, rotation: Quat) -> Vec<ModelPart> {
+    let (mount, radius, barrel) = turret_mount(class);
+    let base = Mat4::from_rotation_translation(rotation, mount);
+    let bottom = turret_deck(class) - radius * 0.3;
+    let top = mount.y;
+    vec![
+        (
+            2,
+            transform(mount, Vec3::splat(radius), Quat::IDENTITY),
+            Vec3::new(0.24, 0.29, 0.31),
+            0.0,
+        ),
+        (
+            0,
+            base * transform(
+                Vec3::X * (radius + barrel * 0.5),
+                Vec3::new(barrel * 0.5, radius * 0.22, radius * 0.22),
+                Quat::IDENTITY,
+            ),
+            Vec3::new(0.15, 0.20, 0.22),
+            0.0,
+        ),
+        (
+            0,
+            base * transform(
+                Vec3::X * (radius + barrel),
+                Vec3::new(0.001, radius * 0.25, radius * 0.25),
+                Quat::IDENTITY,
+            ),
+            Vec3::new(0.05, 0.4, 0.3),
+            0.5,
+        ),
+        (
+            0,
+            transform(
+                Vec3::new(mount.x, (bottom + top) * 0.5, mount.z),
+                Vec3::new(radius * 0.7, (top - bottom) * 0.5, radius * 0.7),
+                Quat::IDENTITY,
+            ),
+            Vec3::new(0.20, 0.25, 0.27),
+            0.0,
+        ),
+    ]
 }
 fn ship_geometry(class: ShipClass, ship: Mat4) -> Vec<(Vec<Vertex>, Mat4)> {
     ship_parts(class)
@@ -2366,6 +2603,49 @@ vec2 sun=p-vec2(0.84,0.82);float flare=0.0018/(dot(sun,sun)+0.006);c+=vec3(0.17,
 mod tests {
     use super::*;
     #[test]
+    fn turret_pedestal_extends_into_measured_hull_deck() {
+        for class in arkline_protocol::ALL_SHIP_CLASSES {
+            let (mount, _, _) = turret_mount(class);
+            let deck = turret_deck(class);
+            let parts = turret_parts(class, Quat::IDENTITY);
+            let (_, support, _, _) = parts.last().unwrap();
+            let bottom = support.transform_point3(-Vec3::Y);
+            let top = support.transform_point3(Vec3::Y);
+            assert!(bottom.y < deck && top.y > deck);
+            assert!((top.y - mount.y).abs() < 1e-6);
+            let hit = ship_geometry(class, Mat4::IDENTITY)
+                .iter()
+                .filter_map(|(mesh, model)| ray_mesh_hit(top, -Vec3::Y, *model, mesh))
+                .min_by(f32::total_cmp)
+                .unwrap();
+            assert!(
+                hit < top.y - bottom.y,
+                "support must reach actual hull geometry"
+            );
+        }
+    }
+    #[test]
+    fn mining_turret_slews_at_finite_rate_and_beam_starts_at_barrel_tip() {
+        let desired = Quat::from_rotation_arc(Vec3::X, Vec3::Z);
+        let step = slew_rotation(Quat::IDENTITY, desired, 0.1);
+        assert!((2.0 * step.w.acos() - 0.1).abs() < 0.0001);
+        assert_eq!(slew_rotation(Quat::IDENTITY, desired, 0.0), Quat::IDENTITY);
+        let aligned = slew_rotation(Quat::IDENTITY, desired, 4.0);
+        for class in arkline_protocol::ALL_SHIP_CLASSES {
+            let (mount, radius, barrel) = turret_mount(class);
+            let muzzle = turret_muzzle(class, aligned);
+            assert!((muzzle - mount).normalize().distance(Vec3::Z) < 0.0001);
+            assert!((muzzle.distance(mount) - radius - barrel).abs() < 0.0001);
+            let (_, model, _, _) = &turret_parts(class, aligned)[2];
+            assert!(model.transform_point3(Vec3::ZERO).distance(muzzle) < 0.0001);
+            let spec = class.spec();
+            assert!(
+                muzzle.y > spec.height_m as f32 / 200.0,
+                "turret is a roof appendage, excluded from published body dimensions"
+            );
+        }
+    }
+    #[test]
     fn hulls_match_public_meter_dimensions_and_picking_surfaces() {
         for class in arkline_protocol::ALL_SHIP_CLASSES {
             let parts = ship_parts(class);
@@ -2488,6 +2768,7 @@ mod tests {
     fn extrapolation_is_bounded_and_warp_uses_server_position() {
         let space = Space::default();
         let mut pilot = PilotView {
+            target_lock: None,
             ship_class: ShipClass::Pioneer,
             system_id: HOME_SYSTEM_ID,
             locked_asteroid: None,
@@ -2724,6 +3005,7 @@ mod tests {
     fn stable_pilot_lane_does_not_depend_on_roster_or_view() {
         let space = Space::default();
         let pilot = PilotView {
+            target_lock: None,
             ship_class: ShipClass::Pioneer,
             system_id: HOME_SYSTEM_ID,
             locked_asteroid: None,

@@ -35,15 +35,16 @@ fn stock(server: &mut Server, session: &mut Option<String>) {
         },
         102,
     );
+    acquire(server, session, route_ms() + 102);
     request(
         server,
         session,
         Request::Mine { units: 100 },
-        route_ms() + 102,
+        route_ms() + 8102,
     );
     assert!(
         !server
-            .handle_at(session, Request::Mine { units: 1 }, route_ms() + 103)
+            .handle_at(session, Request::Mine { units: 1 }, route_ms() + 8103)
             .ok
     );
     request(
@@ -52,9 +53,9 @@ fn stock(server: &mut Server, session: &mut Option<String>) {
         Request::Warp {
             destination: Destination::Station,
         },
-        route_ms() + 103,
+        route_ms() + 8103,
     );
-    request(server, session, Request::Dock, 2 * route_ms() + 103);
+    request(server, session, Request::Dock, 2 * route_ms() + 8103);
     request(
         server,
         session,
@@ -62,7 +63,7 @@ fn stock(server: &mut Server, session: &mut Option<String>) {
             units: 100,
             unit_price: 10,
         },
-        2 * route_ms() + 104,
+        2 * route_ms() + 8104,
     );
 }
 #[test]
@@ -274,11 +275,12 @@ fn restart_preserves_auth_travel_and_cooldown() {
                 )
                 .ok
         );
+        acquire(&mut server, &mut session, route_ms() + 1001);
         request(
             &mut server,
             &mut session,
             Request::Mine { units: 100 },
-            route_ms() + 1001,
+            route_ms() + 9001,
         );
     }
     {
@@ -292,14 +294,14 @@ fn restart_preserves_auth_travel_and_cooldown() {
                 pilot: "Traveler".into(),
                 resume_token: Some(token),
             },
-            route_ms() + 1002,
+            route_ms() + 9002,
         );
         assert!(
             !server
                 .handle_at(
                     &mut session,
                     Request::Mine { units: 100 },
-                    route_ms() + 1002
+                    route_ms() + 9002
                 )
                 .ok
         );
@@ -307,7 +309,7 @@ fn restart_preserves_auth_travel_and_cooldown() {
             &mut server,
             &mut session,
             Request::Mine { units: 100 },
-            route_ms() + 2001,
+            route_ms() + 10001,
         );
     }
     std::fs::remove_file(path).unwrap();
@@ -344,4 +346,36 @@ fn independent_in_memory_worlds_do_not_share_ownership_lock() {
 
 fn route_ms() -> u64 {
     plan_warp(STATION_POSITION, BELT_POSITION, 0).arrives_at_ms
+}
+
+fn acquire(s: &mut Server, p: &mut Option<String>, now: u64) {
+    let snapshot = request(s, p, Request::Snapshot, now).snapshot.unwrap();
+    let pos = snapshot
+        .pilots
+        .iter()
+        .find(|v| Some(&v.name) == p.as_ref())
+        .unwrap()
+        .flight
+        .as_ref()
+        .unwrap()
+        .position;
+    let distance = |a: &Asteroid| {
+        pos.iter()
+            .zip(a.position)
+            .map(|(x, y)| (x - y) * (x - y))
+            .sum::<f64>()
+    };
+    let asteroid = snapshot
+        .asteroids
+        .iter()
+        .filter(|a| a.system_id == HOME_SYSTEM_ID)
+        .min_by(|a, b| distance(a).total_cmp(&distance(b)))
+        .unwrap();
+    request(s, p, Request::LockAsteroid { id: asteroid.id }, now);
+    request(
+        s,
+        p,
+        Request::Snapshot,
+        now + lock_duration_ms(ShipClass::Pioneer, asteroid.radius),
+    );
 }

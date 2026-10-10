@@ -35,7 +35,7 @@ impl PilotInput {
         *mailbox.lock().unwrap() = None;
         self.active = false;
     }
-    fn release_mouse(&mut self, ctx: &egui::Context) {
+    pub fn release_mouse(&mut self, ctx: &egui::Context) {
         if self.captured {
             ctx.send_viewport_cmd(egui::ViewportCommand::CursorGrab(egui::CursorGrab::None));
             ctx.send_viewport_cmd(egui::ViewportCommand::CursorVisible(true));

@@ -72,6 +72,28 @@ impl Client {
             resume_token: token,
         })
     }
+    fn acquire(&mut self, id: u64, pilot: &str) {
+        let response = self.ok(Request::LockAsteroid { id });
+        let initial = response.snapshot.unwrap();
+        let pending = initial.pilots.iter().find(|p| p.name == pilot).unwrap();
+        assert_eq!(pending.target_lock.as_ref().unwrap().asteroid_id, id);
+        assert_eq!(pending.locked_asteroid, None);
+        assert!(!self.send(Request::MineAsteroid { id, units: 1 }).ok);
+        assert!(!self.send(Request::Mine { units: 1 }).ok);
+        let deadline = Instant::now() + Duration::from_secs(12);
+        loop {
+            let snapshot = self.ok(Request::Snapshot).snapshot.unwrap();
+            let own = snapshot.pilots.iter().find(|p| p.name == pilot).unwrap();
+            if own.locked_asteroid == Some(id) {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "target acquisition never completed"
+            );
+            thread::sleep(Duration::from_millis(50));
+        }
+    }
     fn travel(&mut self, destination: Destination, pilot: &str) {
         self.ok(Request::Warp { destination });
         let deadline = Instant::now() + Duration::from_secs(45);
@@ -128,6 +150,7 @@ fn two_pilots_trade_recover_and_export_consistent_history() {
     );
     alice.ok(Request::Undock);
     alice.travel(Destination::Belt, "Alice");
+    alice.acquire(1, "Alice");
     alice.ok(Request::Mine { units: 100 });
     alice.travel(Destination::Station, "Alice");
     alice.ok(Request::Dock);
@@ -411,7 +434,7 @@ fn gates_connect_three_systems_survive_restart_and_preserve_targeted_mining() {
         .find(|a| a.system_id == 3 && a.ore >= 10)
         .unwrap()
         .clone();
-    traveler.ok(Request::LockAsteroid { id: asteroid.id });
+    traveler.acquire(asteroid.id, "GateTraveler");
     let mined = traveler
         .ok(Request::MineAsteroid {
             id: asteroid.id,

@@ -18,7 +18,7 @@ commands operate on the same authoritative flight state.
 5. Warp to the station, belt or selected gate. At the gate, use **Jump** when
    within 1.8 km. Jumping changes systems after the three-second transition.
 6. Select a particular asteroid in space or the Mining overview. **Lock target**,
-   approach within 4.5 km, then **Extract selected**. Only that asteroid loses ore.
+   wait for lock confirmation, approach within 4.5 km, then **Extract selected**. Only that asteroid loses ore.
    Selection alone does not switch the confirmed mining lock.
 
 Distances use meters, kilometers and astronomical units (1 AU = 149,597,870,700 m).
@@ -28,7 +28,8 @@ normal flight; warp samples the same analytic trajectory as the server. Renderin
 subtracts a nearby origin in double precision before converting GPU coordinates.
 These presentation calculations cannot change server state.
 
-The first-person cockpit is the only gameplay view. Full quaternion orientation
+Switch between **2D Tactical**, **3D External** and **Cockpit** in the header.
+Changing views preserves the selected object and navigation state. Full quaternion orientation
 preserves roll independently of movement direction. Manual-flight presentation uses
 a shorter interpolation buffer than autopilot. Rotation input expires after 500 ms
 without a fresh command; translation then brakes instead of continuing stale thrust.
@@ -61,7 +62,8 @@ in the destination system across restart. The economy remains a shared exchange.
 
 There is no collision damage, combat, module fitting, physical mass/inertia
 upgrade system, ship-computer runtime or distributed simulation authority.
-Asteroid locks are immediate, single-target locks; extraction remains one
+Asteroid acquisition takes 2–8 seconds, depending on hull sensors and target size.
+The single-target lock becomes usable only after server confirmation. Extraction remains one
 server-confirmed batch per activation, not an automatic repeating module.
 Warp alignment/warm-up and gate transition durations are fixed preview rules.
 Long warps include a six-second local launch and six-second terminal approach.
@@ -83,7 +85,7 @@ arkline --pilot TestPilot orbit belt 1500 20
 arkline --pilot TestPilot range pilot:OtherPilot 1000 10
 arkline --pilot TestPilot fly 3000 500 2000 10
 arkline --pilot TestPilot stop
-arkline --pilot TestPilot lock 1
+arkline --pilot TestPilot lock 1  # waits for confirmed lock
 arkline --pilot TestPilot extract 1 25
 arkline --pilot TestPilot warp gate:101
 # Wait until warp completes, then:
@@ -99,3 +101,15 @@ Use Services → Hangar while docked to board Pioneer (72 m), Prospector (180 m)
 Hauler (420 m) or Vanguard (1.1 km). Selection persists on the server and is rejected
 while in space. Preview hulls share movement tuning and cargo capacity. The station
 is 20 km across and 6 km high. Station ranges identify the docking port.
+
+## Target acquisition and mining turret
+
+The pending target displays a countdown; it cannot be mined before server confirmation.
+Cancel/unlock releases it. Requesting another target replaces the acquisition; selecting
+a different overview row alone does not. Range loss, depletion, warp, docking and
+jumping invalidate targeting. Pending acquisition is cancelled on restart or last
+connection loss. The command client keeps its connection open until lock confirmation.
+
+The mining mount tracks the authoritative acquisition/lock target with a limited
+visual turning rate. A turret muzzle anchors the extraction beam. This is a mining
+module, not a combat damage system or a general module-fitting inventory.

@@ -137,6 +137,7 @@ mod tests {
                 location: Location::Belt,
                 system_id: 1,
                 locked_asteroid: Some(7),
+                target_lock: None,
                 flight: Some(FlightState {
                     warp: None,
                     orientation: [0.0, 0.0, 0.0, 1.0],

@@ -153,6 +153,7 @@ mod tests {
                 ore: 0,
                 system_id: 1,
                 locked_asteroid: None,
+                target_lock: None,
                 location: Location::Station,
                 flight: Some(FlightState {
                     position: [x, 0.0, 0.0],

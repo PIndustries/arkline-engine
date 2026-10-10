@@ -197,3 +197,22 @@ clear differences in hull sizes and a substantially larger station behind them.
 The staged scene validates visual proportions; it is not evidence of fleet AI.
 Cockpit interior geometry is human scale. Hull physics tuning remains shared and
 collision response is not implemented.
+
+## Camera modes and timed mining targets — 26.10.10.3
+
+The workspace suite passed 83 tests; a subsequent turret-support regression adds
+one client test, and all 41 client tests pass after that geometry fix (84 total).
+Formatting and strict Clippy pass. Tests cover mode switches preserving navigation
+and selection, disabled extraction during acquisition, finite turret slew, barrel
+muzzle position, pedestal attachment, exact lock deadlines, retarget/unlock, range
+loss, warp, logout and restart. Both mining APIs reject unconfirmed targets.
+
+A separate live TCP and command-client journey verified rejected early mining,
+cancellation, retargeting, successful extraction after confirmation, and unlock.
+The command client's lock operation waited 5.18 seconds before reporting success.
+Native inspection switched Cockpit to External and showed a 2.7-second acquisition
+countdown with both extraction controls disabled. Visual inspection caught a floating
+turret mount; a deck-attached pedestal was added and covered by geometry tests.
+Native inspection became unavailable before the final extraction capture, so the
+complete rendered beam sequence still needs hands-on acceptance. This release adds
+one mining module; combat damage and general module fitting are not implemented.

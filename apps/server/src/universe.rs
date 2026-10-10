@@ -27,26 +27,19 @@ pub(super) fn mining_target(
 ) -> Result<u64> {
     let p = world.pilots.get(name).context("pilot missing")?;
     ensure!(normal(p), "mining requires normal space");
-    let asteroid = if let Some(id) = requested {
-        ensure!(
-            p.view.locked_asteroid == Some(id),
-            "lock this asteroid before mining"
-        );
-        world
-            .asteroids
-            .iter()
-            .find(|a| a.id == id)
-            .context("asteroid not found")?
-    } else {
-        world
-            .asteroids
-            .iter()
-            .filter(|a| {
-                a.system_id == p.view.system_id && a.ore >= units && surface(p, a) <= MINING_RANGE
-            })
-            .min_by(|a, b| surface(p, a).total_cmp(&surface(p, b)))
-            .context("no minable asteroid within range")?
-    };
+    let id = p
+        .view
+        .locked_asteroid
+        .context("confirmed target lock required before mining")?;
+    ensure!(
+        requested.is_none_or(|requested| requested == id),
+        "lock this asteroid before mining"
+    );
+    let asteroid = world
+        .asteroids
+        .iter()
+        .find(|a| a.id == id)
+        .context("asteroid not found")?;
     ensure!(
         asteroid.system_id == p.view.system_id,
         "asteroid is in another system"
@@ -57,4 +50,36 @@ pub(super) fn mining_target(
     );
     ensure!(asteroid.ore >= units, "asteroid has insufficient ore");
     Ok(asteroid.id)
+}
+
+/// Validate both pending and completed targets after authoritative movement.
+pub(super) fn advance_locks(world: &mut World, now: u64) {
+    for pilot in world.pilots.values_mut() {
+        let id = pilot
+            .view
+            .target_lock
+            .as_ref()
+            .map(|l| l.asteroid_id)
+            .or(pilot.view.locked_asteroid);
+        let valid = id.is_some_and(|id| {
+            normal(pilot)
+                && world.asteroids.iter().any(|a| {
+                    a.id == id
+                        && a.system_id == pilot.view.system_id
+                        && a.ore > 0
+                        && surface(pilot, a) <= LOCK_RANGE
+                })
+        });
+        if !valid {
+            pilot.view.target_lock = None;
+            pilot.view.locked_asteroid = None;
+        } else if pilot
+            .view
+            .target_lock
+            .as_ref()
+            .is_some_and(|l| now >= l.completes_at_ms)
+        {
+            pilot.view.locked_asteroid = pilot.view.target_lock.take().map(|l| l.asteroid_id);
+        }
+    }
 }

@@ -66,7 +66,7 @@ fn explicit_asteroid_lock_depletion_and_legacy_migration_conserve_ore() {
         route_ms(),
     );
     let mut remaining = asteroid.ore;
-    let mut time = route_ms();
+    let mut time = route_ms() + lock_duration_ms(ShipClass::Pioneer, asteroid.radius);
     while remaining > 0 {
         let units = remaining.min(MAX_MINE_UNITS);
         ok(

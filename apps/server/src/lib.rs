@@ -116,6 +116,7 @@ impl Server {
         universe::ensure_asteroids(&mut world);
         for pilot in world.pilots.values_mut() {
             pilot.controls = None;
+            pilot.view.target_lock = None;
             if !matches!(
                 pilot.view.location,
                 Location::InTransit { .. } | Location::Jumping { .. }
@@ -199,6 +200,7 @@ impl Server {
         flight::migrate_spatial(&mut world);
         universe::ensure_asteroids(&mut world);
         flight::advance(&mut world, now);
+        universe::advance_locks(&mut world, now);
         let next = serde_json::to_string(&world)?;
         if next != json {
             tx.execute("UPDATE world SET json=?1 WHERE id=1", [next])?;
@@ -214,6 +216,7 @@ impl Server {
         universe::ensure_asteroids(&mut world);
         if let Some(p) = world.pilots.get_mut(name) {
             p.controls = None;
+            p.view.target_lock = None;
             if !matches!(
                 p.view.location,
                 Location::InTransit { .. } | Location::Jumping { .. }
@@ -246,6 +249,7 @@ impl Server {
         flight::migrate_spatial(&mut world);
         universe::ensure_asteroids(&mut world);
         flight::advance(&mut world, now);
+        universe::advance_locks(&mut world, now);
         let mut token = None;
         let mut event = None;
         let mut connected = None;
@@ -290,6 +294,7 @@ impl Server {
                         pilot.clone(),
                         Pilot {
                             view: PilotView {
+                                target_lock: None,
                                 ship_class: ShipClass::default(),
                                 name: pilot.clone(),
                                 credits: STARTER_CREDITS,
@@ -367,6 +372,11 @@ impl Server {
                             .map(|v| v * MAX_ANGULAR_SPEED);
                         message = "Piloting input accepted";
                     }
+                    Request::UnlockTarget => {
+                        pilot.view.locked_asteroid = None;
+                        pilot.view.target_lock = None;
+                        message = "Target unlocked";
+                    }
                     Request::LockAsteroid { id } => {
                         ensure!(universe::normal(pilot), "target lock requires normal space");
                         let asteroid = world
@@ -383,8 +393,27 @@ impl Server {
                             universe::surface(pilot, asteroid) <= LOCK_RANGE,
                             "asteroid outside lock range"
                         );
-                        pilot.view.locked_asteroid = Some(id);
-                        message = "Asteroid locked";
+                        if pilot.view.locked_asteroid != Some(id)
+                            && pilot
+                                .view
+                                .target_lock
+                                .as_ref()
+                                .is_none_or(|lock| lock.asteroid_id != id)
+                        {
+                            pilot.view.locked_asteroid = None;
+                            pilot.view.target_lock = None;
+                            pilot.view.target_lock = Some(TargetLock {
+                                asteroid_id: id,
+                                started_at_ms: now,
+                                completes_at_ms: now
+                                    .checked_add(lock_duration_ms(
+                                        pilot.view.ship_class,
+                                        asteroid.radius,
+                                    ))
+                                    .context("clock overflow")?,
+                            });
+                        }
+                        message = "Target acquisition accepted";
                     }
                     Request::Jump { gate_id } => {
                         ensure!(universe::normal(pilot), "jump requires normal space");
@@ -404,6 +433,7 @@ impl Server {
                         pilot.controls = None;
                         f.angular_velocity = [0.0; 3];
                         pilot.view.locked_asteroid = None;
+                        pilot.view.target_lock = None;
                         pilot.view.location = Location::Jumping {
                             gate_id,
                             arrives_at_ms: now
@@ -460,6 +490,7 @@ impl Server {
                             "already at destination"
                         );
                         pilot.view.locked_asteroid = None;
+                        pilot.view.target_lock = None;
                         flight::begin_warp(pilot, destination, now);
                         pilot.view.location = Location::InTransit {
                             destination,
@@ -489,6 +520,7 @@ impl Server {
                             "must be within docking range in normal space"
                         );
                         pilot.view.locked_asteroid = None;
+                        pilot.view.target_lock = None;
                         pilot.controls = None;
                         pilot.view.location = Location::Docked;
                         let f = pilot.view.flight.as_mut().unwrap();
@@ -647,6 +679,7 @@ impl Server {
         // Snapshot polling must not rewrite and fsync the entire world unless
         // it resolves a due arrival. Economic updates still commit with their
         // ledger entry in this same transaction.
+        universe::advance_locks(&mut world, now);
         let updated_json = serde_json::to_string(&world)?;
         if updated_json != json {
             tx.execute("UPDATE world SET json=?1 WHERE id=1", [updated_json])?;
