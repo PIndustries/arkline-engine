@@ -347,3 +347,24 @@ other view modes retain compact floating windows.
 
 See [public preview readiness](docs/public-preview-readiness.md) for the remaining
 publication gates. The repository is still private and not yet open-source licensed.
+
+### Ship power and clear cockpit actions
+
+The cockpit console keeps **UNDOCK / DOCK / STOP** visible above every service tab.
+Flight, Ship, Modules, Drones, Inventory and Station are the main tabs; **More**
+contains the remaining services. The larger screen uses current-window geometry,
+including at the minimum supported window size.
+
+Each hull has a server-owned capacitor (joules) and reactor output (watts). Warp
+reserves its full energy cost at admission. Successful turret/drone mining cycles
+and actual attack-drone shots consume energy; unsupported actions cannot create
+ore or damage when the capacitor is empty. Mining modules stop with a low-power
+reason, drones stop their assignment, and warp is rejected until sufficient charge
+returns. The HUD shows authoritative charge, capacity, regeneration and action
+costs; missing or disconnected power readings are marked accordingly.
+
+Prototype rates are defined by `power_spec` in the protocol crate. Reactors remain
+running while ships are parked/offline, bounded by capacitor capacity. Stored hulls
+keep their own energy when boarding another ship. These are tunable gameplay
+values, not a complete electrical/thermal simulation. Combat remains drone-only;
+ship-mounted turrets currently mine rather than fire combat weapons.

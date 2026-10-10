@@ -614,6 +614,42 @@ pub fn lock_duration_ms(ship: ShipClass, radius: f64) -> u64 {
         .ceil() as u64
 }
 
+/// Tunable prototype energy values. Charge is joules; reactor output is watts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PowerSpec {
+    pub capacity_j: u64,
+    pub regen_w: u64,
+    pub warp_cost_j: u64,
+    pub mining_cycle_cost_j: u64,
+    pub drone_mining_cycle_cost_j: u64,
+    pub drone_attack_cost_j: u64,
+}
+pub fn power_spec(class: ShipClass) -> PowerSpec {
+    let (capacity_j, regen_w, warp_cost_j, mining_cycle_cost_j) = match class {
+        ShipClass::Pioneer => (240_000, 1200, 30_000, 4000),
+        ShipClass::Prospector => (360_000, 1600, 45_000, 6000),
+        ShipClass::Hauler => (600_000, 2200, 70_000, 5000),
+        ShipClass::Vanguard => (1_200_000, 4000, 120_000, 8000),
+    };
+    PowerSpec {
+        capacity_j,
+        regen_w,
+        warp_cost_j,
+        mining_cycle_cost_j,
+        drone_mining_cycle_cost_j: 1500,
+        drone_attack_cost_j: 2000,
+    }
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PowerState {
+    pub charge_j: u64,
+    pub capacity_j: u64,
+    pub regen_w: u64,
+    pub updated_at_ms: u64,
+    /// Fractional joule carry, always less than 1000. Prevents polling-dependent regeneration.
+    pub regen_remainder_mj: u64,
+}
+
 pub const MAX_TARGET_LOCKS: usize = 5;
 pub const DRONE_CLASS_CAP: usize = 5;
 pub const MAX_DRONES: usize = 15;
@@ -725,6 +761,8 @@ pub struct MiningModule {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PilotView {
     #[serde(default)]
+    pub power: Option<PowerState>,
+    #[serde(default)]
     pub drones: Vec<DroneView>,
     #[serde(default)]
     pub target_locks: Vec<TargetLock>,
@@ -760,6 +798,8 @@ pub struct SellOrder {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HangarShip {
+    #[serde(default)]
+    pub power: Option<PowerState>,
     pub ship_class: ShipClass,
     pub system_id: u32,
     pub ore: u64,

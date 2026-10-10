@@ -134,6 +134,11 @@ impl Cockpit {
         let Some(p) = self.own() else { return };
         let available = self.can_fly();
         ui.small("DRONE FLEET / 5 PER CLASS");
+        let power = power_spec(p.ship_class);
+        ui.small(format!(
+            "Owner capacitor: {} J / mining cycle · {} J / weapon shot",
+            power.drone_mining_cycle_cost_j, power.drone_attack_cost_j
+        ));
         ui.horizontal_wrapped(|ui| {
             for (class, label) in [
                 (DroneClass::Recon, "Recon"),

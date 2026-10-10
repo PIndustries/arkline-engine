@@ -345,6 +345,11 @@ pub(super) fn advance(world: &mut World, now: u64) -> Vec<EconomicEvent> {
                             if now >= cycle.completes_at_ms {
                                 if now.saturating_sub(cycle.completes_at_ms)
                                     >= DRONE_MINING_CYCLE_MS
+                                    || !power::spend(
+                                        &mut p.view.power,
+                                        power_spec(p.view.ship_class).drone_mining_cycle_cost_j,
+                                        now,
+                                    )
                                 {
                                     idle(&mut d);
                                 } else {
@@ -444,6 +449,17 @@ pub(super) fn advance(world: &mut World, now: u64) -> Vec<EconomicEvent> {
                     && flight::distance(source.position, target.position) <= DRONE_ATTACK_RANGE
             });
         if valid {
+            let source = world.pilots.get_mut(&attacker).unwrap();
+            if !power::spend(
+                &mut source.view.power,
+                power_spec(source.view.ship_class).drone_attack_cost_j,
+                now,
+            ) {
+                if let Some(drone) = source.view.drones.iter_mut().find(|d| d.id == attacker_id) {
+                    idle(drone);
+                }
+                continue;
+            }
             if let Some(p) = world.pilots.get_mut(&pilot) {
                 if let Some(d) = p.view.drones.iter_mut().find(|d| d.id == id) {
                     d.hit_points = d.hit_points.saturating_sub(damage);

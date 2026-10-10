@@ -60,7 +60,8 @@ impl Cockpit {
             ui.colored_label(self.accent(), "ACTIVE");
             ui.small(format!("{} ore aboard", pilot.ore));
         });
-        ui.small("Each ship retains its own cargo. Board a stored ship only while docked at its station.");
+        self.power_gauge(ui);
+        ui.small("Each ship retains its cargo and capacitor charge. Board a stored ship only while docked at its station.");
         let Some(assets) = self.assets.clone() else {
             ui.colored_label(AMBER, "Waiting for authenticated hangar inventory…");
             return;
@@ -91,6 +92,16 @@ impl Cockpit {
                     });
                 }
             });
+            if let Some(power) = &ship.power {
+                ui.small(format!(
+                    "Capacitor {:.1}/{:.1} kJ · +{} W",
+                    power.charge_j as f64 / 1000.0,
+                    power.capacity_j as f64 / 1000.0,
+                    power.regen_w
+                ));
+            } else {
+                ui.small("Stored capacitor data unavailable");
+            }
             ui.small(format!(
                 "{} × {} × {}",
                 format_distance(spec.length_m),

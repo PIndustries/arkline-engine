@@ -164,6 +164,7 @@ mod tests {
                 ore: remaining,
             }],
             pilots: vec![PilotView {
+                power: None,
                 mining_modules: vec![],
                 ship_class: arkline_protocol::ShipClass::default(),
                 name: "Pilot".into(),

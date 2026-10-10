@@ -158,3 +158,18 @@ Failed connections stay on the relay screen with Retry and pilot/server settings
 Flight commands are blocked while that screen is active. FTL relay is in-universe
 presentation of the existing TCP session, not a new network service or security
 protocol. Reconnection after playing keeps the existing recovery UI.
+
+## Permanent cockpit actions and power (26.10.10.13)
+
+UNDOCK is always in the physical console header when docked, independent of active
+tab or content scrolling. In space that control becomes DOCK; STOP sits beside it.
+The visible capacitor gauge reports current server energy. Flight navigation and
+power remain accessible without finding the Station tab. Six primary tabs and a
+More menu replace the crowded row of eleven services.
+
+Warp charges its reservation once, before departure. It does not continuously
+charge the same trip again. Turret mining, drone mining and attack-drone shots draw
+energy when work actually happens. The reactor recharges by elapsed server time,
+including while parked/offline, capped at hull capacity. A low capacitor blocks
+warp and stops unfunded mining/firing. Hover the gauge for per-action costs. Ship
+combat guns, thermal damage and customizable power routing remain unimplemented.

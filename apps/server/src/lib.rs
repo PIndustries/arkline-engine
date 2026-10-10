@@ -2,6 +2,7 @@ mod assets;
 mod drones;
 mod flight;
 mod mining;
+mod power;
 mod universe;
 use anyhow::{bail, ensure, Context, Result};
 use arkline_protocol::*;
@@ -127,11 +128,13 @@ impl Server {
         )?;
         let json: String = db.query_row("SELECT json FROM world WHERE id=1", [], |r| r.get(0))?;
         let mut world: World = serde_json::from_str(&json)?;
+        let now = now_ms();
         flight::migrate_spatial(&mut world);
         universe::ensure_asteroids(&mut world);
         assets::ensure_accounts(&mut world);
         mining::ensure_modules(&mut world);
         drones::ensure_fleets(&mut world)?;
+        power::advance(&mut world, now)?;
         for pilot in world.pilots.values_mut() {
             mining::stop_all(pilot, "Server restarted");
             pilot.controls = None;
@@ -224,6 +227,7 @@ impl Server {
         assets::ensure_accounts(&mut world);
         mining::ensure_modules(&mut world);
         drones::ensure_fleets(&mut world)?;
+        power::advance(&mut world, now)?;
         flight::advance(&mut world, now);
         universe::advance_locks(&mut world, now);
         let mut events = mining::advance(&mut world, now);
@@ -251,6 +255,7 @@ impl Server {
         assets::ensure_accounts(&mut world);
         mining::ensure_modules(&mut world);
         drones::ensure_fleets(&mut world)?;
+
         if let Some(p) = world.pilots.get_mut(name) {
             mining::stop_all(p, "Pilot disconnected");
             p.controls = None;
@@ -292,6 +297,7 @@ impl Server {
         assets::ensure_accounts(&mut world);
         mining::ensure_modules(&mut world);
         drones::ensure_fleets(&mut world)?;
+        power::advance(&mut world, now)?;
         flight::advance(&mut world, now);
         universe::advance_locks(&mut world, now);
         let mut token = None;
@@ -332,7 +338,7 @@ impl Server {
                 let name = session
                     .as_ref()
                     .context("connect before issuing commands")?;
-                let outcome = assets::execute(&mut world, name, request)?;
+                let outcome = assets::execute(&mut world, name, request, now)?;
                 event = outcome;
                 message = "Station assets updated";
             }
@@ -374,6 +380,7 @@ impl Server {
                         pilot.clone(),
                         Pilot {
                             view: PilotView {
+                                power: None,
                                 drones: Vec::new(),
                                 target_locks: Vec::new(),
                                 locked_asteroids: Vec::new(),
@@ -568,6 +575,14 @@ impl Server {
                             ) > 100.0,
                             "already at destination"
                         );
+                        ensure!(
+                            power::spend(
+                                &mut pilot.view.power,
+                                power_spec(pilot.view.ship_class).warp_cost_j,
+                                now
+                            ),
+                            "insufficient capacitor energy for warp reservation"
+                        );
                         universe::clear_locks(pilot);
                         flight::begin_warp(pilot, destination, now);
                         pilot.view.location = Location::InTransit {
@@ -697,6 +712,7 @@ impl Server {
         assets::ensure_accounts(&mut world);
         mining::ensure_modules(&mut world);
         drones::ensure_fleets(&mut world)?;
+        power::advance(&mut world, now)?;
         validate(&world)?;
         let mut entries = load_entries(&tx, export)?;
         for event in cycle_events.into_iter().chain(event) {
@@ -881,7 +897,7 @@ mod tests {
                 .handle_at(
                     &mut None,
                     Request::Snapshot,
-                    plan_warp(STATION_POSITION, BELT_POSITION, 0).arrives_at_ms + 103
+                    plan_warp(STATION_POSITION, BELT_POSITION, 0).arrives_at_ms + 102
                 )
                 .ok
         );

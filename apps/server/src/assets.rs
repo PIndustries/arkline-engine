@@ -1,7 +1,7 @@
 use super::*;
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub(super) struct Account {
-    ships: Vec<HangarShip>,
+    pub(super) ships: Vec<HangarShip>,
     storage: BTreeMap<u32, u64>,
     corporation: Option<String>,
 }
@@ -22,6 +22,7 @@ pub(super) fn ensure_accounts(world: &mut World) {
                     .into_iter()
                     .filter(|class| *class != p.view.ship_class)
                     .map(|ship_class| HangarShip {
+                        power: None,
                         ship_class,
                         system_id: HOME_SYSTEM_ID,
                         ore: 0,
@@ -169,7 +170,12 @@ pub(super) fn handles(r: &Request) -> bool {
             | Request::WithdrawCorporationOre { .. }
     )
 }
-pub(super) fn execute(w: &mut World, name: &str, r: Request) -> Result<Option<EconomicEvent>> {
+pub(super) fn execute(
+    w: &mut World,
+    name: &str,
+    r: Request,
+    now: u64,
+) -> Result<Option<EconomicEvent>> {
     let p = w.pilots.get(name).context("pilot missing")?;
     let system_id = p.view.system_id;
     let docked = p.view.location == Location::Docked;
@@ -193,6 +199,8 @@ pub(super) fn execute(w: &mut World, name: &str, r: Request) -> Result<Option<Ec
                 "ship is stored at another station"
             );
             let loaded_units = selected.ore;
+            let mut selected_power = selected.power.clone();
+            power::advance_state(&mut selected_power, ship_class, now)?;
             let stored_units = p.view.ore;
             let from_ship_class = p.view.ship_class;
             ensure!(
@@ -200,11 +208,13 @@ pub(super) fn execute(w: &mut World, name: &str, r: Request) -> Result<Option<Ec
                 "stored cargo exceeds capacity"
             );
             account.ships[index] = HangarShip {
+                power: p.view.power.take(),
                 ship_class: from_ship_class,
                 system_id,
                 ore: stored_units,
             };
             p.view.ship_class = ship_class;
+            p.view.power = selected_power;
             // A different hull starts with its own idle module phases/reasons.
             p.view.mining_modules.clear();
             p.view.ore = loaded_units;

@@ -254,6 +254,7 @@ impl FlightView {
         self.selected_drone = selected;
         self.drone_orbit = orbit;
     }
+    #[cfg(test)]
     pub fn cockpit_console_rect(&self) -> Option<egui::Rect> {
         self.console_rect
     }
@@ -410,10 +411,7 @@ impl FlightView {
             ui.available_size().max(egui::vec2(100.0, 150.0)),
             egui::Sense::click_and_drag(),
         );
-        self.console_rect = cockpit.then(|| {
-            let (center, size) = cockpit_screens()[3];
-            instrument_rect(rect, center, size).shrink(5.0)
-        });
+        self.console_rect = cockpit.then(|| cockpit_console_bounds(rect));
         let pointer_on_instrument = cockpit
             && ui.input(|i| i.pointer.hover_pos()).is_some_and(|p| {
                 cockpit_screens()
@@ -1867,7 +1865,7 @@ impl Renderer {
             self.draw(
                 0,
                 base * transform(
-                    Vec3::new(0.78, 0.03, side * 0.49),
+                    Vec3::new(0.78, 0.03, side * 0.52),
                     Vec3::new(0.055, 0.62, 0.045),
                     Quat::from_rotation_x(side * 0.22),
                 ),
@@ -2379,13 +2377,18 @@ fn in_warp(location: &Location, now: u64) -> bool {
 const COCKPIT_FOV: f32 = 1.22;
 fn cockpit_screens() -> [(Vec3, Vec3); 6] {
     [
-        (Vec3::new(0.72, -0.065, 0.0), Vec3::new(0.020, 0.09, 0.18)),
-        (Vec3::new(0.80, -0.23, -0.49), Vec3::new(0.012, 0.13, 0.19)),
-        (Vec3::new(0.80, -0.23, 0.49), Vec3::new(0.012, 0.13, 0.19)),
-        (Vec3::new(0.65, -0.30, 0.0), Vec3::new(0.020, 0.105, 0.24)),
-        (Vec3::new(0.80, 0.02, -0.49), Vec3::new(0.012, 0.085, 0.19)),
-        (Vec3::new(0.80, 0.02, 0.49), Vec3::new(0.012, 0.085, 0.19)),
+        (Vec3::new(0.72, 0.12, 0.0), Vec3::new(0.020, 0.075, 0.18)),
+        (Vec3::new(0.80, -0.23, -0.52), Vec3::new(0.012, 0.13, 0.18)),
+        (Vec3::new(0.80, -0.23, 0.52), Vec3::new(0.012, 0.13, 0.18)),
+        (Vec3::new(0.65, -0.23, 0.0), Vec3::new(0.020, 0.175, 0.27)),
+        (Vec3::new(0.80, 0.02, -0.52), Vec3::new(0.012, 0.085, 0.18)),
+        (Vec3::new(0.80, 0.02, 0.52), Vec3::new(0.012, 0.085, 0.18)),
     ]
+}
+
+pub(super) fn cockpit_console_bounds(viewport: egui::Rect) -> egui::Rect {
+    let (center, size) = cockpit_screens()[3];
+    instrument_rect(viewport, center, size).shrink(5.0)
 }
 
 fn drone_feed_rect(viewport: egui::Rect) -> egui::Rect {
@@ -2517,17 +2520,33 @@ fn instrument_rows(
             "RANGE / TRUE DISTANCE".into(),
         ],
         vec![
-            format!("MODULES / {status}"),
+            format!("POWER / MODULES / {status}"),
+            own.power
+                .as_ref()
+                .map_or("POWER DATA UNAVAILABLE".into(), |p| {
+                    format!(
+                        "CAP {:.1}/{:.1} kJ",
+                        p.charge_j as f64 / 1000.0,
+                        p.capacity_j as f64 / 1000.0
+                    )
+                }),
+            own.power.as_ref().map_or("REACTOR UNKNOWN".into(), |p| {
+                format!("REACTOR +{} W", p.regen_w)
+            }),
+            format!(
+                "WARP COST {:.0} kJ",
+                arkline_protocol::power_spec(own.ship_class).warp_cost_j as f64 / 1000.0
+            ),
             module_instrument(own, 0, now),
             module_instrument(own, 1, now),
             format!("HOLD {} / {}", own.ore, arkline_protocol::CARGO_CAPACITY),
-            format!("CREDITS {}", own.credits),
-            format!(
-                "YIELD {} / CYCLE",
-                arkline_protocol::mining_spec(own.ship_class).yield_units
-            ),
-            "SERVER-TIMED MODULES".into(),
-            "CARGO CAPACITY".into(),
+            own.power.as_ref().map_or("CAPACITOR UNKNOWN".into(), |p| {
+                if p.charge_j < arkline_protocol::power_spec(own.ship_class).warp_cost_j {
+                    "LOW POWER / WARP UNAVAILABLE".into()
+                } else {
+                    "CAPACITOR / CHARGED".into()
+                }
+            }),
         ],
     ]
 }
@@ -2574,7 +2593,9 @@ fn paint_instruments(
         );
         if index == 2 {
             let width = inner.width()
-                * (own.ore as f32 / arkline_protocol::CARGO_CAPACITY as f32).clamp(0.0, 1.0);
+                * own.power.as_ref().map_or(0.0, |p| {
+                    (p.charge_j as f32 / p.capacity_j.max(1) as f32).clamp(0.0, 1.0)
+                });
             painter.rect_filled(
                 egui::Rect::from_min_size(
                     egui::pos2(inner.left(), baseline + 3.0),
@@ -3297,6 +3318,7 @@ mod tests {
     #[test]
     fn instrument_faces_match_projection_and_do_not_overlap_after_resize() {
         for size in [
+            egui::vec2(900.0, 650.0),
             egui::vec2(1100.0, 768.0),
             egui::vec2(1800.0, 1200.0),
             egui::vec2(2560.0, 1440.0),
@@ -3364,7 +3386,17 @@ mod tests {
         assert!(rows[1].contains(&"LOCKED #7".to_string()));
         assert!(rows[1].contains(&super::super::format_distance(5000.0)));
         assert!(rows[2].contains(&"HOLD 225 / 1000".to_string()));
-        assert!(rows[2].contains(&"CREDITS 123".to_string()));
+        assert!(rows[2].contains(&"POWER DATA UNAVAILABLE".to_string()));
+        pilot.power = Some(arkline_protocol::PowerState {
+            charge_j: 25_000,
+            capacity_j: 240_000,
+            regen_w: 1200,
+            updated_at_ms: 1000,
+            regen_remainder_mj: 0,
+        });
+        let powered = instrument_rows(&pilot, &snapshot, None, 1000, true);
+        assert!(powered[2].contains(&"CAP 25.0/240.0 kJ".to_string()));
+        assert!(powered[2].contains(&"LOW POWER / WARP UNAVAILABLE".to_string()));
         let stale = instrument_rows(&pilot, &snapshot, None, 1000, false);
         assert!(stale.iter().all(|rows| rows[0].contains("STALE DATA")));
         assert!(stale[1].contains(&"NO SELECTION".to_string()));
@@ -3663,6 +3695,7 @@ mod tests {
     fn extrapolation_is_bounded_and_warp_uses_server_position() {
         let space = Space::default();
         let mut pilot = PilotView {
+            power: None,
             mining_modules: vec![],
             target_lock: None,
             target_locks: vec![],
@@ -3905,6 +3938,7 @@ mod tests {
     fn stable_pilot_lane_does_not_depend_on_roster_or_view() {
         let space = Space::default();
         let pilot = PilotView {
+            power: None,
             mining_modules: vec![],
             target_lock: None,
             target_locks: vec![],

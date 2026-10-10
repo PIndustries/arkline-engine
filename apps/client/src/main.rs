@@ -610,11 +610,25 @@ impl Cockpit {
                     )
             })
     }
+    fn warp_power_ready(&self) -> bool {
+        self.own().is_none_or(|p| {
+            p.power
+                .as_ref()
+                .is_none_or(|power| power.charge_j >= power_spec(p.ship_class).warp_cost_j)
+        })
+    }
+    fn can_warp(&self) -> bool {
+        self.can_fly() && self.warp_power_ready()
+    }
     fn can_operate(&self) -> bool {
         self.connected && !self.request_pending
     }
     fn send(&mut self, request: Request) {
         if !self.can_operate() {
+            return;
+        }
+        if matches!(request, Request::Warp { .. }) && !self.warp_power_ready() {
+            self.notice = "Insufficient capacitor for warp. Wait for reactor recharge.".into();
             return;
         }
         if matches!(
@@ -1026,6 +1040,22 @@ impl Cockpit {
         }
         if let Some(pilot) = self.own() {
             let spec = mining_spec(pilot.ship_class);
+            let cost = power_spec(pilot.ship_class).mining_cycle_cost_j;
+            ui.colored_label(
+                if pilot.power.as_ref().is_some_and(|p| p.charge_j < cost) {
+                    AMBER
+                } else {
+                    MUTED
+                },
+                format!(
+                    "Capacitor {cost} J / turret cycle{}",
+                    if pilot.power.as_ref().is_some_and(|p| p.charge_j < cost) {
+                        " · low charge"
+                    } else {
+                        ""
+                    }
+                ),
+            );
             ui.small(format!(
                 "Up to {} ore / {:.1}s per turret · repeats until stopped",
                 spec.yield_units,
@@ -1136,25 +1166,90 @@ impl Cockpit {
         }
     }
 
+    fn cockpit_actions(&mut self, ui: &mut egui::Ui) {
+        let Some(pilot) = self.own() else { return };
+        ui.horizontal_wrapped(|ui| {
+            let docked = pilot.location == Location::Docked;
+            let (label, enabled, command) = if docked {
+                ("UNDOCK", self.can_operate(), Request::Undock)
+            } else {
+                ("DOCK", self.can_dock(&pilot), Request::Dock)
+            };
+            if ui
+                .add_enabled(
+                    enabled,
+                    egui::Button::new(egui::RichText::new(label).strong().size(16.0))
+                        .min_size(Vec2::new(108.0, 32.0))
+                        .fill(self.accent().gamma_multiply(0.26)),
+                )
+                .clicked()
+            {
+                self.send(command);
+            }
+            if ui
+                .add_enabled(
+                    self.can_fly(),
+                    egui::Button::new("STOP").min_size(Vec2::new(76.0, 32.0)),
+                )
+                .clicked()
+            {
+                self.send(Request::Navigate {
+                    mode: NavigationMode::Stop,
+                });
+            }
+            let (status, help) = if !self.connected {
+                ("OFFLINE", "Reconnect to operate")
+            } else if self.request_pending {
+                ("PENDING", "Awaiting server confirmation")
+            } else if docked {
+                ("DOCKED", "Undock to begin flight")
+            } else if !self.can_dock(&pilot) {
+                ("IN FLIGHT", "Approach the station docking port to dock")
+            } else {
+                ("IN RANGE", "Station is within docking range")
+            };
+            ui.small(status).on_hover_text(help);
+        });
+    }
+    fn power_gauge(&self, ui: &mut egui::Ui) {
+        let Some(pilot) = self.own() else { return };
+        if let Some(power) = &pilot.power {
+            let fraction = if power.capacity_j == 0 {
+                0.0
+            } else {
+                (power.charge_j as f64 / power.capacity_j as f64).clamp(0.0, 1.0) as f32
+            };
+            ui.add(
+                egui::ProgressBar::new(fraction)
+                    .desired_height(18.0)
+                    .fill(self.accent())
+                    .text(format!(
+                        "Capacitor {:.1}/{:.1} kJ · +{} W{}",
+                        power.charge_j as f64 / 1000.0,
+                        power.capacity_j as f64 / 1000.0,
+                        power.regen_w,
+                        if self.connected { "" } else { " · last known" }
+                    )),
+            )
+            .on_hover_text({let spec=power_spec(pilot.ship_class);format!("Server-confirmed energy. Warp {} J; turret cycle {} J; mining drone cycle {} J; drone weapon shot {} J.",spec.warp_cost_j,spec.mining_cycle_cost_j,spec.drone_mining_cycle_cost_j,spec.drone_attack_cost_j)});
+        } else {
+            ui.small("Capacitor data unavailable");
+        }
+    }
     fn service_tabs(&mut self, ui: &mut egui::Ui) {
         ui.horizontal_wrapped(|ui| {
             for (tab, label) in [
-                (ServiceTab::Navigation, "Nav"),
+                (ServiceTab::Navigation, "Flight"),
+                (ServiceTab::Hangar, "Ship"),
                 (ServiceTab::Modules, "Modules"),
-                (ServiceTab::Drones, "Fleet"),
-                (ServiceTab::Station, "Station"),
-                (ServiceTab::Hangar, "Hangar"),
+                (ServiceTab::Drones, "Drones"),
                 (ServiceTab::Cargo, "Inventory"),
-                (ServiceTab::Exchange, "Exchange"),
-                (ServiceTab::Corporation, "Corp"),
-                (ServiceTab::Activity, "Log"),
-                (ServiceTab::Ledger, "Audit"),
-                (ServiceTab::Settings, "Settings"),
+                (ServiceTab::Station, "Station"),
             ] {
                 if ui
                     .add(
                         egui::Button::new(label)
-                            .small()
+                            .min_size(Vec2::new(0.0, 26.0))
                             .selected(self.service_tab == tab),
                     )
                     .clicked()
@@ -1162,6 +1257,23 @@ impl Cockpit {
                     self.service_tab = tab;
                 }
             }
+            ui.menu_button("More…", |ui| {
+                for (tab, label) in [
+                    (ServiceTab::Exchange, "Exchange"),
+                    (ServiceTab::Corporation, "Corporation"),
+                    (ServiceTab::Activity, "Activity log"),
+                    (ServiceTab::Ledger, "Ledger audit"),
+                    (ServiceTab::Settings, "Settings & view mode"),
+                ] {
+                    if ui
+                        .selectable_label(self.service_tab == tab, label)
+                        .clicked()
+                    {
+                        self.service_tab = tab;
+                        ui.close_menu();
+                    }
+                }
+            });
         });
     }
     fn service_content(&mut self, ui: &mut egui::Ui) {
@@ -1473,9 +1585,28 @@ impl Cockpit {
             _ => None,
         };
         if let Some(destination) = destination {
+            if let Some(pilot) = self.own() {
+                let cost = power_spec(pilot.ship_class).warp_cost_j;
+                ui.colored_label(
+                    if self.warp_power_ready() {
+                        MUTED
+                    } else {
+                        AMBER
+                    },
+                    format!(
+                        "Warp {:.1} kJ{}",
+                        cost as f64 / 1000.0,
+                        if self.warp_power_ready() {
+                            ""
+                        } else {
+                            " · insufficient charge; recharging"
+                        }
+                    ),
+                );
+            }
             if ui
                 .add_enabled(
-                    self.can_fly(),
+                    self.can_warp(),
                     egui::Button::new(
                         if matches!(self.selected_object, SelectedObject::Asteroid(_)) {
                             "Warp to belt"
@@ -2414,7 +2545,7 @@ impl Cockpit {
                 }
                 if let Some(gate) = self.selected_gate() {
                     if ui
-                        .add_enabled(self.can_fly(), egui::Button::new("Warp to gate"))
+                        .add_enabled(self.can_warp(), egui::Button::new("Warp to gate"))
                         .clicked()
                     {
                         self.send(Request::Warp {
@@ -2934,7 +3065,8 @@ impl eframe::App for Cockpit {
             self.services_open = open;
         }
         if self.view_mode == ViewMode::Cockpit {
-            if let Some(rect) = self.flight_view.cockpit_console_rect() {
+            {
+                let rect = flight3d::cockpit_console_bounds(ctx.available_rect()).shrink(1.0);
                 egui::Area::new(egui::Id::new("physical_cockpit_console"))
                     .fixed_pos(rect.min)
                     .movable(false)
@@ -2943,6 +3075,8 @@ impl eframe::App for Cockpit {
                         ui.set_max_size(rect.size());
                         ui.set_clip_rect(rect);
                         ui.spacing_mut().item_spacing = Vec2::new(4.0, 3.0);
+                        self.cockpit_actions(ui);
+                        self.power_gauge(ui);
                         self.service_tabs(ui);
                         ui.separator();
                         egui::ScrollArea::both()
@@ -3239,6 +3373,7 @@ mod tests {
                 ship_class: ShipClass::Pioneer,
                 target_locks: vec![],
                 locked_asteroids: vec![],
+                power: None,
                 drones: vec![],
                 drone: None,
                 target_lock: None,
@@ -3434,6 +3569,166 @@ mod tests {
         assert!(cockpit.controls.lock().unwrap().is_none());
     }
     #[test]
+    fn warp_waits_for_confirmed_capacitor_without_speculative_recharge() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        let cost = power_spec(cockpit.own().unwrap().ship_class).warp_cost_j;
+        cockpit.snapshot.as_mut().unwrap().pilots[0].power = Some(PowerState {
+            charge_j: cost - 1,
+            capacity_j: cost * 2,
+            regen_w: 1000,
+            updated_at_ms: 1,
+            regen_remainder_mj: 0,
+        });
+        let (tx, rx) = mpsc::channel();
+        cockpit.commands = Some(tx);
+        assert!(!cockpit.can_warp());
+        cockpit.send(Request::Warp {
+            destination: Destination::Station,
+        });
+        assert!(rx.try_recv().is_err());
+        assert!(cockpit.notice.contains("Insufficient capacitor"));
+        cockpit.snapshot.as_mut().unwrap().pilots[0]
+            .power
+            .as_mut()
+            .unwrap()
+            .charge_j = cost;
+        assert!(cockpit.can_warp());
+        cockpit.send(Request::Warp {
+            destination: Destination::Station,
+        });
+        assert!(matches!(
+            rx.try_recv().unwrap(),
+            Request::Warp {
+                destination: Destination::Station
+            }
+        ));
+    }
+    #[test]
+    fn physical_console_undock_is_visible_on_every_tab_and_disabled_offline() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        cockpit.view_mode = ViewMode::Cockpit;
+        cockpit.snapshot.as_mut().unwrap().pilots[0].location = Location::Docked;
+        cockpit.snapshot.as_mut().unwrap().pilots[0].power = Some(PowerState {
+            charge_j: 2500,
+            capacity_j: 10000,
+            regen_w: 300,
+            updated_at_ms: 1000,
+            regen_remainder_mj: 0,
+        });
+        let (tx, rx) = mpsc::channel();
+        cockpit.commands = Some(tx);
+        fn frame(
+            ctx: &egui::Context,
+            c: &mut Cockpit,
+            events: Vec<egui::Event>,
+        ) -> Vec<(String, Pos2)> {
+            ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        Pos2::ZERO,
+                        Vec2::new(900.0, 650.0),
+                    )),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| eframe::App::update(c, ctx, &mut eframe::Frame::_new_kittest()),
+            )
+            .shapes
+            .into_iter()
+            .filter_map(|s| {
+                if let egui::Shape::Text(t) = s.shape {
+                    Some((
+                        t.galley.job.text.clone(),
+                        t.pos + t.galley.rect.center().to_vec2(),
+                    ))
+                } else {
+                    None
+                }
+            })
+            .collect()
+        }
+        for _ in 0..4 {
+            frame(&ctx, &mut cockpit, vec![]);
+        }
+        for tab in [
+            ServiceTab::Modules,
+            ServiceTab::Navigation,
+            ServiceTab::Hangar,
+            ServiceTab::Drones,
+            ServiceTab::Cargo,
+            ServiceTab::Station,
+            ServiceTab::Exchange,
+            ServiceTab::Corporation,
+            ServiceTab::Activity,
+            ServiceTab::Ledger,
+            ServiceTab::Settings,
+        ] {
+            cockpit.service_tab = tab;
+            cockpit.request_pending = false;
+            let labels = frame(&ctx, &mut cockpit, vec![]);
+            assert!(labels
+                .iter()
+                .any(|(text, _)| text.contains("Capacitor 2.5/10.0 kJ · +300 W")));
+            let rect = cockpit.flight_view.cockpit_console_rect().unwrap();
+            let point = labels
+                .iter()
+                .find(|(s, p)| s == "UNDOCK" && rect.contains(*p))
+                .unwrap()
+                .1;
+            assert!(
+                rect.contains_rect(egui::Rect::from_center_size(point, Vec2::new(108.0, 32.0))),
+                "entire Undock button must fit physical console at minimum viewport: rect={rect:?}, center={point:?}"
+            );
+            for pressed in [true, false] {
+                frame(
+                    &ctx,
+                    &mut cockpit,
+                    vec![
+                        egui::Event::PointerMoved(point),
+                        egui::Event::PointerButton {
+                            pos: point,
+                            button: egui::PointerButton::Primary,
+                            pressed,
+                            modifiers: egui::Modifiers::NONE,
+                        },
+                    ],
+                );
+            }
+            assert!(matches!(rx.try_recv().unwrap(), Request::Undock));
+            assert!(
+                cockpit.own().unwrap().location == Location::Docked,
+                "only server confirmation changes location"
+            );
+        }
+        cockpit.connected = false;
+        cockpit.request_pending = false;
+        let labels = frame(&ctx, &mut cockpit, vec![]);
+        let rect = cockpit.flight_view.cockpit_console_rect().unwrap();
+        let point = labels
+            .iter()
+            .find(|(s, p)| s == "UNDOCK" && rect.contains(*p))
+            .unwrap()
+            .1;
+        for pressed in [true, false] {
+            frame(
+                &ctx,
+                &mut cockpit,
+                vec![
+                    egui::Event::PointerMoved(point),
+                    egui::Event::PointerButton {
+                        pos: point,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ],
+            );
+        }
+        assert!(rx.try_recv().is_err());
+    }
+    #[test]
     fn physical_console_fleet_click_sends_real_command_without_flight_input() {
         let ctx = egui::Context::default();
         let mut cockpit = view_test_cockpit(&ctx);
@@ -3478,7 +3773,7 @@ mod tests {
         assert!(!labels.iter().any(|(s, _)| s == "Overview"));
         let fleet = labels
             .iter()
-            .find(|(s, p)| s == "Fleet" && rect.contains(*p))
+            .find(|(s, p)| s == "Drones" && rect.contains(*p))
             .unwrap()
             .1;
         for pressed in [true, false] {
@@ -4112,11 +4407,13 @@ mod tests {
         AssetsView {
             ships: vec![
                 HangarShip {
+                    power: None,
                     ship_class: ShipClass::Hauler,
                     system_id: 1,
                     ore: 99,
                 },
                 HangarShip {
+                    power: None,
                     ship_class: ShipClass::Vanguard,
                     system_id: 2,
                     ore: 88,
@@ -4309,6 +4606,7 @@ mod tests {
                 locked_asteroid: None,
                 target_locks: vec![],
                 locked_asteroids: vec![],
+                power: None,
                 drones: vec![],
                 drone: None,
                 target_lock: None,
@@ -4324,6 +4622,7 @@ mod tests {
                 .into_iter()
                 .filter(|c| *c != ShipClass::Pioneer)
                 .map(|ship_class| HangarShip {
+                    power: None,
                     ship_class,
                     system_id: HOME_SYSTEM_ID,
                     ore: 0,
@@ -4421,6 +4720,7 @@ mod tests {
             .ships
             .retain(|s| s.ship_class != ShipClass::Prospector);
         cockpit.assets.as_mut().unwrap().ships.push(HangarShip {
+            power: None,
             ship_class: ShipClass::Pioneer,
             system_id: HOME_SYSTEM_ID,
             ore: 25,
@@ -4528,6 +4828,7 @@ mod tests {
             locked_asteroid: None,
             target_locks: vec![],
             locked_asteroids: vec![],
+            power: None,
             drones: vec![],
             drone: None,
             target_lock: None,

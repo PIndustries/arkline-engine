@@ -328,6 +328,10 @@ fn legacy_nonledger_hull_selection_migrates_once_without_minting_cargo() {
     world.as_object_mut().unwrap().remove("accounts");
     world.as_object_mut().unwrap().remove("corporations");
     world["pilots"]["Legacy"]["view"]["ship_class"] = serde_json::json!("vanguard");
+    world["pilots"]["Legacy"]["view"]
+        .as_object_mut()
+        .unwrap()
+        .remove("power");
     db.execute("UPDATE world SET json=?1 WHERE id=1", [world.to_string()])
         .unwrap();
     drop(db);

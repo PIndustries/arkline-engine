@@ -139,6 +139,14 @@ pub(super) fn advance(world: &mut World, now: u64) -> Vec<EconomicEvent> {
                 halt(module, "Cycle expired");
                 continue;
             }
+            if !power::spend(
+                &mut p.view.power,
+                power_spec(p.view.ship_class).mining_cycle_cost_j,
+                now,
+            ) {
+                halt(module, "Insufficient capacitor energy");
+                continue;
+            }
             let units = spec.yield_units.min(a.ore).min(CARGO_CAPACITY - p.view.ore);
             a.ore -= units;
             world.belt_ore -= units;

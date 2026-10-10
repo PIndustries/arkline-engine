@@ -222,7 +222,7 @@ fn two_pilots_trade_recover_and_export_consistent_history() {
     });
     let before = alice.ok(Request::Snapshot).snapshot.unwrap();
     let observed = bob.ok(Request::Snapshot).snapshot.unwrap();
-    assert_eq!(before.pilots, observed.pilots);
+    assert_same_pilots_with_regeneration(&before, &observed);
     assert_eq!(before.orders, observed.orders);
     assert_eq!(
         before
@@ -255,7 +255,7 @@ fn two_pilots_trade_recover_and_export_consistent_history() {
     let mut bob = Client::new(&address);
     bob.login("Bob", Some(bob_token));
     let after = bob.ok(Request::Snapshot).snapshot.unwrap();
-    assert_eq!(before.pilots, after.pilots);
+    assert_same_pilots_with_regeneration(&before, &after);
     assert_eq!(before.orders, after.orders);
     assert_eq!(before.ledger_hash, after.ledger_hash);
     alice.ok(Request::CancelSell { order_id: order });
@@ -621,4 +621,27 @@ fn direct_piloting_over_tcp_expires_without_losing_roll() {
     drop(client);
     drop(server);
     fs::remove_dir_all(directory).unwrap();
+}
+
+/// A reactor can advance between network observations or during restart. Every
+/// other persisted pilot field remains exactly equal; power must conserve the
+/// elapsed interval and remain within the configured capacitor capacity.
+fn assert_same_pilots_with_regeneration(before: &Snapshot, after: &Snapshot) {
+    assert_eq!(before.pilots.len(), after.pilots.len());
+    for (old, new) in before.pilots.iter().zip(&after.pilots) {
+        let mut old = old.clone();
+        let mut new = new.clone();
+        let old_power = old.power.take().expect("authoritative power");
+        let new_power = new.power.take().expect("authoritative power");
+        assert_eq!(old, new);
+        assert_eq!(old_power.capacity_j, new_power.capacity_j);
+        assert_eq!(old_power.regen_w, new_power.regen_w);
+        assert!(new_power.charge_j >= old_power.charge_j);
+        assert!(new_power.charge_j <= new_power.capacity_j);
+        let elapsed = after.server_time_ms.saturating_sub(before.server_time_ms);
+        let maximum_gain = (elapsed as u128 * old_power.regen_w as u128
+            + old_power.regen_remainder_mj as u128)
+            / 1000;
+        assert!(new_power.charge_j as u128 <= old_power.charge_j as u128 + maximum_gain);
+    }
 }

@@ -693,6 +693,7 @@ mod tests {
                 server_time_ms: 6000,
                 pilots: vec![
                     PilotView {
+                        power: None,
                         drones: vec![],
                         target_locks: vec![],
                         locked_asteroids: vec![],
@@ -709,6 +710,7 @@ mod tests {
                         flight: None,
                     },
                     PilotView {
+                        power: None,
                         drones: vec![],
                         target_locks: vec![],
                         locked_asteroids: vec![],

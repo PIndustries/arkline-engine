@@ -395,3 +395,37 @@ could not unlock it, so appearance, transition timing and native Retry clicks ar
 not claimed verified. The isolated QA process was stopped; existing sessions were
 not replaced. FTL relay labels describe the existing connection, not distributed
 relay infrastructure or an additional security guarantee.
+
+## Cockpit actions and authoritative power — 26.10.10.13
+
+UNDOCK/DOCK/STOP are pinned above the service tabs and scrollable content. The
+physical console is larger and uses the current viewport rather than a cached
+previous-frame rectangle. Six primary services plus More replace the crowded tab
+row. A full-app pointer test checks the entire Undock button footprint at 900×650
+across all eleven service selections, confirms each click sends Undock, and checks
+offline clicks send nothing. Client tests also cover server power values, missing
+readings, and low-power warp admission only recovering after a new snapshot.
+75 client tests pass, with one profiling test ignored.
+
+Independent power acceptance covers capped recharge; successful warp debit;
+invalid/insufficient warp preserving charge; turret/drone mining charged only on
+actual completion; low-power cycles producing no ore; valid attack shots charged
+with damage; empty capacitor producing neither; and persisted charge recovery.
+Unit tests additionally cover fractional polling independence, no refund from
+previously accumulated full-capacitor idle time, extreme elapsed intervals, legacy
+initialization, future timestamps and charge following each physical hull when
+boarding. All server test targets passed, including TCP journeys; one historical
+legacy-save fixture needed the new power field removed and passed after correction.
+Strict workspace Clippy and formatting passed.
+
+The packaged local server was exercised with an isolated PowerQA identity. It
+reported 240000 J and 1200 W while docked; Undock returned station space, then accepted
+warp reduced charge to 210000 J and entered in_transit. No user world was used.
+Native inspection failed with macOS ScreenCaptureKit error -3811 before an app
+binding could be established, so packaged button appearance/readability remains
+unverified even though the full-app interaction tests pass.
+
+Warp pays an upfront reservation, not repeated continuous charges during transit.
+Reactors stay running while parked/offline, capped by capacity. Mining and attack
+drones draw from their owner's capacitor as a prototype powered-link rule. No
+ship combat guns, heat damage, engine fuel or configurable power buses are claimed.
