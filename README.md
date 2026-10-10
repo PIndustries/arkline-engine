@@ -54,7 +54,7 @@ pilot name in both clients unless you deliberately transfer its credential.
 6. Close and restart the server, reconnect both pilots, and inspect the saved state.
 7. Cancel the remaining order to return its ore to the seller's cargo.
 
-Warp includes a two-second drive warm-up, acceleration, cruise and deceleration; travel time depends on distance. Mining is limited to 100 units per command and a
+Warp includes a two-second alignment/warm-up, visible local launch, acceleration, cruise, deceleration and final approach; travel time depends on distance. Routes over 300 km reserve six seconds each for the first and last 30 km. Mining is limited to 100 units per command and a
 one-second cooldown. Cargo holds 1,000 units; escrow is separate. Cancelling an
 order requires room to return its ore. The initial global reserve is 100,000 ore, divided across 108 rocks in three systems.
 

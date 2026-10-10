@@ -62,7 +62,12 @@ There is no collision damage, combat, module fitting, physical mass/inertia
 upgrade system, ship-computer runtime or distributed simulation authority.
 Asteroid locks are immediate, single-target locks; extraction remains one
 server-confirmed batch per activation, not an automatic repeating module.
-Warp warm-up and gate transition durations are fixed preview rules.
+Warp alignment/warm-up and gate transition durations are fixed preview rules.
+Long warps include a six-second local launch and six-second terminal approach.
+The ship crosses the first and final 30 km continuously, with matched velocity
+at phase boundaries. The direction-aligned tunnel is optical feedback, not a
+replacement for moving through authoritative world coordinates. Alignment is a
+fixed turn during warm-up; ship mass/agility and warp disruption are not modeled.
 
 ## Command-client testing
 

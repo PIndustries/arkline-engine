@@ -522,7 +522,18 @@ impl Cockpit {
                 return (
                     phase.into(),
                     format!(
-                        "To {destination} · {:.1}s remaining",
+                        "To {destination} · {} remaining · {:.1}s",
+                        pilot
+                            .flight
+                            .as_ref()
+                            .and_then(|f| f.warp.as_ref())
+                            .map_or_else(
+                                || "—".into(),
+                                |path| format_distance(distance_m(
+                                    motion::position(&pilot, now),
+                                    path.target
+                                ))
+                            ),
                         arrives_at_ms.saturating_sub(now) as f32 / 1000.0
                     ),
                     Some(progress),
@@ -833,31 +844,29 @@ impl Cockpit {
                 .as_ref()?
                 .pilots
                 .iter()
-                .find(|p| p.name == *name && p.system_id == self.current_system())?
-                .flight
-                .as_ref()
-                .map(|f| f.position),
+                .find(|p| p.name == *name && p.system_id == self.current_system())
+                .map(|p| motion::position(p, self.presentation_time())),
         }
     }
     fn navigation_controls(&mut self, ui: &mut egui::Ui) {
         let target = self.selected_target();
         let enabled = self.can_fly() && target.is_some();
         if let Some(own) = self.own() {
-            if let (Some(flight), Some(position)) = (own.flight.as_ref(), self.selected_position())
-            {
+            if let Some(position) = self.selected_position() {
+                let own_position = motion::position(&own, self.presentation_time());
                 ui.colored_label(
                     self.accent(),
                     if let Some(asteroid) = self.selected_asteroid() {
                         format!(
                             "Surface {}",
                             format_distance(
-                                (distance_m(flight.position, position) - asteroid.radius).max(0.0)
+                                (distance_m(own_position, position) - asteroid.radius).max(0.0)
                             )
                         )
                     } else {
                         format!(
                             "Range {}",
-                            format_distance(distance_m(flight.position, position))
+                            format_distance(distance_m(own_position, position))
                         )
                     },
                 );
@@ -1131,12 +1140,16 @@ impl Cockpit {
                         } else {
                             "Ship"
                         },
-                        p.flight.as_ref().map(|f| f.position),
+                        p.flight
+                            .as_ref()
+                            .map(|_| motion::position(p, self.presentation_time())),
                     ));
                 }
             }
         }
-        let own_position = self.own().and_then(|p| p.flight.map(|f| f.position));
+        let own_position = self
+            .own()
+            .map(|p| motion::position(&p, self.presentation_time()));
         rows.sort_by(|a, b| {
             let da = own_position
                 .zip(a.3)
@@ -1650,7 +1663,13 @@ impl Cockpit {
                 let direction = pilot
                     .flight
                     .as_ref()
-                    .map(|f| Vec2::new(f.heading[0] as f32, f.heading[2] as f32).normalized())
+                    .map(|f| {
+                        let heading = f
+                            .warp
+                            .as_ref()
+                            .map_or(f.heading, |path| sample_warp_heading(path, server_now));
+                        Vec2::new(heading[0] as f32, heading[2] as f32).normalized()
+                    })
                     .filter(|v| v.length_sq() > 0.1)
                     .unwrap_or(Vec2::new(heading, 0.0));
                 let perpendicular = Vec2::new(-direction.y, direction.x);
@@ -1752,26 +1771,26 @@ impl Cockpit {
                             );
                         }
                     } else {
-                        let dir = -heading;
-                        let trail = if phase == "WARP ARRIVAL" {
+                        let dir = -direction;
+                        let trail = if matches!(phase, "WARP DECELERATING" | "WARP ARRIVAL") {
                             70.0 * (1.0 - progress) + 12.0
                         } else {
                             40.0 + progress * 32.0
                         };
                         paint.line_segment(
-                            [position, position + Vec2::new(dir * trail, 0.0)],
+                            [position, position + dir * trail],
                             Stroke::new(7.0, color.gamma_multiply(0.12)),
                         );
                         paint.line_segment(
-                            [position, position + Vec2::new(dir * trail, 0.0)],
+                            [position, position + dir * trail],
                             Stroke::new(2.5, color.gamma_multiply(0.8)),
                         );
                         for i in 0..7 {
                             let offset = (server_now as f32 * 0.06 + i as f32 * 13.0) % 72.0;
                             let y = ((i % 2) as f32 * 2.0 - 1.0) * (11.0 + (i / 2) as f32 * 7.0);
-                            let start = position + Vec2::new(dir * offset, y);
+                            let start = position + dir * offset + perpendicular * y;
                             paint.line_segment(
-                                [start, start + Vec2::new(dir * 16.0, 0.0)],
+                                [start, start + dir * 16.0],
                                 Stroke::new(1.0, color.gamma_multiply(0.35)),
                             );
                         }

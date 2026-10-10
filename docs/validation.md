@@ -152,3 +152,14 @@ The planet is now world-anchored. Presentation requests a frame every 16 ms, but
 frame-time benchmark or remote-network latency acceptance has been performed.
 The cockpit and world assets remain procedural prototype geometry; this is not
 final production art or a direct-steering flight simulator.
+
+## Visible warp travel — 26.10.9.6
+
+58 workspace tests pass, including local departure/arrival sampling, velocity
+continuity, legacy-path compatibility, alignment and camera rebasing checks.
+The real TCP three-system journey passed with the longer travel deadlines.
+Native cockpit captures show departure from station and the asteroid field
+approaching at 10.9 km, followed by 1.4 km at 1.1 km/s during terminal arrival.
+External view shows the ship inside the direction-aligned tunnel. Visual QA caught
+a legacy oversized launch hoop; it was removed from launch/arrival and replaced
+by a dim, thin warmup ring. Alignment is still a fixed-duration preview rule.

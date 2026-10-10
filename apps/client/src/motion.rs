@@ -94,9 +94,11 @@ pub fn warp_phase(pilot: &PilotView, now: u64) -> Option<(&'static str, f32)> {
     let elapsed = now.saturating_sub(path.started_at_ms);
     let phases = [
         ("WARP WARMUP", path.warmup_ms),
+        ("WARP LAUNCH", path.launch_ms),
         ("WARP ACCELERATING", path.acceleration_ms),
         ("WARP CRUISE", path.cruise_ms),
-        ("WARP ARRIVAL", path.acceleration_ms),
+        ("WARP DECELERATING", path.acceleration_ms),
+        ("WARP ARRIVAL", path.arrival_ms),
     ];
     let mut start = 0;
     for (name, duration) in phases {
@@ -171,6 +173,47 @@ mod tests {
         assert_ne!(position(&s.pilots[0], t), position(&s.pilots[0], t + 16));
         assert_eq!(position(&s.pilots[0], path.arrives_at_ms), path.target);
         assert_eq!(warp_phase(&s.pilots[0], 1001).unwrap().0, "WARP WARMUP");
+    }
+    #[test]
+    fn terminal_arrival_phase_uses_authoritative_deadline_and_keeps_moving() {
+        let mut s = snapshot(1000, 0.0);
+        let path = plan_warp([0.0; 3], [AU_METERS * 2.0, 0.0, 0.0], 1000);
+        assert!(path.arrival_ms > 0);
+        s.pilots[0].location = Location::InTransit {
+            destination: Destination::Belt,
+            arrives_at_ms: path.arrives_at_ms,
+        };
+        s.pilots[0].flight.as_mut().unwrap().warp = Some(path.clone());
+        let launch = path.started_at_ms + path.warmup_ms;
+        assert_eq!(
+            warp_phase(&s.pilots[0], launch).unwrap(),
+            ("WARP LAUNCH", 0.0)
+        );
+        assert_eq!(
+            warp_phase(&s.pilots[0], launch + path.launch_ms).unwrap().0,
+            "WARP ACCELERATING"
+        );
+        let start = path.arrives_at_ms - path.arrival_ms;
+        assert_eq!(
+            warp_phase(&s.pilots[0], start - 1).unwrap().0,
+            "WARP DECELERATING"
+        );
+        assert_eq!(
+            warp_phase(&s.pilots[0], start).unwrap(),
+            ("WARP ARRIVAL", 0.0)
+        );
+        assert!(
+            warp_phase(&s.pilots[0], start + path.arrival_ms / 2)
+                .unwrap()
+                .1
+                > 0.49
+        );
+        let a = position(&s.pilots[0], start + 100);
+        let b = position(&s.pilots[0], start + 116);
+        assert!(b[0] > a[0]);
+        assert!(path.target[0] - b[0] < path.arrival_distance_m);
+        assert!(warp_phase(&s.pilots[0], path.arrives_at_ms).is_none());
+        assert_eq!(position(&s.pilots[0], path.arrives_at_ms), path.target);
     }
     #[test]
     fn area_changes_do_not_lerp_across_universe() {

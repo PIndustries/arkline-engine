@@ -37,7 +37,9 @@ The server integrates manual flight at 10 Hz and persists position, velocity and
 heading. Warp and gate jumps use durable arrival timestamps. A gate transition
 moves the ship to its paired gate in another system. All three systems currently
 run in the same process and database; this is not distributed authority handoff.
-The client polls snapshots and applies bounded visual prediction.
+The client polls snapshots, buffers normal flight and samples the same durable
+warp trajectory as the server on every presentation frame. Warp effects represent
+that trajectory; they do not replace travel with a timed location swap.
 
 Asteroids have persistent IDs and individual remaining ore. Their reserves sum
 to the legacy global belt reserve. Migration splits only the existing reserve,

@@ -187,6 +187,16 @@ pub struct WarpTrajectory {
     pub acceleration_ms: u64,
     pub cruise_ms: u64,
     pub arrives_at_ms: u64,
+    #[serde(default)]
+    pub arrival_ms: u64,
+    #[serde(default)]
+    pub arrival_distance_m: f64,
+    #[serde(default)]
+    pub launch_ms: u64,
+    #[serde(default)]
+    pub launch_distance_m: f64,
+    #[serde(default)]
+    pub initial_heading: Option<[f64; 3]>,
 }
 /// A symmetric acceleration/cruise/deceleration trajectory with finite warmup.
 /// Durations round upward; sampling derives speed from the exact distance so
@@ -198,16 +208,23 @@ pub fn plan_warp(source: [f64; 3], target: [f64; 3], started_at_ms: u64) -> Warp
         .map(|(a, b)| (b - a).powi(2))
         .sum::<f64>()
         .sqrt();
-    let acceleration_seconds = (distance / WARP_ACCELERATION)
+    let arrival_ms = if distance > 300_000.0 { 6_000 } else { 0 };
+    let arrival_distance_m = if arrival_ms > 0 { 30_000.0 } else { 0.0 };
+    let launch_ms = arrival_ms;
+    let launch_distance_m = arrival_distance_m;
+    let main_distance = distance - arrival_distance_m - launch_distance_m;
+    let acceleration_seconds = (main_distance / WARP_ACCELERATION)
         .sqrt()
         .min(MAX_WARP_SPEED / WARP_ACCELERATION);
     let acceleration_ms = (acceleration_seconds * 1000.0).ceil().max(1.0) as u64;
     let cruise_ms =
-        ((distance / MAX_WARP_SPEED - acceleration_seconds).max(0.0) * 1000.0).ceil() as u64;
+        ((main_distance / MAX_WARP_SPEED - acceleration_seconds).max(0.0) * 1000.0).ceil() as u64;
     let arrives_at_ms = started_at_ms
         .saturating_add(WARP_WARMUP_MS)
         .saturating_add(2 * acceleration_ms)
-        .saturating_add(cruise_ms);
+        .saturating_add(cruise_ms)
+        .saturating_add(arrival_ms)
+        .saturating_add(launch_ms);
     WarpTrajectory {
         source,
         target,
@@ -216,6 +233,11 @@ pub fn plan_warp(source: [f64; 3], target: [f64; 3], started_at_ms: u64) -> Warp
         acceleration_ms,
         cruise_ms,
         arrives_at_ms,
+        arrival_ms,
+        arrival_distance_m,
+        launch_ms,
+        launch_distance_m,
+        initial_heading: None,
     }
 }
 /// Sample authoritative meters and meters/second without f32 precision loss.
@@ -230,6 +252,70 @@ pub fn sample_warp(path: &WarpTrajectory, now_ms: u64) -> ([f64; 3], [f64; 3]) {
     let acceleration = path.acceleration_ms.max(1) as f64 / 1000.0;
     let cruise = path.cruise_ms as f64 / 1000.0;
     let total = 2.0 * acceleration + cruise;
+    if path.arrival_ms > 0 && path.arrival_distance_m > 0.0 {
+        let delta: [f64; 3] = std::array::from_fn(|i| path.target[i] - path.source[i]);
+        let distance = delta.iter().map(|v| v * v).sum::<f64>().sqrt();
+        if distance <= 0.0 {
+            return (path.target, [0.0; 3]);
+        }
+        let direction = delta.map(|v| v / distance);
+        let terminal = path.arrival_distance_m.min(distance);
+        let launch = path.launch_distance_m.min((distance - terminal).max(0.0));
+        let launch_duration = path.launch_ms as f64 / 1000.0;
+        let launch_speed = if launch_duration > 0.0 {
+            2.0 * launch / launch_duration
+        } else {
+            0.0
+        };
+        if elapsed < launch_duration {
+            let u = (elapsed / launch_duration).clamp(0.0, 1.0);
+            let traveled = launch * (2.0 * u.powi(3) - u.powi(4));
+            let speed = launch_speed * (3.0 * u * u - 2.0 * u.powi(3));
+            return (
+                std::array::from_fn(|i| path.source[i] + direction[i] * traveled),
+                direction.map(|v| v * speed),
+            );
+        }
+        let elapsed = elapsed - launch_duration;
+        let duration = path.arrival_ms as f64 / 1000.0;
+        let entry_speed = 2.0 * terminal / duration;
+        if elapsed >= total {
+            let u = ((elapsed - total) / duration).clamp(0.0, 1.0);
+            let traveled = terminal * (2.0 * u - 2.0 * u.powi(3) + u.powi(4));
+            let speed = entry_speed * (1.0 - 3.0 * u * u + 2.0 * u.powi(3));
+            // Target-relative computation preserves sub-meter local precision.
+            return (
+                std::array::from_fn(|i| path.target[i] - direction[i] * (terminal - traveled)),
+                direction.map(|v| v * speed),
+            );
+        }
+        let main_distance = distance - terminal - launch;
+        let peak = (main_distance - 0.5 * (entry_speed + launch_speed) * acceleration)
+            / (acceleration + cruise);
+        let (traveled, speed) = if elapsed < acceleration {
+            (
+                launch_speed * elapsed
+                    + 0.5 * (peak - launch_speed) * elapsed * elapsed / acceleration,
+                launch_speed + (peak - launch_speed) * elapsed / acceleration,
+            )
+        } else if elapsed < acceleration + cruise {
+            (
+                0.5 * (peak + launch_speed) * acceleration + peak * (elapsed - acceleration),
+                peak,
+            )
+        } else {
+            let remaining = total - elapsed;
+            let decel = (peak - entry_speed) / acceleration;
+            (
+                main_distance - entry_speed * remaining - 0.5 * decel * remaining * remaining,
+                entry_speed + decel * remaining,
+            )
+        };
+        return (
+            std::array::from_fn(|i| path.source[i] + direction[i] * (launch + traveled)),
+            direction.map(|v| v * speed),
+        );
+    }
     let (fraction, rate) = if elapsed < acceleration {
         (
             0.5 * elapsed * elapsed / acceleration / (acceleration + cruise),
@@ -252,6 +338,57 @@ pub fn sample_warp(path: &WarpTrajectory, now_ms: u64) -> ([f64; 3], [f64; 3]) {
         std::array::from_fn(|i| path.source[i] + delta[i] * fraction.clamp(0.0, 1.0)),
         delta.map(|d| d * rate),
     )
+}
+
+/// Fixed-duration alignment uses a continuous spherical turn, including 180 degrees.
+pub fn sample_warp_heading(path: &WarpTrajectory, now_ms: u64) -> [f64; 3] {
+    fn normalize(v: [f64; 3]) -> [f64; 3] {
+        let n = v.iter().map(|x| x * x).sum::<f64>().sqrt();
+        if n < 1e-12 {
+            [1.0, 0.0, 0.0]
+        } else {
+            v.map(|x| x / n)
+        }
+    }
+    let target = normalize(std::array::from_fn(|i| path.target[i] - path.source[i]));
+    let Some(initial) = path.initial_heading else {
+        return target;
+    };
+    let initial = normalize(initial);
+    let t = (now_ms.saturating_sub(path.started_at_ms) as f64 / path.warmup_ms.max(1) as f64)
+        .clamp(0.0, 1.0);
+    let t = t * t * (3.0 - 2.0 * t);
+    let dot = initial
+        .iter()
+        .zip(target)
+        .map(|(a, b)| a * b)
+        .sum::<f64>()
+        .clamp(-1.0, 1.0);
+    if dot > 0.9995 {
+        return normalize(std::array::from_fn(|i| {
+            initial[i] * (1.0 - t) + target[i] * t
+        }));
+    }
+    if dot < -0.9995 {
+        let basis = if initial[1].abs() < 0.9 {
+            [0.0, 1.0, 0.0]
+        } else {
+            [1.0, 0.0, 0.0]
+        };
+        let perpendicular = normalize([
+            initial[1] * basis[2] - initial[2] * basis[1],
+            initial[2] * basis[0] - initial[0] * basis[2],
+            initial[0] * basis[1] - initial[1] * basis[0],
+        ]);
+        return normalize(std::array::from_fn(|i| {
+            initial[i] * (std::f64::consts::PI * t).cos()
+                + perpendicular[i] * (std::f64::consts::PI * t).sin()
+        }));
+    }
+    let angle = dot.acos();
+    normalize(std::array::from_fn(|i| {
+        (initial[i] * (angle * (1.0 - t)).sin() + target[i] * (angle * t).sin()) / angle.sin()
+    }))
 }
 
 pub const GENESIS_HASH: &str = "0000000000000000000000000000000000000000000000000000000000000000";
@@ -489,8 +626,14 @@ mod warp_tests {
                 previous = sample;
             }
             for boundary in [
-                1000 + path.warmup_ms + path.acceleration_ms,
-                1000 + path.warmup_ms + path.acceleration_ms + path.cruise_ms,
+                path.started_at_ms + path.warmup_ms + path.launch_ms,
+                path.started_at_ms + path.warmup_ms + path.launch_ms + path.acceleration_ms,
+                path.started_at_ms
+                    + path.warmup_ms
+                    + path.launch_ms
+                    + path.acceleration_ms
+                    + path.cruise_ms,
+                path.arrives_at_ms - path.arrival_ms,
             ] {
                 let a = sample_warp(&path, boundary - 1);
                 let b = sample_warp(&path, boundary + 1);
@@ -503,5 +646,67 @@ mod warp_tests {
             plan_warp([0.0; 3], [12.0 * AU_METERS, 0.0, 0.0], 0).arrives_at_ms
                 > plan_warp([0.0; 3], [2.0 * AU_METERS, 0.0, 0.0], 0).arrives_at_ms
         );
+    }
+}
+
+#[cfg(test)]
+mod local_warp_tests {
+    use super::*;
+    fn norm(v: [f64; 3]) -> f64 {
+        v.iter().map(|x| x * x).sum::<f64>().sqrt()
+    }
+    #[test]
+    fn launch_and_arrival_are_visible_continuous_nonstop_legs() {
+        let path = plan_warp([0.0; 3], [2.0 * AU_METERS, 0.0, 0.0], 1000);
+        assert_eq!(path.launch_ms, 6000);
+        assert_eq!(path.arrival_ms, 6000);
+        let launch_start = path.started_at_ms + path.warmup_ms;
+        let launch_end = launch_start + path.launch_ms;
+        let arrival_start = path.arrives_at_ms - path.arrival_ms;
+        let launch = sample_warp(&path, launch_end);
+        assert!((launch.0[0] - 30_000.0).abs() < 0.001);
+        assert!((launch.1[0] - 10_000.0).abs() < 0.001);
+        let arrival = sample_warp(&path, arrival_start);
+        assert!((path.target[0] - arrival.0[0] - 30_000.0).abs() < 0.001);
+        assert!((arrival.1[0] - 10_000.0).abs() < 0.001);
+        let departure_middle = sample_warp(&path, launch_start + 3000);
+        assert!(departure_middle.0[0] > 5000.0 && departure_middle.0[0] < 6000.0);
+        let arrival_middle = sample_warp(&path, arrival_start + 3000);
+        assert!((path.target[0] - arrival_middle.0[0] - 5625.0).abs() < 0.001);
+        for t in (launch_start + 100..path.arrives_at_ms).step_by(100) {
+            assert!(
+                norm(sample_warp(&path, t).1) > 0.0,
+                "ship stops between phases at {t}"
+            );
+        }
+        assert_eq!(
+            sample_warp(&path, path.arrives_at_ms),
+            (path.target, [0.0; 3])
+        );
+        // Main-profile one-sided velocity extrapolation lands on the same
+        // 10 km/s boundary value; no hidden zero-speed stop/restart.
+        let before = sample_warp(&path, arrival_start - 1);
+        let peak = sample_warp(&path, launch_end + path.acceleration_ms).1[0];
+        let decel = (peak - 10_000.0) / (path.acceleration_ms as f64 / 1000.0);
+        assert!((before.1[0] - decel * 0.001 - arrival.1[0]).abs() < 0.1);
+    }
+    #[test]
+    fn old_paths_remain_legacy_and_alignment_handles_opposite_headings() {
+        let old = serde_json::json!({"source":[0.0,0.0,0.0],"target":[1000.0,0.0,0.0],"started_at_ms":0,"warmup_ms":2000,"acceleration_ms":1000,"cruise_ms":0,"arrives_at_ms":4000});
+        let path: WarpTrajectory = serde_json::from_value(old).unwrap();
+        assert_eq!(path.arrival_ms, 0);
+        assert_eq!(path.launch_ms, 0);
+        assert_eq!(
+            sample_warp(&path, 3000),
+            ([500.0, 0.0, 0.0], [1000.0, 0.0, 0.0])
+        );
+        let mut path = plan_warp([0.0; 3], [AU_METERS, 0.0, 0.0], 0);
+        path.initial_heading = Some([-1.0, 0.0, 0.0]);
+        assert_eq!(sample_warp_heading(&path, 0), [-1.0, 0.0, 0.0]);
+        let middle = sample_warp_heading(&path, 1000);
+        assert!((norm(middle) - 1.0).abs() < 1e-10);
+        assert!(middle[0].abs() < 0.001);
+        let end = sample_warp_heading(&path, 2000);
+        assert!((end[0] - 1.0).abs() < 1e-10);
     }
 }

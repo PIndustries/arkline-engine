@@ -125,6 +125,17 @@ fn ship_orientation(pilot: &PilotView) -> Quat {
         })
 }
 
+fn ship_orientation_at(pilot: &PilotView, now: u64) -> Quat {
+    if matches!(pilot.location, Location::InTransit { .. }) {
+        if let Some(path) = pilot.flight.as_ref().and_then(|f| f.warp.as_ref()) {
+            if let Some(rotation) = orientation(arkline_protocol::sample_warp_heading(path, now)) {
+                return rotation;
+            }
+        }
+    }
+    ship_orientation(pilot)
+}
+
 fn navigation_destination(
     pilot: &PilotView,
     snapshot: &Snapshot,
@@ -228,11 +239,10 @@ impl FlightView {
         let space = Space {
             origin: own_pilot.map_or(STATION_POSITION, |p| display_position(p, now)),
         };
-        self.target += space.scene(self.space.origin);
+        let warp_tracking =
+            own_pilot.is_some_and(|p| matches!(p.location, Location::InTransit { .. }));
+        self.target = rebased_camera_target(self.target, self.space, space, warp_tracking);
         self.space = space;
-        if self.target.length() > 1200.0 {
-            self.target = Vec3::ZERO;
-        }
         let cockpit = matches!(mode, super::ViewMode::Cockpit);
 
         egui::Window::new("Flight camera")
@@ -356,14 +366,18 @@ impl FlightView {
             Vec3::ZERO
         };
         let dt = ui.input(|i| i.stable_dt).min(0.1);
-        self.target = self.target.lerp(desired, 1.0 - (-dt * 8.0).exp());
+        self.target = if warp_tracking {
+            Vec3::ZERO
+        } else {
+            self.target.lerp(desired, 1.0 - (-dt * 8.0).exp())
+        };
         let external_eye = self.target
             + Vec3::new(
                 self.yaw.sin() * self.pitch.cos(),
                 self.pitch.sin(),
                 self.yaw.cos() * self.pitch.cos(),
             ) * self.distance;
-        let rotation = own_pilot.map_or(Quat::IDENTITY, ship_orientation);
+        let rotation = own_pilot.map_or(Quat::IDENTITY, |p| ship_orientation_at(p, now));
         let (eye, view) = if cockpit {
             cockpit_camera(
                 own_pilot.map_or(Vec3::ZERO, |p| space.position(p, now)),
@@ -512,7 +526,7 @@ impl FlightView {
                             let model = transform(
                                 space.position(pilot, now),
                                 Vec3::ONE,
-                                ship_orientation(pilot),
+                                ship_orientation_at(pilot, now),
                             );
                             for (mesh, part) in ship_geometry(model) {
                                 targets.push((
@@ -1141,6 +1155,7 @@ impl Renderer {
             rock_mesh(),
             hull(),
             sphere_with_resolution(false, 72, 48),
+            torus(1.0, 0.008),
         ] {
             let vao = gl.create_vertex_array()?;
             let buffer = gl.create_buffer()?;
@@ -1292,7 +1307,7 @@ impl Renderer {
             let ship = transform(
                 space.position(pilot, frame.now),
                 Vec3::ONE,
-                ship_orientation(pilot),
+                ship_orientation_at(pilot, frame.now),
             );
             self.draw(
                 4,
@@ -1348,8 +1363,8 @@ impl Renderer {
             }
         }
         self.paint_effects(frame);
+        self.paint_warp_tunnel(frame);
         if frame.cockpit {
-            self.paint_cockpit_warp(frame);
             self.paint_cockpit(frame);
         }
         gl.disable(glow::DEPTH_TEST);
@@ -1358,19 +1373,14 @@ impl Renderer {
         gl.use_program(None);
     }
     /// Additive, depth-tested effects do not write depth or obscure UI meshes.
-    unsafe fn paint_cockpit_warp(&self, frame: &Frame) {
+    unsafe fn paint_warp_tunnel(&self, frame: &Frame) {
         let Some(pilot) = frame.pilots.iter().find(|p| p.name == frame.own) else {
             return;
         };
         let Some((phase, progress)) = super::motion::warp_phase(pilot, frame.now) else {
             return;
         };
-        let intensity = match phase {
-            "WARP ACCELERATING" => progress,
-            "WARP CRUISE" => 1.0,
-            "WARP ARRIVAL" => 1.0 - progress,
-            _ => 0.0,
-        };
+        let intensity = warp_tunnel_intensity(phase, progress);
         if intensity <= 0.0 {
             return;
         }
@@ -1378,29 +1388,44 @@ impl Renderer {
         self.gl
             .blend_func_separate(glow::ONE, glow::ONE, glow::ZERO, glow::ONE);
         self.gl.depth_mask(false);
-        let base = Mat4::from_rotation_translation(frame.rotation, frame.eye);
-        // Optical transit feedback only: peripheral streaks never represent
-        // physical objects and have no selection or collision geometry.
-        for i in 0..52 {
+        let base = Mat4::from_rotation_translation(
+            ship_orientation_at(pilot, frame.now),
+            frame.space.position(pilot, frame.now),
+        );
+        // A ship-aligned optical transit volume. Bands flow from the forward
+        // vanishing point past the observer; none are physical world objects.
+        let clock = (frame.now % 6000) as f32 / 6000.0;
+        for i in 0..7 {
+            let travel = (clock * 3.0 + i as f32 / 7.0).fract();
+            let x = 240.0 - travel * 480.0;
+            let radius = 28.0 + 3.0 * (travel * std::f32::consts::TAU).sin();
+            let alpha = intensity * (1.0 - (x / 260.0).abs()).max(0.0);
+            self.draw(
+                6,
+                base * transform(
+                    Vec3::X * x,
+                    Vec3::splat(radius),
+                    Quat::from_rotation_z(std::f32::consts::FRAC_PI_2),
+                ),
+                Vec3::new(0.025, 0.07, 0.11) * alpha,
+                1.3,
+            );
+        }
+        for i in 0..96 {
             let seed = i as f32;
-            let angle = seed * 2.39996;
-            let travel = ((frame.now % 1700) as f32 / 1700.0 + seed * 0.61803).fract();
-            let x = 75.0 - travel * 66.0;
-            let radius = 8.0 + (i % 7) as f32 * 1.7;
+            let travel = (clock * 4.0 + seed * 0.61803).fract();
+            let angle = seed * 2.39996 + clock * 0.15;
+            let radius = 20.0 + (i % 9) as f32 * 2.4;
+            let x = 280.0 - travel * 560.0;
             let start =
                 base.transform_point3(Vec3::new(x, angle.sin() * radius, angle.cos() * radius));
             let end = base.transform_point3(Vec3::new(
-                x + 3.0 + intensity * 8.0,
+                x + 12.0 + intensity * 26.0,
                 angle.sin() * radius,
                 angle.cos() * radius,
             ));
-            if let Some(model) = segment_model(start, end, 0.018 + intensity * 0.018) {
-                self.draw(
-                    0,
-                    model,
-                    Vec3::new(0.055, 0.16, 0.23) * intensity * (1.0 - travel * 0.5),
-                    1.0,
-                );
+            if let Some(model) = segment_model(start, end, 0.045 + intensity * 0.04) {
+                self.draw(0, model, Vec3::new(0.10, 0.28, 0.40) * intensity, 1.4);
             }
         }
         self.gl.depth_mask(true);
@@ -1505,7 +1530,11 @@ impl Renderer {
             if ship_position.distance(frame.eye) > 1100.0 {
                 continue;
             }
-            let ship = transform(ship_position, Vec3::ONE, ship_orientation(pilot));
+            let ship = transform(
+                ship_position,
+                Vec3::ONE,
+                ship_orientation_at(pilot, frame.now),
+            );
             let warp = super::motion::warp_phase(pilot, frame.now);
             if let Location::Jumping { arrives_at_ms, .. } = pilot.location {
                 let progress = 1.0
@@ -1531,9 +1560,13 @@ impl Renderer {
             if pilot.location != Location::Docked {
                 let (length, intensity) = match warp {
                     Some(("WARP WARMUP", progress)) => (3.8 + progress * 4.5, 1.4 + progress),
+                    Some(("WARP LAUNCH", progress)) => (5.0 + progress * 5.0, 2.0 + progress),
                     Some(("WARP ACCELERATING", _)) => (12.0, 3.2),
                     Some(("WARP CRUISE", _)) => (10.0, 2.7),
-                    Some(("WARP ARRIVAL", progress)) => (10.0 - progress * 6.0, 2.7 - progress),
+                    Some(("WARP DECELERATING", progress)) => {
+                        (10.0 - progress * 6.0, 2.7 - progress)
+                    }
+                    Some(("WARP ARRIVAL", progress)) => (4.0 - progress * 3.0, 1.7 - progress),
                     _ => {
                         let speed = pilot.flight.as_ref().map_or(0.0, |flight| {
                             flight
@@ -1568,24 +1601,17 @@ impl Renderer {
                 }
             }
             if let Some((stage, progress)) = warp {
-                if stage == "WARP WARMUP" || stage == "WARP LAUNCH" || stage == "WARP ARRIVAL" {
-                    let (radius, alpha) = match stage {
-                        "WARP WARMUP" => (3.3 + progress * 2.2, 0.30 + progress * 0.55),
-                        "WARP LAUNCH" => (5.5 + progress * 12.0, 1.0 - progress * 0.6),
-                        _ => (
-                            13.0 - progress * 9.0,
-                            0.75 * (std::f32::consts::PI * progress).sin().max(0.15),
-                        ),
-                    };
+                if stage == "WARP WARMUP" {
+                    let radius = 3.3 + progress * 1.2;
                     self.draw(
-                        1,
+                        6,
                         ship * transform(
                             Vec3::new(-1.0, 0.0, 0.0),
-                            Vec3::new(radius, 0.50, radius),
+                            Vec3::splat(radius),
                             Quat::from_rotation_z(std::f32::consts::FRAC_PI_2),
                         ),
-                        Vec3::new(0.12, 0.55, 0.95) * alpha,
-                        1.5,
+                        Vec3::new(0.02, 0.08, 0.12) * (0.2 + progress * 0.3),
+                        0.4,
                     );
                 }
                 if stage != "WARP WARMUP" {
@@ -1728,6 +1754,29 @@ impl Renderer {
         self.gl.delete_vertex_array(self.empty);
         self.gl.delete_program(self.program);
         self.gl.delete_program(self.background);
+    }
+}
+fn rebased_camera_target(target: Vec3, old: Space, new: Space, warp: bool) -> Vec3 {
+    if warp {
+        return Vec3::ZERO;
+    }
+    let target = target + new.scene(old.origin);
+    if target.length() > 1200.0 {
+        Vec3::ZERO
+    } else {
+        target
+    }
+}
+fn warp_tunnel_intensity(phase: &str, progress: f32) -> f32 {
+    let p = progress.clamp(0.0, 1.0);
+    match phase {
+        "WARP WARMUP" => 0.18 * p * p,
+        "WARP LAUNCH" => 0.18 + 0.22 * p,
+        "WARP ACCELERATING" => 0.4 + 0.6 * p,
+        "WARP CRUISE" => 1.0,
+        "WARP DECELERATING" => 1.0 - 0.85 * p,
+        "WARP ARRIVAL" => 0.15 * (1.0 - p),
+        _ => 0.0,
     }
 }
 fn cockpit_camera(ship: Vec3, rotation: Quat) -> (Vec3, Mat4) {
@@ -2105,6 +2154,22 @@ vec2 sun=p-vec2(0.84,0.82);float flare=0.0018/(dot(sun,sun)+0.006);c+=vec3(0.17,
 mod tests {
     use super::*;
     #[test]
+    fn warp_camera_tracks_rebased_ship_without_threshold_jumps() {
+        let old = Space { origin: [0.0; 3] };
+        for meters in [1.0, 100000.0, 1.0e10, arkline_protocol::AU_METERS] {
+            let new = Space {
+                origin: [meters, 0.0, 0.0],
+            };
+            assert_eq!(
+                rebased_camera_target(Vec3::new(2.0, 3.0, 4.0), old, new, true),
+                Vec3::ZERO
+            );
+        }
+        assert_eq!(warp_tunnel_intensity("WARP WARMUP", 0.0), 0.0);
+        assert_eq!(warp_tunnel_intensity("WARP CRUISE", 0.5), 1.0);
+        assert_eq!(warp_tunnel_intensity("WARP ARRIVAL", 1.0), 0.0);
+    }
+    #[test]
     fn cockpit_heading_and_au_relative_precision() {
         let origin = [
             8.0 * arkline_protocol::AU_METERS,
@@ -2341,6 +2406,7 @@ mod tests {
             rock_mesh(),
             hull(),
             sphere_with_resolution(false, 72, 48),
+            torus(1.0, 0.008),
         ] {
             assert!(!mesh.is_empty());
             assert_eq!(mesh.len() % 3, 0);

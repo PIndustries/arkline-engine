@@ -186,6 +186,9 @@ pub(super) fn begin_warp(p: &mut Pilot, destination: Destination, now: u64) {
         started_ms: now,
     });
     f.warp = Some(plan_warp(f.position, berth(&p.view.name, destination), now));
+    if let Some(path) = &mut f.warp {
+        path.initial_heading = Some(f.heading);
+    }
     f.mode = NavigationMode::Stop;
     f.velocity = [0.0; 3];
     f.updated_at_ms = now;
@@ -236,7 +239,7 @@ pub(super) fn advance(world: &mut World, now: u64) {
             let (position, velocity) = sample_warp(trajectory, now);
             f.position = position;
             f.velocity = velocity;
-            f.heading = unit(sub(trajectory.target, trajectory.source));
+            f.heading = sample_warp_heading(trajectory, now);
             f.updated_at_ms = now;
             if now >= arrives_at_ms {
                 f.position = path.target;

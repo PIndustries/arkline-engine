@@ -29,7 +29,7 @@ impl Server {
             .spawn()
             .unwrap();
         let mut server = Self { process, address };
-        let deadline = Instant::now() + Duration::from_secs(30);
+        let deadline = Instant::now() + Duration::from_secs(45);
         loop {
             if TcpStream::connect(&server.address).is_ok() {
                 return server;
@@ -74,7 +74,7 @@ impl Client {
     }
     fn travel(&mut self, destination: Destination, pilot: &str) {
         self.ok(Request::Warp { destination });
-        let deadline = Instant::now() + Duration::from_secs(30);
+        let deadline = Instant::now() + Duration::from_secs(45);
         loop {
             let snap = self.ok(Request::Snapshot).snapshot.unwrap();
             if !matches!(
