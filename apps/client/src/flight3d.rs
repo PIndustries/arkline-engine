@@ -824,7 +824,7 @@ impl FlightView {
                             targets.push((
                                 super::SelectedObject::Asteroid(asteroid.id),
                                 rock_mesh(),
-                                asteroid_model(asteroid, space),
+                                asteroid_model(asteroid, space, now),
                             ));
                         }
                         for prop in snapshot.surface_props.iter().filter(|p| {
@@ -1817,7 +1817,7 @@ impl Renderer {
             } else {
                 Vec3::new(0.36, 0.29, 0.18)
             };
-            self.draw(3, asteroid_model(asteroid, space), color, 0.0);
+            self.draw(3, asteroid_model(asteroid, space, frame.now), color, 0.0);
         }
         for gate in frame
             .gates
@@ -2299,7 +2299,7 @@ impl Renderer {
                     {
                         continue;
                     }
-                    let Some(impact) = mining_impact(source, asteroid, space) else {
+                    let Some(impact) = mining_impact(source, asteroid, space, frame.now) else {
                         continue;
                     };
                     let pulse = 0.9
@@ -3317,12 +3317,31 @@ fn cached_rock() -> &'static [Vertex] {
         mesh
     })
 }
-fn asteroid_model(asteroid: &Asteroid, space: Space) -> Mat4 {
-    let f = (asteroid.id % 10000) as f32;
+/// Visual-only rigid rotation: all callers use the same presentation clock.
+/// Server positions, conservative spherical range bounds and ore remain unchanged.
+fn asteroid_rotation(id: u64, now: u64) -> Quat {
+    let seed = id
+        .wrapping_mul(6364136223846793005)
+        .wrapping_add(1442695040888963407);
+    let period_ms = 240_000 + seed % 360_000; // One turn every four to ten minutes.
+    let direction = if seed & 1 == 0 { 1.0 } else { -1.0 };
+    // Reduce the epoch before float conversion to retain smooth frame-scale steps.
+    let phase = (now % period_ms) as f64 / period_ms as f64 * std::f64::consts::TAU;
+    let axis = Vec3::new(
+        0.37 + (seed % 7) as f32 / 7.0,
+        0.65,
+        0.23 + (seed % 11) as f32 / 11.0,
+    )
+    .normalize();
+    let f = (id % 10000) as f32;
+    Quat::from_euler(glam::EulerRot::XYZ, f * 0.2, f * 0.4, f)
+        * Quat::from_axis_angle(axis, phase as f32 * direction)
+}
+fn asteroid_model(asteroid: &Asteroid, space: Space, now: u64) -> Mat4 {
     transform(
         space.scene(asteroid.position),
         Vec3::splat(asteroid.radius as f32 / 100.0),
-        Quat::from_euler(glam::EulerRot::XYZ, f * 0.2, f * 0.4, f),
+        asteroid_rotation(asteroid.id, now),
     )
 }
 fn gate_models(gate: &Stargate, space: Space) -> [Mat4; 2] {
@@ -3342,12 +3361,12 @@ fn gate_parts(gate: &Stargate, space: Space) -> Vec<(Vec<Vertex>, Mat4)> {
         .map(|model| (mesh.clone(), model))
         .collect()
 }
-fn mining_impact(source: Vec3, asteroid: &Asteroid, space: Space) -> Option<Vec3> {
+fn mining_impact(source: Vec3, asteroid: &Asteroid, space: Space, now: u64) -> Option<Vec3> {
     let direction = (space.scene(asteroid.position) - source).normalize_or_zero();
     ray_mesh_hit(
         source,
         direction,
-        asteroid_model(asteroid, space),
+        asteroid_model(asteroid, space, now),
         cached_rock(),
     )
     .map(|d| source + direction * d)
@@ -3947,7 +3966,7 @@ mod tests {
                 }
             }
             std::hint::black_box(sphere(true));
-            std::hint::black_box(mining_impact(source, &rock, space));
+            std::hint::black_box(mining_impact(source, &rock, space, 0));
         }
         let uncached = start.elapsed();
         let start = std::time::Instant::now();
@@ -3956,7 +3975,7 @@ mod tests {
             for gate in &gates {
                 std::hint::black_box(gate_models(gate, space));
             }
-            std::hint::black_box(mining_impact(source, &rock, space));
+            std::hint::black_box(mining_impact(source, &rock, space, 0));
         }
         eprintln!("CPU render preparation500 iterations: reconstructed uncached {:?}; cached {:?}. Station draws {} -> {}",uncached,start.elapsed(),station_parts(space).len(),batches.len());
     }
@@ -4261,6 +4280,40 @@ mod tests {
         assert!(segment_model(start, start, 0.05).is_none());
     }
     #[test]
+    fn asteroid_spin_is_slow_epoch_stable_and_shared_by_picking_and_beams() {
+        let rock = arkline_protocol::asteroid_catalog(10000).remove(0);
+        let space = Space {
+            origin: rock.position,
+        };
+        let now = 1_792_000_000_000;
+        let start = asteroid_rotation(rock.id, now);
+        let next = asteroid_rotation(rock.id, now + 16);
+        assert_eq!(start, asteroid_rotation(rock.id, now));
+        assert!(start.angle_between(asteroid_rotation(rock.id, now + 10_000)) > 0.08);
+        assert!(start.angle_between(next) < 0.002);
+        let seed = rock
+            .id
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        let period = 240_000 + seed % 360_000;
+        assert!(
+            asteroid_rotation(rock.id, period - 1)
+                .angle_between(asteroid_rotation(rock.id, period + 1))
+                < 0.002
+        );
+        for time in [0, now, now + 10_000, u64::MAX] {
+            let model = asteroid_model(&rock, space, time);
+            assert_eq!(model.transform_point3(Vec3::ZERO), Vec3::ZERO);
+            assert!(cached_rock().iter().all(
+                |v| model.transform_point3(v.p).length() <= rock.radius as f32 / 100.0 + 0.001
+            ));
+            let source = Vec3::Z * (rock.radius as f32 / 100.0 + 20.0);
+            let hit = ray_mesh_hit(source, -Vec3::Z, model, cached_rock()).unwrap();
+            let beam = mining_impact(source, &rock, space, time).unwrap();
+            assert!(beam.distance(source - Vec3::Z * hit) < 0.0001);
+        }
+    }
+    #[test]
     fn mining_targets_exact_authoritative_asteroid() {
         for asteroid in arkline_protocol::asteroid_catalog(10000) {
             let space = Space {
@@ -4268,7 +4321,7 @@ mod tests {
             };
             let center = space.scene(asteroid.position);
             let source = center + Vec3::Z * 10.0;
-            let impact = mining_impact(source, &asteroid, space).unwrap();
+            let impact = mining_impact(source, &asteroid, space, 0).unwrap();
             assert!(impact.distance(center) <= asteroid.radius as f32 / 100.0 + 0.001);
             assert!(impact.distance(source) > 0.0);
         }
@@ -4309,7 +4362,7 @@ mod tests {
             let space = Space {
                 origin: asteroid.position,
             };
-            let model = asteroid_model(&asteroid, space);
+            let model = asteroid_model(&asteroid, space, 0);
             for v in &mesh {
                 assert!(
                     model

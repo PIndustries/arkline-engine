@@ -203,7 +203,11 @@ struct Synth {
     mix: Mix,
     rate: f32,
     phase: [f32; 4],
-    levels: [f32; 5],
+    levels: [f32; 7],
+    texture: [f32; 2],
+    modulation: f32,
+    output: f32,
+    voice_gain: f32,
     tones: [Tone; 16],
     random: u32,
 }
@@ -220,34 +224,37 @@ impl Synth {
             mix: Mix::default(),
             rate,
             phase: [0.; 4],
-            levels: [0.; 5],
+            levels: [0.; 7],
+            texture: [0.; 2],
+            modulation: 0.0,
+            output: 0.0,
+            voice_gain: 1.0,
             tones: [Tone::default(); 16],
             random: 0xaced1234,
         }
     }
     fn cue(&mut self, cue: Cue) {
         let (frequency, glide, duration, amplitude, noise) = match cue {
-            Cue::Connect => (380., 420., 0.45, 0.25, 0.),
-            Cue::Disconnect => (420., -250., 0.4, 0.2, 0.),
-            Cue::Undock => (80., 110., 0.7, 0.3, 0.1),
-            Cue::Dock => (190., -100., 0.55, 0.25, 0.05),
-            Cue::WarpCharge => (65., 280., 1.3, 0.35, 0.15),
-            Cue::WarpArrival => (400., -340., 0.8, 0.3, 0.2),
-            Cue::Jump => (100., 700., 1.0, 0.35, 0.3),
-            Cue::MiningCycle => (720., 180., 0.16, 0.22, 0.05),
-            Cue::DroneLaunch => (250., 350., 0.25, 0.23, 0.1),
-            Cue::DroneRecall => (500., -270., 0.3, 0.2, 0.),
-            Cue::DroneShot => (160., -100., 0.12, 0.3, 0.5),
-            Cue::Lock => (850., 160., 0.2, 0.2, 0.),
-            Cue::LowPower => (220., -60., 0.6, 0.25, 0.),
-            Cue::CargoFull => (660., -220., 0.45, 0.23, 0.),
-            Cue::Ui => (1100., -180., 0.045, 0.12, 0.),
+            Cue::Connect => (330., 165., 0.55, 0.16, 0.),
+            Cue::Disconnect => (330., -110., 0.5, 0.14, 0.),
+            Cue::Undock => (65., 65., 0.9, 0.18, 0.012),
+            Cue::Dock => (130., -65., 0.75, 0.16, 0.008),
+            Cue::WarpCharge => (55., 165., 1.6, 0.19, 0.018),
+            Cue::WarpArrival => (220., -165., 1.0, 0.18, 0.02),
+            Cue::Jump => (110., 330., 1.2, 0.2, 0.02),
+            Cue::MiningCycle => (440., 110., 0.28, 0.13, 0.),
+            Cue::DroneLaunch => (165., 165., 0.45, 0.14, 0.008),
+            Cue::DroneRecall => (330., -165., 0.5, 0.14, 0.),
+            Cue::DroneShot => (130., -65., 0.22, 0.18, 0.025),
+            Cue::Lock => (660., 165., 0.3, 0.12, 0.),
+            Cue::LowPower => (165., -35., 0.75, 0.16, 0.),
+            Cue::CargoFull => (440., -110., 0.6, 0.14, 0.),
+            Cue::Ui => (660., -110., 0.09, 0.075, 0.),
         };
-        let index = self
-            .tones
-            .iter()
-            .position(|t| t.elapsed >= t.duration)
-            .unwrap_or(0);
+        // Never reset an audible oscillator when the bounded voice pool is full.
+        let Some(index) = self.tones.iter().position(|t| t.elapsed >= t.duration) else {
+            return;
+        };
         self.tones[index] = Tone {
             frequency,
             glide,
@@ -273,16 +280,25 @@ impl Synth {
             unit(self.mix.engine) * unit(self.mix.effects) * active,
             unit(self.mix.mining) * unit(self.mix.effects) * active,
             unit(self.mix.warp) * unit(self.mix.effects) * active,
+            unit(self.mix.effects),
+            if self.mix.docked { 1.0 } else { 0.0 },
         ];
         for (level, target) in self.levels.iter_mut().zip(targets) {
-            *level += (target - *level) * (dt * 40.).min(1.);
+            *level += (target - *level) * (dt * 25.).min(1.);
         }
         self.random ^= self.random << 13;
         self.random ^= self.random >> 17;
         self.random ^= self.random << 5;
         let noise = self.random as f32 / u32::MAX as f32 * 2. - 1.;
+        // Two low-pass stages turn broadband random samples into a quiet
+        // mechanical texture instead of sending white-noise hiss to the device.
+        let texture_alpha = (std::f32::consts::TAU * 320.0 * dt).min(1.0);
+        self.texture[0] += (noise - self.texture[0]) * texture_alpha;
+        self.texture[1] += (self.texture[0] - self.texture[1]) * texture_alpha;
+        let texture = self.texture[1];
+        self.modulation = (self.modulation + 0.7 * dt).fract();
         let frequencies = [
-            if self.mix.docked { 43. } else { 31. },
+            31.0 + self.levels[6] * 12.0,
             55. + self.levels[2] * 90.,
             230. + self.levels[3] * 50.,
             70. + self.levels[4] * 620.,
@@ -291,27 +307,55 @@ impl Synth {
             *phase = (*phase + freq * dt).fract();
         }
         let tau = std::f32::consts::TAU;
-        let mut sample = self.levels[1] * ((self.phase[0] * tau).sin() * 0.075 + noise * 0.012);
+        let flutter = 0.94 + (self.modulation * tau).sin() * 0.06;
+        let mut sample = self.levels[1]
+            * ((self.phase[0] * tau).sin() * 0.05
+                + (self.phase[0] * tau * 3.0).sin() * 0.012
+                + texture * 0.008);
         sample += self.levels[2]
-            * ((self.phase[1] * tau).sin() * 0.18
-                + (self.phase[1] * tau * 2.).sin() * 0.045
-                + noise * 0.03);
-        sample += self.levels[3] * ((self.phase[2] * tau).sin() * 0.07 + noise * 0.065);
-        sample += self.levels[4] * ((self.phase[3] * tau).sin() * 0.12 + noise * 0.14);
+            * flutter
+            * ((self.phase[1] * tau).sin() * 0.14
+                + (self.phase[1] * tau * 2.0).sin() * 0.03
+                + texture * 0.015);
+        sample += self.levels[3]
+            * ((self.phase[2] * tau).sin() * 0.055
+                + (self.phase[2] * tau * 2.0).sin() * 0.012
+                + texture * 0.016);
+        sample += self.levels[4] * ((self.phase[3] * tau).sin() * 0.095 + texture * 0.025);
+        let voice_count = self
+            .tones
+            .iter()
+            .filter(|tone| tone.elapsed < tone.duration)
+            .count();
+        let voice_target = 1.0 / (voice_count.max(1) as f32).sqrt();
+        self.voice_gain += (voice_target - self.voice_gain) * (dt * 40.0).min(1.0);
+        let voice_gain = self.voice_gain;
         for tone in &mut self.tones {
             if tone.elapsed < tone.duration {
                 let progress = tone.elapsed / tone.duration;
                 tone.phase = (tone.phase + (tone.frequency + tone.glide * progress) * dt).fract();
-                let envelope = (tone.elapsed / 0.012).min(1.) * (1. - progress).powi(2);
-                sample += unit(self.mix.effects)
+                let attack = (tone.elapsed / 0.025).min(1.0);
+                let release = ((tone.duration - tone.elapsed) / 0.08).min(1.0);
+                let envelope = (0.5 - 0.5 * (attack * std::f32::consts::PI).cos())
+                    * (0.5 - 0.5 * (release * std::f32::consts::PI).cos())
+                    * (1.0 - progress * 0.65);
+                sample += self.levels[5]
+                    * voice_gain
                     * tone.amplitude
                     * envelope
-                    * ((tone.phase * tau).sin() * (1. - tone.noise) + noise * tone.noise);
+                    * ((tone.phase * tau).sin() * (1. - tone.noise) + texture * tone.noise);
                 tone.elapsed += dt;
             }
         }
-        let signal = sample * self.levels[0];
-        signal / (1. + signal.abs())
+        let signal = sample * self.levels[0] * 0.7;
+        // Headroom before a smooth safety limiter; tame any remaining transient
+        // harmonics without clipping or allocating inside the audio callback.
+        let limited = 0.8 * (signal / 0.8).tanh();
+        self.output += (limited - self.output) * (std::f32::consts::TAU * 2200.0 * dt).min(1.0);
+        if self.output.abs() < 1e-20 {
+            self.output = 0.0;
+        }
+        self.output
     }
 }
 #[cfg(test)]
@@ -358,6 +402,65 @@ mod tests {
         }
         assert!(heard);
         assert_eq!(synth.next(), 0.);
+    }
+    #[test]
+    fn steady_layers_have_low_high_frequency_energy_and_preserve_headroom() {
+        let mut synth = Synth::new(48000.0);
+        synth.mix = Mix {
+            master: 1.0,
+            effects: 1.0,
+            ambience: 1.0,
+            active: true,
+            engine: 1.0,
+            mining: 1.0,
+            warp: 1.0,
+            ..Mix::default()
+        };
+        for _ in 0..48000 {
+            synth.next();
+        }
+        let mut energy = 0.0;
+        let mut difference_energy = 0.0;
+        let mut previous = synth.next();
+        let mut peak = 0.0_f32;
+        for _ in 0..48000 {
+            let sample = synth.next();
+            energy += sample * sample;
+            difference_energy += (sample - previous).powi(2);
+            peak = peak.max(sample.abs());
+            previous = sample;
+        }
+        // White-noise static has difference energy around twice signal energy;
+        // this bound requires the layered mix to remain spectrally smooth.
+        assert!(
+            difference_energy / energy < 0.012,
+            "ratio {}",
+            difference_energy / energy
+        );
+        assert!(peak < 0.35, "peak {peak}");
+    }
+    #[test]
+    fn saturated_cue_pool_does_not_reset_an_audible_voice() {
+        let mut synth = Synth::new(48000.0);
+        for _ in 0..16 {
+            synth.cue(Cue::WarpCharge);
+        }
+        for _ in 0..4800 {
+            synth.next();
+        }
+        let elapsed = synth.tones[0].elapsed;
+        let phase = synth.tones[0].phase;
+        synth.cue(Cue::DroneShot);
+        assert_eq!(synth.tones[0].elapsed, elapsed);
+        assert_eq!(synth.tones[0].phase, phase);
+        let mut previous = synth.next();
+        let mut step = 0.0_f32;
+        for _ in 0..24000 {
+            let sample = synth.next();
+            step = step.max((sample - previous).abs());
+            previous = sample;
+        }
+        assert!(step < 0.015, "transient step {step}");
     }
     #[test]
     #[ignore = "Explicit invocation plays procedural sound on the actual default device"]

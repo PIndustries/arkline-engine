@@ -8,6 +8,8 @@ pub(super) struct Job {
     home_system_id: u32,
     stage_started_ms: u64,
     drones_launched: u8,
+    #[serde(default)]
+    initial_cargo: u64,
 }
 pub(super) fn authorize(w: &World, actor: &str, worker: &str) -> Result<()> {
     ensure!(w.pilots.contains_key(worker), "worker pilot not found");
@@ -24,15 +26,10 @@ pub(super) fn start(
     units: u64,
     now: u64,
 ) -> Result<()> {
-    let p = &w.pilots[name].view;
+    let p = w.pilots[name].view.clone();
     ensure!(
-        p.location == Location::Docked,
-        "resource job must start docked"
-    );
-    ensure!(p.ore == 0, "resource job requires empty active cargo");
-    ensure!(
-        p.drones.is_empty(),
-        "recall drones before starting a resource job"
+        !matches!(p.location, Location::Jumping { .. }),
+        "wait for gate travel to finish before assigning a resource job"
     );
     ensure!(
         (1..=cargo_capacity(p.ship_class)).contains(&units),
@@ -44,6 +41,17 @@ pub(super) fn start(
             .is_none_or(|j| j.view.phase.is_terminal()),
         "pilot already has an active resource job"
     );
+    let initial_phase = if p.ore >= units {
+        if p.location == Location::Docked {
+            ResourceJobPhase::Depositing
+        } else {
+            ResourceJobPhase::ReturningToStation
+        }
+    } else if p.location == Location::Docked {
+        ResourceJobPhase::Undocking
+    } else {
+        ResourceJobPhase::TravelToBelt
+    };
     let id = w.next_job_id.max(1);
     w.next_job_id = id.checked_add(1).context("job ID exhausted")?;
     w.resource_jobs.insert(
@@ -52,6 +60,7 @@ pub(super) fn start(
             home_system_id: p.system_id,
             stage_started_ms: now,
             drones_launched: 0,
+            initial_cargo: p.ore,
             view: ResourceJob {
                 id,
                 pilot: name.into(),
@@ -60,12 +69,16 @@ pub(super) fn start(
                 mined_units: 0,
                 stored_units: 0,
                 target_id: None,
-                phase: ResourceJobPhase::Undocking,
-                message: "Preparing resource haul".into(),
+                phase: initial_phase,
+                message: "Preparing haul; existing cargo counts toward storage target".into(),
                 started_at_ms: now,
                 updated_at_ms: now,
             },
         },
+    );
+    stop(
+        w.pilots.get_mut(name).unwrap(),
+        "Resource job taking control",
     );
     Ok(())
 }
@@ -95,7 +108,10 @@ pub(super) fn cancel(w: &mut World, name: &str, now: u64, reason: &str) {
         j.view.message = reason.into();
         j.view.updated_at_ms = now;
         if let Some(p) = w.pilots.get_mut(name) {
-            j.view.mined_units = j.view.mined_units.max(p.view.ore);
+            j.view.mined_units = j
+                .view
+                .mined_units
+                .max(p.view.ore.saturating_sub(j.initial_cargo));
             stop(p, reason);
         }
     }
@@ -128,8 +144,9 @@ fn ready_power(j: &mut Job, p: &PilotView, cost: u64) -> bool {
 fn plan(w: &World, j: &mut Job, now: u64) -> Option<Request> {
     use ResourceJobPhase::*;
     let p = &w.pilots[&j.view.pilot].view;
-    if p.ore > j.view.mined_units {
-        j.view.mined_units = p.ore;
+    let newly_mined = p.ore.saturating_sub(j.initial_cargo);
+    if newly_mined > j.view.mined_units {
+        j.view.mined_units = newly_mined;
         j.stage_started_ms = now;
     }
     j.view.updated_at_ms = now;
@@ -158,6 +175,10 @@ fn plan(w: &World, j: &mut Job, now: u64) -> Option<Request> {
             Some(Request::Undock)
         }
         TravelToBelt => {
+            if !p.drones.is_empty() {
+                j.view.message = "Waiting for deployed drones to return before gathering".into();
+                return None;
+            }
             if in_transit {
                 j.view.message = "Warping to local asteroid belt".into();
                 return None;
@@ -454,7 +475,8 @@ pub(super) fn validate(w: &World) -> Result<()> {
             );
         }
         ensure!(
-            j.view.stored_units <= j.view.mined_units,
+            u128::from(j.view.stored_units)
+                <= u128::from(j.view.mined_units) + u128::from(j.initial_cargo),
             "job stored more than gathered"
         );
     }

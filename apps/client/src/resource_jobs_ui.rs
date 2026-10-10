@@ -59,14 +59,8 @@ impl Cockpit {
         {
             return Some("A job is already running. Cancel it first.");
         }
-        if p.location != Location::Docked {
-            return Some("Dock the selected ship before starting.");
-        }
-        if p.ore != 0 {
-            return Some("Deposit the selected ship's cargo first.");
-        }
-        if !Self::fleet(&p).is_empty() {
-            return Some("Recall the selected ship's drones first.");
+        if matches!(p.location, Location::Jumping { .. }) {
+            return Some("Wait for gate transit to finish before assigning a haul.");
         }
         if self.resource_goal == 0 || self.resource_goal > cargo_capacity(p.ship_class) {
             return Some("Goal must fit the selected ship's cargo capacity.");
@@ -300,7 +294,7 @@ impl Cockpit {
             }
             ui.small("Watch = camera only. Take manual control stops that ship's AI job.");
         });
-        ui.small("Undock → belt → two turrets + mining drones → return → station storage.");
+        ui.small("From dock or space → belt → mine → return → station storage.");
         let capacity = self
             .resource_ship()
             .map_or(1, |p| cargo_capacity(p.ship_class));
@@ -328,7 +322,9 @@ impl Cockpit {
         if let Some(reason) = self.resource_start_reason() {
             ui.colored_label(MUTED, reason);
         }
-        ui.small("Goal is a minimum; fixed cycles can overshoot. Only confirmed ore counts.");
+        ui.small(
+            "Goal includes ore aboard. Warp finishes and drones return before the haul proceeds.",
+        );
         if let Some(job) = self.own_resource_job().cloned() {
             ui.separator();
             ui.horizontal_wrapped(|ui| {

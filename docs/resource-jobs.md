@@ -8,10 +8,11 @@ to another player's inventory.
 ## One confirmed haul
 
 Select a ship, choose an ore goal, and press **Start gathering**. No model is needed
-for this button. The ship must be docked, have empty active cargo and no deployed
-drones. The goal must fit that hull's cargo capacity.
+for this button. Start docked or in space; orders during warp wait for arrival.
+Deployed drones are recalled before departure. Gate transit must finish before
+assignment. Existing cargo counts toward the goal, which must fit the hull.
 
-The server undocks the ship, travels to its current system's belt, acquires an
+The server undocks when needed, travels to its current system's belt, acquires an
 asteroid and mines using both turret slots and up to five mining drones. It recalls
 the drones before returning, docks at the starting system's station, and deposits
 ore in that pilot's personal station storage. This is one haul in one system; it

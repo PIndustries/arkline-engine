@@ -3845,7 +3845,22 @@ mod tests {
             });
         assert!(cockpit.resource_start_reason().is_none());
         cockpit.snapshot.as_mut().unwrap().pilots[1].ore = 1;
-        assert!(cockpit.resource_start_reason().is_some());
+        assert!(cockpit.resource_start_reason().is_none());
+        cockpit.snapshot.as_mut().unwrap().pilots[1].location = Location::Belt;
+        assert!(cockpit.resource_start_reason().is_none());
+        cockpit.snapshot.as_mut().unwrap().pilots[1].location = Location::InTransit {
+            destination: Destination::Belt,
+            arrives_at_ms: 5000,
+        };
+        assert!(cockpit.resource_start_reason().is_none());
+        cockpit.snapshot.as_mut().unwrap().pilots[1].location = Location::Jumping {
+            gate_id: 1,
+            arrives_at_ms: 5000,
+        };
+        assert!(cockpit
+            .resource_start_reason()
+            .unwrap()
+            .contains("gate transit"));
         cockpit.snapshot.as_mut().unwrap().pilots[1].ore = 0;
         cockpit.timeline_origin = Some(1000);
         cockpit.observed = Instant::now() - Duration::from_secs(3);

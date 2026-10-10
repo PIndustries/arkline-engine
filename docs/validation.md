@@ -571,3 +571,19 @@ Native inspection stopped sending inputs when the owner began interacting with
 the preview. Full native headlook/pan acceptance, device switching, microphone
 muting/TTS ducking perception, lighting quality and subjective flight/sound feel
 remain owner validation items. The preview remains private and ad-hoc signed.
+
+## Follow-up refinements — 26.10.10.19
+
+Gathering admission now allows dock, normal space and ordinary warp. Tests cover
+space initiation with deployed-drone recall, queued warp, carried cargo plus new
+mining, an already-complete haul returning directly, and ledger conservation.
+Gate transit remains an explicit temporary restriction. Client admission and model
+instructions match these server rules. The final client suite passes 115 tests
+with five opt-in tests ignored; the six server resource-job tests pass.
+
+Asteroid spin is deterministic, slow and local to each body; render, picking and
+beam impact use the same transform. Tests cover center/radius preservation,
+rotation timing and geometry agreement. Filtered noise, smoother cue envelopes,
+output filtering and additional mix headroom address reported static. Offline
+tests cover sample roughness, peak headroom and saturated-voice continuity.
+These tests do not substitute for owner listening feedback on the revised mix.

@@ -399,3 +399,83 @@ fn two_delegated_workers_finish_parallel_hauls_with_only_controller_online() {
         .unwrap();
     arkline_verifier::verify(&export, None).unwrap();
 }
+
+#[test]
+fn space_jobs_count_carried_cargo_but_only_report_new_extraction() {
+    let f = Fixture::new();
+    let mut s = Server::open(&f.0).unwrap();
+    let mut p = connect(&mut s, "SpaceWorker");
+    let mut now = 0;
+    ok(&mut s, &mut p, Request::Undock, now);
+    ok(
+        &mut s,
+        &mut p,
+        Request::LaunchDroneClass {
+            class: DroneClass::Recon,
+        },
+        now,
+    );
+    start(&mut s, &mut p, 150, now);
+    assert!(snapshot(&mut s, now).pilots[0]
+        .drones
+        .iter()
+        .all(|d| matches!(d.mode, DroneMode::Returning)));
+    fn finish(s: &mut Server, now: &mut u64) -> ResourceJob {
+        let deadline = *now + 240_000;
+        while *now < deadline {
+            *now += 100;
+            s.tick_at(*now).unwrap();
+            let snap = snapshot(s, *now);
+            let j = &snap.resource_jobs[0];
+            if j.phase.is_terminal() {
+                assert_eq!(j.phase, ResourceJobPhase::Completed, "{}", j.message);
+                return j.clone();
+            }
+        }
+        panic!("job did not finish");
+    }
+    let first = finish(&mut s, &mut now);
+    assert_eq!(first.mined_units, first.stored_units);
+    ok(&mut s, &mut p, Request::WithdrawOre { units: 50 }, now);
+    ok(&mut s, &mut p, Request::Undock, now);
+    let warp = ok(
+        &mut s,
+        &mut p,
+        Request::Warp {
+            destination: Destination::Belt,
+        },
+        now,
+    );
+    start(&mut s, &mut p, 100, now);
+    s.tick_at(now + 100).unwrap();
+    let queued = snapshot(&mut s, now + 100);
+    assert!(!queued.resource_jobs[0].phase.is_terminal());
+    assert!(matches!(
+        queued.pilots[0].location,
+        Location::InTransit { .. }
+    ));
+    let arrival = match warp.snapshot.unwrap().pilots[0].location {
+        Location::InTransit { arrives_at_ms, .. } => arrives_at_ms,
+        _ => panic!("expected warp"),
+    };
+    now = arrival;
+    s.tick_at(now).unwrap();
+    let partial = finish(&mut s, &mut now);
+    assert!(partial.mined_units > 0);
+    assert_eq!(partial.stored_units, partial.mined_units + 50);
+    ok(&mut s, &mut p, Request::WithdrawOre { units: 100 }, now);
+    ok(&mut s, &mut p, Request::Undock, now);
+    start(&mut s, &mut p, 50, now);
+    let carried = finish(&mut s, &mut now);
+    assert_eq!(carried.mined_units, 0);
+    assert_eq!(carried.stored_units, 100);
+    ok(&mut s, &mut p, Request::WithdrawOre { units: 50 }, now);
+    start(&mut s, &mut p, 50, now);
+    let docked = finish(&mut s, &mut now);
+    assert_eq!(docked.mined_units, 0);
+    assert_eq!(docked.stored_units, 50);
+    let ledger = ok(&mut s, &mut p, Request::ExportLedger, now)
+        .ledger
+        .unwrap();
+    arkline_verifier::verify(&ledger, None).unwrap();
+}

@@ -8,10 +8,11 @@ has played the model, validated the direction, and explicitly approved publicati
 An open-source license has not been selected. This preview is not a public MMO or a
 financial network.
 
-## Preview 26.10.10.18
+## Preview 26.10.10.19
 
 The ship computer retains short conversations and combines follow-up instructions
-with current ship telemetry. Mining and attack drones orbit their targets; owned
+with current ship telemetry. Gathering starts from space as well as a station;
+warp orders wait for arrival and existing cargo counts toward the haul. Mining and attack drones orbit their targets; owned
 drones also accept explicit orbit/hold orders. Flight has cargo-dependent
 acceleration and gradual braking, with thrusters driven by measured acceleration.
 Hold Shift and use arrow keys to look around the cockpit; release to recenter.
@@ -20,7 +21,9 @@ The 2D map supports cursor-centered wheel zoom and empty-space drag panning.
 [Game sound](docs/sound.md) follows confirmed machinery and lifecycle events,
 with volume, mute, test and retry controls in Settings. Directional lighting,
 material highlights and tone mapping improve the existing renderer; this is not
-HDR-display output. See [validation evidence](docs/validation.md) for tested
+HDR-display output. Asteroids rotate slowly with matching selection and mining
+impact geometry. The sound mix uses filtered machinery textures and softened
+transients. See [validation evidence](docs/validation.md) for tested
 behavior and remaining owner acceptance.
 
 ## Run the model
