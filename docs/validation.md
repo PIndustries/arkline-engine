@@ -280,8 +280,9 @@ as scene objects. Default rings are spaced every 5 km; zoom changes spacing to 1
 object guide shows horizontal projection, signed height and full center distance.
 The overlay can be hidden, and tactical zoom/orbit is retained across view changes.
 
-Client tests pass (54 passed, one ignored profiling test), including ring geometry,
-ship-center projection at astronomical origins, and pointer-based switching among
+Client tests pass (55 passed, one ignored profiling test), including ring geometry,
+ship-center projection at astronomical origins, maximum-zoom click-to-fly rays,
+and pointer-based switching among
 all four views without navigation side effects. Strict workspace Clippy passes.
 Native visual appearance and frame rate for this new mode have not been validated:
 the development Mac was locked during this run. The prior build's measured FPS does

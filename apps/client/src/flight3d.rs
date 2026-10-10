@@ -501,7 +501,7 @@ impl FlightView {
                 0.85
             },
             rect.width() / rect.height().max(1.0),
-            0.03,
+            if tactical { 1.0 } else { 0.03 },
             if tactical { 10000.0 } else { 1200.0 },
         );
         let vp = projection * view;
@@ -2150,7 +2150,7 @@ fn unproject_to_plane(
         return None;
     }
     let distance = (height - origin.y) / direction.y;
-    if distance <= 0.0 || distance > 1200.0 {
+    if distance <= 0.0 || distance > 10000.0 {
         return None;
     }
     let target = origin + direction * distance;
@@ -2164,15 +2164,17 @@ fn screen_ray(vp: Mat4, rect: egui::Rect, pointer: egui::Pos2) -> Option<(Vec3, 
     }
     let x = (pointer.x - rect.center().x) * 2.0 / rect.width();
     let y = (rect.center().y - pointer.y) * 2.0 / rect.height();
-    let inverse = vp.inverse();
-    let near = inverse * glam::Vec4::new(x, y, -1.0, 1.0);
-    let far = inverse * glam::Vec4::new(x, y, 1.0, 1.0);
+    // Invert in double precision to keep distant tactical picking stable.
+    let inverse = glam::DMat4::from_cols_array(&vp.to_cols_array().map(f64::from)).inverse();
+    let near = inverse * glam::DVec4::new(x as f64, y as f64, -1.0, 1.0);
+    let far = inverse * glam::DVec4::new(x as f64, y as f64, 1.0, 1.0);
     if !near.is_finite() || !far.is_finite() || near.w.abs() < 1e-7 || far.w.abs() < 1e-7 {
         return None;
     }
     let origin = near.truncate() / near.w;
     let direction = (far.truncate() / far.w - origin).normalize_or_zero();
-    (direction.is_finite() && direction.length_squared() > 0.5).then_some((origin, direction))
+    (direction.is_finite() && direction.length_squared() > 0.5)
+        .then_some((origin.as_vec3(), direction.as_vec3()))
 }
 fn transform(p: Vec3, scale: Vec3, rotation: Quat) -> Mat4 {
     Mat4::from_scale_rotation_translation(scale, rotation, p)
@@ -2847,6 +2849,16 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn tactical_navigation_reaches_plane_at_maximum_zoom() {
+        let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 900.0));
+        let eye = Vec3::new(0.0, 1500.0, 2000.0);
+        let vp = Mat4::perspective_rh_gl(1.22, rect.aspect_ratio(), 1.0, 10000.0)
+            * Mat4::look_at_rh(eye, Vec3::ZERO, Vec3::Y);
+        let hit = unproject_to_plane(vp, rect, rect.center(), 0.0).unwrap();
+        assert!(hit.length() < 0.02, "{hit:?}");
     }
 
     #[test]
