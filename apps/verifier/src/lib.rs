@@ -693,6 +693,9 @@ mod tests {
                 server_time_ms: 6000,
                 pilots: vec![
                     PilotView {
+                        target_locks: vec![],
+                        locked_asteroids: vec![],
+                        drone: None,
                         mining_modules: Vec::new(),
                         target_lock: None,
                         ship_class: arkline_protocol::ShipClass::default(),
@@ -705,6 +708,9 @@ mod tests {
                         flight: None,
                     },
                     PilotView {
+                        target_locks: vec![],
+                        locked_asteroids: vec![],
+                        drone: None,
                         mining_modules: Vec::new(),
                         target_lock: None,
                         ship_class: arkline_protocol::ShipClass::default(),

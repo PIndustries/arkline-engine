@@ -6,6 +6,7 @@ mod layout;
 mod motion;
 mod pilot_input;
 mod services;
+mod target_controls;
 mod theme;
 #[cfg(test)]
 mod transport_tests;
@@ -379,6 +380,8 @@ struct Cockpit {
     local_server: Option<LocalServer>,
     service_tab: ServiceTab,
     selected_object: SelectedObject,
+    mining_target: Option<u64>,
+    drone_camera: bool,
     sell_amount: u64,
     audit_updates: Option<Receiver<Result<String, String>>>,
     audit_result: Option<Result<String, String>>,
@@ -437,6 +440,8 @@ impl Cockpit {
             local_server: None,
             service_tab: ServiceTab::Cargo,
             selected_object: SelectedObject::Station,
+            mining_target: None,
+            drone_camera: true,
             sell_amount: 25,
             audit_updates: None,
             audit_result: None,
@@ -530,6 +535,7 @@ impl Cockpit {
         self.effects.clear();
         self.feed.clear();
         self.selected_object = SelectedObject::Station;
+        self.mining_target = None;
         self.audit_result = None;
         self.audit_updates = None;
         self.request_pending = false;
@@ -933,65 +939,51 @@ impl Cockpit {
     }
     fn mining_status(&self) -> (String, Option<f32>) {
         let Some(pilot) = self.own() else {
-            return ("Idle · select an asteroid".into(), None);
+            return ("Select an asteroid and lock".into(), None);
         };
         if !self.connected {
             return ("Offline · last known state".into(), None);
         }
-        if let Some(lock) = &pilot.target_lock {
-            let now = self.presentation_time();
-            let remaining = lock.completes_at_ms.saturating_sub(now);
-            let name = self
+        if let Some(id) = self.module_target(&pilot) {
+            let name = self.asteroid_name(id);
+            if let Some(asteroid) = self
                 .snapshot
                 .as_ref()
-                .and_then(|s| s.asteroids.iter().find(|a| a.id == lock.asteroid_id))
-                .map_or_else(
-                    || format!("asteroid #{}", lock.asteroid_id),
-                    |a| a.name.clone(),
-                );
-            let progress = (now.saturating_sub(lock.started_at_ms) as f32
-                / lock
-                    .completes_at_ms
-                    .saturating_sub(lock.started_at_ms)
-                    .max(1) as f32)
-                .clamp(0.0, 1.0);
+                .and_then(|s| s.asteroids.iter().find(|a| a.id == id))
+            {
+                if asteroid.ore == 0 {
+                    return (format!("Depleted · {name}"), None);
+                }
+                if !effects::can_extract_target(&pilot, asteroid) {
+                    return (format!("Out of extraction range · {name}"), None);
+                }
+            }
+            return (format!("Locked · {name}"), None);
+        }
+        if let Some(lock) = pilot.target_locks.first().or(pilot.target_lock.as_ref()) {
+            let now = self.presentation_time();
+            let remaining = lock.completes_at_ms.saturating_sub(now);
             return (
-                if remaining == 0 {
-                    format!("Acquiring {name} · confirming…")
-                } else {
-                    format!("Acquiring {name} · {:.1}s", remaining as f64 / 1000.0)
-                },
-                Some(progress),
+                format!(
+                    "Acquiring {} · {}",
+                    self.asteroid_name(lock.asteroid_id),
+                    if remaining == 0 {
+                        "confirming…".into()
+                    } else {
+                        format!("{:.1}s", remaining as f64 / 1000.0)
+                    }
+                ),
+                Some(
+                    (now.saturating_sub(lock.started_at_ms) as f32
+                        / lock
+                            .completes_at_ms
+                            .saturating_sub(lock.started_at_ms)
+                            .max(1) as f32)
+                        .clamp(0.0, 1.0),
+                ),
             );
         }
-        let Some(id) = pilot.locked_asteroid else {
-            return ("Idle · select an asteroid and lock".into(), None);
-        };
-        let Some(asteroid) = self
-            .snapshot
-            .as_ref()
-            .and_then(|s| s.asteroids.iter().find(|a| a.id == id))
-        else {
-            return ("Target unavailable".into(), None);
-        };
-        if asteroid.ore == 0 {
-            return (format!("Depleted · {}", asteroid.name), None);
-        }
-        if !effects::can_extract_target(&pilot, asteroid) {
-            return (format!("Out of extraction range · {}", asteroid.name), None);
-        }
-        let active = pilot
-            .mining_modules
-            .iter()
-            .filter(|m| m.target_id.is_some())
-            .count();
-        if active > 0 {
-            return (
-                format!("Mining {} · {active} active turret(s)", asteroid.name),
-                None,
-            );
-        }
-        (format!("Locked · {}", asteroid.name), None)
+        ("Select an asteroid and lock".into(), None)
     }
     fn mining_module(&mut self, ui: &mut egui::Ui) {
         ui.small(
@@ -999,6 +991,7 @@ impl Cockpit {
                 .strong()
                 .color(self.accent()),
         );
+        self.target_chips(ui);
         let (status, progress) = self.mining_status();
         ui.small(status);
         if let Some(progress) = progress {
@@ -1036,6 +1029,7 @@ impl Cockpit {
                             ),
                         );
                         if active {
+                            ui.small(self.asteroid_name(module.target_id.unwrap()));
                             let remaining = module
                                 .cycle_completes_at_ms
                                 .unwrap_or(0)
@@ -1093,15 +1087,23 @@ impl Cockpit {
             }
         }
         if let Some(pilot) = self.own() {
-            if (pilot.target_lock.is_some() || pilot.locked_asteroid.is_some())
+            if (!Self::pending_locks(&pilot).is_empty()
+                || !Self::confirmed_locks(&pilot).is_empty())
                 && ui
                     .add_enabled(
                         self.can_operate(),
-                        egui::Button::new(if pilot.target_lock.is_some() {
-                            "Cancel lock"
-                        } else {
-                            "Unlock target"
-                        })
+                        egui::Button::new(
+                            if Self::pending_locks(&pilot).len()
+                                + Self::confirmed_locks(&pilot).len()
+                                > 1
+                            {
+                                "Unlock all targets"
+                            } else if pilot.target_lock.is_some() {
+                                "Cancel lock"
+                            } else {
+                                "Unlock target"
+                            },
+                        )
                         .small(),
                     )
                     .clicked()
@@ -1174,6 +1176,7 @@ impl Cockpit {
             });
             columns[1].small("W/S thrust · A/D strafe · Space/C vertical");
             self.mining_module(&mut columns[2]);
+            self.drone_controls(&mut columns[1]);
         });
     }
     fn current_system(&self) -> u32 {
@@ -1202,8 +1205,12 @@ impl Cockpit {
             && self.own().is_some_and(|p| {
                 self.selected_asteroid().is_some_and(|a| {
                     a.ore > 0
-                        && p.target_lock.is_none()
-                        && p.locked_asteroid != Some(a.id)
+                        && Self::confirmed_locks(&p).len() + Self::pending_locks(&p).len()
+                            < MAX_TARGET_LOCKS
+                        && !Self::confirmed_locks(&p).contains(&a.id)
+                        && !Self::pending_locks(&p)
+                            .iter()
+                            .any(|lock| lock.asteroid_id == a.id)
                         && p.flight.as_ref().is_some_and(|f| {
                             (distance_m(f.position, a.position) - a.radius).max(0.0) <= LOCK_RANGE
                         })
@@ -1222,7 +1229,8 @@ impl Cockpit {
     }
     fn start_module(&mut self, module_id: u8) {
         if let Some(pilot) = self.own().filter(|p| self.can_mine(p)) {
-            if let Some(target_id) = pilot.locked_asteroid {
+            if let Some(target_id) = self.module_target(&pilot) {
+                self.mining_target = Some(target_id);
                 self.send(Request::StartMining {
                     module_id,
                     target_id,
@@ -1247,11 +1255,10 @@ impl Cockpit {
     }
     fn can_mine(&self, pilot: &PilotView) -> bool {
         self.can_operate()
-            && pilot.target_lock.is_none()
             && pilot.ore < CARGO_CAPACITY
             && self.snapshot.as_ref().is_some_and(|snapshot| {
                 snapshot.asteroids.iter().any(|a| {
-                    Some(a.id) == pilot.locked_asteroid
+                    Some(a.id) == self.module_target(pilot)
                         && a.ore > 0
                         && effects::can_extract_target(pilot, a)
                 })
@@ -1421,7 +1428,7 @@ impl Cockpit {
             self.mining_module(ui);
             let locked = self
                 .own()
-                .is_some_and(|p| p.locked_asteroid == Some(asteroid.id));
+                .is_some_and(|p| Self::confirmed_locks(&p).contains(&asteroid.id));
             ui.horizontal(|ui| {
                 if ui
                     .add_enabled(
@@ -1497,7 +1504,10 @@ impl Cockpit {
                         if a.ore > 0 { self.accent() } else { AMBER },
                         format!("{} ore remaining · #{}", a.ore, id),
                     );
-                    if self.own().is_some_and(|p| p.locked_asteroid == Some(id)) {
+                    if self
+                        .own()
+                        .is_some_and(|p| Self::confirmed_locks(&p).contains(&id))
+                    {
                         ui.colored_label(self.accent(), "TARGET LOCK CONFIRMED");
                     }
                 }
@@ -2009,7 +2019,7 @@ impl Cockpit {
                 }
                 if self
                     .own()
-                    .is_some_and(|p| p.locked_asteroid == Some(asteroid.id))
+                    .is_some_and(|p| Self::confirmed_locks(&p).contains(&asteroid.id))
                 {
                     paint.circle_stroke(center, radius + 4.0, Stroke::new(1.5, self.accent()));
                 }
@@ -2841,6 +2851,7 @@ impl eframe::App for Cockpit {
                     let now = self.presentation_time();
                     let display = self.snapshot.as_ref().map(|s| self.motion.sample(s, now));
                     if let Some(snapshot) = &display {
+                        self.flight_view.set_drone_camera(self.drone_camera);
                         if let Some(action) = self.flight_view.ui(
                             ui,
                             snapshot,
@@ -3109,6 +3120,9 @@ mod tests {
                 name: "pilot".into(),
                 system_id: HOME_SYSTEM_ID,
                 ship_class: ShipClass::Pioneer,
+                target_locks: vec![],
+                locked_asteroids: vec![],
+                drone: None,
                 target_lock: None,
                 mining_modules: (0..2)
                     .map(|module_id| MiningModule {
@@ -3410,6 +3424,141 @@ mod tests {
         assert!((larger.x - reset.right() - 16.0).abs() < 3.0);
         assert!((reset.top() - 16.0).abs() < 3.0);
         std::fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn five_lock_rack_selects_independent_turret_targets_and_unlocks_one() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        let snapshot = cockpit.snapshot.as_mut().unwrap();
+        let rock = snapshot.asteroids[0].clone();
+        snapshot.asteroids = (7..12)
+            .map(|id| {
+                let mut a = rock.clone();
+                a.id = id;
+                a.name = format!("Rock {id}");
+                a
+            })
+            .collect();
+        snapshot.pilots[0].locked_asteroids = vec![7, 8, 9, 10];
+        snapshot.pilots[0].target_locks = vec![TargetLock {
+            asteroid_id: 11,
+            started_at_ms: 1000,
+            completes_at_ms: 9000,
+        }];
+        let (tx, rx) = mpsc::channel();
+        cockpit.commands = Some(tx);
+        let labels = ui_test_frame(&ctx, &mut cockpit, vec![], false);
+        assert!(labels.iter().any(|(t, _)| t.contains("TARGET RACK · 5/5")));
+        let point = labels
+            .iter()
+            .find(|(t, _)| t == "Locked · Rock 8")
+            .unwrap()
+            .1;
+        ui_test_click(&ctx, &mut cockpit, point, false);
+        assert_eq!(cockpit.module_target(&cockpit.own().unwrap()), Some(8));
+        cockpit.start_module(0);
+        assert!(matches!(
+            rx.try_recv().unwrap(),
+            Request::StartMining {
+                module_id: 0,
+                target_id: 8
+            }
+        ));
+        cockpit.request_pending = false;
+        cockpit.selected_object = SelectedObject::Asteroid(9);
+        cockpit.start_module(1);
+        assert!(matches!(
+            rx.try_recv().unwrap(),
+            Request::StartMining {
+                module_id: 1,
+                target_id: 9
+            }
+        ));
+        cockpit.request_pending = false;
+        let labels = ui_test_frame(&ctx, &mut cockpit, vec![], false);
+        let point = labels.iter().find(|(t, _)| t == "Unlock").unwrap().1;
+        ui_test_click(&ctx, &mut cockpit, point, false);
+        assert!(matches!(
+            rx.try_recv().unwrap(),
+            Request::UnlockAsteroid { id: 7 }
+        ));
+    }
+    #[test]
+    fn drone_controls_emit_real_launch_hold_recall_and_selected_position() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        let (tx, rx) = mpsc::channel();
+        cockpit.commands = Some(tx);
+        let labels = ui_test_frame(&ctx, &mut cockpit, vec![], false);
+        ui_test_click(
+            &ctx,
+            &mut cockpit,
+            labels.iter().find(|(t, _)| t == "Launch drone").unwrap().1,
+            false,
+        );
+        assert!(matches!(rx.try_recv().unwrap(), Request::LaunchDrone));
+        cockpit.request_pending = false;
+        cockpit.snapshot.as_mut().unwrap().pilots[0].drone = Some(DroneView {
+            position: BELT_POSITION,
+            velocity: [0.0; 3],
+            heading: [1.0, 0.0, 0.0],
+            mode: DroneMode::Hold,
+            updated_at_ms: 1000,
+        });
+        let expected = cockpit.drone_destination(&cockpit.own().unwrap()).unwrap();
+        assert!(
+            (distance_m(expected, BELT_POSITION) - 200.0).abs() < 0.001,
+            "100m radius plus 100m standoff"
+        );
+        for label in ["Hold drone", "Recall drone", "Drone to selected"] {
+            let labels = ui_test_frame(&ctx, &mut cockpit, vec![], false);
+            ui_test_click(
+                &ctx,
+                &mut cockpit,
+                labels.iter().find(|(t, _)| t == label).unwrap().1,
+                false,
+            );
+            let request = rx.try_recv().unwrap();
+            assert!(match label {
+                "Hold drone" => matches!(request, Request::DroneHold),
+                "Recall drone" => matches!(request, Request::RecallDrone),
+                _ => matches!(request,Request::DroneNavigate{position} if position==expected),
+            });
+            cockpit.request_pending = false;
+        }
+        cockpit.selected_object = SelectedObject::Station;
+        let labels = ui_test_frame(&ctx, &mut cockpit, vec![], false);
+        ui_test_click(
+            &ctx,
+            &mut cockpit,
+            labels
+                .iter()
+                .find(|(t, _)| t == "Drone to selected")
+                .unwrap()
+                .1,
+            false,
+        );
+        assert!(
+            rx.try_recv().is_err(),
+            "out-of-range drone navigation stays disabled"
+        );
+    }
+    #[test]
+    fn drone_asteroid_waypoint_faces_drone_and_stays_outside_surface() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        let pilot = &mut cockpit.snapshot.as_mut().unwrap().pilots[0];
+        pilot.drone = Some(DroneView {
+            position: [BELT_POSITION[0] - 3000.0, 0.0, 0.0],
+            velocity: [0.0; 3],
+            heading: [1.0, 0.0, 0.0],
+            mode: DroneMode::Hold,
+            updated_at_ms: 1000,
+        });
+        let target = cockpit.drone_destination(&cockpit.own().unwrap()).unwrap();
+        assert_eq!(target, [BELT_POSITION[0] - 200.0, 0.0, 0.0]);
+        cockpit.snapshot.as_mut().unwrap().asteroids[0].position[0] += DRONE_MAX_RANGE * 2.0;
+        assert!(cockpit.drone_destination(&cockpit.own().unwrap()).is_none());
     }
     #[test]
     fn mining_activation_uses_confirmed_lock_while_browsing_station() {
@@ -3746,6 +3895,9 @@ mod tests {
                 system_id: HOME_SYSTEM_ID,
                 ship_class: ShipClass::Pioneer,
                 locked_asteroid: None,
+                target_locks: vec![],
+                locked_asteroids: vec![],
+                drone: None,
                 target_lock: None,
                 mining_modules: vec![],
                 credits: 100,
@@ -3961,6 +4113,9 @@ mod tests {
             ship_class: ShipClass::default(),
             system_id: HOME_SYSTEM_ID,
             locked_asteroid: None,
+            target_locks: vec![],
+            locked_asteroids: vec![],
+            drone: None,
             target_lock: None,
             mining_modules: vec![],
             credits: 0,

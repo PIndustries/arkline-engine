@@ -156,6 +156,9 @@ mod tests {
                 system_id: 1,
                 locked_asteroid: None,
                 target_lock: None,
+                target_locks: vec![],
+                locked_asteroids: vec![],
+                drone: None,
                 location: Location::Station,
                 flight: Some(FlightState {
                     position: [x, 0.0, 0.0],

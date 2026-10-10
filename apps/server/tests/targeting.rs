@@ -50,7 +50,7 @@ fn setup(s: &mut Server) -> (Option<String>, u64, Vec<Asteroid>) {
     (p, arrives_at_ms, targets)
 }
 #[test]
-fn acquisition_deadline_idempotence_retarget_unlock_and_early_mining() {
+fn acquisition_deadline_idempotence_additional_lock_unlock_and_early_mining() {
     let mut s = Server::open(":memory:").unwrap();
     let (mut p, t, targets) = setup(&mut s);
     let a = &targets[0];
@@ -74,9 +74,12 @@ fn acquisition_deadline_idempotence_retarget_unlock_and_early_mining() {
     let repeat = ok(&mut s, &mut p, Request::LockAsteroid { id: a.id }, t + 100);
     assert_eq!(repeat.pilots[0].target_lock, Some(lock.clone()));
     let changed = ok(&mut s, &mut p, Request::LockAsteroid { id: b.id }, t + 200);
+    assert_eq!(changed.pilots[0].target_locks.len(), 2);
+    assert_eq!(changed.pilots[0].target_locks[0], lock);
+    assert_eq!(changed.pilots[0].target_locks[1].asteroid_id, b.id);
     assert_eq!(
         changed.pilots[0].target_lock.as_ref().unwrap().asteroid_id,
-        b.id
+        a.id
     );
     let cleared = ok(&mut s, &mut p, Request::UnlockTarget, t + 201);
     assert!(cleared.pilots[0].target_lock.is_none());

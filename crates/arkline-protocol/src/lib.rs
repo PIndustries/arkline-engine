@@ -414,6 +414,15 @@ pub const GENESIS_HASH: &str = "000000000000000000000000000000000000000000000000
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "command", rename_all = "snake_case")]
 pub enum Request {
+    UnlockAsteroid {
+        id: u64,
+    },
+    LaunchDrone,
+    RecallDrone,
+    DroneHold,
+    DroneNavigate {
+        position: [f64; 3],
+    },
     StartMining {
         module_id: u8,
         target_id: u64,
@@ -583,6 +592,25 @@ pub fn lock_duration_ms(ship: ShipClass, radius: f64) -> u64 {
         .ceil() as u64
 }
 
+pub const MAX_TARGET_LOCKS: usize = 5;
+pub const DRONE_MAX_RANGE: f64 = 10_000.0;
+pub const DRONE_SPEED: f64 = 150.0;
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum DroneMode {
+    Hold,
+    FlyTo { position: [f64; 3] },
+    Returning,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DroneView {
+    pub position: [f64; 3],
+    pub velocity: [f64; 3],
+    pub heading: [f64; 3],
+    pub mode: DroneMode,
+    pub updated_at_ms: u64,
+}
+
 pub const MINING_MODULE_IDS: [u8; 2] = [0, 1];
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MiningSpec {
@@ -612,6 +640,12 @@ pub struct MiningModule {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PilotView {
+    #[serde(default)]
+    pub target_locks: Vec<TargetLock>,
+    #[serde(default)]
+    pub locked_asteroids: Vec<u64>,
+    #[serde(default)]
+    pub drone: Option<DroneView>,
     #[serde(default)]
     pub mining_modules: Vec<MiningModule>,
     #[serde(default)]

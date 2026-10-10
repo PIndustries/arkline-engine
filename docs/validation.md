@@ -311,3 +311,33 @@ uncertain Buy, queued Deposit, or stale flight control. Reconnecting freezes the
 known scene and disables operations; Ready resets presentation history before new
 state is applied. Three automatic attempts are allowed per worker session; auth
 rejection stops recovery. Full sleep/wake recovery has not been tested.
+
+
+## Five asteroid locks and recon drone — 26.10.10.9
+
+Five pending/confirmed asteroid locks share a server-enforced cap. Each mining slot
+uses its own confirmed target, and individual unlock only stops affected modules.
+Legacy scalar lock fields are compatibility mirrors; old saved locks migrate into
+the new vectors. Independent acceptance tests verify acquisition limits, two-rock
+extraction, selective unlock and economic replay.
+
+A singleton recon drone has authoritative movement, hold and physical recall. The
+client offers launch/recall/hold/fly-selected controls and 100 m asteroid stand-off.
+Tests reject invalid/out-of-range/unauthenticated commands and verify movement,
+recall, migration, lifecycle cleanup and unchanged economics. Automatic safety
+recovery on warp/dock/disconnect/restart/range loss is instantaneous prototype policy.
+
+The left physical cockpit display can render the world from the drone's position
+and heading using a separate clipped GPU viewport. Camera-matrix tests verify that
+moving the drone changes projection, vertical headings remain finite, and the feed
+stays within the display. No recording or decorative substitute is used.
+
+The full workspace suite and strict Clippy passed; client tests were 67 passed with
+one profiling test ignored. In an isolated packaged local world, native launch
+reported a drone 148 m from the ship. TCP acceptance then confirmed five locks,
+modules 0/1 assigned to asteroids 20/28, drone travel to the surface stand-off, and
+physical recall. Repeated cycles produced 900 ore; the packaged independent verifier
+accepted the ledger (1000 credits, 99100 remaining belt ore). Native screen capture then
+failed in macOS ScreenCaptureKit despite a fresh inspection session, preventing final
+visual/FPS validation of the camera feed. The owner's live save was not used for this
+acceptance run. No drone combat/mining payload or fleet management is implemented.

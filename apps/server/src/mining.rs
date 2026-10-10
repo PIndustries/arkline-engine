@@ -41,7 +41,7 @@ fn invalid_reason(p: &Pilot, a: Option<&Asteroid>, id: u64) -> Option<&'static s
     if a.ore == 0 {
         return Some("Asteroid depleted");
     }
-    if p.view.locked_asteroid != Some(id) {
+    if !p.view.locked_asteroids.contains(&id) {
         return Some("Target lock lost");
     }
     if universe::surface(p, a) > MINING_RANGE {

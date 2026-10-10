@@ -1,4 +1,5 @@
 mod assets;
+mod drones;
 mod flight;
 mod mining;
 mod universe;
@@ -127,7 +128,9 @@ impl Server {
         for pilot in world.pilots.values_mut() {
             mining::stop_all(pilot, "Server restarted");
             pilot.controls = None;
-            pilot.view.target_lock = None;
+            pilot.view.target_locks.clear();
+            universe::sync_lock_mirrors(pilot);
+            pilot.view.drone = None;
             if !matches!(
                 pilot.view.location,
                 Location::InTransit { .. } | Location::Jumping { .. }
@@ -214,6 +217,7 @@ impl Server {
         assets::ensure_accounts(&mut world);
         mining::ensure_modules(&mut world);
         flight::advance(&mut world, now);
+        drones::advance(&mut world, now);
         universe::advance_locks(&mut world, now);
         let events = mining::advance(&mut world, now);
         let mut entries = load_entries(&tx, false)?;
@@ -239,7 +243,9 @@ impl Server {
         if let Some(p) = world.pilots.get_mut(name) {
             mining::stop_all(p, "Pilot disconnected");
             p.controls = None;
-            p.view.target_lock = None;
+            p.view.target_locks.clear();
+            universe::sync_lock_mirrors(p);
+            p.view.drone = None;
             if !matches!(
                 p.view.location,
                 Location::InTransit { .. } | Location::Jumping { .. }
@@ -275,6 +281,7 @@ impl Server {
         assets::ensure_accounts(&mut world);
         mining::ensure_modules(&mut world);
         flight::advance(&mut world, now);
+        drones::advance(&mut world, now);
         universe::advance_locks(&mut world, now);
         let mut token = None;
         let cycle_events = mining::advance(&mut world, now);
@@ -283,6 +290,13 @@ impl Server {
         let export = matches!(request, Request::ExportLedger);
         let message;
         match request {
+            request if drones::handles(&request) => {
+                let name = session
+                    .as_ref()
+                    .context("connect before issuing commands")?;
+                drones::execute(&mut world, name, request, now)?;
+                message = "Drone command accepted";
+            }
             Request::StartMining {
                 module_id,
                 target_id,
@@ -346,6 +360,9 @@ impl Server {
                         pilot.clone(),
                         Pilot {
                             view: PilotView {
+                                target_locks: Vec::new(),
+                                locked_asteroids: Vec::new(),
+                                drone: None,
                                 mining_modules: Vec::new(),
                                 target_lock: None,
                                 ship_class: ShipClass::default(),
@@ -417,8 +434,16 @@ impl Server {
                         message = "Piloting input accepted";
                     }
                     Request::UnlockTarget => {
-                        pilot.view.locked_asteroid = None;
-                        pilot.view.target_lock = None;
+                        universe::clear_locks(pilot);
+                        message = "All targets unlocked";
+                    }
+                    Request::UnlockAsteroid { id } => {
+                        pilot
+                            .view
+                            .target_locks
+                            .retain(|lock| lock.asteroid_id != id);
+                        pilot.view.locked_asteroids.retain(|locked| *locked != id);
+                        universe::sync_lock_mirrors(pilot);
                         message = "Target unlocked";
                     }
                     Request::LockAsteroid { id } => {
@@ -437,16 +462,19 @@ impl Server {
                             universe::surface(pilot, asteroid) <= LOCK_RANGE,
                             "asteroid outside lock range"
                         );
-                        if pilot.view.locked_asteroid != Some(id)
-                            && pilot
+                        if !pilot.view.locked_asteroids.contains(&id)
+                            && !pilot
                                 .view
-                                .target_lock
-                                .as_ref()
-                                .is_none_or(|lock| lock.asteroid_id != id)
+                                .target_locks
+                                .iter()
+                                .any(|lock| lock.asteroid_id == id)
                         {
-                            pilot.view.locked_asteroid = None;
-                            pilot.view.target_lock = None;
-                            pilot.view.target_lock = Some(TargetLock {
+                            ensure!(
+                                pilot.view.locked_asteroids.len() + pilot.view.target_locks.len()
+                                    < MAX_TARGET_LOCKS,
+                                "maximum five target locks"
+                            );
+                            pilot.view.target_locks.push(TargetLock {
                                 asteroid_id: id,
                                 started_at_ms: now,
                                 completes_at_ms: now
@@ -456,6 +484,7 @@ impl Server {
                                     ))
                                     .context("clock overflow")?,
                             });
+                            universe::sync_lock_mirrors(pilot);
                         }
                         message = "Target acquisition accepted";
                     }
@@ -476,8 +505,7 @@ impl Server {
                         f.updated_at_ms = now;
                         pilot.controls = None;
                         f.angular_velocity = [0.0; 3];
-                        pilot.view.locked_asteroid = None;
-                        pilot.view.target_lock = None;
+                        universe::clear_locks(pilot);
                         pilot.view.location = Location::Jumping {
                             gate_id,
                             arrives_at_ms: now
@@ -525,8 +553,7 @@ impl Server {
                             ) > 100.0,
                             "already at destination"
                         );
-                        pilot.view.locked_asteroid = None;
-                        pilot.view.target_lock = None;
+                        universe::clear_locks(pilot);
                         flight::begin_warp(pilot, destination, now);
                         pilot.view.location = Location::InTransit {
                             destination,
@@ -555,8 +582,7 @@ impl Server {
                             ) <= DOCK_RANGE,
                             "must be within docking range in normal space"
                         );
-                        pilot.view.locked_asteroid = None;
-                        pilot.view.target_lock = None;
+                        universe::clear_locks(pilot);
                         pilot.controls = None;
                         pilot.view.location = Location::Docked;
                         let f = pilot.view.flight.as_mut().unwrap();
@@ -665,6 +691,7 @@ impl Server {
         // ledger entry in this same transaction.
         universe::advance_locks(&mut world, now);
         mining::invalidate(&mut world);
+        drones::advance(&mut world, now);
         let updated_json = serde_json::to_string(&world)?;
         if updated_json != json {
             tx.execute("UPDATE world SET json=?1 WHERE id=1", [updated_json])?;
@@ -759,6 +786,8 @@ fn add_cargo(current: u64, units: u64) -> Result<u64> {
 fn validate(world: &World) -> Result<()> {
     assets::validate(world)?;
     mining::validate(world)?;
+    universe::validate_locks(world)?;
+    drones::validate(world)?;
     ensure!(
         world.asteroids.iter().map(|a| a.ore as u128).sum::<u128>() == world.belt_ore as u128,
         "asteroid reserve mismatch"

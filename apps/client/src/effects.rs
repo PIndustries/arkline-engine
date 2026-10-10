@@ -6,12 +6,13 @@ pub fn can_extract(pilot: &PilotView) -> bool {
         pilot.location,
         Location::Docked | Location::InTransit { .. } | Location::Jumping { .. }
     ) && pilot.flight.is_some()
-        && pilot.locked_asteroid.is_some()
+        && (!pilot.locked_asteroids.is_empty() || pilot.locked_asteroid.is_some())
 }
 pub fn can_extract_target(pilot: &PilotView, asteroid: &Asteroid) -> bool {
     can_extract(pilot)
         && pilot.system_id == asteroid.system_id
-        && pilot.locked_asteroid == Some(asteroid.id)
+        && (pilot.locked_asteroids.contains(&asteroid.id)
+            || pilot.locked_asteroid == Some(asteroid.id))
         && pilot.flight.as_ref().is_some_and(|flight| {
             let center = flight
                 .position
@@ -41,7 +42,12 @@ pub fn module_cycle(pilot: &PilotView, module_id: u8, now: u64) -> Option<Module
     let target_id = module.target_id?;
     let start = module.cycle_started_at_ms?;
     let finish = module.cycle_completes_at_ms?;
-    if module_id > 1 || finish <= start || now < start || pilot.locked_asteroid != Some(target_id) {
+    if module_id > 1
+        || finish <= start
+        || now < start
+        || (!pilot.locked_asteroids.contains(&target_id)
+            && pilot.locked_asteroid != Some(target_id))
+    {
         return None;
     }
     Some(ModuleCycle {
@@ -167,6 +173,9 @@ mod tests {
                 system_id: 1,
                 locked_asteroid: Some(7),
                 target_lock: None,
+                target_locks: vec![],
+                locked_asteroids: vec![],
+                drone: None,
                 flight: Some(FlightState {
                     warp: None,
                     orientation: [0.0, 0.0, 0.0, 1.0],
@@ -184,6 +193,29 @@ mod tests {
             ledger_hash: GENESIS_HASH.into(),
         }
     }
+    #[test]
+    fn separate_module_beams_use_each_confirmed_target() {
+        let mut snap = snapshot(0, 100);
+        let pilot = &mut snap.pilots[0];
+        pilot.locked_asteroids = vec![7, 8];
+        pilot.mining_modules = [7, 8]
+            .into_iter()
+            .enumerate()
+            .map(|(slot, id)| MiningModule {
+                module_id: slot as u8,
+                target_id: Some(id),
+                cycle_started_at_ms: Some(100),
+                cycle_completes_at_ms: Some(6100),
+                stop_reason: None,
+            })
+            .collect();
+        assert_eq!(module_cycle(pilot, 0, 1000).unwrap().target_id, 7);
+        assert_eq!(module_cycle(pilot, 1, 1000).unwrap().target_id, 8);
+        pilot.locked_asteroids.retain(|id| *id != 8);
+        assert!(module_cycle(pilot, 1, 1000).is_none());
+        assert!(module_cycle(pilot, 0, 1000).is_some());
+    }
+
     #[test]
     fn active_module_visuals_precede_rewards_and_stop_on_server_state() {
         let mut snap = snapshot(0, 25);

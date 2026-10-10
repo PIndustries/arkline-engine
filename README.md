@@ -83,11 +83,13 @@ select them; overview actions still provide approach, orbit, warp, mining and do
 Locking an asteroid starts a server-timed acquisition, lasting 2–8 seconds according
 to the hull's sensors and target radius. The interface shows acquisition progress;
 mining becomes available only after lock confirmation and within mining range.
-Cancel/unlock releases the target. Retargeting starts a new acquisition, and leaving
-range, warping, docking or jumping invalidates the target. A pending acquisition
+Up to five pending/confirmed asteroid locks coexist. The target rack selects which
+confirmed lock receives the next turret activation; each turret keeps its own assignment.
+Unlocking one target affects only that target and its modules. Leaving range, warping,
+docking or jumping invalidates affected targets. A pending acquisition
 is cancelled on server restart or loss of the pilot's last connection.
 
-Hull-mounted mining turrets track the acquiring/locked asteroid. Each active module
+Hull-mounted mining turrets independently track their assigned asteroids. Each active module
 shows its cycle and a beam from its own turret muzzle; completed cycles produce
 confirmed extraction feedback. Warp effects follow
 the authoritative route. These effects do not issue extra mining commands or change
@@ -316,3 +318,19 @@ up to three saved-identity reconnects per session after a transport failure. Rec
 discards queued actions and flight input, refreshes authoritative state, and never
 replays an action whose response was lost. If recovery fails, **Session → Reconnect**
 starts a new attempt. An uncertain action remains flagged for inspection.
+
+
+### Recon drone and cockpit camera
+
+**Ship controls** includes a recon drone launcher. Launch deploys one drone outside
+the hull; **Fly to selected**, **Hold**, and **Recall** send authoritative commands.
+The drone travels at up to 150 m/s within 10 km of its ship. Asteroid navigation stops
+100 m above the surface. Explicit recall flies back before recovering the drone.
+This prototype automatically recovers it on warp, docking, jump, disconnect, restart
+or control-range loss; those safety recoveries are instantaneous.
+
+Enable **Drone camera on cockpit screen** to replace the left navigation display
+with a live 3D view from the drone's position and heading. Ship flight instruments and
+mining instruments remain visible on the other screens. The feed is disabled when
+disconnected or snapshot data is stale. This first drone is for reconnaissance; it
+has no mining/combat payload, manufacturing cost, damage model or fleet control.

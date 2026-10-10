@@ -63,7 +63,7 @@ in the destination system across restart. The economy remains a shared exchange.
 There is no collision damage, combat, module fitting, physical mass/inertia
 upgrade system, ship-computer runtime or distributed simulation authority.
 Asteroid acquisition takes 2–8 seconds, depending on hull sensors and target size.
-The single-target lock becomes usable only after server confirmation. Each of the
+Each of up to five asteroid locks becomes usable only after server confirmation. Each of the
 two mining modules repeats independently while active. Pioneer extracts 25 ore
 every 6 seconds per module; Prospector 40/5s, Hauler 20/8s, Vanguard 30/7s.
 Cycle progress and stop reasons come from the server. There is no yield input.
@@ -119,11 +119,12 @@ is 20 km across and 6 km high. Station ranges identify the docking port.
 ## Target acquisition and mining turret
 
 The pending target displays a countdown; it cannot be mined before server confirmation.
-Cancel/unlock releases it. Requesting another target replaces the acquisition; selecting
-a different overview row alone does not. Range loss, depletion, warp, docking and
+Individual unlock releases that target. Requesting another target adds an acquisition
+up to five total pending/confirmed locks. Select a confirmed target in the rack before
+activating each turret; active assignments remain unchanged when browsing other targets. Range loss, depletion, warp, docking and
 jumping invalidate targeting. Pending acquisition is cancelled on restart or last
 connection loss. The command client keeps its connection open until lock confirmation.
 
-The two mining mounts track the authoritative acquisition/lock target with a limited
+The two mining mounts independently track their authoritative assigned targets with a limited
 visual turning rate. Each active module uses its own turret muzzle for the extraction beam. This is a mining
 module, not a combat damage system or a general module-fitting inventory.
