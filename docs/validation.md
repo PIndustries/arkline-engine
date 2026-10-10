@@ -287,3 +287,27 @@ all four views without navigation side effects. Strict workspace Clippy passes.
 Native visual appearance and frame rate for this new mode have not been validated:
 the development Mac was locked during this run. The prior build's measured FPS does
 not establish this mode's performance. Detached tactical panning is not implemented.
+
+
+## Instrument alignment and transport recovery — 26.10.10.8
+
+The previous preview showed raw macOS os error35 and remained offline after a read
+timeout. Its local server was still listening; native Session → Reconnect restored
+the saved pilot with 225 ore and 1000 credits. The original timeout cause is unconfirmed.
+A later upgrade of the same saved world retained the owner's newer 1000 ore progress.
+
+Instrument text and bezels now share geometry. Display rectangles are derived from
+the actual face, clipped, and scaled with viewport dimensions. Tests compare those
+rectangles with the 3D projection and reject overlapping screens at multiple sizes.
+Telemetry tests check actual body-axis velocities, cargo, balance, range, lock state,
+and stale-data marking. Initial native 26.10.10.7 instrument QA showed aligned text
+and 119–120 FPS; a final adjustment lowers the dashboard and moves side displays inward
+to avoid physical occlusion. That final geometry is packaged in 26.10.10.8 separately
+so the owner's active flight need not be interrupted.
+
+Five TCP transport tests cover fragmented responses, total deadlines under trickle
+traffic, actual response timeout recovery, saved-identity resume, and no replay of an
+uncertain Buy, queued Deposit, or stale flight control. Reconnecting freezes the last
+known scene and disables operations; Ready resets presentation history before new
+state is applied. Three automatic attempts are allowed per worker session; auth
+rejection stops recovery. Full sleep/wake recovery has not been tested.

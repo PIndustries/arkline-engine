@@ -7,6 +7,8 @@ mod motion;
 mod pilot_input;
 mod services;
 mod theme;
+#[cfg(test)]
+mod transport_tests;
 use arkline_protocol::*;
 use eframe::egui::{self, Color32, Pos2, Stroke, Vec2};
 use sha2::{Digest, Sha256};
@@ -35,6 +37,7 @@ pub(crate) enum ViewMode {
 
 enum Update {
     Ready,
+    Reconnecting(String),
     Response(Box<Response>, bool),
     Failure(String),
 }
@@ -47,24 +50,101 @@ fn credentials_path(dir: &std::path::Path, server: &str, pilot: &str) -> PathBuf
     ))
 }
 fn exchange(reader: &mut BufReader<TcpStream>, request: &Request) -> Result<Response, String> {
+    exchange_with_timeout(reader, request, Duration::from_secs(5))
+}
+fn exchange_with_timeout(
+    reader: &mut BufReader<TcpStream>,
+    request: &Request,
+    timeout: Duration,
+) -> Result<Response, String> {
     let mut bytes = serde_json::to_vec(request).map_err(|e| e.to_string())?;
     bytes.push(b'\n');
     reader
         .get_mut()
         .write_all(&bytes)
-        .map_err(|e| e.to_string())?;
-    let mut line = String::new();
-    // The development server is trusted; cap each response to protect the UI process.
-    let n = std::io::Read::take(reader, 16 * 1024 * 1024)
-        .read_line(&mut line)
-        .map_err(|e| e.to_string())?;
-    if n == 0 {
-        return Err("Server closed the connection".into());
+        .map_err(|e| format!("Connection interrupted while sending request: {e}"))?;
+    let deadline = Instant::now() + timeout;
+    let mut line = Vec::new();
+    const LIMIT: usize = 16 * 1024 * 1024;
+    loop {
+        if Instant::now() >= deadline {
+            return Err("Server response timed out; the connection may have paused during sleep or a network interruption".into());
+        }
+        // Keep fragments across transient read timeouts, but bound the whole response.
+        let remaining = deadline
+            .saturating_duration_since(Instant::now())
+            .min(Duration::from_millis(250))
+            .max(Duration::from_millis(1));
+        reader
+            .get_mut()
+            .set_read_timeout(Some(remaining))
+            .map_err(|e| e.to_string())?;
+        let consumed = match reader.fill_buf() {
+            Ok([]) => {
+                return Err("Server closed the connection before completing its response".into())
+            }
+            Ok(buffer) => {
+                let count = buffer
+                    .iter()
+                    .position(|byte| *byte == b'\n')
+                    .map_or(buffer.len(), |index| index + 1)
+                    .min(LIMIT - line.len());
+                line.extend_from_slice(&buffer[..count]);
+                count
+            }
+            Err(e)
+                if matches!(
+                    e.kind(),
+                    std::io::ErrorKind::WouldBlock
+                        | std::io::ErrorKind::TimedOut
+                        | std::io::ErrorKind::Interrupted
+                ) =>
+            {
+                continue
+            }
+            Err(e) => {
+                return Err(format!(
+                    "Connection interrupted while receiving response: {e}"
+                ))
+            }
+        };
+        reader.consume(consumed);
+        if line.last() == Some(&b'\n') {
+            return serde_json::from_slice(&line)
+                .map_err(|e| format!("Invalid server response: {e}"));
+        }
+        if line.len() >= LIMIT {
+            return Err("Server response exceeded the size limit".into());
+        }
     }
-    if !line.ends_with('\n') {
-        return Err("Server response exceeded the size limit".into());
+}
+fn connect_transport(server: &str) -> Result<BufReader<TcpStream>, String> {
+    let addresses: Vec<_> = server
+        .to_socket_addrs()
+        .map_err(|e| e.to_string())?
+        .collect();
+    let stream = addresses
+        .iter()
+        .find_map(|address| TcpStream::connect_timeout(address, Duration::from_secs(3)).ok())
+        .ok_or_else(|| {
+            format!("Cannot connect to {server}. Start arkline-server, then reconnect.")
+        })?;
+    stream
+        .set_write_timeout(Some(Duration::from_secs(5)))
+        .map_err(|e| e.to_string())?;
+    stream.set_nodelay(true).map_err(|e| e.to_string())?;
+    Ok(BufReader::new(stream))
+}
+/// Drop all requests accumulated before recovery, never replay actions or controls.
+fn discard_pending(commands: &Receiver<Request>, controls: &pilot_input::Mailbox) -> bool {
+    *controls.lock().unwrap() = None;
+    loop {
+        match commands.try_recv() {
+            Ok(_) => {}
+            Err(mpsc::TryRecvError::Empty) => return true,
+            Err(mpsc::TryRecvError::Disconnected) => return false,
+        }
     }
-    serde_json::from_str(&line).map_err(|e| format!("Invalid server response: {e}"))
 }
 fn save_token(path: &std::path::Path, token: &str) -> Result<(), String> {
     let parent = path.parent().ok_or("Invalid credential directory")?;
@@ -98,50 +178,35 @@ fn worker(
 ) {
     let run = || -> Result<(), String> {
         let path = credentials_path(&dir, credential_scope.as_deref().unwrap_or(&server), &pilot);
-        let token = match fs::read_to_string(&path) {
+        let mut token = match fs::read_to_string(&path) {
             Ok(v) => Some(v),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
             Err(e) => return Err(format!("Cannot read saved credential: {e}")),
         };
         // Check storage before creating a server-side identity.
         fs::create_dir_all(&dir).map_err(|e| format!("Credential directory unavailable: {e}"))?;
-        let addresses: Vec<_> = server
-            .to_socket_addrs()
-            .map_err(|e| e.to_string())?
-            .collect();
-        let stream = addresses
-            .iter()
-            .find_map(|address| TcpStream::connect_timeout(address, Duration::from_secs(3)).ok())
-            .ok_or_else(|| {
-                format!("Cannot connect to {server}. Start arkline-server, then reconnect.")
-            })?;
-        stream
-            .set_read_timeout(Some(Duration::from_secs(5)))
-            .map_err(|e| e.to_string())?;
-        stream
-            .set_write_timeout(Some(Duration::from_secs(5)))
-            .map_err(|e| e.to_string())?;
-        stream.set_nodelay(true).map_err(|e| e.to_string())?;
-        let mut reader = BufReader::new(stream);
+        let mut reader = connect_transport(&server)?;
         let mut response = exchange(
             &mut reader,
             &Request::Connect {
                 protocol_version: PROTOCOL_VERSION,
-                pilot,
-                resume_token: token,
+                pilot: pilot.clone(),
+                resume_token: token.clone(),
             },
         )?;
         if !response.ok {
             return Err(response.message);
         }
-        if let Some(token) = response.resume_token.take() {
-            save_token(&path, &token)?;
+        if let Some(issued) = response.resume_token.take() {
+            save_token(&path, &issued)?;
+            token = Some(issued);
         }
         updates.send(Update::Ready).map_err(|e| e.to_string())?;
         updates
             .send(Update::Response(Box::new(response), true))
             .map_err(|e| e.to_string())?;
         let mut last_snapshot = Instant::now();
+        let mut retries_left = 3u32;
         loop {
             let (request, visible) = match commands.recv_timeout(Duration::from_millis(50)) {
                 Ok(request) => (request, true),
@@ -156,10 +221,91 @@ fn worker(
                 }
                 Err(mpsc::RecvTimeoutError::Disconnected) => return Ok(()),
             };
-            let response = exchange(&mut reader, &request).map_err(|error| {
-                if visible { format!("{error}. Action outcome unknown; reconnect and inspect state before retrying.") }
-                else { error }
-            })?;
+            let response = match exchange(&mut reader, &request) {
+                Ok(response) => response,
+                Err(error) => {
+                    let uncertainty = if visible {
+                        " Action outcome unknown; inspect refreshed state before retrying. The action will not be replayed."
+                    } else {
+                        ""
+                    };
+                    let explanation = format!("{error}.{uncertainty} Reconnecting; queued actions and flight input are discarded.");
+                    updates
+                        .send(Update::Reconnecting(explanation.clone()))
+                        .map_err(|e| e.to_string())?;
+                    let _ = reader.get_mut().shutdown(std::net::Shutdown::Both);
+                    if token.is_none() {
+                        return Err(format!("{explanation} No saved identity is available for safe automatic recovery."));
+                    }
+                    let mut recovered = None;
+                    let mut last_error = error;
+                    while retries_left > 0 {
+                        retries_left -= 1;
+                        if !discard_pending(&commands, &controls) {
+                            return Ok(());
+                        }
+                        // A dropped sender cancels recovery promptly; received requests are discarded.
+                        let wait_until =
+                            Instant::now() + Duration::from_millis(250 * (3 - retries_left) as u64);
+                        while Instant::now() < wait_until {
+                            match commands
+                                .recv_timeout(wait_until.saturating_duration_since(Instant::now()))
+                            {
+                                Ok(_) => {}
+                                Err(mpsc::RecvTimeoutError::Timeout) => break,
+                                Err(mpsc::RecvTimeoutError::Disconnected) => return Ok(()),
+                            }
+                        }
+                        let attempt = (|| {
+                            let mut next = connect_transport(&server)?;
+                            let mut resumed = exchange(
+                                &mut next,
+                                &Request::Connect {
+                                    protocol_version: PROTOCOL_VERSION,
+                                    pilot: pilot.clone(),
+                                    resume_token: token.clone(),
+                                },
+                            )?;
+                            if !resumed.ok {
+                                return Err(format!("Resume rejected: {}", resumed.message));
+                            }
+                            if let Some(issued) = resumed.resume_token.take() {
+                                save_token(&path, &issued)?;
+                                token = Some(issued);
+                            }
+                            Ok::<_, String>((next, resumed))
+                        })();
+                        match attempt {
+                            Ok(value) => {
+                                recovered = Some(value);
+                                break;
+                            }
+                            Err(error) => {
+                                let rejected = error.starts_with("Resume rejected:");
+                                last_error = error;
+                                if rejected {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    let Some((next, mut resumed)) = recovered else {
+                        return Err(format!("Automatic reconnect stopped: {last_error}.{uncertainty} Use Reconnect when the server is available."));
+                    };
+                    if !discard_pending(&commands, &controls) {
+                        return Ok(());
+                    }
+                    reader = next;
+                    resumed.message =
+                        format!("Connection restored; authoritative state refreshed.{uncertainty}");
+                    updates.send(Update::Ready).map_err(|e| e.to_string())?;
+                    updates
+                        .send(Update::Response(Box::new(resumed), true))
+                        .map_err(|e| e.to_string())?;
+                    last_snapshot = Instant::now();
+                    continue;
+                }
+            };
             last_snapshot = Instant::now();
             updates
                 .send(Update::Response(Box::new(response), visible))
@@ -485,9 +631,26 @@ impl Cockpit {
         for update in updates {
             match update {
                 Update::Ready => {
+                    self.frozen_time = None;
+                    self.timeline_origin = None;
+                    self.motion.clear();
+                    self.effects.clear();
+                    self.snapshot = None;
                     self.connected = true;
                     self.connecting = false;
                     self.notice.clear();
+                }
+                Update::Reconnecting(message) => {
+                    if self.frozen_time.is_none() {
+                        self.frozen_time = Some(self.presentation_time());
+                    }
+                    self.effects.clear();
+                    self.request_pending = false;
+                    self.pilot_input.relinquish(&self.controls);
+                    self.connected = false;
+                    self.connecting = true;
+                    self.notice = message.clone();
+                    self.log(message, true);
                 }
                 Update::Failure(error) => {
                     self.effects.clear();

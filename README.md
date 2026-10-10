@@ -299,3 +299,20 @@ remain online until the server's 120-second read timeout. Server restart clears
 presence, while saved ships and cargo remain. The server remains one authority;
 automatic clustering and ship-computer execution are not implemented in this build.
 See [legacy system findings](docs/legacy-systems.md) for the source-grounded port plan.
+
+
+### Cockpit instruments and connection recovery
+
+Cockpit instrument text uses the physical display faces for positioning, clipping,
+and sizing. The center display reports speed, body-axis velocity, heading, pitch
+and navigation mode. Side displays show server-reported local contacts, selected
+center range, lock state, mining cycles, cargo capacity and credits. These are live
+simulation values; power, heat and damage sensor models are not implemented.
+Readings are marked stale when disconnected or snapshots stop arriving. Collapse
+**Ship controls** using its title arrow when you want the physical screens exposed.
+
+The client preserves partial TCP responses across short read timeouts, and attempts
+up to three saved-identity reconnects per session after a transport failure. Recovery
+discards queued actions and flight input, refreshes authoritative state, and never
+replays an action whose response was lost. If recovery fails, **Session → Reconnect**
+starts a new attempt. An uncertain action remains flagged for inspection.

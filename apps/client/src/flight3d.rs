@@ -858,75 +858,15 @@ impl FlightView {
                 }
                 if cockpit {
                     if let Some(own) = own_pilot {
-                        let speed = own.flight.as_ref().map_or(0.0, |f| {
-                            f.warp
-                                .as_ref()
-                                .map_or(f.velocity, |w| arkline_protocol::sample_warp(w, now).1)
-                                .iter()
-                                .map(|v| v * v)
-                                .sum::<f64>()
-                                .sqrt()
-                        });
-                        let local =
-                            |p: Vec3| project_point(cockpit_vp, rect, eye + rotation * (p * 0.025));
-                        for (point, text) in [
-                            (
-                                Vec3::new(0.58, -0.12, 0.0),
-                                format!(
-                                    "{}\nORE {}\n{}",
-                                    super::format_speed(speed),
-                                    own.ore,
-                                    match own.location {
-                                        Location::InTransit { arrives_at_ms, .. } => format!(
-                                            "WARP {:.1}s",
-                                            arrives_at_ms.saturating_sub(now) as f64 / 1000.0
-                                        ),
-                                        Location::Docked => "DOCKED".into(),
-                                        _ => "LOCAL FLIGHT".into(),
-                                    }
-                                ),
-                            ),
-                            (
-                                Vec3::new(0.77, -0.18, -0.22),
-                                format!(
-                                    "SYSTEM {}\n{}\n{}",
-                                    own.system_id,
-                                    module_instrument(own, 0, now),
-                                    module_instrument(own, 1, now)
-                                ),
-                            ),
-                            (
-                                Vec3::new(0.77, -0.18, 0.22),
-                                format!(
-                                    "TARGET {}\n{}",
-                                    selected_distance.map_or("NONE".into(), super::format_distance),
-                                    if matches!(own.location, Location::InTransit { .. }) {
-                                        "WARP"
-                                    } else if matches!(own.location, Location::Jumping { .. }) {
-                                        "JUMP"
-                                    } else {
-                                        own.flight.as_ref().map_or("OFFLINE", |f| match f.mode {
-                                            NavigationMode::Stop => "STOP",
-                                            NavigationMode::Manual => "MANUAL",
-                                            NavigationMode::Approach { .. } => "APPROACH",
-                                            NavigationMode::Orbit { .. } => "ORBIT",
-                                            NavigationMode::KeepRange { .. } => "KEEP RANGE",
-                                            NavigationMode::FlyTo { .. } => "FLY TO",
-                                        })
-                                    }
-                                ),
-                            ),
-                        ] {
-                            if let Some(point) = local(point) {
-                                painter.text(
-                                    point,
-                                    egui::Align2::CENTER_CENTER,
-                                    text,
-                                    egui::FontId::monospace(12.0),
-                                    egui::Color32::from_rgb(205, 255, 230),
-                                );
-                            }
-                        }
+                        paint_instruments(
+                            &painter,
+                            rect,
+                            own,
+                            snapshot,
+                            selected_distance,
+                            now,
+                            connected,
+                        );
                         painter.circle_stroke(
                             rect.center(),
                             5.0,
@@ -1714,18 +1654,14 @@ impl Renderer {
         self.draw(
             0,
             base * transform(
-                Vec3::new(0.82, -0.42, 0.0),
+                Vec3::new(0.82, -0.50, 0.0),
                 Vec3::new(0.22, 0.13, 0.58),
                 Quat::IDENTITY,
             ),
             steel,
             0.0,
         );
-        for (center, size) in [
-            (Vec3::new(0.79, -0.20, -0.22), Vec3::new(0.012, 0.10, 0.125)),
-            (Vec3::new(0.79, -0.20, 0.22), Vec3::new(0.012, 0.10, 0.125)),
-            (Vec3::new(0.59, -0.13, 0.0), Vec3::new(0.02, 0.085, 0.17)),
-        ] {
+        for (center, size) in cockpit_screens() {
             self.draw(
                 0,
                 base * transform(center, size, Quat::IDENTITY),
@@ -2183,6 +2119,187 @@ fn transform(p: Vec3, scale: Vec3, rotation: Quat) -> Mat4 {
 fn in_warp(location: &Location, now: u64) -> bool {
     matches!(location, Location::InTransit { arrives_at_ms, .. } if now < *arrives_at_ms)
 }
+/// Shared bezel geometry and instrument layout: +X forward, +Y up, +Z right.
+fn cockpit_screens() -> [(Vec3, Vec3); 3] {
+    [
+        (Vec3::new(0.60, -0.18, 0.0), Vec3::new(0.020, 0.10, 0.15)),
+        (Vec3::new(0.78, -0.23, -0.30), Vec3::new(0.012, 0.10, 0.09)),
+        (Vec3::new(0.78, -0.23, 0.30), Vec3::new(0.012, 0.10, 0.09)),
+    ]
+}
+
+fn instrument_rect(viewport: egui::Rect, center: Vec3, size: Vec3) -> egui::Rect {
+    // Body-fixed screens and camera share orientation. Project directly in seat
+    // coordinates to avoid astronomical-world precision and use the actual face.
+    let project = |y: f32, z: f32| {
+        let depth = center.x - 0.025 - 0.006;
+        let focal = 1.0 / (1.05_f32 * 0.5).tan();
+        viewport.center() + egui::vec2(z, -y) * (viewport.height() * 0.5 * focal / depth)
+    };
+    egui::Rect::from_two_pos(
+        project(center.y + size.y - 0.008, center.z - size.z + 0.008),
+        project(center.y - size.y + 0.008, center.z + size.z - 0.008),
+    )
+}
+
+fn instrument_rows(
+    own: &PilotView,
+    snapshot: &Snapshot,
+    target_distance: Option<f64>,
+    now: u64,
+    connected: bool,
+) -> [Vec<String>; 3] {
+    let rotation = ship_orientation_at(own, now);
+    let velocity = own.flight.as_ref().map_or([0.0; 3], |f| {
+        f.warp
+            .as_ref()
+            .map_or(f.velocity, |w| arkline_protocol::sample_warp(w, now).1)
+    });
+    let speed = velocity.iter().map(|v| v * v).sum::<f64>().sqrt();
+    let body = rotation.inverse() * Vec3::from_array(velocity.map(|v| v as f32));
+    let forward = rotation * Vec3::X;
+    let bearing = (forward.z.atan2(forward.x).to_degrees() + 360.0) % 360.0;
+    let pitch = forward.y.clamp(-1.0, 1.0).asin().to_degrees();
+    let connected = connected && now.saturating_sub(snapshot.server_time_ms) <= 1500;
+    let status = if connected { "LIVE" } else { "STALE DATA" };
+    let mode = match own.location {
+        Location::Docked => "DOCKED".into(),
+        Location::InTransit { arrives_at_ms, .. } => format!(
+            "WARP ETA {:.1}s",
+            arrives_at_ms.saturating_sub(now) as f64 / 1000.0
+        ),
+        Location::Jumping { arrives_at_ms, .. } => format!(
+            "JUMP ETA {:.1}s",
+            arrives_at_ms.saturating_sub(now) as f64 / 1000.0
+        ),
+        _ => own
+            .flight
+            .as_ref()
+            .map_or("NO FLIGHT DATA", |f| match f.mode {
+                NavigationMode::Stop => "STOP / BRAKING",
+                NavigationMode::Manual => "MANUAL",
+                NavigationMode::Approach { .. } => "APPROACH",
+                NavigationMode::Orbit { .. } => "ORBIT",
+                NavigationMode::KeepRange { .. } => "KEEP RANGE",
+                NavigationMode::FlyTo { .. } => "FLY TO",
+            })
+            .into(),
+    };
+    let ships = snapshot
+        .pilots
+        .iter()
+        .filter(|p| {
+            p.system_id == own.system_id && p.name != own.name && p.location != Location::Docked
+        })
+        .count();
+    let rocks = snapshot
+        .asteroids
+        .iter()
+        .filter(|a| a.system_id == own.system_id)
+        .count();
+    let lock = if let Some(lock) = &own.target_lock {
+        format!(
+            "LOCKING #{} {:.1}s",
+            lock.asteroid_id,
+            lock.completes_at_ms.saturating_sub(now) as f64 / 1000.0
+        )
+    } else if let Some(id) = own.locked_asteroid {
+        format!("LOCKED #{id}")
+    } else {
+        "NO TARGET LOCK".into()
+    };
+    [
+        vec![
+            format!("FLIGHT / {status}"),
+            mode,
+            format!("SPEED {}", super::format_speed(speed)),
+            format!("FWD {:+.1} m/s", body.x),
+            format!("RIGHT {:+.1} m/s", body.z),
+            format!("UP {:+.1} m/s", body.y),
+            format!("HDG {bearing:05.1}  PITCH {pitch:+.1}"),
+            "BODY-AXIS VELOCITY".into(),
+        ],
+        vec![
+            format!("NAV / {status}"),
+            format!("SYSTEM {}", own.system_id),
+            format!("SHIPS {ships}  ROCKS {rocks}"),
+            "SERVER CONTACT LIST".into(),
+            "SELECTED CENTER RANGE".into(),
+            target_distance.map_or("NO SELECTION".into(), super::format_distance),
+            lock,
+            "RANGE / TRUE DISTANCE".into(),
+        ],
+        vec![
+            format!("MODULES / {status}"),
+            module_instrument(own, 0, now),
+            module_instrument(own, 1, now),
+            format!("HOLD {} / {}", own.ore, arkline_protocol::CARGO_CAPACITY),
+            format!("CREDITS {}", own.credits),
+            format!(
+                "YIELD {} / CYCLE",
+                arkline_protocol::mining_spec(own.ship_class).yield_units
+            ),
+            "SERVER-TIMED MODULES".into(),
+            "CARGO CAPACITY".into(),
+        ],
+    ]
+}
+
+fn paint_instruments(
+    painter: &egui::Painter,
+    viewport: egui::Rect,
+    own: &PilotView,
+    snapshot: &Snapshot,
+    target_distance: Option<f64>,
+    now: u64,
+    connected: bool,
+) {
+    let rows = instrument_rows(own, snapshot, target_distance, now, connected);
+    let connected = connected && now.saturating_sub(snapshot.server_time_ms) <= 1500;
+    let color = if connected { super::TEAL } else { super::AMBER };
+    for (index, (center, size)) in cockpit_screens().into_iter().enumerate() {
+        let screen = instrument_rect(viewport, center, size);
+        let inner = screen.shrink(screen.width().min(screen.height()) * 0.045);
+        let painter = painter.with_clip_rect(inner.intersect(viewport));
+        painter.rect_filled(inner, 0.0, egui::Color32::from_rgb(2, 14, 10));
+        let row_height = inner.height() / 10.0;
+        let font = (inner.width() / 18.0).min(row_height * 0.75);
+        for (row, text) in rows[index].iter().enumerate() {
+            painter.text(
+                inner.left_top() + egui::vec2(3.0, row_height * row as f32 + 2.0),
+                egui::Align2::LEFT_TOP,
+                text,
+                egui::FontId::monospace(font),
+                if row == 0 {
+                    color
+                } else {
+                    egui::Color32::from_rgb(185, 226, 208)
+                },
+            );
+        }
+        let baseline = inner.top() + row_height * 8.6;
+        painter.line_segment(
+            [
+                egui::pos2(inner.left(), baseline),
+                egui::pos2(inner.right(), baseline),
+            ],
+            egui::Stroke::new(1.0, color.gamma_multiply(0.35)),
+        );
+        if index == 2 {
+            let width = inner.width()
+                * (own.ore as f32 / arkline_protocol::CARGO_CAPACITY as f32).clamp(0.0, 1.0);
+            painter.rect_filled(
+                egui::Rect::from_min_size(
+                    egui::pos2(inner.left(), baseline + 3.0),
+                    egui::vec2(width, row_height * 0.45),
+                ),
+                0.0,
+                color,
+            );
+        }
+    }
+}
+
 fn module_instrument(pilot: &PilotView, module_id: u8, now: u64) -> String {
     if let Some(cycle) = super::effects::module_cycle(pilot, module_id, now) {
         format!(
@@ -2833,6 +2950,80 @@ vec2 sun=p-vec2(0.84,0.82);float flare=0.0018/(dot(sun,sun)+0.006);c+=vec3(0.17,
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn instrument_faces_match_projection_and_do_not_overlap_after_resize() {
+        for size in [
+            egui::vec2(1100.0, 768.0),
+            egui::vec2(1800.0, 1200.0),
+            egui::vec2(2560.0, 1440.0),
+        ] {
+            let viewport = egui::Rect::from_min_size(egui::pos2(17.0, 29.0), size);
+            let vp = Mat4::perspective_rh_gl(1.05, viewport.aspect_ratio(), 0.0002, 10.0)
+                * Mat4::look_at_rh(Vec3::ZERO, Vec3::X, Vec3::Y);
+            let screens = cockpit_screens().map(|(center, size)| {
+                let rect = instrument_rect(viewport, center, size);
+                assert!(viewport.contains_rect(rect));
+                let corner = Vec3::new(
+                    center.x - 0.031,
+                    center.y + size.y - 0.008,
+                    center.z - size.z + 0.008,
+                ) * 0.025;
+                assert!(
+                    project_point(vp, viewport, corner)
+                        .unwrap()
+                        .distance(rect.left_top())
+                        < 0.001
+                );
+                rect
+            });
+            assert!(!screens[0].intersects(screens[1]));
+            assert!(!screens[0].intersects(screens[2]));
+            assert!(!screens[1].intersects(screens[2]));
+        }
+    }
+
+    #[test]
+    fn cockpit_telemetry_uses_ship_state_and_marks_disconnection_stale() {
+        let mut pilot: PilotView = serde_json::from_value(serde_json::json!({
+            "name":"InstrumentQA", "credits":123, "ore":225, "location":Location::Belt,
+            "system_id":2, "locked_asteroid":7
+        }))
+        .unwrap();
+        pilot.flight = Some(arkline_protocol::FlightState {
+            position: [0.0; 3],
+            velocity: [3.0, 4.0, 0.0],
+            heading: [1.0, 0.0, 0.0],
+            orientation: [0.0, 0.0, 0.0, 1.0],
+            angular_velocity: [0.0; 3],
+            mode: NavigationMode::Manual,
+            updated_at_ms: 1000,
+            warp: None,
+        });
+        let snapshot = Snapshot {
+            stored_ore: 0,
+            server_time_ms: 1000,
+            online_pilots: vec![],
+            asteroids: vec![],
+            pilots: vec![pilot.clone()],
+            orders: vec![],
+            belt_ore: 0,
+            ledger_sequence: 0,
+            ledger_hash: String::new(),
+        };
+        let rows = instrument_rows(&pilot, &snapshot, Some(5000.0), 1000, true);
+        assert!(rows[0].contains(&"FWD +3.0 m/s".to_string()));
+        assert!(rows[0].contains(&"UP +4.0 m/s".to_string()));
+        let expired = instrument_rows(&pilot, &snapshot, None, 3000, true);
+        assert!(expired.iter().all(|rows| rows[0].contains("STALE DATA")));
+        assert!(rows[1].contains(&"LOCKED #7".to_string()));
+        assert!(rows[1].contains(&super::super::format_distance(5000.0)));
+        assert!(rows[2].contains(&"HOLD 225 / 1000".to_string()));
+        assert!(rows[2].contains(&"CREDITS 123".to_string()));
+        let stale = instrument_rows(&pilot, &snapshot, None, 1000, false);
+        assert!(stale.iter().all(|rows| rows[0].contains("STALE DATA")));
+        assert!(stale[1].contains(&"NO SELECTION".to_string()));
+    }
+
     #[test]
     fn tactical_rings_use_real_kilometers_and_bounded_geometry() {
         let rings = tactical_radii(350.0);
