@@ -158,6 +158,7 @@ mod tests {
                 target_lock: None,
                 target_locks: vec![],
                 locked_asteroids: vec![],
+                drones: vec![],
                 drone: None,
                 location: Location::Station,
                 flight: Some(FlightState {

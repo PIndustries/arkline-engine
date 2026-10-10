@@ -176,6 +176,7 @@ mod tests {
                 target_locks: vec![],
                 locked_asteroids: vec![],
                 drone: None,
+                drones: vec![],
                 flight: Some(FlightState {
                     warp: None,
                     orientation: [0.0, 0.0, 0.0, 1.0],

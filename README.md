@@ -320,17 +320,30 @@ replays an action whose response was lost. If recovery fails, **Session → Reco
 starts a new attempt. An uncertain action remains flagged for inspection.
 
 
-### Recon drone and cockpit camera
+### Drone fleets and cockpit screens
 
-**Ship controls** includes a recon drone launcher. Launch deploys one drone outside
-the hull; **Fly to selected**, **Hold**, and **Recall** send authoritative commands.
-The drone travels at up to 150 m/s within 10 km of its ship. Asteroid navigation stops
-100 m above the surface. Explicit recall flies back before recovering the drone.
-This prototype automatically recovers it on warp, docking, jump, disconnect, restart
-or control-range loss; those safety recoveries are instantaneous.
+The **Fleet** console supports five recon, five mining and five attack drones per
+pilot. Select a drone by its ID to navigate, hold, recall or assign it. Each has
+server-owned position, signal strength and hit points. Mining drones approach a
+confirmed asteroid lock and repeat an eight-second, ten-ore cycle into the owner's
+cargo. Attack drones damage other pilots' deployed drones; ships and cargo are not
+combat targets in this preview. Deployments are free test equipment, not a finished
+drone manufacturing or replacement economy.
 
-Enable **Drone camera on cockpit screen** to replace the left navigation display
-with a live 3D view from the drone's position and heading. Ship flight instruments and
-mining instruments remain visible on the other screens. The feed is disabled when
-disconnected or snapshot data is stale. This first drone is for reconnaissance; it
-has no mining/combat payload, manufacturing cost, damage model or fleet control.
+The 10 km control link weakens with distance. At signal loss, work stops and the
+drone returns autonomously; recall remains available. Warp, docking, jump, final
+disconnect and restart recover the fleet immediately under the current preview
+policy. Individual recall normally travels home before recovery.
+
+The left physical screen shows the selected drone's **POV** or **Orbit camera**.
+Every drone can be selected; one live world-camera pass is rendered at a time.
+Signal degradation adds noise and darkens the picture; a lost/stale link is labeled.
+The cockpit includes a selectable 2D local map and a ship-relative 3D holographic
+map with real-distance rings. Scroll over a map to change range, and click a contact
+to select it. Ship orientation drives the map axes. The center console provides
+Nav, Modules, Fleet, station services and Settings, including view-mode switching.
+Cockpit field of view is 70 degrees. The slim service rail uses hover labels;
+other view modes retain compact floating windows.
+
+See [public preview readiness](docs/public-preview-readiness.md) for the remaining
+publication gates. The repository is still private and not yet open-source licensed.

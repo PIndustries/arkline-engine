@@ -414,6 +414,28 @@ pub const GENESIS_HASH: &str = "000000000000000000000000000000000000000000000000
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "command", rename_all = "snake_case")]
 pub enum Request {
+    LaunchDroneClass {
+        class: DroneClass,
+    },
+    RecallDroneById {
+        id: u64,
+    },
+    DroneHoldById {
+        id: u64,
+    },
+    DroneNavigateById {
+        id: u64,
+        position: [f64; 3],
+    },
+    AssignMiningDrone {
+        id: u64,
+        target_id: u64,
+    },
+    AssignAttackDrone {
+        id: u64,
+        target_pilot: String,
+        target_drone_id: u64,
+    },
     UnlockAsteroid {
         id: u64,
     },
@@ -593,17 +615,79 @@ pub fn lock_duration_ms(ship: ShipClass, radius: f64) -> u64 {
 }
 
 pub const MAX_TARGET_LOCKS: usize = 5;
+pub const DRONE_CLASS_CAP: usize = 5;
+pub const MAX_DRONES: usize = 15;
+pub const DRONE_HIT_POINTS: u32 = 100;
+pub const DRONE_ATTACK_DAMAGE: u32 = 10;
+pub const DRONE_ATTACK_INTERVAL_MS: u64 = 1000;
+pub const DRONE_ATTACK_RANGE: f64 = 1000.0;
+pub const DRONE_MINING_CYCLE_MS: u64 = 8000;
+pub const DRONE_MINING_YIELD: u64 = 10;
+pub const DRONE_MINING_RANGE: f64 = 500.0;
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DroneClass {
+    #[default]
+    Recon,
+    Mining,
+    Attack,
+}
+pub fn drone_speed(class: DroneClass) -> f64 {
+    match class {
+        DroneClass::Recon => 150.0,
+        DroneClass::Mining => 100.0,
+        DroneClass::Attack => 200.0,
+    }
+}
+pub fn drone_signal_strength(drone: [f64; 3], ship: [f64; 3]) -> f64 {
+    let distance = drone
+        .iter()
+        .zip(ship)
+        .map(|(a, b)| (a - b).powi(2))
+        .sum::<f64>()
+        .sqrt();
+    (1.0 - distance / DRONE_MAX_RANGE).clamp(0.0, 1.0)
+}
+fn default_drone_hit_points() -> u32 {
+    DRONE_HIT_POINTS
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DroneMiningCycle {
+    pub started_at_ms: u64,
+    pub completes_at_ms: u64,
+}
 pub const DRONE_MAX_RANGE: f64 = 10_000.0;
 pub const DRONE_SPEED: f64 = 150.0;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum DroneMode {
+    Mining {
+        target_id: u64,
+    },
+    Attacking {
+        target_pilot: String,
+        target_drone_id: u64,
+    },
     Hold,
-    FlyTo { position: [f64; 3] },
+    FlyTo {
+        position: [f64; 3],
+    },
     Returning,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DroneView {
+    #[serde(default)]
+    pub id: u64,
+    #[serde(default)]
+    pub class: DroneClass,
+    #[serde(default = "default_drone_hit_points")]
+    pub hit_points: u32,
+    #[serde(default)]
+    pub signal_strength: f64,
+    #[serde(default)]
+    pub mining_cycle: Option<DroneMiningCycle>,
+    #[serde(default)]
+    pub attack_ready_at_ms: Option<u64>,
     pub position: [f64; 3],
     pub velocity: [f64; 3],
     pub heading: [f64; 3],
@@ -640,6 +724,8 @@ pub struct MiningModule {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PilotView {
+    #[serde(default)]
+    pub drones: Vec<DroneView>,
     #[serde(default)]
     pub target_locks: Vec<TargetLock>,
     #[serde(default)]

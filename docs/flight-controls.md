@@ -128,3 +128,20 @@ connection loss. The command client keeps its connection open until lock confirm
 The two mining mounts independently track their authoritative assigned targets with a limited
 visual turning rate. Each active module uses its own turret muzzle for the extraction beam. This is a mining
 module, not a combat damage system or a general module-fitting inventory.
+
+
+## Cockpit console and drone fleet (26.10.10.11)
+
+Cockpit operations are available through the fixed physical console tabs. Nav
+contains target selection and navigation; Modules assigns miners to independently
+locked asteroids; Fleet launches and controls up to five drones of each class.
+Settings also exposes all view modes. Overview and flight-help overlays are hidden
+in cockpit mode to preserve the canopy view. Instrument clicks suppress flight
+input, and maps do not capture right-button aiming.
+
+The upper side screens contain local 2D and ship-relative 3D maps. Scroll controls
+real-distance range; click contacts to select them. The lower left screen displays
+the selected drone. Choose POV or Orbit camera from Fleet. Signal is authoritative
+and distance-based, with increasing noise as the link weakens. Only one selected
+camera is rendered at once. Recon is observation/navigation; mining drones repeat
+real ore extraction; attack drones currently fight other drones only.

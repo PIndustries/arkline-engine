@@ -320,6 +320,7 @@ fn worker(
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ServiceTab {
+    Navigation,
     Station,
     Corporation,
     Hangar,
@@ -328,6 +329,8 @@ enum ServiceTab {
     Activity,
     Ledger,
     Settings,
+    Modules,
+    Drones,
 }
 #[derive(Clone, PartialEq, Eq)]
 pub(crate) enum SelectedObject {
@@ -382,6 +385,9 @@ struct Cockpit {
     selected_object: SelectedObject,
     mining_target: Option<u64>,
     drone_camera: bool,
+    selected_drone: Option<u64>,
+    drone_orbit: bool,
+    drone_attack_target: Option<(String, u64)>,
     sell_amount: u64,
     audit_updates: Option<Receiver<Result<String, String>>>,
     audit_result: Option<Result<String, String>>,
@@ -438,10 +444,13 @@ impl Cockpit {
             frozen_time: None,
             focus_on_first_frame: true,
             local_server: None,
-            service_tab: ServiceTab::Cargo,
+            service_tab: ServiceTab::Modules,
             selected_object: SelectedObject::Station,
             mining_target: None,
             drone_camera: true,
+            selected_drone: None,
+            drone_orbit: false,
+            drone_attack_target: None,
             sell_amount: 25,
             audit_updates: None,
             audit_result: None,
@@ -461,6 +470,9 @@ impl Cockpit {
         self.theme.accent()
     }
     fn settings_panel(&mut self, ui: &mut egui::Ui) {
+        ui.small("VIEW MODE");
+        ui.horizontal_wrapped(|ui| self.view_selector(ui));
+        ui.separator();
         ui.label(
             egui::RichText::new("COCKPIT APPEARANCE")
                 .color(self.accent())
@@ -536,6 +548,8 @@ impl Cockpit {
         self.feed.clear();
         self.selected_object = SelectedObject::Station;
         self.mining_target = None;
+        self.selected_drone = None;
+        self.drone_attack_target = None;
         self.audit_result = None;
         self.audit_updates = None;
         self.request_pending = false;
@@ -1113,70 +1127,125 @@ impl Cockpit {
         }
     }
 
-    fn flight_deck(&mut self, ui: &mut egui::Ui) {
-        let Some(pilot) = self.own() else {
-            return;
-        };
-        ui.columns(3, |columns| {
-            columns[0].horizontal(|ui| {
-                ui.label(
-                    egui::RichText::new(&pilot.name)
-                        .color(self.accent())
-                        .strong(),
-                );
-                ui.small(format!("{} CR", pilot.credits));
-            });
-            columns[0].small(format!(
-                "{} · {}",
-                pilot.ship_class.spec().name,
-                format_distance(pilot.ship_class.spec().length_m)
-            ));
-            let speed = pilot.flight.as_ref().map_or(0.0, |f| {
-                let velocity = f
-                    .warp
-                    .as_ref()
-                    .filter(|_| matches!(pilot.location, Location::InTransit { .. }))
-                    .map_or(f.velocity, |w| sample_warp(w, self.presentation_time()).1);
-                distance_m(velocity, [0.0; 3])
-            });
-            columns[0].small(format!(
-                "{}  /  {} ore aboard",
-                format_speed(speed),
-                pilot.ore
-            ));
-            columns[0].add(
-                egui::ProgressBar::new(pilot.ore as f32 / CARGO_CAPACITY as f32)
-                    .fill(self.accent())
-                    .desired_height(5.0),
-            );
-            columns[1].horizontal(|ui| {
+    fn service_tabs(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal_wrapped(|ui| {
+            for (tab, label) in [
+                (ServiceTab::Navigation, "Nav"),
+                (ServiceTab::Modules, "Modules"),
+                (ServiceTab::Drones, "Fleet"),
+                (ServiceTab::Station, "Station"),
+                (ServiceTab::Hangar, "Hangar"),
+                (ServiceTab::Cargo, "Inventory"),
+                (ServiceTab::Exchange, "Exchange"),
+                (ServiceTab::Corporation, "Corp"),
+                (ServiceTab::Activity, "Log"),
+                (ServiceTab::Ledger, "Audit"),
+                (ServiceTab::Settings, "Settings"),
+            ] {
                 if ui
-                    .add_enabled(
-                        self.can_operate() && pilot.location == Location::Docked,
-                        egui::Button::new("Undock"),
+                    .add(
+                        egui::Button::new(label)
+                            .small()
+                            .selected(self.service_tab == tab),
                     )
                     .clicked()
                 {
-                    self.send(Request::Undock);
+                    self.service_tab = tab;
                 }
-                if ui
-                    .add_enabled(self.can_dock(&pilot), egui::Button::new("Dock"))
-                    .clicked()
-                {
-                    self.send(Request::Dock);
+            }
+        });
+    }
+    fn service_content(&mut self, ui: &mut egui::Ui) {
+        match self.service_tab {
+            ServiceTab::Navigation => {
+                self.flight_deck(ui);
+                self.overview(ui);
+            }
+            ServiceTab::Modules => self.mining_module(ui),
+            ServiceTab::Drones => self.drone_controls(ui),
+            ServiceTab::Station => self.station_panel(ui),
+            ServiceTab::Corporation => self.corporation_panel(ui),
+            ServiceTab::Hangar => self.hangar_panel(ui),
+            ServiceTab::Cargo => self.cargo_panel(ui),
+            ServiceTab::Exchange => self.market(ui),
+            ServiceTab::Ledger => self.ledger_panel(ui),
+            ServiceTab::Settings => self.settings_panel(ui),
+            ServiceTab::Activity => {
+                for (entry, error) in &self.feed {
+                    ui.colored_label(if *error { AMBER } else { MUTED }, entry);
+                    ui.separator();
                 }
-                if ui
-                    .add_enabled(self.can_fly(), egui::Button::new("Stop"))
-                    .clicked()
-                {
-                    self.send(Request::Navigate {
-                        mode: NavigationMode::Stop,
-                    });
-                }
-            });
-            columns[1].small("W/S thrust · A/D strafe · Space/C vertical");
-            self.mining_module(&mut columns[2]);
-            self.drone_controls(&mut columns[1]);
+            }
+        }
+    }
+    fn flight_deck(&mut self, ui: &mut egui::Ui) {
+        let Some(pilot) = self.own() else { return };
+        let speed = pilot.flight.as_ref().map_or(0.0, |f| {
+            distance_m(
+                f.warp
+                    .as_ref()
+                    .filter(|_| matches!(pilot.location, Location::InTransit { .. }))
+                    .map_or(f.velocity, |w| sample_warp(w, self.presentation_time()).1),
+                [0.0; 3],
+            )
+        });
+        ui.horizontal_wrapped(|ui| {
+            ui.colored_label(
+                self.accent(),
+                format!("{} / {}", pilot.name, pilot.ship_class.spec().name),
+            );
+            ui.small(format!(
+                "{} · {} CR · {}/{} ore",
+                format_speed(speed),
+                pilot.credits,
+                pilot.ore,
+                CARGO_CAPACITY
+            ));
+        });
+        ui.horizontal_wrapped(|ui| {
+            if ui
+                .add_enabled(
+                    self.can_operate() && pilot.location == Location::Docked,
+                    egui::Button::new("Undock").small(),
+                )
+                .clicked()
+            {
+                self.send(Request::Undock);
+            }
+            if ui
+                .add_enabled(self.can_dock(&pilot), egui::Button::new("Dock").small())
+                .clicked()
+            {
+                self.send(Request::Dock);
+            }
+            if ui
+                .add_enabled(self.can_fly(), egui::Button::new("Stop").small())
+                .clicked()
+            {
+                self.send(Request::Navigate {
+                    mode: NavigationMode::Stop,
+                });
+            }
+            if ui.small_button("Modules").clicked() {
+                self.service_tab = ServiceTab::Modules;
+                self.services_open = true;
+            }
+            if ui.small_button("Drone fleet").clicked() {
+                self.service_tab = ServiceTab::Drones;
+                self.services_open = true;
+            }
+            let active = pilot
+                .mining_modules
+                .iter()
+                .filter(|m| m.target_id.is_some())
+                .count();
+            ui.colored_label(
+                if active > 0 { self.accent() } else { MUTED },
+                format!(
+                    "{active}/2 turrets · {} locks",
+                    Self::confirmed_locks(&pilot).len()
+                ),
+            );
         });
     }
     fn current_system(&self) -> u32 {
@@ -1425,7 +1494,10 @@ impl Cockpit {
             ));
         }
         if let Some(asteroid) = self.selected_asteroid().cloned() {
-            self.mining_module(ui);
+            if ui.small_button("Mining modules").clicked() {
+                self.service_tab = ServiceTab::Modules;
+                self.services_open = true;
+            }
             let locked = self
                 .own()
                 .is_some_and(|p| Self::confirmed_locks(&p).contains(&asteroid.id));
@@ -2636,7 +2708,7 @@ impl eframe::App for Cockpit {
             bounds,
             [0.0, 0.0],
             Vec2::new(8.0, 156.0),
-            Vec2::new(110.0, 280.0),
+            Vec2::new(38.0, 330.0),
         );
         let panel_response =
             egui::Area::new(egui::Id::new("service_launcher_overlay").with(self.layout.generation))
@@ -2645,25 +2717,37 @@ impl eframe::App for Cockpit {
                 .constrain_to(bounds)
                 .show(ctx, |ui| {
                     self.overlay_frame(ctx).show(ui, |ui| {
-                        ui.label(egui::RichText::new("SERVICES").size(10.0).color(MUTED));
-                        if ui.small_button("Overview").clicked() {
-                            self.overview_open = true;
+                        ui.set_width(28.0);
+                        if ui
+                            .add_sized([28.0, 26.0], egui::Button::new("◎"))
+                            .on_hover_text("Overview")
+                            .clicked()
+                        {
+                            if self.view_mode == ViewMode::Cockpit {
+                                self.service_tab = ServiceTab::Navigation;
+                            } else {
+                                self.overview_open = true;
+                            }
                         }
-                        for (tab, label) in [
-                            (ServiceTab::Station, "Station"),
-                            (ServiceTab::Hangar, "Hangar"),
-                            (ServiceTab::Corporation, "Corporation"),
-                            (ServiceTab::Cargo, "Inventory"),
-                            (ServiceTab::Exchange, "Exchange"),
-                            (ServiceTab::Activity, "Activity"),
-                            (ServiceTab::Ledger, "Ledger"),
-                            (ServiceTab::Settings, "Settings"),
+                        for (tab, icon, label) in [
+                            (ServiceTab::Station, "⌂", "Station"),
+                            (ServiceTab::Hangar, "H", "Hangar"),
+                            (ServiceTab::Cargo, "▣", "Inventory"),
+                            (ServiceTab::Modules, "M", "Mining modules"),
+                            (ServiceTab::Drones, "D", "Drone fleet"),
+                            (ServiceTab::Corporation, "C", "Corporation"),
+                            (ServiceTab::Exchange, "⇄", "Exchange"),
+                            (ServiceTab::Activity, "≡", "Activity"),
+                            (ServiceTab::Ledger, "✓", "Ledger audit"),
+                            (ServiceTab::Settings, "⚙", "Settings"),
                         ] {
                             if ui
-                                .selectable_label(
-                                    self.services_open && self.service_tab == tab,
-                                    label,
+                                .add_sized(
+                                    [28.0, 26.0],
+                                    egui::Button::new(icon)
+                                        .selected(self.services_open && self.service_tab == tab),
                                 )
+                                .on_hover_text(label)
                                 .clicked()
                             {
                                 self.service_tab = tab;
@@ -2679,97 +2763,101 @@ impl eframe::App for Cockpit {
             None,
             ctx.input(|i| i.pointer.any_down()),
         );
-        let mut overview_open = self.overview_open;
-        let (panel_pos, panel_size) = self.layout.position(
-            "overview",
-            bounds,
-            [1.0, 0.0],
-            Vec2::new(-8.0, 8.0),
-            Vec2::new(310.0, (bounds.height() - 260.0).max(280.0)),
-        );
-        let mut content_size = None;
-        let panel_response = egui::Window::new("Overview")
-            .id(egui::Id::new("cockpit_overview_overlay").with(self.layout.generation))
-            .open(&mut overview_open)
-            .current_pos(panel_pos)
-            .default_size(panel_size)
-            .max_width(bounds.width() - 20.0)
-            .resize(|resize| {
-                if self.layout.reflow {
-                    resize.min_size(panel_size).max_size(panel_size)
-                } else {
-                    resize
-                }
-            })
-            .min_width(275.0)
-            .max_height(bounds.height() - 24.0)
-            .resizable(!self.layout.pinned)
-            .movable(!self.layout.pinned)
-            .collapsible(true)
-            .constrain_to(bounds)
-            .frame(self.overlay_frame(ctx))
-            .vscroll(true)
-            .show(ctx, |ui| {
-                content_size = Some(ui.max_rect().size());
-                self.overview(ui);
-            });
-        if let Some(response) = panel_response {
-            self.layout.record(
+        if self.view_mode != ViewMode::Cockpit {
+            let mut overview_open = self.overview_open;
+            let (panel_pos, panel_size) = self.layout.position(
                 "overview",
                 bounds,
-                response.response.rect,
-                content_size,
-                ctx.input(|i| i.pointer.any_down()),
+                [1.0, 0.0],
+                Vec2::new(-8.0, 8.0),
+                Vec2::new(310.0, (bounds.height() - 260.0).max(280.0)),
             );
+            let mut content_size = None;
+            let panel_response = egui::Window::new("Overview")
+                .id(egui::Id::new("cockpit_overview_overlay").with(self.layout.generation))
+                .open(&mut overview_open)
+                .current_pos(panel_pos)
+                .default_size(panel_size)
+                .max_width(bounds.width() - 20.0)
+                .resize(|resize| {
+                    if self.layout.reflow {
+                        resize.min_size(panel_size).max_size(panel_size)
+                    } else {
+                        resize
+                    }
+                })
+                .min_width(275.0)
+                .max_height(bounds.height() - 24.0)
+                .resizable(!self.layout.pinned)
+                .movable(!self.layout.pinned)
+                .collapsible(true)
+                .constrain_to(bounds)
+                .frame(self.overlay_frame(ctx))
+                .vscroll(true)
+                .show(ctx, |ui| {
+                    content_size = Some(ui.max_rect().size());
+                    self.overview(ui);
+                });
+            if let Some(response) = panel_response {
+                self.layout.record(
+                    "overview",
+                    bounds,
+                    response.response.rect,
+                    content_size,
+                    ctx.input(|i| i.pointer.any_down()),
+                );
+            }
+            self.overview_open = overview_open;
         }
-        self.overview_open = overview_open;
-        let ship_width = (bounds.width() - 70.0).min(760.0);
-        let (panel_pos, panel_size) = self.layout.position(
-            "ship",
-            bounds,
-            [0.5, 1.0],
-            Vec2::new(0.0, -8.0),
-            Vec2::new(ship_width, 155.0),
-        );
-        let mut content_size = None;
-        let panel_response = egui::Window::new("Ship controls")
-            .id(egui::Id::new("ship_controls_overlay").with(self.layout.generation))
-            .current_pos(panel_pos)
-            .default_size(panel_size)
-            .max_width(bounds.width() - 20.0)
-            .resize(|resize| {
-                if self.layout.reflow {
-                    resize.min_size(panel_size).max_size(panel_size)
-                } else {
-                    resize
-                }
-            })
-            .min_width(570.0)
-            .resizable(!self.layout.pinned)
-            .movable(!self.layout.pinned)
-            .collapsible(true)
-            .constrain_to(bounds)
-            .frame(self.overlay_frame(ctx))
-            .show(ctx, |ui| {
-                content_size = Some(ui.max_rect().size());
-                self.flight_deck(ui);
-            });
-        if let Some(response) = panel_response {
-            self.layout.record(
+        if self.view_mode != ViewMode::Cockpit {
+            let ship_width = (bounds.width() - 70.0).min(760.0);
+            let (panel_pos, panel_size) = self.layout.position(
                 "ship",
                 bounds,
-                response.response.rect,
-                content_size,
-                ctx.input(|i| i.pointer.any_down()),
+                [0.5, 1.0],
+                Vec2::new(0.0, -8.0),
+                Vec2::new(ship_width, 52.0),
             );
+            let mut content_size = None;
+            let panel_response = egui::Window::new("Ship controls")
+                .id(egui::Id::new("ship_controls_overlay").with(self.layout.generation))
+                .current_pos(panel_pos)
+                .default_size(panel_size)
+                .max_width(bounds.width() - 20.0)
+                .resize(|resize| {
+                    if self.layout.reflow {
+                        resize.min_size(panel_size).max_size(panel_size)
+                    } else {
+                        resize
+                    }
+                })
+                .min_width(570.0)
+                .resizable(!self.layout.pinned)
+                .movable(!self.layout.pinned)
+                .collapsible(true)
+                .constrain_to(bounds)
+                .frame(self.overlay_frame(ctx))
+                .show(ctx, |ui| {
+                    content_size = Some(ui.max_rect().size());
+                    self.flight_deck(ui);
+                });
+            if let Some(response) = panel_response {
+                self.layout.record(
+                    "ship",
+                    bounds,
+                    response.response.rect,
+                    content_size,
+                    ctx.input(|i| i.pointer.any_down()),
+                );
+            }
         }
-        if self.services_open {
+        if self.services_open && self.view_mode != ViewMode::Cockpit {
             let mut open = true;
             let (panel_pos, panel_size) = self.layout.position(
                 "services",
                 bounds,
                 [0.0, 0.0],
-                Vec2::new(130.0, 164.0),
+                Vec2::new(64.0, 164.0),
                 Vec2::new(620.0, 310.0),
             );
             let mut content_size = None;
@@ -2802,36 +2890,9 @@ impl eframe::App for Cockpit {
             .vscroll(true)
             .show(ctx, |ui| {
                 content_size = Some(ui.max_rect().size());
-                ui.horizontal_wrapped(|ui| {
-                    for (tab, label) in [
-                        (ServiceTab::Station, "Station"),
-                        (ServiceTab::Hangar, "Hangar"),
-                        (ServiceTab::Corporation, "Corporation"),
-                        (ServiceTab::Cargo, "Inventory"),
-                        (ServiceTab::Exchange, "Exchange"),
-                        (ServiceTab::Activity, "Activity"),
-                        (ServiceTab::Ledger, "Ledger"),
-                        (ServiceTab::Settings, "Settings"),
-                    ] {
-                        ui.selectable_value(&mut self.service_tab, tab, label);
-                    }
-                });
+                self.service_tabs(ui);
                 ui.separator();
-                match self.service_tab {
-                    ServiceTab::Station => self.station_panel(ui),
-                    ServiceTab::Corporation => self.corporation_panel(ui),
-                    ServiceTab::Hangar => self.hangar_panel(ui),
-                    ServiceTab::Cargo => self.cargo_panel(ui),
-                    ServiceTab::Exchange => self.market(ui),
-                    ServiceTab::Ledger => self.ledger_panel(ui),
-                    ServiceTab::Settings => self.settings_panel(ui),
-                    ServiceTab::Activity => {
-                        for (entry, error) in &self.feed {
-                            ui.colored_label(if *error { AMBER } else { MUTED }, entry);
-                            ui.separator();
-                        }
-                    }
-                }
+                self.service_content(ui);
             });
             if let Some(response) = panel_response {
                 self.layout.record(
@@ -2844,6 +2905,29 @@ impl eframe::App for Cockpit {
             }
             self.services_open = open;
         }
+        if self.view_mode == ViewMode::Cockpit {
+            if let Some(rect) = self.flight_view.cockpit_console_rect() {
+                egui::Area::new(egui::Id::new("physical_cockpit_console"))
+                    .fixed_pos(rect.min)
+                    .movable(false)
+                    .show(ctx, |ui| {
+                        ui.set_min_size(rect.size());
+                        ui.set_max_size(rect.size());
+                        ui.set_clip_rect(rect);
+                        ui.spacing_mut().item_spacing = Vec2::new(4.0, 3.0);
+                        self.service_tabs(ui);
+                        ui.separator();
+                        egui::ScrollArea::both()
+                            .id_salt("cockpit_console_content")
+                            .max_height((rect.bottom() - ui.cursor().top()).max(20.0))
+                            .max_width(rect.width())
+                            .show(ui, |ui| {
+                                ui.set_max_width(rect.width() - 12.0);
+                                self.service_content(ui);
+                            });
+                    });
+            }
+        }
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
             .show(ctx, |ui| {
@@ -2852,6 +2936,8 @@ impl eframe::App for Cockpit {
                     let display = self.snapshot.as_ref().map(|s| self.motion.sample(s, now));
                     if let Some(snapshot) = &display {
                         self.flight_view.set_drone_camera(self.drone_camera);
+                        self.flight_view
+                            .set_drone_view(self.selected_drone, self.drone_orbit);
                         if let Some(action) = self.flight_view.ui(
                             ui,
                             snapshot,
@@ -2891,7 +2977,8 @@ impl eframe::App for Cockpit {
         if self.view_mode != ViewMode::Cockpit {
             self.pilot_input.release_mouse(ctx);
         }
-        let flight_allowed = self.view_mode != ViewMode::Tactical
+        let flight_allowed = !ctx.input(|i| i.pointer.primary_down())
+            && self.view_mode != ViewMode::Tactical
             && self.connected
             && self.own().is_some_and(|p| {
                 p.flight.is_some() && matches!(p.location, Location::Station | Location::Belt)
@@ -3122,6 +3209,7 @@ mod tests {
                 ship_class: ShipClass::Pioneer,
                 target_locks: vec![],
                 locked_asteroids: vec![],
+                drones: vec![],
                 drone: None,
                 target_lock: None,
                 mining_modules: (0..2)
@@ -3173,7 +3261,8 @@ mod tests {
                     if selector {
                         ui.horizontal(|ui| cockpit.view_selector(ui));
                     } else {
-                        cockpit.flight_deck(ui);
+                        cockpit.mining_module(ui);
+                        cockpit.drone_controls(ui);
                     }
                 });
             },
@@ -3284,6 +3373,126 @@ mod tests {
         assert!(matches!(
             rx.try_recv().unwrap(),
             Request::StopMining { module_id: 1 }
+        ));
+    }
+    #[test]
+    fn physical_console_fleet_click_sends_real_command_without_flight_input() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        cockpit.view_mode = ViewMode::Cockpit;
+        let (tx, rx) = mpsc::channel();
+        cockpit.commands = Some(tx);
+        fn frame(
+            ctx: &egui::Context,
+            c: &mut Cockpit,
+            events: Vec<egui::Event>,
+        ) -> Vec<(String, Pos2)> {
+            ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        Pos2::ZERO,
+                        Vec2::new(1500.0, 1000.0),
+                    )),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| eframe::App::update(c, ctx, &mut eframe::Frame::_new_kittest()),
+            )
+            .shapes
+            .into_iter()
+            .filter_map(|s| {
+                if let egui::Shape::Text(t) = s.shape {
+                    Some((
+                        t.galley.job.text.clone(),
+                        t.pos + t.galley.rect.center().to_vec2(),
+                    ))
+                } else {
+                    None
+                }
+            })
+            .collect()
+        }
+        for _ in 0..4 {
+            frame(&ctx, &mut cockpit, vec![]);
+        }
+        let rect = cockpit.flight_view.cockpit_console_rect().unwrap();
+        let labels = frame(&ctx, &mut cockpit, vec![]);
+        assert!(!labels.iter().any(|(s, _)| s == "Overview"));
+        let fleet = labels
+            .iter()
+            .find(|(s, p)| s == "Fleet" && rect.contains(*p))
+            .unwrap()
+            .1;
+        for pressed in [true, false] {
+            frame(
+                &ctx,
+                &mut cockpit,
+                vec![
+                    egui::Event::PointerMoved(fleet),
+                    egui::Event::PointerButton {
+                        pos: fleet,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ],
+            );
+        }
+        assert!(cockpit.service_tab == ServiceTab::Drones);
+        let labels = frame(&ctx, &mut cockpit, vec![]);
+        let launch = labels
+            .iter()
+            .find(|(s, p)| s == "Launch Recon 0/5" && rect.contains(*p))
+            .unwrap()
+            .1;
+        frame(
+            &ctx,
+            &mut cockpit,
+            vec![
+                egui::Event::PointerMoved(launch),
+                egui::Event::Key {
+                    key: egui::Key::W,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: egui::Modifiers::NONE,
+                },
+                egui::Event::PointerButton {
+                    pos: launch,
+                    button: egui::PointerButton::Primary,
+                    pressed: true,
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ],
+        );
+        assert!(
+            cockpit.controls.lock().unwrap().is_none(),
+            "clicking console with W held must not emit thrust"
+        );
+        frame(
+            &ctx,
+            &mut cockpit,
+            vec![
+                egui::Event::Key {
+                    key: egui::Key::W,
+                    physical_key: None,
+                    pressed: false,
+                    repeat: false,
+                    modifiers: egui::Modifiers::NONE,
+                },
+                egui::Event::PointerButton {
+                    pos: launch,
+                    button: egui::PointerButton::Primary,
+                    pressed: false,
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ],
+        );
+        assert!(matches!(
+            rx.try_recv().unwrap(),
+            Request::LaunchDroneClass {
+                class: DroneClass::Recon
+            }
         ));
     }
     #[test]
@@ -3493,12 +3702,27 @@ mod tests {
         ui_test_click(
             &ctx,
             &mut cockpit,
-            labels.iter().find(|(t, _)| t == "Launch drone").unwrap().1,
+            labels
+                .iter()
+                .find(|(t, _)| t == "Launch Recon 0/5")
+                .unwrap()
+                .1,
             false,
         );
-        assert!(matches!(rx.try_recv().unwrap(), Request::LaunchDrone));
+        assert!(matches!(
+            rx.try_recv().unwrap(),
+            Request::LaunchDroneClass {
+                class: DroneClass::Recon
+            }
+        ));
         cockpit.request_pending = false;
         cockpit.snapshot.as_mut().unwrap().pilots[0].drone = Some(DroneView {
+            id: 1,
+            class: DroneClass::Recon,
+            hit_points: 100,
+            signal_strength: 1.0,
+            mining_cycle: None,
+            attack_ready_at_ms: None,
             position: BELT_POSITION,
             velocity: [0.0; 3],
             heading: [1.0, 0.0, 0.0],
@@ -3520,9 +3744,10 @@ mod tests {
             );
             let request = rx.try_recv().unwrap();
             assert!(match label {
-                "Hold drone" => matches!(request, Request::DroneHold),
-                "Recall drone" => matches!(request, Request::RecallDrone),
-                _ => matches!(request,Request::DroneNavigate{position} if position==expected),
+                "Hold drone" => matches!(request, Request::DroneHoldById { id: 1 }),
+                "Recall drone" => matches!(request, Request::RecallDroneById { id: 1 }),
+                _ =>
+                    matches!(request,Request::DroneNavigateById{id:1,position} if position==expected),
             });
             cockpit.request_pending = false;
         }
@@ -3544,11 +3769,140 @@ mod tests {
         );
     }
     #[test]
+    fn fleet_selection_routes_commands_by_id_and_limits_each_class() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        cockpit.snapshot.as_mut().unwrap().pilots[0].drones = (1..=5)
+            .map(|id| DroneView {
+                id,
+                class: DroneClass::Recon,
+                hit_points: 100,
+                signal_strength: 1.0,
+                mining_cycle: None,
+                attack_ready_at_ms: None,
+                position: BELT_POSITION,
+                velocity: [0.0; 3],
+                heading: [1.0, 0.0, 0.0],
+                mode: DroneMode::Hold,
+                updated_at_ms: 1000,
+            })
+            .collect();
+        let (tx, rx) = mpsc::channel();
+        cockpit.commands = Some(tx);
+        let labels = ui_test_frame(&ctx, &mut cockpit, vec![], false);
+        let second = labels
+            .iter()
+            .find(|(t, _)| t.starts_with("#02 Recon"))
+            .unwrap()
+            .1;
+        ui_test_click(&ctx, &mut cockpit, second, false);
+        assert_eq!(cockpit.selected_drone, Some(2));
+        let labels = ui_test_frame(&ctx, &mut cockpit, vec![], false);
+        ui_test_click(
+            &ctx,
+            &mut cockpit,
+            labels.iter().find(|(t, _)| t == "Hold drone").unwrap().1,
+            false,
+        );
+        assert!(matches!(
+            rx.try_recv().unwrap(),
+            Request::DroneHoldById { id: 2 }
+        ));
+        cockpit.request_pending = false;
+        let labels = ui_test_frame(&ctx, &mut cockpit, vec![], false);
+        ui_test_click(
+            &ctx,
+            &mut cockpit,
+            labels
+                .iter()
+                .find(|(t, _)| t == "Launch Recon 5/5")
+                .unwrap()
+                .1,
+            false,
+        );
+        assert!(rx.try_recv().is_err());
+        let labels = ui_test_frame(&ctx, &mut cockpit, vec![], false);
+        ui_test_click(
+            &ctx,
+            &mut cockpit,
+            labels
+                .iter()
+                .find(|(t, _)| t == "Launch Mining 0/5")
+                .unwrap()
+                .1,
+            false,
+        );
+        assert!(matches!(
+            rx.try_recv().unwrap(),
+            Request::LaunchDroneClass {
+                class: DroneClass::Mining
+            }
+        ));
+        cockpit.request_pending = false;
+        let labels = ui_test_frame(&ctx, &mut cockpit, vec![], false);
+        ui_test_click(
+            &ctx,
+            &mut cockpit,
+            labels.iter().find(|(t, _)| t == "Orbit camera").unwrap().1,
+            false,
+        );
+        assert!(cockpit.drone_orbit);
+        assert!(rx.try_recv().is_err());
+        cockpit.snapshot.as_mut().unwrap().pilots[0].drones[1].class = DroneClass::Mining;
+        cockpit.snapshot.as_mut().unwrap().pilots[0].locked_asteroids = vec![7];
+        let labels = ui_test_frame(&ctx, &mut cockpit, vec![], false);
+        ui_test_click(
+            &ctx,
+            &mut cockpit,
+            labels
+                .iter()
+                .find(|(t, _)| t == "Mine locked target")
+                .unwrap()
+                .1,
+            false,
+        );
+        assert!(matches!(
+            rx.try_recv().unwrap(),
+            Request::AssignMiningDrone {
+                id: 2,
+                target_id: 7
+            }
+        ));
+        cockpit.request_pending = false;
+        cockpit.snapshot.as_mut().unwrap().pilots[0].drones[1].class = DroneClass::Attack;
+        let mut enemy = cockpit.snapshot.as_ref().unwrap().pilots[0].clone();
+        enemy.name = "Other pilot".into();
+        enemy.drones.truncate(1);
+        enemy.drones[0].id = 99;
+        cockpit.snapshot.as_mut().unwrap().pilots.push(enemy);
+        cockpit.drone_attack_target = Some(("Other pilot".into(), 99));
+        let labels = ui_test_frame(&ctx, &mut cockpit, vec![], false);
+        ui_test_click(
+            &ctx,
+            &mut cockpit,
+            labels
+                .iter()
+                .find(|(t, _)| t == "Attack selected drone")
+                .unwrap()
+                .1,
+            false,
+        );
+        assert!(
+            matches!(rx.try_recv().unwrap(),Request::AssignAttackDrone{id:2,target_pilot,target_drone_id:99} if target_pilot=="Other pilot")
+        );
+    }
+    #[test]
     fn drone_asteroid_waypoint_faces_drone_and_stays_outside_surface() {
         let ctx = egui::Context::default();
         let mut cockpit = view_test_cockpit(&ctx);
         let pilot = &mut cockpit.snapshot.as_mut().unwrap().pilots[0];
         pilot.drone = Some(DroneView {
+            id: 1,
+            class: DroneClass::Recon,
+            hit_points: 100,
+            signal_strength: 1.0,
+            mining_cycle: None,
+            attack_ready_at_ms: None,
             position: [BELT_POSITION[0] - 3000.0, 0.0, 0.0],
             velocity: [0.0; 3],
             heading: [1.0, 0.0, 0.0],
@@ -3897,6 +4251,7 @@ mod tests {
                 locked_asteroid: None,
                 target_locks: vec![],
                 locked_asteroids: vec![],
+                drones: vec![],
                 drone: None,
                 target_lock: None,
                 mining_modules: vec![],
@@ -4115,6 +4470,7 @@ mod tests {
             locked_asteroid: None,
             target_locks: vec![],
             locked_asteroids: vec![],
+            drones: vec![],
             drone: None,
             target_lock: None,
             mining_modules: vec![],

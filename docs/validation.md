@@ -341,3 +341,41 @@ accepted the ledger (1000 credits, 99100 remaining belt ore). Native screen capt
 failed in macOS ScreenCaptureKit despite a fresh inspection session, preventing final
 visual/FPS validation of the camera feed. The owner's live save was not used for this
 acceptance run. No drone combat/mining payload or fleet management is implemented.
+
+## Fleet and physical cockpit console — 26.10.10.11
+
+This build adds five drones per class (recon, mining, attack), owned per-drone
+commands, signal strength, autonomous return after link loss, repeated mining
+extraction, and drone-only combat. Independent acceptance covers class/total caps,
+cross-pilot command rejection, two mining cycles with exact depletion and ledger
+verification, assigned-target damage/destruction, an untouched bystander, and
+physical return. Lifecycle tests cover restart and legacy singleton migration;
+formation tests cover all hulls, steep pitch and free-slot reuse.
+
+The cockpit has six shared-geometry screen faces, a 70-degree vertical field of
+view, a real service console, selectable local 2D and body-relative 3D maps, and a
+selected-drone POV/orbit feed. Projection tests cover all six screens at multiple
+window sizes, astronomical offsets, orbit target framing, vertical camera headings
+and orientation-relative map scale. Full-app pointer testing clicks Fleet and
+Launch through the physical console and checks that clicking while holding thrust
+does not issue flight input. Noise uses the authoritative distance-based link and
+is bounded in screen space; one selected world-camera pass is rendered at a time.
+
+Native inspection used an isolated FleetQA world and the intermediate 26.10.10.10
+package. Undock, physical Fleet-tab selection and Launch Recon were clicked through
+the console. The selected drone's actual onboard view was visibly rendered inside
+the left screen; its readout reported 99 percent link and 148 m range. The focused
+fullscreen client's displayed counter settled around 118–120 FPS in this small
+single-drone scene. This is an indicative UI counter, not a frame-time benchmark.
+The user took over the window before orbit-mode and weak-signal visual checks,
+so those visual checks and final .11 native acceptance remain pending. The final
+.11 removes the redundant Overview/Flight Controls cockpit windows, adds separated
+launch formations and clears camera imagery on stale/missing links. The user's
+active session was not replaced.
+
+Scope limits: no drone manufacturing cost or cargo transport hold; no ship combat,
+ship destruction or team/permission-based engagement rules. Warp, docking, jump,
+last disconnect and restart still clear the fleet under preview recovery policy.
+Fifteen simultaneous camera renders, network load performance and Linux native
+visual acceptance are not claimed. See public-preview-readiness.md before changing
+repository visibility.

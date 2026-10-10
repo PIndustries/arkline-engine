@@ -89,9 +89,8 @@ impl Cockpit {
     pub(super) fn drone_destination(&self, pilot: &PilotView) -> Option<[f64; 3]> {
         let mut destination = self.selected_position()?;
         if let Some(asteroid) = self.selected_asteroid() {
-            let origin = pilot
-                .drone
-                .as_ref()
+            let origin = self
+                .selected_drone_view(pilot)
                 .map(|d| d.position)
                 .or_else(|| pilot.flight.as_ref().map(|f| f.position))?;
             let mut delta =
@@ -118,61 +117,191 @@ impl Cockpit {
             .filter(|f| distance_m(f.position, destination) <= DRONE_MAX_RANGE)
             .map(|_| destination)
     }
+    pub(super) fn fleet(p: &PilotView) -> Vec<&DroneView> {
+        if p.drones.is_empty() {
+            p.drone.iter().collect()
+        } else {
+            p.drones.iter().collect()
+        }
+    }
+    pub(super) fn selected_drone_view<'a>(&self, p: &'a PilotView) -> Option<&'a DroneView> {
+        let fleet = Self::fleet(p);
+        self.selected_drone
+            .and_then(|id| fleet.iter().copied().find(|d| d.id == id))
+            .or_else(|| fleet.first().copied())
+    }
     pub(super) fn drone_controls(&mut self, ui: &mut egui::Ui) {
         let Some(p) = self.own() else { return };
-        ui.separator();
-        ui.small("UTILITY DRONE");
         let available = self.can_fly();
-        if let Some(drone) = &p.drone {
-            ui.small(format!(
-                "{} · {} from ship",
-                match drone.mode {
-                    DroneMode::Hold => "Holding",
-                    DroneMode::FlyTo { .. } => "Flying to point",
-                    DroneMode::Returning => "Returning",
-                },
-                format_distance(
-                    p.flight
-                        .as_ref()
-                        .map_or(0.0, |f| distance_m(f.position, drone.position))
-                )
-            ));
-            ui.horizontal_wrapped(|ui| {
-                if ui
-                    .add_enabled(available, egui::Button::new("Recall drone").small())
-                    .clicked()
-                {
-                    self.send(Request::RecallDrone);
-                }
-                if ui
-                    .add_enabled(available, egui::Button::new("Hold drone").small())
-                    .clicked()
-                {
-                    self.send(Request::DroneHold);
-                }
-                let destination = self.drone_destination(&p);
+        ui.small("DRONE FLEET / 5 PER CLASS");
+        ui.horizontal_wrapped(|ui| {
+            for (class, label) in [
+                (DroneClass::Recon, "Recon"),
+                (DroneClass::Mining, "Mining"),
+                (DroneClass::Attack, "Attack"),
+            ] {
+                let count = Self::fleet(&p).iter().filter(|d| d.class == class).count();
                 if ui
                     .add_enabled(
-                        available && destination.is_some(),
-                        egui::Button::new("Drone to selected").small(),
+                        available && count < 5,
+                        egui::Button::new(format!("Launch {label} {count}/5")).small(),
                     )
                     .clicked()
                 {
-                    self.send(Request::DroneNavigate {
-                        position: destination.unwrap(),
-                    });
+                    self.send(Request::LaunchDroneClass { class });
+                }
+            }
+        });
+        egui::ScrollArea::vertical()
+            .id_salt("fleet_list")
+            .max_height(160.0)
+            .show(ui, |ui| {
+                for drone in Self::fleet(&p) {
+                    let selected = self
+                        .selected_drone_view(&p)
+                        .is_some_and(|d| d.id == drone.id);
+                    if ui
+                        .selectable_label(
+                            selected,
+                            format!(
+                                "#{:02} {:?} · {} · {}% signal · {} HP",
+                                drone.id,
+                                drone.class,
+                                drone_mode_label(&drone.mode),
+                                (drone.signal_strength * 100.0).round(),
+                                drone.hit_points
+                            ),
+                        )
+                        .clicked()
+                    {
+                        self.selected_drone = Some(drone.id);
+                    }
                 }
             });
-            ui.checkbox(&mut self.drone_camera, "Drone camera on cockpit screen");
-        } else if ui
-            .add_enabled(available, egui::Button::new("Launch drone").small())
-            .clicked()
-        {
-            self.send(Request::LaunchDrone);
-        }
+        let Some(drone) = self.selected_drone_view(&p) else {
+            ui.small("No deployed drones. Launch a class above.");
+            return;
+        };
+        let id = drone.id;
+        let controlled = available && drone.signal_strength > 0.0;
         ui.small(format!(
-            "Control radius {} · navigation follows selected object",
-            format_distance(DRONE_MAX_RANGE)
+            "Selected #{id} · {} from ship",
+            format_distance(
+                p.flight
+                    .as_ref()
+                    .map_or(0.0, |f| distance_m(f.position, drone.position))
+            )
         ));
+        ui.horizontal_wrapped(|ui| {
+            if ui
+                .add_enabled(available, egui::Button::new("Recall drone").small())
+                .clicked()
+            {
+                self.send(Request::RecallDroneById { id });
+            }
+            if ui
+                .add_enabled(controlled, egui::Button::new("Hold drone").small())
+                .clicked()
+            {
+                self.send(Request::DroneHoldById { id });
+            }
+            let destination = self.drone_destination(&p);
+            if ui
+                .add_enabled(
+                    controlled && destination.is_some(),
+                    egui::Button::new("Drone to selected").small(),
+                )
+                .clicked()
+            {
+                self.send(Request::DroneNavigateById {
+                    id,
+                    position: destination.unwrap(),
+                });
+            }
+            if drone.class == DroneClass::Mining {
+                let target = self.module_target(&p);
+                if ui
+                    .add_enabled(
+                        controlled && target.is_some(),
+                        egui::Button::new("Mine locked target").small(),
+                    )
+                    .clicked()
+                {
+                    self.send(Request::AssignMiningDrone {
+                        id,
+                        target_id: target.unwrap(),
+                    });
+                }
+            }
+        });
+        if drone.class == DroneClass::Attack {
+            let enemies: Vec<_> = self
+                .snapshot
+                .as_ref()
+                .into_iter()
+                .flat_map(|s| &s.pilots)
+                .filter(|other| other.name != self.pilot && other.system_id == p.system_id)
+                .flat_map(|other| {
+                    Self::fleet(other)
+                        .into_iter()
+                        .map(|d| (other.name.clone(), d.id))
+                })
+                .collect();
+            egui::ComboBox::from_id_salt("attack_drone_target")
+                .selected_text(
+                    self.drone_attack_target
+                        .as_ref()
+                        .map_or("Choose hostile drone".into(), |(name, id)| {
+                            format!("{name} #{id}")
+                        }),
+                )
+                .show_ui(ui, |ui| {
+                    for target in &enemies {
+                        ui.selectable_value(
+                            &mut self.drone_attack_target,
+                            Some(target.clone()),
+                            format!("{} #{}", target.0, target.1),
+                        );
+                    }
+                });
+            let target = self
+                .drone_attack_target
+                .clone()
+                .filter(|t| enemies.contains(t));
+            if ui
+                .add_enabled(
+                    controlled && target.is_some(),
+                    egui::Button::new("Attack selected drone").small(),
+                )
+                .clicked()
+            {
+                let (target_pilot, target_drone_id) = target.unwrap();
+                self.send(Request::AssignAttackDrone {
+                    id,
+                    target_pilot,
+                    target_drone_id,
+                });
+            }
+        }
+        ui.horizontal_wrapped(|ui| {
+            ui.checkbox(&mut self.drone_camera, "Drone screen");
+            ui.selectable_value(&mut self.drone_orbit, false, "POV");
+            ui.selectable_value(&mut self.drone_orbit, true, "Orbit camera");
+        });
+        if drone.signal_strength <= 0.0 {
+            ui.colored_label(AMBER, "Signal lost · recall available");
+        }
+        ui.small(
+            "10 km control radius · mining needs a confirmed lock · attacks damage drones only",
+        );
+    }
+}
+fn drone_mode_label(mode: &DroneMode) -> &'static str {
+    match mode {
+        DroneMode::Hold => "Holding",
+        DroneMode::FlyTo { .. } => "Flying",
+        DroneMode::Returning => "Returning",
+        DroneMode::Mining { .. } => "Mining",
+        DroneMode::Attacking { .. } => "Attacking",
     }
 }

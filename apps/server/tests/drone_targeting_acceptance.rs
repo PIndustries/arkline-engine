@@ -253,7 +253,7 @@ fn recon_drone_moves_in_world_returns_and_rejects_invalid_orders_without_economi
 }
 
 #[test]
-fn recon_cannot_survive_departure_or_escape_its_owners_control_range() {
+fn recon_returns_after_signal_loss_and_cannot_survive_departure() {
     let (mut server, mut session, mut now, initial) = setup();
     ok(&mut server, &mut session, Request::LaunchDrone, now);
     let position = initial.pilots[0].flight.as_ref().unwrap().position;
@@ -272,13 +272,19 @@ fn recon_cannot_survive_departure_or_escape_its_owners_control_range() {
     loop {
         now += 100;
         state = ok(&mut server, &mut session, Request::Snapshot, now);
-        if state.pilots[0].drone.is_none() {
+        if state.pilots[0]
+            .drone
+            .as_ref()
+            .is_some_and(|d| d.mode == DroneMode::Returning && d.signal_strength == 0.0)
+        {
             break;
         }
-        assert!(now < deadline, "out-of-range drone was never recovered");
+        assert!(
+            now < deadline,
+            "out-of-range drone did not begin autonomous return"
+        );
     }
     assert_eq!(state.ledger_hash, initial.ledger_hash);
-    ok(&mut server, &mut session, Request::LaunchDrone, now);
     let departing = ok(
         &mut server,
         &mut session,

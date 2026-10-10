@@ -28,6 +28,8 @@ struct Pilot {
 }
 #[derive(Clone, Serialize, Deserialize)]
 struct World {
+    #[serde(default = "default_next_drone_id")]
+    next_drone_id: u64,
     #[serde(default)]
     accounts: BTreeMap<String, assets::Account>,
     #[serde(default)]
@@ -41,9 +43,13 @@ struct World {
     #[serde(default)]
     spatial_version: u32,
 }
+fn default_next_drone_id() -> u64 {
+    1
+}
 impl Default for World {
     fn default() -> Self {
         Self {
+            next_drone_id: 1,
             accounts: BTreeMap::new(),
             corporations: BTreeMap::new(),
             pilots: BTreeMap::new(),
@@ -125,12 +131,13 @@ impl Server {
         universe::ensure_asteroids(&mut world);
         assets::ensure_accounts(&mut world);
         mining::ensure_modules(&mut world);
+        drones::ensure_fleets(&mut world)?;
         for pilot in world.pilots.values_mut() {
             mining::stop_all(pilot, "Server restarted");
             pilot.controls = None;
             pilot.view.target_locks.clear();
             universe::sync_lock_mirrors(pilot);
-            pilot.view.drone = None;
+            drones::clear(pilot);
             if !matches!(
                 pilot.view.location,
                 Location::InTransit { .. } | Location::Jumping { .. }
@@ -216,10 +223,13 @@ impl Server {
         universe::ensure_asteroids(&mut world);
         assets::ensure_accounts(&mut world);
         mining::ensure_modules(&mut world);
+        drones::ensure_fleets(&mut world)?;
         flight::advance(&mut world, now);
-        drones::advance(&mut world, now);
         universe::advance_locks(&mut world, now);
-        let events = mining::advance(&mut world, now);
+        let mut events = mining::advance(&mut world, now);
+        events.extend(drones::advance(&mut world, now));
+        universe::advance_locks(&mut world, now);
+        mining::invalidate(&mut world);
         let mut entries = load_entries(&tx, false)?;
         for event in events {
             append_event(&tx, &mut entries, event, now)?;
@@ -240,12 +250,13 @@ impl Server {
         universe::ensure_asteroids(&mut world);
         assets::ensure_accounts(&mut world);
         mining::ensure_modules(&mut world);
+        drones::ensure_fleets(&mut world)?;
         if let Some(p) = world.pilots.get_mut(name) {
             mining::stop_all(p, "Pilot disconnected");
             p.controls = None;
             p.view.target_locks.clear();
             universe::sync_lock_mirrors(p);
-            p.view.drone = None;
+            drones::clear(p);
             if !matches!(
                 p.view.location,
                 Location::InTransit { .. } | Location::Jumping { .. }
@@ -280,11 +291,14 @@ impl Server {
         universe::ensure_asteroids(&mut world);
         assets::ensure_accounts(&mut world);
         mining::ensure_modules(&mut world);
+        drones::ensure_fleets(&mut world)?;
         flight::advance(&mut world, now);
-        drones::advance(&mut world, now);
         universe::advance_locks(&mut world, now);
         let mut token = None;
-        let cycle_events = mining::advance(&mut world, now);
+        let mut cycle_events = mining::advance(&mut world, now);
+        cycle_events.extend(drones::advance(&mut world, now));
+        universe::advance_locks(&mut world, now);
+        mining::invalidate(&mut world);
         let mut event = None;
         let mut connected = None;
         let export = matches!(request, Request::ExportLedger);
@@ -360,6 +374,7 @@ impl Server {
                         pilot.clone(),
                         Pilot {
                             view: PilotView {
+                                drones: Vec::new(),
                                 target_locks: Vec::new(),
                                 locked_asteroids: Vec::new(),
                                 drone: None,
@@ -681,6 +696,7 @@ impl Server {
         }
         assets::ensure_accounts(&mut world);
         mining::ensure_modules(&mut world);
+        drones::ensure_fleets(&mut world)?;
         validate(&world)?;
         let mut entries = load_entries(&tx, export)?;
         for event in cycle_events.into_iter().chain(event) {
@@ -691,7 +707,7 @@ impl Server {
         // ledger entry in this same transaction.
         universe::advance_locks(&mut world, now);
         mining::invalidate(&mut world);
-        drones::advance(&mut world, now);
+        drones::invalidate(&mut world);
         let updated_json = serde_json::to_string(&world)?;
         if updated_json != json {
             tx.execute("UPDATE world SET json=?1 WHERE id=1", [updated_json])?;

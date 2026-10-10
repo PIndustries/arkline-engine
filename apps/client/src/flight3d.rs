@@ -11,6 +11,10 @@ use glam::{Mat4, Quat, Vec3};
 use glow::HasContext;
 use std::sync::{Arc, Mutex};
 
+#[path = "cockpit_maps.rs"]
+mod cockpit_maps;
+use cockpit_maps::*;
+
 pub enum ViewAction {
     Select(super::SelectedObject),
     FlyTo([f64; 3]),
@@ -206,6 +210,10 @@ pub struct FlightView {
     other_camera: (f32, f32, f32),
     tactical_overlay: bool,
     drone_camera: bool,
+    selected_drone: Option<u64>,
+    drone_orbit: bool,
+    console_rect: Option<egui::Rect>,
+    map_range: f64,
     space: Space,
 }
 impl FlightView {
@@ -232,11 +240,22 @@ impl FlightView {
             other_camera: (0.72, 0.65, 350.0),
             tactical_overlay: true,
             drone_camera: true,
+            selected_drone: None,
+            drone_orbit: false,
+            console_rect: None,
+            map_range: 1_000_000.0,
             space: Space::default(),
         }
     }
     pub fn set_drone_camera(&mut self, enabled: bool) {
         self.drone_camera = enabled;
+    }
+    pub fn set_drone_view(&mut self, selected: Option<u64>, orbit: bool) {
+        self.selected_drone = selected;
+        self.drone_orbit = orbit;
+    }
+    pub fn cockpit_console_rect(&self) -> Option<egui::Rect> {
+        self.console_rect
     }
     pub fn input_surface(&self) -> Option<(egui::Rect, egui::LayerId)> {
         self.input_surface
@@ -305,6 +324,7 @@ impl FlightView {
         );
         let mut camera_content = None;
         let camera_response = egui::Window::new("Flight controls")
+            .open(&mut !cockpit)
             .id(egui::Id::new("flight_camera_overlay").with(layout.generation))
             .current_pos(camera_position)
             .default_size(camera_size)
@@ -390,11 +410,26 @@ impl FlightView {
             ui.available_size().max(egui::vec2(100.0, 150.0)),
             egui::Sense::click_and_drag(),
         );
-        self.input_surface = Some((rect, ui.layer_id()));
+        self.console_rect = cockpit.then(|| {
+            let (center, size) = cockpit_screens()[3];
+            instrument_rect(rect, center, size).shrink(5.0)
+        });
+        let pointer_on_instrument = cockpit
+            && ui.input(|i| i.pointer.hover_pos()).is_some_and(|p| {
+                cockpit_screens()
+                    .iter()
+                    .any(|(center, size)| instrument_rect(rect, *center, *size).contains(p))
+            });
+        self.input_surface = (!pointer_on_instrument).then_some((rect, ui.layer_id()));
         // Foreground panels own their pointer input, including transparent
         // panel margins. Checking the layer also blocks a drag crossing a HUD.
         let world_input = ui.input(|i| i.pointer.hover_pos()).is_some_and(|pointer| {
-            rect.contains(pointer) && ui.ctx().layer_id_at(pointer) == Some(ui.layer_id())
+            rect.contains(pointer)
+                && ui.ctx().layer_id_at(pointer) == Some(ui.layer_id())
+                && !(cockpit
+                    && cockpit_screens()
+                        .iter()
+                        .any(|(c, s)| instrument_rect(rect, *c, *s).contains(pointer)))
         });
         if !cockpit && world_input && response.dragged_by(egui::PointerButton::Primary) {
             let delta = ui.input(|i| i.pointer.delta());
@@ -501,7 +536,7 @@ impl FlightView {
             if tactical {
                 1.22
             } else if cockpit {
-                1.05
+                COCKPIT_FOV
             } else {
                 0.85
             },
@@ -510,15 +545,19 @@ impl FlightView {
             if tactical { 10000.0 } else { 1200.0 },
         );
         let vp = projection * view;
-        let cockpit_vp =
-            Mat4::perspective_rh_gl(1.05, rect.width() / rect.height().max(1.0), 0.0002, 10.0)
-                * view;
+        let cockpit_vp = Mat4::perspective_rh_gl(
+            COCKPIT_FOV,
+            rect.width() / rect.height().max(1.0),
+            0.0002,
+            10.0,
+        ) * view;
         match &self.renderer {
             Ok(renderer) => {
                 let renderer = renderer.clone();
                 let frame = Frame {
                     cockpit_vp,
                     drone_camera: false,
+                    camera_drone: None,
                     space,
                     cockpit,
                     rotation,
@@ -553,22 +592,36 @@ impl FlightView {
                     }),
                 };
                 let drone_screen = drone_feed_rect(rect);
+                let camera_drone = own_pilot.and_then(|p| {
+                    fleet(p)
+                        .into_iter()
+                        .find(|d| Some(d.id) == self.selected_drone)
+                        .or_else(|| fleet(p).first().copied())
+                });
                 let camera_frame = if cockpit
                     && self.drone_camera
                     && connected
                     && now.saturating_sub(snapshot.server_time_ms) <= 1500
                 {
-                    own_pilot.and_then(|p| p.drone.as_ref()).map(|drone| {
-                        let mut feed = frame.clone();
-                        let (eye, vp) =
-                            drone_camera_matrix(drone, space, drone_screen.aspect_ratio());
-                        feed.eye = eye;
-                        feed.vp = vp;
-                        feed.cockpit = false;
-                        feed.drone_camera = true;
-                        feed.docking = None;
-                        feed
-                    })
+                    camera_drone
+                        .filter(|d| d.signal_strength > 0.0)
+                        .map(|drone| {
+                            let mut feed = frame.clone();
+                            let (eye, vp) = drone_view_matrix(
+                                drone,
+                                space,
+                                drone_screen.aspect_ratio(),
+                                self.drone_orbit,
+                                now,
+                            );
+                            feed.eye = eye;
+                            feed.vp = vp;
+                            feed.cockpit = false;
+                            feed.drone_camera = true;
+                            feed.camera_drone = (!self.drone_orbit).then_some(drone.id);
+                            feed.docking = None;
+                            feed
+                        })
                 } else {
                     None
                 };
@@ -583,14 +636,14 @@ impl FlightView {
                         }
                     })),
                 });
-                if let Some(drone) = own_pilot.and_then(|p| p.drone.as_ref()) {
+                for drone in own_pilot.map(fleet).unwrap_or_default() {
                     if let Some(point) = project_point(vp, rect, space.scene(drone.position)) {
                         let painter = ui.painter_at(rect);
                         painter.circle_stroke(point, 8.0, egui::Stroke::new(1.0, super::TEAL));
                         painter.text(
                             point + egui::vec2(0.0, -12.0),
                             egui::Align2::CENTER_BOTTOM,
-                            "RECON DRONE",
+                            format!("{:?} #{}", drone.class, drone.id),
                             egui::FontId::monospace(11.0),
                             super::TEAL,
                         );
@@ -924,7 +977,12 @@ impl FlightView {
                             overlay.text(
                                 drone_screen.left_top() + egui::vec2(4.0, 3.0),
                                 egui::Align2::LEFT_TOP,
-                                "RECON / LIVE CAMERA",
+                                format!(
+                                    "{:?} #{} / {}",
+                                    camera_drone.unwrap().class,
+                                    camera_drone.unwrap().id,
+                                    if self.drone_orbit { "ORBIT" } else { "ONBOARD" }
+                                ),
                                 egui::FontId::monospace((drone_screen.width() / 18.0).min(12.0)),
                                 super::TEAL,
                             );
@@ -933,18 +991,43 @@ impl FlightView {
                                 4.0,
                                 egui::Stroke::new(1.0, super::TEAL),
                             );
-                            if let Some(drone) = &own.drone {
+                            if let Some(drone) = camera_drone {
                                 let meters = space.scene(drone.position).length() * 100.0;
                                 overlay.text(
                                     drone_screen.left_bottom() + egui::vec2(4.0, -3.0),
                                     egui::Align2::LEFT_BOTTOM,
-                                    format!("LINK {}", super::format_distance(meters as f64)),
+                                    format!(
+                                        "LINK {:.0}% / {}",
+                                        drone.signal_strength * 100.0,
+                                        super::format_distance(meters as f64)
+                                    ),
                                     egui::FontId::monospace(
                                         (drone_screen.width() / 18.0).min(12.0),
                                     ),
                                     super::TEAL,
                                 );
                             }
+                        }
+                        if self.drone_camera {
+                            paint_camera_signal(
+                                &painter,
+                                drone_screen,
+                                camera_drone,
+                                now,
+                                connected && now.saturating_sub(snapshot.server_time_ms) <= 1500,
+                            );
+                        }
+                        if let Some(action) = paint_cockpit_maps(
+                            ui,
+                            rect,
+                            own,
+                            snapshot,
+                            now,
+                            connected,
+                            selected,
+                            &mut self.map_range,
+                        ) {
+                            picked = Some(action);
                         }
                         painter.circle_stroke(
                             rect.center(),
@@ -1228,6 +1311,7 @@ impl FlightView {
 struct Frame {
     cockpit_vp: Mat4,
     drone_camera: bool,
+    camera_drone: Option<u64>,
     space: Space,
     cockpit: bool,
     rotation: Quat,
@@ -1611,10 +1695,10 @@ impl Renderer {
             }
         }
         for pilot in &frame.pilots {
-            if frame.drone_camera && pilot.name == frame.own {
-                continue;
-            }
-            if let Some(drone) = &pilot.drone {
+            for drone in fleet(pilot) {
+                if frame.camera_drone == Some(drone.id) && pilot.name == frame.own {
+                    continue;
+                }
                 let base = transform(
                     space.scene(drone.position),
                     Vec3::ONE,
@@ -1623,7 +1707,11 @@ impl Renderer {
                 self.draw(
                     0,
                     base * transform(Vec3::ZERO, Vec3::new(0.025, 0.009, 0.017), Quat::IDENTITY),
-                    Vec3::new(0.12, 0.25, 0.20),
+                    match drone.class {
+                        arkline_protocol::DroneClass::Recon => Vec3::new(0.12, 0.25, 0.20),
+                        arkline_protocol::DroneClass::Mining => Vec3::new(0.50, 0.34, 0.09),
+                        arkline_protocol::DroneClass::Attack => Vec3::new(0.48, 0.12, 0.09),
+                    },
                     0.1,
                 );
                 for side in [-1.0, 1.0] {
@@ -1637,6 +1725,53 @@ impl Renderer {
                         Vec3::new(0.05, 0.7, 0.4),
                         0.8,
                     );
+                }
+            }
+        }
+        if frame.connected {
+            for pilot in &frame.pilots {
+                for drone in fleet(pilot) {
+                    if drone.signal_strength <= 0.0 {
+                        continue;
+                    }
+                    let start = space.scene(drone.position);
+                    let beam = match &drone.mode {
+                        arkline_protocol::DroneMode::Mining { target_id }
+                            if drone.mining_cycle.is_some() =>
+                        {
+                            frame
+                                .asteroids
+                                .iter()
+                                .find(|a| a.id == *target_id && a.ore > 0)
+                                .map(|a| {
+                                    let center = space.scene(a.position);
+                                    let direction = (start - center).normalize_or_zero();
+                                    (
+                                        center + direction * a.radius as f32 / 100.0,
+                                        Vec3::new(0.15, 0.95, 0.45),
+                                    )
+                                })
+                        }
+                        arkline_protocol::DroneMode::Attacking {
+                            target_pilot,
+                            target_drone_id,
+                        } if frame.now % 1000 < 250 => frame
+                            .pilots
+                            .iter()
+                            .find(|p| p.name == *target_pilot)
+                            .and_then(|p| fleet(p).into_iter().find(|d| d.id == *target_drone_id))
+                            .filter(|d| {
+                                space.scene(d.position).distance(start)
+                                    <= arkline_protocol::DRONE_ATTACK_RANGE as f32 / 100.0
+                            })
+                            .map(|d| (space.scene(d.position), Vec3::new(1.0, 0.18, 0.08))),
+                        _ => None,
+                    };
+                    if let Some((end, color)) = beam {
+                        if let Some(model) = segment_model(start, end, 0.009) {
+                            self.draw(0, model, color, 1.2);
+                        }
+                    }
                 }
             }
         }
@@ -2241,11 +2376,15 @@ fn in_warp(location: &Location, now: u64) -> bool {
     matches!(location, Location::InTransit { arrives_at_ms, .. } if now < *arrives_at_ms)
 }
 /// Shared bezel geometry and instrument layout: +X forward, +Y up, +Z right.
-fn cockpit_screens() -> [(Vec3, Vec3); 3] {
+const COCKPIT_FOV: f32 = 1.22;
+fn cockpit_screens() -> [(Vec3, Vec3); 6] {
     [
-        (Vec3::new(0.60, -0.18, 0.0), Vec3::new(0.020, 0.10, 0.15)),
-        (Vec3::new(0.78, -0.23, -0.30), Vec3::new(0.012, 0.10, 0.09)),
-        (Vec3::new(0.78, -0.23, 0.30), Vec3::new(0.012, 0.10, 0.09)),
+        (Vec3::new(0.72, -0.065, 0.0), Vec3::new(0.020, 0.09, 0.18)),
+        (Vec3::new(0.80, -0.23, -0.49), Vec3::new(0.012, 0.13, 0.19)),
+        (Vec3::new(0.80, -0.23, 0.49), Vec3::new(0.012, 0.13, 0.19)),
+        (Vec3::new(0.65, -0.30, 0.0), Vec3::new(0.020, 0.105, 0.24)),
+        (Vec3::new(0.80, 0.02, -0.49), Vec3::new(0.012, 0.085, 0.19)),
+        (Vec3::new(0.80, 0.02, 0.49), Vec3::new(0.012, 0.085, 0.19)),
     ]
 }
 
@@ -2281,7 +2420,7 @@ fn instrument_rect(viewport: egui::Rect, center: Vec3, size: Vec3) -> egui::Rect
     // coordinates to avoid astronomical-world precision and use the actual face.
     let project = |y: f32, z: f32| {
         let depth = center.x - 0.025 - 0.006;
-        let focal = 1.0 / (1.05_f32 * 0.5).tan();
+        let focal = 1.0 / (COCKPIT_FOV * 0.5).tan();
         viewport.center() + egui::vec2(z, -y) * (viewport.height() * 0.5 * focal / depth)
     };
     egui::Rect::from_two_pos(
@@ -2405,7 +2544,7 @@ fn paint_instruments(
     let rows = instrument_rows(own, snapshot, target_distance, now, connected);
     let connected = connected && now.saturating_sub(snapshot.server_time_ms) <= 1500;
     let color = if connected { super::TEAL } else { super::AMBER };
-    for (index, (center, size)) in cockpit_screens().into_iter().enumerate() {
+    for (index, (center, size)) in cockpit_screens().into_iter().take(3).enumerate() {
         let screen = instrument_rect(viewport, center, size);
         let inner = screen.shrink(screen.width().min(screen.height()) * 0.045);
         let painter = painter.with_clip_rect(inner.intersect(viewport));
@@ -3108,6 +3247,12 @@ mod tests {
             origin: [149_597_870_700.0, 50.0, 100.0],
         };
         let mut drone = arkline_protocol::DroneView {
+            id: 1,
+            class: arkline_protocol::DroneClass::Recon,
+            hit_points: 100,
+            signal_strength: 1.0,
+            mining_cycle: None,
+            attack_ready_at_ms: None,
             position: [149_597_871_700.0, 50.0, 100.0],
             velocity: [0.0; 3],
             heading: [1.0, 0.0, 0.0],
@@ -3132,6 +3277,17 @@ mod tests {
                 .distance(feed.center())
                 > 10.0
         );
+        let (orbit_eye, orbit_vp) =
+            drone_view_matrix(&drone, space, feed.aspect_ratio(), true, 15_000);
+        assert!(orbit_eye.distance(space.scene(drone.position)) > 0.3);
+        assert!(
+            project_point(orbit_vp, feed, space.scene(drone.position))
+                .unwrap()
+                .distance(feed.center())
+                < 0.01
+        );
+        let (later_eye, _) = drone_view_matrix(&drone, space, feed.aspect_ratio(), true, 30_000);
+        assert!(later_eye.distance(orbit_eye) > 0.1);
         drone.heading = [0.0, 1.0, 0.0];
         assert!(drone_camera_matrix(&drone, space, feed.aspect_ratio())
             .1
@@ -3146,7 +3302,7 @@ mod tests {
             egui::vec2(2560.0, 1440.0),
         ] {
             let viewport = egui::Rect::from_min_size(egui::pos2(17.0, 29.0), size);
-            let vp = Mat4::perspective_rh_gl(1.05, viewport.aspect_ratio(), 0.0002, 10.0)
+            let vp = Mat4::perspective_rh_gl(COCKPIT_FOV, viewport.aspect_ratio(), 0.0002, 10.0)
                 * Mat4::look_at_rh(Vec3::ZERO, Vec3::X, Vec3::Y);
             let screens = cockpit_screens().map(|(center, size)| {
                 let rect = instrument_rect(viewport, center, size);
@@ -3164,9 +3320,11 @@ mod tests {
                 );
                 rect
             });
-            assert!(!screens[0].intersects(screens[1]));
-            assert!(!screens[0].intersects(screens[2]));
-            assert!(!screens[1].intersects(screens[2]));
+            for (i, a) in screens.iter().enumerate() {
+                for b in &screens[i + 1..] {
+                    assert!(!a.intersects(*b), "physical screens overlap");
+                }
+            }
         }
     }
 
@@ -3510,6 +3668,7 @@ mod tests {
             target_locks: vec![],
             locked_asteroids: vec![],
             drone: None,
+            drones: vec![],
             ship_class: ShipClass::Pioneer,
             system_id: HOME_SYSTEM_ID,
             locked_asteroid: None,
@@ -3751,6 +3910,7 @@ mod tests {
             target_locks: vec![],
             locked_asteroids: vec![],
             drone: None,
+            drones: vec![],
             ship_class: ShipClass::Pioneer,
             system_id: HOME_SYSTEM_ID,
             locked_asteroid: None,
