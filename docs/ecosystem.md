@@ -9,6 +9,8 @@ explicit approval to publish.
 
 - Pilot: saved identity, station departure, timed travel, finite-resource mining,
   cargo, escrow listings, partial purchases and cancellation.
+- Station: owned preview hulls with separate cargo, per-station personal storage,
+  corporation invitations and shared ore storage with owner/member permissions.
 - Cockpit: alternate tactical and perspective views of the same server state.
 - Operator: one authoritative Rust process and a durable SQLite world.
 - Observer: independent economic replay and locally retained history checkpoints.
@@ -38,6 +40,6 @@ history must describe the same authoritative snapshot. Distinguish saved pilots
 from live connections, and make stale state visible after a disconnect.
 
 Show controls only when their underlying behavior exists. Do not imply combat,
-free-flight physics, corporations, production, node payouts or creator publishing
+production, node payouts or creator publishing
 through decorative controls. Each milestone should become a usable part of this
 shell once its complete journey passes validation.

@@ -16,6 +16,7 @@ pub struct Report {
     pub trades: u64,
     pub total_credits: u64,
     pub belt_ore: u64,
+    pub stored_ore: u64,
     pub head: Checkpoint,
 }
 
@@ -23,8 +24,33 @@ pub struct Report {
 struct Account {
     credits: u64,
     ore: u64,
+    active_class: Option<ShipClass>,
+    inactive: BTreeMap<usize, (u32, u64)>,
 }
 
+struct Corporation {
+    owner: String,
+    members: BTreeSet<String>,
+    invitations: BTreeSet<String>,
+    storage: BTreeMap<u32, u64>,
+}
+fn valid_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 24
+        && name
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-')
+}
+fn valid_system(id: u32) -> Result<()> {
+    ensure!(
+        systems().iter().any(|s| s.id == id),
+        "unknown storage system"
+    );
+    Ok(())
+}
+fn hull_key(class: ShipClass) -> usize {
+    ALL_SHIP_CLASSES.iter().position(|c| *c == class).unwrap()
+}
 fn add(a: u64, b: u64) -> Result<u64> {
     a.checked_add(b).context("integer addition overflow")
 }
@@ -59,6 +85,8 @@ pub fn verify(export: &LedgerExport, pinned: Option<&Checkpoint>) -> Result<Repo
         }
     }
     let mut accounts = BTreeMap::<String, Account>::new();
+    let mut corporations = BTreeMap::<String, Corporation>::new();
+    let mut personal = BTreeMap::<(String, u32), u64>::new();
     let mut orders = BTreeMap::<u64, SellOrder>::new();
     let mut used_orders = BTreeSet::new();
     let mut belt = INITIAL_BELT_ORE;
@@ -84,6 +112,170 @@ pub fn verify(export: &LedgerExport, pinned: Option<&Checkpoint>) -> Result<Repo
         apply().with_context(|| format!("entry {}", entry.sequence))?;
         let apply_event = || -> Result<()> {
             match &entry.event {
+                EconomicEvent::ShipBoarded {
+                    pilot,
+                    from_ship_class,
+                    ship_class,
+                    system_id,
+                    stored_units,
+                    loaded_units,
+                } => {
+                    valid_system(*system_id)?;
+                    ensure!(
+                        from_ship_class != ship_class,
+                        "boarding active hull is not a transfer"
+                    );
+                    let account = accounts.get_mut(pilot).context("unknown boarding pilot")?;
+                    ensure!(
+                        account.active_class.is_none_or(|c| c == *from_ship_class),
+                        "boarding source hull mismatch"
+                    );
+                    ensure!(
+                        *stored_units == account.ore,
+                        "boarding stores incorrect cargo"
+                    );
+                    let prior = account.inactive.remove(&hull_key(*ship_class));
+                    if let Some((station, ore)) = prior {
+                        ensure!(
+                            station == *system_id && ore == *loaded_units,
+                            "boarding loads wrong hull cargo or station"
+                        );
+                    } else {
+                        ensure!(*loaded_units == 0, "unrecorded hull cargo fabricated");
+                        ensure!(
+                            *system_id == HOME_SYSTEM_ID,
+                            "unmoved starter hull boarded away from home"
+                        );
+                    }
+                    ensure!(
+                        *loaded_units <= CARGO_CAPACITY,
+                        "boarded cargo over capacity"
+                    );
+                    ensure!(
+                        account
+                            .inactive
+                            .insert(hull_key(*from_ship_class), (*system_id, *stored_units))
+                            .is_none(),
+                        "source hull already inactive"
+                    );
+                    account.active_class = Some(*ship_class);
+                    account.ore = *loaded_units;
+                }
+                EconomicEvent::PersonalOreDeposited {
+                    pilot,
+                    system_id,
+                    units,
+                }
+                | EconomicEvent::PersonalOreWithdrawn {
+                    pilot,
+                    system_id,
+                    units,
+                } => {
+                    valid_system(*system_id)?;
+                    ensure!(*units > 0, "zero storage transfer");
+                    let account = accounts.get_mut(pilot).context("unknown storage pilot")?;
+                    let storage = personal.entry((pilot.clone(), *system_id)).or_default();
+                    if matches!(&entry.event, EconomicEvent::PersonalOreDeposited { .. }) {
+                        account.ore = sub(account.ore, *units)?;
+                        *storage = add(*storage, *units)?;
+                    } else {
+                        *storage = sub(*storage, *units)?;
+                        account.ore = add(account.ore, *units)?;
+                        ensure!(
+                            account.ore <= CARGO_CAPACITY,
+                            "withdrawal exceeds cargo capacity"
+                        );
+                    }
+                }
+                EconomicEvent::CorporationCreated { corporation, owner } => {
+                    ensure!(valid_name(corporation), "invalid corporation name");
+                    ensure!(accounts.contains_key(owner), "unknown corporation owner");
+                    ensure!(
+                        !corporations.contains_key(corporation),
+                        "duplicate corporation"
+                    );
+                    ensure!(
+                        !corporations.values().any(|c| c.members.contains(owner)),
+                        "pilot already belongs to corporation"
+                    );
+                    corporations.insert(
+                        corporation.clone(),
+                        Corporation {
+                            owner: owner.clone(),
+                            members: BTreeSet::from([owner.clone()]),
+                            invitations: BTreeSet::new(),
+                            storage: BTreeMap::new(),
+                        },
+                    );
+                }
+                EconomicEvent::CorporationInvited {
+                    corporation,
+                    pilot,
+                    inviter,
+                } => {
+                    ensure!(accounts.contains_key(pilot), "unknown invitee");
+                    ensure!(
+                        !corporations.values().any(|c| c.members.contains(pilot)),
+                        "invitee already belongs to corporation"
+                    );
+                    let corp = corporations
+                        .get_mut(corporation)
+                        .context("unknown corporation")?;
+                    ensure!(&corp.owner == inviter, "invitation by nonowner");
+                    ensure!(
+                        corp.invitations.insert(pilot.clone()),
+                        "duplicate invitation"
+                    );
+                }
+                EconomicEvent::CorporationJoined { corporation, pilot } => {
+                    ensure!(accounts.contains_key(pilot), "unknown joiner");
+                    ensure!(
+                        !corporations.values().any(|c| c.members.contains(pilot)),
+                        "pilot already belongs to corporation"
+                    );
+                    let corp = corporations
+                        .get_mut(corporation)
+                        .context("unknown corporation")?;
+                    ensure!(corp.invitations.remove(pilot), "joining without invitation");
+                    corp.members.insert(pilot.clone());
+                }
+                EconomicEvent::CorporationOreDeposited {
+                    corporation,
+                    pilot,
+                    system_id,
+                    units,
+                }
+                | EconomicEvent::CorporationOreWithdrawn {
+                    corporation,
+                    pilot,
+                    system_id,
+                    units,
+                } => {
+                    valid_system(*system_id)?;
+                    ensure!(*units > 0, "zero corporation transfer");
+                    let corp = corporations
+                        .get_mut(corporation)
+                        .context("unknown corporation")?;
+                    ensure!(
+                        corp.members.contains(pilot),
+                        "corporation storage by nonmember"
+                    );
+                    let account = accounts
+                        .get_mut(pilot)
+                        .context("unknown corporation pilot")?;
+                    let storage = corp.storage.entry(*system_id).or_default();
+                    if matches!(&entry.event, EconomicEvent::CorporationOreDeposited { .. }) {
+                        account.ore = sub(account.ore, *units)?;
+                        *storage = add(*storage, *units)?;
+                    } else {
+                        *storage = sub(*storage, *units)?;
+                        account.ore = add(account.ore, *units)?;
+                        ensure!(
+                            account.ore <= CARGO_CAPACITY,
+                            "corporation withdrawal exceeds cargo capacity"
+                        );
+                    }
+                }
                 EconomicEvent::PilotCreated { pilot } => {
                     ensure!(
                         !pilot.is_empty()
@@ -99,6 +291,7 @@ pub fn verify(export: &LedgerExport, pinned: Option<&Checkpoint>) -> Result<Repo
                         Account {
                             credits: STARTER_CREDITS,
                             ore: 0,
+                            ..Account::default()
                         },
                     );
                 }
@@ -223,6 +416,10 @@ pub fn verify(export: &LedgerExport, pinned: Option<&Checkpoint>) -> Result<Repo
             .get(&pilot.name)
             .context("unknown snapshot pilot")?;
         ensure!(
+            account.active_class.is_none_or(|c| c == pilot.ship_class),
+            "snapshot active hull mismatch"
+        );
+        ensure!(
             account.credits == pilot.credits && account.ore == pilot.ore,
             "snapshot balance mismatch for {}",
             pilot.name
@@ -250,7 +447,27 @@ pub fn verify(export: &LedgerExport, pinned: Option<&Checkpoint>) -> Result<Repo
         total_credits == expected_credits,
         "credit conservation failed"
     );
-    let total_ore = accounts.values().try_fold(belt, |sum, a| add(sum, a.ore))?;
+    let mut stored_ore = 0;
+    for account in accounts.values() {
+        for (_, ore) in account.inactive.values() {
+            stored_ore = add(stored_ore, *ore)?;
+        }
+    }
+    for ore in personal.values() {
+        stored_ore = add(stored_ore, *ore)?;
+    }
+    for corp in corporations.values() {
+        for ore in corp.storage.values() {
+            stored_ore = add(stored_ore, *ore)?;
+        }
+    }
+    ensure!(
+        snapshot.stored_ore == stored_ore,
+        "snapshot stored ore mismatch"
+    );
+    let total_ore = accounts
+        .values()
+        .try_fold(add(belt, stored_ore)?, |sum, a| add(sum, a.ore))?;
     let total_ore = orders
         .values()
         .try_fold(total_ore, |sum, o| add(sum, o.units))?;
@@ -262,6 +479,7 @@ pub fn verify(export: &LedgerExport, pinned: Option<&Checkpoint>) -> Result<Repo
         trades,
         total_credits,
         belt_ore: belt,
+        stored_ore,
         head: Checkpoint { sequence, hash },
     })
 }
@@ -269,6 +487,149 @@ pub fn verify(export: &LedgerExport, pinned: Option<&Checkpoint>) -> Result<Repo
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn append(export: &mut LedgerExport, event: EconomicEvent) {
+        let mut entry = LedgerEntry {
+            sequence: export.entries.len() as u64 + 1,
+            ruleset_version: RULESET_VERSION,
+            timestamp_ms: export.entries.last().map_or(0, |e| e.timestamp_ms + 1000),
+            previous_hash: export.snapshot.ledger_hash.clone(),
+            event,
+            hash: String::new(),
+        };
+        entry.hash = entry.calculate_hash();
+        export.snapshot.ledger_sequence = entry.sequence;
+        export.snapshot.ledger_hash = entry.hash.clone();
+        export.entries.push(entry);
+    }
+    fn assets_fixture() -> LedgerExport {
+        let mut e = fixture();
+        for event in [
+            EconomicEvent::PersonalOreDeposited {
+                pilot: "Alice".into(),
+                system_id: 1,
+                units: 3,
+            },
+            EconomicEvent::ShipBoarded {
+                pilot: "Alice".into(),
+                from_ship_class: ShipClass::Pioneer,
+                ship_class: ShipClass::Prospector,
+                system_id: 1,
+                stored_units: 3,
+                loaded_units: 0,
+            },
+            EconomicEvent::PersonalOreWithdrawn {
+                pilot: "Alice".into(),
+                system_id: 1,
+                units: 2,
+            },
+            EconomicEvent::ShipBoarded {
+                pilot: "Alice".into(),
+                from_ship_class: ShipClass::Prospector,
+                ship_class: ShipClass::Pioneer,
+                system_id: 1,
+                stored_units: 2,
+                loaded_units: 3,
+            },
+            EconomicEvent::CorporationCreated {
+                corporation: "Builders".into(),
+                owner: "Alice".into(),
+            },
+            EconomicEvent::CorporationInvited {
+                corporation: "Builders".into(),
+                pilot: "Bob".into(),
+                inviter: "Alice".into(),
+            },
+            EconomicEvent::CorporationJoined {
+                corporation: "Builders".into(),
+                pilot: "Bob".into(),
+            },
+            EconomicEvent::CorporationOreDeposited {
+                corporation: "Builders".into(),
+                pilot: "Alice".into(),
+                system_id: 1,
+                units: 1,
+            },
+            EconomicEvent::CorporationOreDeposited {
+                corporation: "Builders".into(),
+                pilot: "Bob".into(),
+                system_id: 1,
+                units: 2,
+            },
+            EconomicEvent::CorporationOreWithdrawn {
+                corporation: "Builders".into(),
+                pilot: "Alice".into(),
+                system_id: 1,
+                units: 1,
+            },
+        ] {
+            append(&mut e, event);
+        }
+        e.snapshot.pilots[0].ore = 3;
+        e.snapshot.pilots[1].ore = 2;
+        e.snapshot.stored_ore = 5;
+        e
+    }
+    #[test]
+    fn inactive_personal_and_shared_cargo_replay_without_double_counting() {
+        let mut e = assets_fixture();
+        let report = verify(&e, None).unwrap();
+        assert_eq!(report.stored_ore, 5);
+        assert_eq!(report.total_credits, 2000);
+        e.snapshot.stored_ore += 1;
+        assert!(verify(&e, None).is_err());
+    }
+    #[test]
+    fn rehashed_hull_cargo_fabrication_and_cross_station_load_are_rejected() {
+        let mut e = assets_fixture();
+        if let EconomicEvent::ShipBoarded { loaded_units, .. } = &mut e.entries[7].event {
+            *loaded_units = 1;
+        }
+        rehash(&mut e);
+        assert!(verify(&e, None).is_err());
+        let mut e = assets_fixture();
+        if let EconomicEvent::ShipBoarded { system_id, .. } = &mut e.entries[9].event {
+            *system_id = 2;
+        }
+        rehash(&mut e);
+        assert!(verify(&e, None).is_err());
+    }
+    #[test]
+    fn corporation_permissions_and_personal_balances_are_replayed() {
+        let mut e = assets_fixture();
+        if let EconomicEvent::CorporationInvited { inviter, .. } = &mut e.entries[11].event {
+            *inviter = "Bob".into();
+        }
+        rehash(&mut e);
+        assert!(verify(&e, None).is_err());
+        let mut e = assets_fixture();
+        if let EconomicEvent::CorporationOreWithdrawn { pilot, .. } = &mut e.entries[15].event {
+            *pilot = "Bob".into();
+        }
+        rehash(&mut e);
+        assert!(verify(&e, None).is_err());
+        let mut e = assets_fixture();
+        if let EconomicEvent::PersonalOreWithdrawn { units, .. } = &mut e.entries[8].event {
+            *units = 4;
+        }
+        rehash(&mut e);
+        assert!(verify(&e, None).is_err());
+        let mut e = fixture();
+        append(
+            &mut e,
+            EconomicEvent::CorporationCreated {
+                corporation: "Builders".into(),
+                owner: "Alice".into(),
+            },
+        );
+        append(
+            &mut e,
+            EconomicEvent::CorporationJoined {
+                corporation: "Builders".into(),
+                pilot: "Bob".into(),
+            },
+        );
+        assert!(verify(&e, None).is_err());
+    }
     #[test]
     fn individual_reserves_match_legacy_economic_total() {
         let mut export = fixture();
@@ -326,6 +687,7 @@ mod tests {
         LedgerExport {
             protocol_version: PROTOCOL_VERSION,
             snapshot: Snapshot {
+                stored_ore: 0,
                 asteroids: vec![],
                 online_pilots: vec![],
                 server_time_ms: 6000,

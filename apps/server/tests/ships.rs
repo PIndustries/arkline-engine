@@ -26,15 +26,19 @@ fn docked_hull_selection_persists_without_changing_economy_and_rejects_space() {
         token = response.resume_token.unwrap();
         let initial = response.snapshot.unwrap();
         assert_eq!(initial.pilots[0].ship_class, ShipClass::Pioneer);
-        for ship_class in ALL_SHIP_CLASSES {
+        for (index, ship_class) in ALL_SHIP_CLASSES.into_iter().enumerate() {
             let response = server.handle_at(&mut session, Request::SelectShip { ship_class }, 1);
             assert!(response.ok, "{}", response.message);
             let snapshot = response.snapshot.unwrap();
             assert_eq!(snapshot.pilots[0].ship_class, ship_class);
             assert_eq!(snapshot.pilots[0].credits, initial.pilots[0].credits);
             assert_eq!(snapshot.pilots[0].ore, initial.pilots[0].ore);
-            assert_eq!(snapshot.ledger_sequence, initial.ledger_sequence);
-            assert_eq!(snapshot.ledger_hash, initial.ledger_hash);
+            assert_eq!(
+                snapshot.ledger_sequence,
+                initial.ledger_sequence + index as u64
+            );
+            assert_eq!(snapshot.stored_ore, 0);
+            assert_eq!(response.assets.unwrap().ships.len(), 3);
         }
         selected = server
             .handle_at(&mut session, Request::Undock, 2)

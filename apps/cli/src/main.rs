@@ -1,6 +1,6 @@
 use anyhow::{bail, Context, Result};
 use arkline_protocol::{
-    Destination, NavigationMode, NavigationTarget, Request, Response, PROTOCOL_VERSION,
+    Destination, NavigationMode, NavigationTarget, Request, Response, ShipClass, PROTOCOL_VERSION,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -58,7 +58,7 @@ fn run() -> Result<()> {
                 credentials_path = Some(args.next().context("--credentials needs a path")?.into())
             }
             "--help" | "-h" => {
-                println!("Arkline command client\n\narkline [--server HOST:PORT] [--pilot NAME] [--credentials PATH] COMMAND\n\nCommands:\n  status                 Read the live universe\n  connect                Create a pilot or resume with saved credentials\n  undock                 Leave Junction Station\n  warp belt|station|gate:ID Begin distance-based warp (2s warmup)\n  dock                   Dock at the station\n  mine UNITS             Mine up to 100 ore from confirmed target\n  lock ASTEROID_ID       Acquire and wait for a specific asteroid lock\n  unlock                 Cancel acquisition or release target\n  extract ASTEROID_ID UNITS Mine the locked asteroid\n  jump GATE_ID           Jump through a nearby local gate\n  stop                   Stop manual navigation\n  approach TARGET SECS   Approach station, belt or pilot:NAME\n  orbit TARGET METERS SECS   Orbit for 1-300 seconds\n  range TARGET METERS SECS   Keep distance for 1-300 seconds\n  fly X Y Z SECS         Fly to meter coordinates for 1-300 seconds\n  sell UNITS PRICE       Escrow ore in a sell order\n  buy ORDER_ID UNITS     Buy ore from another pilot\n  cancel ORDER_ID        Cancel your order and reclaim ore\n  export PATH            Save an economic audit export\n\nCommands return JSON snapshots. Credentials are saved locally with restricted\npermissions. Keep that file to resume the same pilot. This prototype uses\nunencrypted TCP: keep it on loopback or an authenticated private tunnel.");
+                println!("Arkline command client\n\narkline [--server HOST:PORT] [--pilot NAME] [--credentials PATH] COMMAND\n\nCommands:\n  status                 Read the live universe\n  connect                Create a pilot or resume with saved credentials\n  inventory              Read your ships, station storage and corporation\n  board HULL             Board pioneer|prospector|hauler|vanguard at its station\n  deposit UNITS          Move cargo ore into local personal storage\n  withdraw UNITS         Move local personal ore into active cargo\n  corp-create NAME       Create a corporation (letters, digits, _ or -)\n  corp-invite PILOT      Owner invites an existing pilot\n  corp-accept NAME       Accept a corporation invitation\n  corp-deposit UNITS     Deposit cargo ore into local corporation storage\n  corp-withdraw UNITS    Owner withdraws local corporation ore\n  undock                 Leave the current station\n  warp belt|station|gate:ID Begin distance-based warp (2s warmup)\n  dock                   Dock at the station\n  mine UNITS             Mine up to 100 ore from confirmed target\n  lock ASTEROID_ID       Acquire and wait for a specific asteroid lock\n  unlock                 Cancel acquisition or release target\n  extract ASTEROID_ID UNITS Mine the locked asteroid\n  jump GATE_ID           Jump through a nearby local gate\n  stop                   Stop manual navigation\n  approach TARGET SECS   Approach station, belt or pilot:NAME\n  orbit TARGET METERS SECS   Orbit for 1-300 seconds\n  range TARGET METERS SECS   Keep distance for 1-300 seconds\n  fly X Y Z SECS         Fly to meter coordinates for 1-300 seconds\n  sell UNITS PRICE       Escrow ore in a sell order\n  buy ORDER_ID UNITS     Buy ore from another pilot\n  cancel ORDER_ID        Cancel your order and reclaim ore\n  export PATH            Save an economic audit export\n\nCommands return JSON snapshots. Credentials are saved locally with restricted\npermissions. Keep that file to resume the same pilot. This prototype uses\nunencrypted TCP: keep it on loopback or an authenticated private tunnel.");
                 return Ok(());
             }
             x if x.starts_with('-') => bail!("unknown option: {x}"),
@@ -118,7 +118,38 @@ fn run() -> Result<()> {
         0
     };
     let request = match verb {
-        "status" | "connect" => Request::Snapshot,
+        "status" | "connect" | "inventory" => Request::Snapshot,
+        "board" => Request::SelectShip {
+            ship_class: match command.get(1).map(String::as_str) {
+                Some("pioneer") => ShipClass::Pioneer,
+                Some("prospector") => ShipClass::Prospector,
+                Some("hauler") => ShipClass::Hauler,
+                Some("vanguard") => ShipClass::Vanguard,
+                _ => bail!("board needs pioneer, prospector, hauler or vanguard"),
+            },
+        },
+        "deposit" => Request::DepositOre { units: number(1)? },
+        "withdraw" => Request::WithdrawOre { units: number(1)? },
+        "corp-create" => Request::CreateCorporation {
+            name: command
+                .get(1)
+                .context("corp-create needs a corporation name")?
+                .clone(),
+        },
+        "corp-invite" => Request::InviteCorporation {
+            pilot: command
+                .get(1)
+                .context("corp-invite needs a pilot name")?
+                .clone(),
+        },
+        "corp-accept" => Request::AcceptCorporation {
+            corporation: command
+                .get(1)
+                .context("corp-accept needs a corporation name")?
+                .clone(),
+        },
+        "corp-deposit" => Request::DepositCorporationOre { units: number(1)? },
+        "corp-withdraw" => Request::WithdrawCorporationOre { units: number(1)? },
         "undock" => Request::Undock,
         "dock" => Request::Dock,
         "stop" => Request::Navigate {

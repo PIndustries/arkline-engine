@@ -414,6 +414,27 @@ pub const GENESIS_HASH: &str = "000000000000000000000000000000000000000000000000
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "command", rename_all = "snake_case")]
 pub enum Request {
+    DepositOre {
+        units: u64,
+    },
+    WithdrawOre {
+        units: u64,
+    },
+    CreateCorporation {
+        name: String,
+    },
+    InviteCorporation {
+        pilot: String,
+    },
+    AcceptCorporation {
+        corporation: String,
+    },
+    DepositCorporationOre {
+        units: u64,
+    },
+    WithdrawCorporationOre {
+        units: u64,
+    },
     Connect {
         protocol_version: u32,
         pilot: String,
@@ -582,7 +603,36 @@ pub struct SellOrder {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HangarShip {
+    pub ship_class: ShipClass,
+    pub system_id: u32,
+    pub ore: u64,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StationStorage {
+    pub system_id: u32,
+    pub ore: u64,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CorporationView {
+    pub name: String,
+    pub owner: String,
+    pub members: Vec<String>,
+    pub storage: Vec<StationStorage>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AssetsView {
+    /// Inactive owned hulls only; active hull and cargo remain in PilotView.
+    pub ships: Vec<HangarShip>,
+    pub storage: Vec<StationStorage>,
+    pub corporation: Option<CorporationView>,
+    pub invitations: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Snapshot {
+    #[serde(default)]
+    pub stored_ore: u64,
     pub server_time_ms: u64,
     /// Ephemeral authenticated transport presence; excluded from economic replay.
     #[serde(default)]
@@ -599,6 +649,49 @@ pub struct Snapshot {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "event", rename_all = "snake_case")]
 pub enum EconomicEvent {
+    ShipBoarded {
+        from_ship_class: ShipClass,
+        pilot: String,
+        ship_class: ShipClass,
+        system_id: u32,
+        stored_units: u64,
+        loaded_units: u64,
+    },
+    PersonalOreDeposited {
+        pilot: String,
+        system_id: u32,
+        units: u64,
+    },
+    PersonalOreWithdrawn {
+        pilot: String,
+        system_id: u32,
+        units: u64,
+    },
+    CorporationCreated {
+        corporation: String,
+        owner: String,
+    },
+    CorporationInvited {
+        inviter: String,
+        corporation: String,
+        pilot: String,
+    },
+    CorporationJoined {
+        corporation: String,
+        pilot: String,
+    },
+    CorporationOreDeposited {
+        corporation: String,
+        pilot: String,
+        system_id: u32,
+        units: u64,
+    },
+    CorporationOreWithdrawn {
+        corporation: String,
+        pilot: String,
+        system_id: u32,
+        units: u64,
+    },
     PilotCreated {
         pilot: String,
     },
@@ -658,6 +751,8 @@ pub struct LedgerExport {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Response {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assets: Option<AssetsView>,
     pub ok: bool,
     pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -671,6 +766,7 @@ pub struct Response {
 impl Response {
     pub fn error(message: impl Into<String>) -> Self {
         Self {
+            assets: None,
             ok: false,
             message: message.into(),
             resume_token: None,

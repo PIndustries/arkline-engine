@@ -119,6 +119,7 @@ mod tests {
     use arkline_protocol::*;
     fn snapshot(ore: u64, remaining: u64) -> Snapshot {
         Snapshot {
+            stored_ore: 0,
             server_time_ms: 100,
             online_pilots: vec![],
             asteroids: vec![Asteroid {

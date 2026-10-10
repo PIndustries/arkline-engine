@@ -114,8 +114,8 @@ fn run() -> Result<()> {
         atomic_write(Path::new(path), &serde_json::to_vec_pretty(&report.head)?)?;
     }
     println!(
-        "VERIFIED: {} accounts, {} trades, {} credits, {} belt ore",
-        report.accounts, report.trades, report.total_credits, report.belt_ore
+        "VERIFIED: {} accounts, {} trades, {} credits, {} belt ore, {} stored ore",
+        report.accounts, report.trades, report.total_credits, report.belt_ore, report.stored_ore
     );
     println!("Head: {} {}", report.head.sequence, report.head.hash);
     match (checkpoint, pinned) {

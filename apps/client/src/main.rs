@@ -4,6 +4,7 @@ mod effects;
 mod flight3d;
 mod motion;
 mod pilot_input;
+mod services;
 mod theme;
 use arkline_protocol::*;
 use eframe::egui::{self, Color32, Pos2, Stroke, Vec2};
@@ -170,6 +171,8 @@ fn worker(
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ServiceTab {
+    Station,
+    Corporation,
     Hangar,
     Cargo,
     Exchange,
@@ -206,6 +209,10 @@ struct Cockpit {
     connecting: bool,
     connected: bool,
     snapshot: Option<Snapshot>,
+    assets: Option<AssetsView>,
+    transfer_amount: u64,
+    corporation_name: String,
+    invite_pilot: String,
     observed: Instant,
     feed: VecDeque<(String, bool)>,
     amount: u64,
@@ -257,6 +264,10 @@ impl Cockpit {
             connecting: false,
             connected: false,
             snapshot: None,
+            assets: None,
+            transfer_amount: 25,
+            corporation_name: String::new(),
+            invite_pilot: String::new(),
             observed: Instant::now(),
             feed: VecDeque::new(),
             amount: 25,
@@ -348,6 +359,9 @@ impl Cockpit {
         self.frozen_time = None;
         self.pilot = self.pilot.trim().to_string();
         self.snapshot = None;
+        self.assets = None;
+        self.corporation_name.clear();
+        self.invite_pilot.clear();
         let (tx, rx) = mpsc::channel();
         let (out_tx, out_rx) = mpsc::channel();
         let server = self.server.clone();
@@ -404,6 +418,7 @@ impl Cockpit {
         if matches!(
             request,
             Request::Navigate { .. }
+                | Request::SelectShip { .. }
                 | Request::Warp { .. }
                 | Request::Dock
                 | Request::Undock
@@ -454,6 +469,9 @@ impl Cockpit {
                     self.log(error, true);
                 }
                 Update::Response(response, visible) => {
+                    if let Some(assets) = response.assets {
+                        self.assets = Some(assets);
+                    }
                     if visible {
                         self.request_pending = false;
                     }
@@ -467,6 +485,17 @@ impl Cockpit {
                                     snapshot.server_time_ms,
                                 );
                             }
+                        }
+                        let previously_docked =
+                            self.own().is_some_and(|p| p.location == Location::Docked);
+                        if !previously_docked
+                            && snapshot
+                                .pilots
+                                .iter()
+                                .any(|p| p.name == self.pilot && p.location == Location::Docked)
+                        {
+                            self.service_tab = ServiceTab::Station;
+                            self.services_open = true;
                         }
                         let previous_system = self.own().map(|p| p.system_id);
                         if snapshot
@@ -1361,120 +1390,6 @@ impl Cockpit {
                         }
                     });
             });
-    }
-    fn hangar_panel(&mut self, ui: &mut egui::Ui) {
-        let Some(pilot) = self.own() else {
-            return;
-        };
-        ui.colored_label(self.accent(), egui::RichText::new("SHIP HANGAR").strong());
-        ui.label("Select a hull while docked, then undock to fly it.");
-        ui.small("Preview fleet · no charge · cargo and credits stay aboard");
-        if pilot.location != Location::Docked {
-            ui.colored_label(AMBER, "Dock at the station to change ships.");
-        }
-        let enabled = self.can_operate() && pilot.location == Location::Docked;
-        for class in [
-            ShipClass::Pioneer,
-            ShipClass::Prospector,
-            ShipClass::Hauler,
-            ShipClass::Vanguard,
-        ] {
-            let spec = class.spec();
-            ui.separator();
-            ui.horizontal(|ui| {
-                ui.strong(spec.name);
-                ui.small(format!(
-                    "{} × {} × {}",
-                    format_distance(spec.length_m),
-                    format_distance(spec.width_m),
-                    format_distance(spec.height_m)
-                ));
-                if pilot.ship_class == class {
-                    ui.colored_label(self.accent(), "ACTIVE");
-                } else if ui
-                    .add_enabled(enabled, egui::Button::new("Board ship"))
-                    .clicked()
-                {
-                    self.send(Request::SelectShip { ship_class: class });
-                }
-            });
-            let (rect, _) =
-                ui.allocate_exact_size(Vec2::new(ui.available_width(), 10.0), egui::Sense::hover());
-            let width = rect.width() * (spec.length_m / 1100.0) as f32;
-            ui.painter().rect_filled(
-                egui::Rect::from_min_size(rect.min, Vec2::new(width, 6.0)),
-                1.0,
-                self.accent(),
-            );
-        }
-        ui.separator();
-        ui.small("Hull bars share one scale. All preview hulls currently use the same flight tuning and cargo capacity.");
-        ui.label(format!(
-            "Arkline Station: {} span / {} high",
-            format_distance(STATION_DIAMETER_M),
-            format_distance(STATION_HEIGHT_M)
-        ));
-        ui.small("Dimensions and navigation distances use the same world meters.");
-    }
-    fn cargo_panel(&mut self, ui: &mut egui::Ui) {
-        if let Some(pilot) = self.own() {
-            let escrow: u64 = self
-                .snapshot
-                .as_ref()
-                .map(|s| {
-                    s.orders
-                        .iter()
-                        .filter(|o| o.seller == self.pilot)
-                        .map(|o| o.units)
-                        .sum()
-                })
-                .unwrap_or(0);
-            ui.horizontal(|ui| {
-                ui.label(
-                    egui::RichText::new("ORE INVENTORY")
-                        .color(self.accent())
-                        .strong(),
-                );
-                ui.colored_label(MUTED, "Server-confirmed holdings");
-            });
-            egui::Grid::new("cargo-grid")
-                .num_columns(3)
-                .spacing([45.0, 10.0])
-                .striped(true)
-                .show(ui, |ui| {
-                    ui.strong("Location");
-                    ui.strong("Units");
-                    ui.strong("Availability");
-                    ui.end_row();
-                    ui.label("Vessel cargo");
-                    ui.colored_label(self.accent(), pilot.ore.to_string());
-                    ui.label("Available to list while docked");
-                    ui.end_row();
-                    ui.label("Exchange escrow");
-                    ui.colored_label(AMBER, escrow.to_string());
-                    ui.label("Reserved by your active sell orders");
-                    ui.end_row();
-                    ui.label("Free hold capacity");
-                    ui.label(CARGO_CAPACITY.saturating_sub(pilot.ore).to_string());
-                    ui.label("Mining, purchases, and cancellations need room");
-                    ui.end_row();
-                });
-            ui.add_space(8.0);
-            ui.horizontal_wrapped(|ui| {
-                if ui.button("Manage sell orders").clicked() {
-                    self.service_tab = ServiceTab::Exchange;
-                    self.services_open = true;
-                }
-                ui.colored_label(
-                    MUTED,
-                    if pilot.ore == 0 {
-                        "Select the belt in Overview to begin gathering cargo."
-                    } else {
-                        "Dock at the station to offer this cargo to other pilots."
-                    },
-                );
-            });
-        }
     }
     fn ledger_panel(&mut self, ui: &mut egui::Ui) {
         ui.horizontal_wrapped(|ui| {
@@ -2394,8 +2309,10 @@ impl eframe::App for Cockpit {
                         self.overview_open = true;
                     }
                     for (tab, label) in [
+                        (ServiceTab::Station, "Station"),
                         (ServiceTab::Hangar, "Hangar"),
-                        (ServiceTab::Cargo, "Cargo"),
+                        (ServiceTab::Corporation, "Corporation"),
+                        (ServiceTab::Cargo, "Inventory"),
                         (ServiceTab::Exchange, "Exchange"),
                         (ServiceTab::Activity, "Activity"),
                         (ServiceTab::Ledger, "Ledger"),
@@ -2446,46 +2363,56 @@ impl eframe::App for Cockpit {
             });
         if self.services_open {
             let mut open = true;
-            egui::Window::new("Services")
-                .id(egui::Id::new("cockpit_services_overlay"))
-                .open(&mut open)
-                .default_pos(bounds.left_top() + Vec2::new(110.0, 164.0))
-                .default_size(Vec2::new(620.0, 310.0))
-                .min_width(400.0)
-                .max_height(bounds.height() - 30.0)
-                .resizable(true)
-                .collapsible(true)
-                .constrain_to(bounds)
-                .frame(self.overlay_frame(ctx))
-                .vscroll(true)
-                .show(ctx, |ui| {
-                    ui.horizontal_wrapped(|ui| {
-                        for (tab, label) in [
-                            (ServiceTab::Hangar, "Hangar"),
-                            (ServiceTab::Cargo, "Cargo"),
-                            (ServiceTab::Exchange, "Exchange"),
-                            (ServiceTab::Activity, "Activity"),
-                            (ServiceTab::Ledger, "Ledger"),
-                            (ServiceTab::Settings, "Settings"),
-                        ] {
-                            ui.selectable_value(&mut self.service_tab, tab, label);
-                        }
-                    });
-                    ui.separator();
-                    match self.service_tab {
-                        ServiceTab::Hangar => self.hangar_panel(ui),
-                        ServiceTab::Cargo => self.cargo_panel(ui),
-                        ServiceTab::Exchange => self.market(ui),
-                        ServiceTab::Ledger => self.ledger_panel(ui),
-                        ServiceTab::Settings => self.settings_panel(ui),
-                        ServiceTab::Activity => {
-                            for (entry, error) in &self.feed {
-                                ui.colored_label(if *error { AMBER } else { MUTED }, entry);
-                                ui.separator();
-                            }
-                        }
+            egui::Window::new(
+                if self.own().is_some_and(|p| p.location == Location::Docked) {
+                    "Station services"
+                } else {
+                    "Personal services"
+                },
+            )
+            .id(egui::Id::new("cockpit_services_overlay"))
+            .open(&mut open)
+            .default_pos(bounds.left_top() + Vec2::new(110.0, 164.0))
+            .default_size(Vec2::new(620.0, 310.0))
+            .min_width(400.0)
+            .max_height(bounds.height() - 30.0)
+            .resizable(true)
+            .collapsible(true)
+            .constrain_to(bounds)
+            .frame(self.overlay_frame(ctx))
+            .vscroll(true)
+            .show(ctx, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    for (tab, label) in [
+                        (ServiceTab::Station, "Station"),
+                        (ServiceTab::Hangar, "Hangar"),
+                        (ServiceTab::Corporation, "Corporation"),
+                        (ServiceTab::Cargo, "Inventory"),
+                        (ServiceTab::Exchange, "Exchange"),
+                        (ServiceTab::Activity, "Activity"),
+                        (ServiceTab::Ledger, "Ledger"),
+                        (ServiceTab::Settings, "Settings"),
+                    ] {
+                        ui.selectable_value(&mut self.service_tab, tab, label);
                     }
                 });
+                ui.separator();
+                match self.service_tab {
+                    ServiceTab::Station => self.station_panel(ui),
+                    ServiceTab::Corporation => self.corporation_panel(ui),
+                    ServiceTab::Hangar => self.hangar_panel(ui),
+                    ServiceTab::Cargo => self.cargo_panel(ui),
+                    ServiceTab::Exchange => self.market(ui),
+                    ServiceTab::Ledger => self.ledger_panel(ui),
+                    ServiceTab::Settings => self.settings_panel(ui),
+                    ServiceTab::Activity => {
+                        for (entry, error) in &self.feed {
+                            ui.colored_label(if *error { AMBER } else { MUTED }, entry);
+                            ui.separator();
+                        }
+                    }
+                }
+            });
             self.services_open = open;
         }
         egui::CentralPanel::default()
@@ -2737,6 +2664,7 @@ mod tests {
         cockpit.connected = true;
         cockpit.pilot = "pilot".into();
         cockpit.snapshot = Some(Snapshot {
+            stored_ore: 0,
             server_time_ms: 1000,
             asteroids: vec![Asteroid {
                 id: 7,
@@ -2903,6 +2831,250 @@ mod tests {
         assert!(cockpit.can_mine(&cockpit.own().unwrap()));
     }
 
+    fn service_test_frame(
+        ctx: &egui::Context,
+        cockpit: &mut Cockpit,
+        events: Vec<egui::Event>,
+        tab: ServiceTab,
+    ) -> Vec<(String, Pos2)> {
+        let output = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    Pos2::ZERO,
+                    Vec2::new(1100.0, 800.0),
+                )),
+                events,
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| match tab {
+                    ServiceTab::Cargo => cockpit.cargo_panel(ui),
+                    ServiceTab::Corporation => cockpit.corporation_panel(ui),
+                    ServiceTab::Hangar => cockpit.hangar_panel(ui),
+                    _ => cockpit.station_panel(ui),
+                });
+            },
+        );
+        output
+            .shapes
+            .into_iter()
+            .filter_map(|s| {
+                if let egui::Shape::Text(t) = s.shape {
+                    Some((
+                        t.galley.job.text.clone(),
+                        t.pos + t.galley.rect.center().to_vec2(),
+                    ))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+    fn service_test_click(
+        ctx: &egui::Context,
+        cockpit: &mut Cockpit,
+        point: Pos2,
+        tab: ServiceTab,
+    ) {
+        service_test_frame(
+            ctx,
+            cockpit,
+            vec![
+                egui::Event::PointerMoved(point),
+                egui::Event::PointerButton {
+                    pos: point,
+                    button: egui::PointerButton::Primary,
+                    pressed: true,
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ],
+            tab,
+        );
+        service_test_frame(
+            ctx,
+            cockpit,
+            vec![egui::Event::PointerButton {
+                pos: point,
+                button: egui::PointerButton::Primary,
+                pressed: false,
+                modifiers: egui::Modifiers::NONE,
+            }],
+            tab,
+        );
+    }
+    fn asset_test_fixture() -> AssetsView {
+        AssetsView {
+            ships: vec![
+                HangarShip {
+                    ship_class: ShipClass::Hauler,
+                    system_id: 1,
+                    ore: 99,
+                },
+                HangarShip {
+                    ship_class: ShipClass::Vanguard,
+                    system_id: 2,
+                    ore: 88,
+                },
+            ],
+            storage: vec![
+                StationStorage {
+                    system_id: 1,
+                    ore: 50,
+                },
+                StationStorage {
+                    system_id: 2,
+                    ore: 777,
+                },
+            ],
+            corporation: None,
+            invitations: vec![],
+        }
+    }
+    #[test]
+    fn inventory_is_remote_visible_but_transfers_and_boarding_require_local_dock() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        cockpit.assets = Some(asset_test_fixture());
+        let (tx, rx) = mpsc::channel();
+        cockpit.commands = Some(tx);
+        let labels = service_test_frame(&ctx, &mut cockpit, vec![], ServiceTab::Cargo);
+        assert!(labels.iter().any(|(t, _)| t == "777"));
+        assert!(labels.iter().any(|(t, _)| t.contains("Stored")));
+        let store = labels.iter().find(|(t, _)| t == "Store ore").unwrap().1;
+        service_test_click(&ctx, &mut cockpit, store, ServiceTab::Cargo);
+        assert!(rx.try_recv().is_err());
+        cockpit.snapshot.as_mut().unwrap().pilots[0].location = Location::Docked;
+        let labels = service_test_frame(&ctx, &mut cockpit, vec![], ServiceTab::Cargo);
+        let store = labels.iter().find(|(t, _)| t == "Store ore").unwrap().1;
+        service_test_click(&ctx, &mut cockpit, store, ServiceTab::Cargo);
+        assert!(matches!(
+            rx.try_recv().unwrap(),
+            Request::DepositOre { units: 25 }
+        ));
+        cockpit.request_pending = false;
+        let labels = service_test_frame(&ctx, &mut cockpit, vec![], ServiceTab::Hangar);
+        let boards: Vec<_> = labels
+            .iter()
+            .filter(|(t, _)| t == "Board ship")
+            .map(|(_, p)| *p)
+            .collect();
+        assert_eq!(boards.len(), 2);
+        service_test_click(&ctx, &mut cockpit, boards[1], ServiceTab::Hangar);
+        assert!(rx.try_recv().is_err());
+        service_test_click(&ctx, &mut cockpit, boards[0], ServiceTab::Hangar);
+        assert!(matches!(
+            rx.try_recv().unwrap(),
+            Request::SelectShip {
+                ship_class: ShipClass::Hauler
+            }
+        ));
+    }
+    #[test]
+    fn corporation_actions_use_real_requests_and_owner_storage_permissions() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        let (tx, rx) = mpsc::channel();
+        cockpit.commands = Some(tx);
+        cockpit.assets = Some(asset_test_fixture());
+        cockpit.corporation_name = "Test corporation".into();
+        let labels = service_test_frame(&ctx, &mut cockpit, vec![], ServiceTab::Corporation);
+        let button = labels
+            .iter()
+            .find(|(t, _)| t == "Create corporation")
+            .unwrap()
+            .1;
+        service_test_click(&ctx, &mut cockpit, button, ServiceTab::Corporation);
+        assert!(
+            matches!(rx.try_recv().unwrap(),Request::CreateCorporation {name} if name=="Test corporation")
+        );
+        cockpit.request_pending = false;
+        cockpit.assets.as_mut().unwrap().invitations = vec!["Inviting corporation".into()];
+        let labels = service_test_frame(&ctx, &mut cockpit, vec![], ServiceTab::Corporation);
+        let button = labels
+            .iter()
+            .find(|(t, _)| t == "Accept invitation")
+            .unwrap()
+            .1;
+        service_test_click(&ctx, &mut cockpit, button, ServiceTab::Corporation);
+        assert!(
+            matches!(rx.try_recv().unwrap(),Request::AcceptCorporation {corporation} if corporation=="Inviting corporation")
+        );
+        cockpit.request_pending = false;
+        cockpit.snapshot.as_mut().unwrap().pilots[0].location = Location::Docked;
+        cockpit.assets.as_mut().unwrap().corporation = Some(CorporationView {
+            name: "Inviting corporation".into(),
+            owner: "another pilot".into(),
+            members: vec!["pilot".into()],
+            storage: vec![StationStorage {
+                system_id: 1,
+                ore: 100,
+            }],
+        });
+        let labels = service_test_frame(&ctx, &mut cockpit, vec![], ServiceTab::Corporation);
+        let button = labels.iter().find(|(t, _)| t == "Withdraw ore").unwrap().1;
+        service_test_click(&ctx, &mut cockpit, button, ServiceTab::Corporation);
+        assert!(rx.try_recv().is_err());
+        cockpit
+            .assets
+            .as_mut()
+            .unwrap()
+            .corporation
+            .as_mut()
+            .unwrap()
+            .owner = "pilot".into();
+        let labels = service_test_frame(&ctx, &mut cockpit, vec![], ServiceTab::Corporation);
+        let button = labels.iter().find(|(t, _)| t == "Withdraw ore").unwrap().1;
+        service_test_click(&ctx, &mut cockpit, button, ServiceTab::Corporation);
+        assert!(matches!(
+            rx.try_recv().unwrap(),
+            Request::WithdrawCorporationOre { units: 25 }
+        ));
+    }
+    #[test]
+    fn docking_opens_station_once_and_missing_assets_never_claim_empty_inventory() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        let labels = service_test_frame(&ctx, &mut cockpit, vec![], ServiceTab::Hangar);
+        assert!(labels
+            .iter()
+            .any(|(t, _)| t.contains("Waiting for authenticated")));
+        assert!(!labels.iter().any(|(t, _)| t == "Board ship"));
+        let (tx, rx) = mpsc::channel();
+        cockpit.updates = Some(rx);
+        let mut docked = cockpit.snapshot.clone().unwrap();
+        docked.pilots[0].location = Location::Docked;
+        tx.send(Update::Response(
+            Box::new(Response {
+                ok: true,
+                message: "Docked".into(),
+                snapshot: Some(docked.clone()),
+                assets: Some(asset_test_fixture()),
+                resume_token: None,
+                ledger: None,
+            }),
+            true,
+        ))
+        .unwrap();
+        cockpit.poll();
+        assert!(cockpit.services_open);
+        assert!(cockpit.service_tab == ServiceTab::Station);
+        cockpit.services_open = false;
+        tx.send(Update::Response(
+            Box::new(Response {
+                ok: true,
+                message: String::new(),
+                snapshot: Some(docked),
+                assets: Some(asset_test_fixture()),
+                resume_token: None,
+                ledger: None,
+            }),
+            false,
+        ))
+        .unwrap();
+        cockpit.poll();
+        assert!(!cockpit.services_open);
+    }
+
     #[test]
     fn hangar_boards_docked_hull_and_waits_for_confirmation_but_disables_in_space() {
         let ctx = egui::Context::default();
@@ -2916,6 +3088,7 @@ mod tests {
         cockpit.connected = true;
         cockpit.pilot = "pilot".into();
         cockpit.snapshot = Some(Snapshot {
+            stored_ore: 0,
             server_time_ms: 0,
             asteroids: vec![],
             online_pilots: vec![],
@@ -2934,6 +3107,20 @@ mod tests {
                 location: Location::Docked,
                 flight: None,
             }],
+        });
+        cockpit.assets = Some(AssetsView {
+            ships: ALL_SHIP_CLASSES
+                .into_iter()
+                .filter(|c| *c != ShipClass::Pioneer)
+                .map(|ship_class| HangarShip {
+                    ship_class,
+                    system_id: HOME_SYSTEM_ID,
+                    ore: 0,
+                })
+                .collect(),
+            storage: vec![],
+            corporation: None,
+            invitations: vec![],
         });
         let (tx, rx) = mpsc::channel();
         cockpit.commands = Some(tx);
@@ -3016,6 +3203,17 @@ mod tests {
             "selection must wait for server confirmation"
         );
         cockpit.snapshot.as_mut().unwrap().pilots[0].ship_class = ShipClass::Prospector;
+        cockpit
+            .assets
+            .as_mut()
+            .unwrap()
+            .ships
+            .retain(|s| s.ship_class != ShipClass::Prospector);
+        cockpit.assets.as_mut().unwrap().ships.push(HangarShip {
+            ship_class: ShipClass::Pioneer,
+            system_id: HOME_SYSTEM_ID,
+            ore: 25,
+        });
         cockpit.request_pending = false;
         let labels = render(&mut cockpit, vec![]);
         let active = labels.iter().find(|(text, _)| text == "ACTIVE").unwrap().1;
@@ -3180,6 +3378,7 @@ mod tests {
                     _ => panic!("first request must authenticate"),
                 }
                 let response = Response {
+                    assets: None,
                     ok: true,
                     message: "Connected".into(),
                     resume_token: Some("fixture-resume-token".into()),

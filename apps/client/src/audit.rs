@@ -190,6 +190,7 @@ mod tests {
                 Request::ExportLedger
             ));
             let response = Response {
+                assets: None,
                 ok: true,
                 message: "Export".into(),
                 resume_token: None,
@@ -215,6 +216,7 @@ mod tests {
             protocol_version: PROTOCOL_VERSION,
             entries: vec![],
             snapshot: Snapshot {
+                stored_ore: 0,
                 asteroids: vec![],
                 server_time_ms: 0,
                 online_pilots: vec![],

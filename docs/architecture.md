@@ -24,10 +24,18 @@ economic command appends one versioned event in the same transaction as its stat
 change. Rejected operations append nothing. Resume credentials are independent of
 public pilot names and never appear in economic exports.
 
-The initial event set is pilot creation, mining, sell escrow, trade, and cancellation.
+The event set includes pilot creation, mining, sell escrow, trade, cancellation,
+boarding with cargo swaps, station storage transfers, and corporation membership
+and shared storage operations.
 Starter credits are explicit issuance. The ore conservation equation is:
 
-`belt ore + held pilot ore + open sell escrow = initial belt ore`.
+`belt ore + active cargo + inactive ship cargo + personal storage + corporation storage + open sell escrow = initial belt ore`.
+
+Authenticated responses contain the pilot's detailed assets; shared corporation
+storage is shown only to members. Public snapshots expose the combined stored ore
+total. The public ledger still reveals storage movements and membership, so this
+response filtering is not economic confidentiality. See
+[station asset audit boundaries](station-assets-audit.md).
 
 Credits are integer quantities, and multiplication/addition are checked for overflow.
 Total credits are `pilot count * starter issuance` in this ruleset. There are no

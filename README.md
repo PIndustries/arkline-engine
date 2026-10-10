@@ -109,9 +109,34 @@ Arkline Station spans 20 km and stands 6 km high. Its navigation marker identifi
 the docking port; docking range is measured to that port, not the station center.
 Hull dimensions and world distances use meters, with one render unit representing
 100 meters after camera-relative rebasing. Hulls have distinct procedural shapes.
-The preview hangar does not charge credits; boarding preserves cargo and economic
-history. All four hulls currently share flight tuning and cargo capacity. Ship
-production, hull ownership markets and physical collisions are not implemented.
+The preview grants one hull of each class once. Inactive hulls stay at their station;
+boarding requires docking in the same system. Each hull keeps its own cargo, so
+boarding an empty ship leaves the previous ship's ore aboard that stored hull.
+Existing saves retain the active hull and cargo; the other preview hulls start at
+Junction. All four hulls currently share flight tuning and cargo capacity. Ship
+production, multiple hulls of the same class, hull trading and physical collisions
+are not implemented.
+
+## Station assets and corporations
+
+Docking opens **Station** services with the active vessel, **Undock**, and shortcuts
+to **Hangar**, **Inventory**, **Corporation**, and **Exchange**. These services remain
+floating windows over the game. A modeled station interior is not included yet.
+
+**Inventory** is available in space as well as while docked. It shows active cargo,
+stored hull cargo, personal station ore, and market escrow. You can inspect remote
+holdings, but personal deposits and withdrawals require docking at the station
+holding the ore. Boarding does not teleport ships or cargo between systems.
+
+Create a corporation, invite an existing pilot, and have that pilot accept the
+invitation. Members can inspect shared station storage and deposit ore while
+docked; only the owner can withdraw. Transfers use the current station and obey
+the active cargo capacity. Membership and storage survive server restart. This is
+the first corporation implementation: custom roles, shared ships, corporate wallets,
+member removal, ownership transfer, and corporation dissolution are not included.
+
+Inventory currently contains ore and the four preview hull classes. General item
+types, fitting, blueprints, manufacturing and repair services remain future work.
 
 ## Cockpit layout and services
 
@@ -128,10 +153,11 @@ and ships, with category filters and distances. Its selected-object panel gives
 the available navigation, targeting, mining and jump actions. Pilot records include live connection status. Undocked ships remain in space
 after disconnect; docked ships are omitted from the space view. A floating ship HUD keeps cargo, balance and flight controls visible.
 
-Use the service launcher to inspect **Cargo**, trade in **Exchange**, review
+Use the service launcher to inspect **Inventory**, trade in **Exchange**, review
 **Activity**, independently check the economic history in **Ledger**, or save an Emerald, Teal
-or Amber appearance in **Settings**. Emerald uses the default black-and-green theme. Cargo
-separates held ore from sell-order escrow. Exchange actions require docking.
+or Amber appearance in **Settings**. Emerald uses the default black-and-green theme.
+Inventory separates held ore from station storage and sell-order escrow. Exchange
+actions require docking.
 
 The Ledger audit runs separately from the flight connection and pins a local
 checkpoint after successful replay. Its result describes the exported history at
@@ -164,6 +190,10 @@ cargo run -p arkline-cli -- --pilot TerminalPilot undock
 cargo run -p arkline-cli -- --pilot TerminalPilot warp belt
 # After arrival:
 cargo run -p arkline-cli -- --pilot TerminalPilot mine 100
+# Once back at the station and docked:
+cargo run -p arkline-cli -- --pilot TerminalPilot deposit 50
+cargo run -p arkline-cli -- --pilot TerminalPilot board prospector
+cargo run -p arkline-cli -- --pilot TerminalPilot inventory
 ```
 
 ## Repository
@@ -202,6 +232,9 @@ tampered exports, and checkpoint rollback. CI runs on macOS and Linux.
 Use loopback for the preview. TCP is not encrypted. Remote experiments require an
 authenticated encrypted tunnel; direct Internet exposure is not supported. Exports
 and snapshots are readable without login and contain all prototype pilot balances.
+The detailed assets response requires login and is scoped to the pilot and their
+corporation. The public audit history still reveals economic storage movements;
+this is not a private economy.
 One serialized server and one SQLite world are intentional limitations. Starter
 issuance per pilot is not resistant to multiple identities. Credits have no monetary
 value. Operator rewards and hosting governance require separate reviewed designs.

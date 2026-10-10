@@ -23,6 +23,7 @@ fn checkpoint_advances_only_after_full_verification() {
         protocol_version: PROTOCOL_VERSION,
         entries: vec![],
         snapshot: Snapshot {
+            stored_ore: 0,
             asteroids: vec![],
             online_pilots: vec![],
             server_time_ms: 0,

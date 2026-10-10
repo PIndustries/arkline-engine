@@ -1,3 +1,4 @@
+mod assets;
 mod flight;
 mod universe;
 use anyhow::{bail, ensure, Context, Result};
@@ -25,6 +26,10 @@ struct Pilot {
 }
 #[derive(Clone, Serialize, Deserialize)]
 struct World {
+    #[serde(default)]
+    accounts: BTreeMap<String, assets::Account>,
+    #[serde(default)]
+    corporations: BTreeMap<String, assets::Corporation>,
     pilots: BTreeMap<String, Pilot>,
     orders: BTreeMap<u64, SellOrder>,
     belt_ore: u64,
@@ -37,6 +42,8 @@ struct World {
 impl Default for World {
     fn default() -> Self {
         Self {
+            accounts: BTreeMap::new(),
+            corporations: BTreeMap::new(),
             pilots: BTreeMap::new(),
             orders: BTreeMap::new(),
             belt_ore: INITIAL_BELT_ORE,
@@ -114,6 +121,7 @@ impl Server {
         let mut world: World = serde_json::from_str(&json)?;
         flight::migrate_spatial(&mut world);
         universe::ensure_asteroids(&mut world);
+        assets::ensure_accounts(&mut world);
         for pilot in world.pilots.values_mut() {
             pilot.controls = None;
             pilot.view.target_lock = None;
@@ -128,6 +136,7 @@ impl Server {
                 }
             }
         }
+        validate(&world)?;
         let stopped = serde_json::to_string(&world)?;
         if stopped != json {
             db.execute("UPDATE world SET json=?1 WHERE id=1", [stopped])?;
@@ -199,8 +208,10 @@ impl Server {
         let mut world: World = serde_json::from_str(&json)?;
         flight::migrate_spatial(&mut world);
         universe::ensure_asteroids(&mut world);
+        assets::ensure_accounts(&mut world);
         flight::advance(&mut world, now);
         universe::advance_locks(&mut world, now);
+        validate(&world)?;
         let next = serde_json::to_string(&world)?;
         if next != json {
             tx.execute("UPDATE world SET json=?1 WHERE id=1", [next])?;
@@ -214,6 +225,7 @@ impl Server {
         let mut world: World = serde_json::from_str(&json)?;
         flight::migrate_spatial(&mut world);
         universe::ensure_asteroids(&mut world);
+        assets::ensure_accounts(&mut world);
         if let Some(p) = world.pilots.get_mut(name) {
             p.controls = None;
             p.view.target_lock = None;
@@ -228,6 +240,7 @@ impl Server {
                 }
             }
         }
+        validate(&world)?;
         let next = serde_json::to_string(&world)?;
         if next != json {
             tx.execute("UPDATE world SET json=?1 WHERE id=1", [next])?;
@@ -248,6 +261,7 @@ impl Server {
         let mut world: World = serde_json::from_str(&json).context("invalid durable world")?;
         flight::migrate_spatial(&mut world);
         universe::ensure_asteroids(&mut world);
+        assets::ensure_accounts(&mut world);
         flight::advance(&mut world, now);
         universe::advance_locks(&mut world, now);
         let mut token = None;
@@ -256,6 +270,14 @@ impl Server {
         let export = matches!(request, Request::ExportLedger);
         let message;
         match request {
+            request if assets::handles(&request) => {
+                let name = session
+                    .as_ref()
+                    .context("connect before issuing commands")?;
+                let outcome = assets::execute(&mut world, name, request)?;
+                event = outcome;
+                message = "Station assets updated";
+            }
             Request::Connect {
                 protocol_version,
                 pilot,
@@ -459,14 +481,6 @@ impl Server {
                         f.updated_at_ms = now;
                         message = "Navigation accepted";
                     }
-                    Request::SelectShip { ship_class } => {
-                        ensure!(
-                            pilot.view.location == Location::Docked,
-                            "ship selection requires docking"
-                        );
-                        pilot.view.ship_class = ship_class;
-                        message = "Ship selected";
-                    }
                     Request::Undock => {
                         ensure!(pilot.view.location == Location::Docked, "must be docked");
                         pilot.view.location = Location::Station;
@@ -638,6 +652,7 @@ impl Server {
         for pilot in world.pilots.values_mut() {
             flight::ensure_flight(pilot, now);
         }
+        assets::ensure_accounts(&mut world);
         validate(&world)?;
         let mut entries = {
             let query = if export {
@@ -684,7 +699,14 @@ impl Server {
         if updated_json != json {
             tx.execute("UPDATE world SET json=?1 WHERE id=1", [updated_json])?;
         }
+        let private_assets = connected
+            .as_ref()
+            .or(session.as_ref())
+            .and_then(|name| assets::view(&world, name));
         let snapshot = Snapshot {
+            stored_ore: assets::stored_ore(&world)
+                .try_into()
+                .context("stored ore overflow")?,
             server_time_ms: now,
             online_pilots: self.online_sessions.keys().cloned().collect(),
             asteroids: world.asteroids.clone(),
@@ -702,6 +724,7 @@ impl Server {
             *session = Some(pilot);
         }
         Ok(Response {
+            assets: private_assets,
             ok: true,
             message: message.into(),
             resume_token: token,
@@ -724,6 +747,7 @@ fn add_cargo(current: u64, units: u64) -> Result<u64> {
     Ok(next)
 }
 fn validate(world: &World) -> Result<()> {
+    assets::validate(world)?;
     ensure!(
         world.asteroids.iter().map(|a| a.ore as u128).sum::<u128>() == world.belt_ore as u128,
         "asteroid reserve mismatch"
@@ -735,7 +759,8 @@ fn validate(world: &World) -> Result<()> {
             .values()
             .map(|p| p.view.ore as u128)
             .sum::<u128>()
-        + world.orders.values().map(|o| o.units as u128).sum::<u128>();
+        + world.orders.values().map(|o| o.units as u128).sum::<u128>()
+        + assets::stored_ore(world);
     if credits != world.pilots.len() as u128 * STARTER_CREDITS as u128
         || ore != INITIAL_BELT_ORE as u128
     {

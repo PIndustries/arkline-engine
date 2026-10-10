@@ -216,3 +216,26 @@ turret mount; a deck-attached pedestal was added and covered by geometry tests.
 Native inspection became unavailable before the final extraction capture, so the
 complete rendered beam sequence still needs hands-on acceptance. This release adds
 one mining module; combat damage and general module fitting are not implemented.
+
+## Persistent station assets — 26.10.10.4
+
+The station overlay opens on docking and exposes owned ships, personal inventory,
+corporation membership/storage, and the existing exchange. The private preview
+issues one hull of each class once. Stored hulls retain their own cargo and station.
+The UI permits remote inspection but only local docked boarding and ore transfers.
+
+Automated coverage includes 44 client tests, durable-data validation, legacy-save
+migration, station isolation, corporation invitations and authorization, failed
+transfer rollback, and independent replay of all storage buckets. A separate live
+TCP journey mines 100 ore, returns and docks, deposits personal ore, changes hull,
+creates/invites/joins a corporation, rejects unauthorized withdrawals, restarts the
+server, reboards the original hull and passes economic audits before and after.
+An isolated copy of a previous preview world also passes migration with unchanged
+active cargo, credits, hull selection, system, and ledger history.
+
+Native package validation confirms automatic station landing, boarding a stored
+Prospector, corporation creation showing the authenticated owner, and a native
+25-ore deposit updating cargo from 100 to 75 and station storage from 0 to 25. These are
+functional service overlays; a rendered hangar interior, fitting, generic items,
+production, shared hulls and advanced corporation administration are not included.
+See station-assets-audit.md for the public ledger and aggregate snapshot limits.

@@ -143,6 +143,7 @@ mod tests {
     use super::*;
     fn snapshot(time: u64, x: f64) -> Snapshot {
         Snapshot {
+            stored_ore: 0,
             server_time_ms: time,
             online_pilots: vec![],
             asteroids: vec![],
