@@ -379,3 +379,19 @@ last disconnect and restart still clear the fleet under preview recovery policy.
 Fifteen simultaneous camera renders, network load performance and Linux native
 visual acceptance are not claimed. See public-preview-readiness.md before changing
 repository visibility.
+
+## Relay startup — 26.10.10.12
+
+Client tests cover pending, ready and failed startup completion; status labels never
+claim an unconfirmed session or world. A full-app test holds thrust during startup
+and verifies that no command or control is emitted. All 73 client tests pass (one
+profiling test ignored), strict workspace Clippy and formatting pass, and the
+release bundle is ad-hoc signed/verified. The animation uses bounded vector geometry
+and opens shutters onto the actual cockpit once a pilot snapshot is available.
+
+Native visual inspection of the package was attempted in an isolated BootQA
+session. The desktop automation provider reported that the Mac was locked and
+could not unlock it, so appearance, transition timing and native Retry clicks are
+not claimed verified. The isolated QA process was stopped; existing sessions were
+not replaced. FTL relay labels describe the existing connection, not distributed
+relay infrastructure or an additional security guarantee.

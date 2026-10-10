@@ -1,5 +1,6 @@
 //! Native Arkline cockpit. All displayed world data originates from the server.
 mod audit;
+mod boot;
 mod effects;
 mod flight3d;
 mod layout;
@@ -350,6 +351,7 @@ enum OverviewFilter {
 }
 
 struct Cockpit {
+    boot: boot::Boot,
     server: String,
     pilot: String,
     data_dir: PathBuf,
@@ -413,6 +415,7 @@ impl Cockpit {
         let layout = layout::Layout::load(&data_dir);
         theme.apply(&cc.egui_ctx);
         Self {
+            boot: boot::Boot::default(),
             server,
             pilot: String::new(),
             data_dir,
@@ -540,6 +543,8 @@ impl Cockpit {
         })
     }
     fn connect(&mut self) {
+        self.boot.connect();
+        self.connected = false;
         self.controls = pilot_input::Mailbox::default();
         self.pilot_input = pilot_input::PilotInput::default();
         self.motion.clear();
@@ -673,6 +678,10 @@ impl Cockpit {
                     self.log(message, true);
                 }
                 Update::Failure(error) => {
+                    if self.boot.visible {
+                        self.boot.fail();
+                    }
+
                     self.effects.clear();
                     self.request_pending = false;
                     self.frozen_time = Some(self.presentation_time());
@@ -2566,6 +2575,25 @@ impl eframe::App for Cockpit {
             self.frame_intervals.pop_front();
         }
         self.poll();
+        if self.boot.visible {
+            let ready = self.connected && self.own().is_some();
+            match self.boot.show(ctx, ready, self.connected, &self.notice) {
+                boot::Action::Enter => {}
+                boot::Action::Retry => {
+                    self.connect();
+                    return;
+                }
+                boot::Action::Back => {
+                    self.commands = None;
+                    self.updates = None;
+                    self.connected = false;
+                    self.connecting = false;
+                    self.snapshot = None;
+                    return;
+                }
+                boot::Action::Wait => return,
+            }
+        }
         self.effects.retain(self.presentation_time());
         if !ctx.wants_keyboard_input()
             && ctx.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::Space))
@@ -2994,6 +3022,7 @@ impl eframe::App for Cockpit {
         ) {
             *self.controls.lock().unwrap() = Some(control);
         }
+        self.boot.paint_handoff(ctx);
     }
 }
 /// Only the process that spawned a local host owns its lifetime.
@@ -3185,6 +3214,7 @@ mod tests {
             std::env::temp_dir().join("arkline-headless-view-unused"),
             None,
         );
+        cockpit.boot.visible = false;
         cockpit.connected = true;
         cockpit.pilot = "pilot".into();
         cockpit.snapshot = Some(Snapshot {
@@ -3374,6 +3404,34 @@ mod tests {
             rx.try_recv().unwrap(),
             Request::StopMining { module_id: 1 }
         ));
+    }
+    #[test]
+    fn boot_blocks_flight_commands_until_cockpit_entry() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        cockpit.boot.connect();
+        let (tx, rx) = mpsc::channel();
+        cockpit.commands = Some(tx);
+        let _ = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    Pos2::ZERO,
+                    Vec2::new(1200.0, 800.0),
+                )),
+                events: vec![egui::Event::Key {
+                    key: egui::Key::W,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: egui::Modifiers::NONE,
+                }],
+                ..Default::default()
+            },
+            |ctx| eframe::App::update(&mut cockpit, ctx, &mut eframe::Frame::_new_kittest()),
+        );
+        assert!(cockpit.boot.visible);
+        assert!(rx.try_recv().is_err());
+        assert!(cockpit.controls.lock().unwrap().is_none());
     }
     #[test]
     fn physical_console_fleet_click_sends_real_command_without_flight_input() {

@@ -145,3 +145,16 @@ the selected drone. Choose POV or Orbit camera from Fleet. Signal is authoritati
 and distance-based, with increasing noise as the link weakens. Only one selected
 camera is rendered at once. Recon is observation/navigation; mining drones repeat
 real ore extraction; attack drones currently fight other drones only.
+
+## Relay startup (26.10.10.12)
+
+Startup presents the P.Industries relay sequence with animated rings, particles and
+staged status text. The relay/session check is earned by the real connection
+response; world synchronization requires the signed-in pilot in a server snapshot.
+Animation time alone cannot claim success. A short opening-shutter transition
+reveals the cockpit after synchronization; Enter cockpit skips the introduction
+once ready. Without a pilot, the introduction leads to the normal sign-in form.
+Failed connections stay on the relay screen with Retry and pilot/server settings.
+Flight commands are blocked while that screen is active. FTL relay is in-universe
+presentation of the existing TCP session, not a new network service or security
+protocol. Reconnection after playing keeps the existing recovery UI.
