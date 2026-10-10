@@ -67,19 +67,19 @@ fn explicit_asteroid_lock_depletion_and_legacy_migration_conserve_ore() {
     );
     let mut remaining = asteroid.ore;
     let mut time = route_ms() + lock_duration_ms(ShipClass::Pioneer, asteroid.radius);
+    let started = s.handle_at(
+        &mut p,
+        Request::StartMining {
+            module_id: 0,
+            target_id: asteroid.id,
+        },
+        time,
+    );
+    assert!(started.ok, "{}", started.message);
     while remaining > 0 {
-        let units = remaining.min(MAX_MINE_UNITS);
-        ok(
-            &mut s,
-            &mut p,
-            Request::MineAsteroid {
-                id: asteroid.id,
-                units,
-            },
-            time,
-        );
-        remaining -= units;
-        time += 1000;
+        time += mining_spec(ShipClass::Pioneer).cycle_ms;
+        s.tick_at(time).unwrap();
+        remaining = remaining.saturating_sub(mining_spec(ShipClass::Pioneer).yield_units);
     }
     let depleted = ok(&mut s, &mut p, Request::Snapshot, time);
     assert_eq!(

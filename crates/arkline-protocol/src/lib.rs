@@ -414,6 +414,13 @@ pub const GENESIS_HASH: &str = "000000000000000000000000000000000000000000000000
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "command", rename_all = "snake_case")]
 pub enum Request {
+    StartMining {
+        module_id: u8,
+        target_id: u64,
+    },
+    StopMining {
+        module_id: u8,
+    },
     DepositOre {
         units: u64,
     },
@@ -576,8 +583,37 @@ pub fn lock_duration_ms(ship: ShipClass, radius: f64) -> u64 {
         .ceil() as u64
 }
 
+pub const MINING_MODULE_IDS: [u8; 2] = [0, 1];
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MiningSpec {
+    pub cycle_ms: u64,
+    pub yield_units: u64,
+}
+pub fn mining_spec(class: ShipClass) -> MiningSpec {
+    let (cycle_ms, yield_units) = match class {
+        ShipClass::Pioneer => (6000, 25),
+        ShipClass::Prospector => (5000, 40),
+        ShipClass::Hauler => (8000, 20),
+        ShipClass::Vanguard => (7000, 30),
+    };
+    MiningSpec {
+        cycle_ms,
+        yield_units,
+    }
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MiningModule {
+    pub module_id: u8,
+    pub target_id: Option<u64>,
+    pub cycle_started_at_ms: Option<u64>,
+    pub cycle_completes_at_ms: Option<u64>,
+    pub stop_reason: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PilotView {
+    #[serde(default)]
+    pub mining_modules: Vec<MiningModule>,
     #[serde(default)]
     pub target_lock: Option<TargetLock>,
     #[serde(default)]

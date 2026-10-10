@@ -239,3 +239,33 @@ Prospector, corporation creation showing the authenticated owner, and a native
 functional service overlays; a rendered hangar interior, fitting, generic items,
 production, shared hulls and advanced corporation administration are not included.
 See station-assets-audit.md for the public ledger and aggregate snapshot limits.
+
+## Anchored overlays and continuous mining — 26.10.10.5
+
+Panels retain edge-relative placement across viewport changes, with local layout
+persistence and settings for snapping, pinning, and restoring defaults. Native QA
+confirmed the overview remains at the right and ship controls at the bottom when
+switching between windowed and fullscreen. Layout tests also cover saved positions,
+reflow, and reset behavior.
+
+Mining uses two server-timed modules. Activating a module requires a confirmed,
+in-range asteroid lock. Completed cycles award the hull-defined quantity and start
+the next cycle automatically. Tests cover repeat cycles, two simultaneous modules,
+invalid state, stopping without partial awards, late ticks, failed commands at a
+cycle deadline, restart, migration, depletion, full cargo, and independent economic
+conservation. Existing trade and travel acceptance now use completed fixed cycles
+rather than the retired player-selected quantity commands.
+
+In native cockpit QA a Prospector began with 75 ore and reached 835 through repeated
+40-ore cycles without further activation clicks. Both turrets showed active progress,
+physical beams, and cockpit instrument countdowns. Explicit stop halted both modules;
+the independent verifier accepted the resulting world and ledger.
+
+A five-second pre-change process sample showed substantial time in presentation
+synchronization and repeated render work. The renderer now caches uniform handles,
+geometry and station batches (161 station draws reduced to six), while focused
+rendering requests the next frame without an extra 16-ms delay. Unfocused rendering
+is throttled. The header measures actual frame intervals. Native focused station
+and mining scenes measured roughly 116-120 FPS (8.3-8.6 ms) on this Mac; this is not a
+cross-hardware guarantee or a measured before/after FPS ratio. The separate ignored
+CPU preparation benchmark is synthetic and must not be reported as an FPS result.

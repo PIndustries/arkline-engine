@@ -250,6 +250,7 @@ impl FlightView {
         effects: &super::effects::Effects,
         selected: &super::SelectedObject,
         mode: super::ViewMode,
+        layout: &mut super::layout::Layout,
     ) -> Option<ViewAction> {
         let mut picked = None;
         let own_pilot = snapshot.pilots.iter().find(|p| p.name == pilot_name);
@@ -270,10 +271,26 @@ impl FlightView {
         self.space = space;
         let cockpit = matches!(mode, super::ViewMode::Cockpit);
 
-        egui::Window::new("Flight controls")
-            .id(egui::Id::new("flight_camera_overlay"))
-            .default_pos(ui.max_rect().left_bottom() + egui::vec2(16.0, -260.0))
-            .default_size(egui::vec2(280.0, 95.0))
+        let bounds = ui.ctx().screen_rect();
+        let (camera_position, camera_size) = layout.position(
+            "flight-camera",
+            bounds,
+            [0.0, 1.0],
+            egui::vec2(16.0, -180.0),
+            egui::vec2(280.0, 95.0),
+        );
+        let mut camera_content = None;
+        let camera_response = egui::Window::new("Flight controls")
+            .id(egui::Id::new("flight_camera_overlay").with(layout.generation))
+            .current_pos(camera_position)
+            .default_size(camera_size)
+            .resize(|resize| {
+                if layout.reflow {
+                    resize.min_size(camera_size).max_size(camera_size)
+                } else {
+                    resize
+                }
+            })
             .constrain_to(ui.ctx().screen_rect().shrink(8.0))
             .frame(
                 egui::Frame::window(&ui.ctx().style())
@@ -281,7 +298,8 @@ impl FlightView {
                     .stroke(egui::Stroke::new(1.0, super::TEAL.gamma_multiply(0.32)))
                     .inner_margin(8.0),
             )
-            .resizable(false)
+            .movable(!layout.pinned)
+            .resizable(!layout.pinned)
             .collapsible(true)
             .show(ui.ctx(), |ui| {
                 if cockpit {
@@ -289,6 +307,7 @@ impl FlightView {
                     ui.small("W/S: thrust · A/D: strafe · Space/C: vertical");
                     ui.small("Q/E: roll · Arrows: aim · RMB + mouse: aim");
                     ui.small("Left-click: select · Release controls: neutral");
+                    camera_content = Some(ui.max_rect().size());
                     return;
                 }
                 ui.horizontal_wrapped(|ui| {
@@ -319,7 +338,17 @@ impl FlightView {
                 });
                 ui.small("Drag: orbit · Scroll: zoom");
                 ui.small("Double-click space: fly · Right-click: actions");
+                camera_content = Some(ui.max_rect().size());
             });
+        if let Some(response) = camera_response {
+            layout.record(
+                "flight-camera",
+                bounds,
+                response.response.rect,
+                camera_content,
+                ui.input(|i| i.pointer.any_down()),
+            );
+        }
         let (rect, response) = ui.allocate_exact_size(
             ui.available_size().max(egui::vec2(100.0, 150.0)),
             egui::Sense::click_and_drag(),
@@ -412,7 +441,7 @@ impl FlightView {
                     space.position(p, now)
                         + rotation
                             * Vec3::new(
-                                spec.length_m as f32 * 0.003,
+                                spec.length_m as f32 * 0.0005,
                                 spec.height_m as f32 * 0.005,
                                 0.0,
                             )
@@ -445,7 +474,7 @@ impl FlightView {
                     rotation,
                     asteroids: asteroids.clone(),
                     gates: local_gates.clone(),
-                    mining_target: effects.mining_target(now),
+                    connected,
                     vp,
                     eye,
                     now,
@@ -456,7 +485,7 @@ impl FlightView {
                         .cloned()
                         .collect(),
                     own: pilot_name.to_string(),
-                    mining: connected.then(|| effects.mining(now)).flatten(),
+
                     docking: effects.events.iter().rev().find_map(|event| {
                         let age = now.saturating_sub(event.started_ms);
                         if !connected || age >= super::effects::EFFECT_DURATION_MS {
@@ -579,15 +608,23 @@ impl FlightView {
                             }
                             if let Ok(renderer) = &self.renderer {
                                 if let Ok(renderer) = renderer.lock() {
-                                    if let Some(state) = renderer.turrets.get(&pilot.name) {
-                                        for (mesh, part, _, _) in
-                                            turret_parts(pilot.ship_class, state.rotation)
+                                    for module_id in 0..2 {
+                                        if let Some(state) =
+                                            renderer.turrets.get(&(pilot.name.clone(), module_id))
                                         {
-                                            targets.push((
-                                                super::SelectedObject::Pilot(pilot.name.clone()),
-                                                mesh_vertices(mesh),
-                                                model * part,
-                                            ));
+                                            for (mesh, part, _, _) in turret_parts(
+                                                pilot.ship_class,
+                                                state.rotation,
+                                                module_id,
+                                            ) {
+                                                targets.push((
+                                                    super::SelectedObject::Pilot(
+                                                        pilot.name.clone(),
+                                                    ),
+                                                    mesh_vertices(mesh),
+                                                    model * part,
+                                                ));
+                                            }
                                         }
                                     }
                                 }
@@ -799,9 +836,10 @@ impl FlightView {
                             (
                                 Vec3::new(0.77, -0.18, -0.22),
                                 format!(
-                                    "SYSTEM {}\nLOCK {}",
+                                    "SYSTEM {}\n{}\n{}",
                                     own.system_id,
-                                    own.locked_asteroid.map_or("NONE".into(), |v| v.to_string())
+                                    module_instrument(own, 0, now),
+                                    module_instrument(own, 1, now)
                                 ),
                             ),
                             (
@@ -1113,13 +1151,13 @@ struct Frame {
     rotation: Quat,
     asteroids: Vec<Asteroid>,
     gates: Vec<Stargate>,
-    mining_target: Option<u64>,
+    connected: bool,
     vp: Mat4,
     eye: Vec3,
     now: u64,
     pilots: Vec<PilotView>,
     own: String,
-    mining: Option<(f32, u64)>,
+
     docking: Option<(f32, bool)>,
 }
 #[derive(Clone, Copy)]
@@ -1247,14 +1285,26 @@ struct Mesh {
     buffer: glow::Buffer,
     count: i32,
 }
+struct Uniforms {
+    model: Option<glow::UniformLocation>,
+    color: Option<glow::UniformLocation>,
+    emission: Option<glow::UniformLocation>,
+    vp: Option<glow::UniformLocation>,
+    eye: Option<glow::UniformLocation>,
+    material: Option<glow::UniformLocation>,
+    sky_inverse: Option<glow::UniformLocation>,
+    sky_eye: Option<glow::UniformLocation>,
+}
 struct Renderer {
     gl: Arc<glow::Context>,
     program: glow::Program,
     background: glow::Program,
     empty: glow::VertexArray,
     meshes: Vec<Mesh>,
+    uniforms: Uniforms,
+    station_batches: Vec<(usize, Vec3, f32)>,
     destroyed: bool,
-    turrets: std::collections::HashMap<String, TurretState>,
+    turrets: std::collections::HashMap<(String, u8), TurretState>,
 }
 impl Renderer {
     unsafe fn new(gl: Arc<glow::Context>) -> Result<Self, String> {
@@ -1262,7 +1312,17 @@ impl Renderer {
         let background = compile(&gl, BACK_VERTEX, BACK_FRAGMENT)?;
         let empty = gl.create_vertex_array()?;
         let mut meshes = vec![];
-        for vertices in [
+        let uniforms = Uniforms {
+            model: gl.get_uniform_location(program, "model"),
+            color: gl.get_uniform_location(program, "base_color"),
+            emission: gl.get_uniform_location(program, "emission"),
+            vp: gl.get_uniform_location(program, "view_projection"),
+            eye: gl.get_uniform_location(program, "eye"),
+            material: gl.get_uniform_location(program, "material_kind"),
+            sky_inverse: gl.get_uniform_location(background, "inverse_view_projection"),
+            sky_eye: gl.get_uniform_location(background, "camera_eye"),
+        };
+        let mut upload = vec![
             cube(),
             torus(1.0, 0.12),
             sphere(false),
@@ -1270,7 +1330,13 @@ impl Renderer {
             hull(),
             sphere_with_resolution(false, 72, 48),
             torus(1.0, 0.008),
-        ] {
+        ];
+        let mut station_batches = Vec::new();
+        for (vertices, color, emission) in station_batches_geometry() {
+            station_batches.push((upload.len(), color, emission));
+            upload.push(vertices);
+        }
+        for vertices in upload {
             let vao = gl.create_vertex_array()?;
             let buffer = gl.create_buffer()?;
             gl.bind_vertex_array(Some(vao));
@@ -1298,70 +1364,69 @@ impl Renderer {
             background,
             empty,
             meshes,
+            uniforms,
+            station_batches,
             destroyed: false,
             turrets: std::collections::HashMap::new(),
         })
     }
     unsafe fn draw(&self, mesh: usize, model: Mat4, color: Vec3, emission: f32) {
         let gl = &self.gl;
-        gl.uniform_matrix_4_f32_slice(
-            gl.get_uniform_location(self.program, "model").as_ref(),
-            false,
-            &model.to_cols_array(),
-        );
-        gl.uniform_3_f32(
-            gl.get_uniform_location(self.program, "base_color").as_ref(),
-            color.x,
-            color.y,
-            color.z,
-        );
-        gl.uniform_1_f32(
-            gl.get_uniform_location(self.program, "emission").as_ref(),
-            emission,
-        );
+        gl.uniform_matrix_4_f32_slice(self.uniforms.model.as_ref(), false, &model.to_cols_array());
+        gl.uniform_3_f32(self.uniforms.color.as_ref(), color.x, color.y, color.z);
+        gl.uniform_1_f32(self.uniforms.emission.as_ref(), emission);
         gl.bind_vertex_array(Some(self.meshes[mesh].vao));
         gl.draw_arrays(glow::TRIANGLES, 0, self.meshes[mesh].count);
     }
     unsafe fn paint(&mut self, frame: &Frame) {
         let space = frame.space;
         self.turrets
-            .retain(|name, _| frame.pilots.iter().any(|p| &p.name == name));
+            .retain(|(name, _), _| frame.pilots.iter().any(|p| &p.name == name));
         for pilot in &frame.pilots {
-            let state = self
-                .turrets
-                .entry(pilot.name.clone())
-                .or_insert(TurretState {
-                    rotation: Quat::IDENTITY,
-                    last_ms: frame.now,
-                });
-            let target = pilot
-                .target_lock
-                .as_ref()
-                .map(|lock| lock.asteroid_id)
-                .or(pilot.locked_asteroid);
-            let ship = transform(
-                space.position(pilot, frame.now),
-                Vec3::ONE,
-                ship_orientation_at(pilot, frame.now),
-            );
-            let desired = target
-                .and_then(|id| {
-                    frame
-                        .asteroids
-                        .iter()
-                        .find(|a| a.id == id && a.system_id == pilot.system_id)
-                })
-                .and_then(|a| {
-                    let direction = ship.inverse().transform_point3(space.scene(a.position))
-                        - turret_mount(pilot.ship_class).0;
-                    direction
-                        .try_normalize()
-                        .map(|d| Quat::from_rotation_arc(Vec3::X, d))
-                })
-                .unwrap_or(Quat::IDENTITY);
-            let seconds = frame.now.saturating_sub(state.last_ms).min(250) as f32 / 1000.0;
-            state.rotation = slew_rotation(state.rotation, desired, 1.4 * seconds);
-            state.last_ms = frame.now;
+            for module_id in 0..2 {
+                let state = self
+                    .turrets
+                    .entry((pilot.name.clone(), module_id))
+                    .or_insert(TurretState {
+                        rotation: Quat::IDENTITY,
+                        last_ms: frame.now,
+                    });
+                let target = pilot
+                    .mining_modules
+                    .iter()
+                    .find(|m| m.module_id == module_id)
+                    .and_then(|m| m.target_id)
+                    .or_else(|| {
+                        pilot
+                            .target_lock
+                            .as_ref()
+                            .map(|lock| lock.asteroid_id)
+                            .or(pilot.locked_asteroid)
+                    });
+                let ship = transform(
+                    space.position(pilot, frame.now),
+                    Vec3::ONE,
+                    ship_orientation_at(pilot, frame.now),
+                );
+                let desired = target
+                    .and_then(|id| {
+                        frame
+                            .asteroids
+                            .iter()
+                            .find(|a| a.id == id && a.system_id == pilot.system_id)
+                    })
+                    .and_then(|a| {
+                        let direction = ship.inverse().transform_point3(space.scene(a.position))
+                            - turret_mount(pilot.ship_class, module_id).0;
+                        direction
+                            .try_normalize()
+                            .map(|d| Quat::from_rotation_arc(Vec3::X, d))
+                    })
+                    .unwrap_or(Quat::IDENTITY);
+                let seconds = frame.now.saturating_sub(state.last_ms).min(250) as f32 / 1000.0;
+                state.rotation = slew_rotation(state.rotation, desired, 1.4 * seconds);
+                state.last_ms = frame.now;
+            }
         }
         if self.destroyed {
             return;
@@ -1373,14 +1438,12 @@ impl Renderer {
         gl.use_program(Some(self.background));
         gl.bind_vertex_array(Some(self.empty));
         gl.uniform_matrix_4_f32_slice(
-            gl.get_uniform_location(self.background, "inverse_view_projection")
-                .as_ref(),
+            self.uniforms.sky_inverse.as_ref(),
             false,
             &frame.vp.inverse().to_cols_array(),
         );
         gl.uniform_3_f32(
-            gl.get_uniform_location(self.background, "camera_eye")
-                .as_ref(),
+            self.uniforms.sky_eye.as_ref(),
             frame.eye.x,
             frame.eye.y,
             frame.eye.z,
@@ -1392,24 +1455,15 @@ impl Renderer {
         gl.clear_depth_f32(1.0);
         gl.clear(glow::DEPTH_BUFFER_BIT);
         gl.use_program(Some(self.program));
-        gl.uniform_matrix_4_f32_slice(
-            gl.get_uniform_location(self.program, "view_projection")
-                .as_ref(),
-            false,
-            &frame.vp.to_cols_array(),
-        );
+        gl.uniform_matrix_4_f32_slice(self.uniforms.vp.as_ref(), false, &frame.vp.to_cols_array());
         gl.uniform_3_f32(
-            gl.get_uniform_location(self.program, "eye").as_ref(),
+            self.uniforms.eye.as_ref(),
             frame.eye.x,
             frame.eye.y,
             frame.eye.z,
         );
         // Procedural planet material stays isolated from ship/station surfaces.
-        gl.uniform_1_i32(
-            gl.get_uniform_location(self.program, "material_kind")
-                .as_ref(),
-            1,
-        );
+        gl.uniform_1_i32(self.uniforms.material.as_ref(), 1);
         // Fixed world anchor near the station; changing render origin must not
         // carry the planet along with a ship traveling astronomical distances.
         let planet = space.scene([30000.0, -18000.0, -60000.0]);
@@ -1421,16 +1475,12 @@ impl Renderer {
                 0.0,
             );
         }
-        gl.uniform_1_i32(
-            gl.get_uniform_location(self.program, "material_kind")
-                .as_ref(),
-            0,
-        );
-        for (mesh, model, color, emission) in station_parts(space)
-            .into_iter()
-            .filter(|_| space.scene(STATION_POSITION).distance(frame.eye) < 1100.0)
-        {
-            self.draw(mesh, model, color, emission);
+        gl.uniform_1_i32(self.uniforms.material.as_ref(), 0);
+        if space.scene(STATION_CENTER_POSITION).distance(frame.eye) < 1100.0 {
+            let model = Mat4::from_translation(space.scene(STATION_CENTER_POSITION));
+            for &(mesh, color, emission) in &self.station_batches {
+                self.draw(mesh, model, color, emission);
+            }
         }
         for asteroid in frame
             .asteroids
@@ -1449,7 +1499,7 @@ impl Renderer {
             .iter()
             .filter(|g| space.scene(g.position).distance(frame.eye) < 1100.0)
         {
-            for (_, model) in gate_parts(gate, space) {
+            for model in gate_models(gate, space) {
                 self.draw(1, model, Vec3::new(0.16, 0.43, 0.65), 0.7);
             }
         }
@@ -1458,21 +1508,23 @@ impl Renderer {
                 continue;
             }
             let own = pilot.name == frame.own;
-            if frame.cockpit && own {
-                continue;
-            }
             let ship = transform(
                 space.position(pilot, frame.now),
                 Vec3::ONE,
                 ship_orientation_at(pilot, frame.now),
             );
-            for (mesh, model, color, emission) in ship_parts(pilot.ship_class) {
-                self.draw(mesh, ship * model, color, emission);
-            }
-            if let Some(state) = self.turrets.get(&pilot.name) {
-                for (mesh, model, color, emission) in turret_parts(pilot.ship_class, state.rotation)
-                {
+            if !frame.cockpit || !own {
+                for (mesh, model, color, emission) in ship_parts(pilot.ship_class) {
                     self.draw(mesh, ship * model, color, emission);
+                }
+            }
+            for module_id in 0..2 {
+                if let Some(state) = self.turrets.get(&(pilot.name.clone(), module_id)) {
+                    for (mesh, model, color, emission) in
+                        turret_parts(pilot.ship_class, state.rotation, module_id)
+                    {
+                        self.draw(mesh, ship * model, color, emission);
+                    }
                 }
             }
         }
@@ -1553,9 +1605,7 @@ impl Renderer {
         self.gl.enable(glow::DEPTH_TEST);
         self.gl.disable(glow::BLEND);
         self.gl.uniform_matrix_4_f32_slice(
-            self.gl
-                .get_uniform_location(self.program, "view_projection")
-                .as_ref(),
+            self.uniforms.vp.as_ref(),
             false,
             &frame.cockpit_vp.to_cols_array(),
         );
@@ -1773,97 +1823,81 @@ impl Renderer {
                     }
                 }
             }
-            if pilot.name != frame.own {
-                continue;
-            }
-            if let Some((progress, units)) = frame.mining.filter(|_| {
-                frame.asteroids.iter().any(|a| {
-                    Some(a.id) == frame.mining_target
-                        && super::effects::can_extract_target(pilot, a)
-                })
-            }) {
-                let Some(turret) = self.turrets.get(&pilot.name) else {
-                    continue;
-                };
-                let pose = transform(
-                    ship_position,
-                    Vec3::ONE,
-                    ship_orientation_at(pilot, frame.now),
-                );
-                let source =
-                    pose.transform_point3(turret_muzzle(pilot.ship_class, turret.rotation));
-                let forward = pose.transform_vector3(turret.rotation * Vec3::X);
-                if let Some(impact) = frame
-                    .asteroids
-                    .iter()
-                    .find(|a| Some(a.id) == frame.mining_target)
-                    .filter(|a| {
-                        (space.scene(a.position) - source)
-                            .normalize_or_zero()
-                            .dot(forward)
-                            > 0.995
-                    })
-                    .and_then(|a| mining_impact(source, a, space))
-                {
-                    let fade = (progress * 30.0).min(1.0) * ((1.0 - progress) * 5.0).min(1.0);
+            if frame.connected {
+                for module_id in 0..2 {
+                    let Some(cycle) = super::effects::module_cycle(pilot, module_id, frame.now)
+                    else {
+                        continue;
+                    };
+                    let Some(asteroid) = frame.asteroids.iter().find(|a| {
+                        a.id == cycle.target_id && super::effects::can_extract_target(pilot, a)
+                    }) else {
+                        continue;
+                    };
+                    let Some(turret) = self.turrets.get(&(pilot.name.clone(), module_id)) else {
+                        continue;
+                    };
+                    let pose = transform(
+                        ship_position,
+                        Vec3::ONE,
+                        ship_orientation_at(pilot, frame.now),
+                    );
+                    let source = pose.transform_point3(turret_muzzle(
+                        pilot.ship_class,
+                        turret.rotation,
+                        module_id,
+                    ));
+                    let forward = pose.transform_vector3(turret.rotation * Vec3::X);
+                    if (space.scene(asteroid.position) - source)
+                        .normalize_or_zero()
+                        .dot(forward)
+                        < 0.995
+                    {
+                        continue;
+                    }
+                    let Some(impact) = mining_impact(source, asteroid, space) else {
+                        continue;
+                    };
                     let pulse = 0.9
-                        + 0.1 * ((frame.now % 134) as f32 / 134.0 * std::f32::consts::TAU).sin();
-                    let color = Vec3::new(0.09, 0.74, 0.68) * fade;
-                    if let Some(beam) = segment_model(source, impact, 0.004 * pulse) {
+                        + 0.1 * ((frame.now % 400) as f32 / 400.0 * std::f32::consts::TAU).sin();
+                    let cycle_brightness = 0.8 + 0.2 * cycle.progress;
+                    let color = (if module_id == 0 {
+                        Vec3::new(0.06, 0.66, 0.40)
+                    } else {
+                        Vec3::new(0.08, 0.45, 0.76)
+                    }) * cycle_brightness;
+                    if let Some(beam) = segment_model(source, impact, 0.006 * pulse) {
                         self.draw(0, beam, color, 1.8);
                     }
-                    if let Some(halo) = segment_model(source, impact, 0.012 * pulse) {
-                        self.draw(0, halo, color * 0.18, 0.8);
+                    if let Some(beam) = segment_model(source, impact, 0.014 * pulse) {
+                        self.draw(0, beam, color * 0.16, 0.6);
                     }
                     self.draw(
                         2,
-                        transform(impact, Vec3::splat(0.025 * pulse), Quat::IDENTITY),
+                        transform(impact, Vec3::splat(0.035 * pulse), Quat::IDENTITY),
                         color,
-                        1.8,
+                        1.6,
                     );
-                    let toward_ship = (source - impact).normalize_or_zero();
-                    for i in 0..16 {
-                        let seed = i as f32;
-                        let age = (progress * 3.0 + seed * 0.38197).fract();
-                        let direction = (toward_ship
-                            + Vec3::new(
-                                (seed * 2.4).cos(),
-                                (seed * 1.7).sin(),
-                                (seed * 3.1).sin(),
-                            ) * 0.8)
-                            .normalize_or_zero();
-                        let spark = impact + direction * (0.15 + age * 2.8);
+                    for i in 0..6 {
+                        let phase =
+                            ((frame.now % 1200) as f32 / 1200.0 + i as f32 * 0.61803).fract();
+                        let toward = (source - impact).normalize_or_zero();
+                        let spark = impact
+                            + (toward
+                                + Vec3::new((i as f32 * 2.4).cos(), (i as f32 * 1.7).sin(), 0.0))
+                                * phase
+                                * 0.15;
                         self.draw(
                             2,
-                            transform(
-                                spark,
-                                Vec3::splat(0.003 + (1.0 - age) * 0.002),
-                                Quat::IDENTITY,
-                            ),
-                            Vec3::new(0.8, 0.45, 0.10) * fade * (1.0 - age),
+                            transform(spark, Vec3::splat(0.005 * (1.0 - phase)), Quat::IDENTITY),
+                            color * (1.0 - phase),
                             1.0,
                         );
                     }
-                    for i in 0..units.clamp(8, 24) {
-                        let seed = i as f32;
-                        let travel = (progress * 1.65 + seed * 0.61803).fract();
-                        let arc = Vec3::Y
-                            * (std::f32::consts::PI * travel).sin()
-                            * (0.5 + (i % 4) as f32 * 0.25);
-                        let ore = impact.lerp(source, travel) + arc;
-                        let scale = 0.005 + (i % 3) as f32 * 0.001;
-                        self.draw(
-                            3,
-                            transform(
-                                ore,
-                                Vec3::splat(scale),
-                                Quat::from_rotation_y(progress * 8.0 + seed),
-                            ),
-                            Vec3::new(0.42, 0.66, 0.37) * fade,
-                            0.7,
-                        );
-                    }
                 }
+            }
+            if pilot.name != frame.own {
+                continue;
             }
             if let Some((progress, docking)) = frame
                 .docking
@@ -1999,6 +2033,18 @@ fn transform(p: Vec3, scale: Vec3, rotation: Quat) -> Mat4 {
 fn in_warp(location: &Location, now: u64) -> bool {
     matches!(location, Location::InTransit { arrives_at_ms, .. } if now < *arrives_at_ms)
 }
+fn module_instrument(pilot: &PilotView, module_id: u8, now: u64) -> String {
+    if let Some(cycle) = super::effects::module_cycle(pilot, module_id, now) {
+        format!(
+            "T{} #{} {:.1}s",
+            module_id + 1,
+            cycle.target_id,
+            cycle.remaining_ms as f64 / 1000.0
+        )
+    } else {
+        format!("T{} STANDBY", module_id + 1)
+    }
+}
 struct TurretState {
     rotation: Quat,
     last_ms: u64,
@@ -2016,7 +2062,7 @@ fn slew_rotation(current: Quat, mut target: Quat, max_radians: f32) -> Quat {
             .normalize()
     }
 }
-fn turret_mount(class: ShipClass) -> (Vec3, f32, f32) {
+fn turret_mount(class: ShipClass, module_id: u8) -> (Vec3, f32, f32) {
     let spec = class.spec();
     let radius = (spec.length_m as f32 * 0.012).clamp(0.6, 5.0) / 100.0;
     let barrel = (spec.length_m as f32 * 0.06).clamp(3.0, 24.0) / 100.0;
@@ -2024,21 +2070,23 @@ fn turret_mount(class: ShipClass) -> (Vec3, f32, f32) {
         Vec3::new(
             spec.length_m as f32 * 0.0015,
             spec.height_m as f32 / 200.0 + radius,
-            0.0,
+            spec.width_m as f32 * 0.0007 * if module_id == 0 { -1.0 } else { 1.0 },
         ),
         radius,
         barrel,
     )
 }
-fn turret_muzzle(class: ShipClass, rotation: Quat) -> Vec3 {
-    let (mount, radius, barrel) = turret_mount(class);
+fn turret_muzzle(class: ShipClass, rotation: Quat, module_id: u8) -> Vec3 {
+    let (mount, radius, barrel) = turret_mount(class, module_id);
     mount + rotation * Vec3::X * (radius + barrel)
 }
-fn turret_deck(class: ShipClass) -> f32 {
-    static DECKS: std::sync::OnceLock<[f32; 4]> = std::sync::OnceLock::new();
+fn turret_deck(class: ShipClass, module_id: u8) -> f32 {
+    static DECKS: std::sync::OnceLock<[f32; 8]> = std::sync::OnceLock::new();
     let decks = DECKS.get_or_init(|| {
-        arkline_protocol::ALL_SHIP_CLASSES.map(|class| {
-            let (mount, radius, _) = turret_mount(class);
+        std::array::from_fn(|index| {
+            let class = arkline_protocol::ALL_SHIP_CLASSES[index / 2];
+            let module_id = (index % 2) as u8;
+            let (mount, radius, _) = turret_mount(class, module_id);
             let origin = mount + Vec3::Y * radius;
             let distance = ship_geometry(class, Mat4::IDENTITY)
                 .iter()
@@ -2048,17 +2096,18 @@ fn turret_deck(class: ShipClass) -> f32 {
             origin.y - distance
         })
     });
-    decks[match class {
+    decks[(match class {
         ShipClass::Pioneer => 0,
         ShipClass::Prospector => 1,
         ShipClass::Hauler => 2,
         ShipClass::Vanguard => 3,
-    }]
+    }) * 2
+        + usize::from(module_id.min(1))]
 }
-fn turret_parts(class: ShipClass, rotation: Quat) -> Vec<ModelPart> {
-    let (mount, radius, barrel) = turret_mount(class);
+fn turret_parts(class: ShipClass, rotation: Quat, module_id: u8) -> Vec<ModelPart> {
+    let (mount, radius, barrel) = turret_mount(class, module_id);
     let base = Mat4::from_rotation_translation(rotation, mount);
-    let bottom = turret_deck(class) - radius * 0.3;
+    let bottom = turret_deck(class, module_id) - radius * 0.3;
     let top = mount.y;
     vec![
         (
@@ -2298,12 +2347,18 @@ fn parts_bounds(parts: &[(usize, Mat4, Vec3, f32)]) -> (Vec3, Vec3) {
     (min, max)
 }
 fn rock_mesh() -> Vec<Vertex> {
-    let mut mesh = sphere(true);
-    let radius = mesh.iter().map(|v| v.p.length()).fold(0.0_f32, f32::max);
-    for vertex in &mut mesh {
-        vertex.p /= radius;
-    }
-    mesh
+    cached_rock().to_vec()
+}
+fn cached_rock() -> &'static [Vertex] {
+    static ROCK: std::sync::OnceLock<Vec<Vertex>> = std::sync::OnceLock::new();
+    ROCK.get_or_init(|| {
+        let mut mesh = sphere(true);
+        let radius = mesh.iter().map(|v| v.p.length()).fold(0.0_f32, f32::max);
+        for vertex in &mut mesh {
+            vertex.p /= radius;
+        }
+        mesh
+    })
 }
 fn asteroid_model(asteroid: &Asteroid, space: Space) -> Mat4 {
     let f = (asteroid.id % 10000) as f32;
@@ -2313,19 +2368,21 @@ fn asteroid_model(asteroid: &Asteroid, space: Space) -> Mat4 {
         Quat::from_euler(glam::EulerRot::XYZ, f * 0.2, f * 0.4, f),
     )
 }
+fn gate_models(gate: &Stargate, space: Space) -> [Mat4; 2] {
+    [-0.45, 0.45].map(|z| {
+        transform(
+            space.scene(gate.position) + Vec3::Z * z,
+            Vec3::splat(gate.radius as f32 / 112.0),
+            Quat::from_rotation_x(std::f32::consts::FRAC_PI_2),
+        )
+    })
+}
 fn gate_parts(gate: &Stargate, space: Space) -> Vec<(Vec<Vertex>, Mat4)> {
-    [-0.45, 0.45]
+    static TORUS: std::sync::OnceLock<Vec<Vertex>> = std::sync::OnceLock::new();
+    let mesh = TORUS.get_or_init(|| torus(1.0, 0.12));
+    gate_models(gate, space)
         .into_iter()
-        .map(|z| {
-            (
-                torus(1.0, 0.12),
-                transform(
-                    space.scene(gate.position) + Vec3::Z * z,
-                    Vec3::splat(gate.radius as f32 / 112.0),
-                    Quat::from_rotation_x(std::f32::consts::FRAC_PI_2),
-                ),
-            )
-        })
+        .map(|model| (mesh.clone(), model))
         .collect()
 }
 fn mining_impact(source: Vec3, asteroid: &Asteroid, space: Space) -> Option<Vec3> {
@@ -2334,7 +2391,7 @@ fn mining_impact(source: Vec3, asteroid: &Asteroid, space: Space) -> Option<Vec3
         source,
         direction,
         asteroid_model(asteroid, space),
-        &rock_mesh(),
+        cached_rock(),
     )
     .map(|d| source + direction * d)
 }
@@ -2385,6 +2442,30 @@ fn mesh_vertices(mesh: usize) -> Vec<Vertex> {
         2 => sphere(false),
         _ => hull(),
     }
+}
+fn station_batches_geometry() -> Vec<(Vec<Vertex>, Vec3, f32)> {
+    let parts = station_parts(Space {
+        origin: STATION_CENTER_POSITION,
+    });
+    let mut groups = std::collections::BTreeMap::<[u32; 4], (Vec<Vertex>, Vec3, f32)>::new();
+    for (mesh, model, color, emission) in parts {
+        let normal = model.inverse().transpose();
+        let entry = groups
+            .entry([
+                color.x.to_bits(),
+                color.y.to_bits(),
+                color.z.to_bits(),
+                emission.to_bits(),
+            ])
+            .or_insert((Vec::new(), color, emission));
+        entry
+            .0
+            .extend(mesh_vertices(mesh).into_iter().map(|v| Vertex {
+                p: model.transform_point3(v.p),
+                n: normal.transform_vector3(v.n).normalize(),
+            }));
+    }
+    groups.into_values().collect()
 }
 fn station_parts(space: Space) -> Vec<(usize, Mat4, Vec3, f32)> {
     let mut parts = Parts(Vec::new());
@@ -2603,11 +2684,88 @@ vec2 sun=p-vec2(0.84,0.82);float flare=0.0018/(dot(sun,sun)+0.006);c+=vec3(0.17,
 mod tests {
     use super::*;
     #[test]
-    fn turret_pedestal_extends_into_measured_hull_deck() {
+    #[ignore]
+    fn render_preparation_profile() {
+        let space = Space {
+            origin: BELT_POSITION,
+        };
+        let rock = arkline_protocol::asteroid_catalog(10000).remove(0);
+        let source = space.scene(rock.position) + Vec3::Z * 10.0;
+        let gates = gates();
+        let batches = station_batches_geometry();
+        let start = std::time::Instant::now();
+        // Reconstruct the former per-frame geometry-generation work. This is
+        // CPU-only evidence, not a native GPU frame-rate benchmark.
+        for _ in 0..500 {
+            std::hint::black_box(station_parts(space));
+            for _ in &gates {
+                for _ in 0..2 {
+                    std::hint::black_box(torus(1.0, 0.12));
+                }
+            }
+            std::hint::black_box(sphere(true));
+            std::hint::black_box(mining_impact(source, &rock, space));
+        }
+        let uncached = start.elapsed();
+        let start = std::time::Instant::now();
+        for _ in 0..500 {
+            std::hint::black_box(Mat4::from_translation(space.scene(STATION_CENTER_POSITION)));
+            for gate in &gates {
+                std::hint::black_box(gate_models(gate, space));
+            }
+            std::hint::black_box(mining_impact(source, &rock, space));
+        }
+        eprintln!("CPU render preparation500 iterations: reconstructed uncached {:?}; cached {:?}. Station draws {} -> {}",uncached,start.elapsed(),station_parts(space).len(),batches.len());
+    }
+    #[test]
+    fn station_batches_preserve_bounds_vertices_and_reduce_draw_calls() {
+        let parts = station_parts(Space {
+            origin: STATION_CENTER_POSITION,
+        });
+        let (expected_min, expected_max) = parts_bounds(&parts);
+        let batches = station_batches_geometry();
+        assert!(batches.len() <= 8);
+        assert!(parts.len() > 150);
+        let mut min = Vec3::splat(f32::INFINITY);
+        let mut max = Vec3::splat(f32::NEG_INFINITY);
+        let mut count = 0;
+        for (mesh, _, _) in batches {
+            for v in mesh {
+                min = min.min(v.p);
+                max = max.max(v.p);
+                count += 1;
+                assert!(v.n.is_finite() && (v.n.length() - 1.0).abs() < 1e-4);
+            }
+        }
+        assert!(min.distance(expected_min) < 0.001 && max.distance(expected_max) < 0.001);
+        assert_eq!(
+            count,
+            parts
+                .iter()
+                .map(|p| mesh_vertices(p.0).len())
+                .sum::<usize>()
+        );
+    }
+    #[test]
+    fn two_module_mounts_are_distinct_supported_and_forward_of_seat() {
         for class in arkline_protocol::ALL_SHIP_CLASSES {
-            let (mount, _, _) = turret_mount(class);
-            let deck = turret_deck(class);
-            let parts = turret_parts(class, Quat::IDENTITY);
+            let left = turret_mount(class, 0).0;
+            let right = turret_mount(class, 1).0;
+            assert!(left.z < 0.0 && right.z > 0.0);
+            assert_eq!(left.x, right.x);
+            assert!(left.x > class.spec().length_m as f32 * 0.0005);
+            for id in 0..2 {
+                assert!(turret_deck(class, id).is_finite());
+            }
+        }
+    }
+    #[test]
+    fn turret_pedestal_extends_into_measured_hull_deck() {
+        let module_id = 0;
+        for class in arkline_protocol::ALL_SHIP_CLASSES {
+            let (mount, _, _) = turret_mount(class, module_id);
+            let deck = turret_deck(class, module_id);
+            let parts = turret_parts(class, Quat::IDENTITY, module_id);
             let (_, support, _, _) = parts.last().unwrap();
             let bottom = support.transform_point3(-Vec3::Y);
             let top = support.transform_point3(Vec3::Y);
@@ -2626,17 +2784,18 @@ mod tests {
     }
     #[test]
     fn mining_turret_slews_at_finite_rate_and_beam_starts_at_barrel_tip() {
+        let module_id = 0;
         let desired = Quat::from_rotation_arc(Vec3::X, Vec3::Z);
         let step = slew_rotation(Quat::IDENTITY, desired, 0.1);
         assert!((2.0 * step.w.acos() - 0.1).abs() < 0.0001);
         assert_eq!(slew_rotation(Quat::IDENTITY, desired, 0.0), Quat::IDENTITY);
         let aligned = slew_rotation(Quat::IDENTITY, desired, 4.0);
         for class in arkline_protocol::ALL_SHIP_CLASSES {
-            let (mount, radius, barrel) = turret_mount(class);
-            let muzzle = turret_muzzle(class, aligned);
+            let (mount, radius, barrel) = turret_mount(class, module_id);
+            let muzzle = turret_muzzle(class, aligned, module_id);
             assert!((muzzle - mount).normalize().distance(Vec3::Z) < 0.0001);
             assert!((muzzle.distance(mount) - radius - barrel).abs() < 0.0001);
-            let (_, model, _, _) = &turret_parts(class, aligned)[2];
+            let (_, model, _, _) = &turret_parts(class, aligned, module_id)[2];
             assert!(model.transform_point3(Vec3::ZERO).distance(muzzle) < 0.0001);
             let spec = class.spec();
             assert!(
@@ -2768,6 +2927,7 @@ mod tests {
     fn extrapolation_is_bounded_and_warp_uses_server_position() {
         let space = Space::default();
         let mut pilot = PilotView {
+            mining_modules: vec![],
             target_lock: None,
             ship_class: ShipClass::Pioneer,
             system_id: HOME_SYSTEM_ID,
@@ -3005,6 +3165,7 @@ mod tests {
     fn stable_pilot_lane_does_not_depend_on_roster_or_view() {
         let space = Space::default();
         let pilot = PilotView {
+            mining_modules: vec![],
             target_lock: None,
             ship_class: ShipClass::Pioneer,
             system_id: HOME_SYSTEM_ID,

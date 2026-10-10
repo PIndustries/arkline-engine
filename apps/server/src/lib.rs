@@ -1,5 +1,6 @@
 mod assets;
 mod flight;
+mod mining;
 mod universe;
 use anyhow::{bail, ensure, Context, Result};
 use arkline_protocol::*;
@@ -122,7 +123,9 @@ impl Server {
         flight::migrate_spatial(&mut world);
         universe::ensure_asteroids(&mut world);
         assets::ensure_accounts(&mut world);
+        mining::ensure_modules(&mut world);
         for pilot in world.pilots.values_mut() {
+            mining::stop_all(pilot, "Server restarted");
             pilot.controls = None;
             pilot.view.target_lock = None;
             if !matches!(
@@ -209,8 +212,14 @@ impl Server {
         flight::migrate_spatial(&mut world);
         universe::ensure_asteroids(&mut world);
         assets::ensure_accounts(&mut world);
+        mining::ensure_modules(&mut world);
         flight::advance(&mut world, now);
         universe::advance_locks(&mut world, now);
+        let events = mining::advance(&mut world, now);
+        let mut entries = load_entries(&tx, false)?;
+        for event in events {
+            append_event(&tx, &mut entries, event, now)?;
+        }
         validate(&world)?;
         let next = serde_json::to_string(&world)?;
         if next != json {
@@ -226,7 +235,9 @@ impl Server {
         flight::migrate_spatial(&mut world);
         universe::ensure_asteroids(&mut world);
         assets::ensure_accounts(&mut world);
+        mining::ensure_modules(&mut world);
         if let Some(p) = world.pilots.get_mut(name) {
+            mining::stop_all(p, "Pilot disconnected");
             p.controls = None;
             p.view.target_lock = None;
             if !matches!(
@@ -262,14 +273,33 @@ impl Server {
         flight::migrate_spatial(&mut world);
         universe::ensure_asteroids(&mut world);
         assets::ensure_accounts(&mut world);
+        mining::ensure_modules(&mut world);
         flight::advance(&mut world, now);
         universe::advance_locks(&mut world, now);
         let mut token = None;
+        let cycle_events = mining::advance(&mut world, now);
         let mut event = None;
         let mut connected = None;
         let export = matches!(request, Request::ExportLedger);
         let message;
         match request {
+            Request::StartMining {
+                module_id,
+                target_id,
+            } => {
+                let name = session
+                    .as_ref()
+                    .context("connect before issuing commands")?;
+                mining::start(&mut world, name, module_id, target_id, now)?;
+                message = "Mining cycle started";
+            }
+            Request::StopMining { module_id } => {
+                let name = session
+                    .as_ref()
+                    .context("connect before issuing commands")?;
+                mining::stop(&mut world, name, module_id)?;
+                message = "Mining module stopped";
+            }
             request if assets::handles(&request) => {
                 let name = session
                     .as_ref()
@@ -316,6 +346,7 @@ impl Server {
                         pilot.clone(),
                         Pilot {
                             view: PilotView {
+                                mining_modules: Vec::new(),
                                 target_lock: None,
                                 ship_class: ShipClass::default(),
                                 name: pilot.clone(),
@@ -351,15 +382,6 @@ impl Server {
                 if let Request::Navigate { mode } = &request {
                     flight::validate_mode(mode, &name, &world)?;
                 }
-                let mining_id = match &request {
-                    Request::Mine { units } => {
-                        Some(universe::mining_target(&world, &name, None, *units)?)
-                    }
-                    Request::MineAsteroid { id, units } => {
-                        Some(universe::mining_target(&world, &name, Some(*id), *units)?)
-                    }
-                    _ => None,
-                };
                 if let Request::Warp {
                     destination: Destination::Gate { id },
                 } = &request
@@ -545,29 +567,8 @@ impl Server {
                         f.angular_velocity = [0.0; 3];
                         message = "Docked";
                     }
-                    Request::Mine { units } | Request::MineAsteroid { id: _, units } => {
-                        ensure!(
-                            (1..=MAX_MINE_UNITS).contains(&units),
-                            "mine quantity must be 1-100"
-                        );
-                        ensure!(
-                            pilot
-                                .last_mine_ms
-                                .is_none_or(|last| now >= last.saturating_add(1_000)),
-                            "mining cooldown: wait one second"
-                        );
-                        ensure!(world.belt_ore >= units, "insufficient belt ore");
-                        pilot.view.ore = add_cargo(pilot.view.ore, units)?;
-                        world.belt_ore -= units;
-                        world
-                            .asteroids
-                            .iter_mut()
-                            .find(|a| Some(a.id) == mining_id)
-                            .unwrap()
-                            .ore -= units;
-                        pilot.last_mine_ms = Some(now);
-                        event = Some(EconomicEvent::OreMined { pilot: name, units });
-                        message = "Ore mined";
+                    Request::Mine { .. } | Request::MineAsteroid { .. } => {
+                        bail!("manual mining quantities are disabled; use StartMining with a confirmed target")
                     }
                     Request::PlaceSell { units, unit_price } => {
                         ensure!(pilot.view.location == Location::Docked, "must be docked");
@@ -653,48 +654,17 @@ impl Server {
             flight::ensure_flight(pilot, now);
         }
         assets::ensure_accounts(&mut world);
+        mining::ensure_modules(&mut world);
         validate(&world)?;
-        let mut entries = {
-            let query = if export {
-                "SELECT json FROM ledger ORDER BY sequence"
-            } else {
-                "SELECT json FROM ledger ORDER BY sequence DESC LIMIT 1"
-            };
-            let mut statement = tx.prepare(query)?;
-            let rows = statement.query_map([], |r| r.get::<_, String>(0))?;
-            let mut entries = Vec::new();
-            for row in rows {
-                entries.push(serde_json::from_str::<LedgerEntry>(&row?)?);
-            }
-            entries
-        };
-        if let Some(event) = event {
-            let last = entries.last();
-            let mut entry = LedgerEntry {
-                sequence: last
-                    .map_or(0, |e| e.sequence)
-                    .checked_add(1)
-                    .context("ledger sequence overflow")?,
-                ruleset_version: RULESET_VERSION,
-                timestamp_ms: now.max(last.map_or(0, |e| e.timestamp_ms)),
-                previous_hash: last.map_or(GENESIS_HASH, |e| e.hash.as_str()).into(),
-                event,
-                hash: String::new(),
-            };
-            entry.hash = entry.calculate_hash();
-            tx.execute(
-                "INSERT INTO ledger(sequence,json) VALUES(?1,?2)",
-                params![
-                    i64::try_from(entry.sequence)?,
-                    serde_json::to_string(&entry)?
-                ],
-            )?;
-            entries.push(entry);
+        let mut entries = load_entries(&tx, export)?;
+        for event in cycle_events.into_iter().chain(event) {
+            append_event(&tx, &mut entries, event, now)?;
         }
         // Snapshot polling must not rewrite and fsync the entire world unless
         // it resolves a due arrival. Economic updates still commit with their
         // ledger entry in this same transaction.
         universe::advance_locks(&mut world, now);
+        mining::invalidate(&mut world);
         let updated_json = serde_json::to_string(&world)?;
         if updated_json != json {
             tx.execute("UPDATE world SET json=?1 WHERE id=1", [updated_json])?;
@@ -741,6 +711,46 @@ impl Server {
         })
     }
 }
+fn load_entries(tx: &rusqlite::Transaction<'_>, export: bool) -> Result<Vec<LedgerEntry>> {
+    let query = if export {
+        "SELECT json FROM ledger ORDER BY sequence"
+    } else {
+        "SELECT json FROM ledger ORDER BY sequence DESC LIMIT 1"
+    };
+    let mut statement = tx.prepare(query)?;
+    let rows = statement.query_map([], |r| r.get::<_, String>(0))?;
+    rows.map(|row| Ok(serde_json::from_str::<LedgerEntry>(&row?)?))
+        .collect()
+}
+fn append_event(
+    tx: &rusqlite::Transaction<'_>,
+    entries: &mut Vec<LedgerEntry>,
+    event: EconomicEvent,
+    now: u64,
+) -> Result<()> {
+    let last = entries.last();
+    let mut entry = LedgerEntry {
+        sequence: last
+            .map_or(0, |e| e.sequence)
+            .checked_add(1)
+            .context("ledger sequence overflow")?,
+        ruleset_version: RULESET_VERSION,
+        timestamp_ms: now.max(last.map_or(0, |e| e.timestamp_ms)),
+        previous_hash: last.map_or(GENESIS_HASH, |e| e.hash.as_str()).into(),
+        event,
+        hash: String::new(),
+    };
+    entry.hash = entry.calculate_hash();
+    tx.execute(
+        "INSERT INTO ledger(sequence,json) VALUES(?1,?2)",
+        params![
+            i64::try_from(entry.sequence)?,
+            serde_json::to_string(&entry)?
+        ],
+    )?;
+    entries.push(entry);
+    Ok(())
+}
 fn add_cargo(current: u64, units: u64) -> Result<u64> {
     let next = current.checked_add(units).context("cargo overflow")?;
     ensure!(next <= CARGO_CAPACITY, "cargo capacity exceeded");
@@ -748,6 +758,7 @@ fn add_cargo(current: u64, units: u64) -> Result<u64> {
 }
 fn validate(world: &World) -> Result<()> {
     assets::validate(world)?;
+    mining::validate(world)?;
     ensure!(
         world.asteroids.iter().map(|a| a.ore as u128).sum::<u128>() == world.belt_ore as u128,
         "asteroid reserve mismatch"

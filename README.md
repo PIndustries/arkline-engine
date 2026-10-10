@@ -47,15 +47,14 @@ pilot name in both clients unless you deliberately transfer its credential.
 
 1. Create two pilots, each issued 1,000 prototype credits.
 2. Undock one pilot, warp to the belt, select an individual asteroid, lock it,
-   then extract up to 100 ore.
+   wait for confirmation, then activate a mining module. Let it collect at least 60 ore and stop it.
 3. Warp back to the station and dock.
 4. List 60 ore at 7 credits each. From the other pilot, buy 35.
 5. Observe the remaining 25 ore in escrow and the updated balances.
 6. Close and restart the server, reconnect both pilots, and inspect the saved state.
 7. Cancel the remaining order to return its ore to the seller's cargo.
 
-Warp includes a two-second alignment/warm-up, visible local launch, acceleration, cruise, deceleration and final approach; travel time depends on distance. Routes over 300 km reserve six seconds each for the first and last 30 km. Mining is limited to 100 units per command and a
-one-second cooldown. Cargo holds 1,000 units; escrow is separate. Cancelling an
+Warp includes a two-second alignment/warm-up, visible local launch, acceleration, cruise, deceleration and final approach; travel time depends on distance. Routes over 300 km reserve six seconds each for the first and last 30 km. Each ship has two independently activated mining modules. They repeat server-timed cycles with a fixed hull-defined yield; players do not enter extraction quantities. Cargo holds 1,000 units; escrow is separate. Cancelling an
 order requires room to return its ore. The initial global reserve is 100,000 ore, divided across 108 rocks in three systems.
 
 ## Views and direct flight
@@ -88,10 +87,19 @@ Cancel/unlock releases the target. Retargeting starts a new acquisition, and lea
 range, warping, docking or jumping invalidates the target. A pending acquisition
 is cancelled on server restart or loss of the pilot's last connection.
 
-Hull-mounted mining turrets track the acquiring/locked asteroid. Confirmed
-extraction produces a beam from the turret muzzle and impact feedback. Warp effects follow
+Hull-mounted mining turrets track the acquiring/locked asteroid. Each active module
+shows its cycle and a beam from its own turret muzzle; completed cycles produce
+confirmed extraction feedback. Warp effects follow
 the authoritative route. These effects do not issue extra mining commands or change
 inventory. Procedural cockpit/world assets remain a prototype.
+
+Each module yields 25 ore every 6 seconds on Pioneer, 40 every 5 seconds on
+Prospector, 20 every 8 seconds on Hauler, and 30 every 7 seconds on Vanguard.
+Only the terminal cycle can yield less, when the asteroid empties or cargo fills.
+Stopping cancels the unfinished cycle without a partial award. Loss of lock or
+range, warp, docking, jumping, depletion, full cargo, last disconnect and server
+restart stop modules; they do not resume automatically. Stalled cycles never
+produce a backlog of offline ore.
 
 ## Ships and physical scale
 
@@ -147,6 +155,11 @@ or **Fullscreen** to toggle fullscreen mode. Services open
 in a floating window only when requested. Foreground panels consume pointer input
 so manipulating a panel does not issue a navigation command behind it.
 
+Drag panel titles and release near a viewport edge or center to snap. Panels keep
+their edge-relative placement when resizing or switching fullscreen, and save the
+layout locally. **Settings** provides **Pin panels**, **Snap panels**, and
+**Reset panel layout**. The header reports measured FPS and frame time; rendering
+is throttled while the window is unfocused.
 
 The right-hand overview lists local stations, belts, individual asteroids, gates
 and ships, with category filters and distances. Its selected-object panel gives
@@ -189,7 +202,8 @@ cargo run -p arkline-cli -- --pilot TerminalPilot connect
 cargo run -p arkline-cli -- --pilot TerminalPilot undock
 cargo run -p arkline-cli -- --pilot TerminalPilot warp belt
 # After arrival:
-cargo run -p arkline-cli -- --pilot TerminalPilot mine 100
+cargo run -p arkline-cli -- --pilot TerminalPilot lock 1
+cargo run -p arkline-cli -- --pilot TerminalPilot mine 30  # activation seconds, fixed yield
 # Once back at the station and docked:
 cargo run -p arkline-cli -- --pilot TerminalPilot deposit 50
 cargo run -p arkline-cli -- --pilot TerminalPilot board prospector

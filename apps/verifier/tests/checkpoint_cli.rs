@@ -72,6 +72,7 @@ fn checkpoint_advances_only_after_full_verification() {
     entry.hash = entry.calculate_hash();
     export.snapshot.belt_ore = INITIAL_BELT_ORE;
     export.snapshot.pilots.push(PilotView {
+        mining_modules: Vec::new(),
         target_lock: None,
         ship_class: arkline_protocol::ShipClass::default(),
         system_id: HOME_SYSTEM_ID,

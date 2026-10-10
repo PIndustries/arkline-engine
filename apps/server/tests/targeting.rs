@@ -1,3 +1,4 @@
+mod common;
 use arkline_protocol::*;
 use arkline_server::Server;
 fn ok(s: &mut Server, p: &mut Option<String>, r: Request, t: u64) -> Snapshot {
@@ -62,7 +63,10 @@ fn acquisition_deadline_idempotence_retarget_unlock_and_early_mining() {
     );
     assert_eq!(first.pilots[0].locked_asteroid, None);
     for request in [
-        Request::Mine { units: 1 },
+        Request::StartMining {
+            module_id: 0,
+            target_id: a.id,
+        },
         Request::MineAsteroid { id: a.id, units: 1 },
     ] {
         assert!(!s.handle_at(&mut p, request, lock.completes_at_ms - 1).ok);
@@ -86,19 +90,13 @@ fn acquisition_deadline_idempotence_retarget_unlock_and_early_mining() {
     assert_eq!(ready.pilots[0].locked_asteroid, Some(a.id));
     assert!(ready.pilots[0].target_lock.is_none());
     assert_eq!(ready.ledger_hash, first.ledger_hash);
-    let mined = ok(
-        &mut s,
-        &mut p,
-        Request::Mine { units: 1 },
-        lock.completes_at_ms + 202,
+    let mut cycle_time = lock.completes_at_ms + 202;
+    let mined = common::mine_fixed_cycles(&mut s, &mut p, 1, &mut cycle_time);
+    assert_eq!(
+        mined.pilots[0].ore,
+        mining_spec(ShipClass::Pioneer).yield_units
     );
-    assert_eq!(mined.pilots[0].ore, 1);
-    let cleared = ok(
-        &mut s,
-        &mut p,
-        Request::UnlockTarget,
-        lock.completes_at_ms + 203,
-    );
+    let cleared = ok(&mut s, &mut p, Request::UnlockTarget, cycle_time + 1);
     assert_eq!(cleared.pilots[0].locked_asteroid, None);
 }
 #[test]

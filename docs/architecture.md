@@ -55,8 +55,22 @@ that trajectory; they do not replace travel with a timed location swap.
 Asteroids have persistent IDs and individual remaining ore. Their reserves sum
 to the legacy global belt reserve. Migration splits only the existing reserve,
 without changing cargo, credits or ledger history. Mining checks system, target
-lock, surface distance, cooldown, cargo capacity and remaining resource before
-atomically updating the selected rock, global reserve, cargo and economic event.
+lock, surface distance, cargo capacity and remaining resource before each module
+cycle award. Slots 0 and 1 run independently with hull-defined cycle time and
+yield. StartMining is idempotent for an already active target; StopMining cancels
+an unfinished cycle without a partial award. Each completed cycle atomically
+updates the selected rock, global reserve, active cargo and an OreMined event.
+
+The same advancement runs in the server tick and request transactions. It awards
+at most one cycle per module per advancement, then schedules the next full cycle
+from the current server time. A cycle overdue by at least one additional whole
+cycle stops without an award. Rapid polling cannot shorten cycles. Invalid
+commands roll back their transaction, including any due cycle; the next successful
+tick can commit that cycle once. Modules stop on invalid targeting/range, cargo
+full, depletion, departure from normal space, last disconnect and restart.
+Restart creates missing legacy module slots in an idle state; it never awards
+offline cycles. Boarding a different hull resets its module phases. Legacy
+Mine/MineAsteroid quantity requests are rejected.
 The backward-compatible event records quantity and pilot; it does not attest to
 the historical asteroid ID. The verifier checks the aggregate asteroid reserve,
 not physical mining truth or per-rock historical allocation.

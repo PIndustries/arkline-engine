@@ -19,39 +19,6 @@ pub(super) fn normal(p: &Pilot) -> bool {
 pub(super) fn surface(p: &Pilot, a: &Asteroid) -> f64 {
     (flight::distance(p.view.flight.as_ref().unwrap().position, a.position) - a.radius).max(0.0)
 }
-pub(super) fn mining_target(
-    world: &World,
-    name: &str,
-    requested: Option<u64>,
-    units: u64,
-) -> Result<u64> {
-    let p = world.pilots.get(name).context("pilot missing")?;
-    ensure!(normal(p), "mining requires normal space");
-    let id = p
-        .view
-        .locked_asteroid
-        .context("confirmed target lock required before mining")?;
-    ensure!(
-        requested.is_none_or(|requested| requested == id),
-        "lock this asteroid before mining"
-    );
-    let asteroid = world
-        .asteroids
-        .iter()
-        .find(|a| a.id == id)
-        .context("asteroid not found")?;
-    ensure!(
-        asteroid.system_id == p.view.system_id,
-        "asteroid is in another system"
-    );
-    ensure!(
-        surface(p, asteroid) <= MINING_RANGE,
-        "asteroid is outside mining range"
-    );
-    ensure!(asteroid.ore >= units, "asteroid has insufficient ore");
-    Ok(asteroid.id)
-}
-
 /// Validate both pending and completed targets after authoritative movement.
 pub(super) fn advance_locks(world: &mut World, now: u64) {
     for pilot in world.pilots.values_mut() {

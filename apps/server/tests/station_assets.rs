@@ -1,4 +1,5 @@
-//! Real command acceptance with fake clock; no direct mutation of gameplay state.
+mod common;
+// Real command acceptance with fake clock; no direct mutation of gameplay state.
 use arkline_protocol::*;
 use arkline_server::Server;
 
@@ -113,15 +114,7 @@ fn boarding_storage_corporation_authorization_and_restart_conserve_all_ore() {
         .unwrap()
         .completes_at_ms
         + 1;
-    ok(
-        &mut s,
-        &mut alice,
-        Request::MineAsteroid {
-            id: asteroid.id,
-            units: 60,
-        },
-        t,
-    );
+    common::mine_fixed_cycles(&mut s, &mut alice, 3, &mut t);
     deny_unchanged(&mut s, &mut alice, Request::DepositOre { units: 1 }, t);
     travel(&mut s, &mut alice, Destination::Station, &mut t);
     ok(&mut s, &mut alice, Request::Dock, t);
@@ -214,7 +207,7 @@ fn boarding_storage_corporation_authorization_and_restart_conserve_all_ore() {
             .find(|h| h.ship_class == ShipClass::Pioneer)
             .unwrap()
             .ore,
-        30
+        45
     );
     ok(&mut s, &mut alice, Request::WithdrawOre { units: 5 }, t);
     ok(

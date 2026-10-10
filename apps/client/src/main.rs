@@ -2,6 +2,7 @@
 mod audit;
 mod effects;
 mod flight3d;
+mod layout;
 mod motion;
 mod pilot_input;
 mod services;
@@ -210,12 +211,14 @@ struct Cockpit {
     connected: bool,
     snapshot: Option<Snapshot>,
     assets: Option<AssetsView>,
+    layout: layout::Layout,
+    frame_observed: Instant,
+    frame_intervals: VecDeque<f64>,
     transfer_amount: u64,
     corporation_name: String,
     invite_pilot: String,
     observed: Instant,
     feed: VecDeque<(String, bool)>,
-    amount: u64,
     price: u64,
     buy_amount: u64,
     notice: String,
@@ -251,6 +254,7 @@ impl Cockpit {
         credential_scope: Option<String>,
     ) -> Self {
         let theme = theme::Theme::load(&data_dir);
+        let layout = layout::Layout::load(&data_dir);
         theme.apply(&cc.egui_ctx);
         Self {
             server,
@@ -265,12 +269,14 @@ impl Cockpit {
             connected: false,
             snapshot: None,
             assets: None,
+            layout,
+            frame_observed: Instant::now(),
+            frame_intervals: VecDeque::new(),
             transfer_amount: 25,
             corporation_name: String::new(),
             invite_pilot: String::new(),
             observed: Instant::now(),
             feed: VecDeque::new(),
-            amount: 25,
             price: 10,
             buy_amount: 1,
             notice: String::new(),
@@ -309,6 +315,30 @@ impl Cockpit {
                 .strong(),
         );
         ui.label("Choose a local interface accent. Your universe and pilot state are unchanged.");
+        ui.separator();
+        ui.label("Panel layout");
+        if ui
+            .checkbox(
+                &mut self.layout.pinned,
+                "Pin panels (disable moving and resizing)",
+            )
+            .changed()
+        {
+            self.layout.settings_changed();
+        }
+        if ui
+            .checkbox(
+                &mut self.layout.snap,
+                "Snap panels to viewport edges and center",
+            )
+            .changed()
+        {
+            self.layout.settings_changed();
+        }
+        if ui.button("Reset panel layout").clicked() {
+            self.layout.reset();
+        }
+        ui.small("Drag panel titles; release near an edge to snap. Layout saves locally and follows viewport resizing.");
         let previous = self.theme;
         ui.horizontal_wrapped(|ui| {
             for theme in theme::Theme::ALL {
@@ -624,6 +654,31 @@ impl Cockpit {
                 self.accent(),
             );
         }
+        if let Some(module) = pilot
+            .mining_modules
+            .iter()
+            .filter(|m| m.target_id.is_some())
+            .min_by_key(|m| m.cycle_completes_at_ms)
+        {
+            let count = pilot
+                .mining_modules
+                .iter()
+                .filter(|m| m.target_id.is_some())
+                .count();
+            let remaining = module
+                .cycle_completes_at_ms
+                .unwrap_or(now)
+                .saturating_sub(now);
+            return (
+                "MINING MODULES ACTIVE".into(),
+                format!(
+                    "{count} active turret(s) · next cycle {:.1}s · ore credited on completion",
+                    remaining as f64 / 1000.0
+                ),
+                None,
+                self.accent(),
+            );
+        }
         if self.mining_effect_target().is_some() {
             if let Some((progress, units)) = self.effects.mining(now) {
                 return (
@@ -695,7 +750,7 @@ impl Cockpit {
             ),
             Location::Belt => (
                 "EXTRACTION READY".into(),
-                "Extract ore to activate the mining laser".into(),
+                "Lock an asteroid, then activate a mining turret".into(),
                 None,
                 self.accent(),
             ),
@@ -760,13 +815,16 @@ impl Cockpit {
         if !effects::can_extract_target(&pilot, asteroid) {
             return (format!("Out of extraction range · {}", asteroid.name), None);
         }
-        if self.effects.mining_target(self.presentation_time()) == Some(id) {
-            if let Some((progress, units)) = self.effects.mining(self.presentation_time()) {
-                return (
-                    format!("Extracting · +{units} ore already credited"),
-                    Some(progress),
-                );
-            }
+        let active = pilot
+            .mining_modules
+            .iter()
+            .filter(|m| m.target_id.is_some())
+            .count();
+        if active > 0 {
+            return (
+                format!("Mining {} · {active} active turret(s)", asteroid.name),
+                None,
+            );
         }
         (format!("Locked · {}", asteroid.name), None)
     }
@@ -784,6 +842,90 @@ impl Cockpit {
                     .desired_height(4.0)
                     .fill(self.accent()),
             );
+        }
+        if let Some(pilot) = self.own() {
+            let spec = mining_spec(pilot.ship_class);
+            ui.small(format!(
+                "Up to {} ore / {:.1}s per turret · repeats until stopped",
+                spec.yield_units,
+                spec.cycle_ms as f64 / 1000.0
+            ));
+            if pilot.mining_modules.is_empty() {
+                ui.small("Waiting for mining module state…");
+            }
+            for module in &pilot.mining_modules {
+                ui.push_id(module.module_id, |ui| {
+                    let active = module.target_id.is_some();
+                    ui.horizontal_wrapped(|ui| {
+                        ui.colored_label(
+                            if active { self.accent() } else { MUTED },
+                            format!(
+                                "{} TURRET {} · {}",
+                                if active { "●" } else { "○" },
+                                module.module_id + 1,
+                                if module.module_id == 0 {
+                                    "LEFT"
+                                } else {
+                                    "RIGHT"
+                                }
+                            ),
+                        );
+                        if active {
+                            let remaining = module
+                                .cycle_completes_at_ms
+                                .unwrap_or(0)
+                                .saturating_sub(self.presentation_time());
+                            ui.small(if remaining == 0 {
+                                "Confirming cycle…".into()
+                            } else {
+                                format!("{:.1}s", remaining as f64 / 1000.0)
+                            });
+                            if ui
+                                .add_enabled(
+                                    self.can_operate(),
+                                    egui::Button::new("Stop turret").small(),
+                                )
+                                .clicked()
+                            {
+                                self.send(Request::StopMining {
+                                    module_id: module.module_id,
+                                });
+                            }
+                        } else if ui
+                            .add_enabled(
+                                self.can_mine(&pilot),
+                                egui::Button::new("Activate turret").small(),
+                            )
+                            .clicked()
+                        {
+                            self.start_module(module.module_id);
+                        }
+                    });
+                    if let (Some(start), Some(end)) =
+                        (module.cycle_started_at_ms, module.cycle_completes_at_ms)
+                    {
+                        let progress = (self.presentation_time().saturating_sub(start) as f32
+                            / end.saturating_sub(start).max(1) as f32)
+                            .clamp(0.0, 1.0);
+                        ui.add(
+                            egui::ProgressBar::new(progress)
+                                .desired_height(4.0)
+                                .fill(self.accent()),
+                        );
+                    } else if let Some(reason) = &module.stop_reason {
+                        ui.small(reason);
+                    }
+                });
+            }
+            if self.selected_asteroid().is_some()
+                && ui
+                    .add_enabled(self.can_lock_selected(), egui::Button::new("Lock").small())
+                    .clicked()
+            {
+                if let Some(a) = self.selected_asteroid() {
+                    self.send(Request::LockAsteroid { id: a.id });
+                }
+            }
         }
         if let Some(pilot) = self.own() {
             if (pilot.target_lock.is_some() || pilot.locked_asteroid.is_some())
@@ -866,35 +1008,7 @@ impl Cockpit {
                 }
             });
             columns[1].small("W/S thrust · A/D strafe · Space/C vertical");
-            let asteroid = self.selected_asteroid().cloned();
             self.mining_module(&mut columns[2]);
-            columns[2].small(
-                asteroid
-                    .as_ref()
-                    .map(|a| a.name.as_str())
-                    .unwrap_or("Select an asteroid to mine"),
-            );
-            columns[2].horizontal(|ui| {
-                ui.add(
-                    egui::DragValue::new(&mut self.amount)
-                        .range(1..=MAX_MINE_UNITS)
-                        .suffix(" ore"),
-                );
-                if ui
-                    .add_enabled(self.can_lock_selected(), egui::Button::new("Lock"))
-                    .clicked()
-                {
-                    if let Some(a) = &asteroid {
-                        self.send(Request::LockAsteroid { id: a.id });
-                    }
-                }
-                if ui
-                    .add_enabled(self.can_mine(&pilot), egui::Button::new("Extract"))
-                    .clicked()
-                {
-                    self.extract_selected();
-                }
-            });
         });
     }
     fn current_system(&self) -> u32 {
@@ -941,12 +1055,12 @@ impl Cockpit {
                 })
             })
     }
-    fn extract_selected(&mut self) {
-        if self.own().is_some_and(|p| self.can_mine(&p)) {
-            if let Some(a) = self.selected_asteroid() {
-                self.send(Request::MineAsteroid {
-                    id: a.id,
-                    units: self.amount,
+    fn start_module(&mut self, module_id: u8) {
+        if let Some(pilot) = self.own().filter(|p| self.can_mine(p)) {
+            if let Some(target_id) = pilot.locked_asteroid {
+                self.send(Request::StartMining {
+                    module_id,
+                    target_id,
                 });
             }
         }
@@ -969,12 +1083,14 @@ impl Cockpit {
     fn can_mine(&self, pilot: &PilotView) -> bool {
         self.can_operate()
             && pilot.target_lock.is_none()
-            && self.amount > 0
-            && self.amount <= MAX_MINE_UNITS
-            && pilot.ore.saturating_add(self.amount) <= CARGO_CAPACITY
-            && self
-                .selected_asteroid()
-                .is_some_and(|a| a.ore >= self.amount && effects::can_extract_target(pilot, a))
+            && pilot.ore < CARGO_CAPACITY
+            && self.snapshot.as_ref().is_some_and(|snapshot| {
+                snapshot.asteroids.iter().any(|a| {
+                    Some(a.id) == pilot.locked_asteroid
+                        && a.ore > 0
+                        && effects::can_extract_target(pilot, a)
+                })
+            })
     }
     fn selected_target(&self) -> Option<NavigationTarget> {
         match &self.selected_object {
@@ -1150,15 +1266,6 @@ impl Cockpit {
                     .clicked()
                 {
                     self.send(Request::LockAsteroid { id: asteroid.id });
-                }
-                if ui
-                    .add_enabled(
-                        self.own().is_some_and(|p| self.can_mine(&p)),
-                        egui::Button::new("Extract selected"),
-                    )
-                    .clicked()
-                {
-                    self.extract_selected();
                 }
             });
             ui.small(format!(
@@ -1803,21 +1910,30 @@ impl Cockpit {
                     AMBER
                 };
                 if pilot.name == self.pilot {
-                    if let Some((progress, units)) = self.effects.mining(server_now) {
-                        if let Some(asteroid) = self.mining_effect_target() {
+                    for module in pilot.mining_modules.iter().filter(|_| self.connected) {
+                        if let Some(cycle) =
+                            effects::module_cycle(pilot, module.module_id, server_now)
+                        {
+                            let Some(asteroid) =
+                                snapshot.asteroids.iter().find(|a| a.id == cycle.target_id)
+                            else {
+                                continue;
+                            };
+                            let progress = cycle.progress;
+                            let muzzle = position
+                                + perpendicular * if module.module_id == 0 { -5.0 } else { 5.0 };
                             let target = tactical_project(rect, asteroid.position);
-                            let intensity =
-                                ((progress * std::f32::consts::PI).sin() * 1.8).min(1.0);
+                            let intensity = 0.85 + 0.15 * (server_now as f32 * 0.014).sin();
                             paint.line_segment(
-                                [position, target],
+                                [muzzle, target],
                                 Stroke::new(9.0, self.accent().gamma_multiply(0.10 * intensity)),
                             );
                             paint.line_segment(
-                                [position, target],
+                                [muzzle, target],
                                 Stroke::new(3.0, self.accent().gamma_multiply(0.65 * intensity)),
                             );
                             paint.line_segment(
-                                [position, target],
+                                [muzzle, target],
                                 Stroke::new(
                                     1.0,
                                     Color32::from_rgb(218, 255, 244).gamma_multiply(intensity),
@@ -1829,7 +1945,7 @@ impl Cockpit {
                                     Vec2::new((i as f32 * 2.4).sin(), (i as f32 * 3.7).cos())
                                         * (1.0 - travel)
                                         * 9.0;
-                                let particle = target.lerp(position, travel) + drift;
+                                let particle = target.lerp(muzzle, travel) + drift;
                                 paint.circle_filled(
                                     particle,
                                     1.2 + (i % 3) as f32 * 0.5,
@@ -1842,9 +1958,9 @@ impl Cockpit {
                                 Stroke::new(1.0, self.accent().gamma_multiply(intensity)),
                             );
                             paint.text(
-                                position + Vec2::new(0.0, 18.0),
+                                position + Vec2::new(0.0, 18.0 + module.module_id as f32 * 15.0),
                                 egui::Align2::CENTER_TOP,
-                                format!("+{units} ore · confirmed"),
+                                format!("Turret {} · cycling", module.module_id + 1),
                                 egui::FontId::proportional(12.0),
                                 self.accent(),
                             );
@@ -2032,11 +2148,11 @@ impl Cockpit {
                     if ui
                         .add_enabled(
                             self.own().is_some_and(|p| self.can_mine(&p)),
-                            egui::Button::new("Extract selected"),
+                            egui::Button::new("Activate turret 1"),
                         )
                         .clicked()
                     {
-                        self.extract_selected();
+                        self.start_module(0);
                         ui.close_menu();
                     }
                 }
@@ -2195,6 +2311,13 @@ impl eframe::App for Cockpit {
             ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
             self.focus_on_first_frame = false;
         }
+        let frame_now = Instant::now();
+        self.frame_intervals
+            .push_back(frame_now.duration_since(self.frame_observed).as_secs_f64());
+        self.frame_observed = frame_now;
+        while self.frame_intervals.len() > 120 {
+            self.frame_intervals.pop_front();
+        }
         self.poll();
         self.effects.retain(self.presentation_time());
         if !ctx.wants_keyboard_input()
@@ -2205,7 +2328,11 @@ impl eframe::App for Cockpit {
                 mode: NavigationMode::Stop,
             });
         }
-        ctx.request_repaint_after(Duration::from_millis(16));
+        if ctx.input(|i| i.focused && !i.viewport().minimized.unwrap_or(false)) {
+            ctx.request_repaint();
+        } else {
+            ctx.request_repaint_after(Duration::from_millis(100));
+        }
         if !self.connected && self.snapshot.is_none() {
             egui::TopBottomPanel::top("login-brand").show(ctx, |ui| {
                 ui.horizontal(|ui| {
@@ -2250,138 +2377,256 @@ impl eframe::App for Cockpit {
             ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!fullscreen));
         }
         let bounds = ctx.screen_rect().shrink(8.0);
+        self.layout.begin_frame(bounds);
         // Floating layers are registered before the background consumes pointer input.
-        egui::Area::new(egui::Id::new("cockpit_identity_overlay"))
-            .order(egui::Order::Foreground)
-            .default_pos(bounds.left_top() + Vec2::new(8.0, 6.0))
-            .movable(true)
-            .constrain_to(bounds)
-            .show(ctx, |ui| {
-                self.overlay_frame(ctx).show(ui, |ui| {
-                    ui.set_max_width(490.0);
-                    ui.horizontal(|ui| {
-                        ui.label(
-                            egui::RichText::new("A R K L I N E")
-                                .size(21.0)
-                                .color(self.accent())
-                                .strong(),
-                        );
-                        ui.colored_label(AMBER, BUILD_VERSION.trim());
-                        ui.small("PRIVATE");
-                        self.session_menu(ui);
+        let (panel_pos, _) = self.layout.position(
+            "cockpit_identity_overlay",
+            bounds,
+            [0.0, 0.0],
+            Vec2::new(8.0, 6.0),
+            Vec2::new(490.0, 120.0),
+        );
+        let panel_response =
+            egui::Area::new(egui::Id::new("cockpit_identity_overlay").with(self.layout.generation))
+                .order(egui::Order::Foreground)
+                .current_pos(panel_pos)
+                .movable(!self.layout.pinned)
+                .constrain_to(bounds)
+                .show(ctx, |ui| {
+                    self.overlay_frame(ctx).show(ui, |ui| {
+                        ui.set_max_width(490.0);
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                egui::RichText::new("A R K L I N E")
+                                    .size(21.0)
+                                    .color(self.accent())
+                                    .strong(),
+                            );
+                            ui.colored_label(AMBER, BUILD_VERSION.trim());
+                            ui.small("PRIVATE");
+                            let frame_ms = self.frame_intervals.iter().sum::<f64>()
+                                / self.frame_intervals.len().max(1) as f64
+                                * 1000.0;
+                            if frame_ms > 0.0 {
+                                ui.small(format!(
+                                    "{:.0} FPS · {:.1} ms",
+                                    1000.0 / frame_ms,
+                                    frame_ms
+                                ));
+                            }
+                            self.session_menu(ui);
+                        });
+                        ui.horizontal_wrapped(|ui| {
+                            ui.label(
+                                egui::RichText::new(system_name(self.current_system())).strong(),
+                            );
+                            ui.colored_label(
+                                if self.connected { self.accent() } else { AMBER },
+                                if self.connected {
+                                    "● Connected"
+                                } else {
+                                    "○ Offline"
+                                },
+                            );
+                            self.view_selector(ui);
+                            let fullscreen =
+                                ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
+                            if ui
+                                .small_button(if fullscreen {
+                                    "Windowed (F11)"
+                                } else {
+                                    "Fullscreen (F11)"
+                                })
+                                .clicked()
+                            {
+                                ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(
+                                    !fullscreen,
+                                ));
+                            }
+                        });
+                        let (status, detail, _, color) = self.operation_status();
+                        ui.colored_label(color, egui::RichText::new(status).size(12.0).strong());
+                        ui.small(detail);
                     });
-                    ui.horizontal_wrapped(|ui| {
-                        ui.label(egui::RichText::new(system_name(self.current_system())).strong());
-                        ui.colored_label(
-                            if self.connected { self.accent() } else { AMBER },
-                            if self.connected {
-                                "● Connected"
-                            } else {
-                                "○ Offline"
-                            },
-                        );
-                        self.view_selector(ui);
-                        let fullscreen = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
-                        if ui
-                            .small_button(if fullscreen {
-                                "Windowed (F11)"
-                            } else {
-                                "Fullscreen (F11)"
-                            })
-                            .clicked()
-                        {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!fullscreen));
+                });
+        self.layout.record(
+            "cockpit_identity_overlay",
+            bounds,
+            panel_response.response.rect,
+            None,
+            ctx.input(|i| i.pointer.any_down()),
+        );
+        let (panel_pos, _) = self.layout.position(
+            "service_launcher_overlay",
+            bounds,
+            [0.0, 0.0],
+            Vec2::new(8.0, 156.0),
+            Vec2::new(110.0, 280.0),
+        );
+        let panel_response =
+            egui::Area::new(egui::Id::new("service_launcher_overlay").with(self.layout.generation))
+                .current_pos(panel_pos)
+                .movable(!self.layout.pinned)
+                .constrain_to(bounds)
+                .show(ctx, |ui| {
+                    self.overlay_frame(ctx).show(ui, |ui| {
+                        ui.label(egui::RichText::new("SERVICES").size(10.0).color(MUTED));
+                        if ui.small_button("Overview").clicked() {
+                            self.overview_open = true;
+                        }
+                        for (tab, label) in [
+                            (ServiceTab::Station, "Station"),
+                            (ServiceTab::Hangar, "Hangar"),
+                            (ServiceTab::Corporation, "Corporation"),
+                            (ServiceTab::Cargo, "Inventory"),
+                            (ServiceTab::Exchange, "Exchange"),
+                            (ServiceTab::Activity, "Activity"),
+                            (ServiceTab::Ledger, "Ledger"),
+                            (ServiceTab::Settings, "Settings"),
+                        ] {
+                            if ui
+                                .selectable_label(
+                                    self.services_open && self.service_tab == tab,
+                                    label,
+                                )
+                                .clicked()
+                            {
+                                self.service_tab = tab;
+                                self.services_open = true;
+                            }
                         }
                     });
-                    let (status, detail, _, color) = self.operation_status();
-                    ui.colored_label(color, egui::RichText::new(status).size(12.0).strong());
-                    ui.small(detail);
                 });
-            });
-        egui::Area::new(egui::Id::new("service_launcher_overlay"))
-            .default_pos(bounds.left_top() + Vec2::new(8.0, 156.0))
-            .movable(true)
-            .constrain_to(bounds)
-            .show(ctx, |ui| {
-                self.overlay_frame(ctx).show(ui, |ui| {
-                    ui.label(egui::RichText::new("SERVICES").size(10.0).color(MUTED));
-                    if ui.small_button("Overview").clicked() {
-                        self.overview_open = true;
-                    }
-                    for (tab, label) in [
-                        (ServiceTab::Station, "Station"),
-                        (ServiceTab::Hangar, "Hangar"),
-                        (ServiceTab::Corporation, "Corporation"),
-                        (ServiceTab::Cargo, "Inventory"),
-                        (ServiceTab::Exchange, "Exchange"),
-                        (ServiceTab::Activity, "Activity"),
-                        (ServiceTab::Ledger, "Ledger"),
-                        (ServiceTab::Settings, "Settings"),
-                    ] {
-                        if ui
-                            .selectable_label(self.services_open && self.service_tab == tab, label)
-                            .clicked()
-                        {
-                            self.service_tab = tab;
-                            self.services_open = true;
-                        }
-                    }
-                });
-            });
+        self.layout.record(
+            "service_launcher_overlay",
+            bounds,
+            panel_response.response.rect,
+            None,
+            ctx.input(|i| i.pointer.any_down()),
+        );
         let mut overview_open = self.overview_open;
-        egui::Window::new("Overview")
-            .id(egui::Id::new("cockpit_overview_overlay"))
+        let (panel_pos, panel_size) = self.layout.position(
+            "overview",
+            bounds,
+            [1.0, 0.0],
+            Vec2::new(-8.0, 8.0),
+            Vec2::new(310.0, (bounds.height() - 260.0).max(280.0)),
+        );
+        let mut content_size = None;
+        let panel_response = egui::Window::new("Overview")
+            .id(egui::Id::new("cockpit_overview_overlay").with(self.layout.generation))
             .open(&mut overview_open)
-            .default_pos(Pos2::new(bounds.right() - 326.0, bounds.top() + 10.0))
-            .default_size(Vec2::new(310.0, (bounds.height() - 220.0).max(300.0)))
+            .current_pos(panel_pos)
+            .default_size(panel_size)
+            .max_width(bounds.width() - 20.0)
+            .resize(|resize| {
+                if self.layout.reflow {
+                    resize.min_size(panel_size).max_size(panel_size)
+                } else {
+                    resize
+                }
+            })
             .min_width(275.0)
             .max_height(bounds.height() - 24.0)
-            .resizable(true)
+            .resizable(!self.layout.pinned)
+            .movable(!self.layout.pinned)
             .collapsible(true)
             .constrain_to(bounds)
             .frame(self.overlay_frame(ctx))
             .vscroll(true)
             .show(ctx, |ui| {
+                content_size = Some(ui.max_rect().size());
                 self.overview(ui);
             });
+        if let Some(response) = panel_response {
+            self.layout.record(
+                "overview",
+                bounds,
+                response.response.rect,
+                content_size,
+                ctx.input(|i| i.pointer.any_down()),
+            );
+        }
         self.overview_open = overview_open;
         let ship_width = (bounds.width() - 70.0).min(760.0);
-        egui::Window::new("Ship controls")
-            .id(egui::Id::new("ship_controls_overlay"))
-            .default_pos(Pos2::new(
-                bounds.center().x - ship_width * 0.5,
-                bounds.bottom() - 104.0,
-            ))
-            .default_size(Vec2::new(ship_width, 80.0))
+        let (panel_pos, panel_size) = self.layout.position(
+            "ship",
+            bounds,
+            [0.5, 1.0],
+            Vec2::new(0.0, -8.0),
+            Vec2::new(ship_width, 155.0),
+        );
+        let mut content_size = None;
+        let panel_response = egui::Window::new("Ship controls")
+            .id(egui::Id::new("ship_controls_overlay").with(self.layout.generation))
+            .current_pos(panel_pos)
+            .default_size(panel_size)
+            .max_width(bounds.width() - 20.0)
+            .resize(|resize| {
+                if self.layout.reflow {
+                    resize.min_size(panel_size).max_size(panel_size)
+                } else {
+                    resize
+                }
+            })
             .min_width(570.0)
-            .resizable(true)
+            .resizable(!self.layout.pinned)
+            .movable(!self.layout.pinned)
             .collapsible(true)
             .constrain_to(bounds)
             .frame(self.overlay_frame(ctx))
             .show(ctx, |ui| {
+                content_size = Some(ui.max_rect().size());
                 self.flight_deck(ui);
             });
+        if let Some(response) = panel_response {
+            self.layout.record(
+                "ship",
+                bounds,
+                response.response.rect,
+                content_size,
+                ctx.input(|i| i.pointer.any_down()),
+            );
+        }
         if self.services_open {
             let mut open = true;
-            egui::Window::new(
+            let (panel_pos, panel_size) = self.layout.position(
+                "services",
+                bounds,
+                [0.0, 0.0],
+                Vec2::new(130.0, 164.0),
+                Vec2::new(620.0, 310.0),
+            );
+            let mut content_size = None;
+            let panel_response = egui::Window::new(
                 if self.own().is_some_and(|p| p.location == Location::Docked) {
                     "Station services"
                 } else {
                     "Personal services"
                 },
             )
-            .id(egui::Id::new("cockpit_services_overlay"))
+            .id(egui::Id::new("cockpit_services_overlay").with(self.layout.generation))
             .open(&mut open)
-            .default_pos(bounds.left_top() + Vec2::new(110.0, 164.0))
-            .default_size(Vec2::new(620.0, 310.0))
+            .current_pos(panel_pos)
+            .default_size(panel_size)
+            .max_width(bounds.width() - 20.0)
+            .resize(|resize| {
+                if self.layout.reflow {
+                    resize.min_size(panel_size).max_size(panel_size)
+                } else {
+                    resize
+                }
+            })
             .min_width(400.0)
             .max_height(bounds.height() - 30.0)
-            .resizable(true)
+            .resizable(!self.layout.pinned)
+            .movable(!self.layout.pinned)
             .collapsible(true)
             .constrain_to(bounds)
             .frame(self.overlay_frame(ctx))
             .vscroll(true)
             .show(ctx, |ui| {
+                content_size = Some(ui.max_rect().size());
                 ui.horizontal_wrapped(|ui| {
                     for (tab, label) in [
                         (ServiceTab::Station, "Station"),
@@ -2413,6 +2658,15 @@ impl eframe::App for Cockpit {
                     }
                 }
             });
+            if let Some(response) = panel_response {
+                self.layout.record(
+                    "services",
+                    bounds,
+                    response.response.rect,
+                    content_size,
+                    ctx.input(|i| i.pointer.any_down()),
+                );
+            }
             self.services_open = open;
         }
         egui::CentralPanel::default()
@@ -2431,6 +2685,7 @@ impl eframe::App for Cockpit {
                             &self.effects,
                             &self.selected_object,
                             self.view_mode,
+                            &mut self.layout,
                         ) {
                             match action {
                                 flight3d::ViewAction::Select(object) => {
@@ -2451,6 +2706,12 @@ impl eframe::App for Cockpit {
                     self.scene(ui);
                 }
             });
+        if let Err(error) = self
+            .layout
+            .finish_frame(ctx.input(|i| i.pointer.any_down()))
+        {
+            self.settings_notice = error;
+        }
         if self.view_mode != ViewMode::Cockpit {
             self.pilot_input.release_mouse(ctx);
         }
@@ -2684,6 +2945,15 @@ mod tests {
                 system_id: HOME_SYSTEM_ID,
                 ship_class: ShipClass::Pioneer,
                 target_lock: None,
+                mining_modules: (0..2)
+                    .map(|module_id| MiningModule {
+                        module_id,
+                        target_id: None,
+                        cycle_started_at_ms: None,
+                        cycle_completes_at_ms: None,
+                        stop_reason: None,
+                    })
+                    .collect(),
                 locked_asteroid: None,
                 credits: 100,
                 ore: 25,
@@ -2796,6 +3066,215 @@ mod tests {
         }
     }
     #[test]
+    fn mining_turret_activation_and_stop_use_slot_identity_without_quantity() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        cockpit.snapshot.as_mut().unwrap().pilots[0].locked_asteroid = Some(7);
+        let (tx, rx) = mpsc::channel();
+        cockpit.commands = Some(tx);
+        let labels = ui_test_frame(&ctx, &mut cockpit, vec![], false);
+        let buttons: Vec<_> = labels
+            .iter()
+            .filter(|(text, _)| text == "Activate turret")
+            .map(|(_, p)| *p)
+            .collect();
+        assert_eq!(buttons.len(), 2);
+        ui_test_click(&ctx, &mut cockpit, buttons[1], false);
+        assert!(matches!(
+            rx.try_recv().unwrap(),
+            Request::StartMining {
+                module_id: 1,
+                target_id: 7
+            }
+        ));
+        assert_eq!(
+            cockpit.own().unwrap().ore,
+            25,
+            "activation must not grant speculative ore"
+        );
+        cockpit.request_pending = false;
+        let module = &mut cockpit.snapshot.as_mut().unwrap().pilots[0].mining_modules[1];
+        module.target_id = Some(7);
+        module.cycle_started_at_ms = Some(1000);
+        module.cycle_completes_at_ms = Some(6000);
+        let labels = ui_test_frame(&ctx, &mut cockpit, vec![], false);
+        assert!(labels.iter().any(|(t, _)| t.contains("TURRET 2")));
+        let stop = labels.iter().find(|(t, _)| t == "Stop turret").unwrap().1;
+        ui_test_click(&ctx, &mut cockpit, stop, false);
+        assert!(matches!(
+            rx.try_recv().unwrap(),
+            Request::StopMining { module_id: 1 }
+        ));
+    }
+    #[test]
+    fn overview_pointer_drag_persists_and_reflows_in_real_app_update() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        cockpit.view_mode = ViewMode::Tactical;
+        let dir = std::env::temp_dir().join(format!("arkline-window-drag-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        cockpit.layout = layout::Layout::load(&dir);
+        fn frame(
+            ctx: &egui::Context,
+            c: &mut Cockpit,
+            size: Vec2,
+            events: Vec<egui::Event>,
+        ) -> egui::Rect {
+            let _ = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, size)),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| {
+                    eframe::App::update(c, ctx, &mut eframe::Frame::_new_kittest());
+                },
+            );
+            ctx.memory(|m| {
+                m.area_rect(egui::Id::new("cockpit_overview_overlay").with(c.layout.generation))
+                    .unwrap()
+            })
+        }
+        let size = Vec2::new(1200.0, 850.0);
+        for _ in 0..4 {
+            frame(&ctx, &mut cockpit, size, vec![]);
+        }
+        let before = frame(&ctx, &mut cockpit, size, vec![]);
+        let start = before.left_top() + Vec2::new(100.0, 12.0);
+        frame(
+            &ctx,
+            &mut cockpit,
+            size,
+            vec![egui::Event::PointerMoved(start)],
+        );
+        frame(
+            &ctx,
+            &mut cockpit,
+            size,
+            vec![egui::Event::PointerButton {
+                pos: start,
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: egui::Modifiers::NONE,
+            }],
+        );
+        let end = start + Vec2::new(-180.0, 55.0);
+        frame(
+            &ctx,
+            &mut cockpit,
+            size,
+            vec![egui::Event::PointerMoved(end)],
+        );
+        frame(&ctx, &mut cockpit, size, vec![]);
+        frame(
+            &ctx,
+            &mut cockpit,
+            size,
+            vec![egui::Event::PointerButton {
+                pos: end,
+                button: egui::PointerButton::Primary,
+                pressed: false,
+                modifiers: egui::Modifiers::NONE,
+            }],
+        );
+        let moved = frame(&ctx, &mut cockpit, size, vec![]);
+        assert!(
+            (moved.min - before.min - Vec2::new(-180.0, 55.0)).length() < 3.0,
+            "before={before:?}, moved={moved:?}"
+        );
+        assert!(dir.join("layout.json").exists());
+        cockpit.layout = layout::Layout::load(&dir);
+        for _ in 0..3 {
+            frame(&ctx, &mut cockpit, size, vec![]);
+        }
+        let loaded = frame(&ctx, &mut cockpit, size, vec![]);
+        assert!(loaded.min.distance(moved.min) < 3.0);
+        let larger = Vec2::new(1400.0, 950.0);
+        for _ in 0..3 {
+            frame(&ctx, &mut cockpit, larger, vec![]);
+        }
+        let resized = frame(&ctx, &mut cockpit, larger, vec![]);
+        assert!((resized.left() - loaded.left() - 200.0).abs() < 3.0);
+        assert!((resized.top() - loaded.top()).abs() < 3.0);
+        let start = resized.left_top() + Vec2::new(100.0, 12.0);
+        frame(
+            &ctx,
+            &mut cockpit,
+            larger,
+            vec![egui::Event::PointerMoved(start)],
+        );
+        frame(
+            &ctx,
+            &mut cockpit,
+            larger,
+            vec![egui::Event::PointerButton {
+                pos: start,
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: egui::Modifiers::NONE,
+            }],
+        );
+        let end = start + Vec2::new(larger.x - 20.0 - resized.right(), 0.0);
+        frame(
+            &ctx,
+            &mut cockpit,
+            larger,
+            vec![egui::Event::PointerMoved(end)],
+        );
+        frame(&ctx, &mut cockpit, larger, vec![]);
+        frame(
+            &ctx,
+            &mut cockpit,
+            larger,
+            vec![egui::Event::PointerButton {
+                pos: end,
+                button: egui::PointerButton::Primary,
+                pressed: false,
+                modifiers: egui::Modifiers::NONE,
+            }],
+        );
+        let snapped = frame(&ctx, &mut cockpit, larger, vec![]);
+        assert!((larger.x - snapped.right() - 16.0).abs() < 3.0);
+        cockpit.layout.reset();
+        for _ in 0..3 {
+            frame(&ctx, &mut cockpit, larger, vec![]);
+        }
+        let reset = frame(&ctx, &mut cockpit, larger, vec![]);
+        assert!((larger.x - reset.right() - 16.0).abs() < 3.0);
+        assert!((reset.top() - 16.0).abs() < 3.0);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn mining_activation_uses_confirmed_lock_while_browsing_station() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        cockpit.snapshot.as_mut().unwrap().pilots[0].locked_asteroid = Some(7);
+        cockpit.selected_object = SelectedObject::Station;
+        let (tx, rx) = mpsc::channel();
+        cockpit.commands = Some(tx);
+        assert!(cockpit.can_mine(&cockpit.own().unwrap()));
+        assert!(!cockpit.can_lock_selected());
+        let labels = ui_test_frame(&ctx, &mut cockpit, vec![], false);
+        assert!(labels
+            .iter()
+            .any(|(text, _)| text.contains("Locked · Test rock")));
+        let activate = labels
+            .iter()
+            .find(|(text, _)| text == "Activate turret")
+            .unwrap()
+            .1;
+        ui_test_click(&ctx, &mut cockpit, activate, false);
+        assert!(matches!(
+            rx.try_recv().unwrap(),
+            Request::StartMining {
+                module_id: 0,
+                target_id: 7
+            }
+        ));
+        assert!(cockpit.selected_object == SelectedObject::Station);
+    }
+    #[test]
     fn acquiring_lock_blocks_duplicate_and_extract_until_server_confirmation() {
         let ctx = egui::Context::default();
         let mut cockpit = view_test_cockpit(&ctx);
@@ -2812,7 +3291,7 @@ mod tests {
         assert!(labels
             .iter()
             .any(|(text, _)| text.contains("Acquiring Test rock")));
-        for label in ["Lock", "Extract"] {
+        for label in ["Lock", "Activate turret"] {
             let point = labels.iter().find(|(t, _)| t == label).unwrap().1;
             ui_test_click(&ctx, &mut cockpit, point, false);
             assert!(rx.try_recv().is_err());
@@ -3102,6 +3581,7 @@ mod tests {
                 ship_class: ShipClass::Pioneer,
                 locked_asteroid: None,
                 target_lock: None,
+                mining_modules: vec![],
                 credits: 100,
                 ore: 25,
                 location: Location::Docked,
@@ -3316,6 +3796,7 @@ mod tests {
             system_id: HOME_SYSTEM_ID,
             locked_asteroid: None,
             target_lock: None,
+            mining_modules: vec![],
             credits: 0,
             ore: 0,
             location: Location::Station,

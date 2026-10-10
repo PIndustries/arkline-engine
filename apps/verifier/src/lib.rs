@@ -693,6 +693,7 @@ mod tests {
                 server_time_ms: 6000,
                 pilots: vec![
                     PilotView {
+                        mining_modules: Vec::new(),
                         target_lock: None,
                         ship_class: arkline_protocol::ShipClass::default(),
                         system_id: HOME_SYSTEM_ID,
@@ -704,6 +705,7 @@ mod tests {
                         flight: None,
                     },
                     PilotView {
+                        mining_modules: Vec::new(),
                         target_lock: None,
                         ship_class: arkline_protocol::ShipClass::default(),
                         system_id: HOME_SYSTEM_ID,

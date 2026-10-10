@@ -72,13 +72,49 @@ impl Client {
             resume_token: token,
         })
     }
+    fn mine_cycles(&mut self, pilot: &str, cycles: u64) -> Snapshot {
+        let snapshot = self.ok(Request::Snapshot).snapshot.unwrap();
+        let p = snapshot.pilots.iter().find(|p| p.name == pilot).unwrap();
+        let before = p.ore;
+        let spec = mining_spec(p.ship_class);
+        self.ok(Request::StartMining {
+            module_id: 0,
+            target_id: p.locked_asteroid.unwrap(),
+        });
+        let deadline = Instant::now() + Duration::from_millis(spec.cycle_ms * cycles + 10000);
+        loop {
+            let snapshot = self.ok(Request::Snapshot).snapshot.unwrap();
+            if snapshot
+                .pilots
+                .iter()
+                .find(|p| p.name == pilot)
+                .unwrap()
+                .ore
+                >= before + cycles * spec.yield_units
+            {
+                return self
+                    .ok(Request::StopMining { module_id: 0 })
+                    .snapshot
+                    .unwrap();
+            }
+            assert!(Instant::now() < deadline, "mining cycles did not complete");
+            thread::sleep(Duration::from_millis(50));
+        }
+    }
     fn acquire(&mut self, id: u64, pilot: &str) {
         let response = self.ok(Request::LockAsteroid { id });
         let initial = response.snapshot.unwrap();
         let pending = initial.pilots.iter().find(|p| p.name == pilot).unwrap();
         assert_eq!(pending.target_lock.as_ref().unwrap().asteroid_id, id);
         assert_eq!(pending.locked_asteroid, None);
-        assert!(!self.send(Request::MineAsteroid { id, units: 1 }).ok);
+        assert!(
+            !self
+                .send(Request::StartMining {
+                    module_id: 0,
+                    target_id: id
+                })
+                .ok
+        );
         assert!(!self.send(Request::Mine { units: 1 }).ok);
         let deadline = Instant::now() + Duration::from_secs(12);
         loop {
@@ -151,7 +187,7 @@ fn two_pilots_trade_recover_and_export_consistent_history() {
     alice.ok(Request::Undock);
     alice.travel(Destination::Belt, "Alice");
     alice.acquire(1, "Alice");
-    alice.ok(Request::Mine { units: 100 });
+    alice.mine_cycles("Alice", 4);
     alice.travel(Destination::Station, "Alice");
     alice.ok(Request::Dock);
     let order = alice
@@ -254,7 +290,7 @@ fn two_pilots_trade_recover_and_export_consistent_history() {
         previous.clone_from(&entry.hash);
     }
     assert_eq!(export.snapshot.ledger_hash, previous);
-    assert_eq!(export.entries.len(), 6);
+    assert_eq!(export.entries.len(), 9); // Four fixed mining cycles plus creation and trade events.
     let report = arkline_verifier::verify(&export, None).unwrap();
     assert_eq!(report.trades, 1);
     assert_eq!(report.total_credits, 2 * STARTER_CREDITS);
@@ -435,13 +471,7 @@ fn gates_connect_three_systems_survive_restart_and_preserve_targeted_mining() {
         .unwrap()
         .clone();
     traveler.acquire(asteroid.id, "GateTraveler");
-    let mined = traveler
-        .ok(Request::MineAsteroid {
-            id: asteroid.id,
-            units: 10,
-        })
-        .snapshot
-        .unwrap();
+    let mined = traveler.mine_cycles("GateTraveler", 1);
     assert_eq!(
         mined
             .asteroids
@@ -449,7 +479,7 @@ fn gates_connect_three_systems_survive_restart_and_preserve_targeted_mining() {
             .find(|a| a.id == asteroid.id)
             .unwrap()
             .ore,
-        asteroid.ore - 10
+        asteroid.ore - mining_spec(ShipClass::Pioneer).yield_units
     );
     let mut home = Client::new(&address);
     home.login("HomePilot", None);
@@ -483,14 +513,14 @@ fn gates_connect_three_systems_survive_restart_and_preserve_targeted_mining() {
         .unwrap();
     let pilot = s.pilots.iter().find(|p| p.name == "GateTraveler").unwrap();
     assert_eq!(pilot.system_id, 3);
-    assert_eq!(pilot.ore, 10);
+    assert_eq!(pilot.ore, mining_spec(ShipClass::Pioneer).yield_units);
     assert_eq!(
         s.asteroids
             .iter()
             .find(|a| a.id == asteroid.id)
             .unwrap()
             .ore,
-        asteroid.ore - 10
+        asteroid.ore - mining_spec(ShipClass::Pioneer).yield_units
     );
     drop(traveler);
     drop(server);

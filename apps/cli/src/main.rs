@@ -58,7 +58,7 @@ fn run() -> Result<()> {
                 credentials_path = Some(args.next().context("--credentials needs a path")?.into())
             }
             "--help" | "-h" => {
-                println!("Arkline command client\n\narkline [--server HOST:PORT] [--pilot NAME] [--credentials PATH] COMMAND\n\nCommands:\n  status                 Read the live universe\n  connect                Create a pilot or resume with saved credentials\n  inventory              Read your ships, station storage and corporation\n  board HULL             Board pioneer|prospector|hauler|vanguard at its station\n  deposit UNITS          Move cargo ore into local personal storage\n  withdraw UNITS         Move local personal ore into active cargo\n  corp-create NAME       Create a corporation (letters, digits, _ or -)\n  corp-invite PILOT      Owner invites an existing pilot\n  corp-accept NAME       Accept a corporation invitation\n  corp-deposit UNITS     Deposit cargo ore into local corporation storage\n  corp-withdraw UNITS    Owner withdraws local corporation ore\n  undock                 Leave the current station\n  warp belt|station|gate:ID Begin distance-based warp (2s warmup)\n  dock                   Dock at the station\n  mine UNITS             Mine up to 100 ore from confirmed target\n  lock ASTEROID_ID       Acquire and wait for a specific asteroid lock\n  unlock                 Cancel acquisition or release target\n  extract ASTEROID_ID UNITS Mine the locked asteroid\n  jump GATE_ID           Jump through a nearby local gate\n  stop                   Stop manual navigation\n  approach TARGET SECS   Approach station, belt or pilot:NAME\n  orbit TARGET METERS SECS   Orbit for 1-300 seconds\n  range TARGET METERS SECS   Keep distance for 1-300 seconds\n  fly X Y Z SECS         Fly to meter coordinates for 1-300 seconds\n  sell UNITS PRICE       Escrow ore in a sell order\n  buy ORDER_ID UNITS     Buy ore from another pilot\n  cancel ORDER_ID        Cancel your order and reclaim ore\n  export PATH            Save an economic audit export\n\nCommands return JSON snapshots. Credentials are saved locally with restricted\npermissions. Keep that file to resume the same pilot. This prototype uses\nunencrypted TCP: keep it on loopback or an authenticated private tunnel.");
+                println!("Arkline command client\n\narkline [--server HOST:PORT] [--pilot NAME] [--credentials PATH] COMMAND\n\nCommands:\n  status                 Read the live universe\n  connect                Create a pilot or resume with saved credentials\n  inventory              Read your ships, station storage and corporation\n  board HULL             Board pioneer|prospector|hauler|vanguard at its station\n  deposit UNITS          Move cargo ore into local personal storage\n  withdraw UNITS         Move local personal ore into active cargo\n  corp-create NAME       Create a corporation (letters, digits, _ or -)\n  corp-invite PILOT      Owner invites an existing pilot\n  corp-accept NAME       Accept a corporation invitation\n  corp-deposit UNITS     Deposit cargo ore into local corporation storage\n  corp-withdraw UNITS    Owner withdraws local corporation ore\n  undock                 Leave the current station\n  warp belt|station|gate:ID Begin distance-based warp (2s warmup)\n  dock                   Dock at the station\n  mine [SECONDS]         Run module 0 on locked target (default 60s)\n  lock ASTEROID_ID       Acquire and wait for a specific asteroid lock\n  unlock                 Cancel acquisition or release target\n  extract ID [SECONDS]   Run module 0 on locked asteroid (default 60s)\n  stop-mining [MODULE]    Stop module 0 or 1 immediately\n  jump GATE_ID           Jump through a nearby local gate\n  stop                   Stop manual navigation\n  approach TARGET SECS   Approach station, belt or pilot:NAME\n  orbit TARGET METERS SECS   Orbit for 1-300 seconds\n  range TARGET METERS SECS   Keep distance for 1-300 seconds\n  fly X Y Z SECS         Fly to meter coordinates for 1-300 seconds\n  sell UNITS PRICE       Escrow ore in a sell order\n  buy ORDER_ID UNITS     Buy ore from another pilot\n  cancel ORDER_ID        Cancel your order and reclaim ore\n  export PATH            Save an economic audit export\n\nCommands return JSON snapshots. Credentials are saved locally with restricted\npermissions. Keep that file to resume the same pilot. This prototype uses\nunencrypted TCP: keep it on loopback or an authenticated private tunnel.");
                 return Ok(());
             }
             x if x.starts_with('-') => bail!("unknown option: {x}"),
@@ -117,7 +117,22 @@ fn run() -> Result<()> {
     } else {
         0
     };
-    let request = match verb {
+    let mining_seconds = match verb {
+        "mine" | "extract" => {
+            let index = if verb == "mine" { 1 } else { 2 };
+            let seconds = if command.len() > index {
+                number(index)?
+            } else {
+                60
+            };
+            if !(1..=3600).contains(&seconds) {
+                bail!("mining duration must be 1-3600 seconds; yield is server-defined");
+            }
+            Some(seconds)
+        }
+        _ => None,
+    };
+    let mut request = match verb {
         "status" | "connect" | "inventory" => Request::Snapshot,
         "board" => Request::SelectShip {
             ship_class: match command.get(1).map(String::as_str) {
@@ -185,12 +200,16 @@ fn run() -> Result<()> {
                 _ => bail!("warp destination must be belt, station or gate:ID"),
             },
         },
-        "mine" => Request::Mine { units: number(1)? },
+        "mine" => Request::Snapshot,
+        "stop-mining" => Request::StopMining {
+            module_id: u8::try_from(if command.len() > 1 { number(1)? } else { 0 })
+                .context("invalid module ID")?,
+        },
         "lock" => Request::LockAsteroid { id: number(1)? },
         "unlock" => Request::UnlockTarget,
-        "extract" => Request::MineAsteroid {
-            id: number(1)?,
-            units: number(2)?,
+        "extract" => Request::StartMining {
+            module_id: 0,
+            target_id: number(1)?,
         },
         "jump" => Request::Jump {
             gate_id: number(1)?,
@@ -280,7 +299,50 @@ fn run() -> Result<()> {
     } else if !matches!(verb, "status" | "export") {
         bail!("this command needs --pilot NAME");
     }
+    if verb == "mine" {
+        let snapshot = exchange(&mut stream, &Request::Snapshot)?
+            .snapshot
+            .context("missing snapshot")?;
+        let own = snapshot
+            .pilots
+            .iter()
+            .find(|p| Some(&p.name) == pilot_name.as_ref())
+            .context("missing pilot")?;
+        request = Request::StartMining {
+            module_id: 0,
+            target_id: own
+                .locked_asteroid
+                .context("lock an asteroid before activating a mining module")?,
+        };
+    }
     let mut response = exchange(&mut stream, &request)?;
+    if let Some(seconds) = mining_seconds {
+        let deadline = std::time::Instant::now() + Duration::from_secs(seconds);
+        loop {
+            let own = response
+                .snapshot
+                .as_ref()
+                .and_then(|s| {
+                    s.pilots
+                        .iter()
+                        .find(|p| Some(&p.name) == pilot_name.as_ref())
+                })
+                .context("missing mining pilot")?;
+            let active = own
+                .mining_modules
+                .iter()
+                .any(|m| m.module_id == 0 && m.target_id.is_some());
+            if !active {
+                break;
+            }
+            if std::time::Instant::now() >= deadline {
+                response = exchange(&mut stream, &Request::StopMining { module_id: 0 })?;
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+            response = exchange(&mut stream, &Request::Snapshot)?;
+        }
+    }
     if let Request::LockAsteroid { id } = request {
         let deadline = std::time::Instant::now() + Duration::from_secs(15);
         loop {

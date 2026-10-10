@@ -22,7 +22,7 @@ Credits remain independently conserved. `Snapshot.stored_ore` must equal the rep
 
 ## Acceptance evidence
 
-`apps/server/tests/station_assets.rs` exercises real server command APIs with a deterministic clock: mining, returning to station, boarding/reboarding with cargo, personal storage, corporation invitation and acceptance, authorized owner withdrawal, rejected member/outsider withdrawals, rejected member invitations, failed-transfer rollback, per-system isolation after a gate jump, persistent restart, and independent export replay. A separate test removes the new account fields to reconstruct the legacy schema and verifies that repeated restarts do not replenish ships or mint cargo.
+`apps/server/tests/station_assets.rs` exercises real server command APIs with a deterministic clock: three fixed mining cycles, returning to station, boarding/reboarding with cargo, personal storage, corporation invitation and acceptance, authorized owner withdrawal, rejected member/outsider withdrawals, rejected member invitations, failed-transfer rollback, per-system isolation after a gate jump, persistent restart, and independent export replay. A separate test removes the new account fields to reconstruct the legacy schema and verifies that repeated restarts do not replenish ships or mint cargo.
 
 Verifier tests also modify economic events and recompute all hashes. Fabricated cargo, wrong-station hull loading, unauthorized invitations/withdrawals, missing invitations, insufficient personal balances, and a false aggregate stored balance are rejected even when the hash chain is internally consistent.
 

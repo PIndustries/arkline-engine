@@ -18,7 +18,7 @@ commands operate on the same authoritative flight state.
 5. Warp to the station, belt or selected gate. At the gate, use **Jump** when
    within 1.8 km. Jumping changes systems after the three-second transition.
 6. Select a particular asteroid in space or the Mining overview. **Lock target**,
-   wait for lock confirmation, approach within 4.5 km, then **Extract selected**. Only that asteroid loses ore.
+   wait for lock confirmation, approach within 4.5 km, then activate a mining module. Its cycles repeat until stopped; only the confirmed asteroid loses ore.
    Selection alone does not switch the confirmed mining lock.
 
 Distances use meters, kilometers and astronomical units (1 AU = 149,597,870,700 m).
@@ -63,8 +63,14 @@ in the destination system across restart. The economy remains a shared exchange.
 There is no collision damage, combat, module fitting, physical mass/inertia
 upgrade system, ship-computer runtime or distributed simulation authority.
 Asteroid acquisition takes 2–8 seconds, depending on hull sensors and target size.
-The single-target lock becomes usable only after server confirmation. Extraction remains one
-server-confirmed batch per activation, not an automatic repeating module.
+The single-target lock becomes usable only after server confirmation. Each of the
+two mining modules repeats independently while active. Pioneer extracts 25 ore
+every 6 seconds per module; Prospector 40/5s, Hauler 20/8s, Vanguard 30/7s.
+Cycle progress and stop reasons come from the server. There is no yield input.
+Stop cancels the current unfinished cycle without a partial award. The last cycle
+may award less when cargo fills or the asteroid is depleted. Lock/range loss,
+warp, docking, jumping, last disconnect and server restart stop modules.
+Reconnecting does not restart them; suspended time does not accumulate ore.
 Warp alignment/warm-up and gate transition durations are fixed preview rules.
 Long warps include a six-second local launch and six-second terminal approach.
 The ship crosses the first and final 30 km continuously, with matched velocity
@@ -78,6 +84,13 @@ Navigation commands keep their connection open for the supplied duration (1–30
 seconds), then send Stop. Closing the process ends its authenticated session;
 when that was the pilot's last session, manual navigation stops server-side.
 
+`mine [SECONDS]` starts module 0 on the confirmed target;
+`extract ASTEROID_ID [SECONDS]` names that target explicitly. Duration defaults to
+60 seconds and accepts 1–3,600 seconds. These commands hold the connection open
+until the duration ends or the module stops automatically, then stop the module.
+Duration is not an ore quantity: ending mid-cycle awards no partial ore.
+`stop-mining [MODULE_ID]` defaults to module 0.
+
 ```sh
 arkline --pilot TestPilot undock
 arkline --pilot TestPilot approach belt 10
@@ -86,7 +99,8 @@ arkline --pilot TestPilot range pilot:OtherPilot 1000 10
 arkline --pilot TestPilot fly 3000 500 2000 10
 arkline --pilot TestPilot stop
 arkline --pilot TestPilot lock 1  # waits for confirmed lock
-arkline --pilot TestPilot extract 1 25
+arkline --pilot TestPilot extract 1 30  # asteroid ID, activation seconds
+arkline --pilot TestPilot stop-mining 0
 arkline --pilot TestPilot warp gate:101
 # Wait until warp completes, then:
 arkline --pilot TestPilot jump 101
@@ -110,6 +124,6 @@ a different overview row alone does not. Range loss, depletion, warp, docking an
 jumping invalidate targeting. Pending acquisition is cancelled on restart or last
 connection loss. The command client keeps its connection open until lock confirmation.
 
-The mining mount tracks the authoritative acquisition/lock target with a limited
-visual turning rate. A turret muzzle anchors the extraction beam. This is a mining
+The two mining mounts track the authoritative acquisition/lock target with a limited
+visual turning rate. Each active module uses its own turret muzzle for the extraction beam. This is a mining
 module, not a combat damage system or a general module-fitting inventory.

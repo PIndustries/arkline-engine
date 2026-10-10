@@ -1,3 +1,4 @@
+mod common;
 use arkline_protocol::*;
 use arkline_server::Server;
 use std::sync::{Arc, Mutex};
@@ -36,16 +37,16 @@ fn stock(server: &mut Server, session: &mut Option<String>) {
         102,
     );
     acquire(server, session, route_ms() + 102);
-    request(
-        server,
-        session,
-        Request::Mine { units: 100 },
-        route_ms() + 8102,
-    );
-    assert!(
-        !server
-            .handle_at(session, Request::Mine { units: 1 }, route_ms() + 8103)
-            .ok
+    let mut t = route_ms() + 8102;
+    let mined = common::mine_fixed_cycles(server, session, 4, &mut t);
+    assert_eq!(
+        mined
+            .pilots
+            .iter()
+            .find(|v| Some(&v.name) == session.as_ref())
+            .unwrap()
+            .ore,
+        100
     );
     request(
         server,
@@ -53,9 +54,9 @@ fn stock(server: &mut Server, session: &mut Option<String>) {
         Request::Warp {
             destination: Destination::Station,
         },
-        route_ms() + 8103,
+        t + 1,
     );
-    request(server, session, Request::Dock, 2 * route_ms() + 8103);
+    request(server, session, Request::Dock, t + 1 + route_ms());
     request(
         server,
         session,
@@ -63,7 +64,7 @@ fn stock(server: &mut Server, session: &mut Option<String>) {
             units: 100,
             unit_price: 10,
         },
-        2 * route_ms() + 8104,
+        t + 2 + route_ms(),
     );
 }
 #[test]
@@ -232,7 +233,7 @@ fn concurrent_buyers_cannot_duplicate_fill() {
     assert_eq!(snapshot.pilots.iter().map(|p| p.credits).sum::<u64>(), 3000);
 }
 #[test]
-fn restart_preserves_auth_travel_and_cooldown() {
+fn restart_preserves_auth_travel_and_completed_mining() {
     let path = std::env::temp_dir().join(format!(
         "arkline-server-test-{}-{}.sqlite",
         std::process::id(),
@@ -276,12 +277,7 @@ fn restart_preserves_auth_travel_and_cooldown() {
                 .ok
         );
         acquire(&mut server, &mut session, route_ms() + 1001);
-        request(
-            &mut server,
-            &mut session,
-            Request::Mine { units: 100 },
-            route_ms() + 9001,
-        );
+        common::mine_fixed_cycles(&mut server, &mut session, 4, &mut (route_ms() + 9001));
     }
     {
         let mut server = Server::open(&path).unwrap();
@@ -305,12 +301,19 @@ fn restart_preserves_auth_travel_and_cooldown() {
                 )
                 .ok
         );
-        request(
+        let snapshot = request(
             &mut server,
             &mut session,
-            Request::Mine { units: 100 },
-            route_ms() + 10001,
-        );
+            Request::Snapshot,
+            route_ms() + 50000,
+        )
+        .snapshot
+        .unwrap();
+        assert_eq!(snapshot.pilots[0].ore, 100);
+        assert!(snapshot.pilots[0]
+            .mining_modules
+            .iter()
+            .all(|m| m.target_id.is_none()));
     }
     std::fs::remove_file(path).unwrap();
 }

@@ -23,6 +23,33 @@ pub fn can_extract_target(pilot: &PilotView, asteroid: &Asteroid) -> bool {
             (center - asteroid.radius).max(0.0) <= MINING_RANGE
         })
 }
+#[derive(Clone, Copy, Debug)]
+pub struct ModuleCycle {
+    pub target_id: u64,
+    pub progress: f32,
+    pub remaining_ms: u64,
+}
+/// Active state comes from the server, including periods awaiting the next cycle snapshot.
+pub fn module_cycle(pilot: &PilotView, module_id: u8, now: u64) -> Option<ModuleCycle> {
+    if !can_extract(pilot) {
+        return None;
+    }
+    let module = pilot
+        .mining_modules
+        .iter()
+        .find(|m| m.module_id == module_id)?;
+    let target_id = module.target_id?;
+    let start = module.cycle_started_at_ms?;
+    let finish = module.cycle_completes_at_ms?;
+    if module_id > 1 || finish <= start || now < start || pilot.locked_asteroid != Some(target_id) {
+        return None;
+    }
+    Some(ModuleCycle {
+        target_id,
+        progress: (now.saturating_sub(start) as f32 / (finish - start) as f32).clamp(0.0, 1.0),
+        remaining_ms: finish.saturating_sub(now),
+    })
+}
 pub const EFFECT_DURATION_MS: u64 = 6000;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum EffectKind {
@@ -131,6 +158,7 @@ mod tests {
                 ore: remaining,
             }],
             pilots: vec![PilotView {
+                mining_modules: vec![],
                 ship_class: arkline_protocol::ShipClass::default(),
                 name: "Pilot".into(),
                 credits: 1000,
@@ -155,6 +183,33 @@ mod tests {
             ledger_sequence: 0,
             ledger_hash: GENESIS_HASH.into(),
         }
+    }
+    #[test]
+    fn active_module_visuals_precede_rewards_and_stop_on_server_state() {
+        let mut snap = snapshot(0, 25);
+        let pilot = &mut snap.pilots[0];
+        pilot.mining_modules = vec![MiningModule {
+            module_id: 0,
+            target_id: Some(7),
+            cycle_started_at_ms: Some(100),
+            cycle_completes_at_ms: Some(6100),
+            stop_reason: None,
+        }];
+        let cycle = module_cycle(pilot, 0, 3100).unwrap();
+        assert_eq!(cycle.target_id, 7);
+        assert_eq!(cycle.progress, 0.5);
+        assert_eq!(cycle.remaining_ms, 3000);
+        assert_eq!(pilot.ore, 0);
+        assert!(module_cycle(pilot, 1, 3100).is_none());
+        assert!(
+            module_cycle(pilot, 0, 6200).is_some(),
+            "active server state survives pending cycle snapshot"
+        );
+        pilot.mining_modules[0].target_id = None;
+        assert!(module_cycle(pilot, 0, 3200).is_none());
+        pilot.mining_modules[0].target_id = Some(7);
+        pilot.location = Location::Docked;
+        assert!(module_cycle(pilot, 0, 3200).is_none());
     }
     #[test]
     fn confirmed_target_extraction_animates_once_and_expires() {

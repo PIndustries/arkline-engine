@@ -205,6 +205,8 @@ pub(super) fn execute(w: &mut World, name: &str, r: Request) -> Result<Option<Ec
                 ore: stored_units,
             };
             p.view.ship_class = ship_class;
+            // A different hull starts with its own idle module phases/reasons.
+            p.view.mining_modules.clear();
             p.view.ore = loaded_units;
             EconomicEvent::ShipBoarded {
                 from_ship_class,

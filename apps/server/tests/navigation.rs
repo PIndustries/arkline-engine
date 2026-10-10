@@ -1,3 +1,4 @@
+mod common;
 use arkline_protocol::*;
 use arkline_server::Server;
 fn run(s: &mut Server, p: &mut Option<String>, r: Request, t: u64) -> Snapshot {
@@ -217,12 +218,7 @@ fn warp_holds_source_during_warmup_and_arrives_in_range() {
     let arrived = flight(&mut s, "WarpPilot", route_ms());
     assert!(dist(arrived.position, BELT_POSITION) < MINING_RANGE);
     acquire(&mut s, &mut p, route_ms());
-    run(
-        &mut s,
-        &mut p,
-        Request::Mine { units: 1 },
-        route_ms() + 8000,
-    );
+    common::mine_fixed_cycles(&mut s, &mut p, 1, &mut (route_ms() + 8000));
     // Docking remains permitted from the separated station berth.
     run(&mut s, &mut other, Request::Dock, route_ms());
 }
@@ -247,12 +243,7 @@ fn legacy_world_gains_flight_without_changing_inventory_or_history() {
             0,
         );
         acquire(&mut s, &mut p, route_ms());
-        before = run(
-            &mut s,
-            &mut p,
-            Request::Mine { units: 25 },
-            route_ms() + 8000,
-        );
+        before = common::mine_fixed_cycles(&mut s, &mut p, 1, &mut (route_ms() + 8000));
     }
     {
         let db = rusqlite::Connection::open(&path).unwrap();
@@ -318,12 +309,7 @@ fn astronomical_migration_preserves_local_offset_and_economic_history() {
             0,
         );
         acquire(&mut s, &mut p, route_ms());
-        before = run(
-            &mut s,
-            &mut p,
-            Request::Mine { units: 25 },
-            route_ms() + 8000,
-        );
+        before = common::mine_fixed_cycles(&mut s, &mut p, 1, &mut (route_ms() + 8000));
     }
     {
         let db = rusqlite::Connection::open(&path).unwrap();
