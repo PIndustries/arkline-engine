@@ -75,8 +75,88 @@ impl Cockpit {
         self.cancel_ai();
     }
     pub(super) fn cancel_ai(&mut self) {
+        self.voice.cancel();
+        self.voice_pin = None;
         self.ship_ai.cancel_pending();
         self.ai_pin = None;
+    }
+    fn submit_ship_instruction(&mut self) {
+        if self.voice_pin.take().is_some() {
+            self.voice.cancel();
+        }
+        if !self.can_operate()
+            || !self.resource_fresh()
+            || self.ai_pin.is_some()
+            || self.ai_prompt.trim().is_empty()
+        {
+            self.ai_message =
+                "Instruction not sent: ship is unavailable or awaiting a response.".into();
+            return;
+        }
+        if let Some(pilot) = self.resource_ship() {
+            self.ai_pin = Some((pilot.name.clone(), self.connection_generation));
+            self.ship_ai.request(
+                &self.ai_prompt,
+                &pilot,
+                self.snapshot.as_ref().map_or(0, |s| s.server_time_ms),
+            );
+        }
+    }
+    fn speak_reply(&mut self, text: &str) {
+        if self.spoken_replies && !self.voice.is_listening() {
+            self.voice.speak(text);
+        }
+    }
+    pub(super) fn poll_voice(&mut self) {
+        if self.voice_pin.as_ref().is_some_and(|(pilot, generation)| {
+            !self.resource_fresh()
+                || pilot != self.resource_name()
+                || *generation != self.connection_generation
+                || !self.resource_authorized()
+        }) {
+            self.voice.cancel();
+            self.voice_pin = None;
+            self.voice_transcript =
+                "Voice order cancelled: connection or selected ship changed.".into();
+        }
+        while let Some(event) = self.voice.poll() {
+            match event {
+                voice::VoiceEvent::Ready => {}
+                voice::VoiceEvent::Partial(text) => {
+                    if self.voice_pin.is_some() {
+                        self.voice_transcript = text;
+                    }
+                }
+                voice::VoiceEvent::Final(text) => {
+                    let valid = self.voice_pin.take().is_some_and(|(pilot, generation)| {
+                        pilot == self.resource_name()
+                            && generation == self.connection_generation
+                            && self.resource_fresh()
+                            && self.resource_authorized()
+                    });
+                    if valid && !text.trim().is_empty() {
+                        self.voice_transcript = text.clone();
+                        self.ai_prompt = text;
+                        self.submit_ship_instruction();
+                        self.speak_reply("Interpreting your order.");
+                    }
+                }
+                voice::VoiceEvent::Error(error) => {
+                    self.voice_pin = None;
+                    self.voice_transcript = error;
+                }
+            }
+        }
+        if let Some(job) = self.own_resource_job().cloned() {
+            let key = (job.id, job.phase);
+            if self.spoken_job.as_ref() != Some(&key) {
+                self.spoken_job = Some(key);
+                self.speak_reply(&format!(
+                    "{}. {}. {} ore stored.",
+                    job.pilot, job.message, job.stored_units
+                ));
+            }
+        }
     }
     pub(super) fn poll_ship_ai(&mut self) {
         if self.ai_pin.as_ref().is_some_and(|(pilot, generation)| {
@@ -133,6 +213,7 @@ impl Cockpit {
                     }
                 }
             }
+            self.speak_reply(&self.ai_message.clone());
         }
     }
     pub(super) fn resource_job_panel(&mut self, ui: &mut egui::Ui) {
@@ -160,6 +241,8 @@ impl Cockpit {
         if old != self.resource_pilot {
             self.cancel_ai();
             self.ai_message.clear();
+            self.voice_transcript.clear();
+            self.spoken_job = None;
         }
         ui.horizontal_wrapped(|ui| {
             if ui
@@ -269,14 +352,7 @@ impl Cockpit {
                 )
                 .clicked()
             {
-                if let Some(pilot) = self.resource_ship() {
-                    self.ai_pin = Some((pilot.name.clone(), self.connection_generation));
-                    self.ship_ai.request(
-                        &self.ai_prompt,
-                        &pilot,
-                        self.snapshot.as_ref().map_or(0, |s| s.server_time_ms),
-                    );
-                }
+                self.submit_ship_instruction();
             }
             if self.ai_pin.is_some() && ui.button("Cancel request").clicked() {
                 self.cancel_ai();
@@ -286,7 +362,51 @@ impl Cockpit {
         if !self.ai_message.is_empty() {
             ui.label(&self.ai_message);
         }
-        ui.small("Supported instructions run directly after validation. Typed input only.");
+        ui.horizontal_wrapped(|ui| {
+            if ui
+                .add_enabled(
+                    voice::Voice::supported()
+                        && self.can_operate()
+                        && self.resource_fresh()
+                        && self.resource_ship().is_some()
+                        && self.ai_pin.is_none()
+                        && !self.voice.is_listening(),
+                    egui::Button::new("Talk to ship"),
+                )
+                .clicked()
+            {
+                self.voice_pin =
+                    Some((self.resource_name().to_owned(), self.connection_generation));
+                self.voice_transcript.clear();
+                self.spoken_replies = true;
+                self.voice.start_listening();
+            }
+            if self.voice.is_listening() {
+                if ui.button("Finish and send").clicked() {
+                    self.voice.finish_listening();
+                }
+                if ui.button("Cancel recording").clicked() {
+                    self.voice.cancel();
+                    self.voice_pin = None;
+                }
+            }
+            if ui
+                .checkbox(&mut self.spoken_replies, "Spoken replies")
+                .changed()
+                && !self.spoken_replies
+            {
+                self.voice.stop_speaking();
+            }
+            if self.voice.is_speaking() && ui.button("Stop speech").clicked() {
+                self.voice.stop_speaking();
+            }
+        });
+        ui.small(self.voice.status());
+        if !self.voice_transcript.is_empty() {
+            ui.label(format!("Heard: {}", self.voice_transcript));
+        }
+        ui.small("Talk records up to 20 seconds. Final speech submits as an order. Cancel discards it. Uses the Mac's selected audio input/output; local speech recognition requires an installed language model.");
+        ui.small("Supported instructions run directly after validation.");
         ui.collapsing("Fleet permission · this pilot",|ui| {
             let controller = self.snapshot.as_ref().and_then(|s|s.fleet_links.iter().find(|l|l.pilot==self.pilot)).map(|l|l.controller.clone());
             ui.label(format!("Controller: {}",controller.as_deref().unwrap_or("none")));

@@ -21,3 +21,6 @@ jobs:
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
       - run: cargo build --workspace --locked
+      - name: Compile native speech bridge
+        if: runner.os == 'macOS'
+        run: swiftc -target "$(uname -m)-apple-macos14.0" -swift-version 5 -warnings-as-errors tools/arkline-speech.swift -o /tmp/arkline-speech

@@ -417,6 +417,7 @@ confirmed ore into that worker's station storage. Watch a permitted worker on th
 left cockpit screen while retaining control of your own ship.
 
 Deterministic Start/Cancel controls work without a model. Optional typed Spark
-instructions use SSH and a bounded intent adapter; voice is not implemented. See
+instructions use SSH and a bounded intent adapter. The macOS package adds explicit
+Talk/Finish/Cancel recording, local speech recognition and optional spoken replies. See
 [resource jobs, delegation and remote viewing](docs/resource-jobs.md) for setup,
 readiness requirements and cancellation behavior.

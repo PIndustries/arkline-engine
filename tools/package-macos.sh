@@ -61,8 +61,12 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <key>ArklineBuildVersion</key><string>$BUILD_VERSION</string>
 <key>CFBundleIconFile</key><string>Arkline.icns</string>
 <key>NSHighResolutionCapable</key><true/>
+<key>NSMicrophoneUsageDescription</key><string>Record your spoken ship order when you press Talk to ship.</string>
+<key>NSSpeechRecognitionUsageDescription</key><string>Transcribe your spoken ship orders on this Mac.</string>
 </dict></plist>
 PLIST
+swiftc -target "$(uname -m)-apple-macos14.0" -swift-version 5 -O "$ROOT/tools/arkline-speech.swift" -o "$APP/Contents/MacOS/arkline-speech" \
+  -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __info_plist -Xlinker "$APP/Contents/Info.plist"
 # Local ad-hoc signing verifies bundle integrity; this is not Developer ID
 # signing or Apple notarization, and is not a public distribution package.
 codesign --force --deep --sign - "$APP"

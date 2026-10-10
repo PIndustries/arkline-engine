@@ -499,3 +499,27 @@ runs the job after acceptance. This release does not add voice, arbitrary fleet
 planning, production manufacturing, relay propagation delays or signal-dependent
 remote camera degradation. Jobs are one bounded same-system haul per worker;
 restart cancels rather than silently resuming. The repository remains private.
+
+## Spoken ship orders — 26.10.10.16
+
+The macOS client adds explicit recording, partial/final transcript display,
+Finish/Cancel controls, spoken model replies and confirmed resource-job updates.
+Final transcripts follow the same bounded intent path as typed orders. Session,
+worker, permission and freshness changes invalidate recording intent; partial
+transcripts cannot trigger an action. Recording and playback are mutually exclusive.
+
+All 91 client tests passed, including helper-process framing, cancellation,
+deadlines and voice/session invalidation. Strict workspace Clippy and formatting
+passed. The bundled speech helper compiled with warnings denied. An actual TTS
+request reached its native completion callback and exited successfully. A generated
+speech file passed through a separately launched test app and on-device recognition
+returned exactly “What is the status of my ship”. No microphone was captured and no
+OS permission prompt was automatically accepted. Live microphone/acoustic quality
+and external-interface selection remain owner validation items.
+
+The initial command-line recognition probe inherited the coding application's
+privacy identity and was terminated by macOS TCC for that parent's missing usage
+string. LaunchServices validation succeeded. Launch the packaged app normally from
+Finder; the package includes both privacy descriptions and an explicitly targeted
+macOS 14 speech helper. No cloud recognition fallback is permitted. Speech bridges
+are macOS-only; Rust gameplay and typed instructions remain available elsewhere.

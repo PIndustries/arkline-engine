@@ -73,5 +73,33 @@ A pending instruction is bound to the selected pilot and connection session.
 Changing worker, disconnecting, losing permission or fresh state, cancelling the
 request, or issuing manual commands invalidates it. A delayed reply cannot start
 work on a different ship or a replacement session. Only limited ship telemetry is
-sent to the adapter; game credentials are excluded. Input is typed text: voice,
-MIDI and general autonomous planning are not implemented.
+sent to the adapter; game credentials are excluded. MIDI and general autonomous planning are not implemented.
+
+
+## Talk to the ship (macOS preview)
+
+In the AI console, select the worker first, then press **Talk to ship**. macOS asks
+for microphone and speech-recognition permission on first use. Speak a supported
+order, such as “Gather 100 ore and bring it back.” **Finish and send** ends capture;
+a final recognized transcript is submitted automatically through the same Spark
+interpreter and server validation as typed input. The recognizer also ends capture
+after 20 seconds. **Cancel recording** discards the pending utterance. Partial
+transcripts appear as **Heard** but never execute commands. Changing ships,
+losing the connection or permission, stale state and manual takeover invalidate
+pending voice orders.
+
+Talk enables **Spoken replies** for this session. The computer reads interpretation
+results and confirmed job phase/storage updates. Uncheck it to mute, or use
+**Stop speech** to interrupt playback. Starting a new recording stops playback to
+avoid transcribing the computer's own voice. The transcript and text replies remain
+visible. There is no always-listening wake word.
+
+Input/output follows the Mac's default audio devices, including an external audio
+interface if selected in macOS Sound settings. Device selection and MIDI bindings
+inside Arkline are not included yet. The native helper requires installed on-device
+recognition support for the locale (default en-US); it reports unavailable speech
+or denied permission rather than falling back to a cloud recognition service. Raw
+audio is not saved or sent to Spark. The resulting order text and limited selected
+ship telemetry go to the configured Spark model. The Rust client/server remain
+Rust; a small Swift helper bridges Apple's Speech and AVFoundation frameworks.
+Other platforms retain typed input; the native speech helper is macOS-only.

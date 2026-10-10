@@ -14,6 +14,7 @@ mod target_controls;
 mod theme;
 #[cfg(test)]
 mod transport_tests;
+mod voice;
 use arkline_protocol::*;
 use eframe::egui::{self, Color32, Pos2, Stroke, Vec2};
 use sha2::{Digest, Sha256};
@@ -404,6 +405,11 @@ struct Cockpit {
     fleet_controller: String,
     remote_ship: Option<String>,
     ship_ai: ship_ai::ShipAi,
+    voice: voice::Voice,
+    voice_pin: Option<(String, u64)>,
+    voice_transcript: String,
+    spoken_replies: bool,
+    spoken_job: Option<(u64, arkline_protocol::ResourceJobPhase)>,
     ai_prompt: String,
     ai_message: String,
     ai_pin: Option<(String, u64)>,
@@ -479,6 +485,11 @@ impl Cockpit {
             fleet_controller: String::new(),
             remote_ship: None,
             ship_ai: ship_ai::ShipAi::default(),
+            voice: voice::Voice::default(),
+            voice_pin: None,
+            voice_transcript: String::new(),
+            spoken_replies: false,
+            spoken_job: None,
             ai_prompt: String::new(),
             ai_message: String::new(),
             ai_pin: None,
@@ -2875,6 +2886,7 @@ impl eframe::App for Cockpit {
             self.frame_intervals.pop_front();
         }
         self.poll();
+        self.poll_voice();
         self.poll_ship_ai();
         if self.boot.visible {
             let ready = self.connected && self.own().is_some();
@@ -3522,6 +3534,38 @@ fn main() -> eframe::Result<()> {
 mod tests {
     use super::*;
     use std::net::TcpListener;
+
+    #[test]
+    fn voice_order_is_discarded_when_ship_session_or_freshness_changes() {
+        let ctx = egui::Context::default();
+        for changed in 0..3 {
+            let mut cockpit = view_test_cockpit(&ctx);
+            cockpit.voice_pin = Some((cockpit.pilot.clone(), cockpit.connection_generation));
+            match changed {
+                0 => cockpit.connection_generation += 1,
+                1 => cockpit.resource_pilot = Some("different-worker".into()),
+                _ => {
+                    cockpit.timeline_origin = Some(1000);
+                    cockpit.observed = Instant::now() - Duration::from_secs(3);
+                }
+            }
+            cockpit.poll_voice();
+            assert!(cockpit.voice_pin.is_none());
+            assert!(cockpit.ai_pin.is_none());
+            assert!(cockpit.voice_transcript.contains("cancelled"));
+        }
+    }
+
+    #[test]
+    fn manual_takeover_cancels_pending_voice_order() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        cockpit.voice_pin = Some((cockpit.pilot.clone(), cockpit.connection_generation));
+        cockpit.cancel_ai();
+        assert!(cockpit.voice_pin.is_none());
+        assert!(!cockpit.voice.is_listening());
+        assert!(!cockpit.spoken_replies);
+    }
 
     #[test]
     fn resource_job_requires_explicit_worker_permission_and_ready_ship() {
