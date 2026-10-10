@@ -147,6 +147,7 @@ mod tests {
             online_pilots: vec![],
             asteroids: vec![],
             pilots: vec![PilotView {
+                ship_class: arkline_protocol::ShipClass::default(),
                 name: "test".into(),
                 credits: 10,
                 ore: 0,

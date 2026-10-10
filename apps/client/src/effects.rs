@@ -130,6 +130,7 @@ mod tests {
                 ore: remaining,
             }],
             pilots: vec![PilotView {
+                ship_class: arkline_protocol::ShipClass::default(),
                 name: "Pilot".into(),
                 credits: 1000,
                 ore,

@@ -179,3 +179,21 @@ interface, direct-flight status and persisted translated/rotated ship state. Nat
 mouse capture feel has not been fully validated; the client includes a visible
 bounded-aim fallback when capture is unavailable. This remains assisted flight:
 releasing translation brakes the ship, while the current attitude is retained.
+
+## Meter-scale fleet and station — 26.10.10.2
+
+78 workspace tests, formatting and strict Clippy pass. Mesh bounds match all four
+published hull dimensions, rendering and picking share parts, and the station is
+bounded to 20 km across and 6 km high with clear berth points. A headless native UI
+interaction verifies docked boarding sends the selected hull request, waits for
+server confirmation, and cannot change hulls in space. Server tests cover persistence,
+legacy defaults and unchanged economic history.
+
+A separate live TCP run selected all four hulls, checked cross-client replication,
+rejected selection after undocking, and resumed all classes after restart with the
+same ledger hash. Native visual inspection used an isolated staged scene with three
+other hulls roughly 5 km away and the station docking port 22.3 km away. It confirmed
+clear differences in hull sizes and a substantially larger station behind them.
+The staged scene validates visual proportions; it is not evidence of fleet AI.
+Cockpit interior geometry is human scale. Hull physics tuning remains shared and
+collision response is not implemented.

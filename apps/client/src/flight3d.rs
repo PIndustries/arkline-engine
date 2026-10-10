@@ -1,8 +1,8 @@
 //! Native GPU flight view. Presentation only: never issues simulation commands.
 use arkline_protocol::{
     gates, systems, Asteroid, Destination, Location, NavigationMode, NavigationTarget, PilotView,
-    Snapshot, Stargate, BELT_POSITION, HOME_SYSTEM_ID, JUMP_DURATION_MS, MAX_SHIP_SPEED,
-    SPACE_BOUND, STATION_POSITION,
+    ShipClass, Snapshot, Stargate, BELT_POSITION, HOME_SYSTEM_ID, JUMP_DURATION_MS, MAX_SHIP_SPEED,
+    SPACE_BOUND, STATION_CENTER_POSITION, STATION_DIAMETER_M, STATION_HEIGHT_M, STATION_POSITION,
 };
 #[cfg(test)]
 use arkline_protocol::{WARP_DURATION_MS, WARP_WARMUP_MS};
@@ -397,7 +397,16 @@ impl FlightView {
         let rotation = own_pilot.map_or(Quat::IDENTITY, |p| ship_orientation_at(p, now));
         let (eye, view) = if cockpit {
             cockpit_camera(
-                own_pilot.map_or(Vec3::ZERO, |p| space.position(p, now)),
+                own_pilot.map_or(Vec3::ZERO, |p| {
+                    let spec = p.ship_class.spec();
+                    space.position(p, now)
+                        + rotation
+                            * Vec3::new(
+                                spec.length_m as f32 * 0.003,
+                                spec.height_m as f32 * 0.005,
+                                0.0,
+                            )
+                }),
                 rotation,
             )
         } else {
@@ -413,10 +422,14 @@ impl FlightView {
             1200.0,
         );
         let vp = projection * view;
+        let cockpit_vp =
+            Mat4::perspective_rh_gl(1.05, rect.width() / rect.height().max(1.0), 0.0002, 10.0)
+                * view;
         match &self.renderer {
             Ok(renderer) => {
                 let renderer = renderer.clone();
                 let frame = Frame {
+                    cockpit_vp,
                     space,
                     cockpit,
                     rotation,
@@ -465,7 +478,10 @@ impl FlightView {
                         && p.location != Location::Docked
                         && !(cockpit && p.name == pilot_name)
                 }) {
-                    let clip = vp * (space.position(pilot, now) + Vec3::Y * 4.2).extend(1.0);
+                    let clip = vp
+                        * (space.position(pilot, now)
+                            + Vec3::Y * (pilot.ship_class.spec().height_m as f32 / 200.0 + 0.06))
+                            .extend(1.0);
                     if clip.w > 0.0 {
                         let point = clip.truncate() / clip.w;
                         if point.x.abs() < 0.95 && point.y.abs() < 0.92 {
@@ -544,7 +560,7 @@ impl FlightView {
                                 Vec3::ONE,
                                 ship_orientation_at(pilot, now),
                             );
-                            for (mesh, part) in ship_geometry(model) {
+                            for (mesh, part) in ship_geometry(pilot.ship_class, model) {
                                 targets.push((
                                     super::SelectedObject::Pilot(pilot.name.clone()),
                                     mesh,
@@ -736,7 +752,8 @@ impl FlightView {
                                 .sum::<f64>()
                                 .sqrt()
                         });
-                        let local = |p: Vec3| project(eye + rotation * p);
+                        let local =
+                            |p: Vec3| project_point(cockpit_vp, rect, eye + rotation * (p * 0.025));
                         for (point, text) in [
                             (
                                 Vec3::new(0.58, -0.12, 0.0),
@@ -1010,6 +1027,7 @@ impl FlightView {
     }
 }
 struct Frame {
+    cockpit_vp: Mat4,
     space: Space,
     cockpit: bool,
     rotation: Quat,
@@ -1265,9 +1283,6 @@ impl Renderer {
             frame.eye.y,
             frame.eye.z,
         );
-        let steel = Vec3::new(0.20, 0.29, 0.37);
-        let teal = Vec3::new(0.12, 0.86, 0.83);
-        let amber = Vec3::new(1.0, 0.43, 0.12);
         // Procedural planet material stays isolated from ship/station surfaces.
         gl.uniform_1_i32(
             gl.get_uniform_location(self.program, "material_kind")
@@ -1276,7 +1291,7 @@ impl Renderer {
         );
         // Fixed world anchor near the station; changing render origin must not
         // carry the planet along with a ship traveling astronomical distances.
-        let planet = space.scene([7000.0, -9500.0, -23000.0]);
+        let planet = space.scene([30000.0, -18000.0, -60000.0]);
         if planet.distance(frame.eye) < 1100.0 {
             self.draw(
                 5,
@@ -1325,63 +1340,13 @@ impl Renderer {
             if frame.cockpit && own {
                 continue;
             }
-            let accent = if own { teal } else { amber };
             let ship = transform(
                 space.position(pilot, frame.now),
                 Vec3::ONE,
                 ship_orientation_at(pilot, frame.now),
             );
-            self.draw(
-                4,
-                ship,
-                if own {
-                    Vec3::new(0.37, 0.48, 0.57)
-                } else {
-                    Vec3::new(0.46, 0.39, 0.30)
-                },
-                0.0,
-            );
-            self.draw(
-                0,
-                ship * transform(
-                    Vec3::new(-0.7, 0.72, 0.0),
-                    Vec3::new(1.25, 0.12, 0.43),
-                    Quat::from_rotation_z(-0.12),
-                ),
-                accent,
-                0.8,
-            );
-            for side in [-1.0, 1.0] {
-                self.draw(
-                    0,
-                    ship * transform(
-                        Vec3::new(-1.6, -0.05, side * 1.7),
-                        Vec3::new(1.8, 0.22, 0.55),
-                        Quat::from_rotation_y(side * 0.18),
-                    ),
-                    steel,
-                    0.0,
-                );
-                self.draw(
-                    0,
-                    ship * transform(
-                        Vec3::new(-2.5, 0.0, side * 1.5),
-                        Vec3::new(0.45, 0.48, 0.48),
-                        Quat::IDENTITY,
-                    ),
-                    steel * 0.6,
-                    0.0,
-                );
-                self.draw(
-                    2,
-                    ship * transform(
-                        Vec3::new(-3.0, 0.0, side * 1.5),
-                        Vec3::new(0.3, 0.31, 0.31),
-                        Quat::IDENTITY,
-                    ),
-                    accent,
-                    3.0,
-                );
+            for (mesh, model, color, emission) in ship_parts(pilot.ship_class) {
+                self.draw(mesh, ship * model, color, emission);
             }
         }
         self.paint_effects(frame);
@@ -1460,7 +1425,15 @@ impl Renderer {
         self.gl.clear(glow::DEPTH_BUFFER_BIT);
         self.gl.enable(glow::DEPTH_TEST);
         self.gl.disable(glow::BLEND);
-        let base = Mat4::from_rotation_translation(frame.rotation, frame.eye);
+        self.gl.uniform_matrix_4_f32_slice(
+            self.gl
+                .get_uniform_location(self.program, "view_projection")
+                .as_ref(),
+            false,
+            &frame.cockpit_vp.to_cols_array(),
+        );
+        let base =
+            Mat4::from_scale_rotation_translation(Vec3::splat(0.025), frame.rotation, frame.eye);
         let steel = Vec3::new(0.055, 0.08, 0.09);
         let glow = Vec3::new(0.08, 0.62, 0.43);
         // Forward is local +X; glazing is open between structural pillars.
@@ -1552,9 +1525,14 @@ impl Renderer {
             if ship_position.distance(frame.eye) > 1100.0 {
                 continue;
             }
+            let spec = pilot.ship_class.spec();
             let ship = transform(
                 ship_position,
-                Vec3::ONE,
+                Vec3::new(
+                    spec.length_m as f32 / 700.0,
+                    spec.height_m as f32 / 200.0,
+                    spec.width_m as f32 / 500.0,
+                ),
                 ship_orientation_at(pilot, frame.now),
             );
             let warp = super::motion::warp_phase(pilot, frame.now);
@@ -1607,12 +1585,21 @@ impl Renderer {
                         * ((frame.now % 260) as f32 / 260.0 * std::f32::consts::TAU
                             + lane(&pilot.name))
                         .sin();
-                for side in [-1.0, 1.0] {
+                let effect_scale = Vec3::new(
+                    spec.length_m as f32 / 700.0,
+                    spec.height_m as f32 / 200.0,
+                    spec.width_m as f32 / 500.0,
+                );
+                for (_, model, _, _) in ship_parts(pilot.ship_class)
+                    .into_iter()
+                    .filter(|p| p.3 > 0.0)
+                {
+                    let mount = model.transform_point3(Vec3::ZERO) / effect_scale;
                     for (width, brightness) in [(0.58, 0.10), (0.31, 0.62), (0.16, 1.0)] {
                         self.draw(
                             2,
                             ship * transform(
-                                Vec3::new(-3.0 - length * 0.5, 0.0, side * 1.5),
+                                mount - Vec3::X * (length * 0.5),
                                 Vec3::new(length * 0.5 * pulse, width * pulse, width * pulse),
                                 Quat::IDENTITY,
                             ),
@@ -1668,7 +1655,13 @@ impl Renderer {
                         && super::effects::can_extract_target(pilot, a)
                 })
             }) {
-                let source = ship.transform_point3(Vec3::new(0.4, 1.05, 0.0));
+                let source = ship_position
+                    + ship_orientation_at(pilot, frame.now)
+                        * Vec3::new(
+                            spec.length_m as f32 * 0.004,
+                            spec.height_m as f32 * 0.004,
+                            0.0,
+                        );
                 if let Some(impact) = frame
                     .asteroids
                     .iter()
@@ -1679,15 +1672,15 @@ impl Renderer {
                     let pulse = 0.9
                         + 0.1 * ((frame.now % 134) as f32 / 134.0 * std::f32::consts::TAU).sin();
                     let color = Vec3::new(0.09, 0.74, 0.68) * fade;
-                    if let Some(beam) = segment_model(source, impact, 0.18 * pulse) {
+                    if let Some(beam) = segment_model(source, impact, 0.004 * pulse) {
                         self.draw(0, beam, color, 1.8);
                     }
-                    if let Some(halo) = segment_model(source, impact, 0.46 * pulse) {
+                    if let Some(halo) = segment_model(source, impact, 0.012 * pulse) {
                         self.draw(0, halo, color * 0.18, 0.8);
                     }
                     self.draw(
                         2,
-                        transform(impact, Vec3::splat(0.70 * pulse), Quat::IDENTITY),
+                        transform(impact, Vec3::splat(0.025 * pulse), Quat::IDENTITY),
                         color,
                         1.8,
                     );
@@ -1707,7 +1700,7 @@ impl Renderer {
                             2,
                             transform(
                                 spark,
-                                Vec3::splat(0.11 + (1.0 - age) * 0.09),
+                                Vec3::splat(0.003 + (1.0 - age) * 0.002),
                                 Quat::IDENTITY,
                             ),
                             Vec3::new(0.8, 0.45, 0.10) * fade * (1.0 - age),
@@ -1721,7 +1714,7 @@ impl Renderer {
                             * (std::f32::consts::PI * travel).sin()
                             * (0.5 + (i % 4) as f32 * 0.25);
                         let ore = impact.lerp(source, travel) + arc;
-                        let scale = 0.17 + (i % 3) as f32 * 0.045;
+                        let scale = 0.005 + (i % 3) as f32 * 0.001;
                         self.draw(
                             3,
                             transform(
@@ -1802,7 +1795,7 @@ fn warp_tunnel_intensity(phase: &str, progress: f32) -> f32 {
     }
 }
 fn cockpit_camera(ship: Vec3, rotation: Quat) -> (Vec3, Mat4) {
-    let eye = ship + rotation * Vec3::new(0.4, 0.8, 0.0);
+    let eye = ship + rotation * Vec3::new(0.005, 0.015, 0.0);
     (
         eye,
         Mat4::look_at_rh(eye, eye + rotation * Vec3::X, rotation * Vec3::Y),
@@ -1869,45 +1862,203 @@ fn transform(p: Vec3, scale: Vec3, rotation: Quat) -> Mat4 {
 fn in_warp(location: &Location, now: u64) -> bool {
     matches!(location, Location::InTransit { arrives_at_ms, .. } if now < *arrives_at_ms)
 }
-fn ship_geometry(ship: Mat4) -> Vec<(Vec<Vertex>, Mat4)> {
-    let mut parts = vec![
-        (hull(), ship),
-        (
-            cube(),
-            ship * transform(
-                Vec3::new(-0.7, 0.72, 0.0),
-                Vec3::new(1.25, 0.12, 0.43),
-                Quat::from_rotation_z(-0.12),
-            ),
-        ),
-    ];
-    for side in [-1.0, 1.0] {
-        parts.push((
-            cube(),
-            ship * transform(
-                Vec3::new(-1.6, -0.05, side * 1.7),
-                Vec3::new(1.8, 0.22, 0.55),
-                Quat::from_rotation_y(side * 0.18),
-            ),
-        ));
-        parts.push((
-            cube(),
-            ship * transform(
-                Vec3::new(-2.5, 0.0, side * 1.5),
-                Vec3::new(0.45, 0.48, 0.48),
-                Quat::IDENTITY,
-            ),
-        ));
-        parts.push((
-            sphere(false),
-            ship * transform(
-                Vec3::new(-3.0, 0.0, side * 1.5),
-                Vec3::new(0.3, 0.31, 0.31),
-                Quat::IDENTITY,
-            ),
-        ));
+fn ship_geometry(class: ShipClass, ship: Mat4) -> Vec<(Vec<Vertex>, Mat4)> {
+    ship_parts(class)
+        .into_iter()
+        .map(|(mesh, model, _, _)| (mesh_vertices(mesh), ship * model))
+        .collect()
+}
+type ModelPart = (usize, Mat4, Vec3, f32);
+fn ship_parts(class: ShipClass) -> Vec<ModelPart> {
+    static MODELS: std::sync::OnceLock<[Vec<ModelPart>; 4]> = std::sync::OnceLock::new();
+    let models = MODELS.get_or_init(|| arkline_protocol::ALL_SHIP_CLASSES.map(build_ship_parts));
+    models[match class {
+        ShipClass::Pioneer => 0,
+        ShipClass::Prospector => 1,
+        ShipClass::Hauler => 2,
+        ShipClass::Vanguard => 3,
+    }]
+    .clone()
+}
+fn build_ship_parts(class: ShipClass) -> Vec<ModelPart> {
+    let mut parts = Parts(Vec::new());
+    let hull_color = Vec3::new(0.25, 0.32, 0.38);
+    let cargo = Vec3::new(0.36, 0.28, 0.15);
+    let accent = Vec3::new(0.07, 0.48, 0.35);
+    match class {
+        ShipClass::Pioneer => {
+            parts.draw(
+                4,
+                Mat4::from_scale(Vec3::new(0.6, 0.5, 0.6)),
+                hull_color,
+                0.0,
+            );
+            for side in [-1.0, 1.0] {
+                parts.draw(
+                    0,
+                    transform(
+                        Vec3::new(-0.7, 0.0, side * 0.8),
+                        Vec3::new(0.8, 0.12, 0.45),
+                        Quat::from_rotation_y(side * 0.25),
+                    ),
+                    hull_color,
+                    0.0,
+                );
+            }
+        }
+        ShipClass::Prospector => {
+            parts.draw(
+                0,
+                Mat4::from_scale(Vec3::new(1.6, 0.4, 0.5)),
+                hull_color,
+                0.0,
+            );
+            parts.draw(
+                4,
+                transform(
+                    Vec3::new(0.6, 0.0, 0.0),
+                    Vec3::new(0.32, 0.5, 0.4),
+                    Quat::IDENTITY,
+                ),
+                hull_color,
+                0.0,
+            );
+            for side in [-1.0, 1.0] {
+                parts.draw(
+                    0,
+                    transform(
+                        Vec3::new(-0.2, -0.1, side * 0.9),
+                        Vec3::new(0.9, 0.5, 0.3),
+                        Quat::IDENTITY,
+                    ),
+                    cargo,
+                    0.0,
+                );
+                parts.draw(
+                    0,
+                    transform(
+                        Vec3::new(1.0, -0.4, side * 0.8),
+                        Vec3::new(1.0, 0.08, 0.09),
+                        Quat::IDENTITY,
+                    ),
+                    hull_color,
+                    0.0,
+                );
+            }
+        }
+        ShipClass::Hauler => {
+            parts.draw(
+                0,
+                Mat4::from_scale(Vec3::new(2.2, 0.18, 0.4)),
+                hull_color,
+                0.0,
+            );
+            for x in [-1.3, -0.4, 0.5] {
+                for side in [-1.0, 1.0] {
+                    parts.draw(
+                        0,
+                        transform(
+                            Vec3::new(x, 0.0, side * 0.65),
+                            Vec3::new(0.4, 0.48, 0.35),
+                            Quat::IDENTITY,
+                        ),
+                        cargo,
+                        0.0,
+                    );
+                }
+            }
+            parts.draw(
+                0,
+                transform(
+                    Vec3::new(1.7, 0.45, 0.0),
+                    Vec3::new(0.42, 0.3, 0.65),
+                    Quat::IDENTITY,
+                ),
+                hull_color,
+                0.0,
+            );
+        }
+        ShipClass::Vanguard => {
+            parts.draw(
+                4,
+                Mat4::from_scale(Vec3::new(0.9, 0.55, 0.65)),
+                hull_color,
+                0.0,
+            );
+            for side in [-1.0, 1.0] {
+                parts.draw(
+                    0,
+                    transform(
+                        Vec3::new(-0.8, 0.0, side * 0.8),
+                        Vec3::new(1.4, 0.25, 0.25),
+                        Quat::IDENTITY,
+                    ),
+                    hull_color,
+                    0.0,
+                );
+            }
+            for i in 0..4 {
+                parts.draw(
+                    0,
+                    transform(
+                        Vec3::new(-1.4 + i as f32 * 0.45, 0.55, 0.0),
+                        Vec3::new(0.3, 0.22, 0.25),
+                        Quat::IDENTITY,
+                    ),
+                    hull_color * 1.2,
+                    0.0,
+                );
+            }
+        }
     }
-    parts
+    for side in [-1.0, 1.0] {
+        parts.draw(
+            0,
+            transform(
+                Vec3::new(-1.8, 0.0, side * 0.5),
+                Vec3::new(0.3, 0.22, 0.22),
+                Quat::IDENTITY,
+            ),
+            hull_color * 0.6,
+            0.0,
+        );
+        parts.draw(
+            0,
+            transform(
+                Vec3::new(-2.11, 0.0, side * 0.5),
+                Vec3::new(0.01, 0.16, 0.16),
+                Quat::IDENTITY,
+            ),
+            accent,
+            1.0,
+        );
+    }
+    // Fit measured vertices, including all appendages, to the public meter spec.
+    let (min, max) = parts_bounds(&parts.0);
+    let spec = class.spec();
+    let dimensions = Vec3::new(
+        spec.length_m as f32,
+        spec.height_m as f32,
+        spec.width_m as f32,
+    ) / 100.0;
+    let fit =
+        Mat4::from_scale(dimensions / (max - min)) * Mat4::from_translation(-(min + max) * 0.5);
+    for (_, model, _, _) in &mut parts.0 {
+        *model = fit * *model;
+    }
+    parts.0
+}
+fn parts_bounds(parts: &[(usize, Mat4, Vec3, f32)]) -> (Vec3, Vec3) {
+    let mut min = Vec3::splat(f32::INFINITY);
+    let mut max = Vec3::splat(f32::NEG_INFINITY);
+    for (mesh, model, _, _) in parts {
+        for v in mesh_vertices(*mesh) {
+            let point = model.transform_point3(v.p);
+            min = min.min(point);
+            max = max.max(point);
+        }
+    }
+    (min, max)
 }
 fn rock_mesh() -> Vec<Vertex> {
     let mut mesh = sphere(true);
@@ -2000,80 +2151,119 @@ fn mesh_vertices(mesh: usize) -> Vec<Vertex> {
 }
 fn station_parts(space: Space) -> Vec<(usize, Mat4, Vec3, f32)> {
     let mut parts = Parts(Vec::new());
-    let steel = Vec3::new(0.28, 0.34, 0.42);
-    let teal = Vec3::new(0.08, 0.78, 0.71);
-    let amber = Vec3::new(0.95, 0.49, 0.12);
-    let station = Mat4::from_translation(space.scene(STATION_POSITION));
-    parts.draw(1, station * Mat4::from_scale(Vec3::splat(13.0)), steel, 0.0);
-    parts.draw(
-        1,
-        station
-            * transform(
-                Vec3::new(0.0, 0.9, 0.0),
-                Vec3::new(13.0, 1.8, 13.0),
-                Quat::IDENTITY,
-            ),
-        teal,
-        1.6,
-    );
-    parts.draw(
-        1,
-        station * transform(Vec3::new(0.0, -2.0, 0.0), Vec3::splat(8.5), Quat::IDENTITY),
-        steel * 0.7,
-        0.0,
-    );
+    let center = Mat4::from_translation(space.scene(STATION_CENTER_POSITION));
+    let steel = Vec3::new(0.19, 0.25, 0.29);
+    let window = Vec3::new(0.14, 0.43, 0.37);
+    let radius = STATION_DIAMETER_M as f32 / 200.0;
+    let half_height = STATION_HEIGHT_M as f32 / 200.0;
     parts.draw(
         0,
-        station * Mat4::from_scale(Vec3::new(2.8, 5.0, 2.8)),
+        center * Mat4::from_scale(Vec3::new(11.0, half_height, 11.0)),
         steel,
         0.0,
     );
-    parts.draw(
-        2,
-        station
-            * transform(
-                Vec3::new(0.0, 6.0, 0.0),
-                Vec3::new(1.7, 2.0, 1.7),
-                Quat::IDENTITY,
-            ),
-        teal,
-        1.0,
-    );
+    // Habitat rings: the large rings sit above/below the docking plane. Their
+    // 1.12 torus extent exactly matches the advertised twenty-kilometer span.
+    for (y, r) in [(-15.0, radius / 1.12), (0.0, 68.0), (15.0, radius / 1.12)] {
+        parts.draw(
+            1,
+            center * transform(Vec3::new(0.0, y, 0.0), Vec3::new(r, 5.0, r), Quat::IDENTITY),
+            steel,
+            0.0,
+        );
+        for i in 0..32 {
+            let angle = i as f32 * std::f32::consts::TAU / 32.0;
+            let rotation = Quat::from_rotation_y(angle);
+            let p = rotation * Vec3::new(r, 0.0, 0.0) + Vec3::Y * (y + 0.7);
+            parts.draw(
+                0,
+                center * transform(p, Vec3::new(1.5, 0.12, 0.4), rotation),
+                window,
+                0.55,
+            );
+        }
+        for i in 0..8 {
+            let rotation = Quat::from_rotation_y(i as f32 * std::f32::consts::TAU / 8.0);
+            parts.draw(
+                0,
+                center
+                    * transform(
+                        rotation * Vec3::new(r * 0.52, y, 0.0),
+                        Vec3::new(r * 0.44, 0.65, 1.0),
+                        rotation,
+                    ),
+                steel * 0.8,
+                0.0,
+            );
+        }
+    }
     for i in 0..8 {
-        let angle = i as f32 * std::f32::consts::TAU / 8.0;
-        let rot = Quat::from_rotation_y(angle);
+        let y = -24.0 + i as f32 * 6.5;
+        parts.draw(
+            1,
+            center * transform(Vec3::Y * y, Vec3::new(22.0, 3.0, 22.0), Quat::IDENTITY),
+            steel * 1.15,
+            0.0,
+        );
+        for side in [-1.0, 1.0] {
+            parts.draw(
+                0,
+                center
+                    * transform(
+                        Vec3::new(0.0, y, side * 24.0),
+                        Vec3::new(5.0, 1.7, 4.0),
+                        Quat::IDENTITY,
+                    ),
+                steel,
+                0.0,
+            );
+        }
+    }
+    // Recessed +Z-facing port. Nothing occupies the authoritative berth volume
+    // x/y +/-450m, z+1000m around STATION_POSITION, or the docked port point.
+    let port = Mat4::from_translation(space.scene(STATION_POSITION));
+    for y in [-5.5, 5.5] {
         parts.draw(
             0,
-            station
-                * transform(
-                    rot * Vec3::new(7.0, 0.0, 0.0),
-                    Vec3::new(5.0, 0.7, 0.7),
-                    rot,
-                ),
+            port * transform(
+                Vec3::new(-6.0, y, -6.0),
+                Vec3::new(6.0, 0.4, 6.0),
+                Quat::IDENTITY,
+            ),
             steel,
             0.0,
         );
         parts.draw(
             0,
-            station
-                * transform(
-                    rot * Vec3::new(13.0, 1.5, 0.0),
-                    Vec3::new(1.5, 2.0, 1.5),
-                    rot,
-                ),
-            steel * 1.2,
-            0.0,
+            port * transform(
+                Vec3::new(-5.8, y, 0.1),
+                Vec3::new(5.5, 0.07, 0.07),
+                Quat::IDENTITY,
+            ),
+            window,
+            0.8,
         );
+    }
+    parts.draw(
+        0,
+        port * transform(
+            Vec3::new(-12.0, 0.0, -6.0),
+            Vec3::new(0.4, 5.5, 6.0),
+            Quat::IDENTITY,
+        ),
+        steel,
+        0.0,
+    );
+    for i in 0..8 {
         parts.draw(
             0,
-            station
-                * transform(
-                    rot * Vec3::new(14.5, 2.2, 0.0),
-                    Vec3::new(0.2, 0.2, 0.8),
-                    rot,
-                ),
-            amber,
-            1.5,
+            port * transform(
+                Vec3::new(-1.0 - i as f32 * 1.3, -5.0, -2.0),
+                Vec3::new(0.1, 0.1, 1.3),
+                Quat::IDENTITY,
+            ),
+            Vec3::new(0.48, 0.32, 0.07),
+            0.4,
         );
     }
     parts.0
@@ -2176,6 +2366,75 @@ vec2 sun=p-vec2(0.84,0.82);float flare=0.0018/(dot(sun,sun)+0.006);c+=vec3(0.17,
 mod tests {
     use super::*;
     #[test]
+    fn hulls_match_public_meter_dimensions_and_picking_surfaces() {
+        for class in arkline_protocol::ALL_SHIP_CLASSES {
+            let parts = ship_parts(class);
+            let (min, max) = parts_bounds(&parts);
+            let spec = class.spec();
+            let measured = (max - min) * 100.0;
+            assert!(
+                (measured
+                    - Vec3::new(
+                        spec.length_m as f32,
+                        spec.height_m as f32,
+                        spec.width_m as f32
+                    ))
+                .abs()
+                .max_element()
+                    < 0.01
+            );
+            let geometry = ship_geometry(class, Mat4::IDENTITY);
+            assert_eq!(geometry.len(), parts.len());
+            let hits = geometry
+                .iter()
+                .filter_map(|(mesh, model)| {
+                    ray_mesh_hit(Vec3::X * (max.x + 10.0), -Vec3::X, *model, mesh)
+                })
+                .collect::<Vec<_>>();
+            assert!(
+                !hits.is_empty(),
+                "every hull can be picked along centerline"
+            );
+        }
+    }
+    #[test]
+    fn station_is_twenty_km_and_berths_are_clear() {
+        let space = Space {
+            origin: STATION_CENTER_POSITION,
+        };
+        let parts = station_parts(space);
+        let (min, max) = parts_bounds(&parts);
+        assert!(((max.y - min.y) * 100.0 - STATION_HEIGHT_M as f32).abs() < 0.1);
+        assert!(((max.z - min.z) * 100.0 - STATION_DIAMETER_M as f32).abs() < 0.1);
+        let port = space.scene(STATION_POSITION);
+        for x in [-4.5, 0.0, 4.5] {
+            for y in [-4.5, 0.0, 4.5] {
+                let berth = port + Vec3::new(x, y, 10.0);
+                for (mesh, model, _, _) in &parts {
+                    let inverse = model.inverse();
+                    let local = inverse.transform_point3(berth);
+                    let vertices = mesh_vertices(*mesh);
+                    let mut lo = Vec3::splat(f32::INFINITY);
+                    let mut hi = Vec3::splat(f32::NEG_INFINITY);
+                    for v in vertices {
+                        lo = lo.min(v.p);
+                        hi = hi.max(v.p);
+                    }
+                    if *mesh == 0 {
+                        assert!(
+                            !local.cmpge(lo).all() || !local.cmple(hi).all(),
+                            "berth intersects a station component"
+                        );
+                    }
+                    if *mesh == 1 {
+                        let radial = (local.x * local.x + local.z * local.z).sqrt();
+                        assert!((radial - 1.0).powi(2) + local.y.powi(2) > 0.12_f32.powi(2));
+                    }
+                }
+            }
+        }
+    }
+    #[test]
     fn cockpit_roll_rotates_camera_up_without_leveling() {
         let rotation = Quat::from_rotation_x(std::f32::consts::FRAC_PI_2);
         let (eye, view) = cockpit_camera(Vec3::ZERO, rotation);
@@ -2229,6 +2488,7 @@ mod tests {
     fn extrapolation_is_bounded_and_warp_uses_server_position() {
         let space = Space::default();
         let mut pilot = PilotView {
+            ship_class: ShipClass::Pioneer,
             system_id: HOME_SYSTEM_ID,
             locked_asteroid: None,
             name: "Moving".into(),
@@ -2464,6 +2724,7 @@ mod tests {
     fn stable_pilot_lane_does_not_depend_on_roster_or_view() {
         let space = Space::default();
         let pilot = PilotView {
+            ship_class: ShipClass::Pioneer,
             system_id: HOME_SYSTEM_ID,
             locked_asteroid: None,
             name: "Pilot One".into(),

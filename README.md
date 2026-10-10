@@ -83,6 +83,26 @@ Confirmed extraction produces a mining beam and impact feedback. Warp effects fo
 the authoritative route. These effects do not issue extra mining commands or change
 inventory. Procedural cockpit/world assets remain a prototype.
 
+## Ships and physical scale
+
+Open **Hangar** in the services strip while docked to board a preview hull. The
+server saves your selection; all clients render the same hull at its physical size.
+
+| Hull | Length | Width | Height |
+|---|---:|---:|---:|
+| Pioneer | 72 m | 38 m | 18 m |
+| Prospector | 180 m | 92 m | 64 m |
+| Hauler | 420 m | 180 m | 140 m |
+| Vanguard | 1,100 m | 380 m | 260 m |
+
+Arkline Station spans 20 km and stands 6 km high. Its navigation marker identifies
+the docking port; docking range is measured to that port, not the station center.
+Hull dimensions and world distances use meters, with one render unit representing
+100 meters after camera-relative rebasing. Hulls have distinct procedural shapes.
+The preview hangar does not charge credits; boarding preserves cargo and economic
+history. All four hulls currently share flight tuning and cargo capacity. Ship
+production, hull ownership markets and physical collisions are not implemented.
+
 ## Cockpit layout and services
 
 Space fills the entire gameplay window behind the cockpit. Session controls, overview,

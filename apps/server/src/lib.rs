@@ -290,6 +290,7 @@ impl Server {
                         pilot.clone(),
                         Pilot {
                             view: PilotView {
+                                ship_class: ShipClass::default(),
                                 name: pilot.clone(),
                                 credits: STARTER_CREDITS,
                                 ore: 0,
@@ -427,6 +428,14 @@ impl Server {
                         f.mode = mode;
                         f.updated_at_ms = now;
                         message = "Navigation accepted";
+                    }
+                    Request::SelectShip { ship_class } => {
+                        ensure!(
+                            pilot.view.location == Location::Docked,
+                            "ship selection requires docking"
+                        );
+                        pilot.view.ship_class = ship_class;
+                        message = "Ship selected";
                     }
                     Request::Undock => {
                         ensure!(pilot.view.location == Location::Docked, "must be docked");

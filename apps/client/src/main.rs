@@ -169,6 +169,7 @@ fn worker(
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ServiceTab {
+    Hangar,
     Cargo,
     Exchange,
     Activity,
@@ -684,6 +685,11 @@ impl Cockpit {
                 );
                 ui.small(format!("{} CR", pilot.credits));
             });
+            columns[0].small(format!(
+                "{} · {}",
+                pilot.ship_class.spec().name,
+                format_distance(pilot.ship_class.spec().length_m)
+            ));
             let speed = pilot.flight.as_ref().map_or(0.0, |f| {
                 let velocity = f
                     .warp
@@ -990,7 +996,10 @@ impl Cockpit {
             {
                 self.send(Request::Dock);
             }
-            ui.small(format!("Docking range: {}", format_distance(DOCK_RANGE)));
+            ui.small(format!(
+                "Docking port access: {}",
+                format_distance(DOCK_RANGE)
+            ));
         }
         if let Some(asteroid) = self.selected_asteroid().cloned() {
             let locked = self
@@ -1062,7 +1071,12 @@ impl Cockpit {
         match self.selected_object.clone() {
             SelectedObject::Station => {
                 ui.heading("Arkline Station");
-                ui.small("Docking and exchange services");
+                ui.small(format!(
+                    "{} span · {} high",
+                    format_distance(STATION_DIAMETER_M),
+                    format_distance(STATION_HEIGHT_M)
+                ));
+                ui.small("Range is measured to the docking port");
             }
             SelectedObject::Belt => {
                 ui.heading("Asteroid field");
@@ -1094,6 +1108,11 @@ impl Cockpit {
                     .and_then(|s| s.pilots.iter().find(|p| p.name == name))
                 {
                     ui.small(location_label(&p.location));
+                    ui.small(format!(
+                        "{} · {} hull",
+                        p.ship_class.spec().name,
+                        format_distance(p.ship_class.spec().length_m)
+                    ));
                     let online = self
                         .snapshot
                         .as_ref()
@@ -1235,6 +1254,60 @@ impl Cockpit {
                         }
                     });
             });
+    }
+    fn hangar_panel(&mut self, ui: &mut egui::Ui) {
+        let Some(pilot) = self.own() else {
+            return;
+        };
+        ui.colored_label(self.accent(), egui::RichText::new("SHIP HANGAR").strong());
+        ui.label("Select a hull while docked, then undock to fly it.");
+        ui.small("Preview fleet · no charge · cargo and credits stay aboard");
+        if pilot.location != Location::Docked {
+            ui.colored_label(AMBER, "Dock at the station to change ships.");
+        }
+        let enabled = self.can_operate() && pilot.location == Location::Docked;
+        for class in [
+            ShipClass::Pioneer,
+            ShipClass::Prospector,
+            ShipClass::Hauler,
+            ShipClass::Vanguard,
+        ] {
+            let spec = class.spec();
+            ui.separator();
+            ui.horizontal(|ui| {
+                ui.strong(spec.name);
+                ui.small(format!(
+                    "{} × {} × {}",
+                    format_distance(spec.length_m),
+                    format_distance(spec.width_m),
+                    format_distance(spec.height_m)
+                ));
+                if pilot.ship_class == class {
+                    ui.colored_label(self.accent(), "ACTIVE");
+                } else if ui
+                    .add_enabled(enabled, egui::Button::new("Board ship"))
+                    .clicked()
+                {
+                    self.send(Request::SelectShip { ship_class: class });
+                }
+            });
+            let (rect, _) =
+                ui.allocate_exact_size(Vec2::new(ui.available_width(), 10.0), egui::Sense::hover());
+            let width = rect.width() * (spec.length_m / 1100.0) as f32;
+            ui.painter().rect_filled(
+                egui::Rect::from_min_size(rect.min, Vec2::new(width, 6.0)),
+                1.0,
+                self.accent(),
+            );
+        }
+        ui.separator();
+        ui.small("Hull bars share one scale. All preview hulls currently use the same flight tuning and cargo capacity.");
+        ui.label(format!(
+            "Arkline Station: {} span / {} high",
+            format_distance(STATION_DIAMETER_M),
+            format_distance(STATION_HEIGHT_M)
+        ));
+        ui.small("Dimensions and navigation distances use the same world meters.");
     }
     fn cargo_panel(&mut self, ui: &mut egui::Ui) {
         if let Some(pilot) = self.own() {
@@ -2214,6 +2287,7 @@ impl eframe::App for Cockpit {
                         self.overview_open = true;
                     }
                     for (tab, label) in [
+                        (ServiceTab::Hangar, "Hangar"),
                         (ServiceTab::Cargo, "Cargo"),
                         (ServiceTab::Exchange, "Exchange"),
                         (ServiceTab::Activity, "Activity"),
@@ -2280,6 +2354,7 @@ impl eframe::App for Cockpit {
                 .show(ctx, |ui| {
                     ui.horizontal_wrapped(|ui| {
                         for (tab, label) in [
+                            (ServiceTab::Hangar, "Hangar"),
                             (ServiceTab::Cargo, "Cargo"),
                             (ServiceTab::Exchange, "Exchange"),
                             (ServiceTab::Activity, "Activity"),
@@ -2291,6 +2366,7 @@ impl eframe::App for Cockpit {
                     });
                     ui.separator();
                     match self.service_tab {
+                        ServiceTab::Hangar => self.hangar_panel(ui),
                         ServiceTab::Cargo => self.cargo_panel(ui),
                         ServiceTab::Exchange => self.market(ui),
                         ServiceTab::Ledger => self.ledger_panel(ui),
@@ -2535,6 +2611,141 @@ mod tests {
     use std::net::TcpListener;
 
     #[test]
+    fn hangar_boards_docked_hull_and_waits_for_confirmation_but_disables_in_space() {
+        let ctx = egui::Context::default();
+        let cc = eframe::CreationContext::_new_kittest(ctx.clone());
+        let mut cockpit = Cockpit::new(
+            &cc,
+            "fixture".into(),
+            std::env::temp_dir().join("arkline-headless-hangar-unused"),
+            None,
+        );
+        cockpit.connected = true;
+        cockpit.pilot = "pilot".into();
+        cockpit.snapshot = Some(Snapshot {
+            server_time_ms: 0,
+            asteroids: vec![],
+            online_pilots: vec![],
+            orders: vec![],
+            belt_ore: 0,
+            ledger_sequence: 0,
+            ledger_hash: String::new(),
+            pilots: vec![PilotView {
+                name: "pilot".into(),
+                system_id: HOME_SYSTEM_ID,
+                ship_class: ShipClass::Pioneer,
+                locked_asteroid: None,
+                credits: 100,
+                ore: 25,
+                location: Location::Docked,
+                flight: None,
+            }],
+        });
+        let (tx, rx) = mpsc::channel();
+        cockpit.commands = Some(tx);
+        let render = |cockpit: &mut Cockpit, events: Vec<egui::Event>| {
+            let output = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        Pos2::ZERO,
+                        Vec2::new(900.0, 650.0),
+                    )),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| cockpit.hangar_panel(ui));
+                },
+            );
+            output
+                .shapes
+                .into_iter()
+                .filter_map(|shape| {
+                    if let egui::Shape::Text(text) = shape.shape {
+                        Some((
+                            text.galley.job.text.clone(),
+                            text.pos + text.galley.rect.center().to_vec2(),
+                        ))
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>()
+        };
+        let click = |cockpit: &mut Cockpit, point: Pos2| {
+            render(
+                cockpit,
+                vec![
+                    egui::Event::PointerMoved(point),
+                    egui::Event::PointerButton {
+                        pos: point,
+                        button: egui::PointerButton::Primary,
+                        pressed: true,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ],
+            );
+            render(
+                cockpit,
+                vec![egui::Event::PointerButton {
+                    pos: point,
+                    button: egui::PointerButton::Primary,
+                    pressed: false,
+                    modifiers: egui::Modifiers::NONE,
+                }],
+            );
+        };
+        let labels = render(&mut cockpit, vec![]);
+        let active = labels.iter().find(|(text, _)| text == "ACTIVE").unwrap().1;
+        let pioneer = labels
+            .iter()
+            .find(|(text, _)| text == ShipClass::Pioneer.spec().name)
+            .unwrap()
+            .1;
+        assert!((active.y - pioneer.y).abs() < 8.0);
+        let board = labels
+            .iter()
+            .find(|(text, _)| text == "Board ship")
+            .unwrap()
+            .1;
+        click(&mut cockpit, board);
+        assert!(matches!(
+            rx.try_recv().unwrap(),
+            Request::SelectShip {
+                ship_class: ShipClass::Prospector
+            }
+        ));
+        assert!(cockpit.request_pending);
+        assert_eq!(
+            cockpit.own().unwrap().ship_class,
+            ShipClass::Pioneer,
+            "selection must wait for server confirmation"
+        );
+        cockpit.snapshot.as_mut().unwrap().pilots[0].ship_class = ShipClass::Prospector;
+        cockpit.request_pending = false;
+        let labels = render(&mut cockpit, vec![]);
+        let active = labels.iter().find(|(text, _)| text == "ACTIVE").unwrap().1;
+        let selected = labels
+            .iter()
+            .find(|(text, _)| text == ShipClass::Prospector.spec().name)
+            .unwrap()
+            .1;
+        assert!((active.y - selected.y).abs() < 8.0);
+        cockpit.snapshot.as_mut().unwrap().pilots[0].location = Location::Station;
+        let labels = render(&mut cockpit, vec![]);
+        let board = labels
+            .iter()
+            .find(|(text, _)| text == "Board ship")
+            .unwrap()
+            .1;
+        click(&mut cockpit, board);
+        assert!(
+            rx.try_recv().is_err(),
+            "in-space button must not issue SelectShip"
+        );
+    }
+
+    #[test]
     fn floating_overlay_blocks_scene_pointer_but_empty_space_allows_it() {
         let ctx = egui::Context::default();
         let screen = egui::Rect::from_min_size(Pos2::ZERO, Vec2::new(900.0, 650.0));
@@ -2609,6 +2820,7 @@ mod tests {
     fn action_range_uses_physical_position_and_rejects_docked_or_transit() {
         let mut pilot = PilotView {
             name: "Range test".into(),
+            ship_class: ShipClass::default(),
             system_id: HOME_SYSTEM_ID,
             locked_asteroid: None,
             credits: 0,

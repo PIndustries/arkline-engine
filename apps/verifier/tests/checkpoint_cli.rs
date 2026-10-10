@@ -71,6 +71,7 @@ fn checkpoint_advances_only_after_full_verification() {
     entry.hash = entry.calculate_hash();
     export.snapshot.belt_ore = INITIAL_BELT_ORE;
     export.snapshot.pilots.push(PilotView {
+        ship_class: arkline_protocol::ShipClass::default(),
         system_id: HOME_SYSTEM_ID,
         locked_asteroid: None,
         name: "Alice".into(),

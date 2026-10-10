@@ -331,6 +331,7 @@ mod tests {
                 server_time_ms: 6000,
                 pilots: vec![
                     PilotView {
+                        ship_class: arkline_protocol::ShipClass::default(),
                         system_id: HOME_SYSTEM_ID,
                         locked_asteroid: None,
                         name: "Alice".into(),
@@ -340,6 +341,7 @@ mod tests {
                         flight: None,
                     },
                     PilotView {
+                        ship_class: arkline_protocol::ShipClass::default(),
                         system_id: HOME_SYSTEM_ID,
                         locked_asteroid: None,
                         name: "Bob".into(),

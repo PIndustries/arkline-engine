@@ -21,6 +21,12 @@ pub const AU_METERS: f64 = 149_597_870_700.0;
 pub const MAX_WARP_SPEED: f64 = AU_METERS;
 pub const WARP_ACCELERATION: f64 = AU_METERS * 0.5;
 pub const STATION_POSITION: [f64; 3] = [-4500.0, 0.0, 0.0];
+/// Station geometry surrounds a docking port on its positive-X surface.
+pub const STATION_DIAMETER_M: f64 = 20_000.0;
+pub const STATION_HEIGHT_M: f64 = 6_000.0;
+pub const STATION_CENTER_POSITION: [f64; 3] =
+    [STATION_POSITION[0] - STATION_DIAMETER_M / 2.0, 0.0, 0.0];
+
 pub const BELT_POSITION: [f64; 3] = [2.0 * AU_METERS, 0.0, 0.0];
 pub const MAX_SHIP_SPEED: f64 = 600.0;
 pub const SHIP_ACCELERATION: f64 = 150.0;
@@ -431,6 +437,9 @@ pub enum Request {
         translation: [f64; 3],
         rotation: [f64; 3],
     },
+    SelectShip {
+        ship_class: ShipClass,
+    },
     Undock,
     Warp {
         destination: Destination,
@@ -477,8 +486,53 @@ pub enum Location {
     },
 }
 
+/// Prototype hull selection changes physical dimensions, not cargo or dynamics.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ShipClass {
+    #[default]
+    Pioneer,
+    Prospector,
+    Hauler,
+    Vanguard,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ShipSpec {
+    pub name: &'static str,
+    pub length_m: f64,
+    pub width_m: f64,
+    pub height_m: f64,
+}
+
+pub const ALL_SHIP_CLASSES: [ShipClass; 4] = [
+    ShipClass::Pioneer,
+    ShipClass::Prospector,
+    ShipClass::Hauler,
+    ShipClass::Vanguard,
+];
+
+impl ShipClass {
+    pub const fn spec(self) -> ShipSpec {
+        let (name, length_m, width_m, height_m) = match self {
+            Self::Pioneer => ("Pioneer", 72.0, 38.0, 18.0),
+            Self::Prospector => ("Prospector", 180.0, 92.0, 64.0),
+            Self::Hauler => ("Hauler", 420.0, 180.0, 140.0),
+            Self::Vanguard => ("Vanguard", 1100.0, 380.0, 260.0),
+        };
+        ShipSpec {
+            name,
+            length_m,
+            width_m,
+            height_m,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PilotView {
+    #[serde(default)]
+    pub ship_class: ShipClass,
     pub name: String,
     pub credits: u64,
     pub ore: u64,

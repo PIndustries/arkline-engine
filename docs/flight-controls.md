@@ -92,3 +92,10 @@ arkline --pilot TestPilot jump 101
 
 Keep the GUI and CLI credential stores separate unless deliberately transferring
 credentials. These examples use a dedicated command-client pilot.
+
+## Hull selection and station scale
+
+Use Services → Hangar while docked to board Pioneer (72 m), Prospector (180 m),
+Hauler (420 m) or Vanguard (1.1 km). Selection persists on the server and is rejected
+while in space. Preview hulls share movement tuning and cargo capacity. The station
+is 20 km across and 6 km high. Station ranges identify the docking port.
