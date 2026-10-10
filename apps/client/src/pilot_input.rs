@@ -169,14 +169,19 @@ impl PilotInput {
                     axis(egui::Key::Space, egui::Key::C),
                     axis(egui::Key::D, egui::Key::A),
                 ],
-                rotation: [
-                    axis(egui::Key::E, egui::Key::Q),
-                    (axis(egui::Key::ArrowLeft, egui::Key::ArrowRight)
-                        - delta.x as f64 * 0.002 / dt)
-                        .clamp(-1.0, 1.0),
-                    (axis(egui::Key::ArrowUp, egui::Key::ArrowDown) - delta.y as f64 * 0.002 / dt)
-                        .clamp(-1.0, 1.0),
-                ],
+                rotation: if i.modifiers.shift {
+                    [0.0; 3]
+                } else {
+                    [
+                        axis(egui::Key::E, egui::Key::Q),
+                        (axis(egui::Key::ArrowLeft, egui::Key::ArrowRight)
+                            - delta.x as f64 * 0.002 / dt)
+                            .clamp(-1.0, 1.0),
+                        (axis(egui::Key::ArrowUp, egui::Key::ArrowDown)
+                            - delta.y as f64 * 0.002 / dt)
+                            .clamp(-1.0, 1.0),
+                    ]
+                },
             }
         });
         self.update(allowed && !escape, control)
@@ -185,6 +190,28 @@ impl PilotInput {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn shift_arrows_do_not_send_ship_rotation() {
+        let ctx = egui::Context::default();
+        let mut pilot = PilotInput::default();
+        let _ = ctx.run(
+            egui::RawInput {
+                focused: true,
+                modifiers: egui::Modifiers::SHIFT,
+                events: vec![egui::Event::Key {
+                    key: egui::Key::ArrowRight,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: egui::Modifiers::SHIFT,
+                }],
+                ..Default::default()
+            },
+            |ctx| {
+                assert_eq!(pilot.sample(ctx, true, None), None);
+            },
+        );
+    }
     #[test]
     fn remote_target_is_pinned_and_return_never_relabels_queued_thrust() {
         let mailbox = Mailbox::default();

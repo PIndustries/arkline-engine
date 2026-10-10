@@ -181,6 +181,9 @@ pub enum NavigationMode {
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FlightState {
+    /// Actual thruster acceleration from the last normal-space integration step.
+    #[serde(default)]
+    pub acceleration: [f64; 3],
     pub position: [f64; 3],
     pub velocity: [f64; 3],
     pub heading: [f64; 3],
@@ -414,6 +417,10 @@ pub const GENESIS_HASH: &str = "000000000000000000000000000000000000000000000000
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "command", rename_all = "snake_case")]
 pub enum Request {
+    OrbitDrone {
+        id: u64,
+        target: NavigationTarget,
+    },
     BeginRemoteControl {
         pilot: String,
     },
@@ -754,6 +761,9 @@ pub const DRONE_SPEED: f64 = 150.0;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum DroneMode {
+    Orbit {
+        target: NavigationTarget,
+    },
     Mining {
         target_id: u64,
     },
@@ -1347,7 +1357,8 @@ impl Request {
     pub fn is_remote_gameplay(&self) -> bool {
         matches!(
             self,
-            Self::PilotInput { .. }
+            Self::OrbitDrone { .. }
+                | Self::PilotInput { .. }
                 | Self::Navigate { .. }
                 | Self::Warp { .. }
                 | Self::Jump { .. }
@@ -1370,4 +1381,22 @@ impl Request {
                 | Self::DroneNavigate { .. }
         )
     }
+}
+
+/// Tunable inertial mass ratios; ore load adds up to half the empty hull mass.
+pub fn ship_acceleration(class: ShipClass, ore: u64) -> f64 {
+    let ratio = match class {
+        ShipClass::Pioneer => 1.0,
+        ShipClass::Prospector => 1.6,
+        ShipClass::Hauler => 3.0,
+        ShipClass::Vanguard => 6.0,
+        ShipClass::Borealis => 4.0,
+        ShipClass::Stratum => 9.0,
+        ShipClass::Monolith => 20.0,
+    };
+    SHIP_ACCELERATION
+        / (ratio * (1.0 + 0.5 * (ore as f64 / cargo_capacity(class) as f64).clamp(0.0, 1.0)))
+}
+pub fn ship_braking_acceleration(class: ShipClass, ore: u64) -> f64 {
+    ship_acceleration(class, ore) * 0.4
 }

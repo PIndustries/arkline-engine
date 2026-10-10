@@ -217,6 +217,14 @@ fn plan(w: &World, j: &mut Job, now: u64) -> Option<Request> {
                 };
                 return (f.mode != mode).then_some(Request::Navigate { mode });
             }
+            // Let the approach controller finish its mass-aware braking. Issuing
+            // Stop at the range edge would overshoot with a massive loaded hull.
+            if matches!(f.mode, NavigationMode::Approach { .. })
+                && f.velocity.iter().map(|v| v * v).sum::<f64>().sqrt() > 10.0
+            {
+                j.view.message = "Braking onto the mining approach".into();
+                return None;
+            }
             if !matches!(f.mode, NavigationMode::Stop) || f.velocity.iter().any(|v| v.abs() > 0.01)
             {
                 return Some(Request::Navigate {

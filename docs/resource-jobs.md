@@ -130,3 +130,27 @@ All cockpit service destinations are now visible as a wrapping button grid. The
 current page is highlighted; none are hidden in a More dropdown. Long page content
 scrolls within the physical screen while the service grid and ship actions stay
 visible.
+
+## Conversation and drone instructions
+
+The computer retains up to eight completed question/reply exchanges, bounded to
+16,000 characters, for the selected pilot. For example, “I want a mining
+expedition” can lead to a brief quantity question; answering “Fill the hold” uses
+that ship's current cargo capacity. The **Conversation** disclosure shows retained
+exchanges. Changing pilot or connection session clears context. Cancelled or failed
+interpretations do not become completed conversation turns, and previous tool
+interpretations are explicitly not proof that the server accepted or finished work.
+Current telemetry and job state remain the source of truth.
+
+The computer can also request **orbit an asteroid** or **hold position** for an
+existing deployed drone. Supply the drone ID and an asteroid ID, or use the current
+selected asteroid when unambiguous. If a needed argument is missing, the computer
+asks one short clarification. It checks the drone belongs to the selected ship and
+the asteroid exists in that ship's current system; the server still validates the
+command against the latest state.
+
+An own-ship drone instruction requires control of your own ship. For a delegated
+worker's drone instruction, first use **Take manual control** and wait for the
+matching server-confirmed lease. Viewing a worker's camera or granting resource-job
+permission alone does not route drone commands to it. If control does not match the
+selected ship, the instruction is not sent and the panel explains the next step.

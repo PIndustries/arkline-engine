@@ -108,8 +108,28 @@ fn commanded_flight_stops_and_survives_process_restart_without_economic_changes(
         mode: NavigationMode::Stop,
     });
     // Let authoritative braking finish without issuing more navigation commands.
-    thread::sleep(Duration::from_secs(3));
-    let stopped = client.request(Request::Snapshot).snapshot.unwrap();
+    let speed = moved.velocity.iter().map(|v| v * v).sum::<f64>().sqrt();
+    let stop_seconds =
+        speed / ship_braking_acceleration(moving.pilots[0].ship_class, moving.pilots[0].ore) + 2.0;
+    let deadline = std::time::Instant::now() + Duration::from_secs_f64(stop_seconds);
+    let stopped = loop {
+        let snapshot = client.request(Request::Snapshot).snapshot.unwrap();
+        if snapshot.pilots[0]
+            .flight
+            .as_ref()
+            .unwrap()
+            .velocity
+            .iter()
+            .all(|v| v.abs() < 0.1)
+        {
+            break snapshot;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "authoritative braking exceeded physical deadline"
+        );
+        thread::sleep(Duration::from_millis(100));
+    };
     let position = stopped.pilots[0].flight.as_ref().unwrap().position;
     assert!(stopped.pilots[0]
         .flight

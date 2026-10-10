@@ -27,7 +27,8 @@ pub(super) fn ensure_fleets(world: &mut World) -> Result<()> {
 pub(super) fn handles(r: &Request) -> bool {
     matches!(
         r,
-        Request::LaunchDrone
+        Request::OrbitDrone { .. }
+            | Request::LaunchDrone
             | Request::LaunchDroneClass { .. }
             | Request::RecallDrone
             | Request::DroneHold
@@ -121,7 +122,8 @@ pub(super) fn execute(world: &mut World, name: &str, request: Request, now: u64)
         return Ok(());
     }
     let id = match &request {
-        Request::RecallDroneById { id }
+        Request::OrbitDrone { id, .. }
+        | Request::RecallDroneById { id }
         | Request::DroneHoldById { id }
         | Request::DroneNavigateById { id, .. }
         | Request::AssignMiningDrone { id, .. }
@@ -143,6 +145,19 @@ pub(super) fn execute(world: &mut World, name: &str, request: Request, now: u64)
         "drone control signal lost; autonomous return active"
     );
     let mode = match request {
+        Request::OrbitDrone { target, .. } => {
+            let (system, position, _) = orbit_target(world, &target)
+                .context("orbit requires an available asteroid or pilot")?;
+            ensure!(
+                system == p.view.system_id,
+                "orbit target is in another system"
+            );
+            ensure!(
+                flight::distance(position, ship.position) < DRONE_MAX_RANGE,
+                "orbit target outside control range"
+            );
+            DroneMode::Orbit { target }
+        }
         Request::RecallDrone | Request::RecallDroneById { .. } => DroneMode::Returning,
         Request::DroneHold | Request::DroneHoldById { .. } => DroneMode::Hold,
         Request::DroneNavigate { position } | Request::DroneNavigateById { position, .. } => {
@@ -262,6 +277,7 @@ fn targets(world: &World) -> BTreeMap<(String, u64), (u32, [f64; 3])> {
 }
 pub(super) fn invalidate(world: &mut World) {
     let targets = targets(world);
+    let orbit_targets = orbit_catalog(world);
     for p in world.pilots.values_mut() {
         if !universe::normal(p) {
             clear(p);
@@ -277,6 +293,9 @@ pub(super) fn invalidate(world: &mut World) {
                 returning(d);
             }
             let invalid = match &d.mode {
+                DroneMode::Orbit { target } => orbit_targets
+                    .get(&orbit_key(target))
+                    .is_none_or(|(system, _, _)| *system != p.view.system_id),
                 DroneMode::Mining { target_id } => {
                     !p.view.locked_asteroids.contains(target_id)
                         || p.view.ore >= cargo_capacity(p.view.ship_class)
@@ -302,6 +321,7 @@ pub(super) fn invalidate(world: &mut World) {
 pub(super) fn advance(world: &mut World, now: u64) -> Vec<EconomicEvent> {
     invalidate(world);
     let positions = targets(world);
+    let orbit_targets = orbit_catalog(world);
     let mut attacks = Vec::new();
     let mut events = Vec::new();
     for (name, p) in &mut world.pilots {
@@ -313,6 +333,18 @@ pub(super) fn advance(world: &mut World, now: u64) -> Vec<EconomicEvent> {
         for mut d in fleet.drain(..) {
             let mode = d.mode.clone();
             match mode {
+                DroneMode::Orbit { target } => {
+                    if let Some((system, position, radius)) = orbit_targets.get(&orbit_key(&target))
+                    {
+                        if *system == p.view.system_id {
+                            orbit(&mut d, *position, *radius, now);
+                        } else {
+                            idle(&mut d);
+                        }
+                    } else {
+                        idle(&mut d);
+                    }
+                }
                 DroneMode::Hold => {}
                 DroneMode::Returning => {
                     if approach(&mut d, ship_position, 100.0, now) {
@@ -336,8 +368,7 @@ pub(super) fn advance(world: &mut World, now: u64) -> Vec<EconomicEvent> {
                     };
                     if p.view.ore >= cargo_capacity(p.view.ship_class) {
                         idle(&mut d);
-                    } else if approach(&mut d, a.position, a.radius + DRONE_MINING_RANGE * 0.8, now)
-                    {
+                    } else if orbit(&mut d, a.position, a.radius + DRONE_MINING_RANGE * 0.6, now) {
                         d.signal_strength = drone_signal_strength(d.position, ship_position);
                         if d.signal_strength <= 0.0 {
                             returning(&mut d);
@@ -398,7 +429,7 @@ pub(super) fn advance(world: &mut World, now: u64) -> Vec<EconomicEvent> {
                     if let Some((_, position)) =
                         positions.get(&(target_pilot.clone(), target_drone_id))
                     {
-                        approach(&mut d, *position, DRONE_ATTACK_RANGE * 0.5, now);
+                        orbit(&mut d, *position, DRONE_ATTACK_RANGE * 0.6, now);
                         if flight::distance(d.position, *position) <= DRONE_ATTACK_RANGE
                             && drone_signal_strength(d.position, ship_position) > 0.0
                         {
@@ -531,4 +562,87 @@ pub(super) fn validate(world: &World) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn orbit_key(target: &NavigationTarget) -> String {
+    match target {
+        NavigationTarget::Asteroid { id } => format!("asteroid:{id}"),
+        NavigationTarget::Pilot { pilot } => format!("pilot:{pilot}"),
+        _ => String::new(),
+    }
+}
+fn orbit_catalog(w: &World) -> BTreeMap<String, (u32, [f64; 3], f64)> {
+    let mut result = BTreeMap::new();
+    for a in &w.asteroids {
+        result.insert(
+            format!("asteroid:{}", a.id),
+            (a.system_id, a.position, a.radius + 300.0),
+        );
+    }
+    for (name, p) in &w.pilots {
+        if universe::normal(p) {
+            if let Some(f) = &p.view.flight {
+                result.insert(
+                    format!("pilot:{name}"),
+                    (
+                        p.view.system_id,
+                        f.position,
+                        hull_radius_m(p.view.ship_class) + 300.0,
+                    ),
+                );
+            }
+        }
+    }
+    result
+}
+fn orbit_target(w: &World, target: &NavigationTarget) -> Option<(u32, [f64; 3], f64)> {
+    orbit_catalog(w).remove(&orbit_key(target))
+}
+/// Continuous speed-limited tangent motion with radial correction. Never snaps to a ring.
+fn orbit(d: &mut DroneView, target: [f64; 3], radius: f64, now: u64) -> bool {
+    let mut remaining = (now.saturating_sub(d.updated_at_ms) as f64 / 1000.0).min(10.0);
+    let speed = drone_speed(d.class);
+    while remaining > 0.000001 {
+        let dt = remaining.min(0.05);
+        remaining -= dt;
+        let delta = std::array::from_fn::<_, 3, _>(|i| d.position[i] - target[i]);
+        let distance = delta.iter().map(|v| v * v).sum::<f64>().sqrt();
+        let radial = if distance > 0.001 {
+            delta.map(|v| v / distance)
+        } else {
+            [1.0, 0.0, 0.0]
+        };
+        let mut tangent = [-radial[2], 0.0, radial[0]];
+        let length = tangent.iter().map(|v| v * v).sum::<f64>().sqrt();
+        if length > 0.001 {
+            tangent = tangent.map(|v| v / length);
+        } else {
+            tangent = [1.0, 0.0, 0.0];
+        }
+        let correction = ((radius - distance) * 1.2).clamp(-speed, speed);
+        let tangential = if distance > radius + 200.0 {
+            0.0
+        } else {
+            speed * 0.7
+        };
+        let velocity =
+            std::array::from_fn::<_, 3, _>(|i| radial[i] * correction + tangent[i] * tangential);
+        let magnitude = velocity.iter().map(|v| v * v).sum::<f64>().sqrt();
+        d.velocity = velocity.map(|v| {
+            v * if magnitude > speed {
+                speed / magnitude
+            } else {
+                1.0
+            }
+        });
+        for i in 0..3 {
+            d.position[i] += d.velocity[i] * dt;
+        }
+        let actual = d.velocity.iter().map(|v| v * v).sum::<f64>().sqrt();
+        if actual > 0.001 {
+            d.heading = d.velocity.map(|v| v / actual);
+        }
+    }
+    d.updated_at_ms = now;
+    flight::distance(d.position, target) <= radius + 100.0
 }

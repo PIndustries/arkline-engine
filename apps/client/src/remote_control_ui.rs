@@ -23,6 +23,8 @@ impl Cockpit {
         self.selected_object = SelectedObject::Station;
         self.mining_target = None;
         self.tactical_system = false;
+        self.tactical_pan = [0.; 2];
+        self.tactical_zoom = 1.0;
     }
     pub(super) fn return_to_my_ship(&mut self) {
         let release = self.manual_remote.is_some()

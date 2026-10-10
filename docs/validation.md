@@ -546,3 +546,28 @@ with manual thrust while the player stayed docked. EndRemoteControl released the
 lease; a stale worker command was rejected, and an ordinary Undock command then
 operated the player's own ship through the unchanged authenticated session. This
 checks real command routing, rather than inferring it from a camera change.
+
+## Flight, sound and conversational control — 26.10.10.18
+
+Local workspace tests passed, including TCP journeys, server inertia/orbit tests,
+resource jobs, authorization and persistence. After the final sound-scene change,
+the client suite passed 112 tests with five opt-in tests ignored. Formatting and
+workspace Clippy with warnings denied passed. The actual audio-output callback
+opt-in test was run separately and passed on this Mac. It proves the device
+stream ran, not subjective audibility or mix quality. The actual Spark two-turn
+test also passed: a mining expedition clarification followed by “Fill the hold”
+yielded the correct cargo-capacity gathering intent without issuing gameplay commands.
+
+Regression coverage includes bounded/recentering Shift-arrow headlook, suppression
+of ship rotation while looking, 2D map zoom/pan math, acceleration-based nozzles,
+sound transition deduplication and stale-state suppression, preferences, and
+conversation/drone intent validation. Both renderer shader programs compiled and
+linked in native OpenGL 3.2 validation. The packaged application launched as build
+26.10.10.18, connected to an isolated local world and visibly rendered cockpit,
+asteroids and live gathering/warp telemetry. The observed HUD reported roughly
+119–121 FPS; that observation is not a performance benchmark.
+
+Native inspection stopped sending inputs when the owner began interacting with
+the preview. Full native headlook/pan acceptance, device switching, microphone
+muting/TTS ducking perception, lighting quality and subjective flight/sound feel
+remain owner validation items. The preview remains private and ad-hoc signed.

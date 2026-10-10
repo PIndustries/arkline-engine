@@ -74,6 +74,7 @@ impl Cockpit {
         None
     }
     pub(super) fn invalidate_ai_session(&mut self) {
+        self.ship_ai.clear_context();
         self.connection_generation = self.connection_generation.wrapping_add(1);
         self.cancel_ai();
     }
@@ -98,11 +99,14 @@ impl Cockpit {
         }
         if let Some(pilot) = self.resource_ship() {
             self.ai_pin = Some((pilot.name.clone(), self.connection_generation));
-            self.ship_ai.request(
-                &self.ai_prompt,
-                &pilot,
-                self.snapshot.as_ref().map_or(0, |s| s.server_time_ms),
-            );
+            if let Some(snapshot) = &self.snapshot {
+                self.ship_ai.request_with_context(
+                    &self.ai_prompt,
+                    &pilot,
+                    snapshot,
+                    self.selected_target(),
+                );
+            }
         }
     }
     fn speak_reply(&mut self, text: &str) {
@@ -212,11 +216,27 @@ impl Cockpit {
                                 self.ai_message.push_str("\nNo cancellable job available, or server confirmation is pending.");
                             }
                         }
+                        Some(ship_ai::AiIntent::OrbitDrone { id, target }) => {
+                            self.send_ai_drone(Request::OrbitDrone { id, target })
+                        }
+                        Some(ship_ai::AiIntent::HoldDrone { id }) => {
+                            self.send_ai_drone(Request::DroneHoldById { id })
+                        }
                         Some(ship_ai::AiIntent::ReportStatus) | None => {}
                     }
                 }
             }
             self.speak_reply(&self.ai_message.clone());
+        }
+    }
+    fn send_ai_drone(&mut self, request: Request) {
+        let same_target = self.controlled_name() == self.resource_name();
+        let permitted = self.resource_name() == self.pilot
+            || self.controlled_remote() == Some(self.resource_name());
+        if self.can_operate() && self.resource_fresh() && same_target && permitted {
+            self.send(request);
+        } else {
+            self.ai_message.push_str("\nNot sent: take manual control of the selected worker first (or return to your own ship for an own-ship order), and wait for server confirmation.");
         }
     }
     pub(super) fn resource_job_panel(&mut self, ui: &mut egui::Ui) {
@@ -242,6 +262,7 @@ impl Cockpit {
                 }
             });
         if old != self.resource_pilot {
+            self.ship_ai.clear_context();
             self.cancel_ai();
             self.ai_message.clear();
             self.voice_transcript.clear();
@@ -382,6 +403,13 @@ impl Cockpit {
         if !self.ai_message.is_empty() {
             ui.label(&self.ai_message);
         }
+        ui.collapsing("Conversation", |ui| {
+            for (question, answer) in self.ship_ai.conversation() {
+                ui.label(format!("You: {question}"));
+                ui.small(format!("Computer: {answer}"));
+                ui.separator();
+            }
+        });
         ui.horizontal_wrapped(|ui| {
             if ui
                 .add_enabled(

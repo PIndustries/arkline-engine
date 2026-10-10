@@ -12,3 +12,4 @@ sha2.workspace = true
 hex.workspace = true
 eframe = "0.31"
 glam = "=0.29.3"
+cpal = "=0.15.3"

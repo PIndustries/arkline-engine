@@ -185,6 +185,7 @@ mod tests {
                 drone: None,
                 drones: vec![],
                 flight: Some(FlightState {
+                    acceleration: [0.; 3],
                     warp: None,
                     orientation: [0.0, 0.0, 0.0, 1.0],
                     angular_velocity: [0.0; 3],

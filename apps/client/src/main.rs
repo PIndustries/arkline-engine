@@ -11,6 +11,9 @@ mod resource_jobs_ui;
 mod sandbox;
 mod services;
 mod ship_ai;
+mod sound_engine;
+mod sound_scene;
+mod sound_settings;
 mod target_controls;
 mod theme;
 #[cfg(test)]
@@ -394,6 +397,9 @@ struct Cockpit {
     notice: String,
     view_mode: ViewMode,
     tactical_system: bool,
+    tactical_pan: [f64; 2],
+    tactical_zoom: f64,
+    tactical_drag: bool,
     motion: motion::MotionHistory,
     timeline_origin: Option<u64>,
     flight_view: flight3d::FlightView,
@@ -429,6 +435,9 @@ struct Cockpit {
     audit_result: Option<Result<String, String>>,
     request_pending: bool,
     effects: effects::Effects,
+    sound: sound_engine::SoundEngine,
+    sound_scene: sound_scene::Scene,
+    sound_settings: sound_settings::SoundSettings,
     theme: theme::Theme,
     settings_notice: String,
     navigation_range: f64,
@@ -445,6 +454,7 @@ impl Cockpit {
         data_dir: PathBuf,
         credential_scope: Option<String>,
     ) -> Self {
+        let sound_settings = sound_settings::SoundSettings::load(&data_dir);
         let theme = theme::Theme::load(&data_dir);
         let layout = layout::Layout::load(&data_dir);
         theme.apply(&cc.egui_ctx);
@@ -475,6 +485,9 @@ impl Cockpit {
             notice: String::new(),
             view_mode: ViewMode::Cockpit,
             tactical_system: false,
+            tactical_pan: [0.0; 2],
+            tactical_zoom: 1.0,
+            tactical_drag: false,
             motion: motion::MotionHistory::default(),
             timeline_origin: None,
             flight_view: flight3d::FlightView::new(cc.gl.as_ref()),
@@ -510,6 +523,9 @@ impl Cockpit {
             audit_result: None,
             request_pending: false,
             effects: effects::Effects::default(),
+            sound: sound_engine::SoundEngine::default(),
+            sound_scene: sound_scene::Scene::default(),
+            sound_settings,
             theme,
             settings_notice: String::new(),
             navigation_range: 500.0,
@@ -524,6 +540,19 @@ impl Cockpit {
         self.theme.accent()
     }
     fn settings_panel(&mut self, ui: &mut egui::Ui) {
+        let action = self.sound_settings.ui(ui, &self.sound.status());
+        if action.changed {
+            if let Err(error) = self.sound_settings.save(&self.data_dir) {
+                self.settings_notice = error;
+            }
+        }
+        if action.retry {
+            self.sound.retry();
+        }
+        if action.test {
+            self.sound.cue(sound_engine::Cue::Ui);
+        }
+        ui.separator();
         ui.small("VIEW MODE");
         ui.horizontal_wrapped(|ui| self.view_selector(ui));
         ui.separator();
@@ -586,6 +615,24 @@ impl Cockpit {
         self.feed.push_front((text, error));
         self.feed.truncate(60);
     }
+    fn update_sound(&mut self) {
+        let now = self.timeline_origin.map_or(0, |t| {
+            t.saturating_add(self.observed.elapsed().as_millis() as u64)
+        });
+        let name = self.controlled_name().to_owned();
+        let (mut mix, cues) =
+            self.sound_scene
+                .update(self.snapshot.as_ref(), &name, self.connected, now);
+        mix.master = self.sound_settings.master;
+        mix.ambience = self.sound_settings.ambience;
+        mix.effects = self.sound_settings.effects;
+        mix.muted = self.sound_settings.muted || self.voice.is_listening();
+        mix.ducked = self.voice.is_speaking();
+        self.sound.set_mix(mix);
+        for cue in cues {
+            self.sound.cue(cue);
+        }
+    }
     fn presentation_time(&self) -> u64 {
         self.frozen_time.unwrap_or_else(|| {
             self.timeline_origin.map_or(0, |origin| {
@@ -594,6 +641,7 @@ impl Cockpit {
         })
     }
     fn connect(&mut self) {
+        self.sound_scene.reset();
         self.invalidate_ai_session();
         self.resource_pilot = None;
         self.remote_ship = None;
@@ -1054,8 +1102,19 @@ impl Cockpit {
         ui.selectable_value(&mut self.view_mode, ViewMode::External, "3D External");
         ui.selectable_value(&mut self.view_mode, ViewMode::Cockpit, "Cockpit");
         if self.view_mode == ViewMode::Tactical {
+            let previous = self.tactical_system;
             ui.selectable_value(&mut self.tactical_system, false, "Local");
             ui.selectable_value(&mut self.tactical_system, true, "System");
+            if previous != self.tactical_system || ui.button("Reset map").clicked() {
+                self.tactical_pan = [0.0; 2];
+                self.tactical_zoom = 1.0;
+            }
+            if ui.button("Focus my ship").clicked() {
+                self.tactical_system = false;
+                self.tactical_pan = [0.0; 2];
+                self.tactical_zoom = 1.0;
+            }
+            ui.small("Wheel: zoom at cursor · drag empty space: pan");
         }
     }
     fn mining_status(&self) -> (String, Option<f32>) {
@@ -1367,6 +1426,7 @@ impl Cockpit {
                         .clicked()
                     {
                         self.service_tab = tab;
+                        self.sound.cue(sound_engine::Cue::Ui);
                     }
                 }
             });
@@ -2287,31 +2347,66 @@ impl Cockpit {
             .as_ref()
             .and_then(|s| s.pilots.iter().find(|p| p.name == self.controlled_name()))
             .map_or(STATION_POSITION, |p| motion::position(p, now));
-        let center = if self.tactical_system {
+        let base = if self.tactical_system {
             [0.0; 3]
         } else {
             own_position
         };
-        let span = if self.tactical_system {
+        let base_span = if self.tactical_system {
             AU_METERS * 20.0
         } else {
             32000.0
         };
+        let (rect, response) = ui.allocate_exact_size(
+            Vec2::new(ui.available_width(), ui.available_height().max(220.0)),
+            egui::Sense::click_and_drag(),
+        );
+        let world_input = scene_pointer_allowed(ui.ctx(), ui.layer_id(), rect);
+        if world_input {
+            if let Some(pointer) = ui.input(|i| i.pointer.hover_pos()) {
+                let scroll = ui.input(|i| i.smooth_scroll_delta.y);
+                if scroll != 0.0 {
+                    tactical_zoom_at(
+                        rect,
+                        pointer,
+                        base,
+                        base_span,
+                        &mut self.tactical_pan,
+                        &mut self.tactical_zoom,
+                        scroll,
+                    );
+                }
+            }
+            if response.dragged() && self.tactical_drag {
+                let delta = ui.input(|i| i.pointer.delta());
+                let meters =
+                    base_span * self.tactical_zoom / rect.width().min(rect.height()) as f64;
+                self.tactical_pan[0] -= delta.x as f64 * meters;
+                self.tactical_pan[1] -= delta.y as f64 * meters;
+            }
+        }
+        if !response.dragged() {
+            self.tactical_drag = false;
+        }
+        let center = [
+            base[0] + self.tactical_pan[0],
+            base[1],
+            base[2] + self.tactical_pan[1],
+        ];
+        let span = base_span * self.tactical_zoom;
         let tactical_scale = |rect: egui::Rect| rect.width().min(rect.height()) as f64 / span;
         let tactical_project =
             |rect: egui::Rect, point: [f64; 3]| map_project(rect, point, center, span);
         let tactical_unproject = |rect: egui::Rect, point: Pos2, altitude: f64| {
             map_unproject(rect, point, center, span, altitude)
         };
-
-        let (rect, response) = ui.allocate_exact_size(
-            Vec2::new(ui.available_width(), ui.available_height().max(220.0)),
-            egui::Sense::click(),
-        );
-        let world_input = scene_pointer_allowed(ui.ctx(), ui.layer_id(), rect);
-        let clicked = (world_input && (response.clicked() || response.secondary_clicked()))
-            .then(|| response.interact_pointer_pos())
-            .flatten();
+        let clicked = if world_input && response.drag_started() {
+            ui.input(|i| i.pointer.press_origin())
+        } else if world_input && (response.clicked() || response.secondary_clicked()) {
+            response.interact_pointer_pos()
+        } else {
+            None
+        };
         let mut selected = None;
         let mut hit_score = f32::INFINITY;
         let mut pick = |center: Pos2, radius: f32, object: SelectedObject| {
@@ -2691,8 +2786,13 @@ impl Cockpit {
             );
         }
         let hit_object = selected.is_some();
-        if let Some(selected) = selected {
-            self.selected_object = selected;
+        if world_input && response.drag_started() {
+            self.tactical_drag = !hit_object;
+        }
+        if response.clicked() || response.secondary_clicked() {
+            if let Some(selected) = selected {
+                self.selected_object = selected;
+            }
         }
         if world_input
             && !self.tactical_system
@@ -2818,6 +2918,23 @@ impl Cockpit {
         }
     }
 }
+fn tactical_zoom_at(
+    rect: egui::Rect,
+    cursor: Pos2,
+    base: [f64; 3],
+    base_span: f64,
+    pan: &mut [f64; 2],
+    zoom: &mut f64,
+    scroll: f32,
+) {
+    let center = [base[0] + pan[0], base[1], base[2] + pan[1]];
+    let before = map_unproject(rect, cursor, center, base_span * *zoom, base[1]);
+    *zoom = (*zoom * (-scroll as f64 * 0.004).exp())
+        .clamp(100.0 / base_span, AU_METERS * 100.0 / base_span);
+    let after = map_unproject(rect, cursor, center, base_span * *zoom, base[1]);
+    pan[0] += before[0] - after[0];
+    pan[1] += before[2] - after[2];
+}
 fn scene_pointer_allowed(ctx: &egui::Context, layer: egui::LayerId, rect: egui::Rect) -> bool {
     ctx.input(|i| i.pointer.hover_pos())
         .is_some_and(|point| rect.contains(point) && ctx.layer_id_at(point) == Some(layer))
@@ -2934,6 +3051,7 @@ impl eframe::App for Cockpit {
         self.sync_remote_control();
         self.poll_voice();
         self.poll_ship_ai();
+        self.update_sound();
         if self.boot.visible {
             let ready = self.connected && self.own().is_some();
             match self.boot.show(ctx, ready, self.connected, &self.notice) {
@@ -3140,6 +3258,7 @@ impl eframe::App for Cockpit {
                                 .clicked()
                             {
                                 self.service_tab = tab;
+                                self.sound.cue(sound_engine::Cue::Ui);
                                 self.services_open = true;
                             }
                         }
@@ -3294,7 +3413,10 @@ impl eframe::App for Cockpit {
             }
             self.services_open = open;
         }
-        if self.view_mode == ViewMode::Cockpit {
+        if self.view_mode == ViewMode::Cockpit
+            && !self.flight_view.head_looking()
+            && !ctx.input(|i| i.modifiers.shift)
+        {
             {
                 let rect = flight3d::cockpit_console_bounds(
                     ctx.available_rect(),
@@ -3566,6 +3688,7 @@ fn main() -> eframe::Result<()> {
         options,
         Box::new(move |cc| {
             let mut cockpit = Cockpit::new(cc, server, data_dir, credential_scope);
+            cockpit.sound.start();
             cockpit.local_server = local_server;
             if let Some(error) = startup_error {
                 cockpit.notice = error;
@@ -3886,6 +4009,79 @@ mod tests {
         assert_eq!(cockpit.ai_prompt, "Gather 20 ore");
     }
 
+    #[test]
+    fn tactical_cursor_zoom_preserves_anchor_and_bounds_span() {
+        let rect = egui::Rect::from_min_size(Pos2::ZERO, Vec2::new(1000.0, 700.0));
+        let point = Pos2::new(700.0, 400.0);
+        let base = [AU_METERS, 0.0, -AU_METERS];
+        let mut pan = [0.0; 2];
+        let mut zoom = 1.0;
+        let before = map_unproject(rect, point, base, 32000.0, 0.0);
+        tactical_zoom_at(rect, point, base, 32000.0, &mut pan, &mut zoom, 120.0);
+        let after = map_unproject(
+            rect,
+            point,
+            [base[0] + pan[0], 0.0, base[2] + pan[1]],
+            32000.0 * zoom,
+            0.0,
+        );
+        assert!((before[0] - after[0]).abs() < 0.001 && (before[2] - after[2]).abs() < 0.001);
+        tactical_zoom_at(rect, point, base, 32000.0, &mut pan, &mut zoom, 1e6);
+        assert_eq!(32000.0 * zoom, 100.0);
+        tactical_zoom_at(rect, point, base, 32000.0, &mut pan, &mut zoom, -1e6);
+        assert_eq!(32000.0 * zoom, AU_METERS * 100.0);
+    }
+
+    #[test]
+    fn tactical_empty_drag_pans_without_selecting_or_sending_navigation() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        cockpit.view_mode = ViewMode::Tactical;
+        let original = cockpit.selected_object.clone();
+        let (tx, rx) = mpsc::channel();
+        cockpit.commands = Some(tx);
+        let start = Pos2::new(250.0, 150.0);
+        let end = start + Vec2::new(70.0, 40.0);
+        for events in [
+            vec![],
+            vec![],
+            vec![
+                egui::Event::PointerMoved(start),
+                egui::Event::PointerButton {
+                    pos: start,
+                    button: egui::PointerButton::Primary,
+                    pressed: true,
+                    modifiers: Default::default(),
+                },
+            ],
+            vec![egui::Event::PointerMoved(start + Vec2::new(20.0, 10.0))],
+            vec![egui::Event::PointerMoved(end)],
+            vec![egui::Event::PointerButton {
+                pos: end,
+                button: egui::PointerButton::Primary,
+                pressed: false,
+                modifiers: Default::default(),
+            }],
+        ] {
+            let _ = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        Pos2::ZERO,
+                        Vec2::new(900.0, 650.0),
+                    )),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| cockpit.scene(ui));
+                },
+            );
+        }
+        assert!(cockpit.tactical_pan[0] < 0.0 && cockpit.tactical_pan[1] < 0.0);
+        assert!(cockpit.selected_object == original);
+        assert!(rx.try_recv().is_err());
+    }
+
     fn view_test_cockpit(ctx: &egui::Context) -> Cockpit {
         let cc = eframe::CreationContext::_new_kittest(ctx.clone());
         let mut cockpit = Cockpit::new(
@@ -3943,6 +4139,7 @@ mod tests {
                 ore: 25,
                 location: Location::Belt,
                 flight: Some(FlightState {
+                    acceleration: [0.; 3],
                     position: BELT_POSITION,
                     velocity: [0.0; 3],
                     heading: [1.0, 0.0, 0.0],
@@ -5591,6 +5788,7 @@ mod tests {
             ore: 0,
             location: Location::Station,
             flight: Some(FlightState {
+                acceleration: [0.; 3],
                 position: [BELT_POSITION[0] + MINING_RANGE, 0.0, 0.0],
                 velocity: [0.0; 3],
                 heading: [1.0, 0.0, 0.0],

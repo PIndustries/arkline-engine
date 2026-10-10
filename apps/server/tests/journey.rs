@@ -587,8 +587,12 @@ fn direct_piloting_over_tcp_expires_without_losing_roll() {
     let stopped_orientation = flight.orientation;
     let speed = |velocity: [f64; 3]| velocity.iter().map(|v| v * v).sum::<f64>().sqrt();
     let mut previous_speed = speed(flight.velocity);
-    let braking_deadline =
-        Instant::now() + Duration::from_secs_f64(previous_speed / SHIP_ACCELERATION + 2.0);
+    let braking_deadline = Instant::now()
+        + Duration::from_secs_f64(
+            previous_speed
+                / ship_braking_acceleration(expired.pilots[0].ship_class, expired.pilots[0].ore)
+                + 2.0,
+        );
     loop {
         let snapshot = client.ok(Request::Snapshot).snapshot.unwrap();
         let flight = snapshot.pilots[0].flight.as_ref().unwrap();

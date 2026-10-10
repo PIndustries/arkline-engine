@@ -223,6 +223,24 @@ impl Cockpit {
                     position: destination.unwrap(),
                 });
             }
+            let orbit_target = self.selected_target().filter(|t| {
+                matches!(
+                    t,
+                    NavigationTarget::Asteroid { .. } | NavigationTarget::Pilot { .. }
+                )
+            });
+            if ui
+                .add_enabled(
+                    controlled && orbit_target.is_some(),
+                    egui::Button::new("Orbit selected").small(),
+                )
+                .clicked()
+            {
+                self.send(Request::OrbitDrone {
+                    id,
+                    target: orbit_target.unwrap(),
+                });
+            }
             if drone.class == DroneClass::Mining {
                 let target = self.module_target(&p);
                 if ui
@@ -304,6 +322,7 @@ impl Cockpit {
 fn drone_mode_label(mode: &DroneMode) -> &'static str {
     match mode {
         DroneMode::Hold => "Holding",
+        DroneMode::Orbit { .. } => "Orbiting",
         DroneMode::FlyTo { .. } => "Flying",
         DroneMode::Returning => "Returning",
         DroneMode::Mining { .. } => "Mining",

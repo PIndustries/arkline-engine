@@ -1,8 +1,8 @@
 //! Native GPU flight view. Presentation only: never issues simulation commands.
 use arkline_protocol::{
     gates, systems, Asteroid, Destination, Location, NavigationMode, NavigationTarget, PilotView,
-    ShipClass, Snapshot, Stargate, BELT_POSITION, HOME_SYSTEM_ID, JUMP_DURATION_MS, MAX_SHIP_SPEED,
-    SPACE_BOUND, STATION_CENTER_POSITION, STATION_DIAMETER_M, STATION_HEIGHT_M, STATION_POSITION,
+    ShipClass, Snapshot, Stargate, BELT_POSITION, HOME_SYSTEM_ID, JUMP_DURATION_MS, SPACE_BOUND,
+    STATION_CENTER_POSITION, STATION_DIAMETER_M, STATION_HEIGHT_M, STATION_POSITION,
 };
 #[cfg(test)]
 use arkline_protocol::{WARP_DURATION_MS, WARP_WARMUP_MS};
@@ -199,6 +199,7 @@ fn navigation_destination(
 
 pub struct FlightView {
     renderer: Result<Arc<Mutex<Renderer>>, String>,
+    head_look: [f32; 2],
     yaw: f32,
     pitch: f32,
     distance: f32,
@@ -230,6 +231,7 @@ impl FlightView {
             .map(|r| Arc::new(Mutex::new(r)));
         Self {
             renderer,
+            head_look: [0.0; 2],
             yaw: 0.72,
             pitch: 0.35,
             distance: 27.0,
@@ -277,6 +279,9 @@ impl FlightView {
                 }
             }
         }
+    }
+    pub fn head_looking(&self) -> bool {
+        self.head_look.iter().any(|angle| angle.abs() > 0.002)
     }
     #[allow(clippy::too_many_arguments)]
     pub fn ui(
@@ -359,6 +364,7 @@ impl FlightView {
                     ui.label("Pilot seat · full six-axis flight");
                     ui.small("W/S: thrust · A/D: strafe · Space/C: vertical");
                     ui.small("Q/E: roll · Arrows: aim · RMB + mouse: aim");
+                    ui.small("Hold Shift + arrows: look around · release: recenter");
                     ui.small("Left-click: select · Release controls: neutral");
                     camera_content = Some(ui.max_rect().size());
                     return;
@@ -529,7 +535,22 @@ impl FlightView {
                 self.yaw.cos() * self.pitch.cos(),
             ) * self.distance;
         let rotation = own_pilot.map_or(Quat::IDENTITY, |p| ship_orientation_at(p, now));
-        let (eye, view) = if cockpit {
+        let looking = cockpit
+            && !ui.ctx().wants_keyboard_input()
+            && ui.input(|i| i.focused && i.modifiers.shift);
+        let axes = ui.input(|i| {
+            [
+                (i.key_down(egui::Key::ArrowLeft) as i32 - i.key_down(egui::Key::ArrowRight) as i32)
+                    as f32,
+                (i.key_down(egui::Key::ArrowUp) as i32 - i.key_down(egui::Key::ArrowDown) as i32)
+                    as f32,
+            ]
+        });
+        update_head_look(&mut self.head_look, looking, axes, dt);
+        let head_rotation = rotation
+            * Quat::from_rotation_y(self.head_look[0])
+            * Quat::from_rotation_z(self.head_look[1]);
+        let (eye, mut view) = if cockpit {
             cockpit_camera(
                 own_pilot.map_or(Vec3::ZERO, |p| {
                     let spec = p.ship_class.spec();
@@ -549,6 +570,10 @@ impl FlightView {
                 Mat4::look_at_rh(external_eye, self.target, Vec3::Y),
             )
         };
+        if cockpit {
+            view = Mat4::look_at_rh(eye, eye + head_rotation * Vec3::X, head_rotation * Vec3::Y);
+        }
+
         let projection = Mat4::perspective_rh_gl(
             if tactical {
                 1.22
@@ -1044,7 +1069,7 @@ impl FlightView {
                         }
                     }
                 }
-                if cockpit {
+                if cockpit && !self.head_looking() && !ui.input(|i| i.modifiers.shift) {
                     if let Some(own) = own_pilot {
                         paint_instruments(
                             &painter,
@@ -2128,16 +2153,15 @@ impl Renderer {
                     }
                     Some(("WARP ARRIVAL", progress)) => (4.0 - progress * 3.0, 1.7 - progress),
                     _ => {
-                        let speed = pilot.flight.as_ref().map_or(0.0, |flight| {
-                            flight
-                                .velocity
-                                .iter()
-                                .map(|value| value * value)
-                                .sum::<f64>()
-                                .sqrt()
-                        });
-                        let thrust = (speed / MAX_SHIP_SPEED).clamp(0.0, 1.0) as f32;
-                        (0.3 + thrust * 3.5, 0.25 + thrust * 1.35)
+                        let forward = if frame.connected {
+                            confirmed_body_acceleration(pilot, frame.now).x.max(0.0)
+                        } else {
+                            0.0
+                        };
+                        let thrust = (forward / arkline_protocol::SHIP_ACCELERATION as f32)
+                            .clamp(0.0, 1.0)
+                            .sqrt();
+                        (thrust * 4.0, thrust * 1.8)
                     }
                 };
                 let pulse = 1.0
@@ -2152,7 +2176,7 @@ impl Renderer {
                 );
                 for (_, model, _, _) in ship_parts(pilot.ship_class)
                     .into_iter()
-                    .filter(|p| p.3 > 0.0)
+                    .filter(|p| p.3 > 0.0 && intensity > 0.001)
                 {
                     let mount = model.transform_point3(Vec3::ZERO) / effect_scale;
                     for (width, brightness) in [(0.58, 0.10), (0.31, 0.62), (0.16, 1.0)] {
@@ -2165,6 +2189,43 @@ impl Renderer {
                             ),
                             Vec3::new(0.16, 0.48, 0.95) * brightness,
                             intensity,
+                        );
+                    }
+                }
+            }
+            if frame.connected && warp.is_none() {
+                let acceleration = confirmed_body_acceleration(pilot, frame.now);
+                let hull = transform(
+                    ship_position,
+                    Vec3::ONE,
+                    ship_orientation_at(pilot, frame.now),
+                );
+                for axis in 0..3 {
+                    let component = acceleration[axis];
+                    // Forward thrust already uses the modeled main engines.
+                    if component.abs() < 0.01 || (axis == 0 && component > 0.0) {
+                        continue;
+                    }
+                    let exhaust = -component.signum() * [Vec3::X, Vec3::Y, Vec3::Z][axis];
+                    let index = axis * 2 + usize::from(exhaust[axis] < 0.0);
+                    let Some(mount) = reaction_mounts(pilot.ship_class)[index] else {
+                        continue;
+                    };
+                    let strength = (component.abs() / arkline_protocol::SHIP_ACCELERATION as f32)
+                        .clamp(0.0, 1.0)
+                        .sqrt();
+                    let length = spec.length_m as f32 / 100.0 * (0.08 + strength * 0.16);
+                    let radius = spec.width_m as f32 / 100.0 * 0.028;
+                    for (width, brightness) in [(1.0, 0.13), (0.40, 0.85)] {
+                        self.draw(
+                            2,
+                            hull * transform(
+                                mount + exhaust * (length * 0.5),
+                                Vec3::new(length * 0.5, radius * width, radius * width),
+                                Quat::from_rotation_arc(Vec3::X, exhaust),
+                            ),
+                            Vec3::new(0.22, 0.58, 1.0) * brightness,
+                            2.2 * strength,
                         );
                     }
                 }
@@ -2346,6 +2407,19 @@ fn warp_tunnel_intensity(phase: &str, progress: f32) -> f32 {
         "WARP DECELERATING" => 1.0 - 0.85 * p,
         "WARP ARRIVAL" => 0.15 * (1.0 - p),
         _ => 0.0,
+    }
+}
+fn update_head_look(angles: &mut [f32; 2], held: bool, axes: [f32; 2], dt: f32) {
+    let dt = dt.clamp(0.0, 0.1);
+    for (index, angle) in angles.iter_mut().enumerate() {
+        if held {
+            *angle = (*angle + axes[index] * dt * 1.4).clamp(-1.25, 1.25);
+        } else {
+            *angle *= (-dt * 12.0).exp();
+            if angle.abs() < 0.002 {
+                *angle = 0.0;
+            }
+        }
     }
 }
 fn cockpit_camera(ship: Vec3, rotation: Quat) -> (Vec3, Mat4) {
@@ -2820,6 +2894,54 @@ fn turret_mount(class: ShipClass, module_id: u8) -> (Vec3, f32, f32) {
 fn turret_muzzle(class: ShipClass, rotation: Quat, module_id: u8) -> Vec3 {
     let (mount, radius, barrel) = turret_mount(class, module_id);
     mount + rotation * Vec3::X * (radius + barrel)
+}
+/// Measured server acceleration, transformed into body axes; velocity alone
+/// must never light a thrust plume while a ship is coasting.
+fn confirmed_body_acceleration(pilot: &PilotView, now: u64) -> Vec3 {
+    if !matches!(pilot.location, Location::Station | Location::Belt) {
+        return Vec3::ZERO;
+    }
+    let Some(flight) = &pilot.flight else {
+        return Vec3::ZERO;
+    };
+    if now.saturating_sub(flight.updated_at_ms) > 500
+        || !flight.acceleration.iter().all(|a| a.is_finite())
+    {
+        return Vec3::ZERO;
+    }
+    ship_orientation_at(pilot, now).inverse()
+        * Vec3::from_array(flight.acceleration.map(|v| v as f32))
+}
+/// Reaction nozzles sit on the actual outer hull mesh, cached once per class.
+fn reaction_mounts(class: ShipClass) -> &'static [Option<Vec3>; 6] {
+    static MOUNTS: std::sync::OnceLock<Vec<[Option<Vec3>; 6]>> = std::sync::OnceLock::new();
+    let mounts = MOUNTS.get_or_init(|| {
+        arkline_protocol::ALL_SHIP_CLASSES
+            .iter()
+            .map(|class| {
+                let geometry = ship_geometry(*class, Mat4::IDENTITY);
+                let distance = class
+                    .spec()
+                    .length_m
+                    .max(class.spec().height_m)
+                    .max(class.spec().width_m) as f32
+                    / 50.0;
+                std::array::from_fn(|index| {
+                    let outward = [Vec3::X, -Vec3::X, Vec3::Y, -Vec3::Y, Vec3::Z, -Vec3::Z][index];
+                    let source = outward * distance;
+                    geometry
+                        .iter()
+                        .filter_map(|(mesh, model)| ray_mesh_hit(source, -outward, *model, mesh))
+                        .min_by(f32::total_cmp)
+                        .map(|hit| source - outward * hit)
+                })
+            })
+            .collect()
+    });
+    &mounts[arkline_protocol::ALL_SHIP_CLASSES
+        .iter()
+        .position(|c| *c == class)
+        .unwrap()]
 }
 fn turret_deck(class: ShipClass, module_id: u8) -> f32 {
     static DECKS: std::sync::OnceLock<[f32; 14]> = std::sync::OnceLock::new();
@@ -3478,8 +3600,21 @@ float ark_noise3(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
 return mix(mix(mix(ark_hash3(i),ark_hash3(i+vec3(1,0,0)),f.x),mix(ark_hash3(i+vec3(0,1,0)),ark_hash3(i+vec3(1,1,0)),f.x),f.y),
 mix(mix(ark_hash3(i+vec3(0,0,1)),ark_hash3(i+vec3(1,0,1)),f.x),mix(ark_hash3(i+vec3(0,1,1)),ark_hash3(i+vec3(1,1,1)),f.x),f.y),f.z);}
 float ark_terrain(vec3 p){return ark_noise3(p)*0.53+ark_noise3(p*2.07+13.8)*0.27+ark_noise3(p*4.13-7.1)*0.13+ark_noise3(p*8.41+29.4)*0.07;}
+// Scene values stay linear until one filmic shoulder and one sRGB conversion.
+// The egui_glow callback target has FRAMEBUFFER_SRGB disabled.
+vec3 ark_display(vec3 x){x=max(x,vec3(0.0))*1.12;vec3 film=clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14),0.0,1.0);return mix(film*12.92,1.055*pow(film,vec3(1.0/2.4))-0.055,step(vec3(0.0031308),film));}
+vec3 ark_brdf(vec3 n,vec3 v,vec3 l,vec3 albedo,float roughness){
+    vec3 h=normalize(v+l);float nv=max(dot(n,v),0.001),nl=max(dot(n,l),0.0),nh=max(dot(n,h),0.0),vh=max(dot(v,h),0.0);
+    float a=roughness*roughness,a2=a*a,d=nh*nh*(a2-1.0)+1.0;
+    float distribution=a2/(3.14159265*d*d+0.0001);
+    float k=(roughness+1.0)*(roughness+1.0)/8.0;
+    float visibility=(nv/(nv*(1.0-k)+k))*(nl/(nl*(1.0-k)+k));
+    vec3 f0=mix(vec3(0.04),albedo,0.35);vec3 fresnel=f0+(1.0-f0)*pow(1.0-vh,5.0);
+    vec3 specular=distribution*visibility*fresnel/max(4.0*nv*nl,0.001);
+    return ((1.0-fresnel)*albedo/3.14159265+specular)*nl;
+}
 void main(){vec3 n=normalize(surface_normal);if(!gl_FrontFacing)n=-n;vec3 l=normalize(vec3(-0.5,0.8,0.65));vec3 v=normalize(eye-world);
-float diffuse=max(dot(n,l),0.0);float facing=max(dot(n,v),0.0);float rim=pow(1.0-facing,3.0);float spec=pow(max(dot(n,normalize(l+v)),0.0),38.0);
+float diffuse=max(dot(n,l),0.0);float facing=max(dot(n,v),0.0);float rim=pow(1.0-facing,3.0);
 vec3 lit;
 if(material_kind==1 || material_kind==2){
     vec3 sphere=material_kind==1 ? normalize(local_position) : normalize(world-planet_center);
@@ -3499,9 +3634,15 @@ if(material_kind==1 || material_kind==2){
     lit+=vec3(0.46,0.64,0.82)*pow(max(dot(n,normalize(l+v)),0.0),95.0)*(1.0-land)*(1.0-clouds)*0.5;
     lit+=vec3(0.11,0.36,0.75)*pow(1.0-facing,4.0)*(0.23+diffuse*0.85);
 }else{
-    lit=base_color*(0.16+diffuse*0.95)+vec3(0.1,0.21,0.3)*rim*0.7+vec3(0.8,0.88,1.0)*spec*0.42+base_color*emission;
+    vec3 albedo=max(base_color,vec3(0.0));
+    float roughness=mix(0.68,0.40,smoothstep(0.05,0.6,max(albedo.r,max(albedo.g,albedo.b))));
+    vec3 fill=normalize(vec3(0.65,0.16,-0.72));
+    lit=ark_brdf(n,v,l,albedo,roughness)*vec3(3.8,3.45,2.95);
+    lit+=ark_brdf(n,v,fill,albedo,roughness)*vec3(0.24,0.36,0.55);
+    lit+=albedo*mix(vec3(0.055,0.065,0.085),vec3(0.13,0.17,0.23),n.y*0.5+0.5);
+    lit+=albedo*max(emission,0.0);
 }
-color=vec4(pow(lit/(lit+vec3(0.7)),vec3(0.78)),1.0);}
+color=vec4(ark_display(lit),1.0);}
 "#;
 const BACK_VERTEX: &str = r#"#version 150
 out vec2 uv;void main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);uv=p;gl_Position=vec4(p*2.0-1.0,0.999,1.0);}
@@ -3514,7 +3655,7 @@ void main(){vec4 farpoint=inverse_view_projection*vec4(uv*2.0-1.0,1.0,1.0);vec3 
 float band=exp(-pow((p.y-0.4+sin(p.x*3.4)*0.16)*3.0,2.0));vec3 c=vec3(0.008,0.014,0.032)+vec3(0.032,0.07,0.125)*mist*band;
 c+=vec3(0.055,0.022,0.055)*pow(mist*0.6,3.0)*band;
 for(int i=0;i<2;i++){float scale=180.0+float(i)*155.0;vec2 grid=p*scale;vec2 cell=floor(grid);vec2 offset=vec2(hash(cell),hash(cell+13.7));float d=length(fract(grid)-offset);float seed=hash(cell+71.1);float star=(1.0-smoothstep(0.0,0.09,d))*step(0.972,seed);c+=mix(vec3(0.53,0.7,1.0),vec3(1.0,0.87,0.65),seed)*star*(0.5+seed*0.7);}
-vec2 sun=p-vec2(0.84,0.82);float flare=0.0018/(dot(sun,sun)+0.006);c+=vec3(0.17,0.28,0.40)*flare;float horizon=pow(1.0-abs(dot(direction,planet_up)),3.0);
+float sunFacing=max(dot(direction,normalize(vec3(-0.5,0.8,0.65))),0.0);float flare=pow(sunFacing,64.0)*0.15+pow(sunFacing,800.0)*0.45+smoothstep(0.99982,0.99996,sunFacing)*1.8;c+=vec3(1.0,0.88,0.70)*flare;float horizon=pow(1.0-abs(dot(direction,planet_up)),3.0);
 vec3 sky=mix(vec3(0.065,0.17,0.29),vec3(0.44,0.55,0.60),horizon);
 c=mix(c,sky,atmosphere);color=vec4(c,1.0);}
 "#;
@@ -3522,6 +3663,67 @@ c=mix(c,sky,atmosphere);color=vec4(c,1.0);}
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn reaction_thrusters_use_confirmed_acceleration_not_speed_and_mount_on_mesh() {
+        let mut pilot: PilotView = serde_json::from_value(serde_json::json!({
+            "name":"ThrustQA","credits":0,"ore":0,"location":Location::Station,
+            "flight":{"position":[0.0,0.0,0.0],"velocity":[600.0,0.0,0.0],"heading":[1.0,0.0,0.0],
+                "mode":NavigationMode::Stop,"updated_at_ms":1000,"acceleration":[0.0,0.0,0.0]}
+        }))
+        .unwrap();
+        assert_eq!(confirmed_body_acceleration(&pilot, 1000), Vec3::ZERO);
+        pilot.flight.as_mut().unwrap().acceleration = [-60.0, 0.0, 0.0];
+        assert_eq!(confirmed_body_acceleration(&pilot, 1000), -Vec3::X * 60.0);
+        assert_eq!(confirmed_body_acceleration(&pilot, 1501), Vec3::ZERO);
+        let rotation = Quat::from_rotation_y(std::f32::consts::FRAC_PI_2);
+        let flight = pilot.flight.as_mut().unwrap();
+        flight.orientation = rotation.to_array().map(f64::from);
+        flight.acceleration = (rotation * (Vec3::X * 150.0)).to_array().map(f64::from);
+        assert!(confirmed_body_acceleration(&pilot, 1000).distance(Vec3::X * 150.0) < 0.001);
+        pilot.location = Location::Docked;
+        assert_eq!(confirmed_body_acceleration(&pilot, 1000), Vec3::ZERO);
+        for class in arkline_protocol::ALL_SHIP_CLASSES {
+            let mounts = reaction_mounts(class);
+            assert!(mounts[0].is_some(), "braking nozzle missing for {class:?}");
+            for (index, mount) in mounts.iter().enumerate() {
+                let Some(mount) = mount else {
+                    continue;
+                };
+                let out = [Vec3::X, -Vec3::X, Vec3::Y, -Vec3::Y, Vec3::Z, -Vec3::Z][index];
+                let nearest = ship_geometry(class, Mat4::IDENTITY)
+                    .iter()
+                    .filter_map(|(mesh, model)| {
+                        ray_mesh_hit(*mount + out * 0.01, -out, *model, mesh)
+                    })
+                    .min_by(f32::total_cmp)
+                    .unwrap();
+                assert!(
+                    (nearest - 0.01).abs() < 0.001,
+                    "reaction nozzle must touch actual hull"
+                );
+            }
+        }
+    }
+    #[test]
+    fn head_look_is_bounded_and_release_recenters_without_ship_rotation() {
+        let rotation = Quat::from_rotation_x(0.6);
+        let mut angles = [0.0; 2];
+        for _ in 0..200 {
+            update_head_look(&mut angles, true, [-1.0, 1.0], 0.016);
+        }
+        assert_eq!(angles, [-1.25, 1.25]);
+        let (eye, _) = cockpit_camera(Vec3::ZERO, rotation);
+        let looked = Mat4::look_at_rh(
+            eye,
+            eye + rotation * Quat::from_rotation_y(angles[0]) * Vec3::X,
+            rotation * Vec3::Y,
+        );
+        assert!(looked.is_finite());
+        for _ in 0..100 {
+            update_head_look(&mut angles, false, [1.0; 2], 0.016);
+        }
+        assert_eq!(angles, [0.0; 2]);
+    }
     #[test]
     fn drone_camera_uses_drone_pose_and_stays_inside_physical_screen() {
         let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 1000.0));
@@ -3625,6 +3827,7 @@ mod tests {
         }))
         .unwrap();
         pilot.flight = Some(arkline_protocol::FlightState {
+            acceleration: [0.0; 3],
             position: [0.0; 3],
             velocity: [3.0, 4.0, 0.0],
             heading: [1.0, 0.0, 0.0],
@@ -3983,6 +4186,7 @@ mod tests {
             ore: 0,
             location: Location::Station,
             flight: Some(arkline_protocol::FlightState {
+                acceleration: [0.0; 3],
                 orientation: [0.0, 0.0, 0.0, 1.0],
                 angular_velocity: [0.0; 3],
                 warp: None,

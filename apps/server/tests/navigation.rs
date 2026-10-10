@@ -89,10 +89,10 @@ fn flight_accelerates_brakes_validates_and_last_logout_stops() {
         },
         10000,
     );
-    for t in (10100..=15000).step_by(100) {
+    for t in (10100..=21000).step_by(100) {
         s.tick_at(t).unwrap();
     }
-    let stopped = flight(&mut s, "Mover", 15000);
+    let stopped = flight(&mut s, "Mover", 21000);
     assert!(norm(stopped.velocity) < 0.001);
     run(
         &mut s,
@@ -102,18 +102,18 @@ fn flight_accelerates_brakes_validates_and_last_logout_stops() {
                 position: [0.0, 0.0, 0.0],
             },
         },
-        15000,
+        21000,
     );
-    s.tick_at(16000).unwrap();
-    let at_logout = flight(&mut s, "Mover", 16000).position;
+    s.tick_at(22000).unwrap();
+    let at_logout = flight(&mut s, "Mover", 22000).position;
     s.disconnect(&mut p);
-    s.tick_at(17000).unwrap();
-    let after = flight(&mut s, "Mover", 17000);
+    s.tick_at(23000).unwrap();
+    let after = flight(&mut s, "Mover", 23000);
     assert_eq!(at_logout, after.position);
     assert_eq!(after.velocity, [0.0; 3]);
     assert_eq!(
         baseline,
-        run(&mut s, &mut None, Request::Snapshot, 17000).ledger_hash
+        run(&mut s, &mut None, Request::Snapshot, 23000).ledger_hash
     );
 }
 #[test]

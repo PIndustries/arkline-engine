@@ -78,6 +78,7 @@ fn initial(name: &str, location: &Location, class: ShipClass) -> [f64; 3] {
 pub(super) fn ensure_flight(p: &mut Pilot, now: u64) {
     if p.view.flight.is_none() {
         p.view.flight = Some(FlightState {
+            acceleration: [0.0; 3],
             position: initial(&p.view.name, &p.view.location, p.view.ship_class),
             velocity: [0.0; 3],
             heading: [1.0, 0.0, 0.0],
@@ -213,6 +214,7 @@ pub(super) fn begin_warp(p: &mut Pilot, destination: Destination, now: u64) {
     f.angular_velocity = [0.0; 3];
     f.mode = NavigationMode::Stop;
     f.velocity = [0.0; 3];
+    f.acceleration = [0.0; 3];
     f.updated_at_ms = now;
 }
 pub(super) fn advance(world: &mut World, now: u64) {
@@ -221,6 +223,7 @@ pub(super) fn advance(world: &mut World, now: u64) {
     }
     let views = world.pilots.clone();
     for p in world.pilots.values_mut() {
+        let acceleration = ship_acceleration(p.view.ship_class, p.view.ore);
         if matches!(p.view.flight.as_ref().unwrap().mode, NavigationMode::Manual)
             && universe::normal(p)
         {
@@ -244,6 +247,7 @@ pub(super) fn advance(world: &mut World, now: u64) {
                         p.view.ship_class,
                     );
                     f.velocity = [0.0; 3];
+                    f.acceleration = [0.0; 3];
                     f.mode = NavigationMode::Stop;
                     f.updated_at_ms = now;
                     p.view.location = Location::Station;
@@ -266,6 +270,7 @@ pub(super) fn advance(world: &mut World, now: u64) {
                 .warp
                 .get_or_insert_with(|| plan_warp(path.source, path.target, path.started_ms));
             let (position, velocity) = sample_warp(trajectory, now);
+            f.acceleration = [0.0; 3];
             f.position = position;
             f.velocity = velocity;
             f.heading = sample_warp_heading(trajectory, now);
@@ -275,6 +280,7 @@ pub(super) fn advance(world: &mut World, now: u64) {
             if now >= arrives_at_ms {
                 f.position = path.target;
                 f.velocity = [0.0; 3];
+                f.acceleration = [0.0; 3];
                 p.warp = None;
                 f.warp = None;
                 p.view.location = match destination {
@@ -286,9 +292,11 @@ pub(super) fn advance(world: &mut World, now: u64) {
             continue;
         }
         if p.view.location == Location::Docked {
+            f.acceleration = [0.0; 3];
             continue;
         }
         if matches!(f.mode, NavigationMode::Stop) && length(f.velocity) < 0.001 {
+            f.acceleration = [0.0; 3];
             continue;
         }
         let mut remaining = (now.saturating_sub(f.updated_at_ms) as f64 / 1000.0).min(10.0);
@@ -303,9 +311,7 @@ pub(super) fn advance(world: &mut World, now: u64) {
                     let d = sub(*position, f.position);
                     mul(
                         unit(d),
-                        (2.0 * SHIP_ACCELERATION * length(d))
-                            .sqrt()
-                            .min(MAX_SHIP_SPEED),
+                        (2.0 * acceleration * length(d)).sqrt().min(MAX_SHIP_SPEED),
                     )
                 }
                 mode => {
@@ -327,7 +333,7 @@ pub(super) fn advance(world: &mut World, now: u64) {
                             (error * 0.9).clamp(-MAX_SHIP_SPEED, MAX_SHIP_SPEED)
                         } else {
                             error.signum()
-                                * (2.0 * SHIP_ACCELERATION * error.abs())
+                                * (2.0 * acceleration * error.abs())
                                     .sqrt()
                                     .min(MAX_SHIP_SPEED)
                         };
@@ -338,7 +344,7 @@ pub(super) fn advance(world: &mut World, now: u64) {
                                 v,
                                 mul(
                                     tangent,
-                                    (SHIP_ACCELERATION * radius).sqrt().min(MAX_SHIP_SPEED) * 0.55,
+                                    (acceleration * radius).sqrt().min(MAX_SHIP_SPEED) * 0.55,
                                 ),
                             );
                         }
@@ -350,23 +356,32 @@ pub(super) fn advance(world: &mut World, now: u64) {
                 }
             };
             let old = f.velocity;
-            f.velocity = add(old, limit(sub(desired, old), SHIP_ACCELERATION * dt));
+            let applied = if matches!(f.mode, NavigationMode::Stop) {
+                acceleration * 0.4
+            } else {
+                acceleration
+            };
+            f.velocity = add(old, limit(sub(desired, old), applied * dt));
+            f.acceleration = std::array::from_fn(|i| (f.velocity[i] - old[i]) / dt);
             f.position = add(f.position, mul(add(old, f.velocity), dt * 0.5));
             super::surface::constrain(f, p.view.ship_class, p.view.system_id);
             if let Some(point) = destination {
                 if distance(f.position, point) < 0.6 && length(f.velocity) < 12.0 {
                     f.position = point;
                     f.velocity = [0.0; 3];
+                    f.acceleration = [0.0; 3];
                     f.mode = NavigationMode::Stop;
                 }
             }
             if matches!(f.mode, NavigationMode::Stop) && length(f.velocity) < 0.001 {
                 f.velocity = [0.0; 3];
+                f.acceleration = [0.0; 3];
             }
             for i in 0..3 {
                 if f.position[i].abs() > SPACE_BOUND {
                     f.position[i] = f.position[i].clamp(-SPACE_BOUND, SPACE_BOUND);
                     f.velocity = [0.0; 3];
+                    f.acceleration = [0.0; 3];
                     f.mode = NavigationMode::Stop;
                 }
             }
@@ -420,6 +435,7 @@ pub(super) fn migrate_spatial(world: &mut World) {
         if let Some(f) = &mut pilot.view.flight {
             f.position = relocate(f.position, pilot.view.system_id);
             f.velocity = [0.0; 3];
+            f.acceleration = [0.0; 3];
             f.mode = NavigationMode::Stop;
             f.warp = None;
         }
@@ -526,6 +542,7 @@ pub(super) fn controls(translation: [f64; 3], rotation: [f64; 3], now: u64) -> C
     }
 }
 fn advance_manual(p: &mut Pilot, now: u64) {
+    let acceleration = ship_acceleration(p.view.ship_class, p.view.ore);
     let input = p.controls.clone();
     let f = p.view.flight.as_mut().unwrap();
     let mut cursor = f.updated_at_ms as f64;
@@ -559,21 +576,20 @@ fn advance_manual(p: &mut Pilot, now: u64) {
         let old = f.velocity;
         f.velocity = if length(thrust) > 0.0 {
             limit(
-                add(
-                    old,
-                    mul(rotate(f.orientation, thrust), SHIP_ACCELERATION * dt),
-                ),
+                add(old, mul(rotate(f.orientation, thrust), acceleration * dt)),
                 MAX_SHIP_SPEED,
             )
         } else {
-            add(old, limit(mul(old, -1.0), SHIP_ACCELERATION * dt))
+            add(old, limit(mul(old, -1.0), acceleration * 0.15 * dt))
         };
+        f.acceleration = std::array::from_fn(|i| (f.velocity[i] - old[i]) / dt);
         f.position = add(f.position, mul(add(old, f.velocity), dt * 0.5));
         super::surface::constrain(f, p.view.ship_class, p.view.system_id);
         for i in 0..3 {
             if f.position[i].abs() > SPACE_BOUND {
                 f.position[i] = f.position[i].clamp(-SPACE_BOUND, SPACE_BOUND);
                 f.velocity = [0.0; 3];
+                f.acceleration = [0.0; 3];
             }
         }
         cursor += dt * 1000.0;

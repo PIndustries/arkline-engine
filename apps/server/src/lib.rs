@@ -172,6 +172,7 @@ impl Server {
                 if let Some(flight) = &mut pilot.view.flight {
                     flight.mode = NavigationMode::Stop;
                     flight.velocity = [0.0; 3];
+                    flight.acceleration = [0.0; 3];
                     flight.angular_velocity = [0.0; 3];
                 }
             }
@@ -325,6 +326,7 @@ impl Server {
                 if let Some(f) = &mut p.view.flight {
                     f.mode = NavigationMode::Stop;
                     f.velocity = [0.0; 3];
+                    f.acceleration = [0.0; 3];
                     f.angular_velocity = [0.0; 3];
                 }
             }
@@ -699,6 +701,7 @@ impl Server {
                         );
                         f.mode = NavigationMode::Stop;
                         f.velocity = [0.0; 3];
+                        f.acceleration = [0.0; 3];
                         f.updated_at_ms = now;
                         pilot.controls = None;
                         f.angular_velocity = [0.0; 3];
@@ -738,6 +741,7 @@ impl Server {
                             pilot.view.ship_class,
                         );
                         f.velocity = [0.0; 3];
+                        f.acceleration = [0.0; 3];
                         f.mode = NavigationMode::Stop;
                         f.updated_at_ms = now;
                         message = "Undocked";
@@ -798,6 +802,7 @@ impl Server {
                         let f = pilot.view.flight.as_mut().unwrap();
                         f.position = STATION_POSITION;
                         f.velocity = [0.0; 3];
+                        f.acceleration = [0.0; 3];
                         f.mode = NavigationMode::Stop;
                         f.updated_at_ms = now;
                         f.angular_velocity = [0.0; 3];

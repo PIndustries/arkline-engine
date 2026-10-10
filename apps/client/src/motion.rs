@@ -169,6 +169,7 @@ mod tests {
                 drone: None,
                 location: Location::Station,
                 flight: Some(FlightState {
+                    acceleration: [0.; 3],
                     position: [x, 0.0, 0.0],
                     velocity: [100.0, 0.0, 0.0],
                     heading: [1.0, 0.0, 0.0],

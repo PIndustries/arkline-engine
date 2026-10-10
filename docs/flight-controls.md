@@ -29,7 +29,7 @@ subtracts a nearby origin in double precision before converting GPU coordinates.
 These presentation calculations cannot change server state.
 
 Switch between **2D Tactical**, **3D Tactical**, **3D External** and **Cockpit** in
-the header or **More → Settings & view mode**.
+the header or **Settings**.
 Changing views preserves the selected object and navigation state. Full quaternion orientation
 preserves roll independently of movement direction. Manual-flight presentation uses
 a shorter interpolation buffer than autopilot. Rotation input expires after 500 ms
@@ -162,7 +162,7 @@ at contact. Surface state reports altitude, hull ground clearance and whether th
 ship is grounded. It does not implement aerodynamic flight, walking or full rigid
 body/collision physics.
 
-At ground clearance ≤100 m, **More → Surface sandbox** enables crates, pylons and
+At ground clearance ≤100 m, **Surface** enables crates, pylons and
 platforms. East/north offsets choose a location; the server anchors props to the
 sphere. Spawn and movement destinations must be within 500 m of the hull envelope;
 moving/deleting also requires the original prop to be within that range and owned
@@ -193,7 +193,7 @@ module, not a combat damage system or a general module-fitting inventory.
 Cockpit operations are available through the fixed physical console tabs. Flight
 contains target selection and navigation; Modules assigns miners to independently
 locked asteroids; Drones launches and controls up to five drones of each class.
-More → Settings also exposes all view modes. Overview and flight-help overlays are hidden
+Settings also exposes all view modes. Overview and flight-help overlays are hidden
 in cockpit mode to preserve the canopy view. Instrument clicks suppress flight
 input, and maps do not capture right-button aiming.
 
@@ -222,8 +222,7 @@ protocol. Reconnection after playing keeps the existing recovery UI.
 UNDOCK is always in the physical console header when docked, independent of active
 tab or content scrolling. In space that control becomes DOCK; STOP sits beside it.
 The visible capacitor gauge reports current server energy. Flight navigation and
-power remain accessible without finding the Station tab. The primary service tabs and a
-More menu keep the remaining services accessible.
+power remain accessible without finding the Station tab. The wrapping service-button grid keeps every destination visible.
 
 Warp charges its reservation once, before departure. It does not continuously
 charge the same trip again. Turret mining, drone mining and attack-drone shots draw
@@ -247,6 +246,22 @@ worker may be logged out while its controller remains connected; controller
 logout, worker reconnect/manual action, revocation or restart cancels the job.
 
 Typed **Submit instruction** uses the optional Spark SSH adapter and directly
-submits supported validated intents. It provides no voice control. See
+submits supported validated intents. On macOS, **Talk to ship** provides optional
+permission-gated speech input through the same interpreter. See
 [resource jobs](resource-jobs.md) for prerequisites, confirmed progress, stale
 reply protection and endpoint configuration.
+
+## Looking around and the 2D map
+
+In Cockpit, hold **Shift + arrow keys** to look around from the pilot's seat.
+Release Shift to smoothly recenter. These keys change the view, not the ship's
+heading; ship rotation input is suppressed while Shift is held. The fixed
+interactive instrument overlays temporarily hide during head movement and return
+when centered so their click targets cannot drift away from the display faces.
+
+In **2D Tactical**, use the mouse wheel to zoom toward the cursor. Drag **empty
+space** with the primary mouse button to pan; dragging does not select an object or
+issue a flight command. Ordinary clicks still select contacts. **Reset map** resets
+the current map view, and **Focus my ship** restores the local view centered on your
+ship. Local/System choices, reset and focus controls are beside the view selector.
+Scrolling or dragging over an interface panel belongs to that panel, not the map.
