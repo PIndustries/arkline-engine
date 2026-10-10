@@ -214,11 +214,11 @@ fn warp_holds_source_during_warmup_and_arrives_in_range() {
         )
         .ok
     );
-    let arrived = flight(&mut s, "WarpPilot", WARP_DURATION_MS);
+    let arrived = flight(&mut s, "WarpPilot", route_ms());
     assert!(dist(arrived.position, BELT_POSITION) < MINING_RANGE);
-    run(&mut s, &mut p, Request::Mine { units: 1 }, WARP_DURATION_MS);
+    run(&mut s, &mut p, Request::Mine { units: 1 }, route_ms());
     // Docking remains permitted from the separated station berth.
-    run(&mut s, &mut other, Request::Dock, WARP_DURATION_MS);
+    run(&mut s, &mut other, Request::Dock, route_ms());
 }
 
 #[test]
@@ -240,12 +240,7 @@ fn legacy_world_gains_flight_without_changing_inventory_or_history() {
             },
             0,
         );
-        before = run(
-            &mut s,
-            &mut p,
-            Request::Mine { units: 25 },
-            WARP_DURATION_MS,
-        );
+        before = run(&mut s, &mut p, Request::Mine { units: 25 }, route_ms());
     }
     {
         let db = rusqlite::Connection::open(&path).unwrap();
@@ -269,7 +264,7 @@ fn legacy_world_gains_flight_without_changing_inventory_or_history() {
     }
     {
         let mut s = Server::open(&path).unwrap();
-        let restored = run(&mut s, &mut None, Request::Snapshot, WARP_DURATION_MS + 100);
+        let restored = run(&mut s, &mut None, Request::Snapshot, route_ms() + 100);
         assert_eq!(restored.pilots[0].ore, 25);
         assert_eq!(restored.pilots[0].credits, before.pilots[0].credits);
         assert_eq!(restored.ledger_hash, before.ledger_hash);
@@ -280,6 +275,111 @@ fn legacy_world_gains_flight_without_changing_inventory_or_history() {
                 BELT_POSITION
             ) < MINING_RANGE
         );
+    }
+    std::fs::remove_file(&path).unwrap();
+    let mut lock = path.as_os_str().to_os_string();
+    lock.push(".lock");
+    std::fs::remove_file(lock).unwrap();
+}
+
+fn route_ms() -> u64 {
+    plan_warp(STATION_POSITION, BELT_POSITION, 0).arrives_at_ms
+}
+
+#[test]
+fn astronomical_migration_preserves_local_offset_and_economic_history() {
+    let path = std::env::temp_dir().join(format!(
+        "arkline-au-migration-{}-{}.sqlite",
+        std::process::id(),
+        rand::random::<u64>()
+    ));
+    let before;
+    {
+        let mut s = Server::open(&path).unwrap();
+        let mut p = pilot(&mut s, "ScalePilot");
+        run(
+            &mut s,
+            &mut p,
+            Request::Warp {
+                destination: Destination::Belt,
+            },
+            0,
+        );
+        before = run(&mut s, &mut p, Request::Mine { units: 25 }, route_ms());
+    }
+    {
+        let db = rusqlite::Connection::open(&path).unwrap();
+        let json: String = db
+            .query_row("SELECT json FROM world WHERE id=1", [], |r| r.get(0))
+            .unwrap();
+        let mut old: serde_json::Value = serde_json::from_str(&json).unwrap();
+        old.as_object_mut().unwrap().remove("spatial_version");
+        old["pilots"]["ScalePilot"]["view"]["flight"]["position"] =
+            serde_json::json!([6215.0, 22.0, 900.0]);
+        for asteroid in old["asteroids"].as_array_mut().unwrap() {
+            let x = asteroid["position"][0].as_f64().unwrap();
+            asteroid["position"][0] = serde_json::json!(x - BELT_POSITION[0] + 6200.0);
+        }
+        db.execute(
+            "UPDATE world SET json=?1 WHERE id=1",
+            [serde_json::to_string(&old).unwrap()],
+        )
+        .unwrap();
+    }
+    for _ in 0..2 {
+        let mut s = Server::open(&path).unwrap();
+        let after = run(&mut s, &mut None, Request::Snapshot, route_ms() + 10);
+        assert_eq!(
+            after.pilots[0].flight.as_ref().unwrap().position,
+            [BELT_POSITION[0] + 15.0, 22.0, 900.0]
+        );
+        assert_eq!(after.pilots[0].ore, before.pilots[0].ore);
+        assert_eq!(after.ledger_hash, before.ledger_hash);
+        assert_eq!(after.belt_ore, before.belt_ore);
+        assert_eq!(after.asteroids, before.asteroids);
+    }
+    std::fs::remove_file(&path).unwrap();
+    let mut lock = path.as_os_str().to_os_string();
+    lock.push(".lock");
+    std::fs::remove_file(lock).unwrap();
+}
+
+#[test]
+fn persisted_public_trajectory_samples_exactly_after_restart() {
+    let path = std::env::temp_dir().join(format!(
+        "arkline-trajectory-{}-{}.sqlite",
+        std::process::id(),
+        rand::random::<u64>()
+    ));
+    let trajectory;
+    {
+        let mut s = Server::open(&path).unwrap();
+        let mut p = pilot(&mut s, "WarpResume");
+        let snapshot = run(
+            &mut s,
+            &mut p,
+            Request::Warp {
+                destination: Destination::Gate { id: 101 },
+            },
+            1000,
+        );
+        trajectory = snapshot.pilots[0]
+            .flight
+            .as_ref()
+            .unwrap()
+            .warp
+            .clone()
+            .unwrap();
+        s.tick_at(4500).unwrap();
+    }
+    {
+        let mut s = Server::open(&path).unwrap();
+        let f = flight(&mut s, "WarpResume", 4600);
+        assert_eq!(f.warp.as_ref(), Some(&trajectory));
+        assert_eq!((f.position, f.velocity), sample_warp(&trajectory, 4600));
+        let arrived = flight(&mut s, "WarpResume", trajectory.arrives_at_ms);
+        assert_eq!(arrived.position, trajectory.target);
+        assert!(arrived.warp.is_none());
     }
     std::fs::remove_file(&path).unwrap();
     let mut lock = path.as_os_str().to_os_string();

@@ -2,8 +2,10 @@
 use arkline_protocol::{
     gates, systems, Asteroid, Destination, Location, NavigationMode, NavigationTarget, PilotView,
     Snapshot, Stargate, BELT_POSITION, HOME_SYSTEM_ID, JUMP_DURATION_MS, MAX_SHIP_SPEED,
-    SPACE_BOUND, STATION_POSITION, WARP_DURATION_MS, WARP_WARMUP_MS,
+    SPACE_BOUND, STATION_POSITION,
 };
+#[cfg(test)]
+use arkline_protocol::{WARP_DURATION_MS, WARP_WARMUP_MS};
 use eframe::{egui, egui_glow, glow};
 use glam::{Mat4, Quat, Vec3};
 use glow::HasContext;
@@ -15,6 +17,7 @@ pub enum ViewAction {
     Command(arkline_protocol::Request),
 }
 
+#[cfg(test)]
 pub fn route_progress(location: &Location, now: u64) -> f32 {
     match *location {
         Location::Docked | Location::Jumping { .. } | Location::Station => 0.0,
@@ -39,6 +42,7 @@ pub fn route_progress(location: &Location, now: u64) -> f32 {
 }
 /// Presentation phases share authoritative transit timestamps with both views.
 /// Progress is local to the named phase; no phase sends gameplay commands.
+#[cfg(test)]
 pub fn warp_phase(location: &Location, now: u64) -> Option<(&'static str, f32)> {
     let Location::InTransit { arrives_at_ms, .. } = *location else {
         return None;
@@ -82,35 +86,25 @@ pub fn lane(name: &str) -> f32 {
     (hash % 11) as f32 - 5.0
 }
 pub fn display_position(pilot: &PilotView, now: u64) -> [f64; 3] {
-    if let Some(flight) = &pilot.flight {
-        let seconds = if matches!(
-            pilot.location,
-            Location::Docked | Location::Jumping { .. } | Location::InTransit { .. }
-        ) {
-            0.0
-        } else {
-            now.saturating_sub(flight.updated_at_ms).min(350) as f64 / 1000.0
-        };
-        return std::array::from_fn(|axis| flight.position[axis] + flight.velocity[axis] * seconds);
+    super::motion::position(pilot, now)
+}
+#[derive(Clone, Copy, Default)]
+struct Space {
+    origin: [f64; 3],
+}
+impl Space {
+    fn scene(self, meters: [f64; 3]) -> Vec3 {
+        Vec3::from_array(std::array::from_fn(|i| {
+            ((meters[i] - self.origin[i]) / 100.0) as f32
+        }))
     }
-    // Older snapshots lack a flight record. Their coarse locations retain the
-    // legacy display route; current servers always supply authoritative flight.
-    Vec3::new(
-        -45.0 + route_progress(&pilot.location, now) * 105.0,
-        lane(&pilot.name) * 1.8,
-        20.0 + lane(&pilot.name) * 2.0,
-    )
-    .to_array()
-    .map(|value| value as f64 * 100.0)
+    fn world(self, point: Vec3) -> [f64; 3] {
+        std::array::from_fn(|i| self.origin[i] + point[i] as f64 * 100.0)
+    }
+    fn position(self, pilot: &PilotView, now: u64) -> Vec3 {
+        self.scene(display_position(pilot, now))
+    }
 }
-
-fn scene_position(meters: [f64; 3]) -> Vec3 {
-    Vec3::from_array(meters.map(|value| (value / 100.0) as f32))
-}
-fn position(pilot: &PilotView, now: u64) -> Vec3 {
-    scene_position(display_position(pilot, now))
-}
-
 fn orientation(forward: [f64; 3]) -> Option<Quat> {
     let direction = Vec3::from_array(forward.map(|value| value as f32));
     (direction.is_finite() && direction.length_squared() > 1e-6)
@@ -135,6 +129,7 @@ fn navigation_destination(
     pilot: &PilotView,
     snapshot: &Snapshot,
     now: u64,
+    space: Space,
 ) -> Option<(&'static str, Vec3)> {
     if matches!(
         pilot.location,
@@ -144,28 +139,28 @@ fn navigation_destination(
     }
     let (label, target) = match &pilot.flight.as_ref()?.mode {
         NavigationMode::Stop => return None,
-        NavigationMode::FlyTo { position } => return Some(("FLY TO", scene_position(*position))),
+        NavigationMode::FlyTo { position } => return Some(("FLY TO", space.scene(*position))),
         NavigationMode::Approach { target } => ("APPROACH", target),
         NavigationMode::Orbit { target, .. } => ("ORBIT", target),
         NavigationMode::KeepRange { target, .. } => ("KEEP RANGE", target),
     };
     let target = match target {
-        NavigationTarget::Station => scene_position(STATION_POSITION),
-        NavigationTarget::Belt => scene_position(BELT_POSITION),
-        NavigationTarget::Asteroid { id } => scene_position(
+        NavigationTarget::Station => space.scene(STATION_POSITION),
+        NavigationTarget::Belt => space.scene(BELT_POSITION),
+        NavigationTarget::Asteroid { id } => space.scene(
             snapshot
                 .asteroids
                 .iter()
                 .find(|a| a.id == *id && a.system_id == pilot.system_id)?
                 .position,
         ),
-        NavigationTarget::Gate { id } => scene_position(
+        NavigationTarget::Gate { id } => space.scene(
             gates()
                 .iter()
                 .find(|g| g.id == *id && g.system_id == pilot.system_id)?
                 .position,
         ),
-        NavigationTarget::Pilot { pilot: name } => position(
+        NavigationTarget::Pilot { pilot: name } => space.position(
             snapshot
                 .pilots
                 .iter()
@@ -186,6 +181,7 @@ pub struct FlightView {
     focus_selection: bool,
     context_target: Option<[f64; 3]>,
     context_object: Option<super::SelectedObject>,
+    space: Space,
 }
 impl FlightView {
     pub fn new(gl: Option<&Arc<glow::Context>>) -> Self {
@@ -203,6 +199,7 @@ impl FlightView {
             focus_selection: false,
             context_target: None,
             context_object: None,
+            space: Space::default(),
         }
     }
     pub fn destroy(&mut self) {
@@ -224,8 +221,20 @@ impl FlightView {
         connected: bool,
         effects: &super::effects::Effects,
         selected: &super::SelectedObject,
+        mode: super::ViewMode,
     ) -> Option<ViewAction> {
         let mut picked = None;
+        let own_pilot = snapshot.pilots.iter().find(|p| p.name == pilot_name);
+        let space = Space {
+            origin: own_pilot.map_or(STATION_POSITION, |p| display_position(p, now)),
+        };
+        self.target += space.scene(self.space.origin);
+        self.space = space;
+        if self.target.length() > 1200.0 {
+            self.target = Vec3::ZERO;
+        }
+        let cockpit = matches!(mode, super::ViewMode::Cockpit);
+
         egui::Window::new("Flight camera")
             .id(egui::Id::new("flight_camera_overlay"))
             .default_pos(ui.max_rect().left_bottom() + egui::vec2(16.0, -260.0))
@@ -240,6 +249,12 @@ impl FlightView {
             .resizable(false)
             .collapsible(true)
             .show(ui.ctx(), |ui| {
+                if cockpit {
+                    ui.label("Pilot seat · camera follows ship heading");
+                    ui.small("Use External view to orbit or zoom.");
+                    ui.small("Double-click space: fly · Right-click: actions");
+                    return;
+                }
                 ui.horizontal_wrapped(|ui| {
                     if ui.button("Focus my ship").clicked() {
                         self.follow = true;
@@ -278,12 +293,12 @@ impl FlightView {
         let world_input = ui.input(|i| i.pointer.hover_pos()).is_some_and(|pointer| {
             rect.contains(pointer) && ui.ctx().layer_id_at(pointer) == Some(ui.layer_id())
         });
-        if world_input && response.dragged_by(egui::PointerButton::Primary) {
+        if !cockpit && world_input && response.dragged_by(egui::PointerButton::Primary) {
             let delta = ui.input(|i| i.pointer.delta());
             self.yaw -= delta.x * 0.007;
             self.pitch = (self.pitch + delta.y * 0.006).clamp(-1.25, 1.25);
         }
-        if world_input && response.hovered() {
+        if !cockpit && world_input && response.hovered() {
             self.distance = (self.distance
                 * (-ui.input(|i| i.smooth_scroll_delta.y) * 0.002).exp())
             .clamp(9.0, 260.0);
@@ -303,54 +318,77 @@ impl FlightView {
             .into_iter()
             .filter(|g| g.system_id == system_id)
             .collect();
-        let selected_position = match selected {
-            super::SelectedObject::Asteroid(id) => asteroids
-                .iter()
-                .find(|a| a.id == *id)
-                .map(|a| scene_position(a.position))
-                .unwrap_or(self.target),
-            super::SelectedObject::Gate(id) => local_gates
-                .iter()
-                .find(|g| g.id == *id)
-                .map(|g| scene_position(g.position))
-                .unwrap_or(self.target),
-            super::SelectedObject::Station => scene_position(STATION_POSITION),
-            super::SelectedObject::Belt => scene_position(BELT_POSITION),
+        let selected_world = match selected {
+            super::SelectedObject::Asteroid(id) => {
+                asteroids.iter().find(|a| a.id == *id).map(|a| a.position)
+            }
+            super::SelectedObject::Gate(id) => {
+                local_gates.iter().find(|g| g.id == *id).map(|g| g.position)
+            }
+            super::SelectedObject::Station => Some(STATION_POSITION),
+            super::SelectedObject::Belt => Some(BELT_POSITION),
             super::SelectedObject::Pilot(name) => snapshot
                 .pilots
                 .iter()
                 .find(|p| &p.name == name && p.system_id == system_id)
-                .map(|p| position(p, now))
-                .unwrap_or(self.target),
+                .map(|p| display_position(p, now)),
         };
-        let desired = if self.focus_selection {
+        let selected_position = selected_world.map_or(self.target, |p| space.scene(p));
+        let selected_distance = selected_world.zip(own_pilot).map(|(target, pilot)| {
+            let own = display_position(pilot, now);
+            target
+                .iter()
+                .zip(own)
+                .map(|(a, b)| (a - b) * (a - b))
+                .sum::<f64>()
+                .sqrt()
+        });
+        let desired = if self.focus_selection && selected_position.length() < 1000.0 {
             selected_position
         } else if self.follow {
             snapshot
                 .pilots
                 .iter()
                 .find(|p| p.name == pilot_name)
-                .map(|p| position(p, now))
+                .map(|p| space.position(p, now))
                 .unwrap_or(self.target)
         } else {
-            Vec3::new(7.5, 0.0, 5.0)
+            Vec3::ZERO
         };
         let dt = ui.input(|i| i.stable_dt).min(0.1);
         self.target = self.target.lerp(desired, 1.0 - (-dt * 8.0).exp());
-        let eye = self.target
+        let external_eye = self.target
             + Vec3::new(
                 self.yaw.sin() * self.pitch.cos(),
                 self.pitch.sin(),
                 self.yaw.cos() * self.pitch.cos(),
             ) * self.distance;
-        let view = Mat4::look_at_rh(eye, self.target, Vec3::Y);
-        let projection =
-            Mat4::perspective_rh_gl(0.85, rect.width() / rect.height().max(1.0), 0.3, 1200.0);
+        let rotation = own_pilot.map_or(Quat::IDENTITY, ship_orientation);
+        let (eye, view) = if cockpit {
+            cockpit_camera(
+                own_pilot.map_or(Vec3::ZERO, |p| space.position(p, now)),
+                rotation,
+            )
+        } else {
+            (
+                external_eye,
+                Mat4::look_at_rh(external_eye, self.target, Vec3::Y),
+            )
+        };
+        let projection = Mat4::perspective_rh_gl(
+            if cockpit { 1.05 } else { 0.85 },
+            rect.width() / rect.height().max(1.0),
+            0.03,
+            1200.0,
+        );
         let vp = projection * view;
         match &self.renderer {
             Ok(renderer) => {
                 let renderer = renderer.clone();
                 let frame = Frame {
+                    space,
+                    cockpit,
+                    rotation,
                     asteroids: asteroids.clone(),
                     gates: local_gates.clone(),
                     mining_target: effects.mining_target(now),
@@ -393,12 +431,12 @@ impl FlightView {
                         }
                     })),
                 });
-                for pilot in snapshot
-                    .pilots
-                    .iter()
-                    .filter(|p| p.system_id == system_id && p.location != Location::Docked)
-                {
-                    let clip = vp * (position(pilot, now) + Vec3::Y * 4.2).extend(1.0);
+                for pilot in snapshot.pilots.iter().filter(|p| {
+                    p.system_id == system_id
+                        && p.location != Location::Docked
+                        && !(cockpit && p.name == pilot_name)
+                }) {
+                    let clip = vp * (space.position(pilot, now) + Vec3::Y * 4.2).extend(1.0);
                     if clip.w > 0.0 {
                         let point = clip.truncate() / clip.w;
                         if point.x.abs() < 0.95 && point.y.abs() < 0.92 {
@@ -438,32 +476,44 @@ impl FlightView {
                 if world_input && (response.clicked() || response.secondary_clicked()) {
                     if let Some(pointer) = response.interact_pointer_pos() {
                         let mut targets = Vec::new();
-                        for asteroid in &asteroids {
+                        for asteroid in asteroids
+                            .iter()
+                            .filter(|a| space.scene(a.position).distance(eye) < 1100.0)
+                        {
                             targets.push((
                                 super::SelectedObject::Asteroid(asteroid.id),
                                 rock_mesh(),
-                                asteroid_model(asteroid),
+                                asteroid_model(asteroid, space),
                             ));
                         }
-                        for gate in &local_gates {
-                            for (mesh, model) in gate_parts(gate) {
+                        for gate in local_gates
+                            .iter()
+                            .filter(|g| space.scene(g.position).distance(eye) < 1100.0)
+                        {
+                            for (mesh, model) in gate_parts(gate, space) {
                                 targets.push((super::SelectedObject::Gate(gate.id), mesh, model));
                             }
                         }
-                        for (mesh, model, _, _) in station_parts() {
+                        for (mesh, model, _, _) in station_parts(space)
+                            .into_iter()
+                            .filter(|_| space.scene(STATION_POSITION).distance(eye) < 1100.0)
+                        {
                             targets.push((
                                 super::SelectedObject::Station,
                                 mesh_vertices(mesh),
                                 model,
                             ));
                         }
-                        for pilot in snapshot
-                            .pilots
-                            .iter()
-                            .filter(|p| p.system_id == system_id && p.location != Location::Docked)
-                        {
-                            let model =
-                                transform(position(pilot, now), Vec3::ONE, ship_orientation(pilot));
+                        for pilot in snapshot.pilots.iter().filter(|p| {
+                            p.system_id == system_id
+                                && p.location != Location::Docked
+                                && !(cockpit && p.name == pilot_name)
+                        }) {
+                            let model = transform(
+                                space.position(pilot, now),
+                                Vec3::ONE,
+                                ship_orientation(pilot),
+                            );
                             for (mesh, part) in ship_geometry(model) {
                                 targets.push((
                                     super::SelectedObject::Pilot(pilot.name.clone()),
@@ -486,9 +536,19 @@ impl FlightView {
                         let destination = if object.is_none() && can_navigate {
                             own_pilot
                                 .and_then(|pilot| {
-                                    unproject_to_plane(vp, rect, pointer, position(pilot, now).y)
+                                    unproject_to_plane(
+                                        vp,
+                                        rect,
+                                        pointer,
+                                        space.position(pilot, now).y,
+                                    )
                                 })
-                                .map(|point| point.to_array().map(|value| value as f64 * 100.0))
+                                .map(|point| space.world(point))
+                                .filter(|point| {
+                                    point
+                                        .iter()
+                                        .all(|v| v.is_finite() && v.abs() <= SPACE_BOUND)
+                                })
                         } else {
                             None
                         };
@@ -512,8 +572,9 @@ impl FlightView {
                                     ui.label(format!("{} · {} ore", asteroid.name, asteroid.ore));
                                     let lockable = can_navigate
                                         && own_pilot.is_some_and(|p| {
-                                            position(p, now)
-                                                .distance(scene_position(asteroid.position))
+                                            space
+                                                .position(p, now)
+                                                .distance(space.scene(asteroid.position))
                                                 * 100.0
                                                 <= arkline_protocol::LOCK_RANGE as f32
                                         });
@@ -563,7 +624,9 @@ impl FlightView {
                                     }
                                     let in_range = can_navigate
                                         && own_pilot.is_some_and(|p| {
-                                            position(p, now).distance(scene_position(gate.position))
+                                            space
+                                                .position(p, now)
+                                                .distance(space.scene(gate.position))
                                                 * 100.0
                                                 <= arkline_protocol::GATE_RANGE as f32
                                         });
@@ -598,10 +661,121 @@ impl FlightView {
                     });
                 }
                 let painter = ui.painter_at(rect);
-                for gate in &local_gates {
+                for (label, meters) in std::iter::once(("Station".to_string(), STATION_POSITION))
+                    .chain(std::iter::once((
+                        "Resource belt".to_string(),
+                        BELT_POSITION,
+                    )))
+                    .chain(local_gates.iter().map(|g| (g.name.clone(), g.position)))
+                {
+                    let relative = space.scene(meters) - eye;
+                    if relative.length() > 1100.0 {
+                        if let Some(point) = project(eye + relative.normalize_or_zero() * 900.0) {
+                            let distance = meters
+                                .iter()
+                                .zip(space.origin)
+                                .map(|(a, b)| (a - b) * (a - b))
+                                .sum::<f64>()
+                                .sqrt();
+                            painter.circle_stroke(
+                                point,
+                                5.0,
+                                egui::Stroke::new(1.0, super::TEAL.gamma_multiply(0.7)),
+                            );
+                            painter.text(
+                                point + egui::vec2(0.0, 10.0),
+                                egui::Align2::CENTER_TOP,
+                                format!(
+                                    "{label} · {:.2} AU",
+                                    distance / arkline_protocol::AU_METERS
+                                ),
+                                egui::FontId::monospace(11.0),
+                                super::TEAL,
+                            );
+                        }
+                    }
+                }
+                if cockpit {
+                    if let Some(own) = own_pilot {
+                        let speed = own.flight.as_ref().map_or(0.0, |f| {
+                            f.warp
+                                .as_ref()
+                                .map_or(f.velocity, |w| arkline_protocol::sample_warp(w, now).1)
+                                .iter()
+                                .map(|v| v * v)
+                                .sum::<f64>()
+                                .sqrt()
+                        });
+                        let local = |p: Vec3| project(eye + rotation * p);
+                        for (point, text) in [
+                            (
+                                Vec3::new(0.58, -0.12, 0.0),
+                                format!(
+                                    "{}\nORE {}\n{}",
+                                    super::format_speed(speed),
+                                    own.ore,
+                                    match own.location {
+                                        Location::InTransit { arrives_at_ms, .. } => format!(
+                                            "WARP {:.1}s",
+                                            arrives_at_ms.saturating_sub(now) as f64 / 1000.0
+                                        ),
+                                        Location::Docked => "DOCKED".into(),
+                                        _ => "LOCAL FLIGHT".into(),
+                                    }
+                                ),
+                            ),
+                            (
+                                Vec3::new(0.77, -0.18, -0.22),
+                                format!(
+                                    "SYSTEM {}\nLOCK {}",
+                                    own.system_id,
+                                    own.locked_asteroid.map_or("NONE".into(), |v| v.to_string())
+                                ),
+                            ),
+                            (
+                                Vec3::new(0.77, -0.18, 0.22),
+                                format!(
+                                    "TARGET {}\n{}",
+                                    selected_distance.map_or("NONE".into(), super::format_distance),
+                                    if matches!(own.location, Location::InTransit { .. }) {
+                                        "WARP"
+                                    } else if matches!(own.location, Location::Jumping { .. }) {
+                                        "JUMP"
+                                    } else {
+                                        own.flight.as_ref().map_or("OFFLINE", |f| match f.mode {
+                                            NavigationMode::Stop => "STOP",
+                                            NavigationMode::Approach { .. } => "APPROACH",
+                                            NavigationMode::Orbit { .. } => "ORBIT",
+                                            NavigationMode::KeepRange { .. } => "KEEP RANGE",
+                                            NavigationMode::FlyTo { .. } => "FLY TO",
+                                        })
+                                    }
+                                ),
+                            ),
+                        ] {
+                            if let Some(point) = local(point) {
+                                painter.text(
+                                    point,
+                                    egui::Align2::CENTER_CENTER,
+                                    text,
+                                    egui::FontId::monospace(12.0),
+                                    egui::Color32::from_rgb(205, 255, 230),
+                                );
+                            }
+                        }
+                        painter.circle_stroke(
+                            rect.center(),
+                            5.0,
+                            egui::Stroke::new(1.0, super::TEAL.gamma_multiply(0.5)),
+                        );
+                    }
+                }
+                for gate in local_gates
+                    .iter()
+                    .filter(|g| space.scene(g.position).distance(eye) < 1100.0)
+                {
                     if let Some(point) = project(
-                        scene_position(gate.position)
-                            + Vec3::Y * (gate.radius as f32 / 100.0 + 1.0),
+                        space.scene(gate.position) + Vec3::Y * (gate.radius as f32 / 100.0 + 1.0),
                     ) {
                         painter.text(
                             point,
@@ -614,7 +788,7 @@ impl FlightView {
                 }
                 if let super::SelectedObject::Asteroid(id) = selected {
                     if let Some(a) = asteroids.iter().find(|a| a.id == *id) {
-                        if let Some(point) = project(scene_position(a.position)) {
+                        if let Some(point) = project(space.scene(a.position)) {
                             let ore = if a.ore == 0 {
                                 "DEPLETED".into()
                             } else {
@@ -632,7 +806,9 @@ impl FlightView {
                 }
 
                 if let Some(own) = own_pilot {
-                    if let Some((label, destination)) = navigation_destination(own, snapshot, now) {
+                    if let Some((label, destination)) =
+                        navigation_destination(own, snapshot, now, space)
+                    {
                         if let Some(point) = project(destination) {
                             let stroke = egui::Stroke::new(1.5, super::AMBER);
                             painter.circle_stroke(point, 12.0, stroke);
@@ -651,7 +827,7 @@ impl FlightView {
                                 egui::FontId::monospace(12.0),
                                 super::AMBER,
                             );
-                            if let Some(ship) = project(position(own, now)) {
+                            if let Some(ship) = project(space.position(own, now)) {
                                 painter.line_segment(
                                     [ship, point],
                                     egui::Stroke::new(1.0, super::AMBER.gamma_multiply(0.35)),
@@ -681,7 +857,8 @@ impl FlightView {
                                 .line_segment([corner, corner - egui::vec2(0.0, y * 10.0)], stroke);
                         }
                         if let Some(own) = own_pilot {
-                            let meters = position(own, now).distance(selected_position) * 100.0;
+                            let meters =
+                                space.position(own, now).distance(selected_position) * 100.0;
                             painter.text(
                                 point + egui::vec2(0.0, 31.0),
                                 egui::Align2::CENTER_TOP,
@@ -715,7 +892,7 @@ impl FlightView {
                                 super::TEAL,
                             );
                         }
-                        if let Some((phase, progress)) = warp_phase(&own.location, now) {
+                        if let Some((phase, progress)) = super::motion::warp_phase(own, now) {
                             painter.text(
                                 rect.center_top() + egui::vec2(0.0, 45.0),
                                 egui::Align2::CENTER_TOP,
@@ -802,6 +979,9 @@ impl FlightView {
     }
 }
 struct Frame {
+    space: Space,
+    cockpit: bool,
+    rotation: Quat,
     asteroids: Vec<Asteroid>,
     gates: Vec<Stargate>,
     mining_target: Option<u64>,
@@ -1013,6 +1193,7 @@ impl Renderer {
         gl.draw_arrays(glow::TRIANGLES, 0, self.meshes[mesh].count);
     }
     unsafe fn paint(&mut self, frame: &Frame) {
+        let space = frame.space;
         if self.destroyed {
             return;
         }
@@ -1056,42 +1237,60 @@ impl Renderer {
                 .as_ref(),
             1,
         );
-        self.draw(
-            5,
-            transform(
-                Vec3::new(70.0, -95.0, -230.0),
-                Vec3::splat(90.0),
-                Quat::IDENTITY,
-            ),
-            Vec3::new(0.13, 0.22, 0.36),
-            0.0,
-        );
+        // Fixed world anchor near the station; changing render origin must not
+        // carry the planet along with a ship traveling astronomical distances.
+        let planet = space.scene([7000.0, -9500.0, -23000.0]);
+        if planet.distance(frame.eye) < 1100.0 {
+            self.draw(
+                5,
+                transform(planet, Vec3::splat(90.0), Quat::IDENTITY),
+                Vec3::new(0.13, 0.22, 0.36),
+                0.0,
+            );
+        }
         gl.uniform_1_i32(
             gl.get_uniform_location(self.program, "material_kind")
                 .as_ref(),
             0,
         );
-        for (mesh, model, color, emission) in station_parts() {
+        for (mesh, model, color, emission) in station_parts(space)
+            .into_iter()
+            .filter(|_| space.scene(STATION_POSITION).distance(frame.eye) < 1100.0)
+        {
             self.draw(mesh, model, color, emission);
         }
-        for asteroid in &frame.asteroids {
+        for asteroid in frame
+            .asteroids
+            .iter()
+            .filter(|a| space.scene(a.position).distance(frame.eye) < 1100.0)
+        {
             let color = if asteroid.ore == 0 {
                 Vec3::splat(0.10)
             } else {
                 Vec3::new(0.36, 0.29, 0.18)
             };
-            self.draw(3, asteroid_model(asteroid), color, 0.0);
+            self.draw(3, asteroid_model(asteroid, space), color, 0.0);
         }
-        for gate in &frame.gates {
-            for (_, model) in gate_parts(gate) {
+        for gate in frame
+            .gates
+            .iter()
+            .filter(|g| space.scene(g.position).distance(frame.eye) < 1100.0)
+        {
+            for (_, model) in gate_parts(gate, space) {
                 self.draw(1, model, Vec3::new(0.16, 0.43, 0.65), 0.7);
             }
         }
         for pilot in &frame.pilots {
+            if space.position(pilot, frame.now).distance(frame.eye) > 1100.0 {
+                continue;
+            }
             let own = pilot.name == frame.own;
+            if frame.cockpit && own {
+                continue;
+            }
             let accent = if own { teal } else { amber };
             let ship = transform(
-                position(pilot, frame.now),
+                space.position(pilot, frame.now),
                 Vec3::ONE,
                 ship_orientation(pilot),
             );
@@ -1149,21 +1348,165 @@ impl Renderer {
             }
         }
         self.paint_effects(frame);
+        if frame.cockpit {
+            self.paint_cockpit_warp(frame);
+            self.paint_cockpit(frame);
+        }
         gl.disable(glow::DEPTH_TEST);
         gl.depth_mask(false);
         gl.bind_vertex_array(None);
         gl.use_program(None);
     }
     /// Additive, depth-tested effects do not write depth or obscure UI meshes.
+    unsafe fn paint_cockpit_warp(&self, frame: &Frame) {
+        let Some(pilot) = frame.pilots.iter().find(|p| p.name == frame.own) else {
+            return;
+        };
+        let Some((phase, progress)) = super::motion::warp_phase(pilot, frame.now) else {
+            return;
+        };
+        let intensity = match phase {
+            "WARP ACCELERATING" => progress,
+            "WARP CRUISE" => 1.0,
+            "WARP ARRIVAL" => 1.0 - progress,
+            _ => 0.0,
+        };
+        if intensity <= 0.0 {
+            return;
+        }
+        self.gl.enable(glow::BLEND);
+        self.gl
+            .blend_func_separate(glow::ONE, glow::ONE, glow::ZERO, glow::ONE);
+        self.gl.depth_mask(false);
+        let base = Mat4::from_rotation_translation(frame.rotation, frame.eye);
+        // Optical transit feedback only: peripheral streaks never represent
+        // physical objects and have no selection or collision geometry.
+        for i in 0..52 {
+            let seed = i as f32;
+            let angle = seed * 2.39996;
+            let travel = ((frame.now % 1700) as f32 / 1700.0 + seed * 0.61803).fract();
+            let x = 75.0 - travel * 66.0;
+            let radius = 8.0 + (i % 7) as f32 * 1.7;
+            let start =
+                base.transform_point3(Vec3::new(x, angle.sin() * radius, angle.cos() * radius));
+            let end = base.transform_point3(Vec3::new(
+                x + 3.0 + intensity * 8.0,
+                angle.sin() * radius,
+                angle.cos() * radius,
+            ));
+            if let Some(model) = segment_model(start, end, 0.018 + intensity * 0.018) {
+                self.draw(
+                    0,
+                    model,
+                    Vec3::new(0.055, 0.16, 0.23) * intensity * (1.0 - travel * 0.5),
+                    1.0,
+                );
+            }
+        }
+        self.gl.depth_mask(true);
+        self.gl.disable(glow::BLEND);
+    }
+    unsafe fn paint_cockpit(&self, frame: &Frame) {
+        // Interior geometry occupies a separate depth layer inside the ship,
+        // while retaining the same view/projection as the outside universe.
+        self.gl.depth_mask(true);
+        self.gl.clear(glow::DEPTH_BUFFER_BIT);
+        self.gl.enable(glow::DEPTH_TEST);
+        self.gl.disable(glow::BLEND);
+        let base = Mat4::from_rotation_translation(frame.rotation, frame.eye);
+        let steel = Vec3::new(0.055, 0.08, 0.09);
+        let glow = Vec3::new(0.08, 0.62, 0.43);
+        // Forward is local +X; glazing is open between structural pillars.
+        for side in [-1.0, 1.0] {
+            self.draw(
+                0,
+                base * transform(
+                    Vec3::new(0.78, 0.03, side * 0.49),
+                    Vec3::new(0.055, 0.62, 0.045),
+                    Quat::from_rotation_x(side * 0.22),
+                ),
+                steel,
+                0.0,
+            );
+            self.draw(
+                0,
+                base * transform(
+                    Vec3::new(0.63, -0.38, side * 0.42),
+                    Vec3::new(0.35, 0.15, 0.13),
+                    Quat::IDENTITY,
+                ),
+                steel,
+                0.0,
+            );
+            for i in 0..6 {
+                self.draw(
+                    0,
+                    base * transform(
+                        Vec3::new(0.77, -0.34, side * (0.22 + i as f32 * 0.04)),
+                        Vec3::splat(0.013),
+                        Quat::IDENTITY,
+                    ),
+                    glow,
+                    0.8,
+                );
+            }
+        }
+        self.draw(
+            0,
+            base * transform(
+                Vec3::new(0.75, 0.57, 0.0),
+                Vec3::new(0.065, 0.035, 0.57),
+                Quat::IDENTITY,
+            ),
+            steel,
+            0.0,
+        );
+        self.draw(
+            0,
+            base * transform(
+                Vec3::new(0.82, -0.42, 0.0),
+                Vec3::new(0.22, 0.13, 0.58),
+                Quat::IDENTITY,
+            ),
+            steel,
+            0.0,
+        );
+        for (center, size) in [
+            (Vec3::new(0.79, -0.20, -0.22), Vec3::new(0.012, 0.10, 0.125)),
+            (Vec3::new(0.79, -0.20, 0.22), Vec3::new(0.012, 0.10, 0.125)),
+            (Vec3::new(0.59, -0.13, 0.0), Vec3::new(0.02, 0.085, 0.17)),
+        ] {
+            self.draw(
+                0,
+                base * transform(center, size, Quat::IDENTITY),
+                glow * 0.23,
+                0.25,
+            );
+            self.draw(
+                0,
+                base * transform(
+                    center - Vec3::X * 0.025,
+                    Vec3::new(0.006, size.y - 0.008, size.z - 0.008),
+                    Quat::IDENTITY,
+                ),
+                Vec3::new(0.004, 0.012, 0.010),
+                0.1,
+            );
+        }
+    }
     unsafe fn paint_effects(&self, frame: &Frame) {
+        let space = frame.space;
         let gl = &self.gl;
         gl.enable(glow::BLEND);
         gl.blend_func_separate(glow::ONE, glow::ONE, glow::ZERO, glow::ONE);
         gl.depth_mask(false);
         for pilot in &frame.pilots {
-            let ship_position = position(pilot, frame.now);
+            let ship_position = space.position(pilot, frame.now);
+            if ship_position.distance(frame.eye) > 1100.0 {
+                continue;
+            }
             let ship = transform(ship_position, Vec3::ONE, ship_orientation(pilot));
-            let warp = warp_phase(&pilot.location, frame.now);
+            let warp = super::motion::warp_phase(pilot, frame.now);
             if let Location::Jumping { arrives_at_ms, .. } = pilot.location {
                 let progress = 1.0
                     - arrives_at_ms
@@ -1188,7 +1531,7 @@ impl Renderer {
             if pilot.location != Location::Docked {
                 let (length, intensity) = match warp {
                     Some(("WARP WARMUP", progress)) => (3.8 + progress * 4.5, 1.4 + progress),
-                    Some(("WARP LAUNCH", _)) => (12.0, 3.2),
+                    Some(("WARP ACCELERATING", _)) => (12.0, 3.2),
                     Some(("WARP CRUISE", _)) => (10.0, 2.7),
                     Some(("WARP ARRIVAL", progress)) => (10.0 - progress * 6.0, 2.7 - progress),
                     _ => {
@@ -1282,7 +1625,7 @@ impl Renderer {
                     .asteroids
                     .iter()
                     .find(|a| Some(a.id) == frame.mining_target)
-                    .and_then(|a| mining_impact(source, a))
+                    .and_then(|a| mining_impact(source, a, space))
                 {
                     let fade = (progress * 30.0).min(1.0) * ((1.0 - progress) * 5.0).min(1.0);
                     let pulse = 0.9
@@ -1387,6 +1730,13 @@ impl Renderer {
         self.gl.delete_program(self.background);
     }
 }
+fn cockpit_camera(ship: Vec3, rotation: Quat) -> (Vec3, Mat4) {
+    let eye = ship + rotation * Vec3::new(0.4, 0.8, 0.0);
+    (
+        eye,
+        Mat4::look_at_rh(eye, eye + rotation * Vec3::X, rotation * Vec3::Y),
+    )
+}
 fn project_point(vp: Mat4, rect: egui::Rect, point: Vec3) -> Option<egui::Pos2> {
     let clip = vp * point.extend(1.0);
     if !clip.is_finite() || clip.w <= 0.0 {
@@ -1444,6 +1794,7 @@ fn screen_ray(vp: Mat4, rect: egui::Rect, pointer: egui::Pos2) -> Option<(Vec3, 
 fn transform(p: Vec3, scale: Vec3, rotation: Quat) -> Mat4 {
     Mat4::from_scale_rotation_translation(scale, rotation, p)
 }
+#[cfg(test)]
 fn in_warp(location: &Location, now: u64) -> bool {
     matches!(location, Location::InTransit { arrives_at_ms, .. } if now < *arrives_at_ms)
 }
@@ -1495,22 +1846,22 @@ fn rock_mesh() -> Vec<Vertex> {
     }
     mesh
 }
-fn asteroid_model(asteroid: &Asteroid) -> Mat4 {
+fn asteroid_model(asteroid: &Asteroid, space: Space) -> Mat4 {
     let f = (asteroid.id % 10000) as f32;
     transform(
-        scene_position(asteroid.position),
+        space.scene(asteroid.position),
         Vec3::splat(asteroid.radius as f32 / 100.0),
         Quat::from_euler(glam::EulerRot::XYZ, f * 0.2, f * 0.4, f),
     )
 }
-fn gate_parts(gate: &Stargate) -> Vec<(Vec<Vertex>, Mat4)> {
+fn gate_parts(gate: &Stargate, space: Space) -> Vec<(Vec<Vertex>, Mat4)> {
     [-0.45, 0.45]
         .into_iter()
         .map(|z| {
             (
                 torus(1.0, 0.12),
                 transform(
-                    scene_position(gate.position) + Vec3::Z * z,
+                    space.scene(gate.position) + Vec3::Z * z,
                     Vec3::splat(gate.radius as f32 / 112.0),
                     Quat::from_rotation_x(std::f32::consts::FRAC_PI_2),
                 ),
@@ -1518,10 +1869,15 @@ fn gate_parts(gate: &Stargate) -> Vec<(Vec<Vertex>, Mat4)> {
         })
         .collect()
 }
-fn mining_impact(source: Vec3, asteroid: &Asteroid) -> Option<Vec3> {
-    let direction = (scene_position(asteroid.position) - source).normalize_or_zero();
-    ray_mesh_hit(source, direction, asteroid_model(asteroid), &rock_mesh())
-        .map(|d| source + direction * d)
+fn mining_impact(source: Vec3, asteroid: &Asteroid, space: Space) -> Option<Vec3> {
+    let direction = (space.scene(asteroid.position) - source).normalize_or_zero();
+    ray_mesh_hit(
+        source,
+        direction,
+        asteroid_model(asteroid, space),
+        &rock_mesh(),
+    )
+    .map(|d| source + direction * d)
 }
 /// World-distance intersection against the actual displayed triangles. Scaling
 /// is retained in the local direction, so distances remain comparable across objects.
@@ -1571,12 +1927,12 @@ fn mesh_vertices(mesh: usize) -> Vec<Vertex> {
         _ => hull(),
     }
 }
-fn station_parts() -> Vec<(usize, Mat4, Vec3, f32)> {
+fn station_parts(space: Space) -> Vec<(usize, Mat4, Vec3, f32)> {
     let mut parts = Parts(Vec::new());
     let steel = Vec3::new(0.28, 0.34, 0.42);
     let teal = Vec3::new(0.08, 0.78, 0.71);
     let amber = Vec3::new(0.95, 0.49, 0.12);
-    let station = Mat4::from_translation(scene_position(STATION_POSITION));
+    let station = Mat4::from_translation(space.scene(STATION_POSITION));
     parts.draw(1, station * Mat4::from_scale(Vec3::splat(13.0)), steel, 0.0);
     parts.draw(
         1,
@@ -1749,7 +2105,31 @@ vec2 sun=p-vec2(0.84,0.82);float flare=0.0018/(dot(sun,sun)+0.006);c+=vec3(0.17,
 mod tests {
     use super::*;
     #[test]
+    fn cockpit_heading_and_au_relative_precision() {
+        let origin = [
+            8.0 * arkline_protocol::AU_METERS,
+            0.0,
+            -4.0 * arkline_protocol::AU_METERS,
+        ];
+        let space = Space { origin };
+        let target = [origin[0] + 1.0, 12.5, origin[2] - 2.0];
+        let scene = space.scene(target);
+        assert!((scene.x - 0.01).abs() < 1e-7);
+        assert_eq!(space.world(scene), target);
+        for forward in [Vec3::X, Vec3::Y, Vec3::Z, -Vec3::X] {
+            let rotation = Quat::from_rotation_arc(Vec3::X, forward);
+            let (eye, view) = cockpit_camera(Vec3::ZERO, rotation);
+            let direction = view.transform_point3(eye + forward);
+            assert!(direction.x.abs() < 1e-5 && direction.y.abs() < 1e-5 && direction.z < 0.0);
+            let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1000.0, 700.0));
+            let vp = Mat4::perspective_rh_gl(1.05, rect.aspect_ratio(), 0.03, 1200.0) * view;
+            let (_, ray) = screen_ray(vp, rect, rect.center()).unwrap();
+            assert!(ray.dot(forward) > 0.9999);
+        }
+    }
+    #[test]
     fn extrapolation_is_bounded_and_warp_uses_server_position() {
+        let space = Space::default();
         let mut pilot = PilotView {
             system_id: HOME_SYSTEM_ID,
             locked_asteroid: None,
@@ -1758,6 +2138,7 @@ mod tests {
             ore: 0,
             location: Location::Station,
             flight: Some(arkline_protocol::FlightState {
+                warp: None,
                 position: [1000.0, 500.0, -200.0],
                 velocity: [100.0, 0.0, 0.0],
                 heading: [0.0, 0.0, -1.0],
@@ -1765,16 +2146,16 @@ mod tests {
                 updated_at_ms: 1000,
             }),
         };
-        assert_eq!(position(&pilot, 900), Vec3::new(10.0, 5.0, -2.0));
-        assert!((position(&pilot, 1200).x - 10.2).abs() < 0.0001);
-        assert_eq!(position(&pilot, 1350), position(&pilot, 90_000));
+        assert_eq!(space.position(&pilot, 900), Vec3::new(10.0, 5.0, -2.0));
+        assert!((space.position(&pilot, 1200).x - 10.2).abs() < 0.0001);
+        assert_eq!(space.position(&pilot, 1350), space.position(&pilot, 90_000));
         pilot.location = Location::InTransit {
             destination: Destination::Belt,
             arrives_at_ms: 7000,
         };
-        assert_eq!(position(&pilot, 1200), Vec3::new(10.0, 5.0, -2.0));
+        assert_eq!(space.position(&pilot, 1200), Vec3::new(10.0, 5.0, -2.0));
         pilot.location = Location::Docked;
-        assert_eq!(position(&pilot, 1200), Vec3::new(10.0, 5.0, -2.0));
+        assert_eq!(space.position(&pilot, 1200), Vec3::new(10.0, 5.0, -2.0));
         let moving_orientation = ship_orientation(&pilot);
         pilot.flight.as_mut().unwrap().velocity = [0.0; 3];
         assert_eq!(
@@ -1827,9 +2208,12 @@ mod tests {
     #[test]
     fn mining_targets_exact_authoritative_asteroid() {
         for asteroid in arkline_protocol::asteroid_catalog(10000) {
-            let center = scene_position(asteroid.position);
+            let space = Space {
+                origin: asteroid.position,
+            };
+            let center = space.scene(asteroid.position);
             let source = center + Vec3::Z * 10.0;
-            let impact = mining_impact(source, &asteroid).unwrap();
+            let impact = mining_impact(source, &asteroid, space).unwrap();
             assert!(impact.distance(center) <= asteroid.radius as f32 / 100.0 + 0.001);
             assert!(impact.distance(source) > 0.0);
         }
@@ -1852,8 +2236,11 @@ mod tests {
         assert!(a < b);
         assert!(ray_mesh_hit(source, Vec3::X, near, &mesh).is_none());
         let gate = gates().remove(0);
-        let center = scene_position(gate.position);
-        for (mesh, model) in gate_parts(&gate) {
+        let space = Space {
+            origin: gate.position,
+        };
+        let center = space.scene(gate.position);
+        for (mesh, model) in gate_parts(&gate, space) {
             assert!(ray_mesh_hit(center + Vec3::Z * 20.0, -Vec3::Z, model, &mesh).is_none());
             assert!(ray_mesh_hit(
                 center + Vec3::Z * 20.0 + Vec3::X * (gate.radius as f32 / 112.0),
@@ -1864,12 +2251,15 @@ mod tests {
             .is_some());
         }
         for asteroid in arkline_protocol::asteroid_catalog(10000) {
-            let model = asteroid_model(&asteroid);
+            let space = Space {
+                origin: asteroid.position,
+            };
+            let model = asteroid_model(&asteroid, space);
             for v in &mesh {
                 assert!(
                     model
                         .transform_point3(v.p)
-                        .distance(scene_position(asteroid.position))
+                        .distance(space.scene(asteroid.position))
                         <= asteroid.radius as f32 / 100.0 + 0.001
                 );
             }
@@ -1967,6 +2357,7 @@ mod tests {
     }
     #[test]
     fn stable_pilot_lane_does_not_depend_on_roster_or_view() {
+        let space = Space::default();
         let pilot = PilotView {
             system_id: HOME_SYSTEM_ID,
             locked_asteroid: None,
@@ -1976,9 +2367,9 @@ mod tests {
             location: Location::Station,
             flight: None,
         };
-        let before = position(&pilot, 100);
+        let before = space.position(&pilot, 100);
         let _other = lane("Another pilot");
-        assert_eq!(before, position(&pilot, 100));
+        assert_eq!(before, space.position(&pilot, 100));
         assert!((lane(&pilot.name)).abs() <= 5.0);
     }
 }

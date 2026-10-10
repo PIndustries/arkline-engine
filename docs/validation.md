@@ -134,3 +134,21 @@ ship HUD too high; ship and camera windows now specify compact initial sizes.
 
 Fullscreen is available through F11 or the session overlay. This layout update does
 not change the existing physical scale or fixed warp timing.
+
+## Continuous flight and cockpit — 26.10.9.5
+
+The workspace passes 54 tests, formatting and strict Clippy. New checks cover
+analytic warp continuity and bounded acceleration, inter-snapshot normal flight,
+AU-relative meter precision, migration and exact trajectory recovery after restart.
+A separate TCP acceptance run traveled Junction → Ember Reach → Glassway → Ember
+Reach → Junction, mined only asteroid 1, retained 25 ore and 1,000 credits, restarted
+and passed the independent economic audit.
+
+Native inspection switched Tactical local/system, External and Cockpit views.
+Cockpit captures show outside asteroids, readable real speed/cargo/target telemetry,
+and forward streaks during a gate warp at 0.506 AU/s. Native QA caught and fixed
+bright screen faces, a readout covered by ship controls and a camera-relative planet.
+The planet is now world-anchored. Presentation requests a frame every 16 ms, but no
+frame-time benchmark or remote-network latency acceptance has been performed.
+The cockpit and world assets remain procedural prototype geometry; this is not
+final production art or a direct-steering flight simulator.

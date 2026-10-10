@@ -75,6 +75,7 @@ pub(super) fn ensure_flight(p: &mut Pilot, now: u64) {
             heading: [1.0, 0.0, 0.0],
             mode: NavigationMode::Stop,
             updated_at_ms: now,
+            warp: None,
         });
     }
 }
@@ -184,6 +185,7 @@ pub(super) fn begin_warp(p: &mut Pilot, destination: Destination, now: u64) {
         target: berth(&p.view.name, destination),
         started_ms: now,
     });
+    f.warp = Some(plan_warp(f.position, berth(&p.view.name, destination), now));
     f.mode = NavigationMode::Stop;
     f.velocity = [0.0; 3];
     f.updated_at_ms = now;
@@ -228,23 +230,19 @@ pub(super) fn advance(world: &mut World, now: u64) {
                 target: berth(&p.view.name, destination),
                 started_ms: arrives_at_ms.saturating_sub(WARP_DURATION_MS),
             });
-            let elapsed = now.saturating_sub(path.started_ms);
-            let t = (elapsed.saturating_sub(WARP_WARMUP_MS) as f64
-                / (WARP_DURATION_MS - WARP_WARMUP_MS) as f64)
-                .clamp(0.0, 1.0);
-            let eased = t * t * (3.0 - 2.0 * t);
-            let delta = sub(path.target, path.source);
-            f.position = add(path.source, mul(delta, eased));
-            f.heading = unit(delta);
-            f.velocity = mul(
-                delta,
-                6.0 * t * (1.0 - t) / ((WARP_DURATION_MS - WARP_WARMUP_MS) as f64 / 1000.0),
-            );
+            let trajectory = f
+                .warp
+                .get_or_insert_with(|| plan_warp(path.source, path.target, path.started_ms));
+            let (position, velocity) = sample_warp(trajectory, now);
+            f.position = position;
+            f.velocity = velocity;
+            f.heading = unit(sub(trajectory.target, trajectory.source));
             f.updated_at_ms = now;
             if now >= arrives_at_ms {
                 f.position = path.target;
                 f.velocity = [0.0; 3];
                 p.warp = None;
+                f.warp = None;
                 p.view.location = match destination {
                     Destination::Station => Location::Station,
                     Destination::Belt => Location::Belt,
@@ -349,4 +347,61 @@ pub(super) fn advance(world: &mut World, now: u64) {
                 Location::Station
             };
     }
+}
+
+/// One-time migration from compact sector coordinates to astronomical anchors.
+/// Move local offsets, never balances, reserves, ledger entries, or identities.
+pub(super) fn migrate_spatial(world: &mut World) {
+    if world.spatial_version >= 2 {
+        return;
+    }
+    fn relocate(position: [f64; 3], system: u32) -> [f64; 3] {
+        let mut anchors = vec![
+            (STATION_POSITION, STATION_POSITION),
+            ([6200.0, 0.0, 0.0], BELT_POSITION),
+        ];
+        for gate in gates().into_iter().filter(|g| g.system_id == system) {
+            let old = match gate.id {
+                101 => [12000.0, 0.0, -8000.0],
+                201 => [-12000.0, 0.0, -8000.0],
+                202 => [12000.0, 0.0, 8000.0],
+                _ => [-12000.0, 0.0, 8000.0],
+            };
+            anchors.push((old, gate.position));
+        }
+        let (old, new) = anchors
+            .into_iter()
+            .min_by(|a, b| distance(position, a.0).total_cmp(&distance(position, b.0)))
+            .unwrap();
+        add(new, sub(position, old))
+    }
+    for asteroid in &mut world.asteroids {
+        asteroid.position = add(BELT_POSITION, sub(asteroid.position, [6200.0, 0.0, 0.0]));
+    }
+    for pilot in world.pilots.values_mut() {
+        if let Some(f) = &mut pilot.view.flight {
+            f.position = relocate(f.position, pilot.view.system_id);
+            f.velocity = [0.0; 3];
+            f.mode = NavigationMode::Stop;
+            f.warp = None;
+        }
+        if let Location::InTransit { destination, .. } = pilot.view.location {
+            let now = now_ms();
+            ensure_flight(pilot, now);
+            begin_warp(pilot, destination, now);
+            pilot.view.location = Location::InTransit {
+                destination,
+                arrives_at_ms: pilot
+                    .view
+                    .flight
+                    .as_ref()
+                    .unwrap()
+                    .warp
+                    .as_ref()
+                    .unwrap()
+                    .arrives_at_ms,
+            };
+        }
+    }
+    world.spatial_version = 2;
 }

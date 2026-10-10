@@ -2,7 +2,7 @@
 
 The cockpit sends navigation intent. The server owns ship position, velocity,
 acceleration, range checks and the active navigation mode. Changing the camera
-never moves a ship. Both views display the same authoritative flight state.
+never moves a ship. All three views display the same authoritative flight state.
 
 ## Operating a ship
 
@@ -20,9 +20,17 @@ never moves a ship. Both views display the same authoritative flight state.
    approach within 4.5 km, then **Extract selected**. Only that asteroid loses ore.
    Selection alone does not switch the confirmed mining lock.
 
-Distances and speed in the cockpit are gameplay meters and meters per second.
-The renderer scales these to its scene coordinates. Its short bounded position
-prediction smooths normal travel between snapshots; it cannot change server state.
+Distances use meters, kilometers and astronomical units (1 AU = 149,597,870,700 m).
+The belt lies 2 AU from the system origin and gates span multiple AU. Local
+interaction ranges remain meters. A buffered presentation timeline interpolates
+normal flight; warp samples the same analytic trajectory as the server. Rendering
+subtracts a nearby origin in double precision before converting GPU coordinates.
+These presentation calculations cannot change server state.
+
+Switch between tactical, external and cockpit cameras without changing navigation.
+Tactical has local and system scales. The first-person cockpit looks along ship
+heading with a modeled canopy and instruments showing live ship telemetry.
+This is point navigation; it does not add joystick or six-axis manual steering.
 
 ## Persistence and connection loss
 

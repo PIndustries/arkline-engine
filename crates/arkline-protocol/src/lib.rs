@@ -12,18 +12,21 @@ pub const STARTER_CREDITS: u64 = 1_000;
 pub const INITIAL_BELT_ORE: u64 = 100_000;
 pub const CARGO_CAPACITY: u64 = 1_000;
 pub const MAX_MINE_UNITS: u64 = 100;
-/// Total authoritative transit interval, including the initial warmup.
+/// Legacy fixed interval used only when migrating older flight records.
 pub const WARP_DURATION_MS: u64 = 6_000;
 /// Initial part of transit spent charging before visual travel begins.
 pub const WARP_WARMUP_MS: u64 = 2_000;
-/// Flight coordinates are meters; the scene renderer uses 100 meters per unit.
+/// Authoritative f64 coordinates are meters. Subtract a local origin before f32 rendering.
+pub const AU_METERS: f64 = 149_597_870_700.0;
+pub const MAX_WARP_SPEED: f64 = AU_METERS;
+pub const WARP_ACCELERATION: f64 = AU_METERS * 0.5;
 pub const STATION_POSITION: [f64; 3] = [-4500.0, 0.0, 0.0];
-pub const BELT_POSITION: [f64; 3] = [6200.0, 0.0, 0.0];
+pub const BELT_POSITION: [f64; 3] = [2.0 * AU_METERS, 0.0, 0.0];
 pub const MAX_SHIP_SPEED: f64 = 600.0;
 pub const SHIP_ACCELERATION: f64 = 150.0;
 pub const DOCK_RANGE: f64 = 1800.0;
 pub const MINING_RANGE: f64 = 4500.0;
-pub const SPACE_BOUND: f64 = 50000.0;
+pub const SPACE_BOUND: f64 = 100.0 * AU_METERS;
 pub const HOME_SYSTEM_ID: u32 = 1;
 pub const GATE_RANGE: f64 = 1800.0;
 pub const JUMP_DURATION_MS: u64 = 3000;
@@ -66,10 +69,38 @@ pub fn systems() -> Vec<StarSystem> {
 }
 pub fn gates() -> Vec<Stargate> {
     [
-        (101, 1, 2, 201, "Ember Gate", [12000.0, 0.0, -8000.0]),
-        (201, 2, 1, 101, "Junction Gate", [-12000.0, 0.0, -8000.0]),
-        (202, 2, 3, 301, "Glassway Gate", [12000.0, 0.0, 8000.0]),
-        (301, 3, 2, 202, "Ember Gate", [-12000.0, 0.0, 8000.0]),
+        (
+            101,
+            1,
+            2,
+            201,
+            "Ember Gate",
+            [8.0 * AU_METERS, 0.0, -4.0 * AU_METERS],
+        ),
+        (
+            201,
+            2,
+            1,
+            101,
+            "Junction Gate",
+            [-8.0 * AU_METERS, 0.0, -4.0 * AU_METERS],
+        ),
+        (
+            202,
+            2,
+            3,
+            301,
+            "Glassway Gate",
+            [8.0 * AU_METERS, 0.0, 4.0 * AU_METERS],
+        ),
+        (
+            301,
+            3,
+            2,
+            202,
+            "Ember Gate",
+            [-8.0 * AU_METERS, 0.0, 4.0 * AU_METERS],
+        ),
     ]
     .into_iter()
     .map(
@@ -143,6 +174,84 @@ pub struct FlightState {
     pub heading: [f64; 3],
     pub mode: NavigationMode,
     pub updated_at_ms: u64,
+    #[serde(default)]
+    pub warp: Option<WarpTrajectory>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WarpTrajectory {
+    pub source: [f64; 3],
+    pub target: [f64; 3],
+    pub started_at_ms: u64,
+    pub warmup_ms: u64,
+    pub acceleration_ms: u64,
+    pub cruise_ms: u64,
+    pub arrives_at_ms: u64,
+}
+/// A symmetric acceleration/cruise/deceleration trajectory with finite warmup.
+/// Durations round upward; sampling derives speed from the exact distance so
+/// positions meet precisely at the persisted deadline without discontinuity.
+pub fn plan_warp(source: [f64; 3], target: [f64; 3], started_at_ms: u64) -> WarpTrajectory {
+    let distance = source
+        .iter()
+        .zip(target)
+        .map(|(a, b)| (b - a).powi(2))
+        .sum::<f64>()
+        .sqrt();
+    let acceleration_seconds = (distance / WARP_ACCELERATION)
+        .sqrt()
+        .min(MAX_WARP_SPEED / WARP_ACCELERATION);
+    let acceleration_ms = (acceleration_seconds * 1000.0).ceil().max(1.0) as u64;
+    let cruise_ms =
+        ((distance / MAX_WARP_SPEED - acceleration_seconds).max(0.0) * 1000.0).ceil() as u64;
+    let arrives_at_ms = started_at_ms
+        .saturating_add(WARP_WARMUP_MS)
+        .saturating_add(2 * acceleration_ms)
+        .saturating_add(cruise_ms);
+    WarpTrajectory {
+        source,
+        target,
+        started_at_ms,
+        warmup_ms: WARP_WARMUP_MS,
+        acceleration_ms,
+        cruise_ms,
+        arrives_at_ms,
+    }
+}
+/// Sample authoritative meters and meters/second without f32 precision loss.
+pub fn sample_warp(path: &WarpTrajectory, now_ms: u64) -> ([f64; 3], [f64; 3]) {
+    if now_ms >= path.arrives_at_ms {
+        return (path.target, [0.0; 3]);
+    }
+    let elapsed = now_ms
+        .saturating_sub(path.started_at_ms)
+        .saturating_sub(path.warmup_ms) as f64
+        / 1000.0;
+    let acceleration = path.acceleration_ms.max(1) as f64 / 1000.0;
+    let cruise = path.cruise_ms as f64 / 1000.0;
+    let total = 2.0 * acceleration + cruise;
+    let (fraction, rate) = if elapsed < acceleration {
+        (
+            0.5 * elapsed * elapsed / acceleration / (acceleration + cruise),
+            elapsed / acceleration / (acceleration + cruise),
+        )
+    } else if elapsed < acceleration + cruise {
+        (
+            (0.5 * acceleration + elapsed - acceleration) / (acceleration + cruise),
+            1.0 / (acceleration + cruise),
+        )
+    } else {
+        let remaining = (total - elapsed).max(0.0);
+        (
+            1.0 - 0.5 * remaining * remaining / acceleration / (acceleration + cruise),
+            remaining / acceleration / (acceleration + cruise),
+        )
+    };
+    let delta: [f64; 3] = std::array::from_fn(|i| path.target[i] - path.source[i]);
+    (
+        std::array::from_fn(|i| path.source[i] + delta[i] * fraction.clamp(0.0, 1.0)),
+        delta.map(|d| d * rate),
+    )
 }
 
 pub const GENESIS_HASH: &str = "0000000000000000000000000000000000000000000000000000000000000000";
@@ -352,5 +461,47 @@ mod compatibility_tests {
         });
         let snapshot: Snapshot = serde_json::from_value(json).unwrap();
         assert!(snapshot.online_pilots.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod warp_tests {
+    use super::*;
+    fn norm(v: [f64; 3]) -> f64 {
+        v.iter().map(|x| x * x).sum::<f64>().sqrt()
+    }
+    #[test]
+    fn physical_trajectory_is_continuous_bounded_and_distance_dependent() {
+        let source = [AU_METERS * 20.0 + 0.125, 10.0, 20.0];
+        for distance in [1000.0, AU_METERS * 0.1, AU_METERS * 2.0, AU_METERS * 12.0] {
+            let target = [source[0] + distance, source[1], source[2]];
+            let path = plan_warp(source, target, 1000);
+            assert_eq!(sample_warp(&path, 1000).0, source);
+            assert_eq!(sample_warp(&path, 1000 + path.warmup_ms).0, source);
+            assert_eq!(sample_warp(&path, path.arrives_at_ms), (target, [0.0; 3]));
+            let mut previous = sample_warp(&path, 1000);
+            for t in (1100..path.arrives_at_ms).step_by(100) {
+                let sample = sample_warp(&path, t);
+                assert!(sample.0[0] >= previous.0[0]);
+                assert!(norm(sample.1) <= MAX_WARP_SPEED * 1.00000001);
+                let dv = std::array::from_fn(|i| sample.1[i] - previous.1[i]);
+                assert!(norm(dv) <= WARP_ACCELERATION * 0.10000001);
+                previous = sample;
+            }
+            for boundary in [
+                1000 + path.warmup_ms + path.acceleration_ms,
+                1000 + path.warmup_ms + path.acceleration_ms + path.cruise_ms,
+            ] {
+                let a = sample_warp(&path, boundary - 1);
+                let b = sample_warp(&path, boundary + 1);
+                assert!(
+                    norm(std::array::from_fn(|i| b.0[i] - a.0[i])) <= MAX_WARP_SPEED * 0.00200001
+                );
+            }
+        }
+        assert!(
+            plan_warp([0.0; 3], [12.0 * AU_METERS, 0.0, 0.0], 0).arrives_at_ms
+                > plan_warp([0.0; 3], [2.0 * AU_METERS, 0.0, 0.0], 0).arrives_at_ms
+        );
     }
 }

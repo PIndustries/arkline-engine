@@ -33,7 +33,7 @@ fn explicit_asteroid_lock_depletion_and_legacy_migration_conserve_ore() {
         },
         0,
     );
-    let initial = ok(&mut s, &mut p, Request::Snapshot, WARP_DURATION_MS);
+    let initial = ok(&mut s, &mut p, Request::Snapshot, route_ms());
     assert_eq!(
         initial.asteroids.iter().map(|a| a.ore).sum::<u64>(),
         INITIAL_BELT_ORE
@@ -51,22 +51,22 @@ fn explicit_asteroid_lock_depletion_and_legacy_migration_conserve_ore() {
                 id: asteroid.id,
                 units: 1
             },
-            WARP_DURATION_MS
+            route_ms()
         )
         .ok
     );
     assert!(
-        !s.handle_at(&mut p, Request::LockAsteroid { id: 73 }, WARP_DURATION_MS)
+        !s.handle_at(&mut p, Request::LockAsteroid { id: 73 }, route_ms())
             .ok
     );
     ok(
         &mut s,
         &mut p,
         Request::LockAsteroid { id: asteroid.id },
-        WARP_DURATION_MS,
+        route_ms(),
     );
     let mut remaining = asteroid.ore;
-    let mut time = WARP_DURATION_MS;
+    let mut time = route_ms();
     while remaining > 0 {
         let units = remaining.min(MAX_MINE_UNITS);
         ok(
@@ -145,4 +145,8 @@ fn explicit_asteroid_lock_depletion_and_legacy_migration_conserve_ore() {
     let mut lock = path.as_os_str().to_os_string();
     lock.push(".lock");
     std::fs::remove_file(lock).unwrap();
+}
+
+fn route_ms() -> u64 {
+    plan_warp(STATION_POSITION, BELT_POSITION, 0).arrives_at_ms
 }

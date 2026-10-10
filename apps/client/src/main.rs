@@ -2,6 +2,7 @@
 mod audit;
 mod effects;
 mod flight3d;
+mod motion;
 mod theme;
 use arkline_protocol::*;
 use eframe::egui::{self, Color32, Pos2, Stroke, Vec2};
@@ -20,6 +21,13 @@ use std::{
 const TEAL: Color32 = Color32::from_rgb(70, 235, 133);
 const AMBER: Color32 = Color32::from_rgb(255, 192, 104);
 const MUTED: Color32 = Color32::from_rgb(138, 157, 180);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ViewMode {
+    Tactical,
+    External,
+    Cockpit,
+}
 
 enum Update {
     Ready,
@@ -189,7 +197,10 @@ struct Cockpit {
     price: u64,
     buy_amount: u64,
     notice: String,
-    three_dimensional: bool,
+    view_mode: ViewMode,
+    tactical_system: bool,
+    motion: motion::MotionHistory,
+    timeline_origin: Option<u64>,
     flight_view: flight3d::FlightView,
     frozen_time: Option<u64>,
     focus_on_first_frame: bool,
@@ -235,7 +246,10 @@ impl Cockpit {
             price: 10,
             buy_amount: 1,
             notice: String::new(),
-            three_dimensional: true,
+            view_mode: ViewMode::External,
+            tactical_system: false,
+            motion: motion::MotionHistory::default(),
+            timeline_origin: None,
             flight_view: flight3d::FlightView::new(cc.gl.as_ref()),
             frozen_time: None,
             focus_on_first_frame: true,
@@ -298,13 +312,14 @@ impl Cockpit {
     }
     fn presentation_time(&self) -> u64 {
         self.frozen_time.unwrap_or_else(|| {
-            self.snapshot.as_ref().map_or(0, |s| {
-                s.server_time_ms
-                    .saturating_add(self.observed.elapsed().as_millis() as u64)
+            self.timeline_origin.map_or(0, |origin| {
+                origin.saturating_add(self.observed.elapsed().as_millis() as u64)
             })
         })
     }
     fn connect(&mut self) {
+        self.motion.clear();
+        self.timeline_origin = None;
         self.effects.clear();
         self.feed.clear();
         self.selected_object = SelectedObject::Station;
@@ -432,8 +447,12 @@ impl Cockpit {
                         {
                             self.selected_object = SelectedObject::Station;
                         }
+                        if self.timeline_origin.is_none() {
+                            self.timeline_origin = Some(snapshot.server_time_ms);
+                            self.observed = Instant::now();
+                        }
+                        self.motion.observe(&snapshot);
                         self.snapshot = Some(snapshot);
-                        self.observed = Instant::now();
                     }
                     if visible || !response.ok {
                         self.log(response.message, !response.ok);
@@ -499,7 +518,7 @@ impl Cockpit {
                     .map(|g| g.name)
                     .unwrap_or_else(|| "stargate".into()),
             };
-            if let Some((phase, progress)) = flight3d::warp_phase(&pilot.location, now) {
+            if let Some((phase, progress)) = motion::warp_phase(&pilot, now) {
                 return (
                     phase.into(),
                     format!(
@@ -625,11 +644,19 @@ impl Cockpit {
                 );
                 ui.small(format!("{} CR", pilot.credits));
             });
-            let speed = pilot
-                .flight
-                .as_ref()
-                .map_or(0.0, |f| distance_m(f.velocity, [0.0; 3]));
-            columns[0].small(format!("{speed:.0} m/s  /  {} ore aboard", pilot.ore));
+            let speed = pilot.flight.as_ref().map_or(0.0, |f| {
+                let velocity = f
+                    .warp
+                    .as_ref()
+                    .filter(|_| matches!(pilot.location, Location::InTransit { .. }))
+                    .map_or(f.velocity, |w| sample_warp(w, self.presentation_time()).1);
+                distance_m(velocity, [0.0; 3])
+            });
+            columns[0].small(format!(
+                "{}  /  {} ore aboard",
+                format_speed(speed),
+                pilot.ore
+            ));
             columns[0].add(
                 egui::ProgressBar::new(pilot.ore as f32 / CARGO_CAPACITY as f32)
                     .fill(self.accent())
@@ -1428,6 +1455,29 @@ impl Cockpit {
         });
     }
     fn scene(&mut self, ui: &mut egui::Ui) {
+        let now = self.presentation_time();
+        let display = self.snapshot.as_ref().map(|s| self.motion.sample(s, now));
+        let own_position = display
+            .as_ref()
+            .and_then(|s| s.pilots.iter().find(|p| p.name == self.pilot))
+            .map_or(STATION_POSITION, |p| motion::position(p, now));
+        let center = if self.tactical_system {
+            [0.0; 3]
+        } else {
+            own_position
+        };
+        let span = if self.tactical_system {
+            AU_METERS * 20.0
+        } else {
+            32000.0
+        };
+        let tactical_scale = |rect: egui::Rect| rect.width().min(rect.height()) as f64 / span;
+        let tactical_project =
+            |rect: egui::Rect, point: [f64; 3]| map_project(rect, point, center, span);
+        let tactical_unproject = |rect: egui::Rect, point: Pos2, altitude: f64| {
+            map_unproject(rect, point, center, span, altitude)
+        };
+
         let (rect, response) = ui.allocate_exact_size(
             Vec2::new(ui.available_width(), ui.available_height().max(220.0)),
             egui::Sense::click(),
@@ -1449,6 +1499,17 @@ impl Cockpit {
         };
         let paint = ui.painter_at(rect);
         paint.rect_filled(rect, 0.0, Color32::from_rgb(2, 6, 4));
+        paint.text(
+            rect.center_top() + Vec2::new(0.0, 18.0),
+            egui::Align2::CENTER_TOP,
+            if self.tactical_system {
+                "SYSTEM MAP · 20 AU span · select a destination to warp"
+            } else {
+                "LOCAL TACTICAL · 32 km span · double-click to fly"
+            },
+            egui::FontId::proportional(11.0),
+            MUTED,
+        );
         for i in 0..150 {
             let x = ((i * 7919 + 67) % 1000) as f32 / 1000.0;
             let y = ((i * 3571 + 239) % 1000) as f32 / 1000.0;
@@ -1500,17 +1561,17 @@ impl Cockpit {
         );
         paint.circle_stroke(
             belt,
-            2100.0 * tactical_scale(rect),
+            (2100.0 * tactical_scale(rect)) as f32,
             Stroke::new(1.0, MUTED.gamma_multiply(0.2)),
         );
-        if let Some(snapshot) = &self.snapshot {
+        if let Some(snapshot) = &display {
             for asteroid in snapshot
                 .asteroids
                 .iter()
                 .filter(|a| a.system_id == self.current_system())
             {
                 let center = tactical_project(rect, asteroid.position);
-                let radius = (asteroid.radius as f32 * tactical_scale(rect)).max(3.0);
+                let radius = ((asteroid.radius * tactical_scale(rect)) as f32).max(3.0);
                 let tint = if asteroid.ore > 0 {
                     Color32::from_rgb(135, 116, 88)
                 } else {
@@ -1550,7 +1611,7 @@ impl Cockpit {
             .filter(|g| g.system_id == self.current_system())
         {
             let center = tactical_project(rect, gate.position);
-            let radius = (gate.radius as f32 * tactical_scale(rect)).max(8.0);
+            let radius = ((gate.radius * tactical_scale(rect)) as f32).max(8.0);
             paint.circle_stroke(center, radius, Stroke::new(2.5, self.accent()));
             paint.circle_stroke(
                 center,
@@ -1573,7 +1634,7 @@ impl Cockpit {
                 selection_brackets(&paint, center, radius + 8.0, self.accent());
             }
         }
-        if let Some(snapshot) = &self.snapshot {
+        if let Some(snapshot) = &display {
             let server_now = self.presentation_time();
             for pilot in &snapshot.pilots {
                 if pilot.system_id != self.current_system() || pilot.location == Location::Docked {
@@ -1668,7 +1729,7 @@ impl Cockpit {
                         }
                     }
                 }
-                if let Some((phase, progress)) = flight3d::warp_phase(&pilot.location, server_now) {
+                if let Some((phase, progress)) = motion::warp_phase(pilot, server_now) {
                     if phase == "WARP WARMUP" {
                         let radius = 12.0 + progress * 18.0;
                         paint.circle_stroke(
@@ -1762,7 +1823,12 @@ impl Cockpit {
         if let Some(selected) = selected {
             self.selected_object = selected;
         }
-        if world_input && response.double_clicked() && !hit_object && self.can_fly() {
+        if world_input
+            && !self.tactical_system
+            && response.double_clicked()
+            && !hit_object
+            && self.can_fly()
+        {
             if let Some(point) = response.interact_pointer_pos() {
                 let altitude = self
                     .own()
@@ -1776,19 +1842,18 @@ impl Cockpit {
             }
         }
         if world_input && response.secondary_clicked() {
-            self.context_fly_to =
-                response
-                    .interact_pointer_pos()
-                    .filter(|_| !hit_object)
-                    .map(|point| {
-                        tactical_unproject(
-                            rect,
-                            point,
-                            self.own()
-                                .and_then(|p| p.flight.map(|f| f.position[1]))
-                                .unwrap_or(0.0),
-                        )
-                    });
+            self.context_fly_to = response
+                .interact_pointer_pos()
+                .filter(|_| !hit_object && !self.tactical_system)
+                .map(|point| {
+                    tactical_unproject(
+                        rect,
+                        point,
+                        self.own()
+                            .and_then(|p| p.flight.map(|f| f.position[1]))
+                            .unwrap_or(0.0),
+                    )
+                });
         }
         if world_input || response.context_menu_opened() {
             response.context_menu(|ui| {
@@ -1909,31 +1974,45 @@ fn distance_m(a: [f64; 3], b: [f64; 3]) -> f64 {
         .sum::<f64>()
         .sqrt()
 }
-fn format_distance(value: f64) -> String {
-    if value >= 1000.0 {
+pub(crate) fn format_speed(value: f64) -> String {
+    if value >= AU_METERS * 0.001 {
+        format!("{:.3} AU/s", value / AU_METERS)
+    } else if value >= 1000.0 {
+        format!("{:.1} km/s", value / 1000.0)
+    } else {
+        format!("{value:.0} m/s")
+    }
+}
+pub(crate) fn format_distance(value: f64) -> String {
+    if value >= AU_METERS * 0.01 {
+        format!("{:.3} AU", value / AU_METERS)
+    } else if value >= 1_000_000.0 {
+        format!("{:.0} km", value / 1000.0)
+    } else if value >= 1000.0 {
         format!("{:.1} km", value / 1000.0)
     } else {
         format!("{value:.0} m")
     }
 }
-fn tactical_scale(rect: egui::Rect) -> f32 {
-    (rect.width() / 32000.0)
-        .min(rect.height() / 22000.0)
-        .max(0.0001)
-}
-fn tactical_project(rect: egui::Rect, position: [f64; 3]) -> Pos2 {
-    let scale = tactical_scale(rect);
+fn map_project(rect: egui::Rect, point: [f64; 3], center: [f64; 3], span: f64) -> Pos2 {
+    let scale = rect.width().min(rect.height()) as f64 / span;
     Pos2::new(
-        rect.center().x + position[0] as f32 * scale,
-        rect.center().y + position[2] as f32 * scale,
+        rect.center().x + ((point[0] - center[0]) * scale) as f32,
+        rect.center().y + ((point[2] - center[2]) * scale) as f32,
     )
 }
-fn tactical_unproject(rect: egui::Rect, position: Pos2, altitude: f64) -> [f64; 3] {
-    let scale = tactical_scale(rect);
+fn map_unproject(
+    rect: egui::Rect,
+    point: Pos2,
+    center: [f64; 3],
+    span: f64,
+    altitude: f64,
+) -> [f64; 3] {
+    let scale = rect.width().min(rect.height()) as f64 / span;
     [
-        ((position.x - rect.center().x) / scale) as f64,
+        center[0] + (point.x - rect.center().x) as f64 / scale,
         altitude,
-        ((position.y - rect.center().y) / scale) as f64,
+        center[2] + (point.y - rect.center().y) as f64 / scale,
     ]
     .map(|v| v.clamp(-SPACE_BOUND, SPACE_BOUND))
 }
@@ -1983,7 +2062,7 @@ impl eframe::App for Cockpit {
                 mode: NavigationMode::Stop,
             });
         }
-        ctx.request_repaint_after(Duration::from_millis(33));
+        ctx.request_repaint_after(Duration::from_millis(16));
         if !self.connected && self.snapshot.is_none() {
             egui::TopBottomPanel::top("login-brand").show(ctx, |ui| {
                 ui.horizontal(|ui| {
@@ -2036,7 +2115,7 @@ impl eframe::App for Cockpit {
             .constrain_to(bounds)
             .show(ctx, |ui| {
                 self.overlay_frame(ctx).show(ui, |ui| {
-                    ui.set_max_width(440.0);
+                    ui.set_max_width(490.0);
                     ui.horizontal(|ui| {
                         ui.label(
                             egui::RichText::new("A R K L I N E")
@@ -2058,8 +2137,13 @@ impl eframe::App for Cockpit {
                                 "○ Offline"
                             },
                         );
-                        ui.selectable_value(&mut self.three_dimensional, false, "2D");
-                        ui.selectable_value(&mut self.three_dimensional, true, "3D");
+                        ui.selectable_value(&mut self.view_mode, ViewMode::Tactical, "Tactical");
+                        ui.selectable_value(&mut self.view_mode, ViewMode::External, "External");
+                        ui.selectable_value(&mut self.view_mode, ViewMode::Cockpit, "Cockpit");
+                        if self.view_mode == ViewMode::Tactical {
+                            ui.selectable_value(&mut self.tactical_system, false, "Local");
+                            ui.selectable_value(&mut self.tactical_system, true, "System");
+                        }
                         let fullscreen = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
                         if ui
                             .small_button(if fullscreen {
@@ -2182,9 +2266,10 @@ impl eframe::App for Cockpit {
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
             .show(ctx, |ui| {
-                if self.three_dimensional {
+                if self.view_mode != ViewMode::Tactical {
                     let now = self.presentation_time();
-                    if let Some(snapshot) = &self.snapshot {
+                    let display = self.snapshot.as_ref().map(|s| self.motion.sample(s, now));
+                    if let Some(snapshot) = &display {
                         if let Some(action) = self.flight_view.ui(
                             ui,
                             snapshot,
@@ -2193,6 +2278,7 @@ impl eframe::App for Cockpit {
                             self.connected,
                             &self.effects,
                             &self.selected_object,
+                            self.view_mode,
                         ) {
                             match action {
                                 flight3d::ViewAction::Select(object) => {
@@ -2438,13 +2524,33 @@ mod tests {
     }
 
     #[test]
+    fn local_map_retains_meter_precision_at_astronomical_origin() {
+        let rect = egui::Rect::from_min_size(Pos2::ZERO, Vec2::new(1000.0, 700.0));
+        let center = [AU_METERS * 8.0, 0.0, -AU_METERS * 4.0];
+        let point = [center[0] + 125.0, 0.0, center[2] - 300.0];
+        let pixel = map_project(rect, point, center, 32000.0);
+        let roundtrip = map_unproject(rect, pixel, center, 32000.0, 0.0);
+        assert!(distance_m(point, roundtrip) < 0.01);
+        assert_eq!(format_distance(AU_METERS * 2.0), "2.000 AU");
+    }
+    #[test]
     fn tactical_pointer_projection_preserves_meter_coordinates() {
         let rect = egui::Rect::from_min_size(egui::pos2(200.0, 100.0), egui::vec2(740.0, 400.0));
-        for position in [STATION_POSITION, BELT_POSITION, [1234.0, 77.0, -2345.0]] {
-            let result = tactical_unproject(rect, tactical_project(rect, position), position[1]);
+        for position in [
+            STATION_POSITION,
+            [6200.0, 0.0, 0.0],
+            [1234.0, 77.0, -2345.0],
+        ] {
+            let result = map_unproject(
+                rect,
+                map_project(rect, position, [0.0; 3], 32000.0),
+                [0.0; 3],
+                32000.0,
+                position[1],
+            );
             assert!(distance_m(result, position) < 0.01);
         }
-        let bounded = tactical_unproject(rect, egui::pos2(1e9, -1e9), 1e9);
+        let bounded = map_unproject(rect, egui::pos2(1e18, -1e18), [0.0; 3], 32000.0, 1e18);
         assert!(bounded.iter().all(|v| v.abs() <= SPACE_BOUND));
     }
     #[test]
@@ -2462,6 +2568,7 @@ mod tests {
                 heading: [1.0, 0.0, 0.0],
                 mode: NavigationMode::Stop,
                 updated_at_ms: 0,
+                warp: None,
             }),
         };
         assert!(in_navigation_range(&pilot, BELT_POSITION, MINING_RANGE));

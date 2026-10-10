@@ -30,3 +30,13 @@ Important deliberate changes:
 The existing Rust procedural generators used seeded generation alongside random
 UUIDs. They require stable identities and reproducibility tests before serving as
 verifiable universe generation. They have not been copied into this release.
+
+## Spatial migration in build 26.10.9.5
+
+World spatial version 2 moves the belt to 2 AU and gates to multi-AU coordinates.
+Existing ships retain their offset from the nearest old station, belt or gate;
+asteroid IDs and remaining ore are retained. Manual navigation stops during the
+one-time migration and an active old warp is replanned from its migrated position.
+Cargo, credits, orders and ledger events are unchanged. Make a SQLite-consistent
+backup before upgrading. Older clients/servers must not reopen an upgraded world;
+restore the pre-upgrade backup to roll back.

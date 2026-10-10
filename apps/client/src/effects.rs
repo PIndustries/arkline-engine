@@ -137,6 +137,7 @@ mod tests {
                 system_id: 1,
                 locked_asteroid: Some(7),
                 flight: Some(FlightState {
+                    warp: None,
                     position: BELT_POSITION,
                     velocity: [0.0; 3],
                     heading: [1.0, 0.0, 0.0],

@@ -29,6 +29,8 @@ struct World {
     next_order: u64,
     #[serde(default)]
     asteroids: Vec<Asteroid>,
+    #[serde(default)]
+    spatial_version: u32,
 }
 impl Default for World {
     fn default() -> Self {
@@ -38,6 +40,7 @@ impl Default for World {
             belt_ore: INITIAL_BELT_ORE,
             next_order: 1,
             asteroids: asteroid_catalog(INITIAL_BELT_ORE),
+            spatial_version: 2,
         }
     }
 }
@@ -107,6 +110,7 @@ impl Server {
         )?;
         let json: String = db.query_row("SELECT json FROM world WHERE id=1", [], |r| r.get(0))?;
         let mut world: World = serde_json::from_str(&json)?;
+        flight::migrate_spatial(&mut world);
         universe::ensure_asteroids(&mut world);
         for pilot in world.pilots.values_mut() {
             if !matches!(
@@ -188,6 +192,7 @@ impl Server {
         let tx = self.db.transaction()?;
         let json: String = tx.query_row("SELECT json FROM world WHERE id=1", [], |r| r.get(0))?;
         let mut world: World = serde_json::from_str(&json)?;
+        flight::migrate_spatial(&mut world);
         universe::ensure_asteroids(&mut world);
         flight::advance(&mut world, now);
         let next = serde_json::to_string(&world)?;
@@ -201,6 +206,7 @@ impl Server {
         let tx = self.db.transaction()?;
         let json: String = tx.query_row("SELECT json FROM world WHERE id=1", [], |r| r.get(0))?;
         let mut world: World = serde_json::from_str(&json)?;
+        flight::migrate_spatial(&mut world);
         universe::ensure_asteroids(&mut world);
         if let Some(p) = world.pilots.get_mut(name) {
             if !matches!(
@@ -231,6 +237,7 @@ impl Server {
             .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         let json: String = tx.query_row("SELECT json FROM world WHERE id=1", [], |r| r.get(0))?;
         let mut world: World = serde_json::from_str(&json).context("invalid durable world")?;
+        flight::migrate_spatial(&mut world);
         universe::ensure_asteroids(&mut world);
         flight::advance(&mut world, now);
         let mut token = None;
@@ -415,9 +422,15 @@ impl Server {
                         flight::begin_warp(pilot, destination, now);
                         pilot.view.location = Location::InTransit {
                             destination,
-                            arrives_at_ms: now
-                                .checked_add(WARP_DURATION_MS)
-                                .context("clock overflow")?,
+                            arrives_at_ms: pilot
+                                .view
+                                .flight
+                                .as_ref()
+                                .unwrap()
+                                .warp
+                                .as_ref()
+                                .unwrap()
+                                .arrives_at_ms,
                         };
                         message = "Warp initiated";
                     }
@@ -695,7 +708,11 @@ mod tests {
                 )
                 .ok
         );
-        let arrived = server.handle_at(&mut None, Request::Snapshot, WARP_DURATION_MS + 102);
+        let arrived = server.handle_at(
+            &mut None,
+            Request::Snapshot,
+            plan_warp(STATION_POSITION, BELT_POSITION, 0).arrives_at_ms + 102,
+        );
         assert_eq!(arrived.snapshot.unwrap().pilots[0].location, Location::Belt);
         assert_eq!(
             server.db.total_changes(),
@@ -704,7 +721,11 @@ mod tests {
         );
         assert!(
             server
-                .handle_at(&mut None, Request::Snapshot, WARP_DURATION_MS + 103)
+                .handle_at(
+                    &mut None,
+                    Request::Snapshot,
+                    plan_warp(STATION_POSITION, BELT_POSITION, 0).arrives_at_ms + 103
+                )
                 .ok
         );
         assert_eq!(server.db.total_changes(), before + 2);

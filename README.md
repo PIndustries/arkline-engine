@@ -54,13 +54,13 @@ pilot name in both clients unless you deliberately transfer its credential.
 6. Close and restart the server, reconnect both pilots, and inspect the saved state.
 7. Cancel the remaining order to return its ore to the seller's cargo.
 
-Warp takes six seconds, including a two-second drive warm-up. Mining is limited to 100 units per command and a
+Warp includes a two-second drive warm-up, acceleration, cruise and deceleration; travel time depends on distance. Mining is limited to 100 units per command and a
 one-second cooldown. Cargo holds 1,000 units; escrow is separate. Cancelling an
 order requires room to return its ore. The initial global reserve is 100,000 ore, divided across 108 rocks in three systems.
 
 ## Tactical and flight views
 
-Use **2D Tactical / 3D Flight** at the top of the cockpit. Both display the same
+Use **Tactical / External / Cockpit** in the session overlay. All display the same
 live ships and authoritative warp timeline; switching views changes no game state.
 The 3D mode uses native GPU geometry and perspective lighting with procedural ship,
 station, asteroid and planet assets.
@@ -83,7 +83,7 @@ the final art direction or a full free-flight/combat simulation.
 
 ## Cockpit layout and services
 
-Space fills the entire gameplay window in both views. Session controls, overview,
+Space fills the entire gameplay window in all three views. Session controls, overview,
 ship controls and camera controls float above it instead of reserving fixed rows
 or columns. Move or collapse panels to make room around your ship. Use **F11**
 or **Fullscreen** to toggle fullscreen mode. Services open

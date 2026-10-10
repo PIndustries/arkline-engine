@@ -39,11 +39,11 @@ fn stock(server: &mut Server, session: &mut Option<String>) {
         server,
         session,
         Request::Mine { units: 100 },
-        WARP_DURATION_MS + 102,
+        route_ms() + 102,
     );
     assert!(
         !server
-            .handle_at(session, Request::Mine { units: 1 }, WARP_DURATION_MS + 103)
+            .handle_at(session, Request::Mine { units: 1 }, route_ms() + 103)
             .ok
     );
     request(
@@ -52,9 +52,9 @@ fn stock(server: &mut Server, session: &mut Option<String>) {
         Request::Warp {
             destination: Destination::Station,
         },
-        WARP_DURATION_MS + 103,
+        route_ms() + 103,
     );
-    request(server, session, Request::Dock, 2 * WARP_DURATION_MS + 103);
+    request(server, session, Request::Dock, 2 * route_ms() + 103);
     request(
         server,
         session,
@@ -62,7 +62,7 @@ fn stock(server: &mut Server, session: &mut Option<String>) {
             units: 100,
             unit_price: 10,
         },
-        2 * WARP_DURATION_MS + 104,
+        2 * route_ms() + 104,
     );
 }
 #[test]
@@ -81,7 +81,7 @@ fn unauthorized_and_failed_trade_leave_ledger_unchanged() {
                     pilot: "Alice".into(),
                     resume_token: Some("incorrect".into())
                 },
-                2 * WARP_DURATION_MS + 200
+                2 * route_ms() + 200
             )
             .ok
     );
@@ -91,7 +91,7 @@ fn unauthorized_and_failed_trade_leave_ledger_unchanged() {
             .handle_at(
                 &mut stranger,
                 Request::CancelSell { order_id: 1 },
-                2 * WARP_DURATION_MS + 200
+                2 * route_ms() + 200
             )
             .ok
     );
@@ -100,7 +100,7 @@ fn unauthorized_and_failed_trade_leave_ledger_unchanged() {
             .handle_at(
                 &mut bob,
                 Request::CancelSell { order_id: 1 },
-                2 * WARP_DURATION_MS + 200
+                2 * route_ms() + 200
             )
             .ok
     );
@@ -112,7 +112,7 @@ fn unauthorized_and_failed_trade_leave_ledger_unchanged() {
                     order_id: 1,
                     units: 1
                 },
-                2 * WARP_DURATION_MS + 200
+                2 * route_ms() + 200
             )
             .ok
     );
@@ -120,7 +120,7 @@ fn unauthorized_and_failed_trade_leave_ledger_unchanged() {
         &mut server,
         &mut stranger,
         Request::ExportLedger,
-        2 * WARP_DURATION_MS + 200,
+        2 * route_ms() + 200,
     )
     .ledger
     .unwrap();
@@ -132,7 +132,7 @@ fn unauthorized_and_failed_trade_leave_ledger_unchanged() {
                     order_id: 1,
                     units: 101
                 },
-                2 * WARP_DURATION_MS + 200
+                2 * route_ms() + 200
             )
             .ok
     );
@@ -140,7 +140,7 @@ fn unauthorized_and_failed_trade_leave_ledger_unchanged() {
         &mut server,
         &mut stranger,
         Request::ExportLedger,
-        2 * WARP_DURATION_MS + 200,
+        2 * route_ms() + 200,
     )
     .ledger
     .unwrap();
@@ -155,19 +155,19 @@ fn unauthorized_and_failed_trade_leave_ledger_unchanged() {
             order_id: 1,
             units: 40,
         },
-        2 * WARP_DURATION_MS + 300,
+        2 * route_ms() + 300,
     );
     request(
         &mut server,
         &mut alice,
         Request::CancelSell { order_id: 1 },
-        2 * WARP_DURATION_MS + 301,
+        2 * route_ms() + 301,
     );
     let result = request(
         &mut server,
         &mut stranger,
         Request::ExportLedger,
-        2 * WARP_DURATION_MS + 302,
+        2 * route_ms() + 302,
     )
     .ledger
     .unwrap();
@@ -205,7 +205,7 @@ fn concurrent_buyers_cannot_duplicate_fill() {
                             order_id: 1,
                             units: 100,
                         },
-                        2 * WARP_DURATION_MS + 500,
+                        2 * route_ms() + 500,
                     )
                     .ok
             })
@@ -222,7 +222,7 @@ fn concurrent_buyers_cannot_duplicate_fill() {
         &mut server.lock().unwrap(),
         &mut None,
         Request::Snapshot,
-        2 * WARP_DURATION_MS + 600,
+        2 * route_ms() + 600,
     )
     .snapshot
     .unwrap();
@@ -270,7 +270,7 @@ fn restart_preserves_auth_travel_and_cooldown() {
                 .handle_at(
                     &mut session,
                     Request::Mine { units: 100 },
-                    WARP_DURATION_MS + 1000
+                    route_ms() + 1000
                 )
                 .ok
         );
@@ -278,7 +278,7 @@ fn restart_preserves_auth_travel_and_cooldown() {
             &mut server,
             &mut session,
             Request::Mine { units: 100 },
-            WARP_DURATION_MS + 1001,
+            route_ms() + 1001,
         );
     }
     {
@@ -292,14 +292,14 @@ fn restart_preserves_auth_travel_and_cooldown() {
                 pilot: "Traveler".into(),
                 resume_token: Some(token),
             },
-            WARP_DURATION_MS + 1002,
+            route_ms() + 1002,
         );
         assert!(
             !server
                 .handle_at(
                     &mut session,
                     Request::Mine { units: 100 },
-                    WARP_DURATION_MS + 1002
+                    route_ms() + 1002
                 )
                 .ok
         );
@@ -307,7 +307,7 @@ fn restart_preserves_auth_travel_and_cooldown() {
             &mut server,
             &mut session,
             Request::Mine { units: 100 },
-            WARP_DURATION_MS + 2001,
+            route_ms() + 2001,
         );
     }
     std::fs::remove_file(path).unwrap();
@@ -340,4 +340,8 @@ fn database_has_one_lifetime_owner() {
 fn independent_in_memory_worlds_do_not_share_ownership_lock() {
     let _first = Server::open(":memory:").unwrap();
     let _second = Server::open(":memory:").unwrap();
+}
+
+fn route_ms() -> u64 {
+    plan_warp(STATION_POSITION, BELT_POSITION, 0).arrives_at_ms
 }
