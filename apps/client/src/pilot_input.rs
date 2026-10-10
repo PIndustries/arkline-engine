@@ -22,7 +22,59 @@ impl Controls {
         }
     }
 }
-pub type Mailbox = Arc<Mutex<Option<Controls>>>;
+/// A single replaceable control sample with immutable routing. Clearing or
+/// publishing advances its generation; taking never substitutes a new target.
+#[derive(Clone, Default)]
+pub struct Mailbox(Arc<Mutex<MailState>>);
+#[derive(Default)]
+struct MailState {
+    generation: u64,
+    pending: Option<PendingControl>,
+}
+struct PendingControl {
+    generation: u64,
+    control: Controls,
+    remote: Option<String>,
+}
+impl Mailbox {
+    #[cfg(test)]
+    pub fn publish(&self, control: Controls) {
+        self.publish_for(control, None);
+    }
+    pub fn publish_for(&self, control: Controls, remote: Option<String>) {
+        let mut state = self.0.lock().unwrap();
+        state.generation = state.generation.wrapping_add(1);
+        state.pending = Some(PendingControl {
+            generation: state.generation,
+            control,
+            remote,
+        });
+    }
+    pub fn clear(&self) {
+        let mut state = self.0.lock().unwrap();
+        state.generation = state.generation.wrapping_add(1);
+        state.pending = None;
+    }
+    #[cfg(test)]
+    pub fn is_empty(&self) -> bool {
+        self.0.lock().unwrap().pending.is_none()
+    }
+    pub fn take(&self) -> Option<Request> {
+        let mut state = self.0.lock().unwrap();
+        let pending = state.pending.take()?;
+        if pending.generation != state.generation {
+            return None;
+        }
+        let request = pending.control.request();
+        Some(match pending.remote {
+            Some(pilot) => Request::RemoteControl {
+                pilot,
+                request: Box::new(request),
+            },
+            None => request,
+        })
+    }
+}
 #[derive(Default)]
 pub struct PilotInput {
     active: bool,
@@ -32,7 +84,7 @@ pub struct PilotInput {
 }
 impl PilotInput {
     pub fn relinquish(&mut self, mailbox: &Mailbox) {
-        *mailbox.lock().unwrap() = None;
+        mailbox.clear();
         self.active = false;
     }
     pub fn release_mouse(&mut self, ctx: &egui::Context) {
@@ -134,6 +186,55 @@ impl PilotInput {
 mod tests {
     use super::*;
     #[test]
+    fn remote_target_is_pinned_and_return_never_relabels_queued_thrust() {
+        let mailbox = Mailbox::default();
+        mailbox.publish_for(
+            Controls {
+                translation: [1.0, 0.0, 0.0],
+                rotation: [0.0; 3],
+            },
+            Some("WorkerA".into()),
+        );
+        let detached = mailbox.take().unwrap();
+        mailbox.clear();
+        mailbox.publish_for(Controls::default(), Some("WorkerB".into()));
+        assert!(matches!(detached,Request::RemoteControl{pilot,..} if pilot=="WorkerA"));
+        assert!(
+            matches!(mailbox.take(),Some(Request::RemoteControl{pilot,..}) if pilot=="WorkerB")
+        );
+        mailbox.publish_for(Controls::default(), Some("WorkerB".into()));
+        mailbox.clear();
+        assert!(mailbox.take().is_none());
+        mailbox.publish(Controls::default());
+        assert!(matches!(mailbox.take(), Some(Request::PilotInput { .. })));
+    }
+    #[test]
+    fn latest_generation_keeps_release_and_its_exact_target_together() {
+        let mailbox = Mailbox::default();
+        for i in 0..100 {
+            mailbox.publish_for(
+                Controls {
+                    translation: [1.0, 0.0, 0.0],
+                    rotation: [0.0; 3],
+                },
+                Some(format!("Worker{i}")),
+            );
+        }
+        mailbox.publish_for(Controls::default(), Some("FinalWorker".into()));
+        let Some(Request::RemoteControl { pilot, request }) = mailbox.take() else {
+            panic!("remote routing lost")
+        };
+        assert_eq!(pilot, "FinalWorker");
+        assert!(matches!(
+            *request,
+            Request::PilotInput {
+                translation: [0.0, 0.0, 0.0],
+                rotation: [0.0, 0.0, 0.0]
+            }
+        ));
+        assert!(mailbox.take().is_none());
+    }
+    #[test]
     fn release_and_suppression_emit_one_neutral_without_canceling_autopilot() {
         let thrust = Controls {
             translation: [1.0, 0.0, 0.0],
@@ -200,9 +301,9 @@ mod tests {
             rotation: [0.0; 3],
         };
         pilot.update(true, thrust);
-        *mailbox.lock().unwrap() = pilot.update(true, Controls::default());
+        mailbox.publish(pilot.update(true, Controls::default()).unwrap());
         pilot.relinquish(&mailbox);
-        assert!(mailbox.lock().unwrap().is_none());
+        assert!(mailbox.is_empty());
         assert_eq!(pilot.update(true, Controls::default()), None);
         assert_eq!(pilot.update(true, thrust), Some(thrust));
     }
@@ -267,13 +368,19 @@ mod tests {
     fn mailbox_replaces_stale_thrust_with_release() {
         let mailbox = Mailbox::default();
         for i in 0..100 {
-            *mailbox.lock().unwrap() = Some(Controls {
+            mailbox.publish(Controls {
                 translation: [i as f64 / 100.0, 0.0, 0.0],
                 rotation: [0.0; 3],
             });
         }
-        *mailbox.lock().unwrap() = Some(Controls::default());
-        assert_eq!(mailbox.lock().unwrap().take(), Some(Controls::default()));
-        assert!(mailbox.lock().unwrap().take().is_none());
+        mailbox.publish(Controls::default());
+        assert!(matches!(
+            mailbox.take(),
+            Some(Request::PilotInput {
+                translation: [0.0, 0.0, 0.0],
+                rotation: [0.0, 0.0, 0.0]
+            })
+        ));
+        assert!(mailbox.take().is_none());
     }
 }

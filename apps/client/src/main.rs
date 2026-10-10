@@ -6,6 +6,7 @@ mod flight3d;
 mod layout;
 mod motion;
 mod pilot_input;
+mod remote_control_ui;
 mod resource_jobs_ui;
 mod sandbox;
 mod services;
@@ -143,7 +144,7 @@ fn connect_transport(server: &str) -> Result<BufReader<TcpStream>, String> {
 }
 /// Drop all requests accumulated before recovery, never replay actions or controls.
 fn discard_pending(commands: &Receiver<Request>, controls: &pilot_input::Mailbox) -> bool {
-    *controls.lock().unwrap() = None;
+    controls.clear();
     loop {
         match commands.try_recv() {
             Ok(_) => {}
@@ -217,8 +218,8 @@ fn worker(
             let (request, visible) = match commands.recv_timeout(Duration::from_millis(50)) {
                 Ok(request) => (request, true),
                 Err(mpsc::RecvTimeoutError::Timeout) => {
-                    if let Some(control) = controls.lock().unwrap().take() {
-                        (control.request(), false)
+                    if let Some(request) = controls.take() {
+                        (request, false)
                     } else if last_snapshot.elapsed() >= Duration::from_millis(350) {
                         (Request::Snapshot, false)
                     } else {
@@ -227,6 +228,14 @@ fn worker(
                 }
                 Err(mpsc::RecvTimeoutError::Disconnected) => return Ok(()),
             };
+            // Lease transitions invalidate controls sampled under the old view,
+            // including unwrapped own-ship samples queued before remote takeover.
+            if matches!(
+                request,
+                Request::BeginRemoteControl { .. } | Request::EndRemoteControl
+            ) {
+                controls.clear();
+            }
             let response = match exchange(&mut reader, &request) {
                 Ok(response) => response,
                 Err(error) => {
@@ -404,6 +413,7 @@ struct Cockpit {
     resource_pilot: Option<String>,
     fleet_controller: String,
     remote_ship: Option<String>,
+    manual_remote: Option<String>,
     ship_ai: ship_ai::ShipAi,
     voice: voice::Voice,
     voice_pin: Option<(String, u64)>,
@@ -484,6 +494,7 @@ impl Cockpit {
             resource_pilot: None,
             fleet_controller: String::new(),
             remote_ship: None,
+            manual_remote: None,
             ship_ai: ship_ai::ShipAi::default(),
             voice: voice::Voice::default(),
             voice_pin: None,
@@ -586,6 +597,7 @@ impl Cockpit {
         self.invalidate_ai_session();
         self.resource_pilot = None;
         self.remote_ship = None;
+        self.manual_remote = None;
         self.boot.connect();
         self.connected = false;
         self.controls = pilot_input::Mailbox::default();
@@ -689,6 +701,28 @@ impl Cockpit {
         if !matches!(request, Request::Snapshot | Request::ExportLedger) {
             self.cancel_ai();
         }
+        let request = if let Some(pilot) = self.controlled_remote() {
+            if request.is_remote_gameplay() {
+                Request::RemoteControl {
+                    pilot: pilot.to_owned(),
+                    request: Box::new(request),
+                }
+            } else if matches!(
+                request,
+                Request::Snapshot
+                    | Request::ExportLedger
+                    | Request::BeginRemoteControl { .. }
+                    | Request::EndRemoteControl
+            ) {
+                request
+            } else {
+                self.notice =
+                    "Return to your own ship to use account, inventory or AI job actions.".into();
+                return;
+            }
+        } else {
+            request
+        };
         if let Some(tx) = &self.commands {
             if tx.send(request).is_ok() {
                 self.request_pending = true;
@@ -812,7 +846,7 @@ impl Cockpit {
             .as_ref()?
             .pilots
             .iter()
-            .find(|p| p.name == self.pilot)
+            .find(|p| p.name == self.controlled_name())
             .cloned()
     }
     fn operation_status(&self) -> (String, String, Option<f32>, Color32) {
@@ -1287,42 +1321,52 @@ impl Cockpit {
         }
     }
     fn service_tabs(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal_wrapped(|ui| {
-            for (tab, label) in [
-                (ServiceTab::Navigation, "Flight"),
-                (ServiceTab::Hangar, "Ship"),
-                (ServiceTab::Modules, "Modules"),
-                (ServiceTab::Drones, "Drones"),
-                (ServiceTab::Cargo, "Inventory"),
-                (ServiceTab::Station, "Station"),
-                (ServiceTab::ShipComputer, "AI"),
-            ] {
-                if ui
-                    .add(
-                        egui::Button::new(label)
-                            .min_size(Vec2::new(0.0, 26.0))
-                            .selected(self.service_tab == tab),
-                    )
-                    .clicked()
-                {
-                    self.service_tab = tab;
-                }
-            }
-            ui.menu_button("More…", |ui| {
-                for (tab, label) in [
-                    (ServiceTab::Exchange, "Exchange"),
-                    (ServiceTab::Corporation, "Corporation"),
-                    (ServiceTab::Activity, "Activity log"),
-                    (ServiceTab::Ledger, "Ledger audit"),
-                    (ServiceTab::Settings, "Settings & view mode"),
-                    (ServiceTab::Sandbox, "Surface sandbox"),
+        // Every destination stays visible; narrow physical screens wrap the grid.
+        let columns = ((ui.available_width() / 72.0).floor() as usize).clamp(3, 6);
+        let width = (ui.available_width() - 4.0 * (columns - 1) as f32) / columns as f32;
+        ui.scope(|ui| {
+            ui.spacing_mut().item_spacing = Vec2::new(4.0, 3.0);
+            ui.horizontal_wrapped(|ui| {
+                for (tab, label, description) in [
+                    (ServiceTab::Navigation, "Flight", "Targets and navigation"),
+                    (ServiceTab::Hangar, "Ship", "Owned ship hangar"),
+                    (
+                        ServiceTab::Modules,
+                        "Modules",
+                        "Mining turrets and target locks",
+                    ),
+                    (ServiceTab::Drones, "Drones", "Drone fleet and cameras"),
+                    (
+                        ServiceTab::ShipComputer,
+                        "AI",
+                        "Ship computer and resource jobs",
+                    ),
+                    (ServiceTab::Cargo, "Inventory", "Cargo and station storage"),
+                    (ServiceTab::Station, "Station", "Station services"),
+                    (ServiceTab::Exchange, "Exchange", "Ore market"),
+                    (
+                        ServiceTab::Corporation,
+                        "Corp",
+                        "Corporation and shared storage",
+                    ),
+                    (ServiceTab::Activity, "Activity", "Server activity log"),
+                    (ServiceTab::Ledger, "Audit", "Ledger verification"),
+                    (
+                        ServiceTab::Settings,
+                        "Settings",
+                        "View modes, theme and layout",
+                    ),
+                    (ServiceTab::Sandbox, "Surface", "Surface construction tools"),
                 ] {
                     if ui
-                        .selectable_label(self.service_tab == tab, label)
+                        .add_sized(
+                            Vec2::new(width, 24.0),
+                            egui::Button::new(label).selected(self.service_tab == tab),
+                        )
+                        .on_hover_text(description)
                         .clicked()
                     {
                         self.service_tab = tab;
-                        ui.close_menu();
                     }
                 }
             });
@@ -1535,7 +1579,7 @@ impl Cockpit {
                 .and_then(|s| {
                     s.pilots.iter().find(|p| {
                         p.name == *name
-                            && p.name != self.pilot
+                            && p.name != self.controlled_name()
                             && p.system_id == self.current_system()
                             && p.location != Location::Docked
                             && p.flight.is_some()
@@ -1777,7 +1821,8 @@ impl Cockpit {
                 format_distance(GATE_RANGE)
             ));
         }
-        if matches!(&self.selected_object, SelectedObject::Pilot(name) if name == &self.pilot) {
+        if matches!(&self.selected_object, SelectedObject::Pilot(name) if name == self.controlled_name())
+        {
             ui.small("Select another vessel or a location to navigate.");
         }
         ui.small("Ctrl+Space: stop · RMB: aim · Release controls: assisted braking");
@@ -2240,7 +2285,7 @@ impl Cockpit {
         let display = self.snapshot.as_ref().map(|s| self.motion.sample(s, now));
         let own_position = display
             .as_ref()
-            .and_then(|s| s.pilots.iter().find(|p| p.name == self.pilot))
+            .and_then(|s| s.pilots.iter().find(|p| p.name == self.controlled_name()))
             .map_or(STATION_POSITION, |p| motion::position(p, now));
         let center = if self.tactical_system {
             [0.0; 3]
@@ -2471,12 +2516,12 @@ impl Cockpit {
                     .filter(|v| v.length_sq() > 0.1)
                     .unwrap_or(Vec2::new(heading, 0.0));
                 let perpendicular = Vec2::new(-direction.y, direction.x);
-                let color = if pilot.name == self.pilot {
+                let color = if pilot.name == self.controlled_name() {
                     self.accent()
                 } else {
                     AMBER
                 };
-                if pilot.name == self.pilot {
+                if pilot.name == self.controlled_name() {
                     for module in pilot.mining_modules.iter().filter(|_| self.connected) {
                         if let Some(cycle) =
                             effects::module_cycle(pilot, module.module_id, server_now)
@@ -2602,7 +2647,7 @@ impl Cockpit {
                             );
                         }
                     }
-                    if pilot.name == self.pilot {
+                    if pilot.name == self.controlled_name() {
                         paint.text(
                             position + Vec2::new(0.0, 34.0),
                             egui::Align2::CENTER_TOP,
@@ -2886,6 +2931,7 @@ impl eframe::App for Cockpit {
             self.frame_intervals.pop_front();
         }
         self.poll();
+        self.sync_remote_control();
         self.poll_voice();
         self.poll_ship_ai();
         if self.boot.visible {
@@ -3032,6 +3078,7 @@ impl eframe::App for Cockpit {
                                 ));
                             }
                         });
+                        self.ship_connection_panel(ui);
                         let (status, detail, _, color) = self.operation_status();
                         ui.colored_label(color, egui::RichText::new(status).size(12.0).strong());
                         ui.small(detail);
@@ -3294,10 +3341,11 @@ impl eframe::App for Cockpit {
                         self.flight_view
                             .set_drone_view(self.selected_drone, self.drone_orbit);
                         self.flight_view.set_remote_ship(self.remote_ship.clone());
+                        let controlled_name = self.controlled_name().to_owned();
                         if let Some(action) = self.flight_view.ui(
                             ui,
                             snapshot,
-                            &self.pilot,
+                            &controlled_name,
                             now,
                             self.connected,
                             &self.effects,
@@ -3335,7 +3383,8 @@ impl eframe::App for Cockpit {
         }
         let flight_allowed = !ctx.input(|i| i.pointer.primary_down())
             && self.view_mode != ViewMode::Tactical
-            && self.connected
+            && self.can_operate()
+            && (self.manual_remote.is_none() || self.controlled_remote().is_some())
             && self.own().is_some_and(|p| {
                 p.flight.is_some() && matches!(p.location, Location::Station | Location::Belt)
             });
@@ -3349,7 +3398,8 @@ impl eframe::App for Cockpit {
             },
         ) {
             self.cancel_ai();
-            *self.controls.lock().unwrap() = Some(control);
+            self.controls
+                .publish_for(control, self.controlled_remote().map(str::to_owned));
         }
         self.boot.paint_handoff(ctx);
     }
@@ -3534,6 +3584,87 @@ fn main() -> eframe::Result<()> {
 mod tests {
     use super::*;
     use std::net::TcpListener;
+
+    #[test]
+    fn remote_view_takeover_and_return_never_change_player_identity() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        let mut worker = cockpit.snapshot.as_ref().unwrap().pilots[0].clone();
+        worker.name = "worker".into();
+        cockpit.snapshot.as_mut().unwrap().pilots.push(worker);
+        cockpit
+            .snapshot
+            .as_mut()
+            .unwrap()
+            .fleet_links
+            .push(FleetLink {
+                pilot: "worker".into(),
+                controller: "pilot".into(),
+            });
+        let (tx, rx) = mpsc::channel();
+        cockpit.commands = Some(tx);
+        cockpit.remote_ship = Some("worker".into());
+        assert_eq!(
+            cockpit.own().unwrap().name,
+            "pilot",
+            "watching never changes controls"
+        );
+        cockpit.take_remote_control("worker".into());
+        assert!(
+            matches!(rx.try_recv().unwrap(), Request::BeginRemoteControl { pilot } if pilot == "worker")
+        );
+        assert_eq!(
+            cockpit.own().unwrap().name,
+            "pilot",
+            "unconfirmed takeover cannot route controls"
+        );
+        cockpit
+            .snapshot
+            .as_mut()
+            .unwrap()
+            .remote_controls
+            .push(RemoteControlLease {
+                pilot: "worker".into(),
+                controller: "pilot".into(),
+            });
+        cockpit.request_pending = false;
+        assert_eq!(cockpit.own().unwrap().name, "worker");
+        cockpit.send(Request::Undock);
+        assert!(
+            matches!(rx.try_recv().unwrap(), Request::RemoteControl { pilot, request } if pilot == "worker" && matches!(*request,Request::Undock))
+        );
+        cockpit.return_to_my_ship();
+        assert!(matches!(rx.try_recv().unwrap(), Request::EndRemoteControl));
+        assert_eq!(cockpit.pilot, "pilot");
+        assert_eq!(cockpit.own().unwrap().name, "pilot");
+        assert!(cockpit.remote_ship.is_none() && cockpit.manual_remote.is_none());
+        assert!(cockpit.controls.is_empty());
+    }
+
+    #[test]
+    fn remote_control_blocks_account_actions_and_revocation_restores_player() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        cockpit.manual_remote = Some("worker".into());
+        cockpit
+            .snapshot
+            .as_mut()
+            .unwrap()
+            .remote_controls
+            .push(RemoteControlLease {
+                pilot: "worker".into(),
+                controller: "pilot".into(),
+            });
+        let (tx, rx) = mpsc::channel();
+        cockpit.commands = Some(tx);
+        cockpit.send(Request::DepositOre { units: 10 });
+        assert!(rx.try_recv().is_err());
+        assert!(cockpit.notice.contains("Return to your own ship"));
+        cockpit.snapshot.as_mut().unwrap().remote_controls.clear();
+        cockpit.sync_remote_control();
+        assert!(cockpit.manual_remote.is_none());
+        assert_eq!(cockpit.own().unwrap().name, "pilot");
+    }
 
     #[test]
     fn voice_order_is_discarded_when_ship_session_or_freshness_changes() {
@@ -3769,6 +3900,7 @@ mod tests {
         cockpit.snapshot = Some(Snapshot {
             resource_jobs: vec![],
             fleet_links: vec![],
+            remote_controls: vec![],
             surface_props: vec![],
             traffic: vec![],
             stored_ore: 0,
@@ -3986,7 +4118,7 @@ mod tests {
         );
         assert!(cockpit.boot.visible);
         assert!(rx.try_recv().is_err());
-        assert!(cockpit.controls.lock().unwrap().is_none());
+        assert!(cockpit.controls.is_empty());
     }
     #[test]
     fn surface_sandbox_commands_require_confirmed_near_ground_and_owned_props() {
@@ -4414,7 +4546,7 @@ mod tests {
             ],
         );
         assert!(
-            cockpit.controls.lock().unwrap().is_none(),
+            cockpit.controls.is_empty(),
             "clicking console with W held must not emit thrust"
         );
         frame(
@@ -5188,6 +5320,7 @@ mod tests {
         cockpit.snapshot = Some(Snapshot {
             resource_jobs: vec![],
             fleet_links: vec![],
+            remote_controls: vec![],
             surface_props: vec![],
             traffic: vec![],
             stored_ore: 0,

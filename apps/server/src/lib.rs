@@ -3,6 +3,7 @@ mod drones;
 mod flight;
 mod mining;
 mod power;
+mod remote_control;
 mod resource_jobs;
 mod surface;
 mod traffic;
@@ -32,6 +33,8 @@ struct Pilot {
 }
 #[derive(Clone, Serialize, Deserialize)]
 struct World {
+    #[serde(default)]
+    remote_controls: BTreeMap<String, String>,
     #[serde(default)]
     fleet_links: BTreeMap<String, String>,
     #[serde(default)]
@@ -63,6 +66,7 @@ fn default_next_drone_id() -> u64 {
 impl Default for World {
     fn default() -> Self {
         Self {
+            remote_controls: BTreeMap::new(),
             fleet_links: BTreeMap::new(),
             resource_jobs: BTreeMap::new(),
             next_job_id: 1,
@@ -153,6 +157,7 @@ impl Server {
         mining::ensure_modules(&mut world);
         drones::ensure_fleets(&mut world)?;
         power::advance(&mut world, now)?;
+        world.remote_controls.clear();
         resource_jobs::cancel_all(&mut world, now, "Server restarted");
         for pilot in world.pilots.values_mut() {
             mining::stop_all(pilot, "Server restarted");
@@ -278,6 +283,7 @@ impl Server {
         drones::ensure_fleets(&mut world)?;
 
         let now = now_ms();
+        remote_control::release_controller(&mut world, name);
         let controlled: Vec<String> = world
             .resource_jobs
             .iter()
@@ -292,6 +298,10 @@ impl Server {
                 && j.view.controller != name
                 && self.online_sessions.contains_key(&j.view.controller)
         });
+        let delegated = delegated
+            || world.remote_controls.iter().any(|(controller, worker)| {
+                worker == name && self.online_sessions.contains_key(controller)
+            });
         if delegated {
             validate(&world)?;
             tx.execute(
@@ -334,11 +344,32 @@ impl Server {
         now: u64,
         automated: bool,
     ) -> Result<Response> {
+        let transport_session = session;
+        let mut effective_session = transport_session.clone();
+        let session = &mut effective_session;
         let tx = self
             .db
             .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         let json: String = tx.query_row("SELECT json FROM world WHERE id=1", [], |r| r.get(0))?;
         let mut world: World = serde_json::from_str(&json).context("invalid durable world")?;
+        let remote = matches!(&request, Request::RemoteControl { .. });
+        let request = if let Request::RemoteControl { pilot, request } = request {
+            let controller = session
+                .as_ref()
+                .context("connect before issuing commands")?;
+            ensure!(!automated, "job controller cannot issue remote wrappers");
+            remote_control::validate_request(&request)?;
+            ensure!(
+                world.remote_controls.get(controller) == Some(&pilot),
+                "remote control lease does not match requested pilot"
+            );
+            resource_jobs::authorize(&world, controller, &pilot)?;
+            *session = Some(pilot);
+            *request
+        } else {
+            request
+        };
+
         flight::migrate_spatial(&mut world);
         universe::ensure_asteroids(&mut world);
         assets::ensure_accounts(&mut world);
@@ -365,13 +396,32 @@ impl Server {
                     | Request::Connect { .. }
                     | Request::StartResourceJob { .. }
                     | Request::CancelResourceJob { .. }
+                    | Request::BeginRemoteControl { .. }
+                    | Request::EndRemoteControl
             )
         {
             if let Some(name) = session.as_ref() {
+                if !remote {
+                    remote_control::release_worker(&mut world, name);
+                }
                 resource_jobs::cancel(&mut world, name, now, "Manual command took control");
             }
         }
         match request {
+            Request::BeginRemoteControl { pilot } => {
+                let controller = session
+                    .as_ref()
+                    .context("connect before issuing commands")?;
+                remote_control::begin(&mut world, controller, &pilot, now)?;
+                message = "Remote control granted";
+            }
+            Request::EndRemoteControl => {
+                let controller = session
+                    .as_ref()
+                    .context("connect before issuing commands")?;
+                remote_control::release_controller(&mut world, controller);
+                message = "Remote control released; own ship remains selected";
+            }
             Request::StartResourceJob {
                 target_units,
                 pilot,
@@ -381,6 +431,11 @@ impl Server {
                     .context("connect before issuing commands")?;
                 let worker = pilot.as_deref().unwrap_or(name);
                 resource_jobs::authorize(&world, name, worker)?;
+                ensure!(
+                    !world.remote_controls.contains_key(name)
+                        && !world.remote_controls.values().any(|p| p == worker),
+                    "end remote control before starting a resource job"
+                );
                 resource_jobs::start(&mut world, worker, name, target_units, now)?;
                 message = "Resource gathering job started";
             }
@@ -520,6 +575,7 @@ impl Server {
                         pilot: pilot.clone(),
                     });
                 }
+                remote_control::release_worker(&mut world, &pilot);
                 resource_jobs::cancel(
                     &mut world,
                     &pilot,
@@ -863,9 +919,17 @@ impl Server {
         }
         let private_assets = connected
             .as_ref()
-            .or(session.as_ref())
+            .or(transport_session.as_ref())
             .and_then(|name| assets::view(&world, name));
         let snapshot = Snapshot {
+            remote_controls: world
+                .remote_controls
+                .iter()
+                .map(|(controller, pilot)| RemoteControlLease {
+                    controller: controller.clone(),
+                    pilot: pilot.clone(),
+                })
+                .collect(),
             fleet_links: world
                 .fleet_links
                 .iter()
@@ -898,7 +962,7 @@ impl Server {
         };
         tx.commit()?;
         if let Some(pilot) = connected {
-            *session = Some(pilot);
+            *transport_session = Some(pilot);
         }
         Ok(Response {
             assets: private_assets,
@@ -964,6 +1028,7 @@ fn add_cargo(current: u64, units: u64, capacity: u64) -> Result<u64> {
     Ok(next)
 }
 fn validate(world: &World) -> Result<()> {
+    remote_control::validate(world)?;
     resource_jobs::validate(world)?;
     surface::validate(world)?;
     ensure!(

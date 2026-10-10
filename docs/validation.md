@@ -523,3 +523,26 @@ string. LaunchServices validation succeeded. Launch the packaged app normally fr
 Finder; the package includes both privacy descriptions and an explicitly targeted
 macOS 14 speech helper. No cloud recognition fallback is permitted. Speech bridges
 are macOS-only; Rust gameplay and typed instructions remain available elsewhere.
+
+## Player identity and remote piloting — 26.10.10.17
+
+Remote viewing, manual piloting and authenticated player identity are separate.
+The main header identifies the player and the exact control/view target, with a
+Return to my ship action outside the service panels. Thirteen service destinations
+are directly visible in a wrapping grid, replacing More. Native inspection of the
+packaged app confirmed the player identity, own-ship label and direct service grid;
+full owner-driven remote cockpit usability acceptance remains pending.
+
+All 95 client tests and strict workspace Clippy passed. New client checks cover
+watch-only identity, server-confirmed manual routing, return while a request is
+pending, account-action exclusion and revocation. Mailbox tests prove old commands
+retain their worker target, return clears queued input, and reconnect does not
+replay remote thrust. Four server acceptance tests cover explicit permission,
+private inventory isolation, denied nested/economic requests, lease switching,
+failed-request rollback, reconnect/revoke/logout and restart.
+
+A real TCP journey against the packaged server moved only the delegated worker
+with manual thrust while the player stayed docked. EndRemoteControl released the
+lease; a stale worker command was rejected, and an ordinary Undock command then
+operated the player's own ship through the unchanged authenticated session. This
+checks real command routing, rather than inferring it from a camera change.

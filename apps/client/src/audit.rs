@@ -218,6 +218,7 @@ mod tests {
             snapshot: Snapshot {
                 resource_jobs: vec![],
                 fleet_links: vec![],
+                remote_controls: vec![],
                 surface_props: vec![],
                 traffic: vec![],
                 stored_ore: 0,

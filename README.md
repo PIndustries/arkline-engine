@@ -414,7 +414,9 @@ The cockpit **AI** tab can perform one server-controlled mining haul on your own
 ship or an existing worker that explicitly granted fleet control. It uses both
 turrets and up to five mining drones, recalls them before return, then deposits
 confirmed ore into that worker's station storage. Watch a permitted worker on the
-left cockpit screen while retaining control of your own ship.
+left cockpit screen while retaining control of your own ship. Explicit **Take manual
+control** switches flight to that worker; the persistent **Return to my ship**
+control restores your own vessel without changing your player login.
 
 Deterministic Start/Cancel controls work without a model. Optional typed Spark
 instructions use SSH and a bounded intent adapter. The macOS package adds explicit

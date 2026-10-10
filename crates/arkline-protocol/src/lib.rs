@@ -414,6 +414,14 @@ pub const GENESIS_HASH: &str = "000000000000000000000000000000000000000000000000
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "command", rename_all = "snake_case")]
 pub enum Request {
+    BeginRemoteControl {
+        pilot: String,
+    },
+    EndRemoteControl,
+    RemoteControl {
+        pilot: String,
+        request: Box<Request>,
+    },
     StartResourceJob {
         target_units: u64,
         #[serde(default)]
@@ -882,6 +890,8 @@ pub struct AssetsView {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Snapshot {
     #[serde(default)]
+    pub remote_controls: Vec<RemoteControlLease>,
+    #[serde(default)]
     pub fleet_links: Vec<FleetLink>,
     #[serde(default)]
     pub resource_jobs: Vec<ResourceJob>,
@@ -1324,4 +1334,40 @@ pub struct ResourceJob {
 pub struct FleetLink {
     pub pilot: String,
     pub controller: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteControlLease {
+    pub controller: String,
+    pub pilot: String,
+}
+
+impl Request {
+    /// Gameplay commands available under an explicit remote piloting lease.
+    pub fn is_remote_gameplay(&self) -> bool {
+        matches!(
+            self,
+            Self::PilotInput { .. }
+                | Self::Navigate { .. }
+                | Self::Warp { .. }
+                | Self::Jump { .. }
+                | Self::Dock
+                | Self::Undock
+                | Self::LockAsteroid { .. }
+                | Self::UnlockAsteroid { .. }
+                | Self::UnlockTarget
+                | Self::StartMining { .. }
+                | Self::StopMining { .. }
+                | Self::LaunchDroneClass { .. }
+                | Self::RecallDroneById { .. }
+                | Self::DroneHoldById { .. }
+                | Self::DroneNavigateById { .. }
+                | Self::AssignMiningDrone { .. }
+                | Self::AssignAttackDrone { .. }
+                | Self::LaunchDrone
+                | Self::RecallDrone
+                | Self::DroneHold
+                | Self::DroneNavigate { .. }
+        )
+    }
 }

@@ -155,10 +155,13 @@ fn recovery_resumes_credentials_and_discards_uncertain_actions_and_controls() {
         .unwrap();
     accepted_rx.recv_timeout(Duration::from_secs(3)).unwrap();
     commands_tx.send(Request::DepositOre { units: 25 }).unwrap();
-    *controls.lock().unwrap() = Some(pilot_input::Controls {
-        translation: [1.0, 0.0, 0.0],
-        rotation: [0.0; 3],
-    });
+    controls.publish_for(
+        pilot_input::Controls {
+            translation: [1.0, 0.0, 0.0],
+            rotation: [0.0; 3],
+        },
+        Some("DelegatedWorker".into()),
+    );
     close_tx.send(()).unwrap();
     match updates_rx.recv_timeout(Duration::from_secs(3)).unwrap() {
         Update::Reconnecting(message) => assert!(message.contains("outcome unknown")),

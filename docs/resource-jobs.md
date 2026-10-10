@@ -43,15 +43,15 @@ A delegated worker can log out while the controller stays connected. The server
 continues its job and keeps its working drones available for that job. The
 controller's last connection closing, the worker reconnecting or issuing manual
 commands, permission revocation, or server restart cancels the job. A self-directed
-job is cancelled when its pilot's last connection closes. These permissions apply
-to this bounded job interface, not unrestricted remote flight or general account
-access.
+job is cancelled when its pilot's last connection closes. The worker grant permits bounded jobs and explicit manual piloting leases.
+It never delegates account login, storage, trading, or corporation access.
 
 **Watch ship** switches to Cockpit and places the selected ship's live exterior
 camera on the left physical screen. Your main cockpit and flight controls remain
 attached to your own ship. The feed checks current delegation and snapshot
 freshness; it does not require a delegated worker to have an open cockpit. Use
-**Restore drone feed** to return that screen to your selected drone. Only one
+**Close remote camera** to restore the drone screen, or **Return to my ship**
+to clear the remote selection. Only one
 remote/drone camera feed is rendered at a time.
 
 ## Typed Spark instructions
@@ -103,3 +103,30 @@ audio is not saved or sent to Spark. The resulting order text and limited select
 ship telemetry go to the configured Spark model. The Rust client/server remain
 Rust; a small Swift helper bridges Apple's Speech and AVFoundation frameworks.
 Other platforms retain typed input; the native speech helper is macOS-only.
+
+
+## Watching, manual control and returning
+
+Your login/player identity never changes when selecting a worker. The persistent
+header distinguishes **YOUR SHIP**, **WATCHING … CAMERA ONLY**, and **REMOTE
+CONTROL**. Watch keeps flight input attached to your player ship. **Take manual
+control** requests a server-confirmed lease for that explicitly permitted worker,
+stops its AI job and places its cockpit/ship state in the main view. Flight,
+navigation, locks, mining modules and drones then address that worker. Account,
+market, inventory and AI-job actions require returning to your player ship.
+
+**Return to my ship** is always visible in the header while watching or controlling
+a remote ship; it does not require reopening the AI panel. It clears queued input,
+releases the piloting lease, closes the camera link and selects your own ship.
+It does not remove the worker or automatically resume a cancelled mining job.
+Release clears manual thrust/rotation and brakes manual flight; previously issued
+navigation autopilot orders can continue. Worker manual takeover/reconnect,
+permission revocation, controller logout or server restart also release the lease.
+Queued remote commands pin the exact worker, so a delayed command cannot steer a
+different ship after switching. The server validates every remote command against
+that lease and a gameplay-only allowlist.
+
+All cockpit service destinations are now visible as a wrapping button grid. The
+current page is highlighted; none are hidden in a More dropdown. Long page content
+scrolls within the physical screen while the service grid and ship actions stay
+visible.

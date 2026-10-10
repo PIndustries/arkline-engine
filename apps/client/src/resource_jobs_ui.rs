@@ -38,6 +38,9 @@ impl Cockpit {
             .find(|j| j.pilot == self.resource_name())
     }
     pub(super) fn resource_start_reason(&self) -> Option<&'static str> {
+        if self.manual_remote.is_some() {
+            return Some("Return to your own ship before assigning AI jobs.");
+        }
         if !self.connected {
             return Some("Offline: reconnect before starting a job.");
         }
@@ -255,9 +258,26 @@ impl Cockpit {
                 self.remote_ship = Some(self.resource_name().to_owned());
                 self.view_mode = ViewMode::Cockpit;
             }
-            if self.remote_ship.is_some() && ui.button("Restore drone feed").clicked() {
+            if ui
+                .add_enabled(
+                    self.can_operate()
+                        && self.resource_authorized()
+                        && self.resource_name() != self.pilot,
+                    egui::Button::new("Take manual control"),
+                )
+                .clicked()
+            {
+                self.take_remote_control(self.resource_name().to_owned());
+            }
+            if (self.remote_ship.is_some() || self.manual_remote.is_some())
+                && ui.button("Return to my ship").clicked()
+            {
+                self.return_to_my_ship();
+            }
+            if self.remote_ship.is_some() && ui.button("Close remote camera").clicked() {
                 self.remote_ship = None;
             }
+            ui.small("Watch = camera only. Take manual control stops that ship's AI job.");
         });
         ui.small("Undock → belt → two turrets + mining drones → return → station storage.");
         let capacity = self

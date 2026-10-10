@@ -3636,6 +3636,7 @@ mod tests {
         });
         let snapshot = Snapshot {
             fleet_links: vec![],
+            remote_controls: vec![],
             resource_jobs: vec![],
             surface_props: vec![],
             traffic: vec![],
