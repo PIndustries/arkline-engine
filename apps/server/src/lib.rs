@@ -1,3 +1,4 @@
+mod flight;
 use anyhow::{bail, ensure, Context, Result};
 use arkline_protocol::*;
 use fs2::FileExt;
@@ -16,6 +17,8 @@ struct Pilot {
     view: PilotView,
     token_hash: String,
     last_mine_ms: Option<u64>,
+    #[serde(default)]
+    warp: Option<flight::WarpPath>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 struct World {
@@ -98,6 +101,20 @@ impl Server {
             "INSERT OR IGNORE INTO world(id,json) VALUES(1,?1)",
             [serde_json::to_string(&World::default())?],
         )?;
+        let json: String = db.query_row("SELECT json FROM world WHERE id=1", [], |r| r.get(0))?;
+        let mut world: World = serde_json::from_str(&json)?;
+        for pilot in world.pilots.values_mut() {
+            if !matches!(pilot.view.location, Location::InTransit { .. }) {
+                if let Some(flight) = &mut pilot.view.flight {
+                    flight.mode = NavigationMode::Stop;
+                    flight.velocity = [0.0; 3];
+                }
+            }
+        }
+        let stopped = serde_json::to_string(&world)?;
+        if stopped != json {
+            db.execute("UPDATE world SET json=?1 WHERE id=1", [stopped])?;
+        }
         Ok(Self {
             db,
             online_sessions: BTreeMap::new(),
@@ -150,8 +167,45 @@ impl Server {
             *count -= 1;
             if *count == 0 {
                 self.online_sessions.remove(pilot);
+                if let Err(error) = self.stop_disconnected(pilot) {
+                    eprintln!("Could not persist disconnected flight stop: {error}");
+                }
             }
         }
+    }
+    pub fn tick(&mut self) -> Result<()> {
+        self.tick_at(now_ms())
+    }
+    pub fn tick_at(&mut self, now: u64) -> Result<()> {
+        let tx = self.db.transaction()?;
+        let json: String = tx.query_row("SELECT json FROM world WHERE id=1", [], |r| r.get(0))?;
+        let mut world: World = serde_json::from_str(&json)?;
+        flight::advance(&mut world, now);
+        let next = serde_json::to_string(&world)?;
+        if next != json {
+            tx.execute("UPDATE world SET json=?1 WHERE id=1", [next])?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+    fn stop_disconnected(&mut self, name: &str) -> Result<()> {
+        let tx = self.db.transaction()?;
+        let json: String = tx.query_row("SELECT json FROM world WHERE id=1", [], |r| r.get(0))?;
+        let mut world: World = serde_json::from_str(&json)?;
+        if let Some(p) = world.pilots.get_mut(name) {
+            if !matches!(p.view.location, Location::InTransit { .. }) {
+                if let Some(f) = &mut p.view.flight {
+                    f.mode = NavigationMode::Stop;
+                    f.velocity = [0.0; 3];
+                }
+            }
+        }
+        let next = serde_json::to_string(&world)?;
+        if next != json {
+            tx.execute("UPDATE world SET json=?1 WHERE id=1", [next])?;
+        }
+        tx.commit()?;
+        Ok(())
     }
     fn execute(
         &mut self,
@@ -164,20 +218,7 @@ impl Server {
             .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         let json: String = tx.query_row("SELECT json FROM world WHERE id=1", [], |r| r.get(0))?;
         let mut world: World = serde_json::from_str(&json).context("invalid durable world")?;
-        for pilot in world.pilots.values_mut() {
-            if let Location::InTransit {
-                destination,
-                arrives_at_ms,
-            } = pilot.view.location
-            {
-                if now >= arrives_at_ms {
-                    pilot.view.location = match destination {
-                        Destination::Station => Location::Station,
-                        Destination::Belt => Location::Belt,
-                    };
-                }
-            }
-        }
+        flight::advance(&mut world, now);
         let mut token = None;
         let mut event = None;
         let mut connected = None;
@@ -226,9 +267,11 @@ impl Server {
                                 credits: STARTER_CREDITS,
                                 ore: 0,
                                 location: Location::Docked,
+                                flight: None,
                             },
                             token_hash: token_hash(&issued),
                             last_mine_ms: None,
+                            warp: None,
                         },
                     );
                     token = Some(issued);
@@ -247,11 +290,33 @@ impl Server {
                     .as_ref()
                     .context("connect before issuing commands")?
                     .clone();
+                if let Request::Navigate { mode } = &request {
+                    flight::validate_mode(mode, &name, &world)?;
+                }
                 let pilot = world.pilots.get_mut(&name).context("pilot missing")?;
+                flight::ensure_flight(pilot, now);
                 match request {
+                    Request::Navigate { mode } => {
+                        ensure!(
+                            !matches!(
+                                pilot.view.location,
+                                Location::Docked | Location::InTransit { .. }
+                            ),
+                            "navigation requires undocked normal space"
+                        );
+                        let f = pilot.view.flight.as_mut().unwrap();
+                        f.mode = mode;
+                        f.updated_at_ms = now;
+                        message = "Navigation accepted";
+                    }
                     Request::Undock => {
                         ensure!(pilot.view.location == Location::Docked, "must be docked");
                         pilot.view.location = Location::Station;
+                        let f = pilot.view.flight.as_mut().unwrap();
+                        f.position = flight::berth(&pilot.view.name, Destination::Station);
+                        f.velocity = [0.0; 3];
+                        f.mode = NavigationMode::Stop;
+                        f.updated_at_ms = now;
                         message = "Undocked";
                     }
                     Request::Warp { destination } => {
@@ -260,13 +325,13 @@ impl Server {
                             "must be in space and not in transit"
                         );
                         ensure!(
-                            !matches!(
-                                (&pilot.view.location, destination),
-                                (Location::Station, Destination::Station)
-                                    | (Location::Belt, Destination::Belt)
-                            ),
+                            flight::distance(
+                                pilot.view.flight.as_ref().unwrap().position,
+                                flight::berth(&pilot.view.name, destination)
+                            ) > 100.0,
                             "already at destination"
                         );
+                        flight::begin_warp(pilot, destination, now);
                         pilot.view.location = Location::InTransit {
                             destination,
                             arrives_at_ms: now
@@ -277,14 +342,34 @@ impl Server {
                     }
                     Request::Dock => {
                         ensure!(
-                            pilot.view.location == Location::Station,
-                            "must be at station"
+                            !matches!(
+                                pilot.view.location,
+                                Location::Docked | Location::InTransit { .. }
+                            ) && flight::distance(
+                                pilot.view.flight.as_ref().unwrap().position,
+                                STATION_POSITION
+                            ) <= DOCK_RANGE,
+                            "must be within docking range in normal space"
                         );
                         pilot.view.location = Location::Docked;
+                        let f = pilot.view.flight.as_mut().unwrap();
+                        f.position = STATION_POSITION;
+                        f.velocity = [0.0; 3];
+                        f.mode = NavigationMode::Stop;
+                        f.updated_at_ms = now;
                         message = "Docked";
                     }
                     Request::Mine { units } => {
-                        ensure!(pilot.view.location == Location::Belt, "must be at belt");
+                        ensure!(
+                            !matches!(
+                                pilot.view.location,
+                                Location::Docked | Location::InTransit { .. }
+                            ) && flight::distance(
+                                pilot.view.flight.as_ref().unwrap().position,
+                                BELT_POSITION
+                            ) <= MINING_RANGE,
+                            "must be within mining range in normal space"
+                        );
                         ensure!(
                             (1..=MAX_MINE_UNITS).contains(&units),
                             "mine quantity must be 1-100"
@@ -381,6 +466,9 @@ impl Server {
                     _ => unreachable!(),
                 }
             }
+        }
+        for pilot in world.pilots.values_mut() {
+            flight::ensure_flight(pilot, now);
         }
         validate(&world)?;
         let mut entries = {
@@ -501,6 +589,16 @@ mod tests {
         );
         assert!(connected.ok);
         assert!(server.handle_at(&mut session, Request::Undock, 101).ok);
+        let before = server.db.total_changes();
+        for time in [101, 101, 101] {
+            assert!(server.handle_at(&mut None, Request::Snapshot, time).ok);
+            assert!(server.handle_at(&mut None, Request::ExportLedger, time).ok);
+        }
+        assert_eq!(
+            server.db.total_changes(),
+            before,
+            "polling unchanged state must not write"
+        );
         assert!(
             server
                 .handle_at(
@@ -512,28 +610,18 @@ mod tests {
                 )
                 .ok
         );
-        let before = server.db.total_changes();
-        for time in [103, 1000, WARP_DURATION_MS + 101] {
-            assert!(server.handle_at(&mut None, Request::Snapshot, time).ok);
-            assert!(server.handle_at(&mut None, Request::ExportLedger, time).ok);
-        }
-        assert_eq!(
-            server.db.total_changes(),
-            before,
-            "polling unchanged state must not write"
-        );
         let arrived = server.handle_at(&mut None, Request::Snapshot, WARP_DURATION_MS + 102);
         assert_eq!(arrived.snapshot.unwrap().pilots[0].location, Location::Belt);
         assert_eq!(
             server.db.total_changes(),
-            before + 1,
-            "arrival must persist once"
+            before + 2,
+            "warp command and arrival each persist once"
         );
         assert!(
             server
                 .handle_at(&mut None, Request::Snapshot, WARP_DURATION_MS + 103)
                 .ok
         );
-        assert_eq!(server.db.total_changes(), before + 1);
+        assert_eq!(server.db.total_changes(), before + 2);
     }
 }

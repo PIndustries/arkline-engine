@@ -28,6 +28,16 @@ fn main() -> Result<()> {
         }
     }
     let server = Arc::new(Mutex::new(Server::open(db)?));
+    let tick_server = server.clone();
+    std::thread::spawn(move || loop {
+        std::thread::sleep(Duration::from_millis(100));
+        let Ok(mut server) = tick_server.lock() else {
+            break;
+        };
+        if let Err(error) = server.tick() {
+            eprintln!("Flight tick failed: {error}");
+        }
+    });
     let listener = TcpListener::bind(&bind)?;
     println!("Arkline server listening on {}", listener.local_addr()?);
     let active = Arc::new(AtomicUsize::new(0));

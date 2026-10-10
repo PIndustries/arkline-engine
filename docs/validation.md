@@ -7,7 +7,7 @@ This document records evidence for the initial Rust model, not approval to publi
 On the development Apple Silicon Mac with Rust 1.89.0:
 
 - Workspace compilation, formatting and Clippy with warnings denied.
-- 31 tests: private client credential persistence/resume, shared trajectory math,
+- Automated coverage includes: private client credential persistence/resume, shared trajectory math,
   stable pilot placement, geometry normals, beam endpoints and asteroid impacts;
   confirmed extraction cues, expiration and purchase/arrival exclusion; GUI audit checkpoint persistence,
   rejection and concurrent-cockpit locking; server authorization,
@@ -80,5 +80,20 @@ The new transport test authenticates two sockets for one pilot, verifies that
 presence survives the first disconnect but disappears after the last, then checks
 that the undocked ship and economic history survive disconnect and restart.
 Unresponsive networks still use the read timeout, not immediate failure detection.
-Theme tests cover saved choices and invalid-file fallback. Free-flight approach,
-keep-at-range, ship computers and distributed authority are not implemented.
+Theme tests cover saved choices and invalid-file fallback. Ship computers and
+distributed authority are not implemented.
+
+## Authoritative flight — 26.10.9.2
+
+The server now integrates position, velocity and heading at 10 Hz. Automated
+checks cover acceleration, bounds, braking, orbit settling, moving-target range
+tracking, warp warm-up and arrival, separated berths, and legacy save migration.
+An actual TCP client moves, stops, restarts the server and recovers the exact
+stopped position without changing cargo, credits or economic ledger history.
+Client tests cover tactical coordinate mapping, 3D destination projection,
+extrapolation limits and physical mining eligibility after manual movement.
+
+Native macOS inspection confirmed build identity, orbit speed/range feedback,
+Ctrl+Space braking to zero, and double-click flight acceptance with acceleration
+and changing distance in the 3D cockpit. This does not establish collision or
+combat behavior: neither is implemented. Warp cannot yet be cancelled.

@@ -16,6 +16,50 @@ pub const MAX_MINE_UNITS: u64 = 100;
 pub const WARP_DURATION_MS: u64 = 6_000;
 /// Initial part of transit spent charging before visual travel begins.
 pub const WARP_WARMUP_MS: u64 = 2_000;
+/// Flight coordinates are meters; the scene renderer uses 100 meters per unit.
+pub const STATION_POSITION: [f64; 3] = [-4500.0, 0.0, 0.0];
+pub const BELT_POSITION: [f64; 3] = [6200.0, 0.0, 0.0];
+pub const MAX_SHIP_SPEED: f64 = 600.0;
+pub const SHIP_ACCELERATION: f64 = 150.0;
+pub const DOCK_RANGE: f64 = 1800.0;
+pub const MINING_RANGE: f64 = 4500.0;
+pub const SPACE_BOUND: f64 = 50000.0;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum NavigationTarget {
+    Station,
+    Belt,
+    Pilot { pilot: String },
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "mode", rename_all = "snake_case")]
+pub enum NavigationMode {
+    Stop,
+    Approach {
+        target: NavigationTarget,
+    },
+    Orbit {
+        target: NavigationTarget,
+        radius: f64,
+    },
+    KeepRange {
+        target: NavigationTarget,
+        distance: f64,
+    },
+    FlyTo {
+        position: [f64; 3],
+    },
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FlightState {
+    pub position: [f64; 3],
+    pub velocity: [f64; 3],
+    pub heading: [f64; 3],
+    pub mode: NavigationMode,
+    pub updated_at_ms: u64,
+}
+
 pub const GENESIS_HASH: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -27,6 +71,9 @@ pub enum Request {
         resume_token: Option<String>,
     },
     Snapshot,
+    Navigate {
+        mode: NavigationMode,
+    },
     Undock,
     Warp {
         destination: Destination,
@@ -68,12 +115,14 @@ pub enum Location {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PilotView {
     pub name: String,
     pub credits: u64,
     pub ore: u64,
     pub location: Location,
+    #[serde(default)]
+    pub flight: Option<FlightState>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

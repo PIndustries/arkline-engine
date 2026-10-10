@@ -74,6 +74,7 @@ fn checkpoint_advances_only_after_full_verification() {
         credits: STARTER_CREDITS,
         ore: 0,
         location: Location::Docked,
+        flight: None,
     });
     export.snapshot.ledger_sequence = 1;
     export.snapshot.ledger_hash = entry.hash.clone();

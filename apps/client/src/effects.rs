@@ -1,5 +1,27 @@
 //! Short presentation cues derived from confirmed snapshot transitions.
-use arkline_protocol::{Location, Snapshot};
+use arkline_protocol::{Location, PilotView, Snapshot, BELT_POSITION, MINING_RANGE};
+
+pub fn can_extract(pilot: &PilotView) -> bool {
+    if matches!(
+        pilot.location,
+        Location::Docked | Location::InTransit { .. }
+    ) {
+        return false;
+    }
+    pilot
+        .flight
+        .as_ref()
+        .map_or(pilot.location == Location::Belt, |flight| {
+            flight
+                .position
+                .iter()
+                .zip(BELT_POSITION)
+                .map(|(a, b)| (a - b).powi(2))
+                .sum::<f64>()
+                .sqrt()
+                <= MINING_RANGE
+        })
+}
 
 pub const EFFECT_DURATION_MS: u64 = 6000;
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -31,10 +53,7 @@ impl Effects {
         let (Some(before), Some(after)) = (before, after) else {
             return;
         };
-        let kind = if before.location == Location::Belt
-            && after.location == Location::Belt
-            && after.ore > before.ore
-        {
+        let kind = if can_extract(before) && can_extract(after) && after.ore > before.ore {
             Some(EffectKind::Mining {
                 units: after.ore - before.ore,
             })
@@ -81,6 +100,7 @@ mod tests {
                 credits: 1000,
                 ore,
                 location,
+                flight: None,
             }],
             orders: vec![],
             belt_ore: INITIAL_BELT_ORE - ore,
@@ -100,6 +120,24 @@ mod tests {
         assert_eq!(effects.mining(6100), None);
         effects.retain(6100);
         assert!(effects.events.is_empty());
+    }
+    #[test]
+    fn mining_feedback_uses_physical_range_after_manual_flight() {
+        let mut before = snapshot(Location::Station, 0);
+        before.pilots[0].flight = Some(FlightState {
+            position: BELT_POSITION,
+            velocity: [0.0; 3],
+            heading: [1.0, 0.0, 0.0],
+            mode: NavigationMode::Stop,
+            updated_at_ms: 100,
+        });
+        let mut after = before.clone();
+        after.pilots[0].ore = 25;
+        let mut effects = Effects::default();
+        effects.observe(&before, &after, "Pilot", 100);
+        assert_eq!(effects.mining(100), Some((0.0, 25)));
+        after.pilots[0].flight.as_mut().unwrap().position = STATION_POSITION;
+        assert!(!can_extract(&after.pilots[0]));
     }
     #[test]
     fn purchases_and_arrival_do_not_look_like_extraction() {

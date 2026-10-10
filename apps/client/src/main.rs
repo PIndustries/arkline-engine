@@ -193,6 +193,8 @@ struct Cockpit {
     effects: effects::Effects,
     theme: theme::Theme,
     settings_notice: String,
+    navigation_range: f64,
+    context_fly_to: Option<[f64; 3]>,
 }
 impl Cockpit {
     fn new(
@@ -233,6 +235,8 @@ impl Cockpit {
             effects: effects::Effects::default(),
             theme,
             settings_notice: String::new(),
+            navigation_range: 500.0,
+            context_fly_to: None,
         }
     }
     fn accent(&self) -> Color32 {
@@ -326,6 +330,13 @@ impl Cockpit {
             }
             Err(error) => self.log(format!("Could not open second cockpit: {error}"), true),
         }
+    }
+    fn can_fly(&self) -> bool {
+        self.can_operate()
+            && self.own().is_some_and(|p| {
+                p.flight.is_some()
+                    && !matches!(p.location, Location::Docked | Location::InTransit { .. })
+            })
     }
     fn can_operate(&self) -> bool {
         self.connected && !self.request_pending
@@ -468,7 +479,7 @@ impl Cockpit {
                 self.accent(),
             );
         }
-        if pilot.location == Location::Belt {
+        if in_navigation_range(&pilot, BELT_POSITION, MINING_RANGE) {
             if let Some((progress, units)) = self.effects.mining(now) {
                 return (
                     "MINING LASER ACTIVE".into(),
@@ -499,6 +510,29 @@ impl Cockpit {
                     self.accent(),
                 ),
             };
+        }
+        if pilot.location != Location::Docked {
+            if let Some(flight) = &pilot.flight {
+                let label = match flight.mode {
+                    NavigationMode::Stop => "STOP / BRAKING",
+                    NavigationMode::Approach { .. } => "APPROACHING TARGET",
+                    NavigationMode::Orbit { .. } => "ORBITING TARGET",
+                    NavigationMode::KeepRange { .. } => "KEEPING RANGE",
+                    NavigationMode::FlyTo { .. } => "FLYING TO POINT",
+                };
+                return (
+                    label.into(),
+                    format!(
+                        "{:.0} m/s · server-authoritative flight",
+                        distance_m(flight.velocity, [0.0; 3])
+                    ),
+                    Some(
+                        (distance_m(flight.velocity, [0.0; 3]) / MAX_SHIP_SPEED).clamp(0.0, 1.0)
+                            as f32,
+                    ),
+                    self.accent(),
+                );
+            }
         }
         match pilot.location {
             Location::Docked => (
@@ -590,58 +624,46 @@ impl Cockpit {
                     .color(self.accent())
                     .strong(),
             );
-            let active = self.can_operate();
-            let (guidance, primary) = match pilot.location {
-                Location::Docked if pilot.ore > 0 => (
-                    "Ore secured. Open the exchange to list cargo for another pilot.",
-                    "Undock",
-                ),
-                Location::Docked => (
-                    "Undock, travel to the belt, then mine your first cargo.",
-                    "Undock",
-                ),
-                Location::Station => (
-                    "Station perimeter. Dock for market access or travel to the belt.",
-                    "Dock at station",
-                ),
-                Location::Belt => (
-                    "Extract ore here, then return to the station to trade.",
-                    "Return to station",
-                ),
-                Location::InTransit { .. } => (
-                    "Transit is in progress. Navigation resumes after server-confirmed arrival.",
-                    "In transit",
-                ),
-            };
-            ui.colored_label(MUTED, guidance);
-            let can_navigate = active && !matches!(pilot.location, Location::InTransit { .. });
-            if ui
-                .add_enabled(
-                    can_navigate,
-                    egui::Button::new(primary).min_size(Vec2::new(ui.available_width(), 34.0)),
-                )
-                .clicked()
-            {
-                self.send(match pilot.location {
-                    Location::Docked => Request::Undock,
-                    Location::Station => Request::Dock,
-                    _ => Request::Warp {
-                        destination: Destination::Station,
-                    },
-                });
-            }
-            if matches!(pilot.location, Location::Station)
-                && ui
+            ui.small("Select an object to approach, orbit, keep range, or warp. Double-click empty space to fly there.");
+            ui.horizontal(|ui| {
+                if ui
                     .add_enabled(
-                        active,
-                        egui::Button::new("Warp to asteroid belt")
-                            .min_size(Vec2::new(ui.available_width(), 30.0)),
+                        self.can_operate() && pilot.location == Location::Docked,
+                        egui::Button::new("Undock"),
                     )
                     .clicked()
-            {
-                self.send(Request::Warp {
-                    destination: Destination::Belt,
-                });
+                {
+                    self.send(Request::Undock);
+                }
+                if ui
+                    .add_enabled(self.can_dock(&pilot), egui::Button::new("Dock"))
+                    .clicked()
+                {
+                    self.send(Request::Dock);
+                }
+                if ui
+                    .add_enabled(self.can_fly(), egui::Button::new("Stop"))
+                    .clicked()
+                {
+                    self.send(Request::Navigate {
+                        mode: NavigationMode::Stop,
+                    });
+                }
+            });
+            if let Some(flight) = &pilot.flight {
+                ui.colored_label(
+                    self.accent(),
+                    format!(
+                        "Speed {:.0} / {:.0} m/s",
+                        distance_m(flight.velocity, [0.0; 3]),
+                        MAX_SHIP_SPEED
+                    ),
+                );
+                ui.small(format!(
+                    "Station {} · Belt {}",
+                    format_distance(distance_m(flight.position, STATION_POSITION)),
+                    format_distance(distance_m(flight.position, BELT_POSITION))
+                ));
             }
             ui.separator();
             ui.horizontal(|ui| {
@@ -658,9 +680,10 @@ impl Cockpit {
             {
                 self.send(Request::Mine { units: self.amount });
             }
-            if pilot.location != Location::Belt {
-                ui.small("Extraction requires arrival at the belt.");
-            }
+            ui.small(format!(
+                "Extraction requires undocked range ≤ {}.",
+                format_distance(MINING_RANGE)
+            ));
             if ui.button("Inspect cargo").clicked() {
                 self.service_tab = ServiceTab::Cargo;
             }
@@ -669,16 +692,171 @@ impl Cockpit {
             }
         }
     }
+    fn can_dock(&self, pilot: &PilotView) -> bool {
+        self.can_operate() && in_navigation_range(pilot, STATION_POSITION, DOCK_RANGE)
+    }
     fn can_mine(&self, pilot: &PilotView) -> bool {
         self.can_operate()
             && self.amount > 0
             && self.amount <= MAX_MINE_UNITS
-            && pilot.location == Location::Belt
+            && in_navigation_range(pilot, BELT_POSITION, MINING_RANGE)
             && pilot.ore.saturating_add(self.amount) <= CARGO_CAPACITY
             && self
                 .snapshot
                 .as_ref()
                 .is_some_and(|s| s.belt_ore >= self.amount)
+    }
+    fn selected_target(&self) -> Option<NavigationTarget> {
+        match &self.selected_object {
+            SelectedObject::Station => Some(NavigationTarget::Station),
+            SelectedObject::Belt => Some(NavigationTarget::Belt),
+            SelectedObject::Pilot(name) => self
+                .snapshot
+                .as_ref()
+                .and_then(|s| {
+                    s.pilots.iter().find(|p| {
+                        p.name == *name
+                            && p.name != self.pilot
+                            && p.location != Location::Docked
+                            && p.flight.is_some()
+                    })
+                })
+                .map(|p| NavigationTarget::Pilot {
+                    pilot: p.name.clone(),
+                }),
+        }
+    }
+    fn selected_position(&self) -> Option<[f64; 3]> {
+        match &self.selected_object {
+            SelectedObject::Station => Some(STATION_POSITION),
+            SelectedObject::Belt => Some(BELT_POSITION),
+            SelectedObject::Pilot(name) => self
+                .snapshot
+                .as_ref()?
+                .pilots
+                .iter()
+                .find(|p| p.name == *name)?
+                .flight
+                .as_ref()
+                .map(|f| f.position),
+        }
+    }
+    fn navigation_controls(&mut self, ui: &mut egui::Ui) {
+        let target = self.selected_target();
+        let enabled = self.can_fly() && target.is_some();
+        if let Some(own) = self.own() {
+            if let (Some(flight), Some(position)) = (own.flight.as_ref(), self.selected_position())
+            {
+                ui.colored_label(
+                    self.accent(),
+                    format!(
+                        "Range {}",
+                        format_distance(distance_m(flight.position, position))
+                    ),
+                );
+            }
+        }
+        ui.horizontal(|ui| {
+            ui.label("Range");
+            egui::ComboBox::from_id_salt("nav-range")
+                .selected_text(format_distance(self.navigation_range))
+                .show_ui(ui, |ui| {
+                    for range in [100.0, 500.0, 1000.0] {
+                        ui.selectable_value(
+                            &mut self.navigation_range,
+                            range,
+                            format_distance(range),
+                        );
+                    }
+                });
+        });
+        ui.horizontal(|ui| {
+            if ui
+                .add_enabled(enabled, egui::Button::new("Approach"))
+                .clicked()
+            {
+                self.send(Request::Navigate {
+                    mode: NavigationMode::Approach {
+                        target: target.clone().unwrap(),
+                    },
+                });
+            }
+            if ui
+                .add_enabled(enabled, egui::Button::new("Orbit"))
+                .clicked()
+            {
+                self.send(Request::Navigate {
+                    mode: NavigationMode::Orbit {
+                        target: target.clone().unwrap(),
+                        radius: self.navigation_range,
+                    },
+                });
+            }
+        });
+        ui.horizontal(|ui| {
+            if ui
+                .add_enabled(enabled, egui::Button::new("Keep range"))
+                .clicked()
+            {
+                self.send(Request::Navigate {
+                    mode: NavigationMode::KeepRange {
+                        target: target.clone().unwrap(),
+                        distance: self.navigation_range,
+                    },
+                });
+            }
+            if ui
+                .add_enabled(self.can_fly(), egui::Button::new("Stop"))
+                .clicked()
+            {
+                self.send(Request::Navigate {
+                    mode: NavigationMode::Stop,
+                });
+            }
+        });
+        let destination = match self.selected_object {
+            SelectedObject::Station => Some(Destination::Station),
+            SelectedObject::Belt => Some(Destination::Belt),
+            _ => None,
+        };
+        if let Some(destination) = destination {
+            if ui
+                .add_enabled(self.can_fly(), egui::Button::new("Warp to selected"))
+                .clicked()
+            {
+                self.send(Request::Warp { destination });
+            }
+        }
+        if self.selected_object == SelectedObject::Station {
+            let can_dock = self.own().is_some_and(|p| self.can_dock(&p));
+            if ui
+                .add_enabled(can_dock, egui::Button::new("Dock"))
+                .clicked()
+            {
+                self.send(Request::Dock);
+            }
+            ui.small(format!("Docking range: {}", format_distance(DOCK_RANGE)));
+        }
+        if self.selected_object == SelectedObject::Belt {
+            let can_mine = self.own().is_some_and(|p| self.can_mine(&p));
+            if ui
+                .add_enabled(
+                    can_mine,
+                    egui::Button::new(format!("Extract {} ore", self.amount)),
+                )
+                .clicked()
+            {
+                self.send(Request::Mine { units: self.amount });
+            }
+            ui.small(format!(
+                "Extraction range: {}",
+                format_distance(MINING_RANGE)
+            ));
+        }
+        if matches!(&self.selected_object, SelectedObject::Pilot(name) if name == &self.pilot) {
+            ui.small("Select another vessel or a location to navigate.");
+        }
+        ui.small("Ctrl+Space: stop · Double-click empty space: fly there");
     }
     fn overview(&mut self, ui: &mut egui::Ui) {
         ui.label(
@@ -698,20 +876,19 @@ impl Cockpit {
             SelectedObject::Belt,
             "◆  Asteroid Belt",
         );
-        ui.add_space(8.0);
         let pilots = self
             .snapshot
             .as_ref()
             .map(|s| s.pilots.clone())
             .unwrap_or_default();
         ui.label(
-            egui::RichText::new(format!("KNOWN PILOTS  /  {}", pilots.len()))
+            egui::RichText::new(format!("KNOWN PILOTS / {}", pilots.len()))
                 .size(11.0)
                 .color(MUTED),
         );
         egui::ScrollArea::vertical()
             .id_salt("overview-roster")
-            .max_height(150.0)
+            .max_height(110.0)
             .show(ui, |ui| {
                 for pilot in &pilots {
                     let online = if pilot.name == self.pilot {
@@ -721,20 +898,10 @@ impl Cockpit {
                             .as_ref()
                             .is_some_and(|s| s.online_pilots.contains(&pilot.name))
                     };
-                    let label = format!(
-                        "{} {}{}",
-                        if online { "●" } else { "○" },
-                        pilot.name,
-                        if pilot.name == self.pilot {
-                            " (you)"
-                        } else {
-                            ""
-                        }
-                    );
                     ui.selectable_value(
                         &mut self.selected_object,
                         SelectedObject::Pilot(pilot.name.clone()),
-                        label,
+                        format!("{} {}", if online { "●" } else { "○" }, pilot.name),
                     )
                     .on_hover_text(if online {
                         "Connected"
@@ -744,138 +911,51 @@ impl Cockpit {
                 }
             });
         ui.small(if self.connected {
-            "Connected / disconnected status is live. Undocked vessels remain in the world."
+            "Live presence; undocked ships persist."
         } else {
-            "Connection lost: showing last known presence. Undocked vessels remain in the world."
+            "Last known presence; connection lost."
         });
-        ui.add_space(10.0);
         ui.separator();
         ui.label(
             egui::RichText::new("SELECTED OBJECT")
                 .color(self.accent())
                 .strong(),
         );
-        let own = self.own();
         match self.selected_object.clone() {
             SelectedObject::Station => {
                 ui.heading("Arkline Station");
-                ui.colored_label(MUTED, "Orbital trade facility");
-                ui.label("Dock to exchange ore, settle trades, or manage sell orders.");
-                if let Some(pilot) = &own {
-                    match pilot.location {
-                        Location::Docked => {
-                            ui.colored_label(self.accent(), "You are docked here");
-                            if ui.button("Station exchange").clicked() {
-                                self.service_tab = ServiceTab::Exchange;
-                            }
-                        }
-                        Location::Station => {
-                            if ui
-                                .add_enabled(self.can_operate(), egui::Button::new("Dock"))
-                                .clicked()
-                            {
-                                self.send(Request::Dock);
-                            }
-                        }
-                        Location::Belt => {
-                            if ui
-                                .add_enabled(
-                                    self.can_operate(),
-                                    egui::Button::new("Warp to station"),
-                                )
-                                .clicked()
-                            {
-                                self.send(Request::Warp {
-                                    destination: Destination::Station,
-                                });
-                            }
-                        }
-                        Location::InTransit { .. } => {
-                            ui.small("Navigation locked during transit");
-                        }
-                    }
-                }
+                ui.small("Dock to trade cargo and manage orders.");
             }
             SelectedObject::Belt => {
                 ui.heading("Asteroid Belt");
-                ui.colored_label(MUTED, "Ore extraction site");
-                if let Some(s) = &self.snapshot {
-                    ui.label(
-                        egui::RichText::new(format!("{} ore remaining", s.belt_ore)).color(AMBER),
-                    );
-                }
-                ui.label(format!("Extraction batches: up to {} units. Cargo is credited after server confirmation.", MAX_MINE_UNITS));
-                if let Some(pilot) = &own {
-                    match pilot.location {
-                        Location::Docked => {
-                            ui.small("Undock before entering the route.");
-                            if ui
-                                .add_enabled(self.can_operate(), egui::Button::new("Undock"))
-                                .clicked()
-                            {
-                                self.send(Request::Undock);
-                            }
-                        }
-                        Location::Station => {
-                            if ui
-                                .add_enabled(self.can_operate(), egui::Button::new("Warp to belt"))
-                                .clicked()
-                            {
-                                self.send(Request::Warp {
-                                    destination: Destination::Belt,
-                                });
-                            }
-                        }
-                        Location::Belt => {
-                            if ui
-                                .add_enabled(
-                                    self.can_mine(pilot),
-                                    egui::Button::new(format!("Extract {} ore", self.amount)),
-                                )
-                                .clicked()
-                            {
-                                self.send(Request::Mine { units: self.amount });
-                            }
-                        }
-                        Location::InTransit { .. } => {
-                            ui.small("Navigation locked during transit");
-                        }
-                    }
+                if let Some(snapshot) = &self.snapshot {
+                    ui.colored_label(AMBER, format!("{} ore remaining", snapshot.belt_ore));
                 }
             }
             SelectedObject::Pilot(name) => {
                 if let Some(pilot) = pilots.iter().find(|p| p.name == name) {
                     ui.heading(&pilot.name);
-                    let online = if pilot.name == self.pilot {
+                    ui.small(location_label(&pilot.location));
+                    let online = if name == self.pilot {
                         self.connected
                     } else {
                         self.snapshot
                             .as_ref()
-                            .is_some_and(|s| s.online_pilots.contains(&pilot.name))
+                            .is_some_and(|s| s.online_pilots.contains(&name))
                     };
                     ui.colored_label(
                         if online { self.accent() } else { MUTED },
                         if online { "Connected" } else { "Disconnected" },
                     );
-                    ui.colored_label(MUTED, location_label(&pilot.location));
-                    ui.separator();
-                    ui.label(format!("{} CR", pilot.credits));
-                    ui.label(format!("{} ore in cargo", pilot.ore));
-                    let order_count = self
-                        .snapshot
-                        .as_ref()
-                        .map_or(0, |s| s.orders.iter().filter(|o| o.seller == name).count());
-                    ui.label(format!("{} active sell orders", order_count));
-                    if ui.button("View exchange").clicked() {
-                        self.service_tab = ServiceTab::Exchange;
-                    }
-                } else {
-                    ui.small("Pilot unavailable in current snapshot.");
+                    ui.small(format!("{} CR · {} ore", pilot.credits, pilot.ore));
                 }
             }
         }
-        ui.add_space(12.0);
+        self.navigation_controls(ui);
         ui.separator();
+        if ui.button("Station exchange").clicked() {
+            self.service_tab = ServiceTab::Exchange;
+        }
         if let Some((message, error)) = self.feed.front() {
             ui.label(egui::RichText::new("LATEST UPDATE").size(11.0).color(MUTED));
             ui.colored_label(if *error { AMBER } else { self.accent() }, message);
@@ -1102,8 +1182,7 @@ impl Cockpit {
             Vec2::new(ui.available_width(), ui.available_height().max(220.0)),
             egui::Sense::click(),
         );
-        let clicked = response
-            .clicked()
+        let clicked = (response.clicked() || response.secondary_clicked())
             .then(|| response.interact_pointer_pos())
             .flatten();
         let mut selected = None;
@@ -1121,8 +1200,8 @@ impl Cockpit {
                 Color32::from_gray(50 + (i % 75) as u8),
             );
         }
-        let station = Pos2::new(rect.left() + rect.width() * 0.23, rect.center().y);
-        let belt = Pos2::new(rect.left() + rect.width() * 0.78, rect.center().y);
+        let station = tactical_project(rect, STATION_POSITION);
+        let belt = tactical_project(rect, BELT_POSITION);
         if clicked.is_some_and(|p| p.distance(station) <= 43.0) {
             selected = Some(SelectedObject::Station);
         }
@@ -1184,9 +1263,8 @@ impl Cockpit {
                 if pilot.location == Location::Docked {
                     continue;
                 }
-                let t = flight3d::route_progress(&pilot.location, server_now);
-                let position = station.lerp(belt, t)
-                    + Vec2::new(0.0, -56.0 - flight3d::lane(&pilot.name) * 14.0);
+                let position =
+                    tactical_project(rect, flight3d::display_position(pilot, server_now));
                 if clicked.is_some_and(|p| p.distance(position) < 20.0) {
                     selected = Some(SelectedObject::Pilot(pilot.name.clone()));
                 }
@@ -1194,6 +1272,13 @@ impl Cockpit {
                     selection_brackets(&paint, position, 15.0, self.accent());
                 }
                 let heading = flight3d::heading(&pilot.location);
+                let direction = pilot
+                    .flight
+                    .as_ref()
+                    .map(|f| Vec2::new(f.heading[0] as f32, f.heading[2] as f32).normalized())
+                    .filter(|v| v.length_sq() > 0.1)
+                    .unwrap_or(Vec2::new(heading, 0.0));
+                let perpendicular = Vec2::new(-direction.y, direction.x);
                 let color = if pilot.name == self.pilot {
                     self.accent()
                 } else {
@@ -1201,7 +1286,7 @@ impl Cockpit {
                 };
                 if pilot.name == self.pilot {
                     if let Some((progress, units)) = self.effects.mining(server_now) {
-                        if pilot.location == Location::Belt {
+                        if in_navigation_range(pilot, BELT_POSITION, MINING_RANGE) {
                             // Same deterministic asteroid placement as the visible belt above.
                             let angle: f32 = 6.0 * 2.399;
                             let target = belt + Vec2::angled(angle) * 23.0;
@@ -1330,9 +1415,9 @@ impl Cockpit {
                 }
                 paint.add(egui::Shape::convex_polygon(
                     vec![
-                        position + Vec2::new(heading * 8.0, 0.0),
-                        position + Vec2::new(-heading * 6.0, -5.0),
-                        position + Vec2::new(-heading * 6.0, 5.0),
+                        position + direction * 8.0,
+                        position - direction * 6.0 - perpendicular * 5.0,
+                        position - direction * 6.0 + perpendicular * 5.0,
                     ],
                     color,
                     Stroke::NONE,
@@ -1353,13 +1438,74 @@ impl Cockpit {
                 MUTED,
             );
         }
+        let hit_object = selected.is_some();
         if let Some(selected) = selected {
             self.selected_object = selected;
         }
+        if response.double_clicked() && !hit_object && self.can_fly() {
+            if let Some(point) = response.interact_pointer_pos() {
+                let altitude = self
+                    .own()
+                    .and_then(|p| p.flight.map(|f| f.position[1]))
+                    .unwrap_or(0.0);
+                self.send(Request::Navigate {
+                    mode: NavigationMode::FlyTo {
+                        position: tactical_unproject(rect, point, altitude),
+                    },
+                });
+            }
+        }
+        if response.secondary_clicked() {
+            self.context_fly_to =
+                response
+                    .interact_pointer_pos()
+                    .filter(|_| !hit_object)
+                    .map(|point| {
+                        tactical_unproject(
+                            rect,
+                            point,
+                            self.own()
+                                .and_then(|p| p.flight.map(|f| f.position[1]))
+                                .unwrap_or(0.0),
+                        )
+                    });
+        }
+        response.context_menu(|ui| {
+            if let Some(position) = self.context_fly_to {
+                if ui
+                    .add_enabled(self.can_fly(), egui::Button::new("Fly here"))
+                    .clicked()
+                {
+                    self.send(Request::Navigate {
+                        mode: NavigationMode::FlyTo { position },
+                    });
+                    ui.close_menu();
+                }
+            } else if let Some(target) = self.selected_target() {
+                if ui
+                    .add_enabled(self.can_fly(), egui::Button::new("Approach selected"))
+                    .clicked()
+                {
+                    self.send(Request::Navigate {
+                        mode: NavigationMode::Approach { target },
+                    });
+                    ui.close_menu();
+                }
+            }
+            if ui
+                .add_enabled(self.can_fly(), egui::Button::new("Stop ship"))
+                .clicked()
+            {
+                self.send(Request::Navigate {
+                    mode: NavigationMode::Stop,
+                });
+                ui.close_menu();
+            }
+        });
         paint.text(
             rect.right_bottom() + Vec2::new(-12.0, -12.0),
             egui::Align2::RIGHT_BOTTOM,
-            "CLICK AN OBJECT TO SELECT",
+            "CLICK TO SELECT · DOUBLE-CLICK SPACE TO FLY",
             egui::FontId::monospace(10.0),
             MUTED,
         );
@@ -1373,6 +1519,46 @@ impl Cockpit {
             );
         }
     }
+}
+fn in_navigation_range(pilot: &PilotView, target: [f64; 3], range: f64) -> bool {
+    !matches!(
+        pilot.location,
+        Location::Docked | Location::InTransit { .. }
+    ) && pilot
+        .flight
+        .as_ref()
+        .is_some_and(|f| distance_m(f.position, target) <= range)
+}
+fn distance_m(a: [f64; 3], b: [f64; 3]) -> f64 {
+    a.into_iter()
+        .zip(b)
+        .map(|(x, y)| (x - y).powi(2))
+        .sum::<f64>()
+        .sqrt()
+}
+fn format_distance(value: f64) -> String {
+    if value >= 1000.0 {
+        format!("{:.1} km", value / 1000.0)
+    } else {
+        format!("{value:.0} m")
+    }
+}
+fn tactical_project(rect: egui::Rect, position: [f64; 3]) -> Pos2 {
+    let scale = rect.width() * 0.55 / (BELT_POSITION[0] - STATION_POSITION[0]) as f32;
+    Pos2::new(
+        rect.left() + rect.width() * 0.23 + (position[0] - STATION_POSITION[0]) as f32 * scale,
+        rect.center().y + position[2] as f32 * scale,
+    )
+}
+fn tactical_unproject(rect: egui::Rect, position: Pos2, altitude: f64) -> [f64; 3] {
+    let scale = rect.width() * 0.55 / (BELT_POSITION[0] - STATION_POSITION[0]) as f32;
+    [
+        (((position.x - rect.left() - rect.width() * 0.23) / scale) as f64 + STATION_POSITION[0])
+            .clamp(-SPACE_BOUND, SPACE_BOUND),
+        altitude.clamp(-SPACE_BOUND, SPACE_BOUND),
+        ((position.y - rect.center().y) / scale) as f64,
+    ]
+    .map(|v| v.clamp(-SPACE_BOUND, SPACE_BOUND))
 }
 fn selection_brackets(painter: &egui::Painter, center: Pos2, radius: f32, color: Color32) {
     for x in [-1.0, 1.0] {
@@ -1411,6 +1597,14 @@ impl eframe::App for Cockpit {
         }
         self.poll();
         self.effects.retain(self.presentation_time());
+        if !ctx.wants_keyboard_input()
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::Space))
+            && self.can_fly()
+        {
+            self.send(Request::Navigate {
+                mode: NavigationMode::Stop,
+            });
+        }
         ctx.request_repaint_after(Duration::from_millis(33));
         egui::TopBottomPanel::top("brand").show(ctx, |ui| {
             ui.add_space(8.0);
@@ -1600,7 +1794,16 @@ impl eframe::App for Cockpit {
                         &self.effects,
                         &self.selected_object,
                     ) {
-                        self.selected_object = selected;
+                        match selected {
+                            flight3d::ViewAction::Select(object) => self.selected_object = object,
+                            flight3d::ViewAction::FlyTo(position) => {
+                                if self.can_fly() {
+                                    self.send(Request::Navigate {
+                                        mode: NavigationMode::FlyTo { position },
+                                    });
+                                }
+                            }
+                        }
                     }
                 }
             } else {
@@ -1790,6 +1993,47 @@ mod tests {
     use super::*;
     use std::net::TcpListener;
 
+    #[test]
+    fn tactical_pointer_projection_preserves_meter_coordinates() {
+        let rect = egui::Rect::from_min_size(egui::pos2(200.0, 100.0), egui::vec2(740.0, 400.0));
+        for position in [STATION_POSITION, BELT_POSITION, [1234.0, 77.0, -2345.0]] {
+            let result = tactical_unproject(rect, tactical_project(rect, position), position[1]);
+            assert!(distance_m(result, position) < 0.01);
+        }
+        let bounded = tactical_unproject(rect, egui::pos2(1e9, -1e9), 1e9);
+        assert!(bounded.iter().all(|v| v.abs() <= SPACE_BOUND));
+    }
+    #[test]
+    fn action_range_uses_physical_position_and_rejects_docked_or_transit() {
+        let mut pilot = PilotView {
+            name: "Range test".into(),
+            credits: 0,
+            ore: 0,
+            location: Location::Station,
+            flight: Some(FlightState {
+                position: [BELT_POSITION[0] + MINING_RANGE, 0.0, 0.0],
+                velocity: [0.0; 3],
+                heading: [1.0, 0.0, 0.0],
+                mode: NavigationMode::Stop,
+                updated_at_ms: 0,
+            }),
+        };
+        assert!(in_navigation_range(&pilot, BELT_POSITION, MINING_RANGE));
+        pilot.flight.as_mut().unwrap().position[0] += 0.1;
+        assert!(!in_navigation_range(&pilot, BELT_POSITION, MINING_RANGE));
+        pilot.flight.as_mut().unwrap().position = STATION_POSITION;
+        assert!(in_navigation_range(&pilot, STATION_POSITION, DOCK_RANGE));
+        pilot.location = Location::Docked;
+        assert!(!in_navigation_range(&pilot, STATION_POSITION, DOCK_RANGE));
+        pilot.location = Location::InTransit {
+            destination: Destination::Station,
+            arrives_at_ms: 100,
+        };
+        assert!(!in_navigation_range(&pilot, STATION_POSITION, DOCK_RANGE));
+        pilot.location = Location::Station;
+        pilot.flight = None;
+        assert!(!in_navigation_range(&pilot, STATION_POSITION, DOCK_RANGE));
+    }
     #[test]
     fn connection_persists_private_credential_and_resumes_identity() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();

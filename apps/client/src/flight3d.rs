@@ -1,11 +1,17 @@
 //! Native GPU flight view. Presentation only: never issues simulation commands.
 use arkline_protocol::{
-    Destination, Location, PilotView, Snapshot, WARP_DURATION_MS, WARP_WARMUP_MS,
+    Destination, Location, NavigationMode, NavigationTarget, PilotView, Snapshot, BELT_POSITION,
+    MAX_SHIP_SPEED, SPACE_BOUND, STATION_POSITION, WARP_DURATION_MS, WARP_WARMUP_MS,
 };
 use eframe::{egui, egui_glow, glow};
 use glam::{Mat4, Quat, Vec3};
 use glow::HasContext;
 use std::sync::{Arc, Mutex};
+
+pub enum ViewAction {
+    Select(super::SelectedObject),
+    FlyTo([f64; 3]),
+}
 
 pub fn route_progress(location: &Location, now: u64) -> f32 {
     match *location {
@@ -73,12 +79,82 @@ pub fn lane(name: &str) -> f32 {
     });
     (hash % 11) as f32 - 5.0
 }
-fn position(pilot: &PilotView, now: u64) -> Vec3 {
+pub fn display_position(pilot: &PilotView, now: u64) -> [f64; 3] {
+    if let Some(flight) = &pilot.flight {
+        let seconds = if matches!(
+            pilot.location,
+            Location::Docked | Location::InTransit { .. }
+        ) {
+            0.0
+        } else {
+            now.saturating_sub(flight.updated_at_ms).min(350) as f64 / 1000.0
+        };
+        return std::array::from_fn(|axis| flight.position[axis] + flight.velocity[axis] * seconds);
+    }
+    // Older snapshots lack a flight record. Their coarse locations retain the
+    // legacy display route; current servers always supply authoritative flight.
     Vec3::new(
         -45.0 + route_progress(&pilot.location, now) * 105.0,
         lane(&pilot.name) * 1.8,
         20.0 + lane(&pilot.name) * 2.0,
     )
+    .to_array()
+    .map(|value| value as f64 * 100.0)
+}
+
+fn scene_position(meters: [f64; 3]) -> Vec3 {
+    Vec3::from_array(meters.map(|value| (value / 100.0) as f32))
+}
+fn position(pilot: &PilotView, now: u64) -> Vec3 {
+    scene_position(display_position(pilot, now))
+}
+
+fn orientation(forward: [f64; 3]) -> Option<Quat> {
+    let direction = Vec3::from_array(forward.map(|value| value as f32));
+    (direction.is_finite() && direction.length_squared() > 1e-6)
+        .then(|| Quat::from_rotation_arc(Vec3::X, direction.normalize()))
+}
+
+fn ship_orientation(pilot: &PilotView) -> Quat {
+    pilot
+        .flight
+        .as_ref()
+        .and_then(|flight| orientation(flight.heading).or_else(|| orientation(flight.velocity)))
+        .unwrap_or_else(|| {
+            Quat::from_rotation_y(if heading(&pilot.location) < 0.0 {
+                std::f32::consts::PI
+            } else {
+                0.0
+            })
+        })
+}
+
+fn navigation_destination(
+    pilot: &PilotView,
+    snapshot: &Snapshot,
+    now: u64,
+) -> Option<(&'static str, Vec3)> {
+    if matches!(
+        pilot.location,
+        Location::Docked | Location::InTransit { .. }
+    ) {
+        return None;
+    }
+    let (label, target) = match &pilot.flight.as_ref()?.mode {
+        NavigationMode::Stop => return None,
+        NavigationMode::FlyTo { position } => return Some(("FLY TO", scene_position(*position))),
+        NavigationMode::Approach { target } => ("APPROACH", target),
+        NavigationMode::Orbit { target, .. } => ("ORBIT", target),
+        NavigationMode::KeepRange { target, .. } => ("KEEP RANGE", target),
+    };
+    let target = match target {
+        NavigationTarget::Station => scene_position(STATION_POSITION),
+        NavigationTarget::Belt => scene_position(BELT_POSITION),
+        NavigationTarget::Pilot { pilot } => {
+            position(snapshot.pilots.iter().find(|p| &p.name == pilot)?, now)
+        }
+    };
+    Some((label, target))
 }
 
 pub struct FlightView {
@@ -89,6 +165,7 @@ pub struct FlightView {
     target: Vec3,
     follow: bool,
     focus_selection: bool,
+    context_target: Option<[f64; 3]>,
 }
 impl FlightView {
     pub fn new(gl: Option<&Arc<glow::Context>>) -> Self {
@@ -104,6 +181,7 @@ impl FlightView {
             target: Vec3::new(-45.0, 0.0, 20.0),
             follow: true,
             focus_selection: false,
+            context_target: None,
         }
     }
     pub fn destroy(&mut self) {
@@ -125,7 +203,7 @@ impl FlightView {
         connected: bool,
         effects: &super::effects::Effects,
         selected: &super::SelectedObject,
-    ) -> Option<super::SelectedObject> {
+    ) -> Option<ViewAction> {
         let mut picked = None;
         ui.horizontal(|ui| {
             ui.label(
@@ -158,12 +236,12 @@ impl FlightView {
                 self.pitch = 0.35;
             }
         });
-        ui.small("Drag to orbit · Scroll to zoom · Flight controls remain server authoritative");
+        ui.small("Drag: orbit camera · Scroll: zoom · Double-click empty space: fly there · Right-click: navigation");
         let (rect, response) = ui.allocate_exact_size(
             ui.available_size().max(egui::vec2(100.0, 150.0)),
             egui::Sense::click_and_drag(),
         );
-        if response.dragged() {
+        if response.dragged_by(egui::PointerButton::Primary) {
             let delta = ui.input(|i| i.pointer.delta());
             self.yaw -= delta.x * 0.007;
             self.pitch = (self.pitch + delta.y * 0.006).clamp(-1.25, 1.25);
@@ -174,14 +252,14 @@ impl FlightView {
             .clamp(9.0, 260.0);
         }
         let selected_position = match selected {
-            super::SelectedObject::Station => Vec3::new(-45.0, 0.0, 0.0),
-            super::SelectedObject::Belt => Vec3::new(62.0, 0.0, 0.0),
+            super::SelectedObject::Station => scene_position(STATION_POSITION),
+            super::SelectedObject::Belt => scene_position(BELT_POSITION),
             super::SelectedObject::Pilot(name) => snapshot
                 .pilots
                 .iter()
                 .find(|p| &p.name == name)
                 .map(|p| position(p, now))
-                .unwrap_or(Vec3::ZERO),
+                .unwrap_or(self.target),
         };
         let desired = if self.focus_selection {
             selected_position
@@ -191,7 +269,7 @@ impl FlightView {
                 .iter()
                 .find(|p| p.name == pilot_name)
                 .map(|p| position(p, now))
-                .unwrap_or(Vec3::ZERO)
+                .unwrap_or(self.target)
         } else {
             Vec3::new(7.5, 0.0, 5.0)
         };
@@ -277,26 +355,18 @@ impl FlightView {
                         }
                     }
                 }
-                let project = |point: Vec3| -> Option<egui::Pos2> {
-                    let clip = vp * point.extend(1.0);
-                    if clip.w <= 0.0 {
-                        return None;
-                    }
-                    let ndc = clip.truncate() / clip.w;
-                    if ndc.z.abs() > 1.0 {
-                        return None;
-                    }
-                    let screen = rect.center()
-                        + egui::vec2(ndc.x * rect.width() * 0.5, -ndc.y * rect.height() * 0.5);
-                    rect.contains(screen).then_some(screen)
-                };
+                let project = |point: Vec3| project_point(vp, rect, point);
                 let mut targets = vec![
                     (
                         super::SelectedObject::Station,
-                        Vec3::new(-45.0, 0.0, 0.0),
+                        scene_position(STATION_POSITION),
                         14.0,
                     ),
-                    (super::SelectedObject::Belt, Vec3::new(62.0, 0.0, 0.0), 5.0),
+                    (
+                        super::SelectedObject::Belt,
+                        scene_position(BELT_POSITION),
+                        5.0,
+                    ),
                 ];
                 for i in 0..115 {
                     targets.push((
@@ -316,9 +386,21 @@ impl FlightView {
                         4.0,
                     ));
                 }
-                if response.clicked() {
+                let own_pilot = snapshot
+                    .pilots
+                    .iter()
+                    .find(|pilot| pilot.name == pilot_name);
+                let can_navigate = connected
+                    && own_pilot.is_some_and(|pilot| {
+                        pilot.flight.is_some()
+                            && !matches!(
+                                pilot.location,
+                                Location::Docked | Location::InTransit { .. }
+                            )
+                    });
+                if response.clicked() || response.secondary_clicked() {
                     if let Some(pointer) = response.interact_pointer_pos() {
-                        picked = targets
+                        let object = targets
                             .iter()
                             .filter_map(|(object, center, radius)| {
                                 let screen = project(*center)?;
@@ -330,10 +412,76 @@ impl FlightView {
                             })
                             .min_by(|a, b| a.0.total_cmp(&b.0))
                             .map(|(_, object)| object);
+                        let destination = if object.is_none() && can_navigate {
+                            own_pilot
+                                .and_then(|pilot| {
+                                    unproject_to_plane(vp, rect, pointer, position(pilot, now).y)
+                                })
+                                .map(|point| point.to_array().map(|value| value as f64 * 100.0))
+                        } else {
+                            None
+                        };
+                        if response.secondary_clicked() {
+                            self.context_target = destination;
+                        }
+                        if let Some(object) = object {
+                            picked = Some(ViewAction::Select(object));
+                        } else if response.double_clicked() {
+                            picked = destination.map(ViewAction::FlyTo);
+                        }
                     }
                 }
+                response.context_menu(|ui| {
+                    ui.label("Navigation");
+                    if ui
+                        .add_enabled(
+                            can_navigate && self.context_target.is_some(),
+                            egui::Button::new("Fly here"),
+                        )
+                        .clicked()
+                    {
+                        picked = self.context_target.map(ViewAction::FlyTo);
+                        ui.close_menu();
+                    }
+                    ui.small("Destination lies on your ship's horizontal plane.");
+                });
                 let painter = ui.painter_at(rect);
-                let selected_visible = !matches!(selected, super::SelectedObject::Pilot(name) if snapshot.pilots.iter().any(|p| &p.name == name && p.location == Location::Docked));
+                if let Some(own) = own_pilot {
+                    if let Some((label, destination)) = navigation_destination(own, snapshot, now) {
+                        if let Some(point) = project(destination) {
+                            let stroke = egui::Stroke::new(1.5, super::AMBER);
+                            painter.circle_stroke(point, 12.0, stroke);
+                            painter.line_segment(
+                                [point - egui::vec2(18.0, 0.0), point + egui::vec2(18.0, 0.0)],
+                                stroke,
+                            );
+                            painter.line_segment(
+                                [point - egui::vec2(0.0, 18.0), point + egui::vec2(0.0, 18.0)],
+                                stroke,
+                            );
+                            painter.text(
+                                point + egui::vec2(0.0, -22.0),
+                                egui::Align2::CENTER_BOTTOM,
+                                label,
+                                egui::FontId::monospace(12.0),
+                                super::AMBER,
+                            );
+                            if let Some(ship) = project(position(own, now)) {
+                                painter.line_segment(
+                                    [ship, point],
+                                    egui::Stroke::new(1.0, super::AMBER.gamma_multiply(0.35)),
+                                );
+                            }
+                        }
+                    }
+                }
+                let selected_visible = match selected {
+                    super::SelectedObject::Pilot(name) => snapshot
+                        .pilots
+                        .iter()
+                        .any(|pilot| &pilot.name == name && pilot.location != Location::Docked),
+                    _ => true,
+                };
                 if selected_visible {
                     if let Some(point) = project(selected_position) {
                         let stroke = egui::Stroke::new(1.8, super::TEAL);
@@ -343,6 +491,20 @@ impl FlightView {
                                 .line_segment([corner, corner - egui::vec2(x * 10.0, 0.0)], stroke);
                             painter
                                 .line_segment([corner, corner - egui::vec2(0.0, y * 10.0)], stroke);
+                        }
+                        if let Some(own) = own_pilot {
+                            let meters = position(own, now).distance(selected_position) * 100.0;
+                            painter.text(
+                                point + egui::vec2(0.0, 31.0),
+                                egui::Align2::CENTER_TOP,
+                                if meters >= 1000.0 {
+                                    format!("{:.2} km", meters / 1000.0)
+                                } else {
+                                    format!("{meters:.0} m")
+                                },
+                                egui::FontId::monospace(12.0),
+                                super::TEAL,
+                            );
                         }
                     }
                 }
@@ -374,7 +536,8 @@ impl FlightView {
                                 2.0,
                                 super::TEAL,
                             );
-                        } else if effects.mining(now).is_some() && own.location == Location::Belt {
+                        } else if effects.mining(now).is_some() && super::effects::can_extract(own)
+                        {
                             painter.text(
                                 rect.center_top() + egui::vec2(0.0, 45.0),
                                 egui::Align2::CENTER_TOP,
@@ -695,7 +858,7 @@ impl Renderer {
                 .as_ref(),
             0,
         );
-        let station = Mat4::from_translation(Vec3::new(-45.0, 0.0, 0.0));
+        let station = Mat4::from_translation(scene_position(STATION_POSITION));
         self.draw(1, station * Mat4::from_scale(Vec3::splat(13.0)), steel, 0.0);
         self.draw(
             1,
@@ -774,12 +937,10 @@ impl Renderer {
         for pilot in &frame.pilots {
             let own = pilot.name == frame.own;
             let accent = if own { teal } else { amber };
-            let dir = heading(&pilot.location);
-            let yaw = if dir < 0.0 { std::f32::consts::PI } else { 0.0 };
             let ship = transform(
                 position(pilot, frame.now),
                 Vec3::ONE,
-                Quat::from_rotation_y(yaw),
+                ship_orientation(pilot),
             );
             self.draw(
                 4,
@@ -848,12 +1009,7 @@ impl Renderer {
         gl.depth_mask(false);
         for pilot in &frame.pilots {
             let ship_position = position(pilot, frame.now);
-            let rotation = Quat::from_rotation_y(if heading(&pilot.location) < 0.0 {
-                std::f32::consts::PI
-            } else {
-                0.0
-            });
-            let ship = transform(ship_position, Vec3::ONE, rotation);
+            let ship = transform(ship_position, Vec3::ONE, ship_orientation(pilot));
             let warp = warp_phase(&pilot.location, frame.now);
             if pilot.location != Location::Docked {
                 let (length, intensity) = match warp {
@@ -861,7 +1017,18 @@ impl Renderer {
                     Some(("WARP LAUNCH", _)) => (12.0, 3.2),
                     Some(("WARP CRUISE", _)) => (10.0, 2.7),
                     Some(("WARP ARRIVAL", progress)) => (10.0 - progress * 6.0, 2.7 - progress),
-                    _ => (3.8, 1.6),
+                    _ => {
+                        let speed = pilot.flight.as_ref().map_or(0.0, |flight| {
+                            flight
+                                .velocity
+                                .iter()
+                                .map(|value| value * value)
+                                .sum::<f64>()
+                                .sqrt()
+                        });
+                        let thrust = (speed / MAX_SHIP_SPEED).clamp(0.0, 1.0) as f32;
+                        (0.3 + thrust * 3.5, 0.25 + thrust * 1.35)
+                    }
                 };
                 let pulse = 1.0
                     + 0.10
@@ -931,7 +1098,7 @@ impl Renderer {
                 continue;
             }
             if let Some((progress, units)) =
-                frame.mining.filter(|_| pilot.location == Location::Belt)
+                frame.mining.filter(|_| super::effects::can_extract(pilot))
             {
                 let source = ship.transform_point3(Vec3::new(0.4, 1.05, 0.0));
                 if let Some(impact) = mining_impact(source) {
@@ -1038,6 +1205,54 @@ impl Renderer {
         self.gl.delete_program(self.background);
     }
 }
+fn project_point(vp: Mat4, rect: egui::Rect, point: Vec3) -> Option<egui::Pos2> {
+    let clip = vp * point.extend(1.0);
+    if !clip.is_finite() || clip.w <= 0.0 {
+        return None;
+    }
+    let ndc = clip.truncate() / clip.w;
+    if ndc.z.abs() > 1.0 {
+        return None;
+    }
+    let screen =
+        rect.center() + egui::vec2(ndc.x * rect.width() * 0.5, -ndc.y * rect.height() * 0.5);
+    rect.contains(screen).then_some(screen)
+}
+
+/// A navigation ray intersects the horizontal plane through the real ship.
+/// Horizon, behind-camera, outside-viewport and nonfinite targets are rejected.
+fn unproject_to_plane(
+    vp: Mat4,
+    rect: egui::Rect,
+    pointer: egui::Pos2,
+    height: f32,
+) -> Option<Vec3> {
+    if !rect.contains(pointer) || rect.width() <= 0.0 || rect.height() <= 0.0 || !height.is_finite()
+    {
+        return None;
+    }
+    let x = (pointer.x - rect.center().x) * 2.0 / rect.width();
+    let y = (rect.center().y - pointer.y) * 2.0 / rect.height();
+    let inverse = vp.inverse();
+    let near = inverse * glam::Vec4::new(x, y, -1.0, 1.0);
+    let far = inverse * glam::Vec4::new(x, y, 1.0, 1.0);
+    if !near.is_finite() || !far.is_finite() || near.w.abs() < 1e-7 || far.w.abs() < 1e-7 {
+        return None;
+    }
+    let origin = near.truncate() / near.w;
+    let direction = (far.truncate() / far.w - origin).normalize_or_zero();
+    if direction.y.abs() < 0.0001 {
+        return None;
+    }
+    let distance = (height - origin.y) / direction.y;
+    if distance <= 0.0 || distance > 1200.0 {
+        return None;
+    }
+    let target = origin + direction * distance;
+    (target.is_finite() && target.abs().max_element() <= (SPACE_BOUND / 100.0) as f32)
+        .then_some(target)
+}
+
 fn transform(p: Vec3, scale: Vec3, rotation: Quat) -> Mat4 {
     Mat4::from_scale_rotation_translation(scale, rotation, p)
 }
@@ -1048,11 +1263,12 @@ fn asteroid_model(i: usize) -> Mat4 {
     let f = i as f32;
     let angle = f * 2.39996;
     let radius = 6.0 + (i % 13) as f32 * 2.9;
-    let p = Vec3::new(
-        62.0 + angle.cos() * radius,
-        (f * 1.71).sin() * 7.0,
-        angle.sin() * radius,
-    );
+    let p = scene_position(BELT_POSITION)
+        + Vec3::new(
+            angle.cos() * radius,
+            (f * 1.71).sin() * 7.0,
+            angle.sin() * radius,
+        );
     let scale = 0.6 + (i % 7) as f32 * 0.28;
     transform(
         p,
@@ -1198,6 +1414,71 @@ vec2 sun=p-vec2(0.84,0.82);float flare=0.0018/(dot(sun,sun)+0.006);c+=vec3(0.17,
 mod tests {
     use super::*;
     #[test]
+    fn extrapolation_is_bounded_and_warp_uses_server_position() {
+        let mut pilot = PilotView {
+            name: "Moving".into(),
+            credits: 1000,
+            ore: 0,
+            location: Location::Station,
+            flight: Some(arkline_protocol::FlightState {
+                position: [1000.0, 500.0, -200.0],
+                velocity: [100.0, 0.0, 0.0],
+                heading: [0.0, 0.0, -1.0],
+                mode: NavigationMode::Stop,
+                updated_at_ms: 1000,
+            }),
+        };
+        assert_eq!(position(&pilot, 900), Vec3::new(10.0, 5.0, -2.0));
+        assert!((position(&pilot, 1200).x - 10.2).abs() < 0.0001);
+        assert_eq!(position(&pilot, 1350), position(&pilot, 90_000));
+        pilot.location = Location::InTransit {
+            destination: Destination::Belt,
+            arrives_at_ms: 7000,
+        };
+        assert_eq!(position(&pilot, 1200), Vec3::new(10.0, 5.0, -2.0));
+        pilot.location = Location::Docked;
+        assert_eq!(position(&pilot, 1200), Vec3::new(10.0, 5.0, -2.0));
+        let moving_orientation = ship_orientation(&pilot);
+        pilot.flight.as_mut().unwrap().velocity = [0.0; 3];
+        assert_eq!(
+            moving_orientation,
+            ship_orientation(&pilot),
+            "stopping must preserve authoritative heading"
+        );
+        assert!((moving_orientation * Vec3::X).distance(-Vec3::Z) < 0.0001);
+        assert!(orientation([0.0; 3]).is_none());
+        assert!(orientation([f64::NAN, 0.0, 0.0]).is_none());
+    }
+    #[test]
+    fn navigation_projection_roundtrips_horizontal_plane() {
+        let rect = egui::Rect::from_min_size(egui::pos2(310.0, 80.0), egui::vec2(800.0, 600.0));
+        let eye = Vec3::new(15.0, 22.0, 28.0);
+        let vp = Mat4::perspective_rh_gl(0.85, rect.width() / rect.height(), 0.3, 1200.0)
+            * Mat4::look_at_rh(eye, Vec3::ZERO, Vec3::Y);
+        for world in [
+            Vec3::ZERO,
+            Vec3::new(3.0, 0.0, -2.0),
+            Vec3::new(-2.0, 4.0, 3.0),
+        ] {
+            let screen = project_point(vp, rect, world).unwrap();
+            let recovered = unproject_to_plane(vp, rect, screen, world.y).unwrap();
+            assert!(
+                world.distance(recovered) < 0.002,
+                "{world:?} -> {recovered:?}"
+            );
+        }
+        assert!(unproject_to_plane(vp, rect, rect.max + egui::vec2(2.0, 0.0), 0.0).is_none());
+        assert!(unproject_to_plane(Mat4::ZERO, rect, rect.center(), 0.0).is_none());
+        let horizon = Mat4::perspective_rh_gl(0.85, 4.0 / 3.0, 0.3, 1200.0)
+            * Mat4::look_at_rh(
+                Vec3::new(0.0, 10.0, 10.0),
+                Vec3::new(0.0, 10.0, 0.0),
+                Vec3::Y,
+            );
+        assert!(unproject_to_plane(horizon, rect, rect.center(), 0.0).is_none());
+        assert!(unproject_to_plane(vp, rect, rect.center(), 100.0).is_none());
+    }
+    #[test]
     fn beam_transform_ends_on_requested_points_and_rejects_empty_segments() {
         let start = Vec3::new(8.0, -3.0, 2.0);
         let end = Vec3::new(-4.0, 1.5, 7.0);
@@ -1320,6 +1601,7 @@ mod tests {
             credits: 100,
             ore: 0,
             location: Location::Station,
+            flight: None,
         };
         let before = position(&pilot, 100);
         let _other = lane("Another pilot");

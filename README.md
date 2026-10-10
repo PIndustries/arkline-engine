@@ -181,8 +181,10 @@ and includes the original Arkline orbital icon.
 
 Click a station, asteroid belt or visible ship in either viewport to select it.
 The right panel shows contextual actions; **Focus selected** moves the 3D camera.
-Clicking an asteroid selects its shared belt resource. Camera orbit is presentation;
-free-flight approach, ship orbit and keep-at-range commands are not implemented.
+Clicking an asteroid selects its shared belt resource. Use **Approach**, **Orbit**, or **Keep range** to move the ship around the selected
+object. Double-click empty space to fly to a point; **Ctrl+Space** brakes to a stop.
+Both views share server-controlled positions, speed and range. Camera dragging
+only changes the view. See [flight controls](docs/flight-controls.md) for limits.
 
 Online status counts live authenticated connections separately from durable ships.
 Explicit disconnects are removed on socket closure; an unresponsive network may
