@@ -458,3 +458,44 @@ terrain elevation or collision against props/stations. Hull flight tuning is sha
 preview ships are free. Background traffic has no economic behavior. MIDI, Stream Deck
 and event-driven audio remain design proposals. Separate community relay/universe
 hosting, federation and the open-source license are not implemented in this build.
+
+## Resource jobs and remote ship console — 26.10.10.15
+
+The first fleet controller uses ordinary authoritative commands to undock, travel,
+lock an asteroid, operate both turrets and five mining drones, recall, return, dock
+and deposit. Five new server acceptance tests cover real drone extraction events,
+ledger-consistent storage, two concurrent delegated workers, permission rejection,
+manual takeover, last-controller disconnect, worker reconnect, revoke, restart,
+depleted resources and bounded low-power waits.
+
+An explicitly invoked integration test contacted the configured Spark model through
+SSH, validated its 700-unit gathering intent, and sent the resulting request over
+real TCP to the packaged server in an isolated universe. The worker disconnected
+while its controller stayed connected. The job completed in 90.9 seconds with five
+deployed mining drones, actual drone extraction, recalled drones, a docked empty
+ship and exactly 700 units in the worker's station storage. The packaged independent
+verifier accepted the exported economic history. This is an actual-time journey,
+not an accelerated tick simulation. Run it with explicit server/verifier paths:
+
+```sh
+ARKLINE_QA_SERVER_BINARY=/absolute/path/arkline-server \
+ARKLINE_QA_VERIFIER_BINARY=/absolute/path/arkline-verifier \
+cargo test -p arkline-client spark_drives_delegated_drone_haul_over_real_tcp \
+  --locked -- --ignored --nocapture
+```
+
+Client tests cover bounded model intents, cancellation, stale-session/freshness
+checks, cockpit pointer routing and remote camera authorization, system filtering,
+large-coordinate origin and module state. A native 1106-by-768 inspection exposed
+console overflow; the fix adds a bounded vertical viewport and visible scrollbar.
+An exact-size pointer regression scrolls the prompt and Submit control into the
+physical screen, clicks the prompt and verifies typed input. Native inspection of
+the rebuilt app showed its real exterior remote feed inside the cockpit during an
+active gathering job and warp. Full native interactive sign-off remains with the
+owner; neither that capture nor the tests prove all cockpit layouts/performance.
+
+Spark is a typed intent interpreter, not a per-frame flight controller. The server
+runs the job after acceptance. This release does not add voice, arbitrary fleet
+planning, production manufacturing, relay propagation delays or signal-dependent
+remote camera degradation. Jobs are one bounded same-system haul per worker;
+restart cancels rather than silently resuming. The repository remains private.

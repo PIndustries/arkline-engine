@@ -222,8 +222,8 @@ protocol. Reconnection after playing keeps the existing recovery UI.
 UNDOCK is always in the physical console header when docked, independent of active
 tab or content scrolling. In space that control becomes DOCK; STOP sits beside it.
 The visible capacitor gauge reports current server energy. Flight navigation and
-power remain accessible without finding the Station tab. Six primary tabs and a
-More menu replace the crowded row of eleven services.
+power remain accessible without finding the Station tab. The primary service tabs and a
+More menu keep the remaining services accessible.
 
 Warp charges its reservation once, before departure. It does not continuously
 charge the same trip again. Turret mining, drone mining and attack-drone shots draw
@@ -231,3 +231,22 @@ energy when work actually happens. The reactor recharges by elapsed server time,
 including while parked/offline, capped at hull capacity. A low capacitor blocks
 warp and stops unfunded mining/firing. Hover the gauge for per-action costs. Ship
 combat guns, thermal damage and customizable power routing remain unimplemented.
+
+## Ship computer and remote worker feed
+
+**AI** opens the ship computer. Choose your ship or an explicitly delegated worker,
+set a goal, then **Start gathering** for one same-system haul. The ship must begin
+docked with empty cargo and no deployed drones. Server automation uses both
+turrets and up to five mining drones, recalls the fleet, returns and deposits ore.
+**Cancel job** stops automation; successful manual controls override it.
+
+A worker grants or revokes permission in its own **Fleet permission** section.
+**Watch ship** displays the permitted worker on the left cockpit screen without
+changing the ship you fly. **Restore drone feed** restores the selected drone. A
+worker may be logged out while its controller remains connected; controller
+logout, worker reconnect/manual action, revocation or restart cancels the job.
+
+Typed **Submit instruction** uses the optional Spark SSH adapter and directly
+submits supported validated intents. It provides no voice control. See
+[resource jobs](resource-jobs.md) for prerequisites, confirmed progress, stale
+reply protection and endpoint configuration.

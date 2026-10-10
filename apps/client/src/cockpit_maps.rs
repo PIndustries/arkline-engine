@@ -350,3 +350,178 @@ mod tests {
         assert!((high.y + 8.0).abs() < 0.001);
     }
 }
+
+/// Delegated workers can remain simulated without an interactive player session.
+/// Authorization and freshness are rechecked on every authoritative snapshot.
+pub(super) fn remote_worker<'a>(
+    snapshot: &'a Snapshot,
+    controller: &str,
+    target: &str,
+    now: u64,
+    connected: bool,
+) -> Option<&'a PilotView> {
+    if !connected || now.saturating_sub(snapshot.server_time_ms) > 1500 {
+        return None;
+    }
+    if target != controller
+        && !snapshot
+            .fleet_links
+            .iter()
+            .any(|link| link.pilot == target && link.controller == controller)
+    {
+        return None;
+    }
+    snapshot.pilots.iter().find(|p| p.name == target)
+}
+pub(super) fn remote_ship_frame(
+    main: &Frame,
+    snapshot: &Snapshot,
+    worker: &PilotView,
+    aspect: f32,
+) -> Frame {
+    let mut feed = main.clone();
+    feed.space = Space {
+        origin: super::super::motion::position(worker, main.now),
+    };
+    feed.system_id = worker.system_id;
+    feed.own = worker.name.clone();
+    feed.ship_class = worker.ship_class;
+    feed.rotation = ship_orientation_at(worker, main.now);
+    let radius = (worker.ship_class.spec().length_m as f32 / 100.0 * 1.7).max(1.5);
+    let phase = (main.now % 120_000) as f32 / 120_000.0 * std::f32::consts::TAU;
+    feed.eye = Vec3::new(phase.cos() * radius, radius * 0.45, phase.sin() * radius);
+    let view = Mat4::look_at_rh(feed.eye, Vec3::ZERO, Vec3::Y);
+    feed.vp = Mat4::perspective_rh_gl(1.05, aspect.max(0.1), 0.002, 1200.0) * view;
+    feed.planet_vp = Mat4::perspective_rh_gl(1.05, aspect.max(0.1), 1.0, 300_000.0) * view;
+    feed.cockpit = false;
+    feed.drone_camera = true;
+    feed.camera_drone = None;
+    feed.docking = None;
+    feed.pilots = snapshot
+        .pilots
+        .iter()
+        .filter(|p| {
+            p.system_id == worker.system_id
+                && (p.location != Location::Docked || p.name == worker.name)
+        })
+        .cloned()
+        .collect();
+    feed.asteroids = snapshot
+        .asteroids
+        .iter()
+        .filter(|a| a.system_id == worker.system_id)
+        .cloned()
+        .collect();
+    feed.gates = arkline_protocol::gates()
+        .into_iter()
+        .filter(|g| g.system_id == worker.system_id)
+        .collect();
+    feed.traffic = snapshot
+        .traffic
+        .iter()
+        .filter(|a| a.system_id == worker.system_id)
+        .cloned()
+        .collect();
+    feed.surface_props = snapshot
+        .surface_props
+        .iter()
+        .filter(|p| p.system_id == worker.system_id)
+        .cloned()
+        .collect();
+    feed
+}
+
+#[cfg(test)]
+mod remote_tests {
+    use super::*;
+    fn snapshot() -> Snapshot {
+        serde_json::from_value(serde_json::json!({
+            "server_time_ms":1000,"pilots":[
+                {"name":"Controller","credits":1000,"ore":0,"location":Location::Station,"system_id":1},
+                {"name":"Worker","credits":1000,"ore":0,"location":Location::Belt,"system_id":2,
+                 "flight":{"position":[299195741400.0,2000.0,3000.0],"velocity":[0.0,0.0,0.0],"heading":[1.0,0.0,0.0],"mode":NavigationMode::Stop,"updated_at_ms":1000}}
+            ],"orders":[],"belt_ore":100000,"ledger_sequence":0,"ledger_hash":"",
+            "fleet_links":[{"pilot":"Worker","controller":"Controller"}],
+            "asteroids":[{"id":1,"system_id":1,"name":"Other","position":[0.0,0.0,0.0],"radius":100.0,"ore":100},
+                         {"id":2,"system_id":2,"name":"Local","position":[299195741400.0,0.0,0.0],"radius":100.0,"ore":100}]
+        })).unwrap()
+    }
+    fn main_frame() -> Frame {
+        Frame {
+            cockpit_vp: Mat4::IDENTITY,
+            snapshot_time: 1000,
+            planet_vp: Mat4::IDENTITY,
+            system_id: 1,
+            ship_class: ShipClass::Pioneer,
+            traffic: vec![],
+            surface_props: vec![],
+            drone_camera: false,
+            camera_drone: None,
+            space: Space::default(),
+            cockpit: true,
+            rotation: Quat::IDENTITY,
+            asteroids: vec![],
+            gates: vec![],
+            connected: true,
+            vp: Mat4::IDENTITY,
+            eye: Vec3::new(1.0, 2.0, 3.0),
+            now: 1000,
+            pilots: vec![],
+            own: "Controller".into(),
+            docking: None,
+        }
+    }
+    #[test]
+    fn remote_authorization_is_live_revocable_and_does_not_require_worker_session() {
+        let mut s = snapshot();
+        assert!(s.online_pilots.is_empty());
+        assert!(remote_worker(&s, "Controller", "Worker", 1000, true).is_some());
+        assert!(remote_worker(&s, "Stranger", "Worker", 1000, true).is_none());
+        assert!(remote_worker(&s, "Controller", "Worker", 1000, false).is_none());
+        assert!(remote_worker(&s, "Controller", "Worker", 2501, true).is_none());
+        s.fleet_links.clear();
+        assert!(remote_worker(&s, "Controller", "Worker", 1000, true).is_none());
+        assert!(remote_worker(&s, "Controller", "Controller", 1000, true).is_some());
+    }
+    #[test]
+    fn worker_camera_rebases_actual_pose_filters_system_and_leaves_main_unchanged() {
+        let mut s = snapshot();
+        s.pilots[1]
+            .mining_modules
+            .push(arkline_protocol::MiningModule {
+                module_id: 0,
+                target_id: Some(2),
+                cycle_started_at_ms: Some(1000),
+                cycle_completes_at_ms: Some(7000),
+                stop_reason: None,
+            });
+        let worker = &s.pilots[1];
+        let main = main_frame();
+        let feed = remote_ship_frame(&main, &s, worker, 1.5);
+        assert_eq!(feed.space.origin, worker.flight.as_ref().unwrap().position);
+        assert_eq!(feed.system_id, 2);
+        assert_eq!(feed.own, "Worker");
+        assert_eq!(feed.pilots.len(), 1);
+        assert_eq!(feed.pilots[0].mining_modules, worker.mining_modules);
+        assert!(feed.gates.iter().all(|g| g.system_id == 2));
+        assert_eq!(feed.asteroids.len(), 1);
+        assert_eq!(feed.asteroids[0].id, 2);
+        let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(300.0, 200.0));
+        assert!(
+            project_point(feed.vp, rect, Vec3::ZERO)
+                .unwrap()
+                .distance(rect.center())
+                < 0.001
+        );
+        let mut moved = worker.clone();
+        moved.flight.as_mut().unwrap().position[1] += 5000.0;
+        let moved_feed = remote_ship_frame(&main, &s, &moved, 1.5);
+        assert_eq!(moved_feed.space.origin[1] - feed.space.origin[1], 5000.0);
+        assert_eq!(main.own, "Controller");
+        assert_eq!(main.system_id, 1);
+        assert!(main.cockpit);
+        assert_eq!(main.eye, Vec3::new(1.0, 2.0, 3.0));
+        assert!(!feed.cockpit);
+        assert!(feed.drone_camera);
+    }
+}

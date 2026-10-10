@@ -143,6 +143,8 @@ mod tests {
     use super::*;
     fn snapshot(time: u64, x: f64) -> Snapshot {
         Snapshot {
+            resource_jobs: vec![],
+            fleet_links: vec![],
             surface_props: vec![],
             traffic: vec![],
             stored_ore: 0,

@@ -23,6 +23,8 @@ fn checkpoint_advances_only_after_full_verification() {
         protocol_version: PROTOCOL_VERSION,
         entries: vec![],
         snapshot: Snapshot {
+            fleet_links: vec![],
+            resource_jobs: vec![],
             surface_props: vec![],
             traffic: vec![],
             stored_ore: 0,

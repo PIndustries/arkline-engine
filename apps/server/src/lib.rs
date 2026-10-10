@@ -3,6 +3,7 @@ mod drones;
 mod flight;
 mod mining;
 mod power;
+mod resource_jobs;
 mod surface;
 mod traffic;
 mod universe;
@@ -32,6 +33,12 @@ struct Pilot {
 #[derive(Clone, Serialize, Deserialize)]
 struct World {
     #[serde(default)]
+    fleet_links: BTreeMap<String, String>,
+    #[serde(default)]
+    resource_jobs: BTreeMap<String, resource_jobs::Job>,
+    #[serde(default)]
+    next_job_id: u64,
+    #[serde(default)]
     surface_props: Vec<SurfaceProp>,
     #[serde(default)]
     next_prop_id: u64,
@@ -56,6 +63,9 @@ fn default_next_drone_id() -> u64 {
 impl Default for World {
     fn default() -> Self {
         Self {
+            fleet_links: BTreeMap::new(),
+            resource_jobs: BTreeMap::new(),
+            next_job_id: 1,
             surface_props: Vec::new(),
             next_prop_id: 1,
             next_drone_id: 1,
@@ -143,6 +153,7 @@ impl Server {
         mining::ensure_modules(&mut world);
         drones::ensure_fleets(&mut world)?;
         power::advance(&mut world, now)?;
+        resource_jobs::cancel_all(&mut world, now, "Server restarted");
         for pilot in world.pilots.values_mut() {
             mining::stop_all(pilot, "Server restarted");
             pilot.controls = None;
@@ -181,7 +192,7 @@ impl Server {
         now: u64,
     ) -> Response {
         let previous = session.clone();
-        match self.execute(session, request, now) {
+        match self.execute(session, request, now, false) {
             Ok(mut response) => {
                 // execute changes the session only after a successful durable
                 // commit. Repeated Connect on one socket must not double-count.
@@ -253,6 +264,7 @@ impl Server {
             tx.execute("UPDATE world SET json=?1 WHERE id=1", [next])?;
         }
         tx.commit()?;
+        resource_jobs::advance(self, now)?;
         Ok(())
     }
     fn stop_disconnected(&mut self, name: &str) -> Result<()> {
@@ -265,6 +277,31 @@ impl Server {
         mining::ensure_modules(&mut world);
         drones::ensure_fleets(&mut world)?;
 
+        let now = now_ms();
+        let controlled: Vec<String> = world
+            .resource_jobs
+            .iter()
+            .filter(|(_, j)| j.view.controller == name && !j.view.phase.is_terminal())
+            .map(|(n, _)| n.clone())
+            .collect();
+        for worker in controlled {
+            resource_jobs::cancel(&mut world, &worker, now, "Controller disconnected");
+        }
+        let delegated = world.resource_jobs.get(name).is_some_and(|j| {
+            !j.view.phase.is_terminal()
+                && j.view.controller != name
+                && self.online_sessions.contains_key(&j.view.controller)
+        });
+        if delegated {
+            validate(&world)?;
+            tx.execute(
+                "UPDATE world SET json=?1 WHERE id=1",
+                [serde_json::to_string(&world)?],
+            )?;
+            tx.commit()?;
+            return Ok(());
+        }
+        resource_jobs::cancel(&mut world, name, now, "Pilot disconnected");
         if let Some(p) = world.pilots.get_mut(name) {
             mining::stop_all(p, "Pilot disconnected");
             p.controls = None;
@@ -295,6 +332,7 @@ impl Server {
         session: &mut Option<String>,
         request: Request,
         now: u64,
+        automated: bool,
     ) -> Result<Response> {
         let tx = self
             .db
@@ -319,7 +357,64 @@ impl Server {
         let mut connected = None;
         let export = matches!(request, Request::ExportLedger);
         let message;
+        if !automated
+            && !matches!(
+                request,
+                Request::Snapshot
+                    | Request::ExportLedger
+                    | Request::Connect { .. }
+                    | Request::StartResourceJob { .. }
+                    | Request::CancelResourceJob { .. }
+            )
+        {
+            if let Some(name) = session.as_ref() {
+                resource_jobs::cancel(&mut world, name, now, "Manual command took control");
+            }
+        }
         match request {
+            Request::StartResourceJob {
+                target_units,
+                pilot,
+            } => {
+                let name = session
+                    .as_ref()
+                    .context("connect before issuing commands")?;
+                let worker = pilot.as_deref().unwrap_or(name);
+                resource_jobs::authorize(&world, name, worker)?;
+                resource_jobs::start(&mut world, worker, name, target_units, now)?;
+                message = "Resource gathering job started";
+            }
+            Request::CancelResourceJob { pilot } => {
+                let name = session
+                    .as_ref()
+                    .context("connect before issuing commands")?;
+                let worker = pilot.as_deref().unwrap_or(name);
+                resource_jobs::authorize(&world, name, worker)?;
+                ensure!(
+                    world
+                        .resource_jobs
+                        .get(worker)
+                        .is_some_and(|j| !j.view.phase.is_terminal()),
+                    "no active resource job"
+                );
+                resource_jobs::cancel(&mut world, worker, now, "Cancelled by controller or pilot");
+                message = "Resource gathering job cancelled";
+            }
+            Request::SetFleetController { controller } => {
+                let name = session
+                    .as_ref()
+                    .context("connect before issuing commands")?;
+                if let Some(controller) = controller {
+                    ensure!(
+                        controller != *name && world.pilots.contains_key(&controller),
+                        "controller must be another existing pilot"
+                    );
+                    world.fleet_links.insert(name.clone(), controller);
+                } else {
+                    world.fleet_links.remove(name);
+                }
+                message = "Fleet controller permission updated";
+            }
             request if surface::handles(&request) => {
                 let name = session
                     .as_ref()
@@ -425,6 +520,12 @@ impl Server {
                         pilot: pilot.clone(),
                     });
                 }
+                resource_jobs::cancel(
+                    &mut world,
+                    &pilot,
+                    now,
+                    "Pilot reconnected and took control",
+                );
                 connected = Some(pilot);
                 message = "Connected";
             }
@@ -765,6 +866,19 @@ impl Server {
             .or(session.as_ref())
             .and_then(|name| assets::view(&world, name));
         let snapshot = Snapshot {
+            fleet_links: world
+                .fleet_links
+                .iter()
+                .map(|(pilot, controller)| FleetLink {
+                    pilot: pilot.clone(),
+                    controller: controller.clone(),
+                })
+                .collect(),
+            resource_jobs: world
+                .resource_jobs
+                .values()
+                .map(|j| j.view.clone())
+                .collect(),
             surface_props: world.surface_props.clone(),
             traffic: traffic::actors(now),
             stored_ore: assets::stored_ore(&world)
@@ -850,6 +964,7 @@ fn add_cargo(current: u64, units: u64, capacity: u64) -> Result<u64> {
     Ok(next)
 }
 fn validate(world: &World) -> Result<()> {
+    resource_jobs::validate(world)?;
     surface::validate(world)?;
     ensure!(
         world

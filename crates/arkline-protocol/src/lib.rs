@@ -414,6 +414,18 @@ pub const GENESIS_HASH: &str = "000000000000000000000000000000000000000000000000
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "command", rename_all = "snake_case")]
 pub enum Request {
+    StartResourceJob {
+        target_units: u64,
+        #[serde(default)]
+        pilot: Option<String>,
+    },
+    CancelResourceJob {
+        #[serde(default)]
+        pilot: Option<String>,
+    },
+    SetFleetController {
+        controller: Option<String>,
+    },
     SpawnSurfaceProp {
         kind: SurfacePropKind,
         position: [f64; 3],
@@ -870,6 +882,10 @@ pub struct AssetsView {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Snapshot {
     #[serde(default)]
+    pub fleet_links: Vec<FleetLink>,
+    #[serde(default)]
+    pub resource_jobs: Vec<ResourceJob>,
+    #[serde(default)]
     pub surface_props: Vec<SurfaceProp>,
     #[serde(default)]
     pub traffic: Vec<TrafficActor>,
@@ -1268,4 +1284,44 @@ pub fn hull_surface_distance(class: ShipClass, position: [f64; 3], target: [f64;
         .sqrt()
         - hull_radius_m(class))
     .max(0.0)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ResourceJobPhase {
+    Undocking,
+    TravelToBelt,
+    AcquiringTarget,
+    Mining,
+    ReturningToStation,
+    Docking,
+    Depositing,
+    Completed,
+    Blocked,
+    Cancelled,
+}
+impl ResourceJobPhase {
+    pub fn is_terminal(self) -> bool {
+        matches!(self, Self::Completed | Self::Blocked | Self::Cancelled)
+    }
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ResourceJob {
+    pub controller: String,
+    pub id: u64,
+    pub pilot: String,
+    pub target_units: u64,
+    pub mined_units: u64,
+    pub stored_units: u64,
+    pub target_id: Option<u64>,
+    pub phase: ResourceJobPhase,
+    pub message: String,
+    pub started_at_ms: u64,
+    pub updated_at_ms: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FleetLink {
+    pub pilot: String,
+    pub controller: String,
 }

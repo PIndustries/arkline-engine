@@ -379,7 +379,7 @@ Signal degradation adds noise and darkens the picture; a lost/stale link is labe
 The cockpit includes a selectable 2D local map and a ship-relative 3D holographic
 map with real-distance rings. Scroll over a map to change range, and click a contact
 to select it. Ship orientation drives the map axes. The center console provides
-Flight, Ship, Modules, Drones, Inventory and Station, with remaining services and
+Flight, Ship, Modules, Drones, Inventory, Station and AI, with remaining services and
 view-mode Settings under More.
 Cockpit field of view is 70 degrees. The slim service rail uses hover labels;
 other view modes retain compact floating windows.
@@ -390,7 +390,7 @@ publication gates. The repository is still private and not yet open-source licen
 ### Ship power and clear cockpit actions
 
 The cockpit console keeps **UNDOCK / DOCK / STOP** visible above every service tab.
-Flight, Ship, Modules, Drones, Inventory and Station are the main tabs; **More**
+Flight, Ship, Modules, Drones, Inventory, Station and AI are the main tabs; **More**
 contains the remaining services. The larger screen uses current-window geometry,
 including at the minimum supported window size.
 
@@ -407,3 +407,16 @@ running while ships are parked/offline, bounded by capacitor capacity. Stored hu
 keep their own energy when boarding another ship. These are tunable gameplay
 values, not a complete electrical/thermal simulation. Combat remains drone-only;
 ship-mounted turrets currently mine rather than fire combat weapons.
+
+### Ship computer and delegated resource jobs
+
+The cockpit **AI** tab can perform one server-controlled mining haul on your own
+ship or an existing worker that explicitly granted fleet control. It uses both
+turrets and up to five mining drones, recalls them before return, then deposits
+confirmed ore into that worker's station storage. Watch a permitted worker on the
+left cockpit screen while retaining control of your own ship.
+
+Deterministic Start/Cancel controls work without a model. Optional typed Spark
+instructions use SSH and a bounded intent adapter; voice is not implemented. See
+[resource jobs, delegation and remote viewing](docs/resource-jobs.md) for setup,
+readiness requirements and cancellation behavior.

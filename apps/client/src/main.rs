@@ -6,8 +6,10 @@ mod flight3d;
 mod layout;
 mod motion;
 mod pilot_input;
+mod resource_jobs_ui;
 mod sandbox;
 mod services;
+mod ship_ai;
 mod target_controls;
 mod theme;
 #[cfg(test)]
@@ -334,6 +336,7 @@ enum ServiceTab {
     Modules,
     Drones,
     Sandbox,
+    ShipComputer,
 }
 #[derive(Clone, PartialEq, Eq)]
 pub(crate) enum SelectedObject {
@@ -396,6 +399,15 @@ struct Cockpit {
     drone_attack_target: Option<(String, u64)>,
     prop_kind: SurfacePropKind,
     prop_offset: [f64; 3],
+    resource_goal: u64,
+    resource_pilot: Option<String>,
+    fleet_controller: String,
+    remote_ship: Option<String>,
+    ship_ai: ship_ai::ShipAi,
+    ai_prompt: String,
+    ai_message: String,
+    ai_pin: Option<(String, u64)>,
+    connection_generation: u64,
     sell_amount: u64,
     audit_updates: Option<Receiver<Result<String, String>>>,
     audit_result: Option<Result<String, String>>,
@@ -462,6 +474,15 @@ impl Cockpit {
             drone_attack_target: None,
             prop_kind: SurfacePropKind::Crate,
             prop_offset: [20.0, 0.0, 0.0],
+            resource_goal: 100,
+            resource_pilot: None,
+            fleet_controller: String::new(),
+            remote_ship: None,
+            ship_ai: ship_ai::ShipAi::default(),
+            ai_prompt: String::new(),
+            ai_message: String::new(),
+            ai_pin: None,
+            connection_generation: 0,
             sell_amount: 25,
             audit_updates: None,
             audit_result: None,
@@ -551,6 +572,9 @@ impl Cockpit {
         })
     }
     fn connect(&mut self) {
+        self.invalidate_ai_session();
+        self.resource_pilot = None;
+        self.remote_ship = None;
         self.boot.connect();
         self.connected = false;
         self.controls = pilot_input::Mailbox::default();
@@ -647,8 +671,12 @@ impl Cockpit {
                 | Request::Dock
                 | Request::Undock
                 | Request::Jump { .. }
+                | Request::StartResourceJob { .. }
         ) {
             self.pilot_input.relinquish(&self.controls);
+        }
+        if !matches!(request, Request::Snapshot | Request::ExportLedger) {
+            self.cancel_ai();
         }
         if let Some(tx) = &self.commands {
             if tx.send(request).is_ok() {
@@ -678,6 +706,7 @@ impl Cockpit {
         for update in updates {
             match update {
                 Update::Ready => {
+                    self.invalidate_ai_session();
                     self.frozen_time = None;
                     self.timeline_origin = None;
                     self.motion.clear();
@@ -688,6 +717,7 @@ impl Cockpit {
                     self.notice.clear();
                 }
                 Update::Reconnecting(message) => {
+                    self.invalidate_ai_session();
                     if self.frozen_time.is_none() {
                         self.frozen_time = Some(self.presentation_time());
                     }
@@ -700,6 +730,7 @@ impl Cockpit {
                     self.log(message, true);
                 }
                 Update::Failure(error) => {
+                    self.invalidate_ai_session();
                     if self.boot.visible {
                         self.boot.fail();
                     }
@@ -1253,6 +1284,7 @@ impl Cockpit {
                 (ServiceTab::Drones, "Drones"),
                 (ServiceTab::Cargo, "Inventory"),
                 (ServiceTab::Station, "Station"),
+                (ServiceTab::ShipComputer, "AI"),
             ] {
                 if ui
                     .add(
@@ -1292,6 +1324,7 @@ impl Cockpit {
                 self.surface_status(ui);
                 self.overview(ui);
             }
+            ServiceTab::ShipComputer => self.resource_job_panel(ui),
             ServiceTab::Sandbox => self.sandbox_panel(ui),
             ServiceTab::Modules => self.mining_module(ui),
             ServiceTab::Drones => self.drone_controls(ui),
@@ -2842,6 +2875,7 @@ impl eframe::App for Cockpit {
             self.frame_intervals.pop_front();
         }
         self.poll();
+        self.poll_ship_ai();
         if self.boot.visible {
             let ready = self.connected && self.own().is_some();
             match self.boot.show(ctx, ready, self.connected, &self.notice) {
@@ -3030,6 +3064,7 @@ impl eframe::App for Cockpit {
                             (ServiceTab::Cargo, "▣", "Inventory"),
                             (ServiceTab::Modules, "M", "Mining modules"),
                             (ServiceTab::Drones, "D", "Drone fleet"),
+                            (ServiceTab::ShipComputer, "AI", "Ship computer"),
                             (ServiceTab::Corporation, "C", "Corporation"),
                             (ServiceTab::Exchange, "⇄", "Exchange"),
                             (ServiceTab::Activity, "≡", "Activity"),
@@ -3209,6 +3244,7 @@ impl eframe::App for Cockpit {
                 .shrink(1.0);
                 egui::Area::new(egui::Id::new("physical_cockpit_console"))
                     .fixed_pos(rect.min)
+                    .constrain(false)
                     .movable(false)
                     .show(ctx, |ui| {
                         ui.set_min_size(rect.size());
@@ -3219,12 +3255,17 @@ impl eframe::App for Cockpit {
                         self.power_gauge(ui);
                         self.service_tabs(ui);
                         ui.separator();
-                        egui::ScrollArea::both()
+                        egui::ScrollArea::vertical()
+                            .auto_shrink([false, false])
+                            .min_scrolled_height(0.0)
+                            .scroll_bar_visibility(
+                                egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
+                            )
                             .id_salt("cockpit_console_content")
                             .max_height((rect.bottom() - ui.cursor().top()).max(20.0))
                             .max_width(rect.width())
                             .show(ui, |ui| {
-                                ui.set_max_width(rect.width() - 12.0);
+                                ui.set_max_width(rect.width() - 18.0);
                                 self.service_content(ui);
                             });
                     });
@@ -3240,6 +3281,7 @@ impl eframe::App for Cockpit {
                         self.flight_view.set_drone_camera(self.drone_camera);
                         self.flight_view
                             .set_drone_view(self.selected_drone, self.drone_orbit);
+                        self.flight_view.set_remote_ship(self.remote_ship.clone());
                         if let Some(action) = self.flight_view.ui(
                             ui,
                             snapshot,
@@ -3294,6 +3336,7 @@ impl eframe::App for Cockpit {
                 None
             },
         ) {
+            self.cancel_ai();
             *self.controls.lock().unwrap() = Some(control);
         }
         self.boot.paint_handoff(ctx);
@@ -3480,6 +3523,194 @@ mod tests {
     use super::*;
     use std::net::TcpListener;
 
+    #[test]
+    fn resource_job_requires_explicit_worker_permission_and_ready_ship() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        let snapshot = cockpit.snapshot.as_mut().unwrap();
+        snapshot.pilots[0].location = Location::Docked;
+        snapshot.pilots[0].ore = 0;
+        let mut worker = snapshot.pilots[0].clone();
+        worker.name = "worker".into();
+        snapshot.pilots.push(worker);
+        assert!(cockpit.resource_start_reason().is_none());
+        cockpit.resource_pilot = Some("worker".into());
+        assert!(cockpit.resource_start_reason().is_some());
+        cockpit
+            .snapshot
+            .as_mut()
+            .unwrap()
+            .fleet_links
+            .push(FleetLink {
+                pilot: "worker".into(),
+                controller: "pilot".into(),
+            });
+        assert!(cockpit.resource_start_reason().is_none());
+        cockpit.snapshot.as_mut().unwrap().pilots[1].ore = 1;
+        assert!(cockpit.resource_start_reason().is_some());
+        cockpit.snapshot.as_mut().unwrap().pilots[1].ore = 0;
+        cockpit.timeline_origin = Some(1000);
+        cockpit.observed = Instant::now() - Duration::from_secs(3);
+        assert!(cockpit.resource_start_reason().unwrap().contains("stale"));
+        cockpit.ai_pin = Some(("worker".into(), cockpit.connection_generation));
+        cockpit.poll_ship_ai();
+        assert!(cockpit.ai_pin.is_none());
+        cockpit.connected = false;
+        assert!(cockpit.resource_start_reason().is_some());
+    }
+
+    #[test]
+    fn resource_job_pointer_start_routes_selected_worker_and_stale_ai_is_cancelled() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        let snapshot = cockpit.snapshot.as_mut().unwrap();
+        snapshot.pilots[0].location = Location::Docked;
+        snapshot.pilots[0].ore = 0;
+        let mut worker = snapshot.pilots[0].clone();
+        worker.name = "worker".into();
+        snapshot.pilots.push(worker);
+        snapshot.fleet_links.push(FleetLink {
+            pilot: "worker".into(),
+            controller: "pilot".into(),
+        });
+        cockpit.resource_pilot = Some("worker".into());
+        let (tx, rx) = mpsc::channel();
+        cockpit.commands = Some(tx);
+        let mut target = None;
+        for pass in 0..4 {
+            let events = match (pass, target) {
+                (2, Some(pos)) => vec![
+                    egui::Event::PointerMoved(pos),
+                    egui::Event::PointerButton {
+                        pos,
+                        button: egui::PointerButton::Primary,
+                        pressed: true,
+                        modifiers: Default::default(),
+                    },
+                ],
+                (3, Some(pos)) => vec![egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: false,
+                    modifiers: Default::default(),
+                }],
+                _ => vec![],
+            };
+            let output = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        Pos2::ZERO,
+                        egui::vec2(900., 1200.),
+                    )),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| cockpit.resource_job_panel(ui));
+                },
+            );
+            for shape in output.shapes {
+                if let egui::Shape::Text(text) = shape.shape {
+                    if text.galley.text() == "Start gathering" {
+                        target = Some(text.pos + text.galley.size() * 0.5);
+                    }
+                }
+            }
+        }
+        assert!(
+            matches!(rx.try_recv().unwrap(),Request::StartResourceJob {target_units:100,pilot:Some(name)} if name=="worker")
+        );
+        cockpit.ai_pin = Some(("worker".into(), cockpit.connection_generation));
+        cockpit.resource_pilot = None;
+        cockpit.poll_ship_ai();
+        assert!(cockpit.ai_pin.is_none());
+        assert!(rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn physical_ai_console_scrolls_prompt_into_clipped_interactive_screen() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        cockpit.view_mode = ViewMode::Cockpit;
+        cockpit.service_tab = ServiceTab::ShipComputer;
+        cockpit.snapshot.as_mut().unwrap().pilots[0].location = Location::Docked;
+        let viewport = egui::Rect::from_min_size(Pos2::ZERO, Vec2::new(1106., 768.));
+        let console = flight3d::cockpit_console_bounds(viewport, ShipClass::Pioneer).shrink(1.);
+        let mut prompt = None;
+        let mut saw_submit = false;
+        for step in 0..35 {
+            let events = if step > 3 {
+                vec![
+                    egui::Event::PointerMoved(console.center()),
+                    egui::Event::MouseWheel {
+                        unit: egui::MouseWheelUnit::Point,
+                        delta: Vec2::new(0., -20.),
+                        modifiers: Default::default(),
+                    },
+                ]
+            } else {
+                vec![]
+            };
+            let output = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(viewport),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| eframe::App::update(&mut cockpit, ctx, &mut eframe::Frame::_new_kittest()),
+            );
+            for shape in output.shapes {
+                if let egui::Shape::Text(t) = shape.shape {
+                    let center = t.pos + t.galley.rect.center().to_vec2();
+                    if t.galley.text() == "Submit instruction"
+                        && console.contains(center)
+                        && shape.clip_rect.contains(center)
+                    {
+                        saw_submit = true;
+                    }
+                    if t.galley.text() == "Gather 100 ore and bring it back"
+                        && console.contains(center)
+                        && shape.clip_rect.contains(center)
+                    {
+                        prompt = Some(center);
+                    }
+                }
+            }
+            if saw_submit && prompt.is_some() {
+                break;
+            }
+        }
+        assert!(saw_submit, "Submit must scroll into the physical screen");
+        let point = prompt.expect("Prompt must become visible");
+        for pressed in [true, false] {
+            let _ = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(viewport),
+                    events: vec![
+                        egui::Event::PointerMoved(point),
+                        egui::Event::PointerButton {
+                            pos: point,
+                            button: egui::PointerButton::Primary,
+                            pressed,
+                            modifiers: Default::default(),
+                        },
+                    ],
+                    ..Default::default()
+                },
+                |ctx| eframe::App::update(&mut cockpit, ctx, &mut eframe::Frame::_new_kittest()),
+            );
+        }
+        let _ = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(viewport),
+                events: vec![egui::Event::Text("Gather 20 ore".into())],
+                ..Default::default()
+            },
+            |ctx| eframe::App::update(&mut cockpit, ctx, &mut eframe::Frame::_new_kittest()),
+        );
+        assert_eq!(cockpit.ai_prompt, "Gather 20 ore");
+    }
+
     fn view_test_cockpit(ctx: &egui::Context) -> Cockpit {
         let cc = eframe::CreationContext::_new_kittest(ctx.clone());
         let mut cockpit = Cockpit::new(
@@ -3492,6 +3723,8 @@ mod tests {
         cockpit.connected = true;
         cockpit.pilot = "pilot".into();
         cockpit.snapshot = Some(Snapshot {
+            resource_jobs: vec![],
+            fleet_links: vec![],
             surface_props: vec![],
             traffic: vec![],
             stored_ore: 0,
@@ -4909,6 +5142,8 @@ mod tests {
         cockpit.connected = true;
         cockpit.pilot = "pilot".into();
         cockpit.snapshot = Some(Snapshot {
+            resource_jobs: vec![],
+            fleet_links: vec![],
             surface_props: vec![],
             traffic: vec![],
             stored_ore: 0,

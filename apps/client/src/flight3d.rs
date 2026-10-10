@@ -215,6 +215,7 @@ pub struct FlightView {
     drone_camera: bool,
     selected_drone: Option<u64>,
     drone_orbit: bool,
+    remote_ship: Option<String>,
     console_rect: Option<egui::Rect>,
     map_range: f64,
     space: Space,
@@ -245,10 +246,14 @@ impl FlightView {
             drone_camera: true,
             selected_drone: None,
             drone_orbit: false,
+            remote_ship: None,
             console_rect: None,
             map_range: 1_000_000.0,
             space: Space::default(),
         }
+    }
+    pub fn set_remote_ship(&mut self, pilot: Option<String>) {
+        self.remote_ship = pilot;
     }
     pub fn set_drone_camera(&mut self, enabled: bool) {
         self.drone_camera = enabled;
@@ -637,7 +642,16 @@ impl FlightView {
                         .find(|d| Some(d.id) == self.selected_drone)
                         .or_else(|| fleet(p).first().copied())
                 });
-                let camera_frame = if cockpit
+                let remote_worker = self
+                    .remote_ship
+                    .as_deref()
+                    .and_then(|target| remote_worker(snapshot, pilot_name, target, now, connected));
+                let remote_frame = remote_worker.filter(|_| cockpit).map(|worker| {
+                    remote_ship_frame(&frame, snapshot, worker, drone_screen.aspect_ratio())
+                });
+                let camera_frame = if cockpit && self.remote_ship.is_some() {
+                    remote_frame
+                } else if cockpit
                     && self.drone_camera
                     && connected
                     && now.saturating_sub(snapshot.server_time_ms) <= 1500
@@ -1058,12 +1072,16 @@ impl FlightView {
                             overlay.text(
                                 drone_screen.left_top() + egui::vec2(4.0, 3.0),
                                 egui::Align2::LEFT_TOP,
-                                format!(
-                                    "{:?} #{} / {}",
-                                    camera_drone.unwrap().class,
-                                    camera_drone.unwrap().id,
-                                    if self.drone_orbit { "ORBIT" } else { "ONBOARD" }
-                                ),
+                                if let Some(worker) = remote_worker {
+                                    format!("{} / REMOTE SHIP", worker.name)
+                                } else {
+                                    format!(
+                                        "{:?} #{} / {}",
+                                        camera_drone.unwrap().class,
+                                        camera_drone.unwrap().id,
+                                        if self.drone_orbit { "ORBIT" } else { "ONBOARD" }
+                                    )
+                                },
                                 egui::FontId::monospace((drone_screen.width() / 18.0).min(12.0)),
                                 super::TEAL,
                             );
@@ -1072,7 +1090,8 @@ impl FlightView {
                                 4.0,
                                 egui::Stroke::new(1.0, super::TEAL),
                             );
-                            if let Some(drone) = camera_drone {
+                            if let Some(drone) = camera_drone.filter(|_| self.remote_ship.is_none())
+                            {
                                 let meters = space.scene(drone.position).length() * 100.0;
                                 overlay.text(
                                     drone_screen.left_bottom() + egui::vec2(4.0, -3.0),
@@ -1089,7 +1108,21 @@ impl FlightView {
                                 );
                             }
                         }
-                        if self.drone_camera {
+                        if self.remote_ship.is_some() && remote_worker.is_none() {
+                            let overlay = painter.with_clip_rect(drone_screen.intersect(rect));
+                            overlay.rect_filled(
+                                drone_screen,
+                                0.0,
+                                egui::Color32::from_rgb(1, 8, 5),
+                            );
+                            overlay.text(
+                                drone_screen.center(),
+                                egui::Align2::CENTER_CENTER,
+                                "REMOTE VIEW UNAVAILABLE / STALE",
+                                egui::FontId::monospace(11.0),
+                                super::AMBER,
+                            );
+                        } else if self.remote_ship.is_none() && self.drone_camera {
                             paint_camera_signal(
                                 &painter,
                                 drone_screen,
@@ -1640,8 +1673,12 @@ impl Renderer {
     }
     unsafe fn paint(&mut self, frame: &Frame) {
         let space = frame.space;
-        self.turrets
-            .retain(|(name, _), _| frame.pilots.iter().any(|p| &p.name == name));
+        // Main and remote passes may show different systems. Keep recently drawn
+        // turret state between passes so neither camera resets the other's slew.
+        self.turrets.retain(|(name, _), state| {
+            frame.pilots.iter().any(|p| &p.name == name)
+                || frame.now.saturating_sub(state.last_ms) < 5000
+        });
         for pilot in &frame.pilots {
             for module_id in 0..2 {
                 let state = self
@@ -3598,6 +3635,8 @@ mod tests {
             warp: None,
         });
         let snapshot = Snapshot {
+            fleet_links: vec![],
+            resource_jobs: vec![],
             surface_props: vec![],
             traffic: vec![],
             stored_ore: 0,

@@ -216,6 +216,8 @@ mod tests {
             protocol_version: PROTOCOL_VERSION,
             entries: vec![],
             snapshot: Snapshot {
+                resource_jobs: vec![],
+                fleet_links: vec![],
                 surface_props: vec![],
                 traffic: vec![],
                 stored_ore: 0,
