@@ -473,3 +473,99 @@ fn gates_connect_three_systems_survive_restart_and_preserve_targeted_mining() {
     drop(server);
     fs::remove_dir_all(directory).unwrap();
 }
+
+#[test]
+fn direct_piloting_over_tcp_expires_without_losing_roll() {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let directory =
+        std::env::temp_dir().join(format!("arkline-direct-{}-{unique}", std::process::id()));
+    fs::create_dir_all(&directory).unwrap();
+    let db = directory.join("world.sqlite");
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap().to_string();
+    drop(listener);
+    let server = Server::start(&db, address.clone());
+    let mut client = Client::new(&address);
+    client.login("DirectPilot", None);
+    let initial = client.ok(Request::Undock).snapshot.unwrap();
+    let start = initial.pilots[0].flight.as_ref().unwrap().position;
+    // Refresh live controls until the server confirms meaningful motion. Request
+    // latency is part of the lease interval, so do not infer speed from sleeps.
+    let movement_deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let moving = client
+            .ok(Request::PilotInput {
+                translation: [1.0, 0.0, 0.0],
+                rotation: [1.0, 0.0, 0.0],
+            })
+            .snapshot
+            .unwrap();
+        let flight = moving.pilots[0].flight.as_ref().unwrap();
+        if flight.position[0] > start[0] + 10.0 && flight.orientation[0].abs() > 0.2 {
+            break;
+        }
+        assert!(
+            Instant::now() < movement_deadline,
+            "live input did not produce forward motion and roll"
+        );
+        thread::sleep(Duration::from_millis(50));
+    }
+    // Keep the connection open without refreshing controls. Expiry must stop
+    // rotation immediately, while existing linear velocity brakes physically.
+    let expiry_deadline = Instant::now() + Duration::from_millis(PILOT_INPUT_LEASE_MS + 2000);
+    let expired = loop {
+        let snapshot = client.ok(Request::Snapshot).snapshot.unwrap();
+        let flight = snapshot.pilots[0].flight.as_ref().unwrap();
+        if flight.mode == NavigationMode::Stop {
+            assert_eq!(flight.angular_velocity, [0.0; 3]);
+            assert!(flight.orientation[0].abs() > 0.2);
+            break snapshot;
+        }
+        assert!(
+            Instant::now() < expiry_deadline,
+            "stale controls retained their lease"
+        );
+        thread::sleep(Duration::from_millis(50));
+    };
+    let flight = expired.pilots[0].flight.as_ref().unwrap();
+    let stopped_orientation = flight.orientation;
+    let speed = |velocity: [f64; 3]| velocity.iter().map(|v| v * v).sum::<f64>().sqrt();
+    let mut previous_speed = speed(flight.velocity);
+    let braking_deadline =
+        Instant::now() + Duration::from_secs_f64(previous_speed / SHIP_ACCELERATION + 2.0);
+    loop {
+        let snapshot = client.ok(Request::Snapshot).snapshot.unwrap();
+        let flight = snapshot.pilots[0].flight.as_ref().unwrap();
+        let current_speed = speed(flight.velocity);
+        assert_eq!(flight.mode, NavigationMode::Stop);
+        assert_eq!(flight.angular_velocity, [0.0; 3]);
+        assert!(
+            flight
+                .orientation
+                .iter()
+                .zip(stopped_orientation)
+                .all(|(a, b)| (a - b).abs() < 1e-9),
+            "roll changed after input expiry"
+        );
+        assert!(
+            current_speed <= previous_speed + 1e-6,
+            "stale thrust accelerated the ship"
+        );
+        assert_eq!(snapshot.ledger_hash, initial.ledger_hash);
+        if current_speed < 0.01 {
+            break;
+        }
+        assert!(
+            Instant::now() < braking_deadline,
+            "ship did not finish braking after lease expiry"
+        );
+        previous_speed = current_speed;
+        thread::sleep(Duration::from_millis(50));
+    }
+    drop(client);
+    drop(server);
+    fs::remove_dir_all(directory).unwrap();
+}

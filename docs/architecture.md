@@ -33,8 +33,11 @@ Credits are integer quantities, and multiplication/addition are checked for over
 Total credits are `pilot count * starter issuance` in this ruleset. There are no
 implicit NPC mints, fees, taxes, or operator rewards.
 
-The server integrates manual flight at 10 Hz and persists position, velocity and
-heading. Warp and gate jumps use durable arrival timestamps. A gate transition
+The server integrates flight at 10 Hz and persists position, velocity, heading and
+a normalized quaternion orientation. Direct piloting submits bounded body-axis
+translation/rotation inputs through a latest-value client mailbox. The server
+expires input after 500 ms and applies assisted braking; it never trusts client
+position or orientation writes. Warp and gate jumps use durable arrival timestamps. A gate transition
 moves the ship to its paired gate in another system. All three systems currently
 run in the same process and database; this is not distributed authority handoff.
 The client polls snapshots, buffers normal flight and samples the same durable

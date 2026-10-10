@@ -1,26 +1,44 @@
 //! Display-only sampling. Commands and range gates always use the latest server snapshot.
 use arkline_protocol::*;
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 
 const INTERPOLATION_DELAY_MS: u64 = 400;
 #[derive(Default)]
 pub struct MotionHistory {
     samples: VecDeque<Snapshot>,
+    direct_pilots: HashSet<String>,
 }
 impl MotionHistory {
     pub fn clear(&mut self) {
         self.samples.clear();
+        self.direct_pilots.clear();
     }
     pub fn observe(&mut self, snapshot: &Snapshot) {
+        // Keep a pilot's low-latency clock for the session. Switching back to a
+        // larger delay at a Manual -> Stop boundary would replay old movement.
+        for pilot in &snapshot.pilots {
+            if pilot
+                .flight
+                .as_ref()
+                .is_some_and(|f| f.mode == NavigationMode::Manual)
+            {
+                self.direct_pilots.insert(pilot.name.clone());
+            }
+        }
         self.samples.push_back(snapshot.clone());
-        while self.samples.len() > 8 {
+        while self.samples.len() > 32 {
             self.samples.pop_front();
         }
     }
     pub fn sample(&self, latest: &Snapshot, now: u64) -> Snapshot {
-        let time = now.saturating_sub(INTERPOLATION_DELAY_MS);
         let mut result = latest.clone();
         for pilot in &mut result.pilots {
+            let delay = if self.direct_pilots.contains(&pilot.name) {
+                75
+            } else {
+                INTERPOLATION_DELAY_MS
+            };
+            let time = now.saturating_sub(delay);
             if !normal(pilot) {
                 continue;
             }
@@ -53,6 +71,13 @@ impl MotionHistory {
                     std::array::from_fn(|i| a.position[i] + (b.position[i] - a.position[i]) * t);
                 flight.velocity =
                     std::array::from_fn(|i| a.velocity[i] + (b.velocity[i] - a.velocity[i]) * t);
+                let orientation = glam::DQuat::from_array(a.orientation)
+                    .normalize()
+                    .slerp(glam::DQuat::from_array(b.orientation).normalize(), t);
+                flight.orientation = orientation.to_array();
+                flight.angular_velocity = std::array::from_fn(|i| {
+                    a.angular_velocity[i] + (b.angular_velocity[i] - a.angular_velocity[i]) * t
+                });
                 flight.heading =
                     std::array::from_fn(|i| a.heading[i] + (b.heading[i] - a.heading[i]) * t);
             } else if time >= last_time {
@@ -135,6 +160,8 @@ mod tests {
                     mode: NavigationMode::Stop,
                     updated_at_ms: time,
                     warp: None,
+                    orientation: [0.0, 0.0, 0.0, 1.0],
+                    angular_velocity: [0.0; 3],
                 }),
             }],
             orders: vec![],
@@ -214,6 +241,43 @@ mod tests {
         assert!(path.target[0] - b[0] < path.arrival_distance_m);
         assert!(warp_phase(&s.pilots[0], path.arrives_at_ms).is_none());
         assert_eq!(position(&s.pilots[0], path.arrives_at_ms), path.target);
+    }
+    #[test]
+    fn manual_orientation_uses_short_delay_and_shortest_quaternion_path() {
+        let mut history = MotionHistory::default();
+        let mut a = snapshot(1000, 0.0);
+        a.pilots[0].flight.as_mut().unwrap().mode = NavigationMode::Manual;
+        let mut b = a.clone();
+        b.server_time_ms = 1100;
+        b.pilots[0].flight.as_mut().unwrap().orientation =
+            (-glam::DQuat::from_rotation_x(std::f64::consts::FRAC_PI_2)).to_array();
+        history.observe(&a);
+        history.observe(&b);
+        let sample = history.sample(&b, 1125);
+        let actual = glam::DQuat::from_array(sample.pilots[0].flight.as_ref().unwrap().orientation);
+        let expected = glam::DQuat::from_rotation_x(std::f64::consts::FRAC_PI_4);
+        assert!(actual.dot(expected).abs() > 0.999999);
+    }
+    #[test]
+    fn manual_lease_expiry_never_rewinds_and_history_eviction_keeps_clock() {
+        let mut history = MotionHistory::default();
+        let mut latest = snapshot(1000, 0.0);
+        latest.pilots[0].flight.as_mut().unwrap().mode = NavigationMode::Manual;
+        history.observe(&latest);
+        let mut previous = 0.0;
+        for frame in 1..60 {
+            latest = snapshot(1000 + frame * 50, frame as f64 * 5.0);
+            history.observe(&latest);
+            let shown = position(
+                &history.sample(&latest, latest.server_time_ms).pilots[0],
+                latest.server_time_ms,
+            )[0];
+            assert!(shown >= previous, "lease expiry rewound display");
+            if frame > 2 {
+                assert!((shown - (frame as f64 * 5.0 - 7.5)).abs() < 1e-9);
+            }
+            previous = shown;
+        }
     }
     #[test]
     fn area_changes_do_not_lerp_across_universe() {

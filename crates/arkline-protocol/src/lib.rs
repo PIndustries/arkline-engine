@@ -24,6 +24,11 @@ pub const STATION_POSITION: [f64; 3] = [-4500.0, 0.0, 0.0];
 pub const BELT_POSITION: [f64; 3] = [2.0 * AU_METERS, 0.0, 0.0];
 pub const MAX_SHIP_SPEED: f64 = 600.0;
 pub const SHIP_ACCELERATION: f64 = 150.0;
+pub const PILOT_INPUT_LEASE_MS: u64 = 500;
+pub const MAX_ANGULAR_SPEED: f64 = std::f64::consts::FRAC_PI_2;
+pub fn identity_orientation() -> [f64; 4] {
+    [0.0, 0.0, 0.0, 1.0]
+}
 pub const DOCK_RANGE: f64 = 1800.0;
 pub const MINING_RANGE: f64 = 4500.0;
 pub const SPACE_BOUND: f64 = 100.0 * AU_METERS;
@@ -152,6 +157,7 @@ pub enum NavigationTarget {
 #[serde(tag = "mode", rename_all = "snake_case")]
 pub enum NavigationMode {
     Stop,
+    Manual,
     Approach {
         target: NavigationTarget,
     },
@@ -172,6 +178,12 @@ pub struct FlightState {
     pub position: [f64; 3],
     pub velocity: [f64; 3],
     pub heading: [f64; 3],
+    /// Unit quaternion [x,y,z,w], body axes +X forward, +Y up, +Z right.
+    #[serde(default = "identity_orientation")]
+    pub orientation: [f64; 4],
+    /// Body-axis angular velocity (roll X, yaw Y, pitch Z), radians/second.
+    #[serde(default)]
+    pub angular_velocity: [f64; 3],
     pub mode: NavigationMode,
     pub updated_at_ms: u64,
     #[serde(default)]
@@ -414,6 +426,10 @@ pub enum Request {
     },
     Navigate {
         mode: NavigationMode,
+    },
+    PilotInput {
+        translation: [f64; 3],
+        rotation: [f64; 3],
     },
     Undock,
     Warp {

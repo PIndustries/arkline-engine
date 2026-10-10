@@ -115,7 +115,14 @@ fn ship_orientation(pilot: &PilotView) -> Quat {
     pilot
         .flight
         .as_ref()
-        .and_then(|flight| orientation(flight.heading).or_else(|| orientation(flight.velocity)))
+        .and_then(|flight| {
+            let quaternion = Quat::from_array(flight.orientation.map(|v| v as f32));
+            if quaternion.is_finite() && quaternion.length_squared() > 1e-8 {
+                Some(quaternion.normalize())
+            } else {
+                orientation(flight.heading).or_else(|| orientation(flight.velocity))
+            }
+        })
         .unwrap_or_else(|| {
             Quat::from_rotation_y(if heading(&pilot.location) < 0.0 {
                 std::f32::consts::PI
@@ -129,7 +136,8 @@ fn ship_orientation_at(pilot: &PilotView, now: u64) -> Quat {
     if matches!(pilot.location, Location::InTransit { .. }) {
         if let Some(path) = pilot.flight.as_ref().and_then(|f| f.warp.as_ref()) {
             if let Some(rotation) = orientation(arkline_protocol::sample_warp_heading(path, now)) {
-                return rotation;
+                let current = ship_orientation(pilot);
+                return Quat::from_rotation_arc(current * Vec3::X, rotation * Vec3::X) * current;
             }
         }
     }
@@ -149,7 +157,7 @@ fn navigation_destination(
         return None;
     }
     let (label, target) = match &pilot.flight.as_ref()?.mode {
-        NavigationMode::Stop => return None,
+        NavigationMode::Stop | NavigationMode::Manual => return None,
         NavigationMode::FlyTo { position } => return Some(("FLY TO", space.scene(*position))),
         NavigationMode::Approach { target } => ("APPROACH", target),
         NavigationMode::Orbit { target, .. } => ("ORBIT", target),
@@ -192,12 +200,15 @@ pub struct FlightView {
     focus_selection: bool,
     context_target: Option<[f64; 3]>,
     context_object: Option<super::SelectedObject>,
+    input_surface: Option<(egui::Rect, egui::LayerId)>,
     space: Space,
 }
 impl FlightView {
     pub fn new(gl: Option<&Arc<glow::Context>>) -> Self {
         let renderer = gl
-            .ok_or_else(|| "OpenGL is unavailable. Switch to 2D Tactical.".into())
+            .ok_or_else(|| {
+                "OpenGL is unavailable. A graphics context is required for the cockpit.".into()
+            })
             .and_then(|gl| unsafe { Renderer::new(gl.clone()) })
             .map(|r| Arc::new(Mutex::new(r)));
         Self {
@@ -210,8 +221,12 @@ impl FlightView {
             focus_selection: false,
             context_target: None,
             context_object: None,
+            input_surface: None,
             space: Space::default(),
         }
+    }
+    pub fn input_surface(&self) -> Option<(egui::Rect, egui::LayerId)> {
+        self.input_surface
     }
     pub fn destroy(&mut self) {
         if let Ok(renderer) = &self.renderer {
@@ -245,7 +260,7 @@ impl FlightView {
         self.space = space;
         let cockpit = matches!(mode, super::ViewMode::Cockpit);
 
-        egui::Window::new("Flight camera")
+        egui::Window::new("Flight controls")
             .id(egui::Id::new("flight_camera_overlay"))
             .default_pos(ui.max_rect().left_bottom() + egui::vec2(16.0, -260.0))
             .default_size(egui::vec2(280.0, 95.0))
@@ -260,9 +275,10 @@ impl FlightView {
             .collapsible(true)
             .show(ui.ctx(), |ui| {
                 if cockpit {
-                    ui.label("Pilot seat · camera follows ship heading");
-                    ui.small("Use External view to orbit or zoom.");
-                    ui.small("Double-click space: fly · Right-click: actions");
+                    ui.label("Pilot seat · full six-axis flight");
+                    ui.small("W/S: thrust · A/D: strafe · Space/C: vertical");
+                    ui.small("Q/E: roll · Arrows: aim · RMB + mouse: aim");
+                    ui.small("Left-click: select · Release controls: neutral");
                     return;
                 }
                 ui.horizontal_wrapped(|ui| {
@@ -298,6 +314,7 @@ impl FlightView {
             ui.available_size().max(egui::vec2(100.0, 150.0)),
             egui::Sense::click_and_drag(),
         );
+        self.input_surface = Some((rect, ui.layer_id()));
         // Foreground panels own their pointer input, including transparent
         // panel margins. Checking the layer also blocks a drag crossing a HUD.
         let world_input = ui.input(|i| i.pointer.hover_pos()).is_some_and(|pointer| {
@@ -416,8 +433,6 @@ impl FlightView {
                         .cloned()
                         .collect(),
                     own: pilot_name.to_string(),
-                    yaw: self.yaw,
-                    pitch: self.pitch,
                     mining: connected.then(|| effects.mining(now)).flatten(),
                     docking: effects.events.iter().rev().find_map(|event| {
                         let age = now.saturating_sub(event.started_ms);
@@ -487,7 +502,8 @@ impl FlightView {
                                     | Location::InTransit { .. }
                             )
                     });
-                if world_input && (response.clicked() || response.secondary_clicked()) {
+                if world_input && (response.clicked() || (!cockpit && response.secondary_clicked()))
+                {
                     if let Some(pointer) = response.interact_pointer_pos() {
                         let mut targets = Vec::new();
                         for asteroid in asteroids
@@ -572,12 +588,12 @@ impl FlightView {
                         }
                         if let Some(object) = object {
                             picked = Some(ViewAction::Select(object));
-                        } else if response.double_clicked() {
+                        } else if !cockpit && response.double_clicked() {
                             picked = destination.map(ViewAction::FlyTo);
                         }
                     }
                 }
-                if world_input || response.context_menu_opened() {
+                if !cockpit && (world_input || response.context_menu_opened()) {
                     response.context_menu(|ui| {
                         ui.label("Navigation");
                         match &self.context_object {
@@ -758,6 +774,7 @@ impl FlightView {
                                     } else {
                                         own.flight.as_ref().map_or("OFFLINE", |f| match f.mode {
                                             NavigationMode::Stop => "STOP",
+                                            NavigationMode::Manual => "MANUAL",
                                             NavigationMode::Approach { .. } => "APPROACH",
                                             NavigationMode::Orbit { .. } => "ORBIT",
                                             NavigationMode::KeepRange { .. } => "KEEP RANGE",
@@ -1004,8 +1021,6 @@ struct Frame {
     now: u64,
     pilots: Vec<PilotView>,
     own: String,
-    yaw: f32,
-    pitch: f32,
     mining: Option<(f32, u64)>,
     docking: Option<(f32, bool)>,
 }
@@ -1218,11 +1233,18 @@ impl Renderer {
         gl.disable(glow::DEPTH_TEST);
         gl.use_program(Some(self.background));
         gl.bind_vertex_array(Some(self.empty));
-        gl.uniform_2_f32(
-            gl.get_uniform_location(self.background, "camera_angles")
+        gl.uniform_matrix_4_f32_slice(
+            gl.get_uniform_location(self.background, "inverse_view_projection")
                 .as_ref(),
-            frame.yaw,
-            frame.pitch,
+            false,
+            &frame.vp.inverse().to_cols_array(),
+        );
+        gl.uniform_3_f32(
+            gl.get_uniform_location(self.background, "camera_eye")
+                .as_ref(),
+            frame.eye.x,
+            frame.eye.y,
+            frame.eye.z,
         );
         gl.draw_arrays(glow::TRIANGLES, 0, 3);
         gl.enable(glow::DEPTH_TEST);
@@ -2140,10 +2162,10 @@ const BACK_VERTEX: &str = r#"#version 150
 out vec2 uv;void main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);uv=p;gl_Position=vec4(p*2.0-1.0,0.999,1.0);}
 "#;
 const BACK_FRAGMENT: &str = r#"#version 150
-in vec2 uv;uniform vec2 camera_angles;out vec4 color;
+in vec2 uv;uniform mat4 inverse_view_projection;uniform vec3 camera_eye;out vec4 color;
 float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
 float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
-void main(){vec2 p=uv+camera_angles*vec2(0.12,0.18);float mist=noise(p*4.0)+noise(p*9.0)*0.5+noise(p*23.0)*0.18;
+void main(){vec4 farpoint=inverse_view_projection*vec4(uv*2.0-1.0,1.0,1.0);vec3 direction=normalize(farpoint.xyz/farpoint.w-camera_eye);vec2 p=vec2(atan(direction.z,direction.x)/6.2831853+0.5,asin(clamp(direction.y,-1.0,1.0))/3.1415927+0.5);float mist=noise(p*4.0)+noise(p*9.0)*0.5+noise(p*23.0)*0.18;
 float band=exp(-pow((p.y-0.4+sin(p.x*3.4)*0.16)*3.0,2.0));vec3 c=vec3(0.008,0.014,0.032)+vec3(0.032,0.07,0.125)*mist*band;
 c+=vec3(0.055,0.022,0.055)*pow(mist*0.6,3.0)*band;
 for(int i=0;i<2;i++){float scale=180.0+float(i)*155.0;vec2 grid=p*scale;vec2 cell=floor(grid);vec2 offset=vec2(hash(cell),hash(cell+13.7));float d=length(fract(grid)-offset);float seed=hash(cell+71.1);float star=(1.0-smoothstep(0.0,0.09,d))*step(0.972,seed);c+=mix(vec3(0.53,0.7,1.0),vec3(1.0,0.87,0.65),seed)*star*(0.5+seed*0.7);}
@@ -2153,6 +2175,17 @@ vec2 sun=p-vec2(0.84,0.82);float flare=0.0018/(dot(sun,sun)+0.006);c+=vec3(0.17,
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn cockpit_roll_rotates_camera_up_without_leveling() {
+        let rotation = Quat::from_rotation_x(std::f32::consts::FRAC_PI_2);
+        let (eye, view) = cockpit_camera(Vec3::ZERO, rotation);
+        let camera_up = view.inverse().transform_vector3(Vec3::Y);
+        assert!(camera_up.distance(Vec3::Z) < 1e-5);
+        let ahead = view.transform_point3(eye + rotation * Vec3::X);
+        assert!(ahead.distance(-Vec3::Z) < 1e-5);
+        let right = view.inverse().transform_vector3(Vec3::X);
+        assert!(right.distance(rotation * Vec3::Z) < 1e-5);
+    }
     #[test]
     fn warp_camera_tracks_rebased_ship_without_threshold_jumps() {
         let old = Space { origin: [0.0; 3] };
@@ -2203,6 +2236,8 @@ mod tests {
             ore: 0,
             location: Location::Station,
             flight: Some(arkline_protocol::FlightState {
+                orientation: [0.0, 0.0, 0.0, 1.0],
+                angular_velocity: [0.0; 3],
                 warp: None,
                 position: [1000.0, 500.0, -200.0],
                 velocity: [100.0, 0.0, 0.0],
@@ -2221,6 +2256,10 @@ mod tests {
         assert_eq!(space.position(&pilot, 1200), Vec3::new(10.0, 5.0, -2.0));
         pilot.location = Location::Docked;
         assert_eq!(space.position(&pilot, 1200), Vec3::new(10.0, 5.0, -2.0));
+        pilot.flight.as_mut().unwrap().orientation =
+            Quat::from_rotation_y(std::f32::consts::FRAC_PI_2)
+                .to_array()
+                .map(f64::from);
         let moving_orientation = ship_orientation(&pilot);
         pilot.flight.as_mut().unwrap().velocity = [0.0; 3];
         assert_eq!(

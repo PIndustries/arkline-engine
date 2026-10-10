@@ -163,3 +163,19 @@ approaching at 10.9 km, followed by 1.4 km at 1.1 km/s during terminal arrival.
 External view shows the ship inside the direction-aligned tunnel. Visual QA caught
 a legacy oversized launch hoop; it was removed from launch/arrival and replaced
 by a dim, thin warmup ring. Alignment is still a fixed-duration preview rule.
+
+## Direct six-axis cockpit flight — 26.10.10.1
+
+73 workspace tests, formatting and strict Clippy pass. Direct flight checks cover
+all positive/negative body translation axes, pitch/yaw/roll, normalized diagonal
+input, input expiry, release braking, restart recovery and autopilot handoff.
+Client checks cover focus/typing suppression, capture/release commands, latest-input
+delivery and presentation continuity when manual input expires.
+
+An independent live TCP run verified forward, strafe and vertical thrust, combined
+rotation, normalized orientation, stale-input expiry and orientation recovery after
+restart without economic changes. Native inspection confirmed the cockpit-only
+interface, direct-flight status and persisted translated/rotated ship state. Native
+mouse capture feel has not been fully validated; the client includes a visible
+bounded-aim fallback when capture is unavailable. This remains assisted flight:
+releasing translation brakes the ship, while the current attitude is retained.

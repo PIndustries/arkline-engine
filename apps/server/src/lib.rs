@@ -20,6 +20,8 @@ struct Pilot {
     last_mine_ms: Option<u64>,
     #[serde(default)]
     warp: Option<flight::WarpPath>,
+    #[serde(default)]
+    controls: Option<flight::ControlInput>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 struct World {
@@ -113,6 +115,7 @@ impl Server {
         flight::migrate_spatial(&mut world);
         universe::ensure_asteroids(&mut world);
         for pilot in world.pilots.values_mut() {
+            pilot.controls = None;
             if !matches!(
                 pilot.view.location,
                 Location::InTransit { .. } | Location::Jumping { .. }
@@ -120,6 +123,7 @@ impl Server {
                 if let Some(flight) = &mut pilot.view.flight {
                     flight.mode = NavigationMode::Stop;
                     flight.velocity = [0.0; 3];
+                    flight.angular_velocity = [0.0; 3];
                 }
             }
         }
@@ -209,6 +213,7 @@ impl Server {
         flight::migrate_spatial(&mut world);
         universe::ensure_asteroids(&mut world);
         if let Some(p) = world.pilots.get_mut(name) {
+            p.controls = None;
             if !matches!(
                 p.view.location,
                 Location::InTransit { .. } | Location::Jumping { .. }
@@ -216,6 +221,7 @@ impl Server {
                 if let Some(f) = &mut p.view.flight {
                     f.mode = NavigationMode::Stop;
                     f.velocity = [0.0; 3];
+                    f.angular_velocity = [0.0; 3];
                 }
             }
         }
@@ -295,6 +301,7 @@ impl Server {
                             token_hash: token_hash(&issued),
                             last_mine_ms: None,
                             warp: None,
+                            controls: None,
                         },
                     );
                     token = Some(issued);
@@ -338,6 +345,27 @@ impl Server {
                 let pilot = world.pilots.get_mut(&name).context("pilot missing")?;
                 flight::ensure_flight(pilot, now);
                 match request {
+                    Request::PilotInput {
+                        translation,
+                        rotation,
+                    } => {
+                        ensure!(
+                            universe::normal(pilot),
+                            "manual piloting requires undocked normal space"
+                        );
+                        flight::validate_input(translation, rotation)?;
+                        pilot.controls = Some(flight::controls(translation, rotation, now));
+                        let f = pilot.view.flight.as_mut().unwrap();
+                        f.mode = NavigationMode::Manual;
+                        f.updated_at_ms = now;
+                        f.angular_velocity = pilot
+                            .controls
+                            .as_ref()
+                            .unwrap()
+                            .rotation
+                            .map(|v| v * MAX_ANGULAR_SPEED);
+                        message = "Piloting input accepted";
+                    }
                     Request::LockAsteroid { id } => {
                         ensure!(universe::normal(pilot), "target lock requires normal space");
                         let asteroid = world
@@ -372,6 +400,8 @@ impl Server {
                         f.mode = NavigationMode::Stop;
                         f.velocity = [0.0; 3];
                         f.updated_at_ms = now;
+                        pilot.controls = None;
+                        f.angular_velocity = [0.0; 3];
                         pilot.view.locked_asteroid = None;
                         pilot.view.location = Location::Jumping {
                             gate_id,
@@ -392,6 +422,8 @@ impl Server {
                             "navigation requires undocked normal space"
                         );
                         let f = pilot.view.flight.as_mut().unwrap();
+                        pilot.controls = None;
+                        f.angular_velocity = [0.0; 3];
                         f.mode = mode;
                         f.updated_at_ms = now;
                         message = "Navigation accepted";
@@ -448,12 +480,14 @@ impl Server {
                             "must be within docking range in normal space"
                         );
                         pilot.view.locked_asteroid = None;
+                        pilot.controls = None;
                         pilot.view.location = Location::Docked;
                         let f = pilot.view.flight.as_mut().unwrap();
                         f.position = STATION_POSITION;
                         f.velocity = [0.0; 3];
                         f.mode = NavigationMode::Stop;
                         f.updated_at_ms = now;
+                        f.angular_velocity = [0.0; 3];
                         message = "Docked";
                     }
                     Request::Mine { units } | Request::MineAsteroid { id: _, units } => {

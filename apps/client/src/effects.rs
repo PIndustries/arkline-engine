@@ -138,6 +138,8 @@ mod tests {
                 locked_asteroid: Some(7),
                 flight: Some(FlightState {
                     warp: None,
+                    orientation: [0.0, 0.0, 0.0, 1.0],
+                    angular_velocity: [0.0; 3],
                     position: BELT_POSITION,
                     velocity: [0.0; 3],
                     heading: [1.0, 0.0, 0.0],

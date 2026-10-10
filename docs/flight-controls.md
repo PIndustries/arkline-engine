@@ -1,19 +1,20 @@
 # Flight controls
 
 The cockpit sends navigation intent. The server owns ship position, velocity,
-acceleration, range checks and the active navigation mode. Changing the camera
-never moves a ship. All three views display the same authoritative flight state.
+acceleration, range checks and the active navigation mode. The cockpit follows the ship’s full orientation. Direct controls and autopilot
+commands operate on the same authoritative flight state.
 
 ## Operating a ship
 
 1. Undock and select a station, belt, individual asteroid, gate or local vessel.
 2. Choose **Approach** to close the distance, **Orbit** for a circular path, or
    **Keep range** to maintain the chosen separation.
-3. Double-click empty space to fly toward a point. In 3D this picks the horizontal
-   plane through your ship; camera pitch changes where the pointer intersects it.
-   This is point navigation, not direct joystick steering.
-4. Use **Stop** or **Ctrl+Space** to brake. Navigation commands are unavailable
-   while docked or in warp. Shortcuts do not interrupt editing a text field.
+3. Fly directly with W/S (forward/reverse), A/D (strafe), Space/C (up/down),
+   Q/E (roll), and arrow keys (pitch/yaw). Hold right mouse over unobstructed
+   space to aim. These axes are relative to your ship, including after a roll.
+4. Release controls for assisted braking, or use **Stop / Ctrl+Space**. Keyboard
+   controls do not run while typing or while the window is unfocused. Manual
+   input takes over from autopilot; an explicit autopilot action clears stale input.
 5. Warp to the station, belt or selected gate. At the gate, use **Jump** when
    within 1.8 km. Jumping changes systems after the three-second transition.
 6. Select a particular asteroid in space or the Mining overview. **Lock target**,
@@ -27,10 +28,10 @@ normal flight; warp samples the same analytic trajectory as the server. Renderin
 subtracts a nearby origin in double precision before converting GPU coordinates.
 These presentation calculations cannot change server state.
 
-Switch between tactical, external and cockpit cameras without changing navigation.
-Tactical has local and system scales. The first-person cockpit looks along ship
-heading with a modeled canopy and instruments showing live ship telemetry.
-This is point navigation; it does not add joystick or six-axis manual steering.
+The first-person cockpit is the only gameplay view. Full quaternion orientation
+preserves roll independently of movement direction. Manual-flight presentation uses
+a shorter interpolation buffer than autopilot. Rotation input expires after 500 ms
+without a fresh command; translation then brakes instead of continuing stale thrust.
 
 ## Persistence and connection loss
 

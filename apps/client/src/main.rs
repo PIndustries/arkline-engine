@@ -3,6 +3,7 @@ mod audit;
 mod effects;
 mod flight3d;
 mod motion;
+mod pilot_input;
 mod theme;
 use arkline_protocol::*;
 use eframe::egui::{self, Color32, Pos2, Stroke, Vec2};
@@ -25,7 +26,6 @@ const MUTED: Color32 = Color32::from_rgb(138, 157, 180);
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ViewMode {
     Tactical,
-    External,
     Cockpit,
 }
 
@@ -90,6 +90,7 @@ fn worker(
     credential_scope: Option<String>,
     commands: Receiver<Request>,
     updates: Sender<Update>,
+    controls: pilot_input::Mailbox,
 ) {
     let run = || -> Result<(), String> {
         let path = credentials_path(&dir, credential_scope.as_deref().unwrap_or(&server), &pilot);
@@ -136,16 +137,26 @@ fn worker(
         updates
             .send(Update::Response(Box::new(response), true))
             .map_err(|e| e.to_string())?;
+        let mut last_snapshot = Instant::now();
         loop {
-            let (request, visible) = match commands.recv_timeout(Duration::from_millis(350)) {
+            let (request, visible) = match commands.recv_timeout(Duration::from_millis(50)) {
                 Ok(request) => (request, true),
-                Err(mpsc::RecvTimeoutError::Timeout) => (Request::Snapshot, false),
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    if let Some(control) = controls.lock().unwrap().take() {
+                        (control.request(), false)
+                    } else if last_snapshot.elapsed() >= Duration::from_millis(350) {
+                        (Request::Snapshot, false)
+                    } else {
+                        continue;
+                    }
+                }
                 Err(mpsc::RecvTimeoutError::Disconnected) => return Ok(()),
             };
             let response = exchange(&mut reader, &request).map_err(|error| {
                 if visible { format!("{error}. Action outcome unknown; reconnect and inspect state before retrying.") }
                 else { error }
             })?;
+            last_snapshot = Instant::now();
             updates
                 .send(Update::Response(Box::new(response), visible))
                 .map_err(|e| e.to_string())?;
@@ -187,6 +198,8 @@ struct Cockpit {
     data_dir: PathBuf,
     credential_scope: Option<String>,
     commands: Option<Sender<Request>>,
+    controls: pilot_input::Mailbox,
+    pilot_input: pilot_input::PilotInput,
     updates: Option<Receiver<Update>>,
     connecting: bool,
     connected: bool,
@@ -236,6 +249,8 @@ impl Cockpit {
             data_dir,
             credential_scope,
             commands: None,
+            controls: pilot_input::Mailbox::default(),
+            pilot_input: pilot_input::PilotInput::default(),
             updates: None,
             connecting: false,
             connected: false,
@@ -246,7 +261,7 @@ impl Cockpit {
             price: 10,
             buy_amount: 1,
             notice: String::new(),
-            view_mode: ViewMode::External,
+            view_mode: ViewMode::Cockpit,
             tactical_system: false,
             motion: motion::MotionHistory::default(),
             timeline_origin: None,
@@ -318,6 +333,8 @@ impl Cockpit {
         })
     }
     fn connect(&mut self) {
+        self.controls = pilot_input::Mailbox::default();
+        self.pilot_input = pilot_input::PilotInput::default();
         self.motion.clear();
         self.timeline_origin = None;
         self.effects.clear();
@@ -335,7 +352,8 @@ impl Cockpit {
         let pilot = self.pilot.clone();
         let dir = self.data_dir.clone();
         let scope = self.credential_scope.clone();
-        std::thread::spawn(move || worker(server, pilot, dir, scope, rx, out_tx));
+        let controls = self.controls.clone();
+        std::thread::spawn(move || worker(server, pilot, dir, scope, rx, out_tx, controls));
         self.commands = Some(tx);
         self.updates = Some(out_rx);
         self.connecting = true;
@@ -380,6 +398,16 @@ impl Cockpit {
     fn send(&mut self, request: Request) {
         if !self.can_operate() {
             return;
+        }
+        if matches!(
+            request,
+            Request::Navigate { .. }
+                | Request::Warp { .. }
+                | Request::Dock
+                | Request::Undock
+                | Request::Jump { .. }
+        ) {
+            self.pilot_input.relinquish(&self.controls);
         }
         if let Some(tx) = &self.commands {
             if tx.send(request).is_ok() {
@@ -600,6 +628,7 @@ impl Cockpit {
         if pilot.location != Location::Docked {
             if let Some(flight) = &pilot.flight {
                 let label = match flight.mode {
+                    NavigationMode::Manual => "DIRECT FLIGHT / ASSISTED BRAKING",
                     NavigationMode::Stop => "STOP / BRAKING",
                     NavigationMode::Approach { .. } => "APPROACHING TARGET",
                     NavigationMode::Orbit { .. } => "ORBITING TARGET",
@@ -698,7 +727,7 @@ impl Cockpit {
                     });
                 }
             });
-            columns[1].small("Ctrl+Space stop · Double-click space to fly");
+            columns[1].small("W/S thrust · A/D strafe · Space/C vertical");
             let asteroid = self.selected_asteroid().cloned();
             columns[2].small(
                 asteroid
@@ -1013,7 +1042,7 @@ impl Cockpit {
         if matches!(&self.selected_object, SelectedObject::Pilot(name) if name == &self.pilot) {
             ui.small("Select another vessel or a location to navigate.");
         }
-        ui.small("Ctrl+Space: stop · Double-click empty space: fly there");
+        ui.small("Ctrl+Space: stop · RMB: aim · Release controls: assisted braking");
     }
     fn overview(&mut self, ui: &mut egui::Ui) {
         let system = self.current_system();
@@ -1518,7 +1547,7 @@ impl Cockpit {
             if self.tactical_system {
                 "SYSTEM MAP · 20 AU span · select a destination to warp"
             } else {
-                "LOCAL TACTICAL · 32 km span · double-click to fly"
+                "LOCAL NAVIGATION · 32 km span"
             },
             egui::FontId::proportional(11.0),
             MUTED,
@@ -1951,7 +1980,7 @@ impl Cockpit {
         paint.text(
             rect.right_bottom() + Vec2::new(-12.0, -12.0),
             egui::Align2::RIGHT_BOTTOM,
-            "CLICK TO SELECT · DOUBLE-CLICK SPACE TO FLY",
+            "CLICK TO SELECT · USE FLIGHT CONTROLS TO NAVIGATE",
             egui::FontId::monospace(10.0),
             MUTED,
         );
@@ -2156,13 +2185,7 @@ impl eframe::App for Cockpit {
                                 "○ Offline"
                             },
                         );
-                        ui.selectable_value(&mut self.view_mode, ViewMode::Tactical, "Tactical");
-                        ui.selectable_value(&mut self.view_mode, ViewMode::External, "External");
-                        ui.selectable_value(&mut self.view_mode, ViewMode::Cockpit, "Cockpit");
-                        if self.view_mode == ViewMode::Tactical {
-                            ui.selectable_value(&mut self.tactical_system, false, "Local");
-                            ui.selectable_value(&mut self.tactical_system, true, "System");
-                        }
+                        ui.small("COCKPIT · DIRECT FLIGHT");
                         let fullscreen = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
                         if ui
                             .small_button(if fullscreen {
@@ -2318,6 +2341,16 @@ impl eframe::App for Cockpit {
                     self.scene(ui);
                 }
             });
+        let flight_allowed = self.connected
+            && self.own().is_some_and(|p| {
+                p.flight.is_some() && matches!(p.location, Location::Station | Location::Belt)
+            });
+        if let Some(control) =
+            self.pilot_input
+                .sample(ctx, flight_allowed, self.flight_view.input_surface())
+        {
+            *self.controls.lock().unwrap() = Some(control);
+        }
     }
 }
 /// Only the process that spawned a local host owns its lifetime.
@@ -2588,6 +2621,8 @@ mod tests {
                 mode: NavigationMode::Stop,
                 updated_at_ms: 0,
                 warp: None,
+                orientation: [0.0, 0.0, 0.0, 1.0],
+                angular_velocity: [0.0; 3],
             }),
         };
         assert!(in_navigation_range(&pilot, BELT_POSITION, MINING_RANGE));
@@ -2661,6 +2696,7 @@ mod tests {
                     None,
                     commands_rx,
                     updates_tx,
+                    pilot_input::Mailbox::default(),
                 )
             });
             assert!(matches!(

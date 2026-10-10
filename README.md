@@ -58,32 +58,34 @@ Warp includes a two-second alignment/warm-up, visible local launch, acceleration
 one-second cooldown. Cargo holds 1,000 units; escrow is separate. Cancelling an
 order requires room to return its ore. The initial global reserve is 100,000 ore, divided across 108 rocks in three systems.
 
-## Tactical and flight views
+## First-person flight
 
-Use **Tactical / External / Cockpit** in the session overlay. All display the same
-live ships and authoritative warp timeline; switching views changes no game state.
-The 3D mode uses native GPU geometry and perspective lighting with procedural ship,
-station, asteroid and planet assets.
+Gameplay uses the pilot's cockpit with a full-window view outside and live ship
+instruments. Direct flight moves the authoritative ship in all six degrees of
+freedom; the camera follows its complete orientation, including roll.
 
-- Drag inside the 3D viewport to orbit the camera.
-- Scroll inside it to zoom.
-- **Focus my ship** tracks your pilot; **Sector overview** frames the region.
-- **Reset camera** restores the default viewpoint.
+| Controls | Action |
+|---|---|
+| W / S | Forward / reverse thrust |
+| A / D | Strafe left / right |
+| Space / C | Translate up / down |
+| Arrow keys | Pitch and yaw |
+| Q / E | Roll left / right |
+| Hold right mouse + move | Aim from unobstructed space |
+| Ctrl+Space | Brake |
 
-Confirmed extraction produces a short mining beam, impact sparks and returning ore
-particles in both views. A confirmation cue reports the units already credited by
-the server. Warp effects follow the authoritative travel interval; docking and
-undocking produce short arrival/departure cues. These effects are presentation,
-not additional mining commands or delayed inventory updates. Reconnecting does
-not replay old extraction effects.
+Release controls to stop rotation and apply assisted braking. Controls are disabled
+while typing, unfocused, docked or traveling in warp. A short server input lease
+prevents lost input from leaving thrust or rotation active. Left-click objects to
+select them; overview actions still provide approach, orbit, warp, mining and docking.
 
-Flight buttons still control travel. The camera does not move your ship or affect
-the economy. This is an early 3D rendering foundation with procedural assets, not
-the final art direction or a full free-flight/combat simulation.
+Confirmed extraction produces a mining beam and impact feedback. Warp effects follow
+the authoritative route. These effects do not issue extra mining commands or change
+inventory. Procedural cockpit/world assets remain a prototype.
 
 ## Cockpit layout and services
 
-Space fills the entire gameplay window in all three views. Session controls, overview,
+Space fills the entire gameplay window behind the cockpit. Session controls, overview,
 ship controls and camera controls float above it instead of reserving fixed rows
 or columns. Move or collapse panels to make room around your ship. Use **F11**
 or **Fullscreen** to toggle fullscreen mode. Services open
@@ -188,14 +190,15 @@ The header and window title show the same `year.month.day.build` identity as
 new packaged build on a day; start at 1 on a new date. Packaging reads this file
 and includes the original Arkline orbital icon.
 
-Click a station, asteroid belt or visible ship in either viewport to select it.
-The right panel shows contextual actions; **Focus selected** moves the 3D camera.
-Clicking an asteroid selects that individual rock and its remaining ore. Use **Approach**, **Orbit**, or **Keep range** to move the ship around the selected
-object. Asteroid extraction requires locking that rock first. The Travel overview
-contains gates connecting Junction, Ember Reach and Glassway; warp to a gate and
-jump when in range. Double-click empty space to fly to a point; **Ctrl+Space** brakes to a stop.
-Both views share server-controlled positions, speed and range. Camera dragging
-only changes the view. See [flight controls](docs/flight-controls.md) for limits.
+Click a station, asteroid or visible ship through the cockpit to select it.
+The overview shows contextual actions. Clicking an asteroid selects that individual
+rock and its remaining ore. Use **Approach**, **Orbit**, or **Keep range** for
+automatic navigation, or use W/S, A/D and Space/C for direct body-axis thrust.
+Hold the right mouse button to steer; arrow keys pitch/yaw and Q/E roll the ship.
+Asteroid extraction requires locking that rock first. The Travel overview contains
+gates connecting Junction, Ember Reach and Glassway; warp to a gate and jump when
+in range. **Ctrl+Space** brakes to a stop. Cockpit orientation follows the actual
+ship attitude. See [flight controls](docs/flight-controls.md) for limits.
 
 Online status counts live authenticated connections separately from durable ships.
 Explicit disconnects are removed on socket closure; an unresponsive network may

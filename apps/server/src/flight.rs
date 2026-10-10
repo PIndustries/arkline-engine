@@ -73,15 +73,23 @@ pub(super) fn ensure_flight(p: &mut Pilot, now: u64) {
             position: initial(&p.view.name, &p.view.location),
             velocity: [0.0; 3],
             heading: [1.0, 0.0, 0.0],
+            orientation: identity_orientation(),
+            angular_velocity: [0.0; 3],
             mode: NavigationMode::Stop,
             updated_at_ms: now,
             warp: None,
         });
+    } else if let Some(f) = &mut p.view.flight {
+        // Older serialized flights have heading but no quaternion field.
+        if f.orientation == identity_orientation() && distance(f.heading, [1.0, 0.0, 0.0]) > 1e-8 {
+            f.orientation = align(f.orientation, f.heading);
+        }
     }
 }
 pub(super) fn validate_mode(mode: &NavigationMode, name: &str, world: &World) -> Result<()> {
     let target = match mode {
         NavigationMode::Stop => None,
+        NavigationMode::Manual => bail!("use PilotInput for manual flight"),
         NavigationMode::FlyTo { position } => {
             ensure!(
                 position
@@ -189,6 +197,8 @@ pub(super) fn begin_warp(p: &mut Pilot, destination: Destination, now: u64) {
     if let Some(path) = &mut f.warp {
         path.initial_heading = Some(f.heading);
     }
+    p.controls = None;
+    f.angular_velocity = [0.0; 3];
     f.mode = NavigationMode::Stop;
     f.velocity = [0.0; 3];
     f.updated_at_ms = now;
@@ -199,6 +209,12 @@ pub(super) fn advance(world: &mut World, now: u64) {
     }
     let views = world.pilots.clone();
     for p in world.pilots.values_mut() {
+        if matches!(p.view.flight.as_ref().unwrap().mode, NavigationMode::Manual)
+            && universe::normal(p)
+        {
+            advance_manual(p, now);
+            continue;
+        }
         let f = p.view.flight.as_mut().unwrap();
         if let Location::Jumping {
             gate_id,
@@ -240,6 +256,8 @@ pub(super) fn advance(world: &mut World, now: u64) {
             f.position = position;
             f.velocity = velocity;
             f.heading = sample_warp_heading(trajectory, now);
+            f.orientation = align(f.orientation, f.heading);
+            f.angular_velocity = [0.0; 3];
             f.updated_at_ms = now;
             if now >= arrives_at_ms {
                 f.position = path.target;
@@ -266,7 +284,7 @@ pub(super) fn advance(world: &mut World, now: u64) {
             remaining -= dt;
             let mut destination = None;
             let desired = match &f.mode {
-                NavigationMode::Stop => [0.0; 3],
+                NavigationMode::Stop | NavigationMode::Manual => [0.0; 3],
                 NavigationMode::FlyTo { position } => {
                     destination = Some(*position);
                     let d = sub(*position, f.position);
@@ -338,8 +356,11 @@ pub(super) fn advance(world: &mut World, now: u64) {
                     f.mode = NavigationMode::Stop;
                 }
             }
-            if length(f.velocity) > 0.01 {
+            if length(f.velocity) > 0.01
+                && !matches!(f.mode, NavigationMode::Stop | NavigationMode::Manual)
+            {
                 f.heading = unit(f.velocity);
+                f.orientation = align(f.orientation, f.heading);
             }
         }
         f.updated_at_ms = now;
@@ -407,4 +428,152 @@ pub(super) fn migrate_spatial(world: &mut World) {
         }
     }
     world.spatial_version = 2;
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub(super) struct ControlInput {
+    pub translation: [f64; 3],
+    pub rotation: [f64; 3],
+    pub expires_at_ms: u64,
+}
+fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
+    [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ]
+}
+fn qmul(a: [f64; 4], b: [f64; 4]) -> [f64; 4] {
+    let v = add(
+        add(mul([a[0], a[1], a[2]], b[3]), mul([b[0], b[1], b[2]], a[3])),
+        cross([a[0], a[1], a[2]], [b[0], b[1], b[2]]),
+    );
+    [
+        v[0],
+        v[1],
+        v[2],
+        a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2],
+    ]
+}
+fn qnormalize(q: [f64; 4]) -> [f64; 4] {
+    let n = q.iter().map(|x| x * x).sum::<f64>().sqrt();
+    if n < 1e-12 {
+        identity_orientation()
+    } else {
+        q.map(|x| x / n)
+    }
+}
+pub(super) fn rotate(q: [f64; 4], v: [f64; 3]) -> [f64; 3] {
+    let xyz = [q[0], q[1], q[2]];
+    let t = mul(cross(xyz, v), 2.0);
+    add(v, add(mul(t, q[3]), cross(xyz, t)))
+}
+fn align(q: [f64; 4], direction: [f64; 3]) -> [f64; 4] {
+    let old = unit(rotate(q, [1.0, 0.0, 0.0]));
+    let new = unit(direction);
+    let dot = old.iter().zip(new).map(|(a, b)| a * b).sum::<f64>();
+    let axis = if dot < -0.999999 {
+        unit(cross(
+            old,
+            if old[1].abs() < 0.9 {
+                [0.0, 1.0, 0.0]
+            } else {
+                [0.0, 0.0, 1.0]
+            },
+        ))
+    } else {
+        cross(old, new)
+    };
+    qnormalize(qmul(
+        qnormalize([
+            axis[0],
+            axis[1],
+            axis[2],
+            if dot < -0.999999 { 0.0 } else { 1.0 + dot },
+        ]),
+        q,
+    ))
+}
+pub(super) fn validate_input(translation: [f64; 3], rotation: [f64; 3]) -> Result<()> {
+    ensure!(
+        translation
+            .into_iter()
+            .chain(rotation)
+            .all(|v| v.is_finite() && (-1.0..=1.0).contains(&v)),
+        "piloting input components must be finite within -1..1"
+    );
+    Ok(())
+}
+pub(super) fn controls(translation: [f64; 3], rotation: [f64; 3], now: u64) -> ControlInput {
+    ControlInput {
+        translation: limit(translation, 1.0),
+        rotation: limit(rotation, 1.0),
+        expires_at_ms: now.saturating_add(PILOT_INPUT_LEASE_MS),
+    }
+}
+fn advance_manual(p: &mut Pilot, now: u64) {
+    let input = p.controls.clone();
+    let f = p.view.flight.as_mut().unwrap();
+    let mut cursor = f.updated_at_ms as f64;
+    let end = (now as f64).min(cursor + 10000.0);
+    while cursor < end {
+        let active = input.as_ref().filter(|i| cursor < (i.expires_at_ms as f64));
+        let mut dt = ((end - cursor) / 1000.0).min(0.05);
+        if let Some(i) = active {
+            dt = dt.min((i.expires_at_ms as f64 - cursor) / 1000.0);
+        }
+        if dt <= 0.0 {
+            break;
+        }
+        let angular = active.map_or([0.0; 3], |i| mul(i.rotation, MAX_ANGULAR_SPEED));
+        f.angular_velocity = angular;
+        let angle = length(angular) * dt;
+        if angle > 0.0 {
+            let axis = unit(angular);
+            let sin = (angle * 0.5).sin();
+            f.orientation = qnormalize(qmul(
+                f.orientation,
+                [
+                    axis[0] * sin,
+                    axis[1] * sin,
+                    axis[2] * sin,
+                    (angle * 0.5).cos(),
+                ],
+            ));
+        }
+        let thrust = active.map_or([0.0; 3], |i| i.translation);
+        let old = f.velocity;
+        f.velocity = if length(thrust) > 0.0 {
+            limit(
+                add(
+                    old,
+                    mul(rotate(f.orientation, thrust), SHIP_ACCELERATION * dt),
+                ),
+                MAX_SHIP_SPEED,
+            )
+        } else {
+            add(old, limit(mul(old, -1.0), SHIP_ACCELERATION * dt))
+        };
+        f.position = add(f.position, mul(add(old, f.velocity), dt * 0.5));
+        for i in 0..3 {
+            if f.position[i].abs() > SPACE_BOUND {
+                f.position[i] = f.position[i].clamp(-SPACE_BOUND, SPACE_BOUND);
+                f.velocity = [0.0; 3];
+            }
+        }
+        cursor += dt * 1000.0;
+    }
+    f.heading = unit(rotate(f.orientation, [1.0, 0.0, 0.0]));
+    f.updated_at_ms = now;
+    if input.as_ref().is_none_or(|i| now >= i.expires_at_ms) {
+        f.angular_velocity = [0.0; 3];
+        f.mode = NavigationMode::Stop;
+        p.controls = None;
+    }
+    p.view.location =
+        if distance(f.position, BELT_POSITION) < distance(f.position, STATION_POSITION) {
+            Location::Belt
+        } else {
+            Location::Station
+        };
 }
