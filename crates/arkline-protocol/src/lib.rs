@@ -3,13 +3,19 @@
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+/// User-facing year.month.day.build identity; trim the trailing file newline.
+pub const BUILD_VERSION: &str = include_str!("../../../BUILD_VERSION");
+
 pub const PROTOCOL_VERSION: u32 = 1;
 pub const RULESET_VERSION: u32 = 1;
 pub const STARTER_CREDITS: u64 = 1_000;
 pub const INITIAL_BELT_ORE: u64 = 100_000;
 pub const CARGO_CAPACITY: u64 = 1_000;
 pub const MAX_MINE_UNITS: u64 = 100;
-pub const WARP_DURATION_MS: u64 = 3_000;
+/// Total authoritative transit interval, including the initial warmup.
+pub const WARP_DURATION_MS: u64 = 6_000;
+/// Initial part of transit spent charging before visual travel begins.
+pub const WARP_WARMUP_MS: u64 = 2_000;
 pub const GENESIS_HASH: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,6 +87,9 @@ pub struct SellOrder {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Snapshot {
     pub server_time_ms: u64,
+    /// Ephemeral authenticated transport presence; excluded from economic replay.
+    #[serde(default)]
+    pub online_pilots: Vec<String>,
     pub pilots: Vec<PilotView>,
     pub orders: Vec<SellOrder>,
     pub belt_ore: u64,
@@ -169,5 +178,24 @@ impl Response {
             snapshot: None,
             ledger: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod compatibility_tests {
+    use super::*;
+
+    #[test]
+    fn older_snapshots_default_to_no_reported_presence() {
+        let json = serde_json::json!({
+            "server_time_ms": 0,
+            "pilots": [],
+            "orders": [],
+            "belt_ore": INITIAL_BELT_ORE,
+            "ledger_sequence": 0,
+            "ledger_hash": GENESIS_HASH,
+        });
+        let snapshot: Snapshot = serde_json::from_value(json).unwrap();
+        assert!(snapshot.online_pilots.is_empty());
     }
 }

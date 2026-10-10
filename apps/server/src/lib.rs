@@ -50,6 +50,7 @@ fn token_hash(token: &str) -> String {
 /// The durable state and its economic event commit in one SQLite transaction.
 pub struct Server {
     db: Connection,
+    online_sessions: BTreeMap<String, usize>,
     // Kept after db so SQLite closes before authority is released. Never unlink
     // the sidecar: replacing its inode would allow competing locks.
     _ownership_lock: Option<std::fs::File>,
@@ -99,6 +100,7 @@ impl Server {
         )?;
         Ok(Self {
             db,
+            online_sessions: BTreeMap::new(),
             _ownership_lock: ownership_lock,
         })
     }
@@ -111,9 +113,44 @@ impl Server {
         request: Request,
         now: u64,
     ) -> Response {
+        let previous = session.clone();
         match self.execute(session, request, now) {
-            Ok(response) => response,
+            Ok(mut response) => {
+                // execute changes the session only after a successful durable
+                // commit. Repeated Connect on one socket must not double-count.
+                if previous != *session {
+                    if let Some(previous) = previous {
+                        self.remove_presence(&previous);
+                    }
+                    if let Some(current) = session.as_ref() {
+                        *self.online_sessions.entry(current.clone()).or_default() += 1;
+                    }
+                }
+                let online = self.online_sessions.keys().cloned().collect::<Vec<_>>();
+                if let Some(snapshot) = &mut response.snapshot {
+                    snapshot.online_pilots = online.clone();
+                }
+                if let Some(export) = &mut response.ledger {
+                    export.snapshot.online_pilots = online;
+                }
+                response
+            }
             Err(error) => Response::error(error.to_string()),
+        }
+    }
+    /// Called exactly once by the transport session guard, on all exit paths.
+    /// Presence is in-memory only; persistent ships and economy are untouched.
+    pub fn disconnect(&mut self, session: &mut Option<String>) {
+        if let Some(pilot) = session.take() {
+            self.remove_presence(&pilot);
+        }
+    }
+    fn remove_presence(&mut self, pilot: &str) {
+        if let Some(count) = self.online_sessions.get_mut(pilot) {
+            *count -= 1;
+            if *count == 0 {
+                self.online_sessions.remove(pilot);
+            }
         }
     }
     fn execute(
@@ -392,6 +429,7 @@ impl Server {
         }
         let snapshot = Snapshot {
             server_time_ms: now,
+            online_pilots: self.online_sessions.keys().cloned().collect(),
             pilots: world.pilots.values().map(|p| p.view.clone()).collect(),
             orders: world.orders.values().cloned().collect(),
             belt_ore: world.belt_ore,
@@ -475,7 +513,7 @@ mod tests {
                 .ok
         );
         let before = server.db.total_changes();
-        for time in [103, 1000, 3101] {
+        for time in [103, 1000, WARP_DURATION_MS + 101] {
             assert!(server.handle_at(&mut None, Request::Snapshot, time).ok);
             assert!(server.handle_at(&mut None, Request::ExportLedger, time).ok);
         }
@@ -484,14 +522,18 @@ mod tests {
             before,
             "polling unchanged state must not write"
         );
-        let arrived = server.handle_at(&mut None, Request::Snapshot, 3102);
+        let arrived = server.handle_at(&mut None, Request::Snapshot, WARP_DURATION_MS + 102);
         assert_eq!(arrived.snapshot.unwrap().pilots[0].location, Location::Belt);
         assert_eq!(
             server.db.total_changes(),
             before + 1,
             "arrival must persist once"
         );
-        assert!(server.handle_at(&mut None, Request::Snapshot, 3103).ok);
+        assert!(
+            server
+                .handle_at(&mut None, Request::Snapshot, WARP_DURATION_MS + 103)
+                .ok
+        );
         assert_eq!(server.db.total_changes(), before + 1);
     }
 }

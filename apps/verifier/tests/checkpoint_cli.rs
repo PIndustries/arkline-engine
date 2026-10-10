@@ -23,6 +23,7 @@ fn checkpoint_advances_only_after_full_verification() {
         protocol_version: PROTOCOL_VERSION,
         entries: vec![],
         snapshot: Snapshot {
+            online_pilots: vec![],
             server_time_ms: 0,
             pilots: vec![],
             orders: vec![],

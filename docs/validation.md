@@ -7,7 +7,7 @@ This document records evidence for the initial Rust model, not approval to publi
 On the development Apple Silicon Mac with Rust 1.89.0:
 
 - Workspace compilation, formatting and Clippy with warnings denied.
-- 27 tests: private client credential persistence/resume, shared trajectory math,
+- 31 tests: private client credential persistence/resume, shared trajectory math,
   stable pilot placement, geometry normals, beam endpoints and asteroid impacts;
   confirmed extraction cues, expiration and purchase/arrival exclusion; GUI audit checkpoint persistence,
   rejection and concurrent-cockpit locking; server authorization,
@@ -65,3 +65,20 @@ asteroid impact points across all pilot lanes.
 The animation QA app launched, but macOS ScreenCaptureKit returned capture error
 -3811 during inspection. Visual sign-off of this animation update remains pending;
 the earlier cockpit inspection above does not establish animation appearance.
+
+## Dated build and persistent ships
+
+Build 26.10.9.1 adds shared header/window/package identity, an original application
+icon, Emerald/Teal/Amber preferences, viewport object selection and a six-second
+warp sequence with two seconds of warm-up. Native inspection confirmed the dated
+header/title, black-and-green cockpit, operation phase labels and hidden docked
+ship. A live extraction updated cargo and showed MINING LASER ACTIVE; the capture
+of that transient was a background-window thumbnail, so detailed particle
+appearance is not established by that capture alone.
+
+The new transport test authenticates two sockets for one pilot, verifies that
+presence survives the first disconnect but disappears after the last, then checks
+that the undocked ship and economic history survive disconnect and restart.
+Unresponsive networks still use the read timeout, not immediate failure detection.
+Theme tests cover saved choices and invalid-file fallback. Free-flight approach,
+keep-at-range, ship computers and distributed authority are not implemented.

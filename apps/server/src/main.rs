@@ -58,12 +58,29 @@ fn main() -> Result<()> {
     }
     Ok(())
 }
+struct TransportSession {
+    server: Arc<Mutex<Server>>,
+    pilot: Option<String>,
+}
+impl Drop for TransportSession {
+    fn drop(&mut self) {
+        // Release presence on EOF, timeouts, invalid oversized frames, write
+        // errors, and unwinding; taking the pilot makes cleanup idempotent.
+        self.server
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .disconnect(&mut self.pilot);
+    }
+}
 fn serve(mut stream: TcpStream, server: Arc<Mutex<Server>>) -> Result<()> {
+    let mut session = TransportSession {
+        server: server.clone(),
+        pilot: None,
+    };
     stream.set_read_timeout(Some(Duration::from_secs(120)))?;
     stream.set_write_timeout(Some(Duration::from_secs(30)))?;
     stream.set_nodelay(true)?;
     let mut reader = BufReader::new(stream.try_clone()?);
-    let mut session = None;
     loop {
         let mut bytes = Vec::new();
         loop {
@@ -90,7 +107,7 @@ fn serve(mut stream: TcpStream, server: Arc<Mutex<Server>>) -> Result<()> {
             Ok(request) => server
                 .lock()
                 .map_err(|_| anyhow::anyhow!("server state lock poisoned"))?
-                .handle(&mut session, request),
+                .handle(&mut session.pilot, request),
             Err(_) => Response::error("invalid request JSON or command schema"),
         };
         send(&mut stream, &response)?;

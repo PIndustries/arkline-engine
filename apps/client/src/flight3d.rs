@@ -1,5 +1,7 @@
 //! Native GPU flight view. Presentation only: never issues simulation commands.
-use arkline_protocol::{Destination, Location, PilotView, Snapshot, WARP_DURATION_MS};
+use arkline_protocol::{
+    Destination, Location, PilotView, Snapshot, WARP_DURATION_MS, WARP_WARMUP_MS,
+};
 use eframe::{egui, egui_glow, glow};
 use glam::{Mat4, Quat, Vec3};
 use glow::HasContext;
@@ -13,15 +15,43 @@ pub fn route_progress(location: &Location, now: u64) -> f32 {
             destination,
             arrives_at_ms,
         } => {
-            let fraction = 1.0
-                - arrives_at_ms.saturating_sub(now).min(WARP_DURATION_MS) as f32
-                    / WARP_DURATION_MS as f32;
+            let elapsed =
+                WARP_DURATION_MS - arrives_at_ms.saturating_sub(now).min(WARP_DURATION_MS);
+            let travel = (elapsed.saturating_sub(WARP_WARMUP_MS) as f32
+                / (WARP_DURATION_MS - WARP_WARMUP_MS) as f32)
+                .clamp(0.0, 1.0);
+            let fraction = travel * travel * (3.0 - 2.0 * travel);
             if destination == Destination::Belt {
                 fraction
             } else {
                 1.0 - fraction
             }
         }
+    }
+}
+/// Presentation phases share authoritative transit timestamps with both views.
+/// Progress is local to the named phase; no phase sends gameplay commands.
+pub fn warp_phase(location: &Location, now: u64) -> Option<(&'static str, f32)> {
+    let Location::InTransit { arrives_at_ms, .. } = *location else {
+        return None;
+    };
+    let remaining = arrives_at_ms.saturating_sub(now).min(WARP_DURATION_MS);
+    if !in_warp(location, now) {
+        return None;
+    }
+    let elapsed = WARP_DURATION_MS - remaining;
+    if elapsed < WARP_WARMUP_MS {
+        Some(("WARP WARMUP", elapsed as f32 / WARP_WARMUP_MS as f32))
+    } else if elapsed < WARP_WARMUP_MS + 700 {
+        Some(("WARP LAUNCH", (elapsed - WARP_WARMUP_MS) as f32 / 700.0))
+    } else if remaining <= 700 {
+        Some(("WARP ARRIVAL", 1.0 - remaining as f32 / 700.0))
+    } else {
+        Some((
+            "WARP CRUISE",
+            (elapsed - WARP_WARMUP_MS - 700) as f32
+                / (WARP_DURATION_MS - WARP_WARMUP_MS - 1400) as f32,
+        ))
     }
 }
 pub fn heading(location: &Location) -> f32 {
@@ -58,6 +88,7 @@ pub struct FlightView {
     distance: f32,
     target: Vec3,
     follow: bool,
+    focus_selection: bool,
 }
 impl FlightView {
     pub fn new(gl: Option<&Arc<glow::Context>>) -> Self {
@@ -69,9 +100,10 @@ impl FlightView {
             renderer,
             yaw: 0.72,
             pitch: 0.35,
-            distance: 42.0,
+            distance: 27.0,
             target: Vec3::new(-45.0, 0.0, 20.0),
             follow: true,
+            focus_selection: false,
         }
     }
     pub fn destroy(&mut self) {
@@ -83,6 +115,7 @@ impl FlightView {
             }
         }
     }
+    #[allow(clippy::too_many_arguments)]
     pub fn ui(
         &mut self,
         ui: &mut egui::Ui,
@@ -91,7 +124,9 @@ impl FlightView {
         now: u64,
         connected: bool,
         effects: &super::effects::Effects,
-    ) {
+        selected: &super::SelectedObject,
+    ) -> Option<super::SelectedObject> {
+        let mut picked = None;
         ui.horizontal(|ui| {
             ui.label(
                 egui::RichText::new("FLIGHT CAMERA")
@@ -100,17 +135,25 @@ impl FlightView {
             );
             if ui.button("Focus my ship").clicked() {
                 self.follow = true;
+                self.focus_selection = false;
                 self.distance = 27.0;
             }
             if ui.button("Sector overview").clicked() {
                 self.follow = false;
+                self.focus_selection = false;
                 self.distance = 150.0;
                 self.yaw = 0.25;
                 self.pitch = 0.65;
             }
+            if ui.button("Focus selected").clicked() {
+                self.focus_selection = true;
+                self.follow = false;
+                self.distance = 42.0;
+            }
             if ui.button("Reset camera").clicked() {
                 self.follow = true;
-                self.distance = 42.0;
+                self.focus_selection = false;
+                self.distance = 27.0;
                 self.yaw = 0.72;
                 self.pitch = 0.35;
             }
@@ -118,7 +161,7 @@ impl FlightView {
         ui.small("Drag to orbit · Scroll to zoom · Flight controls remain server authoritative");
         let (rect, response) = ui.allocate_exact_size(
             ui.available_size().max(egui::vec2(100.0, 150.0)),
-            egui::Sense::drag(),
+            egui::Sense::click_and_drag(),
         );
         if response.dragged() {
             let delta = ui.input(|i| i.pointer.delta());
@@ -130,7 +173,19 @@ impl FlightView {
                 * (-ui.input(|i| i.smooth_scroll_delta.y) * 0.002).exp())
             .clamp(9.0, 260.0);
         }
-        let desired = if self.follow {
+        let selected_position = match selected {
+            super::SelectedObject::Station => Vec3::new(-45.0, 0.0, 0.0),
+            super::SelectedObject::Belt => Vec3::new(62.0, 0.0, 0.0),
+            super::SelectedObject::Pilot(name) => snapshot
+                .pilots
+                .iter()
+                .find(|p| &p.name == name)
+                .map(|p| position(p, now))
+                .unwrap_or(Vec3::ZERO),
+        };
+        let desired = if self.focus_selection {
+            selected_position
+        } else if self.follow {
             snapshot
                 .pilots
                 .iter()
@@ -159,7 +214,12 @@ impl FlightView {
                     vp,
                     eye,
                     now,
-                    pilots: snapshot.pilots.clone(),
+                    pilots: snapshot
+                        .pilots
+                        .iter()
+                        .filter(|p| p.location != Location::Docked)
+                        .cloned()
+                        .collect(),
                     own: pilot_name.to_string(),
                     yaw: self.yaw,
                     pitch: self.pitch,
@@ -190,7 +250,11 @@ impl FlightView {
                         }
                     })),
                 });
-                for pilot in &snapshot.pilots {
+                for pilot in snapshot
+                    .pilots
+                    .iter()
+                    .filter(|p| p.location != Location::Docked)
+                {
                     let clip = vp * (position(pilot, now) + Vec3::Y * 4.2).extend(1.0);
                     if clip.w > 0.0 {
                         let point = clip.truncate() / clip.w;
@@ -213,7 +277,114 @@ impl FlightView {
                         }
                     }
                 }
+                let project = |point: Vec3| -> Option<egui::Pos2> {
+                    let clip = vp * point.extend(1.0);
+                    if clip.w <= 0.0 {
+                        return None;
+                    }
+                    let ndc = clip.truncate() / clip.w;
+                    if ndc.z.abs() > 1.0 {
+                        return None;
+                    }
+                    let screen = rect.center()
+                        + egui::vec2(ndc.x * rect.width() * 0.5, -ndc.y * rect.height() * 0.5);
+                    rect.contains(screen).then_some(screen)
+                };
+                let mut targets = vec![
+                    (
+                        super::SelectedObject::Station,
+                        Vec3::new(-45.0, 0.0, 0.0),
+                        14.0,
+                    ),
+                    (super::SelectedObject::Belt, Vec3::new(62.0, 0.0, 0.0), 5.0),
+                ];
+                for i in 0..115 {
+                    targets.push((
+                        super::SelectedObject::Belt,
+                        asteroid_model(i).transform_point3(Vec3::ZERO),
+                        2.0,
+                    ));
+                }
+                for pilot in snapshot
+                    .pilots
+                    .iter()
+                    .filter(|p| p.location != Location::Docked)
+                {
+                    targets.push((
+                        super::SelectedObject::Pilot(pilot.name.clone()),
+                        position(pilot, now),
+                        4.0,
+                    ));
+                }
+                if response.clicked() {
+                    if let Some(pointer) = response.interact_pointer_pos() {
+                        picked = targets
+                            .iter()
+                            .filter_map(|(object, center, radius)| {
+                                let screen = project(*center)?;
+                                let pixels = (radius / eye.distance(*center).max(1.0)
+                                    * rect.height())
+                                .clamp(12.0, 100.0);
+                                let distance = screen.distance(pointer);
+                                (distance <= pixels).then_some((distance / pixels, object.clone()))
+                            })
+                            .min_by(|a, b| a.0.total_cmp(&b.0))
+                            .map(|(_, object)| object);
+                    }
+                }
                 let painter = ui.painter_at(rect);
+                let selected_visible = !matches!(selected, super::SelectedObject::Pilot(name) if snapshot.pilots.iter().any(|p| &p.name == name && p.location == Location::Docked));
+                if selected_visible {
+                    if let Some(point) = project(selected_position) {
+                        let stroke = egui::Stroke::new(1.8, super::TEAL);
+                        for (x, y) in [(-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0), (1.0, 1.0)] {
+                            let corner = point + egui::vec2(x * 23.0, y * 23.0);
+                            painter
+                                .line_segment([corner, corner - egui::vec2(x * 10.0, 0.0)], stroke);
+                            painter
+                                .line_segment([corner, corner - egui::vec2(0.0, y * 10.0)], stroke);
+                        }
+                    }
+                }
+
+                if connected {
+                    if let Some(own) = snapshot
+                        .pilots
+                        .iter()
+                        .find(|pilot| pilot.name == pilot_name)
+                    {
+                        if let Some((phase, progress)) = warp_phase(&own.location, now) {
+                            painter.text(
+                                rect.center_top() + egui::vec2(0.0, 45.0),
+                                egui::Align2::CENTER_TOP,
+                                format!("{phase}  {:02}%", (progress * 100.0) as u32),
+                                egui::FontId::proportional(23.0),
+                                super::TEAL,
+                            );
+                            let bar = egui::Rect::from_center_size(
+                                rect.center_top() + egui::vec2(0.0, 83.0),
+                                egui::vec2(240.0, 5.0),
+                            );
+                            painter.rect_filled(bar, 2.0, egui::Color32::from_rgb(24, 45, 55));
+                            painter.rect_filled(
+                                egui::Rect::from_min_size(
+                                    bar.min,
+                                    egui::vec2(bar.width() * progress, bar.height()),
+                                ),
+                                2.0,
+                                super::TEAL,
+                            );
+                        } else if effects.mining(now).is_some() && own.location == Location::Belt {
+                            painter.text(
+                                rect.center_top() + egui::vec2(0.0, 45.0),
+                                egui::Align2::CENTER_TOP,
+                                "EXTRACTION CONFIRMED · ORE TRANSFER",
+                                egui::FontId::proportional(20.0),
+                                super::TEAL,
+                            );
+                        }
+                    }
+                }
                 painter.text(
                     rect.left_top() + egui::vec2(18.0, 16.0),
                     egui::Align2::LEFT_TOP,
@@ -226,6 +397,8 @@ impl FlightView {
                     egui::Align2::LEFT_BOTTOM,
                     if self.follow {
                         "CAMERA: SHIP TRACKING"
+                    } else if self.focus_selection {
+                        "CAMERA: SELECTED OBJECT"
                     } else {
                         "CAMERA: SECTOR OVERVIEW"
                     },
@@ -252,6 +425,7 @@ impl FlightView {
                 );
             }
         }
+        picked
     }
 }
 struct Frame {
@@ -658,23 +832,6 @@ impl Renderer {
                     accent,
                     3.0,
                 );
-                let warp = in_warp(&pilot.location, frame.now);
-                let pulse =
-                    1.0 + 0.16 * ((frame.now % 10_000) as f32 * 0.024 + lane(&pilot.name)).sin();
-                self.draw(
-                    2,
-                    ship * transform(
-                        Vec3::new(if warp { -5.0 } else { -3.5 }, 0.0, side * 1.5),
-                        Vec3::new(
-                            if warp { 2.1 * pulse } else { 0.7 },
-                            0.16 * pulse,
-                            0.16 * pulse,
-                        ),
-                        Quat::IDENTITY,
-                    ),
-                    Vec3::new(0.3, 0.65, 1.0),
-                    2.0,
-                );
             }
         }
         self.paint_effects(frame);
@@ -697,25 +854,76 @@ impl Renderer {
                 0.0
             });
             let ship = transform(ship_position, Vec3::ONE, rotation);
-            if in_warp(&pilot.location, frame.now) {
-                for i in 0..14 {
-                    let phase = ((frame.now % 1_200) as f32 / 1_200.0 + i as f32 / 14.0).fract();
-                    let alpha = (1.0 - phase).powi(2);
-                    for side in [-1.0, 1.0] {
+            let warp = warp_phase(&pilot.location, frame.now);
+            if pilot.location != Location::Docked {
+                let (length, intensity) = match warp {
+                    Some(("WARP WARMUP", progress)) => (3.8 + progress * 4.5, 1.4 + progress),
+                    Some(("WARP LAUNCH", _)) => (12.0, 3.2),
+                    Some(("WARP CRUISE", _)) => (10.0, 2.7),
+                    Some(("WARP ARRIVAL", progress)) => (10.0 - progress * 6.0, 2.7 - progress),
+                    _ => (3.8, 1.6),
+                };
+                let pulse = 1.0
+                    + 0.10
+                        * ((frame.now % 260) as f32 / 260.0 * std::f32::consts::TAU
+                            + lane(&pilot.name))
+                        .sin();
+                for side in [-1.0, 1.0] {
+                    for (width, brightness) in [(0.58, 0.10), (0.31, 0.62), (0.16, 1.0)] {
                         self.draw(
                             2,
                             ship * transform(
-                                Vec3::new(
-                                    -3.5 - phase * 24.0,
-                                    0.15 * (phase * 9.0).sin(),
-                                    side * (1.5 + phase * 0.65),
-                                ),
-                                Vec3::new(0.45 + phase, 0.10, 0.10),
+                                Vec3::new(-3.0 - length * 0.5, 0.0, side * 1.5),
+                                Vec3::new(length * 0.5 * pulse, width * pulse, width * pulse),
                                 Quat::IDENTITY,
                             ),
-                            Vec3::new(0.06, 0.22, 0.52) * alpha,
-                            1.2,
+                            Vec3::new(0.16, 0.48, 0.95) * brightness,
+                            intensity,
                         );
+                    }
+                }
+            }
+            if let Some((stage, progress)) = warp {
+                if stage == "WARP WARMUP" || stage == "WARP LAUNCH" || stage == "WARP ARRIVAL" {
+                    let (radius, alpha) = match stage {
+                        "WARP WARMUP" => (3.3 + progress * 2.2, 0.30 + progress * 0.55),
+                        "WARP LAUNCH" => (5.5 + progress * 12.0, 1.0 - progress * 0.6),
+                        _ => (
+                            13.0 - progress * 9.0,
+                            0.75 * (std::f32::consts::PI * progress).sin().max(0.15),
+                        ),
+                    };
+                    self.draw(
+                        1,
+                        ship * transform(
+                            Vec3::new(-1.0, 0.0, 0.0),
+                            Vec3::new(radius, 0.50, radius),
+                            Quat::from_rotation_z(std::f32::consts::FRAC_PI_2),
+                        ),
+                        Vec3::new(0.12, 0.55, 0.95) * alpha,
+                        1.5,
+                    );
+                }
+                if stage != "WARP WARMUP" {
+                    for i in 0..18 {
+                        let phase = ((frame.now % 900) as f32 / 900.0 + i as f32 / 18.0).fract();
+                        let alpha = (1.0 - phase).powi(2);
+                        for side in [-1.0, 1.0] {
+                            self.draw(
+                                2,
+                                ship * transform(
+                                    Vec3::new(
+                                        -3.5 - phase * 32.0,
+                                        0.2 * (phase * 9.0).sin(),
+                                        side * (1.5 + phase * 1.0),
+                                    ),
+                                    Vec3::new(1.0 + phase * 2.0, 0.22, 0.22),
+                                    Quat::IDENTITY,
+                                ),
+                                Vec3::new(0.09, 0.35, 0.85) * alpha,
+                                2.0,
+                            );
+                        }
                     }
                 }
             }
@@ -727,18 +935,19 @@ impl Renderer {
             {
                 let source = ship.transform_point3(Vec3::new(0.4, 1.05, 0.0));
                 if let Some(impact) = mining_impact(source) {
-                    let fade = (progress * 12.0).min(1.0) * (1.0 - progress).powf(0.6);
-                    let pulse = 0.8 + 0.2 * ((frame.now % 10_000) as f32 * 0.047).sin();
+                    let fade = (progress * 30.0).min(1.0) * ((1.0 - progress) * 5.0).min(1.0);
+                    let pulse = 0.9
+                        + 0.1 * ((frame.now % 134) as f32 / 134.0 * std::f32::consts::TAU).sin();
                     let color = Vec3::new(0.09, 0.74, 0.68) * fade;
-                    if let Some(beam) = segment_model(source, impact, 0.052 * pulse) {
+                    if let Some(beam) = segment_model(source, impact, 0.18 * pulse) {
                         self.draw(0, beam, color, 1.8);
                     }
-                    if let Some(halo) = segment_model(source, impact, 0.15 * pulse) {
-                        self.draw(0, halo, color * 0.08, 0.5);
+                    if let Some(halo) = segment_model(source, impact, 0.46 * pulse) {
+                        self.draw(0, halo, color * 0.18, 0.8);
                     }
                     self.draw(
                         2,
-                        transform(impact, Vec3::splat(0.32 * pulse), Quat::IDENTITY),
+                        transform(impact, Vec3::splat(0.70 * pulse), Quat::IDENTITY),
                         color,
                         1.8,
                     );
@@ -758,7 +967,7 @@ impl Renderer {
                             2,
                             transform(
                                 spark,
-                                Vec3::splat(0.05 + (1.0 - age) * 0.05),
+                                Vec3::splat(0.11 + (1.0 - age) * 0.09),
                                 Quat::IDENTITY,
                             ),
                             Vec3::new(0.8, 0.45, 0.10) * fade * (1.0 - age),
@@ -772,7 +981,7 @@ impl Renderer {
                             * (std::f32::consts::PI * travel).sin()
                             * (0.5 + (i % 4) as f32 * 0.25);
                         let ore = impact.lerp(source, travel) + arc;
-                        let scale = 0.07 + (i % 3) as f32 * 0.025;
+                        let scale = 0.17 + (i % 3) as f32 * 0.045;
                         self.draw(
                             3,
                             transform(
@@ -1016,20 +1225,70 @@ mod tests {
     }
     #[test]
     fn warp_routes_match_both_directions_and_clamp() {
+        let start = 1000;
+        let arrival = start + WARP_DURATION_MS;
         let out = Location::InTransit {
             destination: Destination::Belt,
-            arrives_at_ms: 5000,
+            arrives_at_ms: arrival,
         };
         let back = Location::InTransit {
             destination: Destination::Station,
-            arrives_at_ms: 5000,
+            arrives_at_ms: arrival,
         };
-        for (now, expected) in [(0, 0.0), (2000, 0.0), (3500, 0.5), (5000, 1.0), (9000, 1.0)] {
+        for (now, expected) in [
+            (0, 0.0),
+            (start, 0.0),
+            (start + WARP_WARMUP_MS, 0.0),
+            (
+                start + WARP_WARMUP_MS + (WARP_DURATION_MS - WARP_WARMUP_MS) / 2,
+                0.5,
+            ),
+            (arrival, 1.0),
+            (arrival + 5000, 1.0),
+        ] {
             assert_eq!(route_progress(&out, now), expected);
             assert_eq!(route_progress(&back, now), 1.0 - expected);
         }
         assert_eq!(heading(&out), 1.0);
         assert_eq!(heading(&back), -1.0);
+    }
+    #[test]
+    fn warp_phases_hold_warmup_then_launch_cruise_and_arrive() {
+        let start = 1_800_000_000_000;
+        let arrival = start + WARP_DURATION_MS;
+        let transit = Location::InTransit {
+            destination: Destination::Belt,
+            arrives_at_ms: arrival,
+        };
+        assert_eq!(warp_phase(&transit, start), Some(("WARP WARMUP", 0.0)));
+        assert_eq!(
+            warp_phase(&transit, start + WARP_WARMUP_MS / 2),
+            Some(("WARP WARMUP", 0.5))
+        );
+        assert_eq!(route_progress(&transit, start + WARP_WARMUP_MS - 1), 0.0);
+        assert_eq!(
+            warp_phase(&transit, start + WARP_WARMUP_MS),
+            Some(("WARP LAUNCH", 0.0))
+        );
+        assert_eq!(
+            warp_phase(&transit, start + WARP_WARMUP_MS + 700),
+            Some(("WARP CRUISE", 0.0))
+        );
+        assert_eq!(
+            warp_phase(&transit, arrival - 700),
+            Some(("WARP ARRIVAL", 0.0))
+        );
+        assert_eq!(warp_phase(&transit, arrival), None);
+        assert_eq!(warp_phase(&Location::Belt, arrival), None);
+        let mut previous = 0.0;
+        for elapsed in (0..=WARP_DURATION_MS).step_by(10) {
+            let progress = route_progress(&transit, start + elapsed);
+            assert!(progress >= previous && progress <= 1.0);
+            previous = progress;
+            if let Some((_, local)) = warp_phase(&transit, start + elapsed) {
+                assert!((0.0..=1.0).contains(&local));
+            }
+        }
     }
     #[test]
     fn geometry_is_finite_with_valid_normals_and_nondegenerate_faces() {

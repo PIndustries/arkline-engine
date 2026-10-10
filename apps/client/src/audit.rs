@@ -216,6 +216,7 @@ mod tests {
             entries: vec![],
             snapshot: Snapshot {
                 server_time_ms: 0,
+                online_pilots: vec![],
                 pilots: vec![],
                 orders: vec![],
                 belt_ore: INITIAL_BELT_ORE,

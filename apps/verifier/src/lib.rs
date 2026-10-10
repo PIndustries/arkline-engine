@@ -304,6 +304,7 @@ mod tests {
         LedgerExport {
             protocol_version: PROTOCOL_VERSION,
             snapshot: Snapshot {
+                online_pilots: vec![],
                 server_time_ms: 6000,
                 pilots: vec![
                     PilotView {

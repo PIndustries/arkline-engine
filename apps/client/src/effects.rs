@@ -1,7 +1,7 @@
 //! Short presentation cues derived from confirmed snapshot transitions.
 use arkline_protocol::{Location, Snapshot};
 
-pub const EFFECT_DURATION_MS: u64 = 2400;
+pub const EFFECT_DURATION_MS: u64 = 6000;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum EffectKind {
     Mining { units: u64 },
@@ -75,6 +75,7 @@ mod tests {
     fn snapshot(location: Location, ore: u64) -> Snapshot {
         Snapshot {
             server_time_ms: 100,
+            online_pilots: vec![],
             pilots: vec![PilotView {
                 name: "Pilot".into(),
                 credits: 1000,
@@ -96,8 +97,8 @@ mod tests {
         effects.observe(&after, &after, "Pilot", 101);
         assert_eq!(effects.events.len(), 1);
         assert_eq!(effects.mining(100), Some((0.0, 25)));
-        assert_eq!(effects.mining(2500), None);
-        effects.retain(2500);
+        assert_eq!(effects.mining(6100), None);
+        effects.retain(6100);
         assert!(effects.events.is_empty());
     }
     #[test]

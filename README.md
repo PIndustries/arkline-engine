@@ -53,7 +53,7 @@ pilot name in both clients unless you deliberately transfer its credential.
 6. Close and restart the server, reconnect both pilots, and inspect the saved state.
 7. Cancel the remaining order to return its ore to the seller's cargo.
 
-Warp takes three seconds. Mining is limited to 100 units per command and a
+Warp takes six seconds, including a two-second drive warm-up. Mining is limited to 100 units per command and a
 one-second cooldown. Cargo holds 1,000 units; escrow is separate. Cancelling an
 order requires room to return its ore. The initial belt holds 100,000 ore.
 
@@ -83,12 +83,13 @@ the final art direction or a full free-flight/combat simulation.
 ## Cockpit services
 
 The right-hand overview selects the station, belt or a known pilot. Its selected
-object panel gives the available travel or station action. Known pilots are saved
-identities, not a live presence list. The left ship panel keeps your cargo, balance
+object panel gives the available travel or station action. Pilot records include live connection status. Undocked ships remain in space
+after disconnect; docked ships are omitted from the space view. The left ship panel keeps your cargo, balance
 and next flight operation visible.
 
 Use the bottom services tabs to inspect **Cargo**, trade in **Exchange**, review
-**Activity**, or independently check the economic history in **Ledger**. Cargo
+**Activity**, independently check the economic history in **Ledger**, or save an Emerald, Teal
+or Amber appearance in **Settings**. Emerald uses the default black-and-green theme. Cargo
 separates held ore from sell-order escrow. Exchange actions require docking.
 
 The Ledger audit runs separately from the flight connection and pins a local
@@ -170,3 +171,22 @@ implemented yet.
 
 All first-party application logic is Rust. Dependencies, operating-system APIs,
 SQLite's implementation, and build/packaging configuration are not themselves all Rust.
+
+## Build identity and navigation
+
+The header and window title show the same `year.month.day.build` identity as
+`BUILD_VERSION` (for example, `26.10.9.1`). Increment the last component for each
+new packaged build on a day; start at 1 on a new date. Packaging reads this file
+and includes the original Arkline orbital icon.
+
+Click a station, asteroid belt or visible ship in either viewport to select it.
+The right panel shows contextual actions; **Focus selected** moves the 3D camera.
+Clicking an asteroid selects its shared belt resource. Camera orbit is presentation;
+free-flight approach, ship orbit and keep-at-range commands are not implemented.
+
+Online status counts live authenticated connections separately from durable ships.
+Explicit disconnects are removed on socket closure; an unresponsive network may
+remain online until the server's 120-second read timeout. Server restart clears
+presence, while saved ships and cargo remain. The server remains one authority;
+automatic clustering and ship-computer execution are not implemented in this build.
+See [legacy system findings](docs/legacy-systems.md) for the source-grounded port plan.

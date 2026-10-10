@@ -2,6 +2,7 @@
 mod audit;
 mod effects;
 mod flight3d;
+mod theme;
 use arkline_protocol::*;
 use eframe::egui::{self, Color32, Pos2, Stroke, Vec2};
 use sha2::{Digest, Sha256};
@@ -16,7 +17,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-const TEAL: Color32 = Color32::from_rgb(89, 224, 198);
+const TEAL: Color32 = Color32::from_rgb(70, 235, 133);
 const AMBER: Color32 = Color32::from_rgb(255, 192, 104);
 const MUTED: Color32 = Color32::from_rgb(138, 157, 180);
 
@@ -153,9 +154,10 @@ enum ServiceTab {
     Exchange,
     Activity,
     Ledger,
+    Settings,
 }
 #[derive(Clone, PartialEq, Eq)]
-enum SelectedObject {
+pub(crate) enum SelectedObject {
     Station,
     Belt,
     Pilot(String),
@@ -189,6 +191,8 @@ struct Cockpit {
     audit_result: Option<Result<String, String>>,
     request_pending: bool,
     effects: effects::Effects,
+    theme: theme::Theme,
+    settings_notice: String,
 }
 impl Cockpit {
     fn new(
@@ -197,15 +201,8 @@ impl Cockpit {
         data_dir: PathBuf,
         credential_scope: Option<String>,
     ) -> Self {
-        let mut style = (*cc.egui_ctx.style()).clone();
-        style.visuals = egui::Visuals::dark();
-        style.visuals.panel_fill = Color32::from_rgb(12, 19, 30);
-        style.visuals.window_fill = Color32::from_rgb(17, 27, 41);
-        style.visuals.selection.bg_fill = Color32::from_rgb(29, 102, 97);
-        style.visuals.widgets.inactive.bg_fill = Color32::from_rgb(29, 43, 60);
-        style.visuals.widgets.hovered.bg_fill = Color32::from_rgb(39, 70, 83);
-        style.spacing.item_spacing = Vec2::new(10.0, 10.0);
-        cc.egui_ctx.set_style(style);
+        let theme = theme::Theme::load(&data_dir);
+        theme.apply(&cc.egui_ctx);
         Self {
             server,
             pilot: String::new(),
@@ -234,6 +231,43 @@ impl Cockpit {
             audit_result: None,
             request_pending: false,
             effects: effects::Effects::default(),
+            theme,
+            settings_notice: String::new(),
+        }
+    }
+    fn accent(&self) -> Color32 {
+        self.theme.accent()
+    }
+    fn settings_panel(&mut self, ui: &mut egui::Ui) {
+        ui.label(
+            egui::RichText::new("COCKPIT APPEARANCE")
+                .color(self.accent())
+                .strong(),
+        );
+        ui.label("Choose a local interface accent. Your universe and pilot state are unchanged.");
+        let previous = self.theme;
+        ui.horizontal_wrapped(|ui| {
+            for theme in theme::Theme::ALL {
+                ui.selectable_value(
+                    &mut self.theme,
+                    theme,
+                    egui::RichText::new(theme.name()).color(theme.accent()),
+                );
+            }
+        });
+        if self.theme != previous {
+            self.theme.apply(ui.ctx());
+            self.settings_notice = match self.theme.save(&self.data_dir) {
+                Ok(()) => format!("{} appearance saved", self.theme.name()),
+                Err(error) => error,
+            };
+        }
+        ui.small("Near-black panels · High-contrast interface accents · Saved on this computer");
+        ui.small(
+            "World materials retain their physical colors; this setting changes the interface.",
+        );
+        if !self.settings_notice.is_empty() {
+            ui.colored_label(MUTED, &self.settings_notice);
         }
     }
     fn log(&mut self, text: String, error: bool) {
@@ -375,14 +409,131 @@ impl Cockpit {
             .find(|p| p.name == self.pilot)
             .cloned()
     }
+    fn operation_status(&self) -> (String, String, Option<f32>, Color32) {
+        if !self.connected {
+            return (
+                if self.connecting {
+                    "CONNECTING"
+                } else {
+                    "OFFLINE"
+                }
+                .into(),
+                "Waiting for a live server connection".into(),
+                None,
+                AMBER,
+            );
+        }
+        if self.request_pending {
+            return (
+                "COMMAND PENDING".into(),
+                "Awaiting server confirmation".into(),
+                None,
+                AMBER,
+            );
+        }
+        let Some(pilot) = self.own() else {
+            return (
+                "SYNCHRONIZING".into(),
+                "Waiting for vessel snapshot".into(),
+                None,
+                MUTED,
+            );
+        };
+        let now = self.presentation_time();
+        if let Location::InTransit {
+            destination,
+            arrives_at_ms,
+        } = pilot.location
+        {
+            let destination = if destination == Destination::Belt {
+                "asteroid belt"
+            } else {
+                "station"
+            };
+            if let Some((phase, progress)) = flight3d::warp_phase(&pilot.location, now) {
+                return (
+                    phase.into(),
+                    format!(
+                        "To {destination} · {:.1}s remaining",
+                        arrives_at_ms.saturating_sub(now) as f32 / 1000.0
+                    ),
+                    Some(progress),
+                    self.accent(),
+                );
+            }
+            return (
+                "ARRIVAL CHECK".into(),
+                "Awaiting server-confirmed arrival".into(),
+                Some(1.0),
+                self.accent(),
+            );
+        }
+        if pilot.location == Location::Belt {
+            if let Some((progress, units)) = self.effects.mining(now) {
+                return (
+                    "MINING LASER ACTIVE".into(),
+                    format!("+{units} ore confirmed; cargo already credited"),
+                    Some(progress),
+                    self.accent(),
+                );
+            }
+        }
+        if let Some(event) = self.effects.events.iter().rev().find(|event| {
+            matches!(
+                (event.kind, &pilot.location),
+                (effects::EffectKind::Docking, Location::Docked)
+                    | (effects::EffectKind::Undocking, Location::Station)
+            )
+        }) {
+            return match event.kind {
+                effects::EffectKind::Docking => (
+                    "DOCKING CONFIRMED".into(),
+                    "Station services available".into(),
+                    Some(1.0),
+                    self.accent(),
+                ),
+                _ => (
+                    "UNDOCKING CONFIRMED".into(),
+                    "Navigation available".into(),
+                    Some(1.0),
+                    self.accent(),
+                ),
+            };
+        }
+        match pilot.location {
+            Location::Docked => (
+                "DOCKED / SECURE".into(),
+                "Station exchange ready".into(),
+                None,
+                self.accent(),
+            ),
+            Location::Station => (
+                "FLIGHT READY".into(),
+                "Select the asteroid belt to begin a route".into(),
+                None,
+                self.accent(),
+            ),
+            Location::Belt => (
+                "EXTRACTION READY".into(),
+                "Extract ore to activate the mining laser".into(),
+                None,
+                self.accent(),
+            ),
+            Location::InTransit { .. } => unreachable!(),
+        }
+    }
     fn flight(&mut self, ui: &mut egui::Ui) {
-        ui.label(egui::RichText::new("PILOT / VESSEL").color(TEAL).strong());
+        ui.label(
+            egui::RichText::new("PILOT / VESSEL")
+                .color(self.accent())
+                .strong(),
+        );
         if let Some(pilot) = self.own() {
             ui.heading(&pilot.name);
             ui.colored_label(MUTED, location_label(&pilot.location));
             ui.add_space(8.0);
             egui::Frame::group(ui.style())
-                .fill(Color32::from_rgb(18, 33, 47))
+                .fill(self.theme.panel())
                 .show(ui, |ui| {
                     ui.set_min_width(ui.available_width());
                     ui.small("AVAILABLE BALANCE");
@@ -394,11 +545,14 @@ impl Cockpit {
                     ui.separator();
                     ui.horizontal(|ui| {
                         ui.label("ORE HOLD");
-                        ui.colored_label(TEAL, format!("{} / {}", pilot.ore, CARGO_CAPACITY));
+                        ui.colored_label(
+                            self.accent(),
+                            format!("{} / {}", pilot.ore, CARGO_CAPACITY),
+                        );
                     });
                     ui.add(
                         egui::ProgressBar::new(pilot.ore as f32 / CARGO_CAPACITY as f32)
-                            .fill(TEAL)
+                            .fill(self.accent())
                             .desired_height(6.0),
                     );
                     let escrow: u64 = self
@@ -414,49 +568,28 @@ impl Cockpit {
                         .unwrap_or(0);
                     ui.small(format!("{} ore listed on exchange", escrow));
                 });
-            if let Some((progress, units)) = self
-                .effects
-                .mining(self.presentation_time())
-                .filter(|_| pilot.location == Location::Belt)
-            {
-                ui.add_space(6.0);
-                ui.colored_label(TEAL, format!("Extraction confirmed · +{units} ore"));
-                ui.add(
-                    egui::ProgressBar::new(progress)
-                        .fill(TEAL)
-                        .desired_height(5.0),
-                );
-                ui.small("Cargo already credited by server");
-            }
-            if let Some(event) = self
-                .effects
-                .events
-                .iter()
-                .rev()
-                .find(|event| !matches!(event.kind, effects::EffectKind::Mining { .. }))
-            {
-                match event.kind {
-                    effects::EffectKind::Docking if pilot.location == Location::Docked => {
-                        ui.colored_label(TEAL, "Docking confirmed · station services available");
-                    }
-                    effects::EffectKind::Undocking if pilot.location == Location::Station => {
-                        ui.colored_label(AMBER, "Undocking confirmed · navigation available");
-                    }
-                    _ => {}
-                }
-            }
-            ui.add_space(8.0);
+            ui.add_space(6.0);
+            let (status, detail, progress, color) = self.operation_status();
+            // Every state reserves the same space, so cues never move action buttons.
+            ui.allocate_ui_with_layout(
+                Vec2::new(ui.available_width(), 108.0),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    ui.label(egui::RichText::new("VESSEL STATUS").size(11.0).color(MUTED));
+                    ui.colored_label(color, egui::RichText::new(status).strong());
+                    ui.small(detail);
+                    ui.add(
+                        egui::ProgressBar::new(progress.unwrap_or(0.0))
+                            .fill(color)
+                            .desired_height(5.0),
+                    );
+                },
+            );
             ui.label(
                 egui::RichText::new("FLIGHT OPERATIONS")
-                    .color(TEAL)
+                    .color(self.accent())
                     .strong(),
             );
-            if self.request_pending {
-                ui.horizontal(|ui| {
-                    ui.spinner();
-                    ui.small("Awaiting server confirmation");
-                });
-            }
             let active = self.can_operate();
             let (guidance, primary) = match pilot.location {
                 Location::Docked if pilot.ore > 0 => (
@@ -510,16 +643,6 @@ impl Cockpit {
                     destination: Destination::Belt,
                 });
             }
-            if let Location::InTransit { arrives_at_ms, .. } = pilot.location {
-                let remaining = arrives_at_ms.saturating_sub(self.presentation_time());
-                ui.add(
-                    egui::ProgressBar::new(
-                        1.0 - remaining.min(WARP_DURATION_MS) as f32 / WARP_DURATION_MS as f32,
-                    )
-                    .fill(TEAL)
-                    .text(format!("{:.1}s estimated", remaining as f32 / 1000.0)),
-                );
-            }
             ui.separator();
             ui.horizontal(|ui| {
                 ui.label("Mine units");
@@ -558,7 +681,11 @@ impl Cockpit {
                 .is_some_and(|s| s.belt_ore >= self.amount)
     }
     fn overview(&mut self, ui: &mut egui::Ui) {
-        ui.label(egui::RichText::new("SECTOR OVERVIEW").color(TEAL).strong());
+        ui.label(
+            egui::RichText::new("SECTOR OVERVIEW")
+                .color(self.accent())
+                .strong(),
+        );
         ui.small("01 / Arkline orbital region");
         ui.separator();
         ui.selectable_value(
@@ -587,26 +714,47 @@ impl Cockpit {
             .max_height(150.0)
             .show(ui, |ui| {
                 for pilot in &pilots {
+                    let online = if pilot.name == self.pilot {
+                        self.connected
+                    } else {
+                        self.snapshot
+                            .as_ref()
+                            .is_some_and(|s| s.online_pilots.contains(&pilot.name))
+                    };
                     let label = format!(
-                        "{} {}",
+                        "{} {}{}",
+                        if online { "●" } else { "○" },
+                        pilot.name,
                         if pilot.name == self.pilot {
-                            "●"
+                            " (you)"
                         } else {
-                            "○"
-                        },
-                        pilot.name
+                            ""
+                        }
                     );
                     ui.selectable_value(
                         &mut self.selected_object,
                         SelectedObject::Pilot(pilot.name.clone()),
                         label,
-                    );
+                    )
+                    .on_hover_text(if online {
+                        "Connected"
+                    } else {
+                        "Disconnected; vessel persists"
+                    });
                 }
             });
-        ui.small("Registered pilots; presence is not tracked.");
+        ui.small(if self.connected {
+            "Connected / disconnected status is live. Undocked vessels remain in the world."
+        } else {
+            "Connection lost: showing last known presence. Undocked vessels remain in the world."
+        });
         ui.add_space(10.0);
         ui.separator();
-        ui.label(egui::RichText::new("SELECTED OBJECT").color(TEAL).strong());
+        ui.label(
+            egui::RichText::new("SELECTED OBJECT")
+                .color(self.accent())
+                .strong(),
+        );
         let own = self.own();
         match self.selected_object.clone() {
             SelectedObject::Station => {
@@ -616,7 +764,7 @@ impl Cockpit {
                 if let Some(pilot) = &own {
                     match pilot.location {
                         Location::Docked => {
-                            ui.colored_label(TEAL, "You are docked here");
+                            ui.colored_label(self.accent(), "You are docked here");
                             if ui.button("Station exchange").clicked() {
                                 self.service_tab = ServiceTab::Exchange;
                             }
@@ -698,6 +846,17 @@ impl Cockpit {
             SelectedObject::Pilot(name) => {
                 if let Some(pilot) = pilots.iter().find(|p| p.name == name) {
                     ui.heading(&pilot.name);
+                    let online = if pilot.name == self.pilot {
+                        self.connected
+                    } else {
+                        self.snapshot
+                            .as_ref()
+                            .is_some_and(|s| s.online_pilots.contains(&pilot.name))
+                    };
+                    ui.colored_label(
+                        if online { self.accent() } else { MUTED },
+                        if online { "Connected" } else { "Disconnected" },
+                    );
                     ui.colored_label(MUTED, location_label(&pilot.location));
                     ui.separator();
                     ui.label(format!("{} CR", pilot.credits));
@@ -719,7 +878,7 @@ impl Cockpit {
         ui.separator();
         if let Some((message, error)) = self.feed.front() {
             ui.label(egui::RichText::new("LATEST UPDATE").size(11.0).color(MUTED));
-            ui.colored_label(if *error { AMBER } else { TEAL }, message);
+            ui.colored_label(if *error { AMBER } else { self.accent() }, message);
         }
     }
     fn cargo_panel(&mut self, ui: &mut egui::Ui) {
@@ -736,7 +895,11 @@ impl Cockpit {
                 })
                 .unwrap_or(0);
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("ORE INVENTORY").color(TEAL).strong());
+                ui.label(
+                    egui::RichText::new("ORE INVENTORY")
+                        .color(self.accent())
+                        .strong(),
+                );
                 ui.colored_label(MUTED, "Server-confirmed holdings");
             });
             egui::Grid::new("cargo-grid")
@@ -749,7 +912,7 @@ impl Cockpit {
                     ui.strong("Availability");
                     ui.end_row();
                     ui.label("Vessel cargo");
-                    ui.colored_label(TEAL, pilot.ore.to_string());
+                    ui.colored_label(self.accent(), pilot.ore.to_string());
                     ui.label("Available to list while docked");
                     ui.end_row();
                     ui.label("Exchange escrow");
@@ -779,7 +942,11 @@ impl Cockpit {
     }
     fn ledger_panel(&mut self, ui: &mut egui::Ui) {
         ui.horizontal_wrapped(|ui| {
-            ui.label(egui::RichText::new("ECONOMIC LEDGER").color(TEAL).strong());
+            ui.label(
+                egui::RichText::new("ECONOMIC LEDGER")
+                    .color(self.accent())
+                    .strong(),
+            );
             if ui
                 .add_enabled(
                     self.connected && self.audit_updates.is_none(),
@@ -826,7 +993,7 @@ impl Cockpit {
         );
         match &self.audit_result {
             Some(Ok(result)) => {
-                ui.colored_label(TEAL, result);
+                ui.colored_label(self.accent(), result);
             }
             Some(Err(error)) => {
                 ui.colored_label(AMBER, format!("Audit failed: {error}"));
@@ -839,7 +1006,11 @@ impl Cockpit {
         ui.small("An audit checks the exported economic rules and history. It does not prove every gameplay event occurred or certify server honesty.");
     }
     fn market(&mut self, ui: &mut egui::Ui) {
-        ui.label(egui::RichText::new("STATION EXCHANGE").color(TEAL).strong());
+        ui.label(
+            egui::RichText::new("STATION EXCHANGE")
+                .color(self.accent())
+                .strong(),
+        );
         let own = self.own();
         let docked =
             self.can_operate() && own.as_ref().is_some_and(|p| p.location == Location::Docked);
@@ -926,13 +1097,18 @@ impl Cockpit {
                 }
             });
     }
-    fn scene(&self, ui: &mut egui::Ui) {
-        let (rect, _) = ui.allocate_exact_size(
+    fn scene(&mut self, ui: &mut egui::Ui) {
+        let (rect, response) = ui.allocate_exact_size(
             Vec2::new(ui.available_width(), ui.available_height().max(220.0)),
-            egui::Sense::hover(),
+            egui::Sense::click(),
         );
+        let clicked = response
+            .clicked()
+            .then(|| response.interact_pointer_pos())
+            .flatten();
+        let mut selected = None;
         let paint = ui.painter_at(rect);
-        paint.rect_filled(rect, 9.0, Color32::from_rgb(6, 13, 24));
+        paint.rect_filled(rect, 9.0, Color32::from_rgb(2, 6, 4));
         for i in 0..150 {
             let x = ((i * 7919 + 67) % 1000) as f32 / 1000.0;
             let y = ((i * 3571 + 239) % 1000) as f32 / 1000.0;
@@ -947,28 +1123,44 @@ impl Cockpit {
         }
         let station = Pos2::new(rect.left() + rect.width() * 0.23, rect.center().y);
         let belt = Pos2::new(rect.left() + rect.width() * 0.78, rect.center().y);
+        if clicked.is_some_and(|p| p.distance(station) <= 43.0) {
+            selected = Some(SelectedObject::Station);
+        }
+        if clicked.is_some_and(|p| p.distance(belt) <= 50.0) {
+            selected = Some(SelectedObject::Belt);
+        }
+        if self.selected_object == SelectedObject::Station {
+            selection_brackets(&paint, station, 44.0, self.accent());
+        }
+        if self.selected_object == SelectedObject::Belt {
+            selection_brackets(&paint, belt, 53.0, self.accent());
+        }
         paint.line_segment(
             [station, belt],
             Stroke::new(1.0, Color32::from_rgb(35, 57, 76)),
         );
-        paint.circle_stroke(station, 36.0, Stroke::new(1.5, TEAL));
-        paint.circle_stroke(station, 24.0, Stroke::new(1.0, TEAL.gamma_multiply(0.4)));
+        paint.circle_stroke(station, 36.0, Stroke::new(1.5, self.accent()));
+        paint.circle_stroke(
+            station,
+            24.0,
+            Stroke::new(1.0, self.accent().gamma_multiply(0.4)),
+        );
         paint.rect_filled(
             egui::Rect::from_center_size(station, Vec2::new(15.0, 45.0)),
             3.0,
-            TEAL.gamma_multiply(0.6),
+            self.accent().gamma_multiply(0.6),
         );
         paint.rect_filled(
             egui::Rect::from_center_size(station, Vec2::new(45.0, 15.0)),
             3.0,
-            TEAL.gamma_multiply(0.6),
+            self.accent().gamma_multiply(0.6),
         );
         paint.text(
             station + Vec2::new(0.0, 60.0),
             egui::Align2::CENTER_TOP,
             "ARKLINE STATION",
             egui::FontId::proportional(13.0),
-            TEAL,
+            self.accent(),
         );
         for i in 0..15 {
             let angle = i as f32 * 2.399;
@@ -989,12 +1181,21 @@ impl Cockpit {
         if let Some(snapshot) = &self.snapshot {
             let server_now = self.presentation_time();
             for pilot in &snapshot.pilots {
+                if pilot.location == Location::Docked {
+                    continue;
+                }
                 let t = flight3d::route_progress(&pilot.location, server_now);
                 let position = station.lerp(belt, t)
                     + Vec2::new(0.0, -56.0 - flight3d::lane(&pilot.name) * 14.0);
+                if clicked.is_some_and(|p| p.distance(position) < 20.0) {
+                    selected = Some(SelectedObject::Pilot(pilot.name.clone()));
+                }
+                if self.selected_object == SelectedObject::Pilot(pilot.name.clone()) {
+                    selection_brackets(&paint, position, 15.0, self.accent());
+                }
                 let heading = flight3d::heading(&pilot.location);
                 let color = if pilot.name == self.pilot {
-                    TEAL
+                    self.accent()
                 } else {
                     AMBER
                 };
@@ -1008,11 +1209,11 @@ impl Cockpit {
                                 ((progress * std::f32::consts::PI).sin() * 1.8).min(1.0);
                             paint.line_segment(
                                 [position, target],
-                                Stroke::new(9.0, TEAL.gamma_multiply(0.10 * intensity)),
+                                Stroke::new(9.0, self.accent().gamma_multiply(0.10 * intensity)),
                             );
                             paint.line_segment(
                                 [position, target],
-                                Stroke::new(3.0, TEAL.gamma_multiply(0.65 * intensity)),
+                                Stroke::new(3.0, self.accent().gamma_multiply(0.65 * intensity)),
                             );
                             paint.line_segment(
                                 [position, target],
@@ -1037,21 +1238,21 @@ impl Cockpit {
                             paint.circle_stroke(
                                 target,
                                 7.0 + (progress * 13.0).fract() * 6.0,
-                                Stroke::new(1.0, TEAL.gamma_multiply(intensity)),
+                                Stroke::new(1.0, self.accent().gamma_multiply(intensity)),
                             );
                             paint.text(
                                 position + Vec2::new(0.0, 18.0),
                                 egui::Align2::CENTER_TOP,
                                 format!("+{units} ore · confirmed"),
                                 egui::FontId::proportional(12.0),
-                                TEAL,
+                                self.accent(),
                             );
                         }
                     }
                     for event in &self.effects.events {
                         let ring_color = match event.kind {
                             effects::EffectKind::Docking if pilot.location == Location::Docked => {
-                                TEAL
+                                self.accent()
                             }
                             effects::EffectKind::Undocking
                                 if pilot.location == Location::Station =>
@@ -1070,12 +1271,62 @@ impl Cockpit {
                         }
                     }
                 }
-                if matches!(pilot.location, Location::InTransit { .. }) {
-                    let dir = -heading;
-                    paint.line_segment(
-                        [position, position + Vec2::new(dir * 28.0, 0.0)],
-                        Stroke::new(2.0, color.gamma_multiply(0.4)),
-                    );
+                if let Some((phase, progress)) = flight3d::warp_phase(&pilot.location, server_now) {
+                    if phase == "WARP WARMUP" {
+                        let radius = 12.0 + progress * 18.0;
+                        paint.circle_stroke(
+                            position,
+                            radius,
+                            Stroke::new(2.0, color.gamma_multiply(0.75)),
+                        );
+                        paint.circle_stroke(
+                            position,
+                            radius + 6.0,
+                            Stroke::new(5.0, color.gamma_multiply(0.12)),
+                        );
+                        for i in 0..10 {
+                            let angle =
+                                server_now as f32 * 0.005 + i as f32 * std::f32::consts::TAU / 10.0;
+                            paint.circle_filled(
+                                position + Vec2::angled(angle) * radius,
+                                1.8,
+                                color,
+                            );
+                        }
+                    } else {
+                        let dir = -heading;
+                        let trail = if phase == "WARP ARRIVAL" {
+                            70.0 * (1.0 - progress) + 12.0
+                        } else {
+                            40.0 + progress * 32.0
+                        };
+                        paint.line_segment(
+                            [position, position + Vec2::new(dir * trail, 0.0)],
+                            Stroke::new(7.0, color.gamma_multiply(0.12)),
+                        );
+                        paint.line_segment(
+                            [position, position + Vec2::new(dir * trail, 0.0)],
+                            Stroke::new(2.5, color.gamma_multiply(0.8)),
+                        );
+                        for i in 0..7 {
+                            let offset = (server_now as f32 * 0.06 + i as f32 * 13.0) % 72.0;
+                            let y = ((i % 2) as f32 * 2.0 - 1.0) * (11.0 + (i / 2) as f32 * 7.0);
+                            let start = position + Vec2::new(dir * offset, y);
+                            paint.line_segment(
+                                [start, start + Vec2::new(dir * 16.0, 0.0)],
+                                Stroke::new(1.0, color.gamma_multiply(0.35)),
+                            );
+                        }
+                    }
+                    if pilot.name == self.pilot {
+                        paint.text(
+                            position + Vec2::new(0.0, 34.0),
+                            egui::Align2::CENTER_TOP,
+                            phase,
+                            egui::FontId::monospace(12.0),
+                            color,
+                        );
+                    }
                 }
                 paint.add(egui::Shape::convex_polygon(
                     vec![
@@ -1102,6 +1353,16 @@ impl Cockpit {
                 MUTED,
             );
         }
+        if let Some(selected) = selected {
+            self.selected_object = selected;
+        }
+        paint.text(
+            rect.right_bottom() + Vec2::new(-12.0, -12.0),
+            egui::Align2::RIGHT_BOTTOM,
+            "CLICK AN OBJECT TO SELECT",
+            egui::FontId::monospace(10.0),
+            MUTED,
+        );
         if !self.connected {
             paint.text(
                 rect.center(),
@@ -1109,6 +1370,21 @@ impl Cockpit {
                 "CONNECTION LOST · LAST KNOWN STATE",
                 egui::FontId::proportional(16.0),
                 AMBER,
+            );
+        }
+    }
+}
+fn selection_brackets(painter: &egui::Painter, center: Pos2, radius: f32, color: Color32) {
+    for x in [-1.0, 1.0] {
+        for y in [-1.0, 1.0] {
+            let corner = center + Vec2::new(x * radius, y * radius);
+            painter.line_segment(
+                [corner, corner - Vec2::new(x * 9.0, 0.0)],
+                Stroke::new(1.5, color),
+            );
+            painter.line_segment(
+                [corner, corner - Vec2::new(0.0, y * 9.0)],
+                Stroke::new(1.5, color),
             );
         }
     }
@@ -1142,16 +1418,21 @@ impl eframe::App for Cockpit {
                 ui.label(
                     egui::RichText::new("A R K L I N E")
                         .size(25.0)
-                        .color(TEAL)
+                        .color(self.accent())
                         .strong(),
                 );
-                ui.colored_label(MUTED, "PRIVATE PREVIEW");
+                ui.label(
+                    egui::RichText::new(BUILD_VERSION.trim())
+                        .color(AMBER)
+                        .strong(),
+                );
+                ui.colored_label(MUTED, "PRIVATE");
                 ui.separator();
                 ui.selectable_value(&mut self.three_dimensional, false, "2D Tactical");
                 ui.selectable_value(&mut self.three_dimensional, true, "3D Flight");
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.colored_label(
-                        if self.connected { TEAL } else { AMBER },
+                        if self.connected { self.accent() } else { AMBER },
                         if self.connected {
                             "● ONLINE"
                         } else if self.connecting {
@@ -1162,7 +1443,14 @@ impl eframe::App for Cockpit {
                     );
                 });
             });
-            ui.add_space(8.0);
+            ui.separator();
+            let (status, detail, _, color) = self.operation_status();
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("VESSEL").size(11.0).color(MUTED));
+                ui.colored_label(color, egui::RichText::new(status).strong());
+                ui.colored_label(MUTED, detail);
+            });
+            ui.add_space(4.0);
         });
         egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
             ui.horizontal_wrapped(|ui| {
@@ -1197,7 +1485,7 @@ impl eframe::App for Cockpit {
                         if !self.notice.is_empty() { ui.add_space(12.0); ui.colored_label(AMBER, &self.notice); }
                         ui.add_space(22.0); ui.separator();
                         if self.credential_scope.is_some() {
-                            ui.colored_label(TEAL, "Local universe is running. Your world saves automatically.");
+                            ui.colored_label(self.accent(), "Local universe is running. Your world saves automatically.");
                             ui.small("Keep the hosting cockpit open while other pilots play.");
                             if ui.button("Open second cockpit").clicked() { self.second_cockpit(); }
                         } else {
@@ -1276,6 +1564,7 @@ impl eframe::App for Cockpit {
                     ui.selectable_value(&mut self.service_tab, ServiceTab::Exchange, "Exchange");
                     ui.selectable_value(&mut self.service_tab, ServiceTab::Activity, "Activity");
                     ui.selectable_value(&mut self.service_tab, ServiceTab::Ledger, "Ledger");
+                    ui.selectable_value(&mut self.service_tab, ServiceTab::Settings, "Settings");
                 });
                 ui.separator();
                 egui::ScrollArea::vertical()
@@ -1284,8 +1573,13 @@ impl eframe::App for Cockpit {
                         ServiceTab::Cargo => self.cargo_panel(ui),
                         ServiceTab::Exchange => self.market(ui),
                         ServiceTab::Ledger => self.ledger_panel(ui),
+                        ServiceTab::Settings => self.settings_panel(ui),
                         ServiceTab::Activity => {
-                            ui.label(egui::RichText::new("SERVER ACTIVITY").color(TEAL).strong());
+                            ui.label(
+                                egui::RichText::new("SERVER ACTIVITY")
+                                    .color(self.accent())
+                                    .strong(),
+                            );
                             for (entry, error) in &self.feed {
                                 ui.colored_label(if *error { AMBER } else { MUTED }, entry);
                                 ui.separator();
@@ -1297,14 +1591,17 @@ impl eframe::App for Cockpit {
             if self.three_dimensional {
                 let now = self.presentation_time();
                 if let Some(snapshot) = &self.snapshot {
-                    self.flight_view.ui(
+                    if let Some(selected) = self.flight_view.ui(
                         ui,
                         snapshot,
                         &self.pilot,
                         now,
                         self.connected,
                         &self.effects,
-                    );
+                        &self.selected_object,
+                    ) {
+                        self.selected_object = selected;
+                    }
                 }
             } else {
                 self.scene(ui);
@@ -1395,6 +1692,10 @@ fn main() -> eframe::Result<()> {
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
+            "--version" | "-V" => {
+                println!("Arkline {}", BUILD_VERSION.trim());
+                return Ok(());
+            }
             "--help" | "-h" => {
                 println!("Arkline native client\n\nUsage: arkline-client [--local | --remote-only] [--server HOST:PORT] [--data-dir PATH] [--pilot NAME]\n\n--pilot creates or resumes the named pilot immediately.\n--local starts a sibling arkline-server on a private loopback port.\nA macOS app bundle starts locally by default and saves in ~/Library/Application Support/Arkline/Preview.\n--server selects an existing server; --remote-only prevents bundle auto-hosting.\nCLI defaults: 127.0.0.1:7777, data/client.\n--credential-scope NAME selects a stable credential namespace (used by local preview cockpits).\nResume credentials are private local files. Development TCP requires a secure tunnel for remote use.");
                 return Ok(());
@@ -1454,6 +1755,13 @@ fn main() -> eframe::Result<()> {
         depth_buffer: 24,
         renderer: eframe::Renderer::Glow,
         viewport: egui::ViewportBuilder::default()
+            .with_title(format!("Arkline — {}", BUILD_VERSION.trim()))
+            .with_icon(
+                eframe::icon_data::from_png_bytes(include_bytes!(
+                    "../../../assets/Arkline-256.png"
+                ))
+                .expect("embedded Arkline icon must be valid PNG"),
+            )
             .with_inner_size([1200.0, 800.0])
             .with_min_inner_size([960.0, 680.0]),
         ..Default::default()

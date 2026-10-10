@@ -35,10 +35,15 @@ fn stock(server: &mut Server, session: &mut Option<String>) {
         },
         102,
     );
-    request(server, session, Request::Mine { units: 100 }, 3102);
+    request(
+        server,
+        session,
+        Request::Mine { units: 100 },
+        WARP_DURATION_MS + 102,
+    );
     assert!(
         !server
-            .handle_at(session, Request::Mine { units: 1 }, 3103)
+            .handle_at(session, Request::Mine { units: 1 }, WARP_DURATION_MS + 103)
             .ok
     );
     request(
@@ -47,9 +52,9 @@ fn stock(server: &mut Server, session: &mut Option<String>) {
         Request::Warp {
             destination: Destination::Station,
         },
-        3103,
+        WARP_DURATION_MS + 103,
     );
-    request(server, session, Request::Dock, 6103);
+    request(server, session, Request::Dock, 2 * WARP_DURATION_MS + 103);
     request(
         server,
         session,
@@ -57,7 +62,7 @@ fn stock(server: &mut Server, session: &mut Option<String>) {
             units: 100,
             unit_price: 10,
         },
-        6104,
+        2 * WARP_DURATION_MS + 104,
     );
 }
 #[test]
@@ -76,19 +81,27 @@ fn unauthorized_and_failed_trade_leave_ledger_unchanged() {
                     pilot: "Alice".into(),
                     resume_token: Some("incorrect".into())
                 },
-                6200
+                2 * WARP_DURATION_MS + 200
             )
             .ok
     );
     assert!(stranger.is_none());
     assert!(
         !server
-            .handle_at(&mut stranger, Request::CancelSell { order_id: 1 }, 6200)
+            .handle_at(
+                &mut stranger,
+                Request::CancelSell { order_id: 1 },
+                2 * WARP_DURATION_MS + 200
+            )
             .ok
     );
     assert!(
         !server
-            .handle_at(&mut bob, Request::CancelSell { order_id: 1 }, 6200)
+            .handle_at(
+                &mut bob,
+                Request::CancelSell { order_id: 1 },
+                2 * WARP_DURATION_MS + 200
+            )
             .ok
     );
     assert!(
@@ -99,13 +112,18 @@ fn unauthorized_and_failed_trade_leave_ledger_unchanged() {
                     order_id: 1,
                     units: 1
                 },
-                6200
+                2 * WARP_DURATION_MS + 200
             )
             .ok
     );
-    let before = request(&mut server, &mut stranger, Request::ExportLedger, 6200)
-        .ledger
-        .unwrap();
+    let before = request(
+        &mut server,
+        &mut stranger,
+        Request::ExportLedger,
+        2 * WARP_DURATION_MS + 200,
+    )
+    .ledger
+    .unwrap();
     assert!(
         !server
             .handle_at(
@@ -114,13 +132,18 @@ fn unauthorized_and_failed_trade_leave_ledger_unchanged() {
                     order_id: 1,
                     units: 101
                 },
-                6200
+                2 * WARP_DURATION_MS + 200
             )
             .ok
     );
-    let after = request(&mut server, &mut stranger, Request::ExportLedger, 6200)
-        .ledger
-        .unwrap();
+    let after = request(
+        &mut server,
+        &mut stranger,
+        Request::ExportLedger,
+        2 * WARP_DURATION_MS + 200,
+    )
+    .ledger
+    .unwrap();
     assert_eq!(before.snapshot.ledger_hash, after.snapshot.ledger_hash);
     assert_eq!(before.snapshot.orders, after.snapshot.orders);
     assert_eq!(before.snapshot.pilots, after.snapshot.pilots);
@@ -132,17 +155,22 @@ fn unauthorized_and_failed_trade_leave_ledger_unchanged() {
             order_id: 1,
             units: 40,
         },
-        6300,
+        2 * WARP_DURATION_MS + 300,
     );
     request(
         &mut server,
         &mut alice,
         Request::CancelSell { order_id: 1 },
-        6301,
+        2 * WARP_DURATION_MS + 301,
     );
-    let result = request(&mut server, &mut stranger, Request::ExportLedger, 6302)
-        .ledger
-        .unwrap();
+    let result = request(
+        &mut server,
+        &mut stranger,
+        Request::ExportLedger,
+        2 * WARP_DURATION_MS + 302,
+    )
+    .ledger
+    .unwrap();
     assert!(result.snapshot.orders.is_empty());
     assert_eq!(result.snapshot.pilots[0].ore, 60);
     assert_eq!(result.snapshot.pilots[0].credits, 1400);
@@ -177,7 +205,7 @@ fn concurrent_buyers_cannot_duplicate_fill() {
                             order_id: 1,
                             units: 100,
                         },
-                        6500,
+                        2 * WARP_DURATION_MS + 500,
                     )
                     .ok
             })
@@ -194,7 +222,7 @@ fn concurrent_buyers_cannot_duplicate_fill() {
         &mut server.lock().unwrap(),
         &mut None,
         Request::Snapshot,
-        6600,
+        2 * WARP_DURATION_MS + 600,
     )
     .snapshot
     .unwrap();
@@ -239,14 +267,18 @@ fn restart_preserves_auth_travel_and_cooldown() {
         );
         assert!(
             !server
-                .handle_at(&mut session, Request::Mine { units: 100 }, 4000)
+                .handle_at(
+                    &mut session,
+                    Request::Mine { units: 100 },
+                    WARP_DURATION_MS + 1000
+                )
                 .ok
         );
         request(
             &mut server,
             &mut session,
             Request::Mine { units: 100 },
-            4001,
+            WARP_DURATION_MS + 1001,
         );
     }
     {
@@ -260,18 +292,22 @@ fn restart_preserves_auth_travel_and_cooldown() {
                 pilot: "Traveler".into(),
                 resume_token: Some(token),
             },
-            4002,
+            WARP_DURATION_MS + 1002,
         );
         assert!(
             !server
-                .handle_at(&mut session, Request::Mine { units: 100 }, 4002)
+                .handle_at(
+                    &mut session,
+                    Request::Mine { units: 100 },
+                    WARP_DURATION_MS + 1002
+                )
                 .ok
         );
         request(
             &mut server,
             &mut session,
             Request::Mine { units: 100 },
-            5001,
+            WARP_DURATION_MS + 2001,
         );
     }
     std::fs::remove_file(path).unwrap();

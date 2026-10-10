@@ -74,7 +74,7 @@ impl Client {
     }
     fn travel(&mut self, destination: Destination, pilot: &str) {
         self.ok(Request::Warp { destination });
-        let deadline = Instant::now() + Duration::from_secs(6);
+        let deadline = Instant::now() + Duration::from_secs(10);
         loop {
             let snap = self.ok(Request::Snapshot).snapshot.unwrap();
             if !matches!(
@@ -240,6 +240,99 @@ fn two_pilots_trade_recover_and_export_consistent_history() {
     assert!(arkline_verifier::verify(&tampered, None).is_err());
     drop(alice);
     drop(bob);
+    drop(server);
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn transport_presence_counts_sessions_without_removing_persistent_ships() {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let directory =
+        std::env::temp_dir().join(format!("arkline-presence-{}-{unique}", std::process::id()));
+    fs::create_dir_all(&directory).unwrap();
+    let db = directory.join("world.sqlite");
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap().to_string();
+    drop(listener);
+    let server = Server::start(&db, address.clone());
+    let mut observer = Client::new(&address);
+    assert!(observer
+        .ok(Request::Snapshot)
+        .snapshot
+        .unwrap()
+        .online_pilots
+        .is_empty());
+    let mut first = Client::new(&address);
+    let response = first.login("PresencePilot", None);
+    let token = response.resume_token.unwrap();
+    assert_eq!(
+        response.snapshot.unwrap().online_pilots,
+        vec!["PresencePilot"]
+    );
+    first.ok(Request::Undock);
+    let mut second = Client::new(&address);
+    second.login("PresencePilot", Some(token.clone()));
+    // Reauthentication on the same connection must not leak an extra reference.
+    second.login("PresencePilot", Some(token.clone()));
+    let rejected = second.send(Request::Connect {
+        protocol_version: PROTOCOL_VERSION,
+        pilot: "PresencePilot".into(),
+        resume_token: Some("wrong".into()),
+    });
+    assert!(!rejected.ok);
+    drop(first);
+    assert_eq!(
+        observer
+            .ok(Request::Snapshot)
+            .snapshot
+            .unwrap()
+            .online_pilots,
+        vec!["PresencePilot"]
+    );
+    drop(second);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let offline = loop {
+        let snapshot = observer.ok(Request::Snapshot).snapshot.unwrap();
+        if snapshot.online_pilots.is_empty() {
+            break snapshot;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "closed transports remained online"
+        );
+        thread::sleep(Duration::from_millis(20));
+    };
+    assert_eq!(offline.pilots[0].name, "PresencePilot");
+    assert_eq!(offline.pilots[0].location, Location::Station);
+    assert_eq!(
+        offline.ledger_sequence, 1,
+        "presence must not append economic events"
+    );
+    let export = observer.ok(Request::ExportLedger).ledger.unwrap();
+    assert!(export.snapshot.online_pilots.is_empty());
+    assert_eq!(export.snapshot.pilots, offline.pilots);
+    drop(observer);
+    drop(server);
+    // Restart clears transport presence, but keeps undocked ship and credential.
+    let server = Server::start(&db, address.clone());
+    let mut observer = Client::new(&address);
+    assert!(observer
+        .ok(Request::Snapshot)
+        .snapshot
+        .unwrap()
+        .online_pilots
+        .is_empty());
+    let mut resumed = Client::new(&address);
+    let response = resumed.login("PresencePilot", Some(token));
+    let snapshot = response.snapshot.unwrap();
+    assert_eq!(snapshot.online_pilots, vec!["PresencePilot"]);
+    assert_eq!(snapshot.pilots[0].location, Location::Station);
+    assert_eq!(snapshot.ledger_sequence, 1);
+    drop(resumed);
+    drop(observer);
     drop(server);
     fs::remove_dir_all(directory).unwrap();
 }
