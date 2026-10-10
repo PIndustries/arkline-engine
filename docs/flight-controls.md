@@ -28,7 +28,8 @@ normal flight; warp samples the same analytic trajectory as the server. Renderin
 subtracts a nearby origin in double precision before converting GPU coordinates.
 These presentation calculations cannot change server state.
 
-Switch between **2D Tactical**, **3D External** and **Cockpit** in the header.
+Switch between **2D Tactical**, **3D Tactical**, **3D External** and **Cockpit** in
+the header or **More → Settings & view mode**.
 Changing views preserves the selected object and navigation state. Full quaternion orientation
 preserves roll independently of movement direction. Manual-flight presentation uses
 a shorter interpolation buffer than autopilot. Rotation input expires after 500 ms
@@ -60,12 +61,14 @@ All / Mining / Travel / Pilots and orders objects by distance. Space brackets an
 rows select the same object ID. Gate jumps preserve cargo, credits and position
 in the destination system across restart. The economy remains a shared exchange.
 
-There is no collision damage, combat, module fitting, physical mass/inertia
-upgrade system, ship-computer runtime or distributed simulation authority.
+There is no collision damage, ship combat, module fitting, physical mass/inertia
+upgrade system, ship-computer runtime or distributed simulation authority. Attack
+drones can damage other deployed drones; that limited model does not include ships.
 Asteroid acquisition takes 2–8 seconds, depending on hull sensors and target size.
 Each of up to five asteroid locks becomes usable only after server confirmation. Each of the
 two mining modules repeats independently while active. Pioneer extracts 25 ore
-every 6 seconds per module; Prospector 40/5s, Hauler 20/8s, Vanguard 30/7s.
+every 6 seconds per module; Prospector 40/5s, Borealis 75/5s, Stratum 100/4s,
+Monolith 100/3s. The utility hulls remain Hauler 20/8s and Vanguard 30/7s.
 Cycle progress and stop reasons come from the server. There is no yield input.
 Stop cancels the current unfinished cycle without a partial award. The last cycle
 may award less when cargo fills or the asteroid is depleted. Lock/range loss,
@@ -111,10 +114,65 @@ credentials. These examples use a dedicated command-client pilot.
 
 ## Hull selection and station scale
 
-Use Services → Hangar while docked to board Pioneer (72 m), Prospector (180 m),
-Hauler (420 m) or Vanguard (1.1 km). Selection persists on the server and is rejected
-while in space. Preview hulls share movement tuning and cargo capacity. The station
-is 20 km across and 6 km high. Station ranges identify the docking port.
+Use **Ship** in the physical console or **Hangar** from the service rail while
+docked. Only hulls owned at the current station can be boarded. Selection persists,
+and each inactive hull keeps its own cargo and capacitor charge.
+
+| Mining tier | Hull | Length × width × height | Cargo ore | Ore / cycle per turret |
+|---|---|---|---:|---:|
+| 1 | Pioneer | 72 × 38 × 18 m | 1,000 | 25 / 6 s |
+| 2 | Prospector | 180 × 92 × 64 m | 2,500 | 40 / 5 s |
+| 3 | Borealis | 640 × 260 × 180 m | 8,000 | 75 / 5 s |
+| 4 | Stratum | 1,800 × 800 × 480 m | 24,000 | 100 / 4 s |
+| 5 | Monolith | 5,200 × 2,200 × 1,400 m | 80,000 | 100 / 3 s |
+| Utility | Hauler | 420 × 180 × 140 m | 16,000 | 20 / 8 s |
+| Utility | Vanguard | 1,100 × 380 × 260 m | 4,000 | 30 / 7 s |
+
+The preview grants one of each class, including migration of existing pilot saves;
+newly issued inactive hulls start at Junction. Movement tuning is currently shared,
+while cargo, extraction and power specifications vary. Mining rates are per turret;
+energy, target validity, remaining rock ore and cargo room still limit output.
+
+The station is 20 km across and 6 km high. Docking uses the docking-port marker and
+an orientation-independent enclosing hull sphere with radius equal to half the
+hull diagonal. **DOCK** is available within 1.8 km of that envelope, so large hulls
+need not put their centers into the port. Berth placement scales with hull size to
+keep the entire hull outside the station's front plane. This interaction envelope
+is not a general collision model. Gate and asteroid interaction rules remain their
+own server checks; docking's envelope does not expand mining range.
+
+## Verdant approach and surface sandbox
+
+Return to Junction station before attempting planet approach from the belt or
+another system. In **Flight → Travel**, select **Verdant** and choose **Approach
+planet**. The client sends normal flight to `[0, -115000, 0]` meters, approximately
+5 km above the spherical ground. From the home station this takes roughly three
+minutes at the preview ship speed. This is continuous flight, not a planetary
+warp destination or teleport. At arrival, use manual thrust to descend and brake;
+body-relative down is **C** only while the ship's up axis points away from the
+surface. Check the authoritative altitude and ground-clearance readings rather
+than assuming your attitude is level.
+
+Verdant has a 6,000 km radius and a 60 km atmosphere boundary. The home station is
+about 120 km above the surface, so returning by station warp leaves the ship outside
+the atmosphere. Planet approach then crosses that boundary in normal flight; descend
+the final 5 km manually. The server prevents the oriented
+hull support from going below the spherical surface and removes inward velocity
+at contact. Surface state reports altitude, hull ground clearance and whether the
+ship is grounded. It does not implement aerodynamic flight, walking or full rigid
+body/collision physics.
+
+At ground clearance ≤100 m, **More → Surface sandbox** enables crates, pylons and
+platforms. East/north offsets choose a location; the server anchors props to the
+sphere. Spawn and movement destinations must be within 500 m of the hull envelope;
+moving/deleting also requires the original prop to be within that range and owned
+by the pilot. Limits are 32 owned props and 256 total. Position and ownership persist
+through restart. There is no terrain deformation, building economy or walking
+mode; this is the first bounded construction interface.
+
+Station shuttles, freight tenders and patrols are decorative server-timed traffic.
+Their lights and movement convey background activity; they do not participate in
+the economy, mine, trade, create credits or appear as connected players.
 
 ## Target acquisition and mining turret
 
@@ -132,16 +190,16 @@ module, not a combat damage system or a general module-fitting inventory.
 
 ## Cockpit console and drone fleet (26.10.10.11)
 
-Cockpit operations are available through the fixed physical console tabs. Nav
+Cockpit operations are available through the fixed physical console tabs. Flight
 contains target selection and navigation; Modules assigns miners to independently
-locked asteroids; Fleet launches and controls up to five drones of each class.
-Settings also exposes all view modes. Overview and flight-help overlays are hidden
+locked asteroids; Drones launches and controls up to five drones of each class.
+More → Settings also exposes all view modes. Overview and flight-help overlays are hidden
 in cockpit mode to preserve the canopy view. Instrument clicks suppress flight
 input, and maps do not capture right-button aiming.
 
 The upper side screens contain local 2D and ship-relative 3D maps. Scroll controls
 real-distance range; click contacts to select them. The lower left screen displays
-the selected drone. Choose POV or Orbit camera from Fleet. Signal is authoritative
+the selected drone. Choose POV or Orbit camera from Drones. Signal is authoritative
 and distance-based, with increasing noise as the link weakens. Only one selected
 camera is rendered at once. Recon is observation/navigation; mining drones repeat
 real ore extraction; attack drones currently fight other drones only.

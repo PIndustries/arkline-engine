@@ -3,6 +3,8 @@ mod drones;
 mod flight;
 mod mining;
 mod power;
+mod surface;
+mod traffic;
 mod universe;
 use anyhow::{bail, ensure, Context, Result};
 use arkline_protocol::*;
@@ -29,6 +31,10 @@ struct Pilot {
 }
 #[derive(Clone, Serialize, Deserialize)]
 struct World {
+    #[serde(default)]
+    surface_props: Vec<SurfaceProp>,
+    #[serde(default)]
+    next_prop_id: u64,
     #[serde(default = "default_next_drone_id")]
     next_drone_id: u64,
     #[serde(default)]
@@ -50,6 +56,8 @@ fn default_next_drone_id() -> u64 {
 impl Default for World {
     fn default() -> Self {
         Self {
+            surface_props: Vec::new(),
+            next_prop_id: 1,
             next_drone_id: 1,
             accounts: BTreeMap::new(),
             corporations: BTreeMap::new(),
@@ -229,6 +237,7 @@ impl Server {
         drones::ensure_fleets(&mut world)?;
         power::advance(&mut world, now)?;
         flight::advance(&mut world, now);
+        surface::update(&mut world);
         universe::advance_locks(&mut world, now);
         let mut events = mining::advance(&mut world, now);
         events.extend(drones::advance(&mut world, now));
@@ -299,6 +308,7 @@ impl Server {
         drones::ensure_fleets(&mut world)?;
         power::advance(&mut world, now)?;
         flight::advance(&mut world, now);
+        surface::update(&mut world);
         universe::advance_locks(&mut world, now);
         let mut token = None;
         let mut cycle_events = mining::advance(&mut world, now);
@@ -310,6 +320,13 @@ impl Server {
         let export = matches!(request, Request::ExportLedger);
         let message;
         match request {
+            request if surface::handles(&request) => {
+                let name = session
+                    .as_ref()
+                    .context("connect before issuing commands")?;
+                surface::execute(&mut world, name, request)?;
+                message = "Surface prop updated";
+            }
             request if drones::handles(&request) => {
                 let name = session
                     .as_ref()
@@ -380,6 +397,7 @@ impl Server {
                         pilot.clone(),
                         Pilot {
                             view: PilotView {
+                                surface: None,
                                 power: None,
                                 drones: Vec::new(),
                                 target_locks: Vec::new(),
@@ -557,7 +575,11 @@ impl Server {
                         ensure!(pilot.view.location == Location::Docked, "must be docked");
                         pilot.view.location = Location::Station;
                         let f = pilot.view.flight.as_mut().unwrap();
-                        f.position = flight::berth(&pilot.view.name, Destination::Station);
+                        f.position = flight::berth(
+                            &pilot.view.name,
+                            Destination::Station,
+                            pilot.view.ship_class,
+                        );
                         f.velocity = [0.0; 3];
                         f.mode = NavigationMode::Stop;
                         f.updated_at_ms = now;
@@ -571,7 +593,7 @@ impl Server {
                         ensure!(
                             flight::distance(
                                 pilot.view.flight.as_ref().unwrap().position,
-                                flight::berth(&pilot.view.name, destination)
+                                flight::berth(&pilot.view.name, destination, pilot.view.ship_class)
                             ) > 100.0,
                             "already at destination"
                         );
@@ -606,7 +628,8 @@ impl Server {
                                 Location::Docked
                                     | Location::InTransit { .. }
                                     | Location::Jumping { .. }
-                            ) && flight::distance(
+                            ) && hull_surface_distance(
+                                pilot.view.ship_class,
                                 pilot.view.flight.as_ref().unwrap().position,
                                 STATION_POSITION
                             ) <= DOCK_RANGE,
@@ -667,7 +690,11 @@ impl Server {
                             .checked_mul(order.unit_price)
                             .context("price overflow")?;
                         ensure!(pilot.view.credits >= price, "insufficient credits");
-                        pilot.view.ore = add_cargo(pilot.view.ore, units)?;
+                        pilot.view.ore = add_cargo(
+                            pilot.view.ore,
+                            units,
+                            cargo_capacity(pilot.view.ship_class),
+                        )?;
                         pilot.view.credits -= price;
                         let seller = world
                             .pilots
@@ -694,7 +721,11 @@ impl Server {
                         ensure!(pilot.view.location == Location::Docked, "must be docked");
                         let order = world.orders.get(&order_id).context("order not found")?;
                         ensure!(order.seller == name, "only seller can cancel");
-                        pilot.view.ore = add_cargo(pilot.view.ore, order.units)?;
+                        pilot.view.ore = add_cargo(
+                            pilot.view.ore,
+                            order.units,
+                            cargo_capacity(pilot.view.ship_class),
+                        )?;
                         world.orders.remove(&order_id);
                         event = Some(EconomicEvent::SellCancelled {
                             order_id,
@@ -709,6 +740,7 @@ impl Server {
         for pilot in world.pilots.values_mut() {
             flight::ensure_flight(pilot, now);
         }
+        surface::update(&mut world);
         assets::ensure_accounts(&mut world);
         mining::ensure_modules(&mut world);
         drones::ensure_fleets(&mut world)?;
@@ -733,6 +765,8 @@ impl Server {
             .or(session.as_ref())
             .and_then(|name| assets::view(&world, name));
         let snapshot = Snapshot {
+            surface_props: world.surface_props.clone(),
+            traffic: traffic::actors(now),
             stored_ore: assets::stored_ore(&world)
                 .try_into()
                 .context("stored ore overflow")?,
@@ -810,12 +844,20 @@ fn append_event(
     entries.push(entry);
     Ok(())
 }
-fn add_cargo(current: u64, units: u64) -> Result<u64> {
+fn add_cargo(current: u64, units: u64, capacity: u64) -> Result<u64> {
     let next = current.checked_add(units).context("cargo overflow")?;
-    ensure!(next <= CARGO_CAPACITY, "cargo capacity exceeded");
+    ensure!(next <= capacity, "cargo capacity exceeded");
     Ok(next)
 }
 fn validate(world: &World) -> Result<()> {
+    surface::validate(world)?;
+    ensure!(
+        world
+            .pilots
+            .values()
+            .all(|p| p.view.ore <= cargo_capacity(p.view.ship_class)),
+        "active cargo exceeds hull capacity"
+    );
     assets::validate(world)?;
     mining::validate(world)?;
     universe::validate_locks(world)?;

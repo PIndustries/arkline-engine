@@ -176,7 +176,7 @@ pub(super) fn execute(world: &mut World, name: &str, request: Request, now: u64)
                 a.system_id == p.view.system_id && a.ore > 0,
                 "asteroid unavailable"
             );
-            ensure!(p.view.ore < CARGO_CAPACITY, "cargo full");
+            ensure!(p.view.ore < cargo_capacity(p.view.ship_class), "cargo full");
             DroneMode::Mining { target_id }
         }
         Request::AssignAttackDrone {
@@ -279,7 +279,7 @@ pub(super) fn invalidate(world: &mut World) {
             let invalid = match &d.mode {
                 DroneMode::Mining { target_id } => {
                     !p.view.locked_asteroids.contains(target_id)
-                        || p.view.ore >= CARGO_CAPACITY
+                        || p.view.ore >= cargo_capacity(p.view.ship_class)
                         || !world.asteroids.iter().any(|a| {
                             a.id == *target_id && a.system_id == p.view.system_id && a.ore > 0
                         })
@@ -334,7 +334,7 @@ pub(super) fn advance(world: &mut World, now: u64) -> Vec<EconomicEvent> {
                         p.view.drones.push(d);
                         continue;
                     };
-                    if p.view.ore >= CARGO_CAPACITY {
+                    if p.view.ore >= cargo_capacity(p.view.ship_class) {
                         idle(&mut d);
                     } else if approach(&mut d, a.position, a.radius + DRONE_MINING_RANGE * 0.8, now)
                     {
@@ -355,7 +355,7 @@ pub(super) fn advance(world: &mut World, now: u64) -> Vec<EconomicEvent> {
                                 } else {
                                     let units = DRONE_MINING_YIELD
                                         .min(a.ore)
-                                        .min(CARGO_CAPACITY - p.view.ore);
+                                        .min(cargo_capacity(p.view.ship_class) - p.view.ore);
                                     a.ore -= units;
                                     world.belt_ore -= units;
                                     p.view.ore += units;
@@ -363,7 +363,8 @@ pub(super) fn advance(world: &mut World, now: u64) -> Vec<EconomicEvent> {
                                         pilot: name.clone(),
                                         units,
                                     });
-                                    if a.ore == 0 || p.view.ore == CARGO_CAPACITY {
+                                    if a.ore == 0 || p.view.ore == cargo_capacity(p.view.ship_class)
+                                    {
                                         idle(&mut d);
                                     } else {
                                         d.mining_cycle = now

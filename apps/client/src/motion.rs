@@ -143,11 +143,14 @@ mod tests {
     use super::*;
     fn snapshot(time: u64, x: f64) -> Snapshot {
         Snapshot {
+            surface_props: vec![],
+            traffic: vec![],
             stored_ore: 0,
             server_time_ms: time,
             online_pilots: vec![],
             asteroids: vec![],
             pilots: vec![PilotView {
+                surface: None,
                 power: None,
                 mining_modules: vec![],
                 ship_class: arkline_protocol::ShipClass::default(),

@@ -216,6 +216,8 @@ mod tests {
             protocol_version: PROTOCOL_VERSION,
             entries: vec![],
             snapshot: Snapshot {
+                surface_props: vec![],
+                traffic: vec![],
                 stored_ore: 0,
                 asteroids: vec![],
                 server_time_ms: 0,

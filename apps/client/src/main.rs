@@ -6,6 +6,7 @@ mod flight3d;
 mod layout;
 mod motion;
 mod pilot_input;
+mod sandbox;
 mod services;
 mod target_controls;
 mod theme;
@@ -332,9 +333,12 @@ enum ServiceTab {
     Settings,
     Modules,
     Drones,
+    Sandbox,
 }
 #[derive(Clone, PartialEq, Eq)]
 pub(crate) enum SelectedObject {
+    Planet(u64),
+    Prop(u64),
     Asteroid(u64),
     Gate(u64),
     Station,
@@ -390,6 +394,8 @@ struct Cockpit {
     selected_drone: Option<u64>,
     drone_orbit: bool,
     drone_attack_target: Option<(String, u64)>,
+    prop_kind: SurfacePropKind,
+    prop_offset: [f64; 3],
     sell_amount: u64,
     audit_updates: Option<Receiver<Result<String, String>>>,
     audit_result: Option<Result<String, String>>,
@@ -454,6 +460,8 @@ impl Cockpit {
             selected_drone: None,
             drone_orbit: false,
             drone_attack_target: None,
+            prop_kind: SurfacePropKind::Crate,
+            prop_offset: [20.0, 0.0, 0.0],
             sell_amount: 25,
             audit_updates: None,
             audit_result: None,
@@ -1264,6 +1272,7 @@ impl Cockpit {
                     (ServiceTab::Activity, "Activity log"),
                     (ServiceTab::Ledger, "Ledger audit"),
                     (ServiceTab::Settings, "Settings & view mode"),
+                    (ServiceTab::Sandbox, "Surface sandbox"),
                 ] {
                     if ui
                         .selectable_label(self.service_tab == tab, label)
@@ -1280,8 +1289,10 @@ impl Cockpit {
         match self.service_tab {
             ServiceTab::Navigation => {
                 self.flight_deck(ui);
+                self.surface_status(ui);
                 self.overview(ui);
             }
+            ServiceTab::Sandbox => self.sandbox_panel(ui),
             ServiceTab::Modules => self.mining_module(ui),
             ServiceTab::Drones => self.drone_controls(ui),
             ServiceTab::Station => self.station_panel(ui),
@@ -1320,7 +1331,7 @@ impl Cockpit {
                 format_speed(speed),
                 pilot.credits,
                 pilot.ore,
-                CARGO_CAPACITY
+                cargo_capacity(pilot.ship_class)
             ));
         });
         ui.horizontal_wrapped(|ui| {
@@ -1441,11 +1452,20 @@ impl Cockpit {
             .map(|_| asteroid)
     }
     fn can_dock(&self, pilot: &PilotView) -> bool {
-        self.can_operate() && in_navigation_range(pilot, STATION_POSITION, DOCK_RANGE)
+        self.can_operate()
+            && in_navigation_range(
+                pilot,
+                STATION_POSITION,
+                DOCK_RANGE + hull_radius_m(pilot.ship_class),
+            )
+    }
+    fn own_cargo_capacity(&self) -> u64 {
+        self.own()
+            .map_or(CARGO_CAPACITY, |p| cargo_capacity(p.ship_class))
     }
     fn can_mine(&self, pilot: &PilotView) -> bool {
         self.can_operate()
-            && pilot.ore < CARGO_CAPACITY
+            && pilot.ore < cargo_capacity(pilot.ship_class)
             && self.snapshot.as_ref().is_some_and(|snapshot| {
                 snapshot.asteroids.iter().any(|a| {
                     Some(a.id) == self.module_target(pilot)
@@ -1456,6 +1476,7 @@ impl Cockpit {
     }
     fn selected_target(&self) -> Option<NavigationTarget> {
         match &self.selected_object {
+            SelectedObject::Planet(_) | SelectedObject::Prop(_) => None,
             SelectedObject::Asteroid(id) => self
                 .selected_asteroid()
                 .map(|_| NavigationTarget::Asteroid { id: *id }),
@@ -1483,6 +1504,17 @@ impl Cockpit {
     }
     fn selected_position(&self) -> Option<[f64; 3]> {
         match &self.selected_object {
+            SelectedObject::Planet(id) => planets()
+                .iter()
+                .find(|p| p.id == *id && p.system_id == self.current_system())
+                .map(|_| PLANET_APPROACH_POSITION),
+            SelectedObject::Prop(id) => self
+                .snapshot
+                .as_ref()?
+                .surface_props
+                .iter()
+                .find(|p| p.id == *id && p.system_id == self.current_system())
+                .map(|p| p.position),
             SelectedObject::Asteroid(_) => self.selected_asteroid().map(|a| a.position),
             SelectedObject::Gate(_) => self.selected_gate().map(|g| g.position),
             SelectedObject::Station => Some(STATION_POSITION),
@@ -1497,6 +1529,32 @@ impl Cockpit {
         }
     }
     fn navigation_controls(&mut self, ui: &mut egui::Ui) {
+        if matches!(
+            self.selected_object,
+            SelectedObject::Planet(_) | SelectedObject::Prop(_)
+        ) {
+            if let Some(mut position) = self.selected_position() {
+                let planet = matches!(self.selected_object, SelectedObject::Planet(_));
+                if !planet {
+                    position[1] += 100.0;
+                }
+                if ui
+                    .add_enabled(
+                        self.can_fly(),
+                        egui::Button::new(if planet {
+                            "Approach planet"
+                        } else {
+                            "Fly above prop"
+                        }),
+                    )
+                    .clicked()
+                {
+                    self.send(Request::Navigate {
+                        mode: NavigationMode::FlyTo { position },
+                    });
+                }
+            }
+        }
         let target = self.selected_target();
         let enabled = self.can_fly() && target.is_some();
         if let Some(own) = self.own() {
@@ -1629,7 +1687,7 @@ impl Cockpit {
                 self.send(Request::Dock);
             }
             ui.small(format!(
-                "Docking port access: {}",
+                "Docking port access: {} from hull envelope",
                 format_distance(DOCK_RANGE)
             ));
         }
@@ -1704,6 +1762,27 @@ impl Cockpit {
                     format_distance(STATION_HEIGHT_M)
                 ));
                 ui.small("Range is measured to the docking port");
+            }
+            SelectedObject::Planet(id) => {
+                if let Some(planet) = planets().iter().find(|p| p.id == id) {
+                    ui.heading(&planet.name);
+                    ui.small("Approach in normal flight, then descend continuously through the atmosphere.");
+                }
+                self.surface_status(ui);
+            }
+            SelectedObject::Prop(id) => {
+                if let Some(prop) = self
+                    .snapshot
+                    .as_ref()
+                    .and_then(|s| s.surface_props.iter().find(|p| p.id == id))
+                {
+                    ui.heading(format!("{:?} #{id}", prop.kind));
+                    ui.small(format!("Owned by {}", prop.owner));
+                }
+                if ui.button("Surface sandbox").clicked() {
+                    self.service_tab = ServiceTab::Sandbox;
+                    self.services_open = true;
+                }
             }
             SelectedObject::Belt => {
                 ui.heading("Asteroid field");
@@ -1780,6 +1859,14 @@ impl Cockpit {
                 "Field",
                 Some(BELT_POSITION),
             ));
+            for planet in planets().into_iter().filter(|p| p.system_id == system) {
+                rows.push((
+                    SelectedObject::Planet(planet.id),
+                    planet.name,
+                    "Planet",
+                    Some(PLANET_APPROACH_POSITION),
+                ));
+            }
             for gate in gates().into_iter().filter(|g| g.system_id == system) {
                 rows.push((
                     SelectedObject::Gate(gate.id),
@@ -1787,6 +1874,22 @@ impl Cockpit {
                     "Gate",
                     Some(gate.position),
                 ));
+            }
+        }
+        if self.overview_filter == OverviewFilter::All {
+            if let Some(snapshot) = &self.snapshot {
+                for prop in snapshot
+                    .surface_props
+                    .iter()
+                    .filter(|p| p.system_id == system)
+                {
+                    rows.push((
+                        SelectedObject::Prop(prop.id),
+                        format!("{:?} #{}", prop.kind, prop.id),
+                        "Prop",
+                        Some(prop.position),
+                    ));
+                }
             }
         }
         if matches!(
@@ -1957,12 +2060,13 @@ impl Cockpit {
                 .strong(),
         );
         let own = self.own();
+        let cargo_limit = self.own_cargo_capacity();
         let docked =
             self.can_operate() && own.as_ref().is_some_and(|p| p.location == Location::Docked);
         ui.small("Player sell orders · ore · credits per unit");
         ui.horizontal(|ui| {
             ui.label("Sell");
-            ui.add(egui::DragValue::new(&mut self.sell_amount).range(1..=CARGO_CAPACITY));
+            ui.add(egui::DragValue::new(&mut self.sell_amount).range(1..=cargo_limit));
             ui.label("at");
             ui.add(egui::DragValue::new(&mut self.price).range(1..=1_000_000));
             let can_sell = docked && own.as_ref().is_some_and(|p| p.ore >= self.sell_amount);
@@ -1978,7 +2082,7 @@ impl Cockpit {
         });
         ui.horizontal(|ui| {
             ui.label("Buy quantity");
-            ui.add(egui::DragValue::new(&mut self.buy_amount).range(1..=CARGO_CAPACITY));
+            ui.add(egui::DragValue::new(&mut self.buy_amount).range(1..=cargo_limit));
         });
         if !docked {
             ui.colored_label(AMBER, "Dock at the station to place or fill orders.");
@@ -2008,7 +2112,8 @@ impl Cockpit {
                                 .add_enabled(
                                     docked
                                         && own.as_ref().is_some_and(|p| {
-                                            p.ore.saturating_add(order.units) <= CARGO_CAPACITY
+                                            p.ore.saturating_add(order.units)
+                                                <= cargo_capacity(p.ship_class)
                                         }),
                                     egui::Button::new("Cancel"),
                                 )
@@ -2022,7 +2127,8 @@ impl Cockpit {
                                     .unit_price
                                     .checked_mul(self.buy_amount)
                                     .is_some_and(|cost| cost <= p.credits)
-                                    && p.ore.saturating_add(self.buy_amount) <= CARGO_CAPACITY
+                                    && p.ore.saturating_add(self.buy_amount)
+                                        <= cargo_capacity(p.ship_class)
                             });
                             if ui
                                 .add_enabled(
@@ -2152,6 +2258,36 @@ impl Cockpit {
                 if i % 9 == 0 { 1.3 } else { 0.65 },
                 Color32::from_gray(50 + (i % 75) as u8),
             );
+        }
+        for planet in planets()
+            .into_iter()
+            .filter(|p| p.system_id == self.current_system())
+        {
+            let point = tactical_project(rect, PLANET_APPROACH_POSITION);
+            paint.circle_stroke(point, 18.0, Stroke::new(2.0, self.accent()));
+            paint.text(
+                point + Vec2::new(0.0, 22.0),
+                egui::Align2::CENTER_TOP,
+                &planet.name,
+                egui::FontId::proportional(12.0),
+                self.accent(),
+            );
+            pick(point, 22.0, SelectedObject::Planet(planet.id));
+        }
+        if let Some(snapshot) = &self.snapshot {
+            for prop in snapshot
+                .surface_props
+                .iter()
+                .filter(|p| p.system_id == self.current_system())
+            {
+                let point = tactical_project(rect, prop.position);
+                paint.rect_filled(
+                    egui::Rect::from_center_size(point, Vec2::splat(7.0)),
+                    1.0,
+                    AMBER,
+                );
+                pick(point, 12.0, SelectedObject::Prop(prop.id));
+            }
         }
         let station = tactical_project(rect, STATION_POSITION);
         let belt = tactical_project(rect, BELT_POSITION);
@@ -3066,7 +3202,11 @@ impl eframe::App for Cockpit {
         }
         if self.view_mode == ViewMode::Cockpit {
             {
-                let rect = flight3d::cockpit_console_bounds(ctx.available_rect()).shrink(1.0);
+                let rect = flight3d::cockpit_console_bounds(
+                    ctx.available_rect(),
+                    self.own().map_or(ShipClass::Pioneer, |p| p.ship_class),
+                )
+                .shrink(1.0);
                 egui::Area::new(egui::Id::new("physical_cockpit_console"))
                     .fixed_pos(rect.min)
                     .movable(false)
@@ -3352,6 +3492,8 @@ mod tests {
         cockpit.connected = true;
         cockpit.pilot = "pilot".into();
         cockpit.snapshot = Some(Snapshot {
+            surface_props: vec![],
+            traffic: vec![],
             stored_ore: 0,
             server_time_ms: 1000,
             asteroids: vec![Asteroid {
@@ -3373,6 +3515,7 @@ mod tests {
                 ship_class: ShipClass::Pioneer,
                 target_locks: vec![],
                 locked_asteroids: vec![],
+                surface: None,
                 power: None,
                 drones: vec![],
                 drone: None,
@@ -3567,6 +3710,181 @@ mod tests {
         assert!(cockpit.boot.visible);
         assert!(rx.try_recv().is_err());
         assert!(cockpit.controls.lock().unwrap().is_none());
+    }
+    #[test]
+    fn surface_sandbox_commands_require_confirmed_near_ground_and_owned_props() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        let p = &mut cockpit.snapshot.as_mut().unwrap().pilots[0];
+        p.flight.as_mut().unwrap().position = [
+            0.0,
+            arkline_protocol::PLANET_CENTER_POSITION[1] + arkline_protocol::PLANET_RADIUS_M + 20.0,
+            0.0,
+        ];
+        p.surface = Some(SurfaceState {
+            planet_id: 1,
+            altitude_m: 20.0,
+            ground_clearance_m: 11.0,
+            grounded: false,
+        });
+        let (tx, rx) = mpsc::channel();
+        cockpit.commands = Some(tx);
+        fn frame(
+            ctx: &egui::Context,
+            c: &mut Cockpit,
+            events: Vec<egui::Event>,
+        ) -> Vec<(String, Pos2)> {
+            ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        Pos2::ZERO,
+                        Vec2::new(900.0, 650.0),
+                    )),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| c.sandbox_panel(ui));
+                },
+            )
+            .shapes
+            .into_iter()
+            .filter_map(|s| {
+                if let egui::Shape::Text(t) = s.shape {
+                    Some((
+                        t.galley.job.text.clone(),
+                        t.pos + t.galley.rect.center().to_vec2(),
+                    ))
+                } else {
+                    None
+                }
+            })
+            .collect()
+        }
+        let click = |c: &mut Cockpit, label: &str| {
+            let labels = frame(&ctx, c, vec![]);
+            let point = labels.iter().find(|(s, _)| s == label).unwrap().1;
+            for pressed in [true, false] {
+                frame(
+                    &ctx,
+                    c,
+                    vec![
+                        egui::Event::PointerMoved(point),
+                        egui::Event::PointerButton {
+                            pos: point,
+                            button: egui::PointerButton::Primary,
+                            pressed,
+                            modifiers: egui::Modifiers::NONE,
+                        },
+                    ],
+                );
+            }
+        };
+        click(&mut cockpit, "Spawn selected prop");
+        let Request::SpawnSurfaceProp { kind, position } = rx.try_recv().unwrap() else {
+            panic!("expected prop spawn")
+        };
+        assert!(kind == SurfacePropKind::Crate);
+        assert!((planet_altitude(position) - 4.0).abs() < 0.001);
+        assert!(cockpit.snapshot.as_ref().unwrap().surface_props.is_empty());
+        cockpit.request_pending = false;
+        cockpit.snapshot.as_mut().unwrap().surface_props = vec![
+            SurfaceProp {
+                id: 8,
+                owner: "pilot".into(),
+                system_id: HOME_SYSTEM_ID,
+                kind,
+                position,
+            },
+            SurfaceProp {
+                id: 9,
+                owner: "other".into(),
+                system_id: HOME_SYSTEM_ID,
+                kind,
+                position,
+            },
+        ];
+        let labels = frame(&ctx, &mut cockpit, vec![]);
+        assert_eq!(labels.iter().filter(|(s, _)| s == "Delete prop").count(), 1);
+        click(&mut cockpit, "Move here");
+        assert!(matches!(
+            rx.try_recv().unwrap(),
+            Request::MoveSurfaceProp { id: 8, .. }
+        ));
+        cockpit.request_pending = false;
+        click(&mut cockpit, "Delete prop");
+        assert!(matches!(
+            rx.try_recv().unwrap(),
+            Request::RemoveSurfaceProp { id: 8 }
+        ));
+        cockpit.request_pending = false;
+        cockpit.snapshot.as_mut().unwrap().pilots[0]
+            .surface
+            .as_mut()
+            .unwrap()
+            .ground_clearance_m = 200.0;
+        click(&mut cockpit, "Spawn selected prop");
+        assert!(rx.try_recv().is_err());
+    }
+    #[test]
+    fn selected_planet_uses_continuous_flight_entry_and_hulls_use_actual_cargo() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        cockpit.selected_object = SelectedObject::Planet(1);
+        assert_eq!(cockpit.selected_position(), Some(PLANET_APPROACH_POSITION));
+        assert!(cockpit.selected_target().is_none());
+        let (tx, rx) = mpsc::channel();
+        cockpit.commands = Some(tx);
+        let render = |c: &mut Cockpit, events| {
+            ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        Pos2::ZERO,
+                        Vec2::new(900.0, 650.0),
+                    )),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| c.navigation_controls(ui));
+                },
+            )
+        };
+        let output = render(&mut cockpit, vec![]);
+        let point = output
+            .shapes
+            .iter()
+            .find_map(|s| {
+                if let egui::Shape::Text(t) = &s.shape {
+                    (t.galley.job.text == "Approach planet")
+                        .then_some(t.pos + t.galley.rect.center().to_vec2())
+                } else {
+                    None
+                }
+            })
+            .unwrap();
+        for pressed in [true, false] {
+            render(
+                &mut cockpit,
+                vec![
+                    egui::Event::PointerMoved(point),
+                    egui::Event::PointerButton {
+                        pos: point,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ],
+            );
+        }
+        assert!(
+            matches!(rx.try_recv().unwrap(),Request::Navigate{mode:NavigationMode::FlyTo{position}} if position==PLANET_APPROACH_POSITION)
+        );
+        for (index, class) in MINING_SHIP_CLASSES.into_iter().enumerate() {
+            cockpit.snapshot.as_mut().unwrap().pilots[0].ship_class = class;
+            assert_eq!(class.spec().mining_tier, Some(index as u8 + 1));
+            assert_eq!(cockpit.own_cargo_capacity(), class.spec().cargo_capacity);
+        }
     }
     #[test]
     fn warp_waits_for_confirmed_capacitor_without_speculative_recharge() {
@@ -4591,6 +4909,8 @@ mod tests {
         cockpit.connected = true;
         cockpit.pilot = "pilot".into();
         cockpit.snapshot = Some(Snapshot {
+            surface_props: vec![],
+            traffic: vec![],
             stored_ore: 0,
             server_time_ms: 0,
             asteroids: vec![],
@@ -4606,6 +4926,7 @@ mod tests {
                 locked_asteroid: None,
                 target_locks: vec![],
                 locked_asteroids: vec![],
+                surface: None,
                 power: None,
                 drones: vec![],
                 drone: None,
@@ -4820,6 +5141,26 @@ mod tests {
         assert!(bounded.iter().all(|v| v.abs() <= SPACE_BOUND));
     }
     #[test]
+    fn capital_hull_can_dock_at_server_surface_envelope_boundary() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        let pilot = &mut cockpit.snapshot.as_mut().unwrap().pilots[0];
+        pilot.ship_class = ShipClass::Monolith;
+        pilot.location = Location::Station;
+        pilot.flight.as_mut().unwrap().position = [
+            STATION_POSITION[0] + DOCK_RANGE + hull_radius_m(pilot.ship_class),
+            STATION_POSITION[1],
+            STATION_POSITION[2],
+        ];
+        assert!(cockpit.can_dock(&cockpit.own().unwrap()));
+        cockpit.snapshot.as_mut().unwrap().pilots[0]
+            .flight
+            .as_mut()
+            .unwrap()
+            .position[0] += 0.1;
+        assert!(!cockpit.can_dock(&cockpit.own().unwrap()));
+    }
+    #[test]
     fn action_range_uses_physical_position_and_rejects_docked_or_transit() {
         let mut pilot = PilotView {
             name: "Range test".into(),
@@ -4828,6 +5169,7 @@ mod tests {
             locked_asteroid: None,
             target_locks: vec![],
             locked_asteroids: vec![],
+            surface: None,
             power: None,
             drones: vec![],
             drone: None,

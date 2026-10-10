@@ -152,6 +152,8 @@ mod tests {
     use arkline_protocol::*;
     fn snapshot(ore: u64, remaining: u64) -> Snapshot {
         Snapshot {
+            surface_props: vec![],
+            traffic: vec![],
             stored_ore: 0,
             server_time_ms: 100,
             online_pilots: vec![],
@@ -164,6 +166,7 @@ mod tests {
                 ore: remaining,
             }],
             pilots: vec![PilotView {
+                surface: None,
                 power: None,
                 mining_modules: vec![],
                 ship_class: arkline_protocol::ShipClass::default(),

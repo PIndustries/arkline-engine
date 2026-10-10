@@ -276,7 +276,7 @@ fn boarding_storage_corporation_authorization_and_restart_conserve_all_ore() {
     let mut s = Server::open(&path).unwrap();
     let resumed = connect(&mut s, &mut None, "Alice", Some(token), t + 1);
     let assets = resumed.assets.unwrap();
-    assert_eq!(assets.ships.len(), 3);
+    assert_eq!(assets.ships.len(), ALL_SHIP_CLASSES.len() - 1);
     assert_eq!(
         assets
             .ships
@@ -339,7 +339,7 @@ fn legacy_nonledger_hull_selection_migrates_once_without_minting_cargo() {
         let mut server = Server::open(&path).unwrap();
         let response = connect(&mut server, &mut None, "Legacy", Some(token.clone()), cycle);
         let assets = response.assets.unwrap();
-        assert_eq!(assets.ships.len(), 3);
+        assert_eq!(assets.ships.len(), ALL_SHIP_CLASSES.len() - 1);
         assert!(assets
             .ships
             .iter()

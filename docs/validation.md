@@ -429,3 +429,32 @@ Warp pays an upfront reservation, not repeated continuous charges during transit
 Reactors stay running while parked/offline, capped by capacity. Mining and attack
 drones draw from their owner's capacitor as a prototype powered-link rule. No
 ship combat guns, heat damage, engine fuel or configurable power buses are claimed.
+
+## Mining fleet, living world and surface construction — 26.10.10.14
+
+The workspace test suite and strict all-target Clippy pass. Client coverage includes
+79 passing tests (one profiling test ignored), all seven hulls' measured dimensions,
+turret support, screen projection and non-overlap at four viewport sizes, physical
+console buttons, hull-envelope docking, per-hull cargo, planet approach selection
+and owned-prop commands. Six surface acceptance tests cover continuous control
+inputs and ground contact, range/ownership/count limits, persistence, safe hull
+migration, larger cargo ledger replay, scaled berths and station/atmosphere geometry.
+Traffic tests check identity, continuous routes, hull clearance and unchanged economy.
+The final full suite also exercises the existing TCP flight/travel/recovery journeys.
+
+The macOS release package launched as build 26.10.10.14 in a separate local QA world.
+Native inspection confirmed the cockpit with transparent forward telemetry, physical
+side screens, the permanent Undock control, and a subsequent authoritative undocking
+confirmation. Native inspection stopped when the application reported user activity.
+Observed frame-rate readings varied (including 12–34 FPS while inspecting the docked
+cockpit and 109 FPS after undocking/view change); this is not a controlled frame-pacing
+benchmark. Planet appearance throughout descent, every hull's native cockpit,
+traffic labels/animation and full-screen performance still need hands-on acceptance.
+Do not describe this build as visually or performance-validated for public release.
+
+This is a construction-from-ship prototype on a smooth spherical ground surface:
+no walking, rigid-body prop simulation, surface facilities, atmospheric aerodynamics,
+terrain elevation or collision against props/stations. Hull flight tuning is shared;
+preview ships are free. Background traffic has no economic behavior. MIDI, Stream Deck
+and event-driven audio remain design proposals. Separate community relay/universe
+hosting, federation and the open-source license are not implemented in this build.

@@ -84,6 +84,29 @@ pub fn verify(export: &LedgerExport, pinned: Option<&Checkpoint>) -> Result<Repo
             );
         }
     }
+    // Before boarding events existed, hull choice was saved only in the world.
+    // Infer that historical starting hull from the first boarding source, or the
+    // final snapshot when the pilot has never boarded. Ownership of those free
+    // preview hulls remains a migration assumption, not an independently proved event.
+    let mut initial_classes: BTreeMap<String, ShipClass> = export
+        .snapshot
+        .pilots
+        .iter()
+        .map(|p| (p.name.clone(), p.ship_class))
+        .collect();
+    let mut first_boarding = BTreeSet::new();
+    for entry in &export.entries {
+        if let EconomicEvent::ShipBoarded {
+            pilot,
+            from_ship_class,
+            ..
+        } = &entry.event
+        {
+            if first_boarding.insert(pilot) {
+                initial_classes.insert(pilot.clone(), *from_ship_class);
+            }
+        }
+    }
     let mut accounts = BTreeMap::<String, Account>::new();
     let mut corporations = BTreeMap::<String, Corporation>::new();
     let mut personal = BTreeMap::<(String, u32), u64>::new();
@@ -148,7 +171,7 @@ pub fn verify(export: &LedgerExport, pinned: Option<&Checkpoint>) -> Result<Repo
                         );
                     }
                     ensure!(
-                        *loaded_units <= CARGO_CAPACITY,
+                        *loaded_units <= cargo_capacity(*ship_class),
                         "boarded cargo over capacity"
                     );
                     ensure!(
@@ -182,7 +205,11 @@ pub fn verify(export: &LedgerExport, pinned: Option<&Checkpoint>) -> Result<Repo
                         *storage = sub(*storage, *units)?;
                         account.ore = add(account.ore, *units)?;
                         ensure!(
-                            account.ore <= CARGO_CAPACITY,
+                            account.ore
+                                <= account
+                                    .active_class
+                                    .map(cargo_capacity)
+                                    .unwrap_or(CARGO_CAPACITY),
                             "withdrawal exceeds cargo capacity"
                         );
                     }
@@ -271,7 +298,11 @@ pub fn verify(export: &LedgerExport, pinned: Option<&Checkpoint>) -> Result<Repo
                         *storage = sub(*storage, *units)?;
                         account.ore = add(account.ore, *units)?;
                         ensure!(
-                            account.ore <= CARGO_CAPACITY,
+                            account.ore
+                                <= account
+                                    .active_class
+                                    .map(cargo_capacity)
+                                    .unwrap_or(CARGO_CAPACITY),
                             "corporation withdrawal exceeds cargo capacity"
                         );
                     }
@@ -289,6 +320,7 @@ pub fn verify(export: &LedgerExport, pinned: Option<&Checkpoint>) -> Result<Repo
                     accounts.insert(
                         pilot.clone(),
                         Account {
+                            active_class: initial_classes.get(pilot).copied(),
                             credits: STARTER_CREDITS,
                             ore: 0,
                             ..Account::default()
@@ -301,7 +333,11 @@ pub fn verify(export: &LedgerExport, pinned: Option<&Checkpoint>) -> Result<Repo
                         "invalid mining quantity"
                     );
                     ensure!(
-                        add(cargo(&accounts, pilot)?, *units)? <= CARGO_CAPACITY,
+                        add(cargo(&accounts, pilot)?, *units)?
+                            <= accounts[pilot]
+                                .active_class
+                                .map(cargo_capacity)
+                                .unwrap_or(CARGO_CAPACITY),
                         "cargo capacity exceeded"
                     );
                     belt = sub(belt, *units)?;
@@ -349,7 +385,11 @@ pub fn verify(export: &LedgerExport, pinned: Option<&Checkpoint>) -> Result<Repo
                     );
                     ensure!(*buyer != order.seller, "self trade");
                     ensure!(
-                        add(cargo(&accounts, buyer)?, *units)? <= CARGO_CAPACITY,
+                        add(cargo(&accounts, buyer)?, *units)?
+                            <= accounts[buyer]
+                                .active_class
+                                .map(cargo_capacity)
+                                .unwrap_or(CARGO_CAPACITY),
                         "cargo capacity exceeded"
                     );
                     let price = units
@@ -373,7 +413,11 @@ pub fn verify(export: &LedgerExport, pinned: Option<&Checkpoint>) -> Result<Repo
                     let account = accounts.get_mut(seller).context("unknown seller")?;
                     account.ore = add(account.ore, order.units)?;
                     ensure!(
-                        account.ore <= CARGO_CAPACITY,
+                        account.ore
+                            <= account
+                                .active_class
+                                .map(cargo_capacity)
+                                .unwrap_or(CARGO_CAPACITY),
                         "cancel exceeds cargo capacity"
                     );
                     orders.remove(order_id);
@@ -687,12 +731,15 @@ mod tests {
         LedgerExport {
             protocol_version: PROTOCOL_VERSION,
             snapshot: Snapshot {
+                surface_props: vec![],
+                traffic: vec![],
                 stored_ore: 0,
                 asteroids: vec![],
                 online_pilots: vec![],
                 server_time_ms: 6000,
                 pilots: vec![
                     PilotView {
+                        surface: None,
                         power: None,
                         drones: vec![],
                         target_locks: vec![],
@@ -710,6 +757,7 @@ mod tests {
                         flight: None,
                     },
                     PilotView {
+                        surface: None,
                         power: None,
                         drones: vec![],
                         target_locks: vec![],

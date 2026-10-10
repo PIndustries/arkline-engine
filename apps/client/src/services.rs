@@ -26,7 +26,9 @@ impl Cockpit {
         ));
         ui.label(format!(
             "{} / {} ore aboard · {} credits",
-            pilot.ore, CARGO_CAPACITY, pilot.credits
+            pilot.ore,
+            cargo_capacity(pilot.ship_class),
+            pilot.credits
         ));
         if ui
             .add_enabled(
@@ -60,15 +62,29 @@ impl Cockpit {
             ui.colored_label(self.accent(), "ACTIVE");
             ui.small(format!("{} ore aboard", pilot.ore));
         });
+        let active = pilot.ship_class.spec();
+        ui.small(format!(
+            "{} · {}/{} ore cargo",
+            active
+                .mining_tier
+                .map_or("Utility hull".into(), |tier| format!(
+                    "Mining tier {tier}/5"
+                )),
+            pilot.ore,
+            active.cargo_capacity
+        ));
         self.power_gauge(ui);
         ui.small("Each ship retains its cargo and capacitor charge. Board a stored ship only while docked at its station.");
-        let Some(assets) = self.assets.clone() else {
+        let Some(mut assets) = self.assets.clone() else {
             ui.colored_label(AMBER, "Waiting for authenticated hangar inventory…");
             return;
         };
         if assets.ships.is_empty() {
             ui.label("No inactive ships in your hangars.");
         }
+        assets
+            .ships
+            .sort_by_key(|ship| ship.ship_class.spec().mining_tier.unwrap_or(9));
         for ship in &assets.ships {
             let spec = ship.ship_class.spec();
             ui.separator();
@@ -92,6 +108,22 @@ impl Cockpit {
                     });
                 }
             });
+            ui.small(format!(
+                "{} · {} ore cargo",
+                spec.mining_tier
+                    .map_or("Utility hull".into(), |tier| format!(
+                        "Mining tier {tier}/5"
+                    )),
+                spec.cargo_capacity
+            ));
+            let extraction = mining_spec(ship.ship_class);
+            let energy = power_spec(ship.ship_class);
+            ui.small(format!(
+                "Extraction: up to {} ore / {:.1}s per turret · {} J / cycle",
+                extraction.yield_units,
+                extraction.cycle_ms as f64 / 1000.0,
+                energy.mining_cycle_cost_j
+            ));
             if let Some(power) = &ship.power {
                 ui.small(format!(
                     "Capacitor {:.1}/{:.1} kJ · +{} W",
@@ -113,7 +145,10 @@ impl Cockpit {
             ui.painter().rect_filled(
                 egui::Rect::from_min_size(
                     rect.min,
-                    Vec2::new(rect.width() * (spec.length_m / 1100.0) as f32, 5.0),
+                    Vec2::new(
+                        rect.width() * (spec.length_m / ShipClass::Monolith.spec().length_m) as f32,
+                        5.0,
+                    ),
                 ),
                 1.0,
                 self.accent(),
@@ -121,7 +156,7 @@ impl Cockpit {
         }
         ui.separator();
         ui.small(
-            "Hull bars share one scale. Preview hulls share flight tuning and cargo capacity.",
+            "Hull bars share one scale. Extraction, cargo and reactor specifications belong to the selected hull.",
         );
     }
     pub(super) fn cargo_panel(&mut self, ui: &mut egui::Ui) {
@@ -189,7 +224,7 @@ impl Cockpit {
         ui.horizontal_wrapped(|ui| {
             ui.add(
                 egui::DragValue::new(&mut self.transfer_amount)
-                    .range(1..=CARGO_CAPACITY)
+                    .range(1..=cargo_capacity(pilot.ship_class))
                     .suffix(" ore"),
             );
             if ui
@@ -207,7 +242,8 @@ impl Cockpit {
                 .add_enabled(
                     docked
                         && self.transfer_amount <= stored
-                        && pilot.ore.saturating_add(self.transfer_amount) <= CARGO_CAPACITY,
+                        && pilot.ore.saturating_add(self.transfer_amount)
+                            <= cargo_capacity(pilot.ship_class),
                     egui::Button::new("Load ore"),
                 )
                 .clicked()
@@ -285,7 +321,7 @@ impl Cockpit {
             ui.horizontal_wrapped(|ui| {
                 ui.add(
                     egui::DragValue::new(&mut self.transfer_amount)
-                        .range(1..=CARGO_CAPACITY)
+                        .range(1..=cargo_capacity(pilot.ship_class))
                         .suffix(" ore"),
                 );
                 if ui
@@ -304,7 +340,8 @@ impl Cockpit {
                         docked
                             && owner
                             && self.transfer_amount <= stored
-                            && pilot.ore.saturating_add(self.transfer_amount) <= CARGO_CAPACITY,
+                            && pilot.ore.saturating_add(self.transfer_amount)
+                                <= cargo_capacity(pilot.ship_class),
                         egui::Button::new("Withdraw ore"),
                     )
                     .clicked()

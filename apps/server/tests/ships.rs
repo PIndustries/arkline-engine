@@ -38,7 +38,10 @@ fn docked_hull_selection_persists_without_changing_economy_and_rejects_space() {
                 initial.ledger_sequence + index as u64
             );
             assert_eq!(snapshot.stored_ore, 0);
-            assert_eq!(response.assets.unwrap().ships.len(), 3);
+            assert_eq!(
+                response.assets.unwrap().ships.len(),
+                ALL_SHIP_CLASSES.len() - 1
+            );
         }
         selected = server
             .handle_at(&mut session, Request::Undock, 2)
@@ -59,7 +62,7 @@ fn docked_hull_selection_persists_without_changing_economy_and_rejects_space() {
                 .unwrap()
                 .pilots[0]
                 .ship_class,
-            ShipClass::Vanguard
+            ShipClass::Monolith
         );
     }
     {
@@ -75,7 +78,7 @@ fn docked_hull_selection_persists_without_changing_economy_and_rejects_space() {
         );
         assert!(response.ok);
         let snapshot = response.snapshot.unwrap();
-        assert_eq!(snapshot.pilots[0].ship_class, ShipClass::Vanguard);
+        assert_eq!(snapshot.pilots[0].ship_class, ShipClass::Monolith);
         assert_eq!(snapshot.pilots[0].location, Location::Station);
         assert_eq!(snapshot.pilots[0].credits, selected.pilots[0].credits);
         assert_eq!(snapshot.ledger_hash, selected.ledger_hash);
@@ -95,7 +98,7 @@ fn legacy_pilot_defaults_to_pioneer_and_dimensions_are_meters() {
     assert_eq!(pilot.ship_class, ShipClass::Pioneer);
     assert_eq!(
         ALL_SHIP_CLASSES.map(|s| s.spec().length_m),
-        [72.0, 180.0, 420.0, 1100.0]
+        [72.0, 180.0, 420.0, 1100.0, 640.0, 1800.0, 5200.0]
     );
     for class in ALL_SHIP_CLASSES {
         let spec = class.spec();

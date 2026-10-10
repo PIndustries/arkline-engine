@@ -37,7 +37,7 @@ fn limit(a: [f64; 3], max: f64) -> [f64; 3] {
 pub(super) fn distance(a: [f64; 3], b: [f64; 3]) -> f64 {
     length(sub(a, b))
 }
-pub(super) fn berth(name: &str, destination: Destination) -> [f64; 3] {
+pub(super) fn berth(name: &str, destination: Destination, class: ShipClass) -> [f64; 3] {
     // Stable visual separation, not collision avoidance or physical docking.
     let hash = name
         .bytes()
@@ -53,24 +53,32 @@ pub(super) fn berth(name: &str, destination: Destination) -> [f64; 3] {
                 .find(|g| g.id == id)
                 .map_or(STATION_POSITION, |g| g.position),
         },
-        [x, y, 1000.0],
+        [
+            if destination == Destination::Station {
+                hull_radius_m(class) + 550.0 + x
+            } else {
+                x
+            },
+            y,
+            1000.0,
+        ],
     )
 }
-fn initial(name: &str, location: &Location) -> [f64; 3] {
+fn initial(name: &str, location: &Location, class: ShipClass) -> [f64; 3] {
     match location {
         Location::Docked => STATION_POSITION,
-        Location::Belt => berth(name, Destination::Belt),
+        Location::Belt => berth(name, Destination::Belt, class),
         Location::InTransit {
             destination: Destination::Station,
             ..
-        } => berth(name, Destination::Belt),
-        _ => berth(name, Destination::Station),
+        } => berth(name, Destination::Belt, class),
+        _ => berth(name, Destination::Station, class),
     }
 }
 pub(super) fn ensure_flight(p: &mut Pilot, now: u64) {
     if p.view.flight.is_none() {
         p.view.flight = Some(FlightState {
-            position: initial(&p.view.name, &p.view.location),
+            position: initial(&p.view.name, &p.view.location, p.view.ship_class),
             velocity: [0.0; 3],
             heading: [1.0, 0.0, 0.0],
             orientation: identity_orientation(),
@@ -190,10 +198,14 @@ pub(super) fn begin_warp(p: &mut Pilot, destination: Destination, now: u64) {
     let f = p.view.flight.as_mut().unwrap();
     p.warp = Some(WarpPath {
         source: f.position,
-        target: berth(&p.view.name, destination),
+        target: berth(&p.view.name, destination, p.view.ship_class),
         started_ms: now,
     });
-    f.warp = Some(plan_warp(f.position, berth(&p.view.name, destination), now));
+    f.warp = Some(plan_warp(
+        f.position,
+        berth(&p.view.name, destination, p.view.ship_class),
+        now,
+    ));
     if let Some(path) = &mut f.warp {
         path.initial_heading = Some(f.heading);
     }
@@ -229,6 +241,7 @@ pub(super) fn advance(world: &mut World, now: u64) {
                         Destination::Gate {
                             id: gate.arrival_gate_id,
                         },
+                        p.view.ship_class,
                     );
                     f.velocity = [0.0; 3];
                     f.mode = NavigationMode::Stop;
@@ -246,7 +259,7 @@ pub(super) fn advance(world: &mut World, now: u64) {
         {
             let path = p.warp.get_or_insert_with(|| WarpPath {
                 source: f.position,
-                target: berth(&p.view.name, destination),
+                target: berth(&p.view.name, destination, p.view.ship_class),
                 started_ms: arrives_at_ms.saturating_sub(WARP_DURATION_MS),
             });
             let trajectory = f
@@ -339,6 +352,7 @@ pub(super) fn advance(world: &mut World, now: u64) {
             let old = f.velocity;
             f.velocity = add(old, limit(sub(desired, old), SHIP_ACCELERATION * dt));
             f.position = add(f.position, mul(add(old, f.velocity), dt * 0.5));
+            super::surface::constrain(f, p.view.ship_class, p.view.system_id);
             if let Some(point) = destination {
                 if distance(f.position, point) < 0.6 && length(f.velocity) < 12.0 {
                     f.position = point;
@@ -555,6 +569,7 @@ fn advance_manual(p: &mut Pilot, now: u64) {
             add(old, limit(mul(old, -1.0), SHIP_ACCELERATION * dt))
         };
         f.position = add(f.position, mul(add(old, f.velocity), dt * 0.5));
+        super::surface::constrain(f, p.view.ship_class, p.view.system_id);
         for i in 0..3 {
             if f.position[i].abs() > SPACE_BOUND {
                 f.position[i] = f.position[i].clamp(-SPACE_BOUND, SPACE_BOUND);

@@ -156,9 +156,30 @@ pub(super) fn paint_cockpit_maps(
             gate.name,
         ));
     }
+    for planet in arkline_protocol::planets()
+        .into_iter()
+        .filter(|p| p.system_id == own.system_id)
+    {
+        contacts.push((
+            super::super::SelectedObject::Planet(planet.id),
+            arkline_protocol::PLANET_APPROACH_POSITION,
+            planet.name,
+        ));
+    }
+    for prop in snapshot
+        .surface_props
+        .iter()
+        .filter(|p| p.system_id == own.system_id)
+    {
+        contacts.push((
+            super::super::SelectedObject::Prop(prop.id),
+            prop.position,
+            format!("{:?} #{}", prop.kind, prop.id),
+        ));
+    }
     let mut picked = None;
     for (index, tactical) in [(4, false), (5, true)] {
-        let (center, size) = cockpit_screens()[index];
+        let (center, size) = cockpit_screens(own.ship_class)[index];
         let rect = instrument_rect(viewport, center, size).shrink(3.0);
         let painter = ui.painter_at(rect);
         painter.rect_filled(

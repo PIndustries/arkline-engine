@@ -1,6 +1,8 @@
 use super::*;
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub(super) struct Account {
+    #[serde(default)]
+    hull_catalog_version: u32,
     pub(super) ships: Vec<HangarShip>,
     storage: BTreeMap<u32, u64>,
     corporation: Option<String>,
@@ -18,6 +20,7 @@ pub(super) fn ensure_accounts(world: &mut World) {
             .accounts
             .entry(name.clone())
             .or_insert_with(|| Account {
+                hull_catalog_version: 1,
                 ships: ALL_SHIP_CLASSES
                     .into_iter()
                     .filter(|class| *class != p.view.ship_class)
@@ -30,6 +33,23 @@ pub(super) fn ensure_accounts(world: &mut World) {
                     .collect(),
                 ..Account::default()
             });
+    }
+    for (name, account) in &mut world.accounts {
+        if account.hull_catalog_version == 0 {
+            for class in [ShipClass::Borealis, ShipClass::Stratum, ShipClass::Monolith] {
+                if world.pilots[name].view.ship_class != class
+                    && !account.ships.iter().any(|s| s.ship_class == class)
+                {
+                    account.ships.push(HangarShip {
+                        power: None,
+                        ship_class: class,
+                        system_id: HOME_SYSTEM_ID,
+                        ore: 0,
+                    });
+                }
+            }
+            account.hull_catalog_version = 1;
+        }
     }
 }
 fn storage_view(storage: &BTreeMap<u32, u64>) -> Vec<StationStorage> {
@@ -86,8 +106,8 @@ pub(super) fn validate(world: &World) -> Result<()> {
             .get(name)
             .context("asset account has no pilot")?;
         ensure!(
-            a.ships.len() == 3,
-            "pilot must own three inactive preview hulls"
+            a.ships.len() == ALL_SHIP_CLASSES.len() - 1,
+            "pilot must own the inactive preview hull catalog"
         );
         for (i, ship) in a.ships.iter().enumerate() {
             ensure!(
@@ -102,7 +122,7 @@ pub(super) fn validate(world: &World) -> Result<()> {
                 "stored hull has unknown system"
             );
             ensure!(
-                ship.ore <= CARGO_CAPACITY,
+                ship.ore <= cargo_capacity(ship.ship_class),
                 "stored hull exceeds cargo capacity"
             );
         }
@@ -177,6 +197,7 @@ pub(super) fn execute(
     now: u64,
 ) -> Result<Option<EconomicEvent>> {
     let p = w.pilots.get(name).context("pilot missing")?;
+    let capacity = cargo_capacity(p.view.ship_class);
     let system_id = p.view.system_id;
     let docked = p.view.location == Location::Docked;
     let pilot = name.to_string();
@@ -204,7 +225,7 @@ pub(super) fn execute(
             let stored_units = p.view.ore;
             let from_ship_class = p.view.ship_class;
             ensure!(
-                loaded_units <= CARGO_CAPACITY,
+                loaded_units <= cargo_capacity(ship_class),
                 "stored cargo exceeds capacity"
             );
             account.ships[index] = HangarShip {
@@ -239,7 +260,7 @@ pub(super) fn execute(
                 .storage
                 .entry(system_id)
                 .or_default();
-            transfer(&mut p.view.ore, stored, units, deposit)?;
+            transfer(&mut p.view.ore, stored, units, deposit, capacity)?;
             if deposit {
                 EconomicEvent::PersonalOreDeposited {
                     pilot,
@@ -349,6 +370,7 @@ pub(super) fn execute(
                 c.storage.entry(system_id).or_default(),
                 units,
                 deposit,
+                capacity,
             )?;
             if deposit {
                 EconomicEvent::CorporationOreDeposited {
@@ -370,14 +392,20 @@ pub(super) fn execute(
     };
     Ok(Some(event))
 }
-fn transfer(cargo: &mut u64, stored: &mut u64, units: u64, deposit: bool) -> Result<()> {
+fn transfer(
+    cargo: &mut u64,
+    stored: &mut u64,
+    units: u64,
+    deposit: bool,
+    capacity: u64,
+) -> Result<()> {
     if deposit {
         ensure!(*cargo >= units, "insufficient cargo ore");
         *stored = stored.checked_add(units).context("storage overflow")?;
         *cargo -= units;
     } else {
         ensure!(*stored >= units, "insufficient station ore");
-        *cargo = add_cargo(*cargo, units)?;
+        *cargo = add_cargo(*cargo, units, capacity)?;
         *stored -= units;
     }
     Ok(())

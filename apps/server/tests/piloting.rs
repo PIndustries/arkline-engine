@@ -257,7 +257,11 @@ fn abrupt_restart_clears_live_input_and_migrates_legacy_heading() {
         for (a, b) in restored.heading.into_iter().zip(saved.heading) {
             close(a, b)
         }
-        assert_eq!(restored.position, saved.position);
+        // The legacy JSON fixture is decoded and re-encoded once more than
+        // normal recovery; allow sub-nanometre floating-point roundoff only.
+        for (a, b) in restored.position.into_iter().zip(saved.position) {
+            assert!((a - b).abs() < 1e-9, "position changed: {a} != {b}");
+        }
     }
     std::fs::remove_file(&path).unwrap();
     let mut lock = path.as_os_str().to_os_string();

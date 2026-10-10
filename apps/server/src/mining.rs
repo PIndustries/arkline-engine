@@ -47,7 +47,7 @@ fn invalid_reason(p: &Pilot, a: Option<&Asteroid>, id: u64) -> Option<&'static s
     if universe::surface(p, a) > MINING_RANGE {
         return Some("Target outside mining range");
     }
-    if p.view.ore >= CARGO_CAPACITY {
+    if p.view.ore >= cargo_capacity(p.view.ship_class) {
         return Some("Cargo full");
     }
     None
@@ -147,7 +147,10 @@ pub(super) fn advance(world: &mut World, now: u64) -> Vec<EconomicEvent> {
                 halt(module, "Insufficient capacitor energy");
                 continue;
             }
-            let units = spec.yield_units.min(a.ore).min(CARGO_CAPACITY - p.view.ore);
+            let units = spec
+                .yield_units
+                .min(a.ore)
+                .min(cargo_capacity(p.view.ship_class) - p.view.ore);
             a.ore -= units;
             world.belt_ore -= units;
             p.view.ore += units;
@@ -157,7 +160,7 @@ pub(super) fn advance(world: &mut World, now: u64) -> Vec<EconomicEvent> {
             });
             if a.ore == 0 {
                 halt(module, "Asteroid depleted");
-            } else if p.view.ore == CARGO_CAPACITY {
+            } else if p.view.ore == cargo_capacity(p.view.ship_class) {
                 halt(module, "Cargo full");
             } else if let Some(next) = now.checked_add(spec.cycle_ms) {
                 module.cycle_started_at_ms = Some(now);

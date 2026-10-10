@@ -23,6 +23,8 @@ fn checkpoint_advances_only_after_full_verification() {
         protocol_version: PROTOCOL_VERSION,
         entries: vec![],
         snapshot: Snapshot {
+            surface_props: vec![],
+            traffic: vec![],
             stored_ore: 0,
             asteroids: vec![],
             online_pilots: vec![],
@@ -72,6 +74,7 @@ fn checkpoint_advances_only_after_full_verification() {
     entry.hash = entry.calculate_hash();
     export.snapshot.belt_ore = INITIAL_BELT_ORE;
     export.snapshot.pilots.push(PilotView {
+        surface: None,
         power: None,
         drones: vec![],
         target_locks: vec![],

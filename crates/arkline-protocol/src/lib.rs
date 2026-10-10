@@ -414,6 +414,17 @@ pub const GENESIS_HASH: &str = "000000000000000000000000000000000000000000000000
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "command", rename_all = "snake_case")]
 pub enum Request {
+    SpawnSurfaceProp {
+        kind: SurfacePropKind,
+        position: [f64; 3],
+    },
+    MoveSurfaceProp {
+        id: u64,
+        position: [f64; 3],
+    },
+    RemoveSurfaceProp {
+        id: u64,
+    },
     LaunchDroneClass {
         class: DroneClass,
     },
@@ -546,7 +557,7 @@ pub enum Location {
     },
 }
 
-/// Prototype hull selection changes physical dimensions, not cargo or dynamics.
+/// Prototype hull specifications; movement dynamics are shared for now.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ShipClass {
@@ -555,21 +566,29 @@ pub enum ShipClass {
     Prospector,
     Hauler,
     Vanguard,
+    Borealis,
+    Stratum,
+    Monolith,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ShipSpec {
     pub name: &'static str,
+    pub cargo_capacity: u64,
+    pub mining_tier: Option<u8>,
     pub length_m: f64,
     pub width_m: f64,
     pub height_m: f64,
 }
 
-pub const ALL_SHIP_CLASSES: [ShipClass; 4] = [
+pub const ALL_SHIP_CLASSES: [ShipClass; 7] = [
     ShipClass::Pioneer,
     ShipClass::Prospector,
     ShipClass::Hauler,
     ShipClass::Vanguard,
+    ShipClass::Borealis,
+    ShipClass::Stratum,
+    ShipClass::Monolith,
 ];
 
 impl ShipClass {
@@ -579,8 +598,20 @@ impl ShipClass {
             Self::Prospector => ("Prospector", 180.0, 92.0, 64.0),
             Self::Hauler => ("Hauler", 420.0, 180.0, 140.0),
             Self::Vanguard => ("Vanguard", 1100.0, 380.0, 260.0),
+            Self::Borealis => ("Borealis", 640.0, 260.0, 180.0),
+            Self::Stratum => ("Stratum", 1800.0, 800.0, 480.0),
+            Self::Monolith => ("Monolith", 5200.0, 2200.0, 1400.0),
         };
         ShipSpec {
+            cargo_capacity: cargo_capacity(self),
+            mining_tier: match self {
+                Self::Pioneer => Some(1),
+                Self::Prospector => Some(2),
+                Self::Borealis => Some(3),
+                Self::Stratum => Some(4),
+                Self::Monolith => Some(5),
+                _ => None,
+            },
             name,
             length_m,
             width_m,
@@ -603,6 +634,9 @@ pub fn lock_duration_ms(ship: ShipClass, radius: f64) -> u64 {
         ShipClass::Prospector => 3200.0,
         ShipClass::Hauler => 5600.0,
         ShipClass::Vanguard => 6400.0,
+        ShipClass::Borealis => 3600.0,
+        ShipClass::Stratum => 4200.0,
+        ShipClass::Monolith => 5000.0,
     };
     let radius = if radius.is_finite() {
         radius.max(1.0)
@@ -630,6 +664,9 @@ pub fn power_spec(class: ShipClass) -> PowerSpec {
         ShipClass::Prospector => (360_000, 1600, 45_000, 6000),
         ShipClass::Hauler => (600_000, 2200, 70_000, 5000),
         ShipClass::Vanguard => (1_200_000, 4000, 120_000, 8000),
+        ShipClass::Borealis => (900_000, 3000, 90_000, 9000),
+        ShipClass::Stratum => (2_400_000, 7000, 240_000, 16000),
+        ShipClass::Monolith => (8_000_000, 16000, 800_000, 24000),
     };
     PowerSpec {
         capacity_j,
@@ -743,6 +780,9 @@ pub fn mining_spec(class: ShipClass) -> MiningSpec {
         ShipClass::Prospector => (5000, 40),
         ShipClass::Hauler => (8000, 20),
         ShipClass::Vanguard => (7000, 30),
+        ShipClass::Borealis => (5000, 75),
+        ShipClass::Stratum => (4000, 100),
+        ShipClass::Monolith => (3000, 100),
     };
     MiningSpec {
         cycle_ms,
@@ -760,6 +800,8 @@ pub struct MiningModule {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PilotView {
+    #[serde(default)]
+    pub surface: Option<SurfaceState>,
     #[serde(default)]
     pub power: Option<PowerState>,
     #[serde(default)]
@@ -827,6 +869,10 @@ pub struct AssetsView {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Snapshot {
+    #[serde(default)]
+    pub surface_props: Vec<SurfaceProp>,
+    #[serde(default)]
+    pub traffic: Vec<TrafficActor>,
     #[serde(default)]
     pub stored_ore: u64,
     pub server_time_ms: u64,
@@ -1099,4 +1145,127 @@ mod local_warp_tests {
         let end = sample_warp_heading(&path, 2000);
         assert!((end[0] - 1.0).abs() < 1e-10);
     }
+}
+
+pub const MINING_SHIP_CLASSES: [ShipClass; 5] = [
+    ShipClass::Pioneer,
+    ShipClass::Prospector,
+    ShipClass::Borealis,
+    ShipClass::Stratum,
+    ShipClass::Monolith,
+];
+pub const fn cargo_capacity(class: ShipClass) -> u64 {
+    match class {
+        ShipClass::Pioneer => 1000,
+        ShipClass::Prospector => 2500,
+        ShipClass::Hauler => 16000,
+        ShipClass::Vanguard => 4000,
+        ShipClass::Borealis => 8000,
+        ShipClass::Stratum => 24000,
+        ShipClass::Monolith => 80000,
+    }
+}
+pub const PLANET_CENTER_POSITION: [f64; 3] = [0.0, -6_120_000.0, 0.0];
+pub const PLANET_RADIUS_M: f64 = 6_000_000.0;
+pub const PLANET_ATMOSPHERE_HEIGHT_M: f64 = 60_000.0;
+pub const PLANET_APPROACH_POSITION: [f64; 3] = [0.0, -115_000.0, 0.0];
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Planet {
+    pub id: u64,
+    pub system_id: u32,
+    pub name: String,
+    pub center: [f64; 3],
+    pub radius_m: f64,
+    pub atmosphere_height_m: f64,
+}
+pub fn planets() -> Vec<Planet> {
+    vec![Planet {
+        id: 1,
+        system_id: HOME_SYSTEM_ID,
+        name: "Verdant".into(),
+        center: PLANET_CENTER_POSITION,
+        radius_m: PLANET_RADIUS_M,
+        atmosphere_height_m: PLANET_ATMOSPHERE_HEIGHT_M,
+    }]
+}
+pub fn planet_altitude(position: [f64; 3]) -> f64 {
+    position
+        .iter()
+        .zip(PLANET_CENTER_POSITION)
+        .map(|(a, b)| (a - b).powi(2))
+        .sum::<f64>()
+        .sqrt()
+        - PLANET_RADIUS_M
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SurfaceState {
+    pub planet_id: u64,
+    pub altitude_m: f64,
+    pub ground_clearance_m: f64,
+    pub grounded: bool,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SurfacePropKind {
+    Crate,
+    Pylon,
+    Platform,
+}
+impl SurfacePropKind {
+    pub fn size(self) -> [f64; 3] {
+        match self {
+            Self::Crate => [8.0, 8.0, 8.0],
+            Self::Pylon => [4.0, 20.0, 4.0],
+            Self::Platform => [40.0, 2.0, 40.0],
+        }
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SurfaceProp {
+    pub id: u64,
+    pub owner: String,
+    pub system_id: u32,
+    pub kind: SurfacePropKind,
+    pub position: [f64; 3],
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TrafficRole {
+    StationShuttle,
+    FreightTender,
+    Patrol,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TrafficPhase {
+    Arriving,
+    Departing,
+    Holding,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TrafficActor {
+    pub id: u64,
+    pub system_id: u32,
+    pub role: TrafficRole,
+    pub ship_class: ShipClass,
+    pub position: [f64; 3],
+    pub velocity: [f64; 3],
+    pub heading: [f64; 3],
+    pub phase: TrafficPhase,
+}
+
+/// Conservative enclosing sphere for interaction distances; not collision geometry.
+pub fn hull_radius_m(class: ShipClass) -> f64 {
+    let s = class.spec();
+    (s.length_m * s.length_m + s.width_m * s.width_m + s.height_m * s.height_m).sqrt() / 2.0
+}
+pub fn hull_surface_distance(class: ShipClass, position: [f64; 3], target: [f64; 3]) -> f64 {
+    (position
+        .iter()
+        .zip(target)
+        .map(|(a, b)| (a - b).powi(2))
+        .sum::<f64>()
+        .sqrt()
+        - hull_radius_m(class))
+    .max(0.0)
 }

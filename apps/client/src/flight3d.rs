@@ -14,6 +14,9 @@ use std::sync::{Arc, Mutex};
 #[path = "cockpit_maps.rs"]
 mod cockpit_maps;
 use cockpit_maps::*;
+#[path = "world_visuals.rs"]
+mod world_visuals;
+use world_visuals::*;
 
 pub enum ViewAction {
     Select(super::SelectedObject),
@@ -411,10 +414,12 @@ impl FlightView {
             ui.available_size().max(egui::vec2(100.0, 150.0)),
             egui::Sense::click_and_drag(),
         );
-        self.console_rect = cockpit.then(|| cockpit_console_bounds(rect));
+        self.console_rect = cockpit.then(|| {
+            cockpit_console_bounds(rect, own_pilot.map_or(ShipClass::Pioneer, |p| p.ship_class))
+        });
         let pointer_on_instrument = cockpit
             && ui.input(|i| i.pointer.hover_pos()).is_some_and(|p| {
-                cockpit_screens()
+                cockpit_screens(own_pilot.map_or(ShipClass::Pioneer, |p| p.ship_class))
                     .iter()
                     .any(|(center, size)| instrument_rect(rect, *center, *size).contains(p))
             });
@@ -425,7 +430,7 @@ impl FlightView {
             rect.contains(pointer)
                 && ui.ctx().layer_id_at(pointer) == Some(ui.layer_id())
                 && !(cockpit
-                    && cockpit_screens()
+                    && cockpit_screens(own_pilot.map_or(ShipClass::Pioneer, |p| p.ship_class))
                         .iter()
                         .any(|(c, s)| instrument_rect(rect, *c, *s).contains(pointer)))
         });
@@ -467,6 +472,15 @@ impl FlightView {
             super::SelectedObject::Gate(id) => {
                 local_gates.iter().find(|g| g.id == *id).map(|g| g.position)
             }
+            super::SelectedObject::Planet(id) => arkline_protocol::planets()
+                .iter()
+                .find(|p| p.id == *id)
+                .map(|_| arkline_protocol::PLANET_APPROACH_POSITION),
+            super::SelectedObject::Prop(id) => snapshot
+                .surface_props
+                .iter()
+                .find(|p| p.id == *id)
+                .map(|p| p.position),
             super::SelectedObject::Station => Some(STATION_POSITION),
             super::SelectedObject::Belt => Some(BELT_POSITION),
             super::SelectedObject::Pilot(name) => snapshot
@@ -517,8 +531,8 @@ impl FlightView {
                     space.position(p, now)
                         + rotation
                             * Vec3::new(
-                                spec.length_m as f32 * 0.0005,
-                                spec.height_m as f32 * 0.005,
+                                spec.length_m as f32 * 0.0043,
+                                spec.height_m as f32 * 0.0062,
                                 0.0,
                             )
                 }),
@@ -554,6 +568,33 @@ impl FlightView {
                 let renderer = renderer.clone();
                 let frame = Frame {
                     cockpit_vp,
+                    snapshot_time: snapshot.server_time_ms,
+                    planet_vp: Mat4::perspective_rh_gl(
+                        if tactical {
+                            1.22
+                        } else if cockpit {
+                            COCKPIT_FOV
+                        } else {
+                            0.85
+                        },
+                        rect.aspect_ratio(),
+                        1.0,
+                        300_000.0,
+                    ) * view,
+                    system_id,
+                    ship_class: own_pilot.map_or(ShipClass::Pioneer, |p| p.ship_class),
+                    traffic: snapshot
+                        .traffic
+                        .iter()
+                        .filter(|a| a.system_id == system_id)
+                        .cloned()
+                        .collect(),
+                    surface_props: snapshot
+                        .surface_props
+                        .iter()
+                        .filter(|p| p.system_id == system_id)
+                        .cloned()
+                        .collect(),
                     drone_camera: false,
                     camera_drone: None,
                     space,
@@ -589,7 +630,7 @@ impl FlightView {
                         ))
                     }),
                 };
-                let drone_screen = drone_feed_rect(rect);
+                let drone_screen = drone_feed_rect(rect, frame.ship_class);
                 let camera_drone = own_pilot.and_then(|p| {
                     fleet(p)
                         .into_iter()
@@ -614,6 +655,19 @@ impl FlightView {
                             );
                             feed.eye = eye;
                             feed.vp = vp;
+                            feed.planet_vp = Mat4::perspective_rh_gl(
+                                1.05,
+                                drone_screen.aspect_ratio().max(0.1),
+                                1.0,
+                                300_000.0,
+                            ) * Mat4::perspective_rh_gl(
+                                1.05,
+                                drone_screen.aspect_ratio().max(0.1),
+                                0.002,
+                                1200.0,
+                            )
+                            .inverse()
+                                * vp;
                             feed.cockpit = false;
                             feed.drone_camera = true;
                             feed.camera_drone = (!self.drone_orbit).then_some(drone.id);
@@ -686,6 +740,25 @@ impl FlightView {
                         }
                     }
                 }
+                for actor in snapshot.traffic.iter().filter(|a| a.system_id == system_id) {
+                    let pos = space.scene(actor.position);
+                    if pos.distance(eye) < 300.0 {
+                        if let Some(label) = project_point(vp, rect, pos) {
+                            let role = match actor.role {
+                                arkline_protocol::TrafficRole::StationShuttle => "Shuttle",
+                                arkline_protocol::TrafficRole::FreightTender => "Freight tender",
+                                arkline_protocol::TrafficRole::Patrol => "Patrol",
+                            };
+                            ui.painter_at(rect).text(
+                                label + egui::vec2(0.0, -12.0),
+                                egui::Align2::CENTER_BOTTOM,
+                                format!("{role} · background traffic"),
+                                egui::FontId::proportional(10.0),
+                                super::MUTED,
+                            );
+                        }
+                    }
+                }
                 let project = |point: Vec3| project_point(vp, rect, point);
                 let own_pilot = snapshot
                     .pilots
@@ -713,6 +786,16 @@ impl FlightView {
                                 super::SelectedObject::Asteroid(asteroid.id),
                                 rock_mesh(),
                                 asteroid_model(asteroid, space),
+                            ));
+                        }
+                        for prop in snapshot.surface_props.iter().filter(|p| {
+                            p.system_id == system_id
+                                && space.scene(p.position).distance(eye) < 1100.0
+                        }) {
+                            targets.push((
+                                super::SelectedObject::Prop(prop.id),
+                                cube(),
+                                surface_prop_model(prop, space),
                             ));
                         }
                         for gate in local_gates
@@ -1308,6 +1391,12 @@ impl FlightView {
 #[derive(Clone)]
 struct Frame {
     cockpit_vp: Mat4,
+    snapshot_time: u64,
+    planet_vp: Mat4,
+    system_id: u32,
+    ship_class: ShipClass,
+    traffic: Vec<arkline_protocol::TrafficActor>,
+    surface_props: Vec<arkline_protocol::SurfaceProp>,
     drone_camera: bool,
     camera_drone: Option<u64>,
     space: Space,
@@ -1458,6 +1547,9 @@ struct Uniforms {
     material: Option<glow::UniformLocation>,
     sky_inverse: Option<glow::UniformLocation>,
     sky_eye: Option<glow::UniformLocation>,
+    planet_center: Option<glow::UniformLocation>,
+    atmosphere: Option<glow::UniformLocation>,
+    planet_up: Option<glow::UniformLocation>,
 }
 struct Renderer {
     gl: Arc<glow::Context>,
@@ -1477,6 +1569,9 @@ impl Renderer {
         let empty = gl.create_vertex_array()?;
         let mut meshes = vec![];
         let uniforms = Uniforms {
+            planet_center: gl.get_uniform_location(program, "planet_center"),
+            atmosphere: gl.get_uniform_location(background, "atmosphere"),
+            planet_up: gl.get_uniform_location(background, "planet_up"),
             model: gl.get_uniform_location(program, "model"),
             color: gl.get_uniform_location(program, "base_color"),
             emission: gl.get_uniform_location(program, "emission"),
@@ -1494,6 +1589,7 @@ impl Renderer {
             hull(),
             sphere_with_resolution(false, 72, 48),
             torus(1.0, 0.008),
+            surface_patch(),
         ];
         let mut station_batches = Vec::new();
         for (vertices, color, emission) in station_batches_geometry() {
@@ -1612,6 +1708,22 @@ impl Renderer {
             frame.eye.y,
             frame.eye.z,
         );
+        let camera_world = frame.space.world(frame.eye);
+        let (density, up) = arkline_protocol::planets()
+            .iter()
+            .find(|p| p.system_id == frame.system_id)
+            .map_or((0.0, Vec3::Y), |p| {
+                let radial =
+                    glam::DVec3::from_array(std::array::from_fn(|i| camera_world[i] - p.center[i]));
+                (
+                    ((1.0 - (radial.length() - p.radius_m) / p.atmosphere_height_m).clamp(0.0, 1.0)
+                        as f32)
+                        .powi(2),
+                    radial.normalize().as_vec3(),
+                )
+            });
+        gl.uniform_1_f32(self.uniforms.atmosphere.as_ref(), density);
+        gl.uniform_3_f32(self.uniforms.planet_up.as_ref(), up.x, up.y, up.z);
         gl.draw_arrays(glow::TRIANGLES, 0, 3);
         gl.enable(glow::DEPTH_TEST);
         gl.depth_func(glow::LEQUAL);
@@ -1626,20 +1738,7 @@ impl Renderer {
             frame.eye.y,
             frame.eye.z,
         );
-        // Procedural planet material stays isolated from ship/station surfaces.
-        gl.uniform_1_i32(self.uniforms.material.as_ref(), 1);
-        // Fixed world anchor near the station; changing render origin must not
-        // carry the planet along with a ship traveling astronomical distances.
-        let planet = space.scene([30000.0, -18000.0, -60000.0]);
-        if planet.distance(frame.eye) < 1100.0 {
-            self.draw(
-                5,
-                transform(planet, Vec3::splat(90.0), Quat::IDENTITY),
-                Vec3::new(0.13, 0.22, 0.36),
-                0.0,
-            );
-        }
-        gl.uniform_1_i32(self.uniforms.material.as_ref(), 0);
+        self.paint_environment(frame);
         if space.scene(STATION_CENTER_POSITION).distance(frame.eye) < 1100.0 {
             let model = Mat4::from_translation(space.scene(STATION_CENTER_POSITION));
             for &(mesh, color, emission) in &self.station_batches {
@@ -1773,6 +1872,7 @@ impl Renderer {
                 }
             }
         }
+        self.paint_living_world(frame);
         self.paint_effects(frame);
         if !frame.drone_camera {
             self.paint_warp_tunnel(frame);
@@ -1865,8 +1965,8 @@ impl Renderer {
             self.draw(
                 0,
                 base * transform(
-                    Vec3::new(0.78, 0.03, side * 0.52),
-                    Vec3::new(0.055, 0.62, 0.045),
+                    Vec3::new(0.88, 0.03, side * cockpit_span(frame.ship_class)),
+                    Vec3::new(0.025, 0.62, 0.018),
                     Quat::from_rotation_x(side * 0.22),
                 ),
                 steel,
@@ -1915,7 +2015,10 @@ impl Renderer {
             steel,
             0.0,
         );
-        for (center, size) in cockpit_screens() {
+        for (index, (center, size)) in cockpit_screens(frame.ship_class).into_iter().enumerate() {
+            if index == 0 {
+                continue;
+            } // Transparent canopy telemetry preserves forward visibility.
             self.draw(
                 0,
                 base * transform(center, size, Quat::IDENTITY),
@@ -2375,24 +2478,32 @@ fn in_warp(location: &Location, now: u64) -> bool {
 }
 /// Shared bezel geometry and instrument layout: +X forward, +Y up, +Z right.
 const COCKPIT_FOV: f32 = 1.22;
-fn cockpit_screens() -> [(Vec3, Vec3); 6] {
-    [
+fn cockpit_screens(class: ShipClass) -> [(Vec3, Vec3); 6] {
+    let mut screens = [
         (Vec3::new(0.72, 0.12, 0.0), Vec3::new(0.020, 0.075, 0.18)),
         (Vec3::new(0.80, -0.23, -0.52), Vec3::new(0.012, 0.13, 0.18)),
         (Vec3::new(0.80, -0.23, 0.52), Vec3::new(0.012, 0.13, 0.18)),
         (Vec3::new(0.65, -0.23, 0.0), Vec3::new(0.020, 0.175, 0.27)),
         (Vec3::new(0.80, 0.02, -0.52), Vec3::new(0.012, 0.085, 0.18)),
         (Vec3::new(0.80, 0.02, 0.52), Vec3::new(0.012, 0.085, 0.18)),
-    ]
+    ];
+    let tier = class.spec().mining_tier.unwrap_or(2) as f32;
+    // Larger bridge desks spread their side displays; all screen faces still
+    // share exact geometry with projection and interaction.
+    for index in [1, 2, 4, 5] {
+        screens[index].0.z *= 1.0 + (tier - 1.0) * 0.015;
+    }
+    screens[0].0.y = 0.10 + tier * 0.006;
+    screens
 }
 
-pub(super) fn cockpit_console_bounds(viewport: egui::Rect) -> egui::Rect {
-    let (center, size) = cockpit_screens()[3];
+pub(super) fn cockpit_console_bounds(viewport: egui::Rect, class: ShipClass) -> egui::Rect {
+    let (center, size) = cockpit_screens(class)[3];
     instrument_rect(viewport, center, size).shrink(5.0)
 }
 
-fn drone_feed_rect(viewport: egui::Rect) -> egui::Rect {
-    let (center, size) = cockpit_screens()[1];
+fn drone_feed_rect(viewport: egui::Rect, class: ShipClass) -> egui::Rect {
+    let (center, size) = cockpit_screens(class)[1];
     let screen = instrument_rect(viewport, center, size);
     screen.shrink(screen.width().min(screen.height()) * 0.05)
 }
@@ -2500,14 +2611,22 @@ fn instrument_rows(
     };
     [
         vec![
-            format!("FLIGHT / {status}"),
+            format!("{} / {status}", own.ship_class.spec().name.to_uppercase()),
             mode,
             format!("SPEED {}", super::format_speed(speed)),
             format!("FWD {:+.1} m/s", body.x),
             format!("RIGHT {:+.1} m/s", body.z),
             format!("UP {:+.1} m/s", body.y),
             format!("HDG {bearing:05.1}  PITCH {pitch:+.1}"),
-            "BODY-AXIS VELOCITY".into(),
+            own.surface
+                .as_ref()
+                .map_or("BODY-AXIS VELOCITY".into(), |s| {
+                    format!(
+                        "ALT {} / {}",
+                        super::format_distance(s.altitude_m),
+                        if s.grounded { "GROUNDED" } else { "FLIGHT" }
+                    )
+                }),
         ],
         vec![
             format!("NAV / {status}"),
@@ -2539,7 +2658,11 @@ fn instrument_rows(
             ),
             module_instrument(own, 0, now),
             module_instrument(own, 1, now),
-            format!("HOLD {} / {}", own.ore, arkline_protocol::CARGO_CAPACITY),
+            format!(
+                "HOLD {} / {}",
+                own.ore,
+                arkline_protocol::cargo_capacity(own.ship_class)
+            ),
             own.power.as_ref().map_or("CAPACITOR UNKNOWN".into(), |p| {
                 if p.charge_j < arkline_protocol::power_spec(own.ship_class).warp_cost_j {
                     "LOW POWER / WARP UNAVAILABLE".into()
@@ -2563,11 +2686,17 @@ fn paint_instruments(
     let rows = instrument_rows(own, snapshot, target_distance, now, connected);
     let connected = connected && now.saturating_sub(snapshot.server_time_ms) <= 1500;
     let color = if connected { super::TEAL } else { super::AMBER };
-    for (index, (center, size)) in cockpit_screens().into_iter().take(3).enumerate() {
+    for (index, (center, size)) in cockpit_screens(own.ship_class)
+        .into_iter()
+        .take(3)
+        .enumerate()
+    {
         let screen = instrument_rect(viewport, center, size);
         let inner = screen.shrink(screen.width().min(screen.height()) * 0.045);
         let painter = painter.with_clip_rect(inner.intersect(viewport));
-        painter.rect_filled(inner, 0.0, egui::Color32::from_rgb(2, 14, 10));
+        if index != 0 {
+            painter.rect_filled(inner, 0.0, egui::Color32::from_rgb(2, 14, 10));
+        }
         let row_height = inner.height() / 10.0;
         let font = (inner.width() / 18.0).min(row_height * 0.75);
         for (row, text) in rows[index].iter().enumerate() {
@@ -2656,7 +2785,7 @@ fn turret_muzzle(class: ShipClass, rotation: Quat, module_id: u8) -> Vec3 {
     mount + rotation * Vec3::X * (radius + barrel)
 }
 fn turret_deck(class: ShipClass, module_id: u8) -> f32 {
-    static DECKS: std::sync::OnceLock<[f32; 8]> = std::sync::OnceLock::new();
+    static DECKS: std::sync::OnceLock<[f32; 14]> = std::sync::OnceLock::new();
     let decks = DECKS.get_or_init(|| {
         std::array::from_fn(|index| {
             let class = arkline_protocol::ALL_SHIP_CLASSES[index / 2];
@@ -2676,6 +2805,9 @@ fn turret_deck(class: ShipClass, module_id: u8) -> f32 {
         ShipClass::Prospector => 1,
         ShipClass::Hauler => 2,
         ShipClass::Vanguard => 3,
+        ShipClass::Borealis => 4,
+        ShipClass::Stratum => 5,
+        ShipClass::Monolith => 6,
     }) * 2
         + usize::from(module_id.min(1))]
 }
@@ -2731,13 +2863,16 @@ fn ship_geometry(class: ShipClass, ship: Mat4) -> Vec<(Vec<Vertex>, Mat4)> {
 }
 type ModelPart = (usize, Mat4, Vec3, f32);
 fn ship_parts(class: ShipClass) -> Vec<ModelPart> {
-    static MODELS: std::sync::OnceLock<[Vec<ModelPart>; 4]> = std::sync::OnceLock::new();
+    static MODELS: std::sync::OnceLock<[Vec<ModelPart>; 7]> = std::sync::OnceLock::new();
     let models = MODELS.get_or_init(|| arkline_protocol::ALL_SHIP_CLASSES.map(build_ship_parts));
     models[match class {
         ShipClass::Pioneer => 0,
         ShipClass::Prospector => 1,
         ShipClass::Hauler => 2,
         ShipClass::Vanguard => 3,
+        ShipClass::Borealis => 4,
+        ShipClass::Stratum => 5,
+        ShipClass::Monolith => 6,
     }]
     .clone()
 }
@@ -2803,6 +2938,94 @@ fn build_ship_parts(class: ShipClass) -> Vec<ModelPart> {
                         Quat::IDENTITY,
                     ),
                     hull_color,
+                    0.0,
+                );
+            }
+        }
+        ShipClass::Borealis | ShipClass::Stratum | ShipClass::Monolith => {
+            let tier = class.spec().mining_tier.unwrap() as usize;
+            parts.draw(
+                0,
+                transform(Vec3::ZERO, Vec3::new(2.8, 0.3, 0.48), Quat::IDENTITY),
+                hull_color,
+                0.0,
+            );
+            for row in 0..tier {
+                let x = -1.8 + row as f32 * 0.7;
+                for side in [-1.0, 1.0] {
+                    parts.draw(
+                        0,
+                        transform(
+                            Vec3::new(x, -0.08, side * 0.82),
+                            Vec3::new(0.29, 0.46, 0.34),
+                            Quat::IDENTITY,
+                        ),
+                        cargo * (0.8 + row as f32 * 0.05),
+                        0.0,
+                    );
+                    parts.draw(
+                        0,
+                        transform(
+                            Vec3::new(x, 0.43, side * 0.82),
+                            Vec3::new(0.22, 0.015, 0.27),
+                            Quat::IDENTITY,
+                        ),
+                        accent,
+                        0.9,
+                    );
+                }
+            }
+            parts.draw(
+                4,
+                transform(
+                    Vec3::new(2.15, 0.26, 0.0),
+                    Vec3::new(0.20, 0.45, 0.44),
+                    Quat::IDENTITY,
+                ),
+                hull_color * 1.15,
+                0.0,
+            );
+            for side in [-1.0, 1.0] {
+                parts.draw(
+                    0,
+                    transform(
+                        Vec3::new(1.3, -0.3, side * 1.22),
+                        Vec3::new(1.1, 0.12, 0.14),
+                        Quat::IDENTITY,
+                    ),
+                    hull_color,
+                    0.0,
+                );
+                parts.draw(
+                    0,
+                    transform(
+                        Vec3::new(-1.7, 0.0, side * 1.12),
+                        Vec3::new(0.55, 0.35, 0.27),
+                        Quat::IDENTITY,
+                    ),
+                    hull_color * 0.6,
+                    0.0,
+                );
+            }
+            if class == ShipClass::Monolith {
+                parts.draw(
+                    1,
+                    transform(
+                        Vec3::new(-1.0, 0.5, 0.0),
+                        Vec3::splat(0.65),
+                        Quat::from_rotation_z(std::f32::consts::FRAC_PI_2),
+                    ),
+                    hull_color,
+                    0.0,
+                );
+                parts.draw(
+                    0,
+                    transform(
+                        Vec3::new(-0.5, 0.75, 0.0),
+                        Vec3::new(0.7, 0.2, 0.27),
+                        Quat::IDENTITY,
+                    ),
+                    cargo,
                     0.0,
                 );
             }
@@ -3212,7 +3435,7 @@ void main(){local_position=position;vec4 p=model*vec4(position,1.0);world=p.xyz;
 "#;
 const FRAGMENT: &str = r#"#version 150
 in vec3 world;in vec3 surface_normal;in vec3 local_position;
-uniform vec3 base_color;uniform vec3 eye;uniform float emission;uniform int material_kind;out vec4 color;
+uniform vec3 planet_center;uniform vec3 base_color;uniform vec3 eye;uniform float emission;uniform int material_kind;out vec4 color;
 float ark_hash3(vec3 p){return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5453);}
 float ark_noise3(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
 return mix(mix(mix(ark_hash3(i),ark_hash3(i+vec3(1,0,0)),f.x),mix(ark_hash3(i+vec3(0,1,0)),ark_hash3(i+vec3(1,1,0)),f.x),f.y),
@@ -3221,8 +3444,8 @@ float ark_terrain(vec3 p){return ark_noise3(p)*0.53+ark_noise3(p*2.07+13.8)*0.27
 void main(){vec3 n=normalize(surface_normal);if(!gl_FrontFacing)n=-n;vec3 l=normalize(vec3(-0.5,0.8,0.65));vec3 v=normalize(eye-world);
 float diffuse=max(dot(n,l),0.0);float facing=max(dot(n,v),0.0);float rim=pow(1.0-facing,3.0);float spec=pow(max(dot(n,normalize(l+v)),0.0),38.0);
 vec3 lit;
-if(material_kind==1){
-    vec3 sphere=normalize(local_position);
+if(material_kind==1 || material_kind==2){
+    vec3 sphere=material_kind==1 ? normalize(local_position) : normalize(world-planet_center);
     float elevation=ark_terrain(sphere*4.1+vec3(3.2,1.7,9.4));
     float land=smoothstep(0.47,0.51,elevation);
     float aridity=ark_terrain(sphere*9.0+21.5);
@@ -3231,7 +3454,9 @@ if(material_kind==1){
     float polar=smoothstep(0.79,0.94,abs(sphere.y)+ark_terrain(sphere*14.0)*0.09);
     vec3 surface=mix(mix(ocean,earth,land),vec3(0.73,0.82,0.85),polar);
     vec3 wind=sphere*15.0+vec3(sin(sphere.y*11.0)*0.9,0.0,cos(sphere.y*8.0)*0.7);
-    float clouds=smoothstep(0.52,0.68,ark_terrain(wind));
+    float clouds=smoothstep(0.52,0.68,ark_terrain(wind))*smoothstep(10.0,300.0,length(eye-world));
+    float detail=(ark_terrain((world-planet_center)*0.9)-0.5)*0.20;
+    if(material_kind==2) surface*=1.0+detail*(1.0-smoothstep(100.0,900.0,length(eye-world)));
     surface=mix(surface,vec3(0.76,0.83,0.88),clouds*0.88);
     lit=surface*(0.10+diffuse*1.22);
     lit+=vec3(0.46,0.64,0.82)*pow(max(dot(n,normalize(l+v)),0.0),95.0)*(1.0-land)*(1.0-clouds)*0.5;
@@ -3245,14 +3470,16 @@ const BACK_VERTEX: &str = r#"#version 150
 out vec2 uv;void main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);uv=p;gl_Position=vec4(p*2.0-1.0,0.999,1.0);}
 "#;
 const BACK_FRAGMENT: &str = r#"#version 150
-in vec2 uv;uniform mat4 inverse_view_projection;uniform vec3 camera_eye;out vec4 color;
+in vec2 uv;uniform float atmosphere;uniform vec3 planet_up;uniform mat4 inverse_view_projection;uniform vec3 camera_eye;out vec4 color;
 float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
 float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
 void main(){vec4 farpoint=inverse_view_projection*vec4(uv*2.0-1.0,1.0,1.0);vec3 direction=normalize(farpoint.xyz/farpoint.w-camera_eye);vec2 p=vec2(atan(direction.z,direction.x)/6.2831853+0.5,asin(clamp(direction.y,-1.0,1.0))/3.1415927+0.5);float mist=noise(p*4.0)+noise(p*9.0)*0.5+noise(p*23.0)*0.18;
 float band=exp(-pow((p.y-0.4+sin(p.x*3.4)*0.16)*3.0,2.0));vec3 c=vec3(0.008,0.014,0.032)+vec3(0.032,0.07,0.125)*mist*band;
 c+=vec3(0.055,0.022,0.055)*pow(mist*0.6,3.0)*band;
 for(int i=0;i<2;i++){float scale=180.0+float(i)*155.0;vec2 grid=p*scale;vec2 cell=floor(grid);vec2 offset=vec2(hash(cell),hash(cell+13.7));float d=length(fract(grid)-offset);float seed=hash(cell+71.1);float star=(1.0-smoothstep(0.0,0.09,d))*step(0.972,seed);c+=mix(vec3(0.53,0.7,1.0),vec3(1.0,0.87,0.65),seed)*star*(0.5+seed*0.7);}
-vec2 sun=p-vec2(0.84,0.82);float flare=0.0018/(dot(sun,sun)+0.006);c+=vec3(0.17,0.28,0.40)*flare;color=vec4(c,1.0);}
+vec2 sun=p-vec2(0.84,0.82);float flare=0.0018/(dot(sun,sun)+0.006);c+=vec3(0.17,0.28,0.40)*flare;float horizon=pow(1.0-abs(dot(direction,planet_up)),3.0);
+vec3 sky=mix(vec3(0.065,0.17,0.29),vec3(0.44,0.55,0.60),horizon);
+c=mix(c,sky,atmosphere);color=vec4(c,1.0);}
 "#;
 
 #[cfg(test)]
@@ -3261,8 +3488,9 @@ mod tests {
     #[test]
     fn drone_camera_uses_drone_pose_and_stays_inside_physical_screen() {
         let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 1000.0));
-        let feed = drone_feed_rect(viewport);
-        let (center, size) = cockpit_screens()[1];
+        let class = ShipClass::Pioneer;
+        let feed = drone_feed_rect(viewport, class);
+        let (center, size) = cockpit_screens(class)[1];
         assert!(instrument_rect(viewport, center, size).contains_rect(feed));
         let space = Space {
             origin: [149_597_870_700.0, 50.0, 100.0],
@@ -3326,25 +3554,27 @@ mod tests {
             let viewport = egui::Rect::from_min_size(egui::pos2(17.0, 29.0), size);
             let vp = Mat4::perspective_rh_gl(COCKPIT_FOV, viewport.aspect_ratio(), 0.0002, 10.0)
                 * Mat4::look_at_rh(Vec3::ZERO, Vec3::X, Vec3::Y);
-            let screens = cockpit_screens().map(|(center, size)| {
-                let rect = instrument_rect(viewport, center, size);
-                assert!(viewport.contains_rect(rect));
-                let corner = Vec3::new(
-                    center.x - 0.031,
-                    center.y + size.y - 0.008,
-                    center.z - size.z + 0.008,
-                ) * 0.025;
-                assert!(
-                    project_point(vp, viewport, corner)
-                        .unwrap()
-                        .distance(rect.left_top())
-                        < 0.001
-                );
-                rect
-            });
-            for (i, a) in screens.iter().enumerate() {
-                for b in &screens[i + 1..] {
-                    assert!(!a.intersects(*b), "physical screens overlap");
+            for class in arkline_protocol::ALL_SHIP_CLASSES {
+                let screens = cockpit_screens(class).map(|(center, size)| {
+                    let rect = instrument_rect(viewport, center, size);
+                    assert!(viewport.contains_rect(rect));
+                    let corner = Vec3::new(
+                        center.x - 0.031,
+                        center.y + size.y - 0.008,
+                        center.z - size.z + 0.008,
+                    ) * 0.025;
+                    assert!(
+                        project_point(vp, viewport, corner)
+                            .unwrap()
+                            .distance(rect.left_top())
+                            < 0.001
+                    );
+                    rect
+                });
+                for (i, a) in screens.iter().enumerate() {
+                    for b in &screens[i + 1..] {
+                        assert!(!a.intersects(*b), "physical screens overlap");
+                    }
                 }
             }
         }
@@ -3368,6 +3598,8 @@ mod tests {
             warp: None,
         });
         let snapshot = Snapshot {
+            surface_props: vec![],
+            traffic: vec![],
             stored_ore: 0,
             server_time_ms: 1000,
             online_pilots: vec![],
@@ -3695,6 +3927,7 @@ mod tests {
     fn extrapolation_is_bounded_and_warp_uses_server_position() {
         let space = Space::default();
         let mut pilot = PilotView {
+            surface: None,
             power: None,
             mining_modules: vec![],
             target_lock: None,
@@ -3938,6 +4171,7 @@ mod tests {
     fn stable_pilot_lane_does_not_depend_on_roster_or_view() {
         let space = Space::default();
         let pilot = PilotView {
+            surface: None,
             power: None,
             mining_modules: vec![],
             target_lock: None,

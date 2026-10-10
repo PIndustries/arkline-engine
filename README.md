@@ -54,12 +54,12 @@ pilot name in both clients unless you deliberately transfer its credential.
 6. Close and restart the server, reconnect both pilots, and inspect the saved state.
 7. Cancel the remaining order to return its ore to the seller's cargo.
 
-Warp includes a two-second alignment/warm-up, visible local launch, acceleration, cruise, deceleration and final approach; travel time depends on distance. Routes over 300 km reserve six seconds each for the first and last 30 km. Each ship has two independently activated mining modules. They repeat server-timed cycles with a fixed hull-defined yield; players do not enter extraction quantities. Cargo holds 1,000 units; escrow is separate. Cancelling an
+Warp includes a two-second alignment/warm-up, visible local launch, acceleration, cruise, deceleration and final approach; travel time depends on distance. Routes over 300 km reserve six seconds each for the first and last 30 km. Each ship has two independently activated mining modules. They repeat server-timed cycles with a fixed hull-defined yield; players do not enter extraction quantities. Cargo capacity depends on the hull (1,000 units on Pioneer); escrow is separate. Cancelling an
 order requires room to return its ore. The initial global reserve is 100,000 ore, divided across 108 rocks in three systems.
 
 ## Views and direct flight
 
-Use **2D Tactical**, **3D External**, or **Cockpit** in the header to switch views.
+Use **2D Tactical**, **3D Tactical**, **3D External**, or **Cockpit** in the header or cockpit Settings to switch views.
 They share selection, authoritative position, navigation and target lock. Cockpit
 shows live ship instruments and follows the complete ship attitude, including roll.
 The external view lets you orbit the ship to inspect its hull and turret mounts.
@@ -95,8 +95,9 @@ confirmed extraction feedback. Warp effects follow
 the authoritative route. These effects do not issue extra mining commands or change
 inventory. Procedural cockpit/world assets remain a prototype.
 
-Each module yields 25 ore every 6 seconds on Pioneer, 40 every 5 seconds on
-Prospector, 20 every 8 seconds on Hauler, and 30 every 7 seconds on Vanguard.
+The five mining tiers yield 25/6s, 40/5s, 75/5s, 100/4s and 100/3s per module,
+respectively; the hull table below gives names and capacities. Hauler yields 20/8s
+and Vanguard 30/7s.
 Only the terminal cycle can yield less, when the asteroid empties or cargo fills.
 Stopping cancels the unfinished cycle without a partial award. Loss of lock or
 range, warp, docking, jumping, depletion, full cargo, last disconnect and server
@@ -105,33 +106,71 @@ produce a backlog of offline ore.
 
 ## Ships and physical scale
 
-Open **Hangar** in the services strip while docked to board a preview hull. The
+Open **Ship** in the cockpit console (or **Hangar** from the service rail) while docked to board an owned preview hull. The
 server saves your selection; all clients render the same hull at its physical size.
 
-| Hull | Length | Width | Height |
-|---|---:|---:|---:|
-| Pioneer | 72 m | 38 m | 18 m |
-| Prospector | 180 m | 92 m | 64 m |
-| Hauler | 420 m | 180 m | 140 m |
-| Vanguard | 1,100 m | 380 m | 260 m |
+| Hull | Mining tier | Length × width × height | Cargo ore | Ore / cycle per turret |
+|---|---:|---|---:|---:|
+| Pioneer | 1 | 72 × 38 × 18 m | 1,000 | 25 / 6 s |
+| Prospector | 2 | 180 × 92 × 64 m | 2,500 | 40 / 5 s |
+| Borealis | 3 | 640 × 260 × 180 m | 8,000 | 75 / 5 s |
+| Stratum | 4 | 1,800 × 800 × 480 m | 24,000 | 100 / 4 s |
+| Monolith | 5 | 5,200 × 2,200 × 1,400 m | 80,000 | 100 / 3 s |
+| Hauler | Utility | 420 × 180 × 140 m | 16,000 | 20 / 8 s |
+| Vanguard | Utility | 1,100 × 380 × 260 m | 4,000 | 30 / 7 s |
+
+Both turrets use the listed per-turret rate while their targets, cargo room and
+capacitor permit extraction. Hull names and rates are prototype specifications.
 
 Arkline Station spans 20 km and stands 6 km high. Its navigation marker identifies
-the docking port; docking range is measured to that port, not the station center.
+the docking port. Docking requires at most 1.8 km from the hull's conservative
+enclosing sphere to that port, rather than from the ship center. The sphere radius
+is half the hull diagonal; this is an orientation-independent interaction rule,
+not collision geometry. Berths scale with hull size and keep the hull outside the
+station front plane.
 Hull dimensions and world distances use meters, with one render unit representing
 100 meters after camera-relative rebasing. Hulls have distinct procedural shapes.
 The preview grants one hull of each class once. Inactive hulls stay at their station;
 boarding requires docking in the same system. Each hull keeps its own cargo, so
 boarding an empty ship leaves the previous ship's ore aboard that stored hull.
 Existing saves retain the active hull and cargo; the other preview hulls start at
-Junction. All four hulls currently share flight tuning and cargo capacity. Ship
-production, multiple hulls of the same class, hull trading and physical collisions
-are not implemented.
+Junction. The seven hulls currently share flight tuning, but have different cargo,
+mining and reactor specifications, procedural hulls and cockpit layouts. Ship
+production, multiple hulls of the same class, hull trading and general physical
+collisions are not implemented.
+
+## Planet approach and first surface construction
+
+Verdant is the home system's landable prototype planet, with a 6,000 km radius and
+60 km atmosphere boundary. Start near Junction station: choose Verdant in **Flight**
+→ **Travel**, then **Approach planet**. This sends ordinary continuous flight to a
+point about 5 km above the spherical surface. The station is about 120 km above
+the ground, outside the atmosphere; approach takes roughly three minutes at the
+preview ship speed. Return to the home station first if
+you are at the distant belt or in another system; planet approach is not an AU-scale
+warp route or an instant landing command. From the approach point, descend manually,
+watch the server-reported altitude and hull ground clearance, then brake near the
+surface. Translation axes follow your ship's attitude.
+
+Open **More → Surface sandbox** at no more than 100 m ground clearance to place
+crates, pylons or platforms. Choose an east/north offset; the server anchors the
+prop to the spherical ground. Select an owned prop to move or delete it within
+500 m of the hull envelope. Each pilot may own 32 props, with a world limit of 256.
+Props and their ownership persist. The server constrains the ship against the
+sphere using its oriented hull support; this is first construction support, not
+walking, terrain deformation, a general collision/rigid-body system or a complete
+planetary environment. The visual terrain is procedural, and no new economic yield
+is created by props.
+
+Shuttles, freight tenders and patrols provide server-timed background traffic near
+stations. They are decorative service actors, not online players or economic NPCs:
+they do not mine, trade, consume stock, create credits or change the ledger.
 
 ## Station assets and corporations
 
 Docking opens **Station** services with the active vessel, **Undock**, and shortcuts
-to **Hangar**, **Inventory**, **Corporation**, and **Exchange**. These services remain
-floating windows over the game. A modeled station interior is not included yet.
+to **Hangar**, **Inventory**, **Corporation**, and **Exchange**. In Cockpit these services use the physical console; other views use floating
+windows. A modeled station interior is not included yet.
 
 **Inventory** is available in space as well as while docked. It shows active cargo,
 stored hull cargo, personal station ore, and market escrow. You can inspect remote
@@ -145,7 +184,7 @@ the active cargo capacity. Membership and storage survive server restart. This i
 the first corporation implementation: custom roles, shared ships, corporate wallets,
 member removal, ownership transfer, and corporation dissolution are not included.
 
-Inventory currently contains ore and the four preview hull classes. General item
+Inventory currently contains ore and seven preview hull classes. General item
 types, fitting, blueprints, manufacturing and repair services remain future work.
 
 ## 3D tactical camera
@@ -166,11 +205,10 @@ linked-window groups are not implemented.
 
 ## Cockpit layout and services
 
-Space fills the entire gameplay window in all four views. Session controls, overview,
-ship controls and camera controls float above it instead of reserving fixed rows
-or columns. Move or collapse panels to make room around your ship. Use **F11**
-or **Fullscreen** to toggle fullscreen mode. Services open
-in a floating window only when requested. Foreground panels consume pointer input
+Space fills the entire gameplay window in all four views. Cockpit operations live
+on the physical console; overview and ship/camera overlays are hidden there. Other
+views use movable, collapsible overview, ship and camera panels, and requested
+services open in a floating window. Use **F11** or **Fullscreen** to toggle fullscreen. Foreground panels consume pointer input
 so manipulating a panel does not issue a navigation command behind it.
 
 Drag panel titles and release near a viewport edge or center to snap. Panels keep
@@ -179,10 +217,10 @@ layout locally. **Settings** provides **Pin panels**, **Snap panels**, and
 **Reset panel layout**. The header reports measured FPS and frame time; rendering
 is throttled while the window is unfocused.
 
-The right-hand overview lists local stations, belts, individual asteroids, gates
-and ships, with category filters and distances. Its selected-object panel gives
+The overview, available in cockpit Flight or a floating panel, lists local stations,
+belts, individual asteroids, gates, planets, props and ships, with category filters and distances. Its selected-object panel gives
 the available navigation, targeting, mining and jump actions. Pilot records include live connection status. Undocked ships remain in space
-after disconnect; docked ships are omitted from the space view. A floating ship HUD keeps cargo, balance and flight controls visible.
+after disconnect; docked ships are omitted from the space view. The compact HUD in other views and the physical cockpit instruments show cargo, balance and flight controls.
 
 Use the service launcher to inspect **Inventory**, trade in **Exchange**, review
 **Activity**, independently check the economic history in **Ledger**, or save an Emerald, Teal
@@ -309,9 +347,9 @@ Cockpit instrument text uses the physical display faces for positioning, clippin
 and sizing. The center display reports speed, body-axis velocity, heading, pitch
 and navigation mode. Side displays show server-reported local contacts, selected
 center range, lock state, mining cycles, cargo capacity and credits. These are live
-simulation values; power, heat and damage sensor models are not implemented.
-Readings are marked stale when disconnected or snapshots stop arriving. Collapse
-**Ship controls** using its title arrow when you want the physical screens exposed.
+simulation values. Capacitor power is modeled; heat and ship damage sensor models
+are not implemented. Readings are marked stale when disconnected or snapshots stop
+arriving. Cockpit mode hides the floating Ship controls panel.
 
 The client preserves partial TCP responses across short read timeouts, and attempts
 up to three saved-identity reconnects per session after a transport failure. Recovery
@@ -322,7 +360,7 @@ starts a new attempt. An uncertain action remains flagged for inspection.
 
 ### Drone fleets and cockpit screens
 
-The **Fleet** console supports five recon, five mining and five attack drones per
+The **Drones** console supports five recon, five mining and five attack drones per
 pilot. Select a drone by its ID to navigate, hold, recall or assign it. Each has
 server-owned position, signal strength and hit points. Mining drones approach a
 confirmed asteroid lock and repeat an eight-second, ten-ore cycle into the owner's
@@ -341,7 +379,8 @@ Signal degradation adds noise and darkens the picture; a lost/stale link is labe
 The cockpit includes a selectable 2D local map and a ship-relative 3D holographic
 map with real-distance rings. Scroll over a map to change range, and click a contact
 to select it. Ship orientation drives the map axes. The center console provides
-Nav, Modules, Fleet, station services and Settings, including view-mode switching.
+Flight, Ship, Modules, Drones, Inventory and Station, with remaining services and
+view-mode Settings under More.
 Cockpit field of view is 70 degrees. The slim service rail uses hover labels;
 other view modes retain compact floating windows.
 
@@ -357,7 +396,7 @@ including at the minimum supported window size.
 
 Each hull has a server-owned capacitor (joules) and reactor output (watts). Warp
 reserves its full energy cost at admission. Successful turret/drone mining cycles
-and actual attack-drone shots consume energy; unsupported actions cannot create
+and actual attack-drone shots consume energy; unfunded actions cannot create
 ore or damage when the capacitor is empty. Mining modules stop with a low-power
 reason, drones stop their assignment, and warp is rejected until sufficient charge
 returns. The HUD shows authoritative charge, capacity, regeneration and action
