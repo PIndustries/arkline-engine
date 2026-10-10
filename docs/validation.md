@@ -587,3 +587,29 @@ rotation timing and geometry agreement. Filtered noise, smoother cue envelopes,
 output filtering and additional mix headroom address reported static. Offline
 tests cover sample roughness, peak headroom and saturated-voice continuity.
 These tests do not substitute for owner listening feedback on the revised mix.
+
+## Multi-trip jobs and drone feeds — 26.10.10.20
+
+The server regression submits a 4,000-ore total to a 1,000-capacity Pioneer and
+verifies four real station deposits, cumulative mined/stored counters, final
+cargo state and independent ledger replay. All seven resource-job tests pass.
+A separate real Spark request interprets the same 4,000-ore goal successfully.
+
+The final client suite passes 119 tests with seven opt-in tests ignored; strict
+workspace Clippy passes. The explicitly run native offscreen OpenGL test exercises
+actual feed framebuffer rendering, clipped composite pixel readback, state
+restoration, reuse and bounded eviction/texture deletion. Camera math, four-feed
+paging and real pointer controls are covered separately. The actual audio device
+and Spark checks from earlier previews are not implied by the ignored count.
+
+Camera feeds are capped at four visible feeds, 384 pixels on the longest edge,
+60 refreshes/second in single mode or 30 per feed in split mode. These are limits,
+not measured delivered frame rates. Drone extrapolation is bounded to 350 ms;
+freshness and signal checks still suppress unavailable feeds. Gameplay performance
+and owner acceptance remain separate from native offscreen correctness.
+
+Packaged native 26.10.10.20 QA connected an isolated pilot, undocked, launched four
+recon drones and switched Split feeds → Top down. Four separate labeled scene
+feeds were visible within the cockpit screen. The HUD reported roughly118–120FPS
+in that scene; this is not a general performance benchmark. Full workspace tests
+passed, followed by the final client suite and Clippy after graphics-cache changes.

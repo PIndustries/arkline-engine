@@ -262,7 +262,7 @@ fn revocation_reconnect_explicit_cancel_and_admission_are_authoritative() {
         0,
     );
     let token = login.resume_token.unwrap();
-    for target_units in [0, CARGO_CAPACITY + 1] {
+    for target_units in [0, MAX_RESOURCE_JOB_UNITS + 1] {
         assert!(
             !s.handle_at(
                 &mut worker,
@@ -478,4 +478,64 @@ fn space_jobs_count_carried_cargo_but_only_report_new_extraction() {
         .ledger
         .unwrap();
     arkline_verifier::verify(&ledger, None).unwrap();
+}
+
+#[test]
+fn four_thousand_goal_repeats_real_hauls_with_cumulative_progress() {
+    let f = Fixture::new();
+    let mut s = Server::open(&f.0).unwrap();
+    let mut p = connect(&mut s, "Hauler");
+    assert!(
+        !s.handle_at(
+            &mut p,
+            Request::StartResourceJob {
+                target_units: MAX_RESOURCE_JOB_UNITS + 1,
+                pilot: None
+            },
+            0
+        )
+        .ok
+    );
+    start(&mut s, &mut p, 4000, 0);
+    let mut previous_stored = 0;
+    let mut previous_mined = 0;
+    let mut deliveries = 0;
+    let mut done = None;
+    for t in (100..=900_000).step_by(100) {
+        s.tick_at(t).unwrap();
+        let snap = snapshot(&mut s, t);
+        let j = &snap.resource_jobs[0];
+        assert!(j.stored_units >= previous_stored);
+        assert!(j.mined_units >= previous_mined);
+        assert!(snap.pilots[0].ore <= cargo_capacity(ShipClass::Pioneer));
+        if j.stored_units > previous_stored {
+            assert!(j.stored_units - previous_stored <= cargo_capacity(ShipClass::Pioneer));
+            deliveries += 1;
+        }
+        previous_stored = j.stored_units;
+        previous_mined = j.mined_units;
+        if j.phase.is_terminal() {
+            assert_eq!(j.phase, ResourceJobPhase::Completed, "{}", j.message);
+            assert!(j.stored_units >= 4000);
+            assert_eq!(j.mined_units, j.stored_units);
+            assert_eq!(snap.pilots[0].location, Location::Docked);
+            assert_eq!(snap.pilots[0].ore, 0);
+            done = Some(t);
+            break;
+        }
+    }
+    let t = done.expect("bounded multi-haul completion");
+    assert_eq!(deliveries, 4);
+    let result = ok(&mut s, &mut p, Request::ExportLedger, t);
+    assert_eq!(
+        result
+            .assets
+            .unwrap()
+            .storage
+            .iter()
+            .map(|a| a.ore)
+            .sum::<u64>(),
+        previous_stored
+    );
+    arkline_verifier::verify(&result.ledger.unwrap(), None).unwrap();
 }

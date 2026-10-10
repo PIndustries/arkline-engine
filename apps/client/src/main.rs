@@ -411,7 +411,8 @@ struct Cockpit {
     mining_target: Option<u64>,
     drone_camera: bool,
     selected_drone: Option<u64>,
-    drone_orbit: bool,
+    drone_camera_mode: flight3d::DroneCameraMode,
+    drone_split: bool,
     drone_attack_target: Option<(String, u64)>,
     prop_kind: SurfacePropKind,
     prop_offset: [f64; 3],
@@ -499,7 +500,8 @@ impl Cockpit {
             mining_target: None,
             drone_camera: true,
             selected_drone: None,
-            drone_orbit: false,
+            drone_camera_mode: flight3d::DroneCameraMode::Raised,
+            drone_split: false,
             drone_attack_target: None,
             prop_kind: SurfacePropKind::Crate,
             prop_offset: [20.0, 0.0, 0.0],
@@ -3460,8 +3462,17 @@ impl eframe::App for Cockpit {
                     let display = self.snapshot.as_ref().map(|s| self.motion.sample(s, now));
                     if let Some(snapshot) = &display {
                         self.flight_view.set_drone_camera(self.drone_camera);
+                        self.flight_view.set_drone_view(self.selected_drone, false);
                         self.flight_view
-                            .set_drone_view(self.selected_drone, self.drone_orbit);
+                            .set_drone_camera_mode(self.drone_camera_mode);
+                        let feeds = self.own().map_or_else(Vec::new, |p| {
+                            target_controls::feed_ids(
+                                &Self::fleet(&p).iter().map(|d| d.id).collect::<Vec<_>>(),
+                                self.selected_drone,
+                                self.drone_split,
+                            )
+                        });
+                        self.flight_view.set_drone_feeds(&feeds);
                         self.flight_view.set_remote_ship(self.remote_ship.clone());
                         let controlled_name = self.controlled_name().to_owned();
                         if let Some(action) = self.flight_view.ui(
@@ -5138,8 +5149,25 @@ mod tests {
             labels.iter().find(|(t, _)| t == "Orbit camera").unwrap().1,
             false,
         );
-        assert!(cockpit.drone_orbit);
+        assert_eq!(cockpit.drone_camera_mode, flight3d::DroneCameraMode::Orbit);
         assert!(rx.try_recv().is_err());
+        for label in ["Split feeds", "Next feeds", "Raised"] {
+            let labels = ui_test_frame(&ctx, &mut cockpit, vec![], false);
+            ui_test_click(
+                &ctx,
+                &mut cockpit,
+                labels.iter().find(|(text, _)| text == label).unwrap().1,
+                false,
+            );
+        }
+        assert!(cockpit.drone_split);
+        assert_eq!(cockpit.selected_drone, Some(5));
+        assert_eq!(cockpit.drone_camera_mode, flight3d::DroneCameraMode::Raised);
+        assert!(
+            rx.try_recv().is_err(),
+            "Camera choices must not steer drones"
+        );
+        cockpit.selected_drone = Some(2);
         cockpit.snapshot.as_mut().unwrap().pilots[0].drones[1].class = DroneClass::Mining;
         cockpit.snapshot.as_mut().unwrap().pilots[0].locked_asteroids = vec![7];
         let labels = ui_test_frame(&ctx, &mut cockpit, vec![], false);

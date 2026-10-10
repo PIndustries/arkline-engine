@@ -306,11 +306,64 @@ impl Cockpit {
                 });
             }
         }
+        ui.separator();
+        ui.small("LIVE CAMERA / VIEW ONLY");
         ui.horizontal_wrapped(|ui| {
             ui.checkbox(&mut self.drone_camera, "Drone screen");
-            ui.selectable_value(&mut self.drone_orbit, false, "POV");
-            ui.selectable_value(&mut self.drone_orbit, true, "Orbit camera");
+            ui.selectable_value(&mut self.drone_split, false, "Single feed");
+            ui.selectable_value(&mut self.drone_split, true, "Split feeds");
         });
+        ui.horizontal_wrapped(|ui| {
+            for (mode, label) in [
+                (flight3d::DroneCameraMode::Pov, "POV"),
+                (flight3d::DroneCameraMode::Raised, "Raised"),
+                (flight3d::DroneCameraMode::TopDown, "Top down"),
+                (flight3d::DroneCameraMode::Orbit, "Orbit camera"),
+            ] {
+                ui.selectable_value(&mut self.drone_camera_mode, mode, label);
+            }
+        });
+        let mut ids: Vec<_> = Self::fleet(&p).iter().map(|d| d.id).collect();
+        ids.sort_unstable();
+        let feeds = feed_ids(&ids, self.selected_drone, self.drone_split);
+        if self.drone_split && !ids.is_empty() {
+            let page = ids
+                .iter()
+                .position(|id| Some(*id) == self.selected_drone)
+                .unwrap_or(0)
+                / 4;
+            let pages = ids.len().div_ceil(4);
+            ui.horizontal_wrapped(|ui| {
+                if ui
+                    .add_enabled(page > 0, egui::Button::new("Previous feeds").small())
+                    .clicked()
+                {
+                    self.selected_drone = ids.get((page - 1) * 4).copied();
+                }
+                ui.small(format!("Page {} / {pages}", page + 1));
+                if ui
+                    .add_enabled(page + 1 < pages, egui::Button::new("Next feeds").small())
+                    .clicked()
+                {
+                    self.selected_drone = ids.get((page + 1) * 4).copied();
+                }
+            });
+        }
+        ui.small(format!(
+            "On screen: {}",
+            feeds
+                .iter()
+                .map(|id| format!("#{id}"))
+                .collect::<Vec<_>>()
+                .join(" · ")
+        ));
+        ui.small("Select a fleet row to switch cameras. Split view shows at most four live feeds.");
+        if self.remote_ship.is_some() {
+            ui.colored_label(AMBER, "Worker feed overrides drone screen.");
+            if ui.small_button("Restore drone feed").clicked() {
+                self.remote_ship = None;
+            }
+        }
         if drone.signal_strength <= 0.0 {
             ui.colored_label(AMBER, "Signal lost · recall available");
         }
@@ -327,5 +380,42 @@ fn drone_mode_label(mode: &DroneMode) -> &'static str {
         DroneMode::Returning => "Returning",
         DroneMode::Mining { .. } => "Mining",
         DroneMode::Attacking { .. } => "Attacking",
+    }
+}
+
+/// Stable ID pages retain the selected drone and never render more than four feeds.
+pub(super) fn feed_ids(ids: &[u64], selected: Option<u64>, split: bool) -> Vec<u64> {
+    let mut ids = ids.to_vec();
+    ids.sort_unstable();
+    ids.dedup();
+    let index = selected
+        .and_then(|id| ids.iter().position(|value| *value == id))
+        .unwrap_or(0);
+    if split {
+        ids.into_iter().skip(index / 4 * 4).take(4).collect()
+    } else {
+        ids.get(index).copied().into_iter().collect()
+    }
+}
+
+#[cfg(test)]
+mod feed_tests {
+    use super::feed_ids;
+    #[test]
+    fn feed_pages_are_bounded_and_contain_selected_drone() {
+        let ids: Vec<_> = (1..=15).rev().collect();
+        for selected in 1..=15 {
+            let feeds = feed_ids(&ids, Some(selected), true);
+            assert!(feeds.len() <= 4);
+            assert!(feeds.contains(&selected));
+            assert_eq!(feed_ids(&ids, Some(selected), false), vec![selected]);
+        }
+        assert_eq!(feed_ids(&ids, Some(15), true), vec![13, 14, 15]);
+    }
+    #[test]
+    fn destroyed_or_missing_selection_falls_back_without_duplicate_feeds() {
+        assert_eq!(feed_ids(&[9, 3, 3, 7], Some(99), true), vec![3, 7, 9]);
+        assert_eq!(feed_ids(&[9, 3, 7], Some(99), false), vec![3]);
+        assert!(feed_ids(&[], Some(7), true).is_empty());
     }
 }

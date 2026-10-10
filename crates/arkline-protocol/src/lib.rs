@@ -3,6 +3,8 @@
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+/// Maximum total ore requested across repeated resource-job hauls.
+pub const MAX_RESOURCE_JOB_UNITS: u64 = 1_000_000;
 /// User-facing year.month.day.build identity; trim the trailing file newline.
 pub const BUILD_VERSION: &str = include_str!("../../../BUILD_VERSION");
 

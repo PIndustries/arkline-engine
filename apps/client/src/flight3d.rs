@@ -18,6 +18,24 @@ use cockpit_maps::*;
 mod world_visuals;
 use world_visuals::*;
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum DroneCameraMode {
+    Pov,
+    #[default]
+    Raised,
+    TopDown,
+    Orbit,
+}
+impl DroneCameraMode {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Pov => "POV",
+            Self::Raised => "Raised",
+            Self::TopDown => "Top-down",
+            Self::Orbit => "Orbit",
+        }
+    }
+}
 pub enum ViewAction {
     Select(super::SelectedObject),
     FlyTo([f64; 3]),
@@ -215,7 +233,9 @@ pub struct FlightView {
     tactical_overlay: bool,
     drone_camera: bool,
     selected_drone: Option<u64>,
-    drone_orbit: bool,
+    drone_mode: DroneCameraMode,
+    drone_feeds: Vec<u64>,
+    drone_headings: std::collections::HashMap<u64, Vec3>,
     remote_ship: Option<String>,
     console_rect: Option<egui::Rect>,
     map_range: f64,
@@ -247,7 +267,9 @@ impl FlightView {
             tactical_overlay: true,
             drone_camera: true,
             selected_drone: None,
-            drone_orbit: false,
+            drone_mode: DroneCameraMode::Raised,
+            drone_feeds: Vec::new(),
+            drone_headings: std::collections::HashMap::new(),
             remote_ship: None,
             console_rect: None,
             map_range: 1_000_000.0,
@@ -260,9 +282,24 @@ impl FlightView {
     pub fn set_drone_camera(&mut self, enabled: bool) {
         self.drone_camera = enabled;
     }
+    pub fn set_drone_camera_mode(&mut self, mode: DroneCameraMode) {
+        self.drone_mode = mode;
+    }
+    pub fn set_drone_feeds(&mut self, ids: &[u64]) {
+        self.drone_feeds.clear();
+        for id in ids.iter().take(4) {
+            if !self.drone_feeds.contains(id) {
+                self.drone_feeds.push(*id);
+            }
+        }
+    }
     pub fn set_drone_view(&mut self, selected: Option<u64>, orbit: bool) {
         self.selected_drone = selected;
-        self.drone_orbit = orbit;
+        self.drone_mode = if orbit {
+            DroneCameraMode::Orbit
+        } else {
+            DroneCameraMode::Raised
+        };
     }
     #[cfg(test)]
     pub fn cockpit_console_rect(&self) -> Option<egui::Rect> {
@@ -674,48 +711,69 @@ impl FlightView {
                 let remote_frame = remote_worker.filter(|_| cockpit).map(|worker| {
                     remote_ship_frame(&frame, snapshot, worker, drone_screen.aspect_ratio())
                 });
-                let camera_frame = if cockpit && self.remote_ship.is_some() {
-                    remote_frame
+                let mut camera_feeds = Vec::new();
+                if cockpit && self.remote_ship.is_some() {
+                    if let Some(feed) = remote_frame {
+                        camera_feeds.push((drone_screen, feed, None));
+                    }
                 } else if cockpit
                     && self.drone_camera
                     && connected
                     && now.saturating_sub(snapshot.server_time_ms) <= 1500
                 {
-                    camera_drone
-                        .filter(|d| d.signal_strength > 0.0)
-                        .map(|drone| {
-                            let mut feed = frame.clone();
-                            let (eye, vp) = drone_view_matrix(
-                                drone,
-                                space,
-                                drone_screen.aspect_ratio(),
-                                self.drone_orbit,
-                                now,
-                            );
-                            feed.eye = eye;
-                            feed.vp = vp;
-                            feed.planet_vp = Mat4::perspective_rh_gl(
-                                1.05,
-                                drone_screen.aspect_ratio().max(0.1),
-                                1.0,
-                                300_000.0,
-                            ) * Mat4::perspective_rh_gl(
-                                1.05,
-                                drone_screen.aspect_ratio().max(0.1),
-                                0.002,
-                                1200.0,
-                            )
-                            .inverse()
-                                * vp;
-                            feed.cockpit = false;
-                            feed.drone_camera = true;
-                            feed.camera_drone = (!self.drone_orbit).then_some(drone.id);
-                            feed.docking = None;
-                            feed
-                        })
-                } else {
-                    None
-                };
+                    let fleet = own_pilot.map(fleet).unwrap_or_default();
+                    self.drone_headings
+                        .retain(|id, _| fleet.iter().any(|d| d.id == *id));
+                    let chosen: Vec<_> = if self.drone_feeds.is_empty() {
+                        camera_drone.into_iter().collect()
+                    } else {
+                        self.drone_feeds
+                            .iter()
+                            .filter_map(|id| fleet.iter().find(|d| d.id == *id).copied())
+                            .take(4)
+                            .collect()
+                    };
+                    let screens = feed_tiles(drone_screen, chosen.len());
+                    for (drone, screen) in chosen.into_iter().zip(screens) {
+                        let mut feed = frame.clone();
+                        let mut camera_sample = drone.clone();
+                        let heading =
+                            Vec3::from_array(drone.heading.map(|v| v as f32)).normalize_or_zero();
+                        let previous = self.drone_headings.entry(drone.id).or_insert(heading);
+                        *previous = previous
+                            .lerp(heading, 1.0 - (-dt * 14.0).exp())
+                            .normalize_or_zero();
+                        camera_sample.heading = previous.to_array().map(|v| v as f64);
+                        let (eye, vp) = drone_mode_matrix(
+                            &camera_sample,
+                            space,
+                            screen.aspect_ratio(),
+                            self.drone_mode,
+                            now,
+                        );
+                        feed.eye = eye;
+                        feed.vp = vp;
+                        feed.planet_vp = Mat4::perspective_rh_gl(
+                            1.05,
+                            screen.aspect_ratio().max(0.1),
+                            1.0,
+                            300_000.0,
+                        ) * Mat4::perspective_rh_gl(
+                            1.05,
+                            screen.aspect_ratio().max(0.1),
+                            0.002,
+                            1200.0,
+                        )
+                        .inverse()
+                            * vp;
+                        feed.cockpit = false;
+                        feed.drone_camera = true;
+                        feed.camera_drone =
+                            (self.drone_mode == DroneCameraMode::Pov).then_some(drone.id);
+                        feed.docking = None;
+                        camera_feeds.push((screen, feed, Some(drone)));
+                    }
+                }
                 let drone_renderer = renderer.clone();
                 ui.painter().add(egui::PaintCallback {
                     rect,
@@ -1080,57 +1138,50 @@ impl FlightView {
                             now,
                             connected,
                         );
-                        if let Some(feed) = camera_frame {
-                            painter.with_clip_rect(drone_screen.intersect(rect)).add(
-                                egui::PaintCallback {
-                                    rect: drone_screen,
-                                    callback: Arc::new(egui_glow::CallbackFn::new(move |_, _| {
-                                        if let Ok(mut renderer) = drone_renderer.lock() {
-                                            unsafe {
-                                                renderer.paint(&feed);
-                                            }
-                                        }
-                                    })),
-                                },
-                            );
-                            let overlay = painter.with_clip_rect(drone_screen.intersect(rect));
+                        let feed_count = camera_feeds.len();
+                        for (screen, feed, drone) in camera_feeds {
+                            let fresh =
+                                connected && now.saturating_sub(snapshot.server_time_ms) <= 1500;
+                            if drone.is_none_or(|d| d.signal_strength > 0.0) {
+                                let renderer = drone_renderer.clone();
+                                let key = egui::Id::new((
+                                    pilot_name,
+                                    drone.map(|d| d.id),
+                                    self.remote_ship.as_deref(),
+                                    self.drone_mode,
+                                ))
+                                .value();
+                                painter.with_clip_rect(screen.intersect(rect)).add(
+                                    egui::PaintCallback {
+                                        rect: screen,
+                                        callback: Arc::new(egui_glow::CallbackFn::new(
+                                            move |info, _| {
+                                                if let Ok(mut renderer) = renderer.lock() {
+                                                    unsafe {
+                                                        renderer.paint_cached_feed(
+                                                            &feed, key, info, feed_count,
+                                                        );
+                                                    }
+                                                }
+                                            },
+                                        )),
+                                    },
+                                );
+                            }
+                            let overlay = painter.with_clip_rect(screen.intersect(rect));
                             overlay.text(
-                                drone_screen.left_top() + egui::vec2(4.0, 3.0),
+                                screen.left_top() + egui::vec2(3.0, 3.0),
                                 egui::Align2::LEFT_TOP,
                                 if let Some(worker) = remote_worker {
                                     format!("{} / REMOTE SHIP", worker.name)
                                 } else {
-                                    format!(
-                                        "{:?} #{} / {}",
-                                        camera_drone.unwrap().class,
-                                        camera_drone.unwrap().id,
-                                        if self.drone_orbit { "ORBIT" } else { "ONBOARD" }
-                                    )
+                                    format!("#{} / {}", drone.unwrap().id, self.drone_mode.label())
                                 },
-                                egui::FontId::monospace((drone_screen.width() / 18.0).min(12.0)),
+                                egui::FontId::monospace((screen.width() / 16.0).clamp(8.0, 12.0)),
                                 super::TEAL,
                             );
-                            overlay.circle_stroke(
-                                drone_screen.center(),
-                                4.0,
-                                egui::Stroke::new(1.0, super::TEAL),
-                            );
-                            if let Some(drone) = camera_drone.filter(|_| self.remote_ship.is_none())
-                            {
-                                let meters = space.scene(drone.position).length() * 100.0;
-                                overlay.text(
-                                    drone_screen.left_bottom() + egui::vec2(4.0, -3.0),
-                                    egui::Align2::LEFT_BOTTOM,
-                                    format!(
-                                        "LINK {:.0}% / {}",
-                                        drone.signal_strength * 100.0,
-                                        super::format_distance(meters as f64)
-                                    ),
-                                    egui::FontId::monospace(
-                                        (drone_screen.width() / 18.0).min(12.0),
-                                    ),
-                                    super::TEAL,
-                                );
+                            if let Some(drone) = drone {
+                                paint_camera_signal(&painter, screen, Some(drone), now, fresh);
                             }
                         }
                         if self.remote_ship.is_some() && remote_worker.is_none() {
@@ -1147,7 +1198,8 @@ impl FlightView {
                                 egui::FontId::monospace(11.0),
                                 super::AMBER,
                             );
-                        } else if self.remote_ship.is_none() && self.drone_camera {
+                        } else if self.remote_ship.is_none() && self.drone_camera && feed_count == 0
+                        {
                             paint_camera_signal(
                                 &painter,
                                 drone_screen,
@@ -1609,6 +1661,97 @@ struct Uniforms {
     atmosphere: Option<glow::UniformLocation>,
     planet_up: Option<glow::UniformLocation>,
 }
+struct CachedFeed {
+    key: u64,
+    framebuffer: glow::Framebuffer,
+    texture: glow::Texture,
+    depth: glow::Renderbuffer,
+    width: i32,
+    height: i32,
+    painted_ms: Option<u64>,
+}
+impl CachedFeed {
+    unsafe fn create(
+        gl: &glow::Context,
+        key: u64,
+        width: i32,
+        height: i32,
+    ) -> Result<Self, String> {
+        let framebuffer = gl.create_framebuffer()?;
+        let texture = match gl.create_texture() {
+            Ok(t) => t,
+            Err(e) => {
+                gl.delete_framebuffer(framebuffer);
+                return Err(e);
+            }
+        };
+        let depth = match gl.create_renderbuffer() {
+            Ok(d) => d,
+            Err(e) => {
+                gl.delete_texture(texture);
+                gl.delete_framebuffer(framebuffer);
+                return Err(e);
+            }
+        };
+        gl.bind_framebuffer(glow::FRAMEBUFFER, Some(framebuffer));
+        gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+        gl.tex_image_2d(
+            glow::TEXTURE_2D,
+            0,
+            glow::RGBA8 as i32,
+            width,
+            height,
+            0,
+            glow::RGBA,
+            glow::UNSIGNED_BYTE,
+            glow::PixelUnpackData::Slice(None),
+        );
+        gl.tex_parameter_i32(
+            glow::TEXTURE_2D,
+            glow::TEXTURE_MIN_FILTER,
+            glow::LINEAR as i32,
+        );
+        gl.tex_parameter_i32(
+            glow::TEXTURE_2D,
+            glow::TEXTURE_MAG_FILTER,
+            glow::LINEAR as i32,
+        );
+        gl.framebuffer_texture_2d(
+            glow::FRAMEBUFFER,
+            glow::COLOR_ATTACHMENT0,
+            glow::TEXTURE_2D,
+            Some(texture),
+            0,
+        );
+        gl.bind_renderbuffer(glow::RENDERBUFFER, Some(depth));
+        gl.renderbuffer_storage(glow::RENDERBUFFER, glow::DEPTH_COMPONENT24, width, height);
+        gl.framebuffer_renderbuffer(
+            glow::FRAMEBUFFER,
+            glow::DEPTH_ATTACHMENT,
+            glow::RENDERBUFFER,
+            Some(depth),
+        );
+        let cache = Self {
+            key,
+            framebuffer,
+            texture,
+            depth,
+            width,
+            height,
+            painted_ms: None,
+        };
+        if gl.check_framebuffer_status(glow::FRAMEBUFFER) != glow::FRAMEBUFFER_COMPLETE {
+            cache.destroy(gl);
+            return Err("Camera framebuffer unavailable".into());
+        }
+        Ok(cache)
+    }
+    unsafe fn destroy(self, gl: &glow::Context) {
+        gl.delete_framebuffer(self.framebuffer);
+        gl.delete_texture(self.texture);
+        gl.delete_renderbuffer(self.depth);
+    }
+}
 struct Renderer {
     gl: Arc<glow::Context>,
     program: glow::Program,
@@ -1617,6 +1760,7 @@ struct Renderer {
     meshes: Vec<Mesh>,
     uniforms: Uniforms,
     station_batches: Vec<(usize, Vec3, f32)>,
+    feed_cache: Vec<CachedFeed>,
     destroyed: bool,
     turrets: std::collections::HashMap<(String, u8), TurretState>,
 }
@@ -1684,6 +1828,7 @@ impl Renderer {
             meshes,
             uniforms,
             station_batches,
+            feed_cache: Vec::new(),
             destroyed: false,
             turrets: std::collections::HashMap::new(),
         })
@@ -1695,6 +1840,143 @@ impl Renderer {
         gl.uniform_1_f32(self.uniforms.emission.as_ref(), emission);
         gl.bind_vertex_array(Some(self.meshes[mesh].vao));
         gl.draw_arrays(glow::TRIANGLES, 0, self.meshes[mesh].count);
+    }
+    unsafe fn paint_cached_feed(
+        &mut self,
+        frame: &Frame,
+        key: u64,
+        info: egui::PaintCallbackInfo,
+        count: usize,
+    ) {
+        let gl = self.gl.clone();
+        let viewport = info.viewport_in_pixels();
+        let (width, height) = feed_resolution(viewport.width_px, viewport.height_px);
+        let draw = gl.get_parameter_framebuffer(glow::DRAW_FRAMEBUFFER_BINDING);
+        let read = gl.get_parameter_framebuffer(glow::READ_FRAMEBUFFER_BINDING);
+        let mut old_viewport = [0; 4];
+        let mut old_scissor = [0; 4];
+        gl.get_parameter_i32_slice(glow::VIEWPORT, &mut old_viewport);
+        gl.get_parameter_i32_slice(glow::SCISSOR_BOX, &mut old_scissor);
+        let scissor = gl.is_enabled(glow::SCISSOR_TEST);
+        let depth_enabled = gl.is_enabled(glow::DEPTH_TEST);
+        let blend_enabled = gl.is_enabled(glow::BLEND);
+        let srgb = gl.is_enabled(glow::FRAMEBUFFER_SRGB);
+        let depth_mask = gl.get_parameter_bool(glow::DEPTH_WRITEMASK);
+        let color_mask = gl.get_parameter_bool_array::<4>(glow::COLOR_WRITEMASK);
+        let blend = [
+            gl.get_parameter_i32(glow::BLEND_SRC_RGB),
+            gl.get_parameter_i32(glow::BLEND_DST_RGB),
+            gl.get_parameter_i32(glow::BLEND_SRC_ALPHA),
+            gl.get_parameter_i32(glow::BLEND_DST_ALPHA),
+        ];
+        let equation = [
+            gl.get_parameter_i32(glow::BLEND_EQUATION_RGB),
+            gl.get_parameter_i32(glow::BLEND_EQUATION_ALPHA),
+        ];
+        gl.color_mask(true, true, true, true);
+        gl.disable(glow::FRAMEBUFFER_SRGB);
+        if let Some(index) = self
+            .feed_cache
+            .iter()
+            .position(|c| c.key == key && (c.width != width || c.height != height))
+        {
+            self.feed_cache.remove(index).destroy(&gl);
+        }
+        if !self.feed_cache.iter().any(|c| c.key == key) {
+            if self.feed_cache.len() >= 4 {
+                self.feed_cache.remove(0).destroy(&gl);
+            }
+            if let Ok(cache) = CachedFeed::create(&gl, key, width, height) {
+                self.feed_cache.push(cache);
+            }
+        }
+        if let Some(index) = self.feed_cache.iter().position(|c| c.key == key) {
+            let cache = &self.feed_cache[index];
+            let framebuffer = cache.framebuffer;
+            if feed_due(cache.painted_ms, frame.now, count) {
+                gl.bind_framebuffer(glow::FRAMEBUFFER, Some(framebuffer));
+                gl.viewport(0, 0, width, height);
+                gl.disable(glow::SCISSOR_TEST);
+                gl.clear_color(0.0, 0.0, 0.0, 1.0);
+                gl.depth_mask(true);
+                gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
+                self.paint(frame);
+                self.feed_cache[index].painted_ms = Some(frame.now);
+            }
+            gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(framebuffer));
+            gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, draw);
+            gl.viewport(
+                old_viewport[0],
+                old_viewport[1],
+                old_viewport[2],
+                old_viewport[3],
+            );
+            gl.scissor(
+                old_scissor[0],
+                old_scissor[1],
+                old_scissor[2],
+                old_scissor[3],
+            );
+            if scissor {
+                gl.enable(glow::SCISSOR_TEST);
+            } else {
+                gl.disable(glow::SCISSOR_TEST);
+            }
+            if srgb {
+                gl.enable(glow::FRAMEBUFFER_SRGB);
+            }
+            gl.blit_framebuffer(
+                0,
+                0,
+                width,
+                height,
+                viewport.left_px,
+                viewport.from_bottom_px,
+                viewport.left_px + viewport.width_px,
+                viewport.from_bottom_px + viewport.height_px,
+                glow::COLOR_BUFFER_BIT,
+                glow::LINEAR,
+            );
+        }
+        gl.depth_mask(depth_mask);
+        gl.color_mask(color_mask[0], color_mask[1], color_mask[2], color_mask[3]);
+        gl.blend_func_separate(
+            blend[0] as u32,
+            blend[1] as u32,
+            blend[2] as u32,
+            blend[3] as u32,
+        );
+        gl.blend_equation_separate(equation[0] as u32, equation[1] as u32);
+        for (state, enabled) in [
+            (glow::DEPTH_TEST, depth_enabled),
+            (glow::BLEND, blend_enabled),
+            (glow::FRAMEBUFFER_SRGB, srgb),
+        ] {
+            if enabled {
+                gl.enable(state);
+            } else {
+                gl.disable(state);
+            }
+        }
+        gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, draw);
+        gl.bind_framebuffer(glow::READ_FRAMEBUFFER, read);
+        gl.viewport(
+            old_viewport[0],
+            old_viewport[1],
+            old_viewport[2],
+            old_viewport[3],
+        );
+        gl.scissor(
+            old_scissor[0],
+            old_scissor[1],
+            old_scissor[2],
+            old_scissor[3],
+        );
+        if scissor {
+            gl.enable(glow::SCISSOR_TEST);
+        } else {
+            gl.disable(glow::SCISSOR_TEST);
+        }
     }
     unsafe fn paint(&mut self, frame: &Frame) {
         let space = frame.space;
@@ -1859,7 +2141,7 @@ impl Renderer {
                     continue;
                 }
                 let base = transform(
-                    space.scene(drone.position),
+                    space.scene(drone_present_position(drone, frame.now)),
                     Vec3::ONE,
                     orientation(drone.heading).unwrap_or(Quat::IDENTITY),
                 );
@@ -1890,10 +2172,12 @@ impl Renderer {
         if frame.connected {
             for pilot in &frame.pilots {
                 for drone in fleet(pilot) {
-                    if drone.signal_strength <= 0.0 {
+                    if drone.signal_strength <= 0.0
+                        || (frame.camera_drone == Some(drone.id) && pilot.name == frame.own)
+                    {
                         continue;
                     }
-                    let start = space.scene(drone.position);
+                    let start = space.scene(drone_present_position(drone, frame.now));
                     let beam = match &drone.mode {
                         arkline_protocol::DroneMode::Mining { target_id }
                             if drone.mining_cycle.is_some() =>
@@ -2377,6 +2661,9 @@ impl Renderer {
             return;
         }
         self.destroyed = true;
+        for cache in self.feed_cache.drain(..) {
+            cache.destroy(&self.gl);
+        }
         for mesh in &self.meshes {
             self.gl.delete_buffer(mesh.buffer);
             self.gl.delete_vertex_array(mesh.vao);
@@ -2619,6 +2906,66 @@ fn drone_feed_rect(viewport: egui::Rect, class: ShipClass) -> egui::Rect {
     screen.shrink(screen.width().min(screen.height()) * 0.05)
 }
 
+fn feed_resolution(width: i32, height: i32) -> (i32, i32) {
+    let scale = (384.0 / width.max(height).max(1) as f32).min(1.0);
+    (
+        ((width as f32 * scale).round() as i32).max(1),
+        ((height as f32 * scale).round() as i32).max(1),
+    )
+}
+fn feed_due(previous: Option<u64>, now: u64, count: usize) -> bool {
+    previous.is_none_or(|before| {
+        now < before || now.saturating_sub(before) >= if count > 1 { 33 } else { 16 }
+    })
+}
+fn drone_present_position(drone: &arkline_protocol::DroneView, now: u64) -> [f64; 3] {
+    let seconds = now.saturating_sub(drone.updated_at_ms).min(350) as f64 / 1000.0;
+    std::array::from_fn(|axis| drone.position[axis] + drone.velocity[axis] * seconds)
+}
+fn feed_tiles(screen: egui::Rect, count: usize) -> Vec<egui::Rect> {
+    let count = count.min(4);
+    let columns = if count > 1 { 2 } else { 1 };
+    let rows = if count > 2 { 2 } else { 1 };
+    (0..count)
+        .map(|i| {
+            let size = screen.size() / egui::vec2(columns as f32, rows as f32);
+            egui::Rect::from_min_size(
+                screen.min
+                    + egui::vec2((i % columns) as f32 * size.x, (i / columns) as f32 * size.y),
+                size,
+            )
+            .shrink(1.0)
+        })
+        .collect()
+}
+fn drone_mode_matrix(
+    drone: &arkline_protocol::DroneView,
+    space: Space,
+    aspect: f32,
+    mode: DroneCameraMode,
+    now: u64,
+) -> (Vec3, Mat4) {
+    let mut sampled = drone.clone();
+    sampled.position = drone_present_position(drone, now);
+    if mode == DroneCameraMode::Pov {
+        return drone_camera_matrix(&sampled, space, aspect);
+    }
+    if mode == DroneCameraMode::Orbit {
+        return drone_view_matrix(&sampled, space, aspect, true, now);
+    }
+    let target = space.scene(sampled.position);
+    let forward = Vec3::from_array(sampled.heading.map(|v| v as f32)).normalize_or_zero();
+    let (eye, up) = if mode == DroneCameraMode::TopDown {
+        (target + Vec3::Y * 1.5, Vec3::X)
+    } else {
+        (target + Vec3::Y * 0.55 - forward * 0.65, Vec3::Y)
+    };
+    (
+        eye,
+        Mat4::perspective_rh_gl(1.05, aspect.max(0.1), 0.002, 1200.0)
+            * Mat4::look_at_rh(eye, target, up),
+    )
+}
 fn drone_camera_matrix(
     drone: &arkline_protocol::DroneView,
     space: Space,
@@ -3682,6 +4029,191 @@ c=mix(c,sky,atmosphere);color=vec4(c,1.0);}
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn drone_feed_budget_and_tiles_are_bounded() {
+        assert_eq!(feed_resolution(1920, 1080), (384, 216));
+        assert_eq!(feed_resolution(0, 0), (1, 1));
+        assert!(!feed_due(Some(1000), 1010, 1));
+        assert!(feed_due(Some(1000), 1016, 1));
+        assert!(!feed_due(Some(1000), 1032, 4));
+        assert!(feed_due(Some(1000), 1033, 4));
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(320., 180.));
+        let tiles = feed_tiles(screen, 15);
+        assert_eq!(tiles.len(), 4);
+        for (index, tile) in tiles.iter().enumerate() {
+            assert!(screen.contains_rect(*tile));
+            for other in &tiles[index + 1..] {
+                assert!(!tile.intersects(*other));
+            }
+        }
+    }
+    #[test]
+    fn drone_camera_modes_keep_target_visible_and_bound_extrapolation() {
+        let drone: arkline_protocol::DroneView=serde_json::from_value(serde_json::json!({"id":1,"position":[0,0,0],"velocity":[100,0,0],"heading":[1,0,0],"mode":{"kind":"hold"},"updated_at_ms":1000})).unwrap();
+        assert_eq!(drone_present_position(&drone, 1100), [10., 0., 0.]);
+        assert_eq!(drone_present_position(&drone, 2000), [35., 0., 0.]);
+        let space = Space { origin: [0.; 3] };
+        let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(320., 180.));
+        for mode in [
+            DroneCameraMode::Raised,
+            DroneCameraMode::TopDown,
+            DroneCameraMode::Orbit,
+        ] {
+            let (eye, vp) = drone_mode_matrix(&drone, space, rect.aspect_ratio(), mode, 1100);
+            assert!(eye.is_finite() && vp.is_finite());
+            let target = space.scene(drone_present_position(&drone, 1100));
+            let point = project_point(vp, rect, target).unwrap();
+            assert!(point.distance(rect.center()) < 0.01);
+            assert!(eye.distance(target) > 0.3);
+        }
+    }
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore = "Explicit native offscreen OpenGL cache/composite validation; no app window"]
+    fn native_camera_cache_composites_and_restores_state() {
+        use std::ffi::{c_void, CString};
+        #[link(name = "OpenGL", kind = "framework")]
+        unsafe extern "C" {
+            fn CGLChoosePixelFormat(
+                attributes: *const u32,
+                format: *mut *mut c_void,
+                count: *mut i32,
+            ) -> i32;
+            fn CGLCreateContext(
+                format: *mut c_void,
+                share: *mut c_void,
+                context: *mut *mut c_void,
+            ) -> i32;
+            fn CGLSetCurrentContext(context: *mut c_void) -> i32;
+            fn CGLDestroyContext(context: *mut c_void) -> i32;
+            fn CGLDestroyPixelFormat(format: *mut c_void) -> i32;
+        }
+        unsafe extern "C" {
+            fn dlsym(handle: *mut c_void, symbol: *const std::ffi::c_char) -> *mut c_void;
+        }
+        unsafe {
+            let mut format = std::ptr::null_mut();
+            let mut count = 0;
+            let attributes = [99, 0x3200, 73, 8, 24, 12, 24, 0];
+            assert_eq!(
+                CGLChoosePixelFormat(attributes.as_ptr(), &mut format, &mut count),
+                0
+            );
+            let mut context = std::ptr::null_mut();
+            assert_eq!(
+                CGLCreateContext(format, std::ptr::null_mut(), &mut context),
+                0
+            );
+            CGLDestroyPixelFormat(format);
+            assert_eq!(CGLSetCurrentContext(context), 0);
+            let gl = Arc::new(glow::Context::from_loader_function(|name| {
+                dlsym(
+                    (-2_isize) as *mut c_void,
+                    CString::new(name).unwrap().as_ptr(),
+                )
+                .cast()
+            }));
+            let mut renderer = Renderer::new(gl.clone()).unwrap();
+            let target = CachedFeed::create(&gl, 999, 128, 128).unwrap();
+            gl.bind_framebuffer(glow::FRAMEBUFFER, Some(target.framebuffer));
+            gl.viewport(0, 0, 128, 128);
+            gl.disable(glow::SCISSOR_TEST);
+            gl.color_mask(true, true, true, true);
+            gl.clear_color(1., 0., 1., 1.);
+            gl.clear(glow::COLOR_BUFFER_BIT);
+            gl.enable(glow::SCISSOR_TEST);
+            gl.scissor(40, 40, 48, 48);
+            gl.enable(glow::BLEND);
+            gl.disable(glow::DEPTH_TEST);
+            gl.depth_mask(false);
+            let view = Mat4::look_at_rh(Vec3::ZERO, Vec3::X, Vec3::Y);
+            let vp = Mat4::perspective_rh_gl(1.05, 1., 0.002, 1200.) * view;
+            let mut frame = Frame {
+                cockpit_vp: vp,
+                snapshot_time: 1000,
+                planet_vp: vp,
+                system_id: 3,
+                ship_class: ShipClass::Pioneer,
+                traffic: vec![],
+                surface_props: vec![],
+                drone_camera: true,
+                camera_drone: None,
+                space: Space { origin: [0.; 3] },
+                cockpit: false,
+                rotation: Quat::IDENTITY,
+                asteroids: vec![],
+                gates: vec![],
+                connected: true,
+                vp,
+                eye: Vec3::ZERO,
+                now: 1000,
+                pilots: vec![],
+                own: "fixture".into(),
+                docking: None,
+            };
+            let info = || egui::PaintCallbackInfo {
+                viewport: egui::Rect::from_min_size(egui::pos2(32., 32.), egui::vec2(64., 64.)),
+                clip_rect: egui::Rect::from_min_size(egui::pos2(40., 40.), egui::vec2(48., 48.)),
+                pixels_per_point: 1.,
+                screen_size_px: [128, 128],
+            };
+            renderer.paint_cached_feed(&frame, 1, info(), 1);
+            assert_eq!(
+                gl.get_parameter_framebuffer(glow::DRAW_FRAMEBUFFER_BINDING),
+                Some(target.framebuffer)
+            );
+            assert!(gl.is_enabled(glow::BLEND));
+            assert!(!gl.is_enabled(glow::DEPTH_TEST));
+            assert!(!gl.get_parameter_bool(glow::DEPTH_WRITEMASK));
+            let mut pixels = [0u8; 4];
+            gl.read_pixels(
+                64,
+                64,
+                1,
+                1,
+                glow::RGBA,
+                glow::UNSIGNED_BYTE,
+                glow::PixelPackData::Slice(Some(&mut pixels)),
+            );
+            assert_ne!(
+                pixels,
+                [255, 0, 255, 255],
+                "feed must composite into destination"
+            );
+            gl.read_pixels(
+                16,
+                16,
+                1,
+                1,
+                glow::RGBA,
+                glow::UNSIGNED_BYTE,
+                glow::PixelPackData::Slice(Some(&mut pixels)),
+            );
+            assert_eq!(pixels, [255, 0, 255, 255], "outside clip stays untouched");
+            frame.now = 1008;
+            renderer.paint_cached_feed(&frame, 1, info(), 1);
+            assert_eq!(renderer.feed_cache[0].painted_ms, Some(1000));
+            for key in 2..=5 {
+                renderer.paint_cached_feed(&frame, key, info(), 4);
+            }
+            assert_eq!(renderer.feed_cache.len(), 4);
+            assert!(!renderer.feed_cache.iter().any(|cache| cache.key == 1));
+            let live_textures: Vec<_> = renderer
+                .feed_cache
+                .iter()
+                .map(|cache| cache.texture)
+                .collect();
+            assert_eq!(gl.get_error(), glow::NO_ERROR);
+            renderer.destroy();
+            assert!(renderer.feed_cache.is_empty());
+            assert!(live_textures
+                .into_iter()
+                .all(|texture| !gl.is_texture(texture)));
+            target.destroy(&gl);
+            CGLSetCurrentContext(std::ptr::null_mut());
+            CGLDestroyContext(context);
+        }
+    }
     #[test]
     fn reaction_thrusters_use_confirmed_acceleration_not_speed_and_mount_on_mesh() {
         let mut pilot: PilotView = serde_json::from_value(serde_json::json!({

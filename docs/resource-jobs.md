@@ -5,23 +5,26 @@ existing authenticated ship, or an existing worker that explicitly delegated fle
 control to your pilot. It does not create pilots, spawn worker ships, or grant access
 to another player's inventory.
 
-## One confirmed haul
+## Confirmed multi-trip delivery
 
 Select a ship, choose an ore goal, and press **Start gathering**. No model is needed
 for this button. Start docked or in space; orders during warp wait for arrival.
 Deployed drones are recalled before departure. Gate transit must finish before
-assignment. Existing cargo counts toward the goal, which must fit the hull.
+assignment. Existing cargo counts toward the total goal, which may be up to 1,000,000 ore.
+The hold limits each trip rather than the whole job: a 4,000-ore order with a
+1,000-ore hold makes approximately four trips.
 
 The server undocks when needed, travels to its current system's belt, acquires an
 asteroid and mines using both turret slots and up to five mining drones. It recalls
 the drones before returning, docks at the starting system's station, and deposits
-ore in that pilot's personal station storage. This is one haul in one system; it
-does not traverse gates, repeat indefinitely, trade, or transfer the proceeds to
-the controller. Fixed extraction cycles can exceed the requested minimum, within
+ore in that pilot's personal station storage. If storage is below the total goal, it departs again and repeats. The job stays
+in one system; it does not traverse gates, repeat indefinitely, trade, or transfer
+the proceeds to the controller. Fixed extraction cycles can exceed the requested minimum, within
 cargo capacity.
 
 The panel shows the latest job for the selected ship, its phase and message, and
-separate **confirmed mined** and **stored** totals. Progress reflects confirmed
+separate cumulative **confirmed mined** and **stored** totals across all trips.
+Carried-in ore counts toward storage but is not newly mined ore. Progress reflects confirmed
 storage, not an animation or model prediction. A blocked job displays its reason;
 low power can pause work before a bounded wait ends in a blocked result. The panel
 retains last-known state when disconnected. Starting jobs and accepting model
@@ -137,7 +140,9 @@ visible.
 The computer retains up to eight completed question/reply exchanges, bounded to
 16,000 characters, for the selected pilot. For example, “I want a mining
 expedition” can lead to a brief quantity question; answering “Fill the hold” uses
-that ship's current cargo capacity. The **Conversation** disclosure shows retained
+that ship's current cargo capacity. An explicit larger goal such as “Mine and
+store 4,000 ore” schedules repeated deliveries without rejecting it at hold size.
+The **Conversation** disclosure shows retained
 exchanges. Changing pilot or connection session clears context. Cancelled or failed
 interpretations do not become completed conversation turns, and previous tool
 interpretations are explicitly not proof that the server accepted or finished work.

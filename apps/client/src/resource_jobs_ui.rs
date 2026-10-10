@@ -62,8 +62,9 @@ impl Cockpit {
         if matches!(p.location, Location::Jumping { .. }) {
             return Some("Wait for gate transit to finish before assigning a haul.");
         }
-        if self.resource_goal == 0 || self.resource_goal > cargo_capacity(p.ship_class) {
-            return Some("Goal must fit the selected ship's cargo capacity.");
+        if self.resource_goal == 0 || self.resource_goal > arkline_protocol::MAX_RESOURCE_JOB_UNITS
+        {
+            return Some("Total goal must be between 1 and 1,000,000 ore.");
         }
         None
     }
@@ -299,10 +300,10 @@ impl Cockpit {
             .resource_ship()
             .map_or(1, |p| cargo_capacity(p.ship_class));
         ui.horizontal_wrapped(|ui| {
-            ui.label("Ore goal");
+            ui.label("Total ore goal");
             ui.add(
                 egui::DragValue::new(&mut self.resource_goal)
-                    .range(1..=capacity)
+                    .range(1..=arkline_protocol::MAX_RESOURCE_JOB_UNITS)
                     .suffix(" units"),
             );
             if ui
@@ -322,6 +323,11 @@ impl Cockpit {
         if let Some(reason) = self.resource_start_reason() {
             ui.colored_label(MUTED, reason);
         }
+        ui.small(format!(
+            "{} ore per hold · approximately {} trips · repeats until stored",
+            capacity,
+            self.resource_goal.div_ceil(capacity.max(1))
+        ));
         ui.small(
             "Goal includes ore aboard. Warp finishes and drones return before the haul proceeds.",
         );

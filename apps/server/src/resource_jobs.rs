@@ -32,8 +32,8 @@ pub(super) fn start(
         "wait for gate travel to finish before assigning a resource job"
     );
     ensure!(
-        (1..=cargo_capacity(p.ship_class)).contains(&units),
-        "target must be 1 through active hull cargo capacity"
+        (1..=MAX_RESOURCE_JOB_UNITS).contains(&units),
+        "total delivery target must be 1 through 1,000,000 ore"
     );
     ensure!(
         w.resource_jobs
@@ -41,7 +41,7 @@ pub(super) fn start(
             .is_none_or(|j| j.view.phase.is_terminal()),
         "pilot already has an active resource job"
     );
-    let initial_phase = if p.ore >= units {
+    let initial_phase = if p.ore >= units || p.ore >= cargo_capacity(p.ship_class) {
         if p.location == Location::Docked {
             ResourceJobPhase::Depositing
         } else {
@@ -108,10 +108,12 @@ pub(super) fn cancel(w: &mut World, name: &str, now: u64, reason: &str) {
         j.view.message = reason.into();
         j.view.updated_at_ms = now;
         if let Some(p) = w.pilots.get_mut(name) {
-            j.view.mined_units = j
-                .view
-                .mined_units
-                .max(p.view.ore.saturating_sub(j.initial_cargo));
+            j.view.mined_units = j.view.mined_units.max(
+                j.view
+                    .stored_units
+                    .saturating_add(p.view.ore)
+                    .saturating_sub(j.initial_cargo),
+            );
             stop(p, reason);
         }
     }
@@ -144,7 +146,11 @@ fn ready_power(j: &mut Job, p: &PilotView, cost: u64) -> bool {
 fn plan(w: &World, j: &mut Job, now: u64) -> Option<Request> {
     use ResourceJobPhase::*;
     let p = &w.pilots[&j.view.pilot].view;
-    let newly_mined = p.ore.saturating_sub(j.initial_cargo);
+    let newly_mined = j
+        .view
+        .stored_units
+        .saturating_add(p.ore)
+        .saturating_sub(j.initial_cargo);
     if newly_mined > j.view.mined_units {
         j.view.mined_units = newly_mined;
         j.stage_started_ms = now;
@@ -195,11 +201,13 @@ fn plan(w: &World, j: &mut Job, now: u64) -> Option<Request> {
             }
         }
         AcquiringTarget => {
-            if p.ore >= j.view.target_units || p.ore >= cargo_capacity(p.ship_class) {
+            if p.ore >= j.view.target_units.saturating_sub(j.view.stored_units)
+                || p.ore >= cargo_capacity(p.ship_class)
+            {
                 phase(
                     j,
                     ReturningToStation,
-                    "Target gathered; recovering mining drones",
+                    "Haul ready; recovering mining drones",
                     now,
                 );
                 return None;
@@ -266,11 +274,13 @@ fn plan(w: &World, j: &mut Job, now: u64) -> Option<Request> {
             Some(Request::LockAsteroid { id: a.id })
         }
         Mining => {
-            if p.ore >= j.view.target_units || p.ore >= cargo_capacity(p.ship_class) {
+            if p.ore >= j.view.target_units.saturating_sub(j.view.stored_units)
+                || p.ore >= cargo_capacity(p.ship_class)
+            {
                 phase(
                     j,
                     ReturningToStation,
-                    "Target gathered; recovering mining drones",
+                    "Haul ready; recovering mining drones",
                     now,
                 );
                 return None;
@@ -428,13 +438,39 @@ pub(super) fn advance(s: &mut Server, now: u64) -> Result<()> {
                         j.drones_launched += 1;
                     }
                     if let Some(units) = deposit {
-                        j.view.stored_units = units;
-                        let message = if units >= j.view.target_units {
-                            "Haul stored in personal station inventory"
+                        j.view.stored_units = j
+                            .view
+                            .stored_units
+                            .checked_add(units)
+                            .context("job delivery total overflow")?;
+                        if j.view.stored_units >= j.view.target_units {
+                            phase(
+                                j,
+                                ResourceJobPhase::Completed,
+                                "Total delivery goal stored in personal station inventory",
+                                now,
+                            );
+                        } else if !w
+                            .asteroids
+                            .iter()
+                            .any(|a| a.system_id == j.home_system_id && a.ore > 0)
+                        {
+                            phase(
+                                j,
+                                ResourceJobPhase::Completed,
+                                "Available partial haul stored; local resources exhausted",
+                                now,
+                            );
                         } else {
-                            "Available partial haul stored; local resources exhausted"
-                        };
-                        phase(j, ResourceJobPhase::Completed, message, now);
+                            j.drones_launched = 0;
+                            j.view.target_id = None;
+                            phase(
+                                j,
+                                ResourceJobPhase::Undocking,
+                                "Haul stored; departing for remaining delivery goal",
+                                now,
+                            );
+                        }
                     }
                 }
                 Err(error) => {
@@ -470,8 +506,8 @@ pub(super) fn validate(w: &World) -> Result<()> {
         if !j.view.phase.is_terminal() {
             authorize(w, &j.view.controller, name)?;
             ensure!(
-                j.view.target_units <= cargo_capacity(w.pilots[name].view.ship_class),
-                "active job target exceeds hull capacity"
+                j.view.target_units <= MAX_RESOURCE_JOB_UNITS,
+                "active job target exceeds delivery limit"
             );
         }
         ensure!(

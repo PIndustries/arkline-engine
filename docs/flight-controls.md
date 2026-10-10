@@ -199,10 +199,21 @@ input, and maps do not capture right-button aiming.
 
 The upper side screens contain local 2D and ship-relative 3D maps. Scroll controls
 real-distance range; click contacts to select them. The lower left screen displays
-the selected drone. Choose POV or Orbit camera from Drones. Signal is authoritative
-and distance-based, with increasing noise as the link weakens. Only one selected
-camera is rendered at once. Recon is observation/navigation; mining drones repeat
-real ore extraction; attack drones currently fight other drones only.
+the selected drone. In **Drones → Live camera**, select a fleet row to choose its
+camera. **Single feed** and **Raised** are the defaults. Camera angles are **POV**,
+**Raised**, **Top down**, and **Orbit camera**; changing them does not steer a drone.
+**Split feeds** divides the physical screen into at most four real camera views.
+The selected drone chooses its page; **Previous feeds** and **Next feeds** move
+between stable ID pages. A fleet of fifteen therefore has four pages, never
+fifteen simultaneous renders. The chosen angle applies to all visible feeds.
+**Drone screen** hides or shows the display. A watched worker ship takes precedence;
+**Restore drone feed** returns it to these drone choices.
+
+Feeds use bounded render resolution and update frequency to limit rendering cost;
+this is a monitoring screen, not a full-resolution second main viewport. Signal is
+authoritative and distance-based, with increasing noise as the link weakens. Recon
+is observation/navigation; mining drones repeat real ore extraction; attack drones
+currently fight other drones only.
 
 ## Relay startup (26.10.10.12)
 
