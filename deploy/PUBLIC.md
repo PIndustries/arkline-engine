@@ -79,7 +79,7 @@ are separate release checks.
 
 Stage each complete browser build under `web/VERSION/`, retaining previous version
 directories. Create `release.conf` in the reviewed image build context with
-`location = / { return 302 /VERSION/$is_args$args; }`, replacing VERSION with the
+`location = / { return 302 https://play.arkline.network/VERSION/$is_args$args; }`, replacing VERSION with the
 verified build number. Relative module and WASM imports then stay within that
 release even during rolling deployments. Do not change files within a published
 version. The same origin preserves existing browser pilot credentials.
