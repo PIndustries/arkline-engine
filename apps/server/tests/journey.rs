@@ -3,7 +3,7 @@ use arkline_protocol::*;
 use std::{
     fs,
     io::{BufRead, BufReader, Write},
-    net::{TcpListener, TcpStream},
+    net::TcpStream,
     path::Path,
     process::{Child, Command, Stdio},
     thread,
@@ -24,23 +24,28 @@ impl Server {
     fn start(db: &Path, address: String) -> Self {
         let process = Command::new(env!("CARGO_BIN_EXE_arkline-server"))
             .args(["--bind", &address, "--db", db.to_str().unwrap()])
-            .stdout(Stdio::null())
+            .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
             .spawn()
             .unwrap();
         let mut server = Self { process, address };
-        let deadline = Instant::now() + Duration::from_secs(45);
-        loop {
-            if TcpStream::connect(&server.address).is_ok() {
-                return server;
-            }
-            assert!(
-                server.process.try_wait().unwrap().is_none(),
-                "server exited before listening"
-            );
-            assert!(Instant::now() < deadline, "server never became ready");
-            thread::sleep(Duration::from_millis(25));
-        }
+        let stdout = server.process.stdout.take().unwrap();
+        let (sender, receiver) = std::sync::mpsc::channel();
+        thread::spawn(move || {
+            let mut line = String::new();
+            let result = BufReader::new(stdout).read_line(&mut line).map(|_| line);
+            let _ = sender.send(result);
+        });
+        let line = receiver
+            .recv_timeout(Duration::from_secs(45))
+            .expect("server did not report its bound address")
+            .expect("server readiness output failed");
+        server.address = line
+            .trim()
+            .strip_prefix("Arkline server listening on ")
+            .expect("server exited before binding its socket")
+            .to_string();
+        server
     }
 }
 struct Client(BufReader<TcpStream>);
@@ -161,10 +166,10 @@ fn two_pilots_trade_recover_and_export_consistent_history() {
         std::env::temp_dir().join(format!("arkline-journey-{}-{unique}", std::process::id()));
     fs::create_dir_all(&directory).unwrap();
     let db = directory.join("world.sqlite");
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let address = listener.local_addr().unwrap().to_string();
-    drop(listener);
-    let server = Server::start(&db, address.clone());
+    // Let the child own its ephemeral port from bind onward. Reserving then
+    // dropping a parent socket allowed another test/connection to take it.
+    let server = Server::start(&db, "127.0.0.1:0".to_string());
+    let address = server.address.clone();
     let mut alice = Client::new(&address);
     let alice_token = alice.login("Alice", None).resume_token.unwrap();
     let mut bob = Client::new(&address);
@@ -313,10 +318,10 @@ fn transport_presence_counts_sessions_without_removing_persistent_ships() {
         std::env::temp_dir().join(format!("arkline-presence-{}-{unique}", std::process::id()));
     fs::create_dir_all(&directory).unwrap();
     let db = directory.join("world.sqlite");
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let address = listener.local_addr().unwrap().to_string();
-    drop(listener);
-    let server = Server::start(&db, address.clone());
+    // Let the child own its ephemeral port from bind onward. Reserving then
+    // dropping a parent socket allowed another test/connection to take it.
+    let server = Server::start(&db, "127.0.0.1:0".to_string());
+    let address = server.address.clone();
     let mut observer = Client::new(&address);
     assert!(observer
         .ok(Request::Snapshot)
@@ -406,10 +411,10 @@ fn gates_connect_three_systems_survive_restart_and_preserve_targeted_mining() {
         std::env::temp_dir().join(format!("arkline-gates-{}-{unique}", std::process::id()));
     fs::create_dir_all(&directory).unwrap();
     let db = directory.join("world.sqlite");
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let address = listener.local_addr().unwrap().to_string();
-    drop(listener);
-    let server = Server::start(&db, address.clone());
+    // Let the child own its ephemeral port from bind onward. Reserving then
+    // dropping a parent socket allowed another test/connection to take it.
+    let server = Server::start(&db, "127.0.0.1:0".to_string());
+    let address = server.address.clone();
     let mut traveler = Client::new(&address);
     let token = traveler.login("GateTraveler", None).resume_token.unwrap();
     traveler.ok(Request::Undock);
@@ -537,10 +542,10 @@ fn direct_piloting_over_tcp_expires_without_losing_roll() {
         std::env::temp_dir().join(format!("arkline-direct-{}-{unique}", std::process::id()));
     fs::create_dir_all(&directory).unwrap();
     let db = directory.join("world.sqlite");
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let address = listener.local_addr().unwrap().to_string();
-    drop(listener);
-    let server = Server::start(&db, address.clone());
+    // Let the child own its ephemeral port from bind onward. Reserving then
+    // dropping a parent socket allowed another test/connection to take it.
+    let server = Server::start(&db, "127.0.0.1:0".to_string());
+    let address = server.address.clone();
     let mut client = Client::new(&address);
     client.login("DirectPilot", None);
     let initial = client.ok(Request::Undock).snapshot.unwrap();

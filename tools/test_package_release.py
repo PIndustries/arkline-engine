@@ -1,6 +1,8 @@
 """Offline packaging checks; no builds, network access, uploads or signing."""
 import importlib.util
 import json
+import os
+import zipfile
 from pathlib import Path
 import sys
 import tarfile
@@ -46,8 +48,20 @@ class PackagingTests(unittest.TestCase):
             package.archive(release, output)
             with tarfile.open(output) as archive:
                 member = archive.getmember("Arkline-server/arkline-server")
-                self.assertEqual(member.mode & 0o777, 0o755)
+                if os.name != "nt":
+                    self.assertEqual(member.mode & 0o777, 0o755)
                 self.assertEqual(archive.extractfile(member).read(), b"test")
+
+    def test_windows_zip_contains_executable_and_versioned_root(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            release = root / "Arkline-server"
+            release.mkdir()
+            (release / "arkline-server.exe").write_bytes(b"test-executable")
+            output = root / "server.zip"
+            package.archive(release, output, windows=True)
+            with zipfile.ZipFile(output) as archive:
+                self.assertEqual(archive.read("Arkline-server/arkline-server.exe"), b"test-executable")
 
     def test_source_rejects_runtime_data_even_if_tracked(self):
         with tempfile.TemporaryDirectory() as temporary:
