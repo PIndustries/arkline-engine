@@ -5192,6 +5192,7 @@ mod tests {
             (moved.min - before.min - Vec2::new(-180.0, 55.0)).length() < 3.0,
             "before={before:?}, moved={moved:?}"
         );
+        cockpit.layout.wait_for_save();
         assert!(dir.join("layout.json").exists());
         cockpit.layout = layout::Layout::load(&dir);
         for _ in 0..3 {
@@ -5252,6 +5253,7 @@ mod tests {
         let reset = frame(&ctx, &mut cockpit, larger, vec![]);
         assert!((larger.x - reset.right() - 16.0).abs() < 3.0);
         assert!((reset.top() - 16.0).abs() < 3.0);
+        cockpit.layout.wait_for_save();
         std::fs::remove_dir_all(dir).unwrap();
     }
     #[test]
