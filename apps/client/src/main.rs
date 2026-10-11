@@ -1550,6 +1550,18 @@ impl Cockpit {
             ui.small("Capacitor data unavailable");
         }
     }
+    fn service_visible(&self, tab: ServiceTab) -> bool {
+        self.own().is_none_or(|p| p.station_avatar.is_none())
+            || !matches!(
+                tab,
+                ServiceTab::Navigation
+                    | ServiceTab::Hangar
+                    | ServiceTab::Modules
+                    | ServiceTab::Drones
+                    | ServiceTab::ShipComputer
+                    | ServiceTab::Sandbox
+            )
+    }
     fn service_tabs(&mut self, ui: &mut egui::Ui) {
         // Every destination stays visible; narrow physical screens wrap the grid.
         let columns = ((ui.available_width() / 72.0).floor() as usize).clamp(3, 6);
@@ -1593,6 +1605,9 @@ impl Cockpit {
                     ),
                     (ServiceTab::Sandbox, "Surface", "Surface construction tools"),
                 ] {
+                    if !self.service_visible(tab) {
+                        continue;
+                    }
                     if ui
                         .add_sized(
                             Vec2::new(width, 24.0),
@@ -3348,6 +3363,9 @@ impl eframe::App for Cockpit {
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::F11)) {
             toggle_fullscreen(ctx);
         }
+        if !self.service_visible(self.service_tab) {
+            self.service_tab = ServiceTab::Station;
+        }
         let in_hangar = self.in_station_hangar();
         let bounds = ctx.screen_rect().shrink(8.0);
         self.layout.begin_frame(bounds);
@@ -3457,10 +3475,11 @@ impl eframe::App for Cockpit {
                 .show(ctx, |ui| {
                     self.overlay_frame(ctx).show(ui, |ui| {
                         ui.set_width(28.0);
-                        if ui
-                            .add_sized([28.0, 26.0], egui::Button::new("◎"))
-                            .on_hover_text("Overview")
-                            .clicked()
+                        if self.service_visible(ServiceTab::Navigation)
+                            && ui
+                                .add_sized([28.0, 26.0], egui::Button::new("◎"))
+                                .on_hover_text("Overview")
+                                .clicked()
                         {
                             if self.view_mode == ViewMode::Cockpit {
                                 self.service_tab = ServiceTab::Navigation;
@@ -3482,6 +3501,9 @@ impl eframe::App for Cockpit {
                             (ServiceTab::Ledger, "✓", "Ledger audit"),
                             (ServiceTab::Settings, "⚙", "Settings"),
                         ] {
+                            if !self.service_visible(tab) {
+                                continue;
+                            }
                             if ui
                                 .add_sized(
                                     [28.0, 26.0],

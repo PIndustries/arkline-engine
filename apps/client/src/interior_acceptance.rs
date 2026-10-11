@@ -338,5 +338,24 @@ fn on_foot_camera_buttons_and_ship_command_boundary() {
         assert!(text.contains("ON FOOT"));
         assert!(!text.contains("Undock active vessel"));
         assert!(!text.contains("Activate turret"));
+        let labels = j
+            .step(vec![])
+            .into_iter()
+            .map(|(t, _)| t)
+            .collect::<Vec<_>>();
+        for forbidden in [
+            "Flight", "Ship", "Modules", "Drones", "AI", "Surface", "M", "D", "H", "◎",
+        ] {
+            assert!(
+                !labels.iter().any(|t| t == forbidden),
+                "misleading on-foot launcher: {forbidden}"
+            );
+        }
+        for retained in ["▣", "⌂", "L", "⇄", "C", "≡", "✓", "⚙"] {
+            assert!(
+                labels.iter().any(|t| t == retained),
+                "missing on-foot service: {retained}; {labels:?}"
+            );
+        }
     }
 }
