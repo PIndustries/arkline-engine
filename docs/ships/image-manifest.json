@@ -3,7 +3,7 @@
     "ship": "Pioneer",
     "version": "v02-laser-correction",
     "status": "superseded draft",
-    "original_zip_path": "Archive/Pioneer/v02-laser-correction.png",
+    "original_zip_path": "Archive/v02-laser-correction/Pioneer.png",
     "original_sha256": "a832bc066aee41939ca209cbf0a24e1374fe07b08bb4e35b0fa220c8101e1911",
     "repository_preview": "pioneer/images/v02-laser-correction.jpg",
     "preview_sha256": "ae9d6f5f1877f04faa515b93e4695244d7926ac2412fa720d67a31f0e8158fd1"
@@ -12,7 +12,7 @@
     "ship": "Prospector",
     "version": "v02-laser-correction",
     "status": "superseded draft",
-    "original_zip_path": "Archive/Prospector/v02-laser-correction.png",
+    "original_zip_path": "Archive/v02-laser-correction/Prospector.png",
     "original_sha256": "e0fc4aa22652652adcc57191fa54bf0c0712123c174b2b467c7072e32598b0c5",
     "repository_preview": "prospector/images/v02-laser-correction.jpg",
     "preview_sha256": "7bd10117bfa17fb554578e966569c55b1309788478435cec4abc8a81274632ee"
@@ -21,7 +21,7 @@
     "ship": "Hauler",
     "version": "v01-initial-fleet",
     "status": "superseded draft",
-    "original_zip_path": "Archive/Hauler/v01-initial-fleet.png",
+    "original_zip_path": "Archive/v01-initial-fleet/Hauler.png",
     "original_sha256": "61ba3cb4b9e6cf4bf9053da04ee626f9df6542272a4ddc3e995eb7539280ffc0",
     "repository_preview": "hauler/images/v01-initial-fleet.jpg",
     "preview_sha256": "c501669ed6fa057b478a577166882bfdae24ad44af7fbd4b37ae79a6b87ad822"
@@ -30,7 +30,7 @@
     "ship": "Vanguard",
     "version": "v01-initial-fleet",
     "status": "superseded draft",
-    "original_zip_path": "Archive/Vanguard/v01-initial-fleet.png",
+    "original_zip_path": "Archive/v01-initial-fleet/Vanguard.png",
     "original_sha256": "8e44bcf1232d513890bd21d1895ed03e569c33c91c3f9029457d0fc2f437cfa6",
     "repository_preview": "vanguard/images/v01-initial-fleet.jpg",
     "preview_sha256": "3118fea1525f03dbcd86857f195640e68ff97dab1ca50f9065f7db0af5390031"
@@ -39,7 +39,7 @@
     "ship": "Borealis",
     "version": "v01-initial-fleet",
     "status": "superseded draft",
-    "original_zip_path": "Archive/Borealis/v01-initial-fleet.png",
+    "original_zip_path": "Archive/v01-initial-fleet/Borealis.png",
     "original_sha256": "351df7baa7a22940863aed736a0e0534c2ecc73c2a953672b2597460cdf459fc",
     "repository_preview": "borealis/images/v01-initial-fleet.jpg",
     "preview_sha256": "81718ad621eb2b3ed66393cc91f306444475bf7df57738e35fdaae2d58c93686"
@@ -48,7 +48,7 @@
     "ship": "Stratum",
     "version": "v01-initial-fleet",
     "status": "superseded draft",
-    "original_zip_path": "Archive/Stratum/v01-initial-fleet.png",
+    "original_zip_path": "Archive/v01-initial-fleet/Stratum.png",
     "original_sha256": "7195b2b277a86dc674b9f17ae21ba50fc6df2ea725db73ca991787548282f6aa",
     "repository_preview": "stratum/images/v01-initial-fleet.jpg",
     "preview_sha256": "b0922e022cbabcb80ee16e17f4a5b426c7ab1ca6fb7e56fbeabdc49266c96348"
@@ -57,7 +57,7 @@
     "ship": "Monolith",
     "version": "v01-initial-fleet",
     "status": "superseded draft",
-    "original_zip_path": "Archive/Monolith/v01-initial-fleet.png",
+    "original_zip_path": "Archive/v01-initial-fleet/Monolith.png",
     "original_sha256": "c0621e3b22ee9584574612aaccb43f645f1dfa4555957b318941cd90a4db4b6c",
     "repository_preview": "monolith/images/v01-initial-fleet.jpg",
     "preview_sha256": "309d8dfa74ea6d7ae9fab977a87fc4f1b7c0277dc0f3b2f2338edd095662a5f3"
@@ -66,7 +66,7 @@
     "ship": "Pioneer",
     "version": "v03-black-green-construction",
     "status": "superseded draft",
-    "original_zip_path": "Archive/Pioneer/v03-black-green-construction.png",
+    "original_zip_path": "Archive/v03-black-green-construction/Pioneer.png",
     "original_sha256": "1351c4abaa1828bc01054cc517d31ac2b0ffd33be234f26d96830d0b0eff6902",
     "repository_preview": "pioneer/images/v03-black-green-construction.jpg",
     "preview_sha256": "5e88463b1ed930e55b95885af089eecbd14494eca05ab6e70d9e1e3cc79b9d54"
@@ -75,7 +75,7 @@
     "ship": "Prospector",
     "version": "v03-black-green-construction",
     "status": "superseded draft",
-    "original_zip_path": "Archive/Prospector/v03-black-green-construction.png",
+    "original_zip_path": "Archive/v03-black-green-construction/Prospector.png",
     "original_sha256": "1192edda3edb4e58489749838c944588cdb7e8cdbaab7bdea8ce843dc920961d",
     "repository_preview": "prospector/images/v03-black-green-construction.jpg",
     "preview_sha256": "44440474b82edd6b66e931dddb387559d2c330048dfdb50fa5a6873a5ad5a587"
@@ -84,7 +84,7 @@
     "ship": "Hauler",
     "version": "v03-black-green-construction",
     "status": "superseded draft",
-    "original_zip_path": "Archive/Hauler/v03-black-green-construction.png",
+    "original_zip_path": "Archive/v03-black-green-construction/Hauler.png",
     "original_sha256": "f2c89da99f3216076cf6de52348caf69481a30ba91e1ea9753fa57277105876a",
     "repository_preview": "hauler/images/v03-black-green-construction.jpg",
     "preview_sha256": "fcf0be8a4859cec7d0d628becd1fd29a97568e8b4cbbb6580f94783ea8dbfaa1"
@@ -93,7 +93,7 @@
     "ship": "Vanguard",
     "version": "v03-black-green-construction",
     "status": "superseded draft",
-    "original_zip_path": "Archive/Vanguard/v03-black-green-construction.png",
+    "original_zip_path": "Archive/v03-black-green-construction/Vanguard.png",
     "original_sha256": "30d1be5740388605a780541f8dc2d20685d1a95a53b62422895098696acffef7",
     "repository_preview": "vanguard/images/v03-black-green-construction.jpg",
     "preview_sha256": "b8571937c25ced4293ecff7068488bf653d02f3853d2a1880ba283567a5f44e1"
@@ -102,7 +102,7 @@
     "ship": "Borealis",
     "version": "v03-black-green-construction",
     "status": "superseded draft",
-    "original_zip_path": "Archive/Borealis/v03-black-green-construction.png",
+    "original_zip_path": "Archive/v03-black-green-construction/Borealis.png",
     "original_sha256": "66202fbcf489b2e5fffc1ee36657ce6404848b617a769eb5b16f1fea5a8235e9",
     "repository_preview": "borealis/images/v03-black-green-construction.jpg",
     "preview_sha256": "9395ccbdf74af95bfe94ff9165a06c43b383dcd57b55ff6ca289752f927e020e"
@@ -111,7 +111,7 @@
     "ship": "Stratum",
     "version": "v03-black-green-construction",
     "status": "superseded draft",
-    "original_zip_path": "Archive/Stratum/v03-black-green-construction.png",
+    "original_zip_path": "Archive/v03-black-green-construction/Stratum.png",
     "original_sha256": "d99e1f08f43e6bc4bf6e33c3a9d96fb160d587c4afcddd0decaf036f85651336",
     "repository_preview": "stratum/images/v03-black-green-construction.jpg",
     "preview_sha256": "a4d082d25c7427dd06271a08a9ff8622e5e98ccf3b2a7157e634df7f23b63081"
@@ -120,7 +120,7 @@
     "ship": "Monolith",
     "version": "v03-black-green-construction",
     "status": "superseded draft",
-    "original_zip_path": "Archive/Monolith/v03-black-green-construction.png",
+    "original_zip_path": "Archive/v03-black-green-construction/Monolith.png",
     "original_sha256": "ee03583b7836d9a00854b40d3e95cee25d4b25a960a9c21a3900f4f8af5010b3",
     "repository_preview": "monolith/images/v03-black-green-construction.jpg",
     "preview_sha256": "ee3ec917e2fc4e8a81aa2bc38491db2d9a6706c2c024c384fddb45dd1ec393f5"
@@ -129,7 +129,7 @@
     "ship": "Pioneer",
     "version": "v04-interior-draft",
     "status": "superseded draft",
-    "original_zip_path": "Archive/Pioneer/v04-interior-draft.png",
+    "original_zip_path": "Archive/v04-interior-draft/Pioneer.png",
     "original_sha256": "cf5dc0f5d57fe02790c4a19712c5a11312aab40b8ee775a12f09726e87a83de7",
     "repository_preview": "pioneer/images/v04-interior-draft.jpg",
     "preview_sha256": "ae7fad5d95ec59a901488348af5b3c3f853d7da2715e0d7102f57490774dbdb3"
@@ -138,7 +138,7 @@
     "ship": "Prospector",
     "version": "v04-interior-draft",
     "status": "superseded draft",
-    "original_zip_path": "Archive/Prospector/v04-interior-draft.png",
+    "original_zip_path": "Archive/v04-interior-draft/Prospector.png",
     "original_sha256": "392bbfa32c47867b8f25b7676d4dc7cf75f72d7761d075d49e62275e3b8ed1ec",
     "repository_preview": "prospector/images/v04-interior-draft.jpg",
     "preview_sha256": "7009136415e6f847769b4465216571c7820975470a6bde5af4d0fa5b700a587b"
@@ -147,7 +147,7 @@
     "ship": "Hauler",
     "version": "v04-interior-draft",
     "status": "superseded draft",
-    "original_zip_path": "Archive/Hauler/v04-interior-draft.png",
+    "original_zip_path": "Archive/v04-interior-draft/Hauler.png",
     "original_sha256": "ac274885d1b77b4b7743283996506e85e85957780d68368cdd0ee5b36c79451a",
     "repository_preview": "hauler/images/v04-interior-draft.jpg",
     "preview_sha256": "fd504d17b270623d7d120d48904b0a139942dd362568b230de6dbd6a17171624"
@@ -156,7 +156,7 @@
     "ship": "Vanguard",
     "version": "v04-interior-draft",
     "status": "superseded draft",
-    "original_zip_path": "Archive/Vanguard/v04-interior-draft.png",
+    "original_zip_path": "Archive/v04-interior-draft/Vanguard.png",
     "original_sha256": "10a67c3c5ef852989bf0e9b1ca1ce8b53ecb60f66b302190a0d3893b42b7a51e",
     "repository_preview": "vanguard/images/v04-interior-draft.jpg",
     "preview_sha256": "8394c0c086c3bd46169bc3c19c2fddd5b146a41ef9c43c67333a3da80ad3cf65"
@@ -165,7 +165,7 @@
     "ship": "Borealis",
     "version": "v04-interior-draft",
     "status": "superseded draft",
-    "original_zip_path": "Archive/Borealis/v04-interior-draft.png",
+    "original_zip_path": "Archive/v04-interior-draft/Borealis.png",
     "original_sha256": "7a285b6dd70cd796dd356a072a0141b6cb3131c9a4efe975990dc67a09b9a3d2",
     "repository_preview": "borealis/images/v04-interior-draft.jpg",
     "preview_sha256": "fa0e113174b844f0773edc7d107d65aa4667e6df93635057657b71bf6b631d88"
@@ -174,7 +174,7 @@
     "ship": "Stratum",
     "version": "v04-interior-draft",
     "status": "superseded draft",
-    "original_zip_path": "Archive/Stratum/v04-interior-draft.png",
+    "original_zip_path": "Archive/v04-interior-draft/Stratum.png",
     "original_sha256": "ff9e124fac8d31dc37b93967370fb7910a1b479a1ab53e1cf6eb0a828e89bab4",
     "repository_preview": "stratum/images/v04-interior-draft.jpg",
     "preview_sha256": "25191c899fef4059e8120d91574fbff8558b2906664092ed600efcfcfa47e91f"
@@ -183,7 +183,7 @@
     "ship": "Monolith",
     "version": "v04-interior-draft",
     "status": "superseded draft",
-    "original_zip_path": "Archive/Monolith/v04-interior-draft.png",
+    "original_zip_path": "Archive/v04-interior-draft/Monolith.png",
     "original_sha256": "f4abf63e6dafe672e4cf9d89cc35faeaae21c0700a74c6a8647ac3b55caf9bf1",
     "repository_preview": "monolith/images/v04-interior-draft.jpg",
     "preview_sha256": "0aabddc562aacf474c762765079c019c83bd620cd44efcb407f9b9fe6a7424f9"
@@ -255,7 +255,7 @@
     "ship": "Pioneer",
     "version": "v00-initial-study",
     "status": "superseded draft",
-    "original_zip_path": "Archive/Pioneer/v00-initial-study.png",
+    "original_zip_path": "Archive/v00-initial-study/Pioneer.png",
     "original_sha256": "b80d4fdf672910be6efb504dbd80b9d719e3b6f0b865bca2692ae370e9559776",
     "repository_preview": "pioneer/images/v00-initial-study.jpg",
     "preview_sha256": "083ad0233cd8abc05f863af2ce34e8db80892fa29ff50e2f55763a2cb7677efd"
@@ -264,7 +264,7 @@
     "ship": "Pioneer",
     "version": "v01-drill-draft-superseded",
     "status": "superseded draft",
-    "original_zip_path": "Archive/Pioneer/v01-drill-draft-superseded.png",
+    "original_zip_path": "Archive/v01-drill-draft-superseded/Pioneer.png",
     "original_sha256": "4a0b9eaf78b8455544178b350796828f88e88dcc3cf07f621b31db5253ce72ce",
     "repository_preview": "pioneer/images/v01-drill-draft-superseded.jpg",
     "preview_sha256": "9236aafa52ab840c6e915981a60416353dc0bce207dbc6823245b6da0739c7e9"
@@ -273,7 +273,7 @@
     "ship": "Prospector",
     "version": "v01-drill-draft-superseded",
     "status": "superseded draft",
-    "original_zip_path": "Archive/Prospector/v01-drill-draft-superseded.png",
+    "original_zip_path": "Archive/v01-drill-draft-superseded/Prospector.png",
     "original_sha256": "25015f6bc189e3d5fe975cc8f0d1717f6700ad3086700c8f8c260d87ba553086",
     "repository_preview": "prospector/images/v01-drill-draft-superseded.jpg",
     "preview_sha256": "40c13ca683551bdd251a4542eed8cd33e8c7b24f4e5b4932b8464f7daf1b66a8"
