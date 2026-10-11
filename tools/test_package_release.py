@@ -63,6 +63,20 @@ class PackagingTests(unittest.TestCase):
             with zipfile.ZipFile(output) as archive:
                 self.assertEqual(archive.read("Arkline-server/arkline-server.exe"), b"test-executable")
 
+    def test_windows_zip_clamps_cargo_notice_epoch_without_changing_content(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            release = root / "Arkline-client"
+            release.mkdir()
+            notice = release / "LICENSE"
+            notice.write_bytes(b"Original dependency license")
+            os.utime(notice, (1, 1))
+            output = root / "client.zip"
+            package.archive(release, output, windows=True)
+            with zipfile.ZipFile(output) as archive:
+                self.assertEqual(archive.read("Arkline-client/LICENSE"), b"Original dependency license")
+                self.assertEqual(archive.getinfo("Arkline-client/LICENSE").date_time, (1980, 1, 1, 0, 0, 0))
+
     def test_source_rejects_runtime_data_even_if_tracked(self):
         with tempfile.TemporaryDirectory() as temporary:
             with patch.object(package, "run", return_value="data/world.sqlite\0"):

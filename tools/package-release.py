@@ -23,7 +23,7 @@ def run(*args, cwd=ROOT, capture=False):
 
 def archive(directory, output, windows=False):
     if windows:
-        with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as handle:
+        with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED, compresslevel=6, strict_timestamps=False) as handle:
             for path in sorted(directory.rglob("*")):
                 if path.is_file():
                     handle.write(path, path.relative_to(directory.parent))

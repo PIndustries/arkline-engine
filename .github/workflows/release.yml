@@ -2,6 +2,13 @@ name: Prepare release downloads
 # Deliberately creates review artifacts only; publishing a public release is separate.
 on:
   workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform download sets to prepare
+        required: true
+        default: all
+        type: choice
+        options: [all, windows, linux, macos]
 permissions:
   contents: read
 env:
@@ -11,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, windows-2022, macos-14]
+        os: ${{ fromJSON(inputs.platform == 'windows' && '["windows-2022"]' || inputs.platform == 'linux' && '["ubuntu-22.04"]' || inputs.platform == 'macos' && '["macos-14"]' || '["ubuntu-22.04","windows-2022","macos-14"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
@@ -24,6 +31,8 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev libxi-dev libxrandr-dev libxcursor-dev libgl1-mesa-dev libasound2-dev
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
       - name: Check packaging rules
         run: python tools/test_package_release.py
       - name: Test the selected release source
