@@ -4,7 +4,7 @@ A shared space sandbox built in Rust by P.Industries and contributors. Fly a shi
 mine finite resources, manage drones, and trade in a persistent, server-authoritative
 universe. The current test world contains three connected star systems.
 
-**Early access · 26.10.11.5.** Arkline is under active development. Expect
+**Early access · 26.10.11.6.** Arkline is under active development. Expect
 unfinished systems and visual rough edges. Desktop and browser clients share the
 official relay at `wss://relay.arkline.network/ws`. The connection screen also offers
 a separate Test world and custom servers. See [public hosting](deploy/PUBLIC.md)
@@ -23,6 +23,8 @@ with alternating foot contact/lift and a smooth return to idle. Leave the ship, 
 return to the boarding marker before entering and undocking. A connected captain’s
 room adds furniture, live operational displays and in-world station terminals. See the
 [stability audit](docs/stability-audit.md) for remaining foundation gaps.
+On foot, WASD and arrow keys move the pilot, and Space jumps. Jump height and landing
+are controlled by the server; boarding and seating wait until the pilot is grounded.
 
 The ship computer retains short conversations and combines follow-up instructions
 with current ship telemetry. Gathering starts from space as well as a station;

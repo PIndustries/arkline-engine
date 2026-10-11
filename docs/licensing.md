@@ -37,11 +37,14 @@ does not grant official-server access, deployment rights or maintainer status.
 
 ## Dependency and asset review
 
-The locked metadata inventory at ebfa4c9 contained 456 resolved external packages
-across all platform targets, all with declared license expressions. The declared
+The locked metadata inventory checked for build 26.10.11.6 contains 476 resolved
+external packages across all platform targets, all with declared license metadata. The declared
 expressions include permissive alternatives and separate bundled-font terms.
 Metadata alone is not a completed compatibility/provenance or attribution review.
-Before public source/binary distribution, review actual license files, select
+The release packager collects dependency license files and bundled-font notices
+into each distribution and supplies matching vendored source. This automated
+collection does not establish rights to every asset or resolve every license choice.
+Before making the repository public, finish the actual license-file and asset review, select
 appropriate alternatives, collect required notices, and confirm original asset
 rights. Keep this gate in [public-preview-readiness.md](public-preview-readiness.md) until recorded complete.
 

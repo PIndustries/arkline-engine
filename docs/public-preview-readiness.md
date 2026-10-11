@@ -1,9 +1,31 @@
 # Open-source developer alpha readiness
 
-Assessment: stabilization work for 26.10.10.24. The repository remains private.
+Historical assessment below: stabilization work for 26.10.10.24. The repository remains private.
 The owner selected AGPL-3.0-only. Publication still requires explicit approval.
 A public source alpha does not imply that the official network is ready for
 untrusted Internet players.
+
+## Update: 2026-10-11
+
+Public early-access downloads and WSS official Production/Test connections now
+exist for 26.10.11.5. Source-repository visibility remains a separate owner decision.
+Current source bundles include vendored corresponding source and collected
+third-party notices; the older table below records the earlier review, not the
+current distribution state. See [licensing.md](licensing.md), [browser.md](browser.md)
+and [../deploy/PUBLIC.md](../deploy/PUBLIC.md) for current boundaries.
+
+A read-only redacted Gitleaks pass over 46 locally available commits through
+`c7b268d` reported zero findings; historical object names contained no matches for
+credential/private-key/database filename patterns. This does not certify deleted
+remote refs, release attachments or undiscovered secrets. Re-scan the final commit.
+Before making the repository public, reconcile older private-preview release
+attachments with their historical licenses/source/notices, review operational
+inventory for intended disclosure, and finish explicit owner acceptance.
+
+[SECURITY.md](../SECURITY.md) now gives the existing private P.Industries contact
+and distinguishes WSS from private raw TCP. Public contribution CI must not run
+untrusted fork code on persistent privileged runners; current push/dispatch jobs
+are not a substitute for an isolated contribution workflow.
 
 ## Recommended release target
 

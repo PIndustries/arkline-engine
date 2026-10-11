@@ -1,4 +1,9 @@
-# Legacy systems: source review and Rust restoration plan
+# Legacy systems: historical source review and Rust restoration plan
+
+Historical snapshot, reviewed on 2026-10-09. Current Rust implementation has since
+expanded substantially; statements about missing features below apply only to that
+review date. See [component-map.md](component-map.md) and [api.md](api.md) for the
+current source-based map and protocol.
 
 Reviewed local source on 2026-10-09. This is an implementation inventory, not a
 claim that the old deployments or test suites are currently healthy. Neither
