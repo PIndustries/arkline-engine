@@ -5594,6 +5594,7 @@ mod tests {
     fn asset_test_fixture() -> AssetsView {
         AssetsView {
             pioneer_interior_available: true,
+            pioneer_interior_decks: 2,
             ships: vec![
                 HangarShip {
                     power: None,
@@ -5815,6 +5816,7 @@ mod tests {
         });
         cockpit.assets = Some(AssetsView {
             pioneer_interior_available: true,
+            pioneer_interior_decks: 2,
             ships: ALL_SHIP_CLASSES
                 .into_iter()
                 .filter(|c| *c != ShipClass::Pioneer)

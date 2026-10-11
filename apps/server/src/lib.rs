@@ -496,6 +496,7 @@ impl Server {
             | Request::EnterShip
             | Request::EnterInterior
             | Request::ExitInterior
+            | Request::InteriorLift { .. }
             | Request::StationJump
             | Request::StationWalk { .. }) => {
                 let name = session

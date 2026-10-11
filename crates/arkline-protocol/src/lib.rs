@@ -428,6 +428,9 @@ pub enum Request {
     EnterShip,
     EnterInterior,
     ExitInterior,
+    InteriorLift {
+        deck: u8,
+    },
     StationJump,
     StationWalk {
         forward: f64,
@@ -890,6 +893,9 @@ pub struct StationAvatar {
     /// Pioneer deck-one local coordinates when true; private hangar otherwise.
     #[serde(default)]
     pub onboard_interior: bool,
+    /// Interior deck identity; feet height remains local to that deck.
+    #[serde(default = "default_interior_deck")]
+    pub interior_deck: u8,
     /// Authoritative start time; absent when grounded. Older saves default to grounded.
     #[serde(default)]
     pub jump_started_ms: Option<u64>,
@@ -901,6 +907,9 @@ pub struct StationAvatar {
     pub heading: f64,
     pub moving: bool,
     pub updated_at_ms: u64,
+}
+fn default_interior_deck() -> u8 {
+    1
 }
 #[derive(Debug, Clone, Copy)]
 pub struct HangarLayout {
@@ -1012,6 +1021,8 @@ pub struct CorporationView {
 pub struct AssetsView {
     #[serde(default)]
     pub pioneer_interior_available: bool,
+    #[serde(default)]
+    pub pioneer_interior_decks: u8,
     /// Inactive owned hulls only; active hull and cargo remain in PilotView.
     pub ships: Vec<HangarShip>,
     pub storage: Vec<StationStorage>,

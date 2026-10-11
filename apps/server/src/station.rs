@@ -26,7 +26,7 @@ pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result
         Request::EnterInterior => {
             ensure!(
                 p.view.ship_class == ShipClass::Pioneer,
-                "only Pioneer deck one is walkable"
+                "only Pioneer interiors are walkable"
             );
             if let Some(a) = &p.view.station_avatar {
                 ensure!(
@@ -40,6 +40,7 @@ pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result
             p.walk_input = None;
             p.view.station_avatar = Some(StationAvatar {
                 onboard_interior: true,
+                interior_deck: 1,
                 jump_started_ms: None,
                 seated: false,
                 position: PIONEER_INTERIOR_ENTRY,
@@ -47,6 +48,32 @@ pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result
                 moving: false,
                 updated_at_ms: now,
             });
+        }
+        Request::InteriorLift { deck } => {
+            let a = p
+                .view
+                .station_avatar
+                .as_mut()
+                .context("enter the interior before using its lift")?;
+            ensure!(
+                p.view.ship_class == ShipClass::Pioneer && a.onboard_interior,
+                "the lift belongs to the Pioneer interior"
+            );
+            ensure!(
+                (1..=2).contains(&deck) && deck != a.interior_deck,
+                "choose the other interior deck"
+            );
+            ensure!(
+                a.jump_started_ms.is_none()
+                    && !a.seated
+                    && flight::distance(a.position, PIONEER_LIFT_POINT) <= PIONEER_LIFT_RANGE,
+                "stand on the marked access-core lift landing first"
+            );
+            a.interior_deck = deck;
+            a.position = PIONEER_LIFT_POINT;
+            a.moving = false;
+            a.updated_at_ms = now;
+            p.walk_input = None;
         }
         Request::ExitInterior => {
             let a = p
@@ -56,6 +83,7 @@ pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result
                 .context("not inside the ship")?;
             ensure!(
                 a.onboard_interior
+                    && a.interior_deck == 1
                     && a.jump_started_ms.is_none()
                     && flight::distance(a.position, PIONEER_INTERIOR_ENTRY)
                         <= STATION_BOARD_RANGE_M,
@@ -64,6 +92,7 @@ pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result
             p.walk_input = None;
             p.view.station_avatar = Some(StationAvatar {
                 onboard_interior: false,
+                interior_deck: 1,
                 jump_started_ms: None,
                 seated: false,
                 position: layout.boarding_point,
@@ -78,6 +107,7 @@ pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result
             p.controls = None;
             p.view.station_avatar = Some(StationAvatar {
                 onboard_interior: false,
+                interior_deck: 1,
                 jump_started_ms: None,
                 seated: false,
                 position: layout.boarding_point,
@@ -292,6 +322,7 @@ pub(super) fn validate(w: &World) -> Result<()> {
                     && a.position[2].abs() <= l.half_width
                     && (!a.onboard_interior
                         || (p.view.ship_class == ShipClass::Pioneer
+                            && (1..=2).contains(&a.interior_deck)
                             && a.position[0] >= 0.3
                             && a.position[0] <= 31.7
                             && a.position[2] >= 0.3

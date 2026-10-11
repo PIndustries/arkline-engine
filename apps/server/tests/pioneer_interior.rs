@@ -74,6 +74,62 @@ fn interior_rooms_doors_restart_and_boarding_lifecycle() {
         walk(&mut s, &mut session, &mut now, [door, z + 2.7]);
         walk(&mut s, &mut session, &mut now, [door, 7.0]);
     }
+    assert!(
+        !s.handle_at(&mut session, Request::InteriorLift { deck: 2 }, now)
+            .ok
+    );
+    walk(&mut s, &mut session, &mut now, [2.0, 7.0]);
+    assert!(
+        !s.handle_at(&mut session, Request::InteriorLift { deck: 3 }, now)
+            .ok
+    );
+    assert!(
+        !s.handle_at(&mut session, Request::InteriorLift { deck: 1 }, now)
+            .ok
+    );
+    assert!(s.handle_at(&mut session, Request::StationJump, now).ok);
+    assert!(
+        !s.handle_at(&mut session, Request::InteriorLift { deck: 2 }, now)
+            .ok
+    );
+    now += 1000;
+    assert!(
+        s.handle_at(&mut session, Request::InteriorLift { deck: 2 }, now)
+            .ok
+    );
+    assert_eq!(
+        state(&mut s, &mut session, now)
+            .station_avatar
+            .unwrap()
+            .interior_deck,
+        2
+    );
+    for (_, x, z) in PIONEER_DECK_TWO_ROOMS {
+        let door = x + 8.9333333333 / 2.0;
+        walk(&mut s, &mut session, &mut now, [door, 7.0]);
+        walk(&mut s, &mut session, &mut now, [door, z + 2.7]);
+        walk(&mut s, &mut session, &mut now, [door, 7.0]);
+    }
+    // Matching XY airlock coordinates on deck two are not an exterior hatch.
+    walk(
+        &mut s,
+        &mut session,
+        &mut now,
+        [PIONEER_INTERIOR_ENTRY[0], 7.0],
+    );
+    walk(
+        &mut s,
+        &mut session,
+        &mut now,
+        [PIONEER_INTERIOR_ENTRY[0], 3.0],
+    );
+    assert!(!s.handle_at(&mut session, Request::ExitInterior, now).ok);
+    walk(
+        &mut s,
+        &mut session,
+        &mut now,
+        [PIONEER_INTERIOR_ENTRY[0], 7.0],
+    );
     assert!(!s.handle_at(&mut session, Request::ExitInterior, now).ok);
     // A bulkhead blocks walking into a room away from its doorway.
     walk(&mut s, &mut session, &mut now, [25.0, 7.0]);
@@ -122,8 +178,14 @@ fn interior_rooms_doors_restart_and_boarding_lifecycle() {
     );
     let a = state(&mut s, &mut session, now).station_avatar.unwrap();
     assert!(a.onboard_interior);
+    assert_eq!(a.interior_deck, 2);
     assert_eq!(a.position[1], 0.0);
     assert!(!a.moving);
+    walk(&mut s, &mut session, &mut now, [2.0, 7.0]);
+    assert!(
+        s.handle_at(&mut session, Request::InteriorLift { deck: 1 }, now)
+            .ok
+    );
     walk(
         &mut s,
         &mut session,
@@ -167,9 +229,13 @@ fn old_avatar_and_assets_never_claim_interior_support() {
     )
     .unwrap();
     assert!(!a.onboard_interior);
+    assert_eq!(a.interior_deck, 1);
     let a: AssetsView = serde_json::from_value(
         serde_json::json!({"ships":[],"storage":[],"corporation":null,"invitations":[]}),
     )
     .unwrap();
     assert!(!a.pioneer_interior_available);
+    assert_eq!(a.pioneer_interior_decks, 0);
+    let a:StationAvatar=serde_json::from_value(serde_json::json!({"onboard_interior":true,"position":[8.6666666667,0,3],"heading":0,"moving":false,"updated_at_ms":0})).unwrap();
+    assert_eq!(a.interior_deck, 1);
 }

@@ -55,7 +55,7 @@ impl Cockpit {
                     .map(|(a, b)| (a - b).powi(2))
                     .sum::<f64>()
                     .sqrt();
-                ui.strong("ON FOOT · PIONEER DECK ONE");
+                ui.strong(format!("ON FOOT · PIONEER DECK {}", avatar.interior_deck));
                 ui.small("WASD / arrows walk · Space jump · RMB look");
                 ui.small(
                     "Room fixtures are prototypes. Power/cargo screens read actual ship data.",
@@ -65,6 +65,7 @@ impl Cockpit {
                         self.can_operate()
                             && interior_available
                             && distance <= STATION_BOARD_RANGE_M
+                            && avatar.interior_deck == 1
                             && avatar.jump_started_ms.is_none(),
                         egui::Button::new("Exit airlock to hangar"),
                     )
@@ -72,7 +73,35 @@ impl Cockpit {
                 {
                     self.send(Request::ExitInterior);
                 }
-                ui.small(format!("Return to airlock · {:.1} m", distance));
+                let lift_distance = avatar
+                    .position
+                    .iter()
+                    .zip(PIONEER_LIFT_POINT)
+                    .map(|(a, b)| (a - b).powi(2))
+                    .sum::<f64>()
+                    .sqrt();
+                let next_deck = if avatar.interior_deck == 1 { 2 } else { 1 };
+                if ui
+                    .add_enabled(
+                        self.can_operate()
+                            && self
+                                .assets
+                                .as_ref()
+                                .is_some_and(|a| a.pioneer_interior_decks >= 2)
+                            && lift_distance <= PIONEER_LIFT_RANGE
+                            && avatar.jump_started_ms.is_none(),
+                        egui::Button::new(format!("Use lift to deck {next_deck}")),
+                    )
+                    .clicked()
+                {
+                    self.send(Request::InteriorLift { deck: next_deck });
+                }
+                ui.small(format!("Access-core lift · {:.1} m", lift_distance));
+                if avatar.interior_deck == 1 {
+                    ui.small(format!("Return to airlock · {:.1} m", distance));
+                } else {
+                    ui.small("Airlock exit is on deck 1. Return via the access-core lift.");
+                }
                 return;
             }
 
@@ -311,6 +340,7 @@ mod tests {
             c.snapshot.as_mut().unwrap().pilots[0].location = Location::Docked;
             c.assets = Some(AssetsView {
                 pioneer_interior_available: supported,
+                pioneer_interior_decks: if supported { 2 } else { 0 },
                 ships: vec![],
                 storage: vec![],
                 corporation: None,
@@ -344,6 +374,42 @@ mod tests {
                 matches!(rx.try_recv(), Ok(Request::EnterInterior)),
                 supported
             );
+            c.request_pending = false;
+            c.snapshot.as_mut().unwrap().pilots[0].station_avatar = Some(StationAvatar {
+                onboard_interior: true,
+                interior_deck: 1,
+                position: PIONEER_LIFT_POINT,
+                jump_started_ms: None,
+                seated: false,
+                heading: 0.0,
+                moving: false,
+                updated_at_ms: 1000,
+            });
+            frame(&ctx, &mut c, vec![]);
+            let point = frame(&ctx, &mut c, vec![])
+                .iter()
+                .find(|(t, _)| t == "Use lift to deck 2")
+                .unwrap()
+                .1;
+            for pressed in [true, false] {
+                frame(
+                    &ctx,
+                    &mut c,
+                    vec![
+                        egui::Event::PointerMoved(point),
+                        egui::Event::PointerButton {
+                            pos: point,
+                            button: egui::PointerButton::Primary,
+                            pressed,
+                            modifiers: egui::Modifiers::NONE,
+                        },
+                    ],
+                );
+            }
+            assert_eq!(
+                matches!(rx.try_recv(), Ok(Request::InteriorLift { deck: 2 })),
+                supported
+            );
         }
     }
     #[test]
@@ -355,6 +421,7 @@ mod tests {
             p.location = Location::Docked;
             p.station_avatar = Some(StationAvatar {
                 onboard_interior: false,
+                interior_deck: 1,
                 jump_started_ms: None,
                 seated: false,
                 position: hangar_layout(p.ship_class).boarding_point,
@@ -404,6 +471,7 @@ mod tests {
         p.location = Location::Docked;
         p.station_avatar = Some(StationAvatar {
             onboard_interior: false,
+            interior_deck: 1,
             jump_started_ms: None,
             seated: false,
             position: hangar_layout(p.ship_class).boarding_point,
@@ -460,6 +528,7 @@ mod tests {
         p.location = Location::Docked;
         p.station_avatar = Some(StationAvatar {
             onboard_interior: false,
+            interior_deck: 1,
             jump_started_ms: None,
             seated: false,
             position: hangar_layout(p.ship_class).boarding_point,
@@ -519,6 +588,7 @@ mod tests {
         p.location = Location::Docked;
         p.station_avatar = Some(StationAvatar {
             onboard_interior: false,
+            interior_deck: 1,
             jump_started_ms: None,
             seated: false,
             position: hangar_layout(p.ship_class).boarding_point,
@@ -540,6 +610,7 @@ mod tests {
         p.location = Location::Docked;
         p.station_avatar = Some(StationAvatar {
             onboard_interior: false,
+            interior_deck: 1,
             jump_started_ms: None,
             seated: false,
             position: quarters_layout(p.ship_class).seat_point,

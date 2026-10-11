@@ -18,6 +18,7 @@ pub struct HangarView {
     zoom: f32,
     walking: bool,
     interior: bool,
+    interior_deck: u8,
     class: Option<ShipClass>,
     follow: Option<Vec3>,
     gait: avatar_animation::Gait,
@@ -41,6 +42,7 @@ impl HangarView {
             zoom: 1.0,
             walking: false,
             interior: false,
+            interior_deck: 1,
             class: None,
             follow: None,
             gait: Default::default(),
@@ -76,11 +78,14 @@ impl HangarView {
             .station_avatar
             .as_ref()
             .is_some_and(|a| a.onboard_interior);
-        if self.walking != walking
+        let interior_deck = pilot.station_avatar.as_ref().map_or(1, |a| a.interior_deck);
+        if self.interior_deck != interior_deck
+            || self.walking != walking
             || self.interior != interior
             || self.class != Some(pilot.ship_class)
         {
             self.interior = interior;
+            self.interior_deck = interior_deck;
             self.zoom = 1.0;
             self.follow = None;
             self.gait = Default::default();
@@ -143,7 +148,7 @@ impl HangarView {
             30000.0,
         ) * Mat4::look_at_rh(eye, target, Vec3::Y);
         let mut parts = if interior {
-            pioneer_interior::parts()
+            pioneer_interior::parts(interior_deck)
         } else {
             let mut p = bay_parts(pilot.ship_class);
             p.extend(quarters::room_parts(pilot.ship_class, now));
@@ -191,7 +196,11 @@ impl HangarView {
             format!(
                 "{}  /  {}\n{}",
                 if interior {
-                    "ONBOARD · DECK ONE"
+                    if interior_deck == 2 {
+                        "ONBOARD · DECK TWO"
+                    } else {
+                        "ONBOARD · DECK ONE"
+                    }
                 } else {
                     "PRIVATE BAY"
                 },
@@ -609,6 +618,7 @@ mod tests {
     fn avatar_has_human_scale_and_walk_articulation() {
         let mut avatar = StationAvatar {
             onboard_interior: false,
+            interior_deck: 1,
             jump_started_ms: None,
             seated: false,
             position: [0.0; 3],
@@ -726,25 +736,35 @@ mod tests {
                 let eye = Vec3::new(5.0, 1.7, 7.0);
                 let vp = Mat4::perspective_rh_gl(1.2, 1280.0 / 720.0, 0.08, 100.0)
                     * Mat4::look_at_rh(eye, Vec3::new(20.0, 1.4, 7.0), Vec3::Y);
-                paint(&renderer, vp, eye, &pioneer_interior::parts());
-                let mut rgba = vec![0u8; 1280 * 720 * 4];
-                gl.read_pixels(
-                    0,
-                    0,
-                    1280,
-                    720,
-                    glow::RGBA,
-                    glow::UNSIGNED_BYTE,
-                    glow::PixelPackData::Slice(Some(&mut rgba)),
-                );
-                assert_eq!(gl.get_error(), glow::NO_ERROR);
-                let mut ppm = b"P6\n1280 720\n255\n".to_vec();
-                for row in rgba.chunks_exact(1280 * 4).rev() {
-                    for pixel in row.chunks_exact(4) {
-                        ppm.extend_from_slice(&pixel[..3]);
+                for deck in [1, 2] {
+                    paint(&renderer, vp, eye, &pioneer_interior::parts(deck));
+                    let mut rgba = vec![0u8; 1280 * 720 * 4];
+                    gl.read_pixels(
+                        0,
+                        0,
+                        1280,
+                        720,
+                        glow::RGBA,
+                        glow::UNSIGNED_BYTE,
+                        glow::PixelPackData::Slice(Some(&mut rgba)),
+                    );
+                    assert_eq!(gl.get_error(), glow::NO_ERROR);
+                    let mut ppm = b"P6\n1280 720\n255\n".to_vec();
+                    for row in rgba.chunks_exact(1280 * 4).rev() {
+                        for pixel in row.chunks_exact(4) {
+                            ppm.extend_from_slice(&pixel[..3]);
+                        }
                     }
+                    std::fs::write(
+                        if deck == 1 {
+                            path.clone()
+                        } else {
+                            format!("{path}.deck-two.ppm")
+                        },
+                        ppm,
+                    )
+                    .unwrap();
                 }
-                std::fs::write(path, ppm).unwrap();
                 capture.destroy(&gl);
             }
             if let Ok(path) = std::env::var("ARKLINE_HANGAR_CAPTURE") {
@@ -808,6 +828,7 @@ mod tests {
                 gl.viewport(0, 0, tile as i32, tile as i32);
                 let avatar = StationAvatar {
                     onboard_interior: false,
+                    interior_deck: 1,
                     jump_started_ms: None,
                     position: [0.0; 3],
                     heading: 0.0,

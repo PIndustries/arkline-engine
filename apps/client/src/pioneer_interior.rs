@@ -1,8 +1,6 @@
-//! Docked Pioneer deck one, rendered from the server's shared collision plan.
+//! Docked Pioneer decks, rendered from the server's shared collision plan.
 use super::*;
-use arkline_protocol::{
-    pioneer_interior_obstacles, StationObstacleKind, PIONEER_INTERIOR_ENTRY, PIONEER_ROOMS,
-};
+use arkline_protocol::{pioneer_interior_obstacles, StationObstacleKind, PIONEER_INTERIOR_ENTRY};
 fn block(p: &mut Parts, min: Vec3, max: Vec3, color: Vec3, emission: f32) {
     p.draw(
         0,
@@ -11,7 +9,7 @@ fn block(p: &mut Parts, min: Vec3, max: Vec3, color: Vec3, emission: f32) {
         emission,
     );
 }
-pub(super) fn parts() -> Vec<ModelPart> {
+pub(super) fn parts(deck: u8) -> Vec<ModelPart> {
     let mut p = Parts(Vec::new());
     let steel = Vec3::new(0.045, 0.065, 0.072);
     block(
@@ -53,7 +51,7 @@ pub(super) fn parts() -> Vec<ModelPart> {
             );
         }
     }
-    for (_, x, z) in PIONEER_ROOMS {
+    for &(_, x, z) in arkline_protocol::pioneer_rooms(deck) {
         let x = x as f32;
         let z = z as f32;
         let door = x + 8.933333 / 2.0;
@@ -108,7 +106,20 @@ pub(super) fn parts() -> Vec<ModelPart> {
             0.35,
         );
     }
-    let e = Vec3::from_array(PIONEER_INTERIOR_ENTRY.map(|v| v as f32));
+    let lift = Vec3::from_array(arkline_protocol::PIONEER_LIFT_POINT.map(|v| v as f32));
+    block(
+        &mut p,
+        lift + Vec3::new(-0.9, 0.005, -0.9),
+        lift + Vec3::new(0.9, 0.01, 0.9),
+        Vec3::new(0.30, 0.23, 0.05),
+        0.3,
+    );
+    let entry = if deck == 1 {
+        PIONEER_INTERIOR_ENTRY
+    } else {
+        arkline_protocol::PIONEER_LIFT_POINT
+    };
+    let e = Vec3::from_array(entry.map(|v| v as f32));
     block(
         &mut p,
         e + Vec3::new(-0.6, 0.01, -0.6),
@@ -142,7 +153,7 @@ pub(super) fn labels(ui: &mut egui::Ui, rect: egui::Rect, vp: Mat4, pilot: &Pilo
         return;
     };
     let pos = Vec3::from_array(a.position.map(|v| v as f32));
-    let room = PIONEER_ROOMS
+    let room = arkline_protocol::pioneer_rooms(a.interior_deck)
         .iter()
         .find(|(_, x, z)| {
             a.position[0] >= *x
@@ -168,7 +179,7 @@ pub(super) fn labels(ui: &mut egui::Ui, rect: egui::Rect, vp: Mat4, pilot: &Pilo
             arkline_protocol::cargo_capacity(pilot.ship_class)
         )
     } else {
-        "Fixtures: proposed / non-operational. Deck two is not accessible yet.".into()
+        "Fixtures: proposed / non-operational. Lift landing is in the access core.".into()
     };
     ui.painter().text(
         rect.left_top() + egui::vec2(20.0, 135.0),
@@ -184,7 +195,7 @@ pub(super) fn labels(ui: &mut egui::Ui, rect: egui::Rect, vp: Mat4, pilot: &Pilo
         egui::FontId::proportional(14.0),
         egui::Color32::from_rgb(165, 230, 185),
     );
-    for (name, x, z) in PIONEER_ROOMS {
+    for &(name, x, z) in arkline_protocol::pioneer_rooms(a.interior_deck) {
         let face = if z < 7.0 { 5.65 } else { 8.2 };
         let at = Vec3::new((x + 8.933333 / 2.0) as f32, 2.7, face as f32);
         let blocked = pioneer_interior_obstacles().iter().any(|o| {
@@ -217,6 +228,6 @@ mod tests {
         let target = Vec3::new(10.0, 1.25, 7.0);
         let eye = camera(target, Vec3::new(10.0, 6.0, 2.0));
         assert!(eye.y <= 2.95 && eye.z > 5.8);
-        assert!(!parts().is_empty());
+        assert!(!parts(1).is_empty());
     }
 }
