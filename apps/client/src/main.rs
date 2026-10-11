@@ -7,6 +7,7 @@ mod browser;
 mod effects;
 mod flight3d;
 mod layout;
+mod lighting_settings;
 mod motion;
 mod pilot_input;
 mod remote_control_ui;
@@ -511,6 +512,7 @@ impl Cockpit {
         let sound_settings = sound_settings::SoundSettings::load(&data_dir);
         let theme = theme::Theme::load(&data_dir);
         let layout = layout::Layout::load(&data_dir);
+        let lighting_quality = lighting_settings::LightingQuality::load(&data_dir);
         theme.apply(&cc.egui_ctx);
         let logo_image = image::load_from_memory_with_format(
             include_bytes!("../../../assets/Arkline-256.png"),
@@ -560,7 +562,11 @@ impl Cockpit {
             tactical_drag: false,
             motion: motion::MotionHistory::default(),
             timeline_origin: None,
-            flight_view: flight3d::FlightView::new(cc.gl.as_ref()),
+            flight_view: {
+                let mut view = flight3d::FlightView::new(cc.gl.as_ref());
+                view.lighting_quality = lighting_quality;
+                view
+            },
             hangar_view: flight3d::hangar::HangarView::new(cc.gl.as_ref()),
             station_walk_active: false,
             frozen_time: None,
@@ -624,6 +630,24 @@ impl Cockpit {
         }
         if action.test {
             self.sound.cue(sound_engine::Cue::Ui);
+        }
+        ui.separator();
+        ui.label("LIGHTING QUALITY");
+        let previous = self.flight_view.lighting_quality;
+        ui.horizontal_wrapped(|ui| {
+            for quality in lighting_settings::LightingQuality::ALL {
+                ui.selectable_value(
+                    &mut self.flight_view.lighting_quality,
+                    quality,
+                    quality.label(),
+                );
+            }
+        });
+        ui.small("Low disables cast shadows. Balanced and High improve nearby shadows; drone screens use a smaller budget.");
+        if previous != self.flight_view.lighting_quality {
+            if let Err(error) = self.flight_view.lighting_quality.save(&self.data_dir) {
+                self.settings_notice = error;
+            }
         }
         ui.separator();
         ui.small("VIEW MODE");
