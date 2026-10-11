@@ -1,0 +1,371 @@
+{
+  "name": "Pioneer",
+  "source_commit": "cb76d975421937d4cb4ae5da57cb5488843b108b",
+  "implemented": {
+    "hull_bounds_m": [
+      72,
+      38,
+      18
+    ],
+    "cargo_game_units": 1000,
+    "power": {
+      "capacity_j": 240000,
+      "regen_w": 1200,
+      "warp_cost_j": 30000,
+      "mining_cycle_cost_j": 4000,
+      "drone_mining_cycle_cost_j": 1500,
+      "drone_attack_cost_j": 2000
+    },
+    "mining_module_ids": [
+      0,
+      1
+    ],
+    "avatar_height_m": 1.8,
+    "station_avatar_radius_m": 0.3
+  },
+  "proposed": {
+    "human_core_origin_xzy_m": [
+      39.6,
+      12.0,
+      2
+    ],
+    "human_core_size_lw_m": [
+      32,
+      14
+    ],
+    "decks": [
+      {
+        "deck": 1,
+        "floor_y_m": 2.0,
+        "clear_ceiling_y_m": 5.2,
+        "corridor_bounds_uv_m": [
+          0,
+          5.8,
+          32,
+          2.4
+        ],
+        "access_core_bounds_uv_m": [
+          0.2,
+          0.2,
+          3.6,
+          13.6
+        ],
+        "access_core": "Reserved ladder/stair/lift and cross-passage envelope; stair treads, landing and lift geometry unresolved.",
+        "rooms": [
+          {
+            "id": "D1-P1",
+            "role": "AIRLOCK / EVA",
+            "local_bounds_m": [
+              4.2,
+              0.2,
+              8.933333333333334,
+              5.3999999999999995
+            ],
+            "doorway_center_uv_m": [
+              8.666666666666668,
+              5.8
+            ],
+            "clear_height_m": 3.2,
+            "door_clear_m": [
+              1.4,
+              2.4
+            ],
+            "status": "proposed"
+          },
+          {
+            "id": "D1-S1",
+            "role": "POWER CONTROL",
+            "local_bounds_m": [
+              4.2,
+              8.399999999999999,
+              8.933333333333334,
+              5.3999999999999995
+            ],
+            "doorway_center_uv_m": [
+              8.666666666666668,
+              8.2
+            ],
+            "clear_height_m": 3.2,
+            "door_clear_m": [
+              1.4,
+              2.4
+            ],
+            "status": "proposed"
+          },
+          {
+            "id": "D1-P2",
+            "role": "DRONE WORKSHOP",
+            "local_bounds_m": [
+              13.533333333333333,
+              0.2,
+              8.933333333333334,
+              5.3999999999999995
+            ],
+            "doorway_center_uv_m": [
+              18.0,
+              5.8
+            ],
+            "clear_height_m": 3.2,
+            "door_clear_m": [
+              1.4,
+              2.4
+            ],
+            "status": "proposed"
+          },
+          {
+            "id": "D1-S2",
+            "role": "CARGO ACCESS",
+            "local_bounds_m": [
+              13.533333333333333,
+              8.399999999999999,
+              8.933333333333334,
+              5.3999999999999995
+            ],
+            "doorway_center_uv_m": [
+              18.0,
+              8.2
+            ],
+            "clear_height_m": 3.2,
+            "door_clear_m": [
+              1.4,
+              2.4
+            ],
+            "status": "proposed"
+          },
+          {
+            "id": "D1-P3",
+            "role": "STORES / SERVICE",
+            "local_bounds_m": [
+              22.866666666666667,
+              0.2,
+              8.933333333333334,
+              5.3999999999999995
+            ],
+            "doorway_center_uv_m": [
+              27.333333333333336,
+              5.8
+            ],
+            "clear_height_m": 3.2,
+            "door_clear_m": [
+              1.4,
+              2.4
+            ],
+            "status": "proposed"
+          },
+          {
+            "id": "D1-S3",
+            "role": "WORKSHOP",
+            "local_bounds_m": [
+              22.866666666666667,
+              8.399999999999999,
+              8.933333333333334,
+              5.3999999999999995
+            ],
+            "doorway_center_uv_m": [
+              27.333333333333336,
+              8.2
+            ],
+            "clear_height_m": 3.2,
+            "door_clear_m": [
+              1.4,
+              2.4
+            ],
+            "status": "proposed"
+          }
+        ]
+      },
+      {
+        "deck": 2,
+        "floor_y_m": 5.8,
+        "clear_ceiling_y_m": 9.0,
+        "corridor_bounds_uv_m": [
+          0,
+          5.8,
+          32,
+          2.4
+        ],
+        "access_core_bounds_uv_m": [
+          0.2,
+          0.2,
+          3.6,
+          13.6
+        ],
+        "access_core": "Reserved ladder/stair/lift and cross-passage envelope; stair treads, landing and lift geometry unresolved.",
+        "rooms": [
+          {
+            "id": "D2-P1",
+            "role": "BRIDGE / NAV",
+            "local_bounds_m": [
+              4.2,
+              0.2,
+              8.933333333333334,
+              5.3999999999999995
+            ],
+            "doorway_center_uv_m": [
+              8.666666666666668,
+              5.8
+            ],
+            "clear_height_m": 3.2,
+            "door_clear_m": [
+              1.4,
+              2.4
+            ],
+            "status": "proposed"
+          },
+          {
+            "id": "D2-S1",
+            "role": "CREW / GALLEY",
+            "local_bounds_m": [
+              4.2,
+              8.399999999999999,
+              8.933333333333334,
+              5.3999999999999995
+            ],
+            "doorway_center_uv_m": [
+              8.666666666666668,
+              8.2
+            ],
+            "clear_height_m": 3.2,
+            "door_clear_m": [
+              1.4,
+              2.4
+            ],
+            "status": "proposed"
+          },
+          {
+            "id": "D2-P2",
+            "role": "SENSORS / COMMS",
+            "local_bounds_m": [
+              13.533333333333333,
+              0.2,
+              8.933333333333334,
+              5.3999999999999995
+            ],
+            "doorway_center_uv_m": [
+              18.0,
+              5.8
+            ],
+            "clear_height_m": 3.2,
+            "door_clear_m": [
+              1.4,
+              2.4
+            ],
+            "status": "proposed"
+          },
+          {
+            "id": "D2-S2",
+            "role": "MEDICAL / REST",
+            "local_bounds_m": [
+              13.533333333333333,
+              8.399999999999999,
+              8.933333333333334,
+              5.3999999999999995
+            ],
+            "doorway_center_uv_m": [
+              18.0,
+              8.2
+            ],
+            "clear_height_m": 3.2,
+            "door_clear_m": [
+              1.4,
+              2.4
+            ],
+            "status": "proposed"
+          },
+          {
+            "id": "D2-P3",
+            "role": "OPERATIONS",
+            "local_bounds_m": [
+              22.866666666666667,
+              0.2,
+              8.933333333333334,
+              5.3999999999999995
+            ],
+            "doorway_center_uv_m": [
+              27.333333333333336,
+              5.8
+            ],
+            "clear_height_m": 3.2,
+            "door_clear_m": [
+              1.4,
+              2.4
+            ],
+            "status": "proposed"
+          },
+          {
+            "id": "D2-S3",
+            "role": "LIFE SUPPORT",
+            "local_bounds_m": [
+              22.866666666666667,
+              8.399999999999999,
+              8.933333333333334,
+              5.3999999999999995
+            ],
+            "doorway_center_uv_m": [
+              27.333333333333336,
+              8.2
+            ],
+            "clear_height_m": 3.2,
+            "door_clear_m": [
+              1.4,
+              2.4
+            ],
+            "status": "proposed"
+          }
+        ]
+      }
+    ],
+    "zones": [
+      {
+        "name": "ENGINE / POWER RESERVE",
+        "bounds_xzy_lwh_m": [
+          2.16,
+          9.5,
+          0.0,
+          11.52,
+          19.0,
+          11.700000000000001
+        ],
+        "status": "proposed equipment envelope; not reactor sizing"
+      },
+      {
+        "name": "ORE / CARGO RESERVE",
+        "bounds_xzy_lwh_m": [
+          15.84,
+          9.5,
+          0.0,
+          20.160000000000004,
+          19.0,
+          11.700000000000001
+        ],
+        "status": "proposed; game cargo units have no physical volume conversion"
+      },
+      {
+        "name": "HUMAN CORE",
+        "bounds_xzy_lwh_m": [
+          39.6,
+          12.0,
+          2,
+          32,
+          14,
+          7.6
+        ],
+        "status": "proposed deck envelope"
+      }
+    ],
+    "power_route": "Aft power equipment reserve -> charge storage -> isolated distribution trunk -> propulsion/warp, two mining turrets, drone service, hotel loads. Room geometry, thermal systems and circuit simulation are unimplemented.",
+    "access": "Outer airlock -> access core -> deck corridor -> rooms. Vertical links reserved but not collision/navigation validated."
+  },
+  "standard": {
+    "avatar_height_m": 1.8,
+    "existing_avatar_radius_m": 0.3,
+    "proposed_corridor_clear_width_m": 2.4,
+    "proposed_door_clear_width_m": 1.4,
+    "proposed_door_clear_height_m": 2.4,
+    "proposed_room_clear_height_m": 3.2,
+    "proposed_deck_pitch_m": 3.8,
+    "proposed_wall_thickness_m": 0.2,
+    "coordinate_system": "X forward from aft bounding-box face; Y up; Z starboard from port bounding-box face. Local plan U aft-to-forward and V port-to-starboard. Not current mesh origin."
+  },
+  "validation": "Numeric bounding-box/room/deck containment only. No watertight hull fit, collision, navmesh, egress or runtime walk test."
+}

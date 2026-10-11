@@ -1,0 +1,562 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="5820" viewBox="0 0 1600 5820">
+<style>text{font-family:monospace;fill:#b9e8d5;font-size:16px}.h{font-size:30px;fill:#12e58b}.s{font-size:13px}.warn{fill:#ffbf66}.dim{fill:#ffffff}.line{fill:none;stroke:#12b978;stroke-width:1.3}</style>
+<rect width="1600" height="5820" fill="#081410"/>
+<text x="30" y="45" class="h">ARKLINE / MONOLITH / DIMENSIONED PLANNING SHEET</text>
+<text x="30" y="75" class="warn">Source dimensions and power: implemented prototype. ALL interior allocations: PROPOSED.</text>
+<text x="30" y="102" class="warn">Bounds are rectangular reservations, NOT an accurate hull silhouette or production CAD.</text>
+<text x="40" y="138" class="dim">TOP ENVELOPE: 5200 m x 2200 m / +X forward →</text>
+<rect x="40" y="150" width="685.4545454545454" height="290.0" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<rect x="60.56363636363636" y="222.5" width="109.67272727272726" height="145.0" fill="none" stroke="#ffb050" stroke-width="1.4" stroke-dasharray="5 4"/>
+<text x="1040" y="160" class="s">ENGINE / POWER RESERVE</text>
+<text x="1040" y="180" class="s">832 x 1100 x 910 m reserved</text>
+<rect x="190.79999999999998" y="222.5" width="191.92727272727274" height="145.0" fill="none" stroke="#46adba" stroke-width="1.4" stroke-dasharray="5 4"/>
+<text x="1040" y="215" class="s">ORE / CARGO RESERVE</text>
+<text x="1040" y="235" class="s">1456 x 1100 x 910 m reserved</text>
+<rect x="417.0" y="293.81363636363636" width="6.327272727272726" height="2.3727272727272726" fill="none" stroke="#10ec89" stroke-width="1.4" stroke-dasharray="5 4"/>
+<text x="1040" y="270" class="s">HUMAN CORE</text>
+<text x="1040" y="290" class="s">48 x 18 x 45.6 m reserved</text>
+<rect x="74.27272727272727" y="164.5" width="105.45454545454544" height="55.36363636363636" fill="none" stroke="#cb99ff" stroke-width="1.4" stroke-dasharray="5 4"/>
+<text x="1040" y="325" class="s">OPTIONAL CRAFT BAY</text>
+<text x="1040" y="345" class="s">800 x 420 x 240 m reserved</text>
+<text x="40" y="490" class="dim">SIDE ENVELOPE / same scale: 5200 m x 1400 m</text>
+<rect x="40" y="510" width="685.4545454545454" height="184.54545454545453" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<rect x="417.0" y="693.86" width="6.327272727272726" height="0.4218181818181818" fill="none" stroke="#10ec89" stroke-width="1.4"/>
+<rect x="417.0" y="693.3590909090909" width="6.327272727272726" height="0.4218181818181818" fill="none" stroke="#10ec89" stroke-width="1.4"/>
+<rect x="417.0" y="692.8581818181818" width="6.327272727272726" height="0.4218181818181818" fill="none" stroke="#10ec89" stroke-width="1.4"/>
+<rect x="417.0" y="692.3572727272726" width="6.327272727272726" height="0.4218181818181818" fill="none" stroke="#10ec89" stroke-width="1.4"/>
+<rect x="417.0" y="691.8563636363635" width="6.327272727272726" height="0.4218181818181818" fill="none" stroke="#10ec89" stroke-width="1.4"/>
+<rect x="417.0" y="691.3554545454546" width="6.327272727272726" height="0.4218181818181818" fill="none" stroke="#10ec89" stroke-width="1.4"/>
+<rect x="417.0" y="690.8545454545455" width="6.327272727272726" height="0.4218181818181818" fill="none" stroke="#10ec89" stroke-width="1.4"/>
+<rect x="417.0" y="690.3536363636364" width="6.327272727272726" height="0.4218181818181818" fill="none" stroke="#10ec89" stroke-width="1.4"/>
+<rect x="417.0" y="689.8527272727272" width="6.327272727272726" height="0.4218181818181818" fill="none" stroke="#10ec89" stroke-width="1.4"/>
+<rect x="417.0" y="689.3518181818181" width="6.327272727272726" height="0.4218181818181818" fill="none" stroke="#10ec89" stroke-width="1.4"/>
+<rect x="417.0" y="688.850909090909" width="6.327272727272726" height="0.4218181818181818" fill="none" stroke="#10ec89" stroke-width="1.4"/>
+<rect x="417.0" y="688.35" width="6.327272727272726" height="0.4218181818181818" fill="none" stroke="#10ec89" stroke-width="1.4"/>
+<text x="1040" y="490" class="dim">FRONT ENVELOPE: 2200 m x 1400 m</text>
+<rect x="1040" y="510" width="298.57142857142856" height="189.99999999999997" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="40" y="745" class="dim">GAME POWER: 8,000,000 J charge | 16,000 W regeneration | 800,000 J warp | 24,000 J mining cycle</text>
+<text x="40" y="772" class="s">CARGO: 80,000 game units. No volume/mass conversion defined. Mining module IDs: 0, 1.</text>
+<text x="40" y="798" class="s">Power physical route (PROPOSED): power reserve → charge store → isolated bus → warp / turrets / drones.</text>
+<text x="40" y="823" class="s">Avatar: 1.8 m tall, 0.6 m existing collision diameter. Proposed door: 1.4 x 2.4 m; corridor: 2.4 m.</text>
+<text x="40" y="848" class="warn">Room clear height: 3.2 m; deck pitch: 3.8 m. Vertical access/airlocks/life support are not implemented.</text>
+<text x="40" y="890" class="dim">DECK 1: floor Y=2 m / ceiling Y=5.2 m / LOCAL PLAN</text>
+<rect x="40" y="908" width="826.6666666666666" height="310.0" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<rect x="40" y="1042.3333333333333" width="826.6666666666666" height="41.33333333333333" fill="#103c2b" stroke="#12996a" stroke-width="1.4"/>
+<rect x="43.44444444444444" y="911.4444444444445" width="62.0" height="303.11111111111114" fill="none" stroke="#d19af5" stroke-width="1.4"/>
+<rect x="112.33333333333333" y="911.4444444444445" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="117.33333333333333" y="925.4444444444445" class="s">D1-P1</text>
+<text x="117.33333333333333" y="939.4444444444445" class="s">AIRLOCK</text>
+<text x="117.33333333333333" y="952.4444444444445" class="s">EVA</text>
+<text x="117.33333333333333" y="967.4444444444445" class="s">14.3 x 7.4 m</text>
+<rect x="223.12962962962962" y="1041.3333333333333" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="112.33333333333333" y="1087.111111111111" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="117.33333333333333" y="1101.111111111111" class="s">D1-S1</text>
+<text x="117.33333333333333" y="1115.111111111111" class="s">POWER CONTROL</text>
+<text x="117.33333333333333" y="1143.111111111111" class="s">14.3 x 7.4 m</text>
+<rect x="223.12962962962962" y="1082.6666666666667" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="364.92592592592587" y="911.4444444444445" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="369.92592592592587" y="925.4444444444445" class="s">D1-P2</text>
+<text x="369.92592592592587" y="939.4444444444445" class="s">DRONE WORKSHOP</text>
+<text x="369.92592592592587" y="967.4444444444445" class="s">14.3 x 7.4 m</text>
+<rect x="475.72222222222223" y="1041.3333333333333" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="364.92592592592587" y="1087.111111111111" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="369.92592592592587" y="1101.111111111111" class="s">D1-S2</text>
+<text x="369.92592592592587" y="1115.111111111111" class="s">CARGO ACCESS</text>
+<text x="369.92592592592587" y="1143.111111111111" class="s">14.3 x 7.4 m</text>
+<rect x="475.72222222222223" y="1082.6666666666667" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="617.5185185185185" y="911.4444444444445" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="622.5185185185185" y="925.4444444444445" class="s">D1-P3</text>
+<text x="622.5185185185185" y="939.4444444444445" class="s">STORES</text>
+<text x="622.5185185185185" y="952.4444444444445" class="s">SERVICE</text>
+<text x="622.5185185185185" y="967.4444444444445" class="s">14.3 x 7.4 m</text>
+<rect x="728.3148148148147" y="1041.3333333333333" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="617.5185185185185" y="1087.111111111111" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="622.5185185185185" y="1101.111111111111" class="s">D1-S3</text>
+<text x="622.5185185185185" y="1115.111111111111" class="s">WORKSHOP</text>
+<text x="622.5185185185185" y="1143.111111111111" class="s">14.3 x 7.4 m</text>
+<rect x="728.3148148148147" y="1082.6666666666667" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<text x="1170" y="928" class="s">Purple: vertical access</text>
+<text x="1170" y="950" class="s">White: door opening</text>
+<text x="1170" y="972" class="s">Green: clear corridor</text>
+<text x="1170" y="998" class="warn">All room uses proposed</text>
+<text x="1170" y="1020" class="s">See JSON for coordinates</text>
+<text x="40" y="1300" class="dim">DECK 2: floor Y=5.8 m / ceiling Y=9 m / LOCAL PLAN</text>
+<rect x="40" y="1318" width="826.6666666666666" height="310.0" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<rect x="40" y="1452.3333333333333" width="826.6666666666666" height="41.33333333333333" fill="#103c2b" stroke="#12996a" stroke-width="1.4"/>
+<rect x="43.44444444444444" y="1321.4444444444443" width="62.0" height="303.11111111111114" fill="none" stroke="#d19af5" stroke-width="1.4"/>
+<rect x="112.33333333333333" y="1321.4444444444443" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="117.33333333333333" y="1335.4444444444443" class="s">D2-P1</text>
+<text x="117.33333333333333" y="1349.4444444444443" class="s">CREW</text>
+<text x="117.33333333333333" y="1362.4444444444443" class="s">GALLEY</text>
+<text x="117.33333333333333" y="1377.4444444444443" class="s">14.3 x 7.4 m</text>
+<rect x="223.12962962962962" y="1451.3333333333333" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="112.33333333333333" y="1497.111111111111" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="117.33333333333333" y="1511.111111111111" class="s">D2-S1</text>
+<text x="117.33333333333333" y="1525.111111111111" class="s">HYGIENE</text>
+<text x="117.33333333333333" y="1538.111111111111" class="s">STORES</text>
+<text x="117.33333333333333" y="1553.111111111111" class="s">14.3 x 7.4 m</text>
+<rect x="223.12962962962962" y="1492.6666666666667" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="364.92592592592587" y="1321.4444444444443" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="369.92592592592587" y="1335.4444444444443" class="s">D2-P2</text>
+<text x="369.92592592592587" y="1349.4444444444443" class="s">MEDICAL</text>
+<text x="369.92592592592587" y="1362.4444444444443" class="s">HYGIENE</text>
+<text x="369.92592592592587" y="1377.4444444444443" class="s">14.3 x 7.4 m</text>
+<rect x="475.72222222222223" y="1451.3333333333333" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="364.92592592592587" y="1497.111111111111" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="369.92592592592587" y="1511.111111111111" class="s">D2-S2</text>
+<text x="369.92592592592587" y="1525.111111111111" class="s">CREW REST</text>
+<text x="369.92592592592587" y="1553.111111111111" class="s">14.3 x 7.4 m</text>
+<rect x="475.72222222222223" y="1492.6666666666667" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="617.5185185185185" y="1321.4444444444443" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="622.5185185185185" y="1335.4444444444443" class="s">D2-P3</text>
+<text x="622.5185185185185" y="1349.4444444444443" class="s">CREW REST</text>
+<text x="622.5185185185185" y="1377.4444444444443" class="s">14.3 x 7.4 m</text>
+<rect x="728.3148148148147" y="1451.3333333333333" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="617.5185185185185" y="1497.111111111111" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="622.5185185185185" y="1511.111111111111" class="s">D2-S3</text>
+<text x="622.5185185185185" y="1525.111111111111" class="s">SERVICE</text>
+<text x="622.5185185185185" y="1538.111111111111" class="s">SUPPORT</text>
+<text x="622.5185185185185" y="1553.111111111111" class="s">14.3 x 7.4 m</text>
+<rect x="728.3148148148147" y="1492.6666666666667" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<text x="1170" y="1338" class="s">Purple: vertical access</text>
+<text x="1170" y="1360" class="s">White: door opening</text>
+<text x="1170" y="1382" class="s">Green: clear corridor</text>
+<text x="1170" y="1408" class="warn">All room uses proposed</text>
+<text x="1170" y="1430" class="s">See JSON for coordinates</text>
+<text x="40" y="1710" class="dim">DECK 3: floor Y=9.6 m / ceiling Y=12.8 m / LOCAL PLAN</text>
+<rect x="40" y="1728" width="826.6666666666666" height="310.0" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<rect x="40" y="1862.3333333333333" width="826.6666666666666" height="41.33333333333333" fill="#103c2b" stroke="#12996a" stroke-width="1.4"/>
+<rect x="43.44444444444444" y="1731.4444444444443" width="62.0" height="303.11111111111114" fill="none" stroke="#d19af5" stroke-width="1.4"/>
+<rect x="112.33333333333333" y="1731.4444444444443" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="117.33333333333333" y="1745.4444444444443" class="s">D3-P1</text>
+<text x="117.33333333333333" y="1759.4444444444443" class="s">POWER CONTROL</text>
+<text x="117.33333333333333" y="1787.4444444444443" class="s">14.3 x 7.4 m</text>
+<rect x="223.12962962962962" y="1861.3333333333333" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="112.33333333333333" y="1907.111111111111" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="117.33333333333333" y="1921.111111111111" class="s">D3-S1</text>
+<text x="117.33333333333333" y="1935.111111111111" class="s">HYGIENE</text>
+<text x="117.33333333333333" y="1948.111111111111" class="s">STORES</text>
+<text x="117.33333333333333" y="1963.111111111111" class="s">14.3 x 7.4 m</text>
+<rect x="223.12962962962962" y="1902.6666666666667" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="364.92592592592587" y="1731.4444444444443" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="369.92592592592587" y="1745.4444444444443" class="s">D3-P2</text>
+<text x="369.92592592592587" y="1759.4444444444443" class="s">ELECTRICAL SERVICE</text>
+<text x="369.92592592592587" y="1787.4444444444443" class="s">14.3 x 7.4 m</text>
+<rect x="475.72222222222223" y="1861.3333333333333" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="364.92592592592587" y="1907.111111111111" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="369.92592592592587" y="1921.111111111111" class="s">D3-S2</text>
+<text x="369.92592592592587" y="1935.111111111111" class="s">CREW REST</text>
+<text x="369.92592592592587" y="1963.111111111111" class="s">14.3 x 7.4 m</text>
+<rect x="475.72222222222223" y="1902.6666666666667" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="617.5185185185185" y="1731.4444444444443" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="622.5185185185185" y="1745.4444444444443" class="s">D3-P3</text>
+<text x="622.5185185185185" y="1759.4444444444443" class="s">LIFE SUPPORT</text>
+<text x="622.5185185185185" y="1787.4444444444443" class="s">14.3 x 7.4 m</text>
+<rect x="728.3148148148147" y="1861.3333333333333" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="617.5185185185185" y="1907.111111111111" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="622.5185185185185" y="1921.111111111111" class="s">D3-S3</text>
+<text x="622.5185185185185" y="1935.111111111111" class="s">SERVICE</text>
+<text x="622.5185185185185" y="1948.111111111111" class="s">SUPPORT</text>
+<text x="622.5185185185185" y="1963.111111111111" class="s">14.3 x 7.4 m</text>
+<rect x="728.3148148148147" y="1902.6666666666667" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<text x="1170" y="1748" class="s">Purple: vertical access</text>
+<text x="1170" y="1770" class="s">White: door opening</text>
+<text x="1170" y="1792" class="s">Green: clear corridor</text>
+<text x="1170" y="1818" class="warn">All room uses proposed</text>
+<text x="1170" y="1840" class="s">See JSON for coordinates</text>
+<text x="40" y="2120" class="dim">DECK 4: floor Y=13.4 m / ceiling Y=16.6 m / LOCAL PLAN</text>
+<rect x="40" y="2138" width="826.6666666666666" height="310.0" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<rect x="40" y="2272.3333333333335" width="826.6666666666666" height="41.33333333333333" fill="#103c2b" stroke="#12996a" stroke-width="1.4"/>
+<rect x="43.44444444444444" y="2141.4444444444443" width="62.0" height="303.11111111111114" fill="none" stroke="#d19af5" stroke-width="1.4"/>
+<rect x="112.33333333333333" y="2141.4444444444443" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="117.33333333333333" y="2155.4444444444443" class="s">D4-P1</text>
+<text x="117.33333333333333" y="2169.4444444444443" class="s">CREW</text>
+<text x="117.33333333333333" y="2182.4444444444443" class="s">SUPPORT</text>
+<text x="117.33333333333333" y="2197.4444444444443" class="s">14.3 x 7.4 m</text>
+<rect x="223.12962962962962" y="2271.3333333333335" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="112.33333333333333" y="2317.1111111111113" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="117.33333333333333" y="2331.1111111111113" class="s">D4-S1</text>
+<text x="117.33333333333333" y="2345.1111111111113" class="s">HYGIENE</text>
+<text x="117.33333333333333" y="2358.1111111111113" class="s">STORES</text>
+<text x="117.33333333333333" y="2373.1111111111113" class="s">14.3 x 7.4 m</text>
+<rect x="223.12962962962962" y="2312.6666666666665" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="364.92592592592587" y="2141.4444444444443" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="369.92592592592587" y="2155.4444444444443" class="s">D4-P2</text>
+<text x="369.92592592592587" y="2169.4444444444443" class="s">WORKSHOP</text>
+<text x="369.92592592592587" y="2182.4444444444443" class="s">STORES</text>
+<text x="369.92592592592587" y="2197.4444444444443" class="s">14.3 x 7.4 m</text>
+<rect x="475.72222222222223" y="2271.3333333333335" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="364.92592592592587" y="2317.1111111111113" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="369.92592592592587" y="2331.1111111111113" class="s">D4-S2</text>
+<text x="369.92592592592587" y="2345.1111111111113" class="s">CREW REST</text>
+<text x="369.92592592592587" y="2373.1111111111113" class="s">14.3 x 7.4 m</text>
+<rect x="475.72222222222223" y="2312.6666666666665" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="617.5185185185185" y="2141.4444444444443" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="622.5185185185185" y="2155.4444444444443" class="s">D4-P3</text>
+<text x="622.5185185185185" y="2169.4444444444443" class="s">OPERATIONS</text>
+<text x="622.5185185185185" y="2182.4444444444443" class="s">RESERVE</text>
+<text x="622.5185185185185" y="2197.4444444444443" class="s">14.3 x 7.4 m</text>
+<rect x="728.3148148148147" y="2271.3333333333335" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="617.5185185185185" y="2317.1111111111113" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="622.5185185185185" y="2331.1111111111113" class="s">D4-S3</text>
+<text x="622.5185185185185" y="2345.1111111111113" class="s">SERVICE</text>
+<text x="622.5185185185185" y="2358.1111111111113" class="s">SUPPORT</text>
+<text x="622.5185185185185" y="2373.1111111111113" class="s">14.3 x 7.4 m</text>
+<rect x="728.3148148148147" y="2312.6666666666665" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<text x="1170" y="2158" class="s">Purple: vertical access</text>
+<text x="1170" y="2180" class="s">White: door opening</text>
+<text x="1170" y="2202" class="s">Green: clear corridor</text>
+<text x="1170" y="2228" class="warn">All room uses proposed</text>
+<text x="1170" y="2250" class="s">See JSON for coordinates</text>
+<text x="40" y="2530" class="dim">DECK 5: floor Y=17.2 m / ceiling Y=20.4 m / LOCAL PLAN</text>
+<rect x="40" y="2548" width="826.6666666666666" height="310.0" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<rect x="40" y="2682.3333333333335" width="826.6666666666666" height="41.33333333333333" fill="#103c2b" stroke="#12996a" stroke-width="1.4"/>
+<rect x="43.44444444444444" y="2551.4444444444443" width="62.0" height="303.11111111111114" fill="none" stroke="#d19af5" stroke-width="1.4"/>
+<rect x="112.33333333333333" y="2551.4444444444443" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="117.33333333333333" y="2565.4444444444443" class="s">D5-P1</text>
+<text x="117.33333333333333" y="2579.4444444444443" class="s">CREW</text>
+<text x="117.33333333333333" y="2592.4444444444443" class="s">SUPPORT</text>
+<text x="117.33333333333333" y="2607.4444444444443" class="s">14.3 x 7.4 m</text>
+<rect x="223.12962962962962" y="2681.3333333333335" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="112.33333333333333" y="2727.1111111111113" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="117.33333333333333" y="2741.1111111111113" class="s">D5-S1</text>
+<text x="117.33333333333333" y="2755.1111111111113" class="s">HYGIENE</text>
+<text x="117.33333333333333" y="2768.1111111111113" class="s">STORES</text>
+<text x="117.33333333333333" y="2783.1111111111113" class="s">14.3 x 7.4 m</text>
+<rect x="223.12962962962962" y="2722.6666666666665" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="364.92592592592587" y="2551.4444444444443" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="369.92592592592587" y="2565.4444444444443" class="s">D5-P2</text>
+<text x="369.92592592592587" y="2579.4444444444443" class="s">WORKSHOP</text>
+<text x="369.92592592592587" y="2592.4444444444443" class="s">STORES</text>
+<text x="369.92592592592587" y="2607.4444444444443" class="s">14.3 x 7.4 m</text>
+<rect x="475.72222222222223" y="2681.3333333333335" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="364.92592592592587" y="2727.1111111111113" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="369.92592592592587" y="2741.1111111111113" class="s">D5-S2</text>
+<text x="369.92592592592587" y="2755.1111111111113" class="s">CREW REST</text>
+<text x="369.92592592592587" y="2783.1111111111113" class="s">14.3 x 7.4 m</text>
+<rect x="475.72222222222223" y="2722.6666666666665" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="617.5185185185185" y="2551.4444444444443" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="622.5185185185185" y="2565.4444444444443" class="s">D5-P3</text>
+<text x="622.5185185185185" y="2579.4444444444443" class="s">OPERATIONS</text>
+<text x="622.5185185185185" y="2592.4444444444443" class="s">RESERVE</text>
+<text x="622.5185185185185" y="2607.4444444444443" class="s">14.3 x 7.4 m</text>
+<rect x="728.3148148148147" y="2681.3333333333335" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="617.5185185185185" y="2727.1111111111113" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="622.5185185185185" y="2741.1111111111113" class="s">D5-S3</text>
+<text x="622.5185185185185" y="2755.1111111111113" class="s">SERVICE</text>
+<text x="622.5185185185185" y="2768.1111111111113" class="s">SUPPORT</text>
+<text x="622.5185185185185" y="2783.1111111111113" class="s">14.3 x 7.4 m</text>
+<rect x="728.3148148148147" y="2722.6666666666665" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<text x="1170" y="2568" class="s">Purple: vertical access</text>
+<text x="1170" y="2590" class="s">White: door opening</text>
+<text x="1170" y="2612" class="s">Green: clear corridor</text>
+<text x="1170" y="2638" class="warn">All room uses proposed</text>
+<text x="1170" y="2660" class="s">See JSON for coordinates</text>
+<text x="40" y="2940" class="dim">DECK 6: floor Y=21 m / ceiling Y=24.2 m / LOCAL PLAN</text>
+<rect x="40" y="2958" width="826.6666666666666" height="310.0" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<rect x="40" y="3092.3333333333335" width="826.6666666666666" height="41.33333333333333" fill="#103c2b" stroke="#12996a" stroke-width="1.4"/>
+<rect x="43.44444444444444" y="2961.4444444444443" width="62.0" height="303.11111111111114" fill="none" stroke="#d19af5" stroke-width="1.4"/>
+<rect x="112.33333333333333" y="2961.4444444444443" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="117.33333333333333" y="2975.4444444444443" class="s">D6-P1</text>
+<text x="117.33333333333333" y="2989.4444444444443" class="s">CREW</text>
+<text x="117.33333333333333" y="3002.4444444444443" class="s">SUPPORT</text>
+<text x="117.33333333333333" y="3017.4444444444443" class="s">14.3 x 7.4 m</text>
+<rect x="223.12962962962962" y="3091.3333333333335" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="112.33333333333333" y="3137.1111111111113" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="117.33333333333333" y="3151.1111111111113" class="s">D6-S1</text>
+<text x="117.33333333333333" y="3165.1111111111113" class="s">HYGIENE</text>
+<text x="117.33333333333333" y="3178.1111111111113" class="s">STORES</text>
+<text x="117.33333333333333" y="3193.1111111111113" class="s">14.3 x 7.4 m</text>
+<rect x="223.12962962962962" y="3132.6666666666665" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="364.92592592592587" y="2961.4444444444443" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="369.92592592592587" y="2975.4444444444443" class="s">D6-P2</text>
+<text x="369.92592592592587" y="2989.4444444444443" class="s">WORKSHOP</text>
+<text x="369.92592592592587" y="3002.4444444444443" class="s">STORES</text>
+<text x="369.92592592592587" y="3017.4444444444443" class="s">14.3 x 7.4 m</text>
+<rect x="475.72222222222223" y="3091.3333333333335" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="364.92592592592587" y="3137.1111111111113" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="369.92592592592587" y="3151.1111111111113" class="s">D6-S2</text>
+<text x="369.92592592592587" y="3165.1111111111113" class="s">CREW REST</text>
+<text x="369.92592592592587" y="3193.1111111111113" class="s">14.3 x 7.4 m</text>
+<rect x="475.72222222222223" y="3132.6666666666665" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="617.5185185185185" y="2961.4444444444443" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="622.5185185185185" y="2975.4444444444443" class="s">D6-P3</text>
+<text x="622.5185185185185" y="2989.4444444444443" class="s">OPERATIONS</text>
+<text x="622.5185185185185" y="3002.4444444444443" class="s">RESERVE</text>
+<text x="622.5185185185185" y="3017.4444444444443" class="s">14.3 x 7.4 m</text>
+<rect x="728.3148148148147" y="3091.3333333333335" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="617.5185185185185" y="3137.1111111111113" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="622.5185185185185" y="3151.1111111111113" class="s">D6-S3</text>
+<text x="622.5185185185185" y="3165.1111111111113" class="s">SERVICE</text>
+<text x="622.5185185185185" y="3178.1111111111113" class="s">SUPPORT</text>
+<text x="622.5185185185185" y="3193.1111111111113" class="s">14.3 x 7.4 m</text>
+<rect x="728.3148148148147" y="3132.6666666666665" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<text x="1170" y="2978" class="s">Purple: vertical access</text>
+<text x="1170" y="3000" class="s">White: door opening</text>
+<text x="1170" y="3022" class="s">Green: clear corridor</text>
+<text x="1170" y="3048" class="warn">All room uses proposed</text>
+<text x="1170" y="3070" class="s">See JSON for coordinates</text>
+<text x="40" y="3350" class="dim">DECK 7: floor Y=24.8 m / ceiling Y=28 m / LOCAL PLAN</text>
+<rect x="40" y="3368" width="826.6666666666666" height="310.0" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<rect x="40" y="3502.3333333333335" width="826.6666666666666" height="41.33333333333333" fill="#103c2b" stroke="#12996a" stroke-width="1.4"/>
+<rect x="43.44444444444444" y="3371.4444444444443" width="62.0" height="303.11111111111114" fill="none" stroke="#d19af5" stroke-width="1.4"/>
+<rect x="112.33333333333333" y="3371.4444444444443" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="117.33333333333333" y="3385.4444444444443" class="s">D7-P1</text>
+<text x="117.33333333333333" y="3399.4444444444443" class="s">CREW</text>
+<text x="117.33333333333333" y="3412.4444444444443" class="s">SUPPORT</text>
+<text x="117.33333333333333" y="3427.4444444444443" class="s">14.3 x 7.4 m</text>
+<rect x="223.12962962962962" y="3501.3333333333335" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="112.33333333333333" y="3547.1111111111113" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="117.33333333333333" y="3561.1111111111113" class="s">D7-S1</text>
+<text x="117.33333333333333" y="3575.1111111111113" class="s">HYGIENE</text>
+<text x="117.33333333333333" y="3588.1111111111113" class="s">STORES</text>
+<text x="117.33333333333333" y="3603.1111111111113" class="s">14.3 x 7.4 m</text>
+<rect x="223.12962962962962" y="3542.6666666666665" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="364.92592592592587" y="3371.4444444444443" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="369.92592592592587" y="3385.4444444444443" class="s">D7-P2</text>
+<text x="369.92592592592587" y="3399.4444444444443" class="s">WORKSHOP</text>
+<text x="369.92592592592587" y="3412.4444444444443" class="s">STORES</text>
+<text x="369.92592592592587" y="3427.4444444444443" class="s">14.3 x 7.4 m</text>
+<rect x="475.72222222222223" y="3501.3333333333335" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="364.92592592592587" y="3547.1111111111113" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="369.92592592592587" y="3561.1111111111113" class="s">D7-S2</text>
+<text x="369.92592592592587" y="3575.1111111111113" class="s">CREW REST</text>
+<text x="369.92592592592587" y="3603.1111111111113" class="s">14.3 x 7.4 m</text>
+<rect x="475.72222222222223" y="3542.6666666666665" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="617.5185185185185" y="3371.4444444444443" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="622.5185185185185" y="3385.4444444444443" class="s">D7-P3</text>
+<text x="622.5185185185185" y="3399.4444444444443" class="s">OPERATIONS</text>
+<text x="622.5185185185185" y="3412.4444444444443" class="s">RESERVE</text>
+<text x="622.5185185185185" y="3427.4444444444443" class="s">14.3 x 7.4 m</text>
+<rect x="728.3148148148147" y="3501.3333333333335" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="617.5185185185185" y="3547.1111111111113" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="622.5185185185185" y="3561.1111111111113" class="s">D7-S3</text>
+<text x="622.5185185185185" y="3575.1111111111113" class="s">SERVICE</text>
+<text x="622.5185185185185" y="3588.1111111111113" class="s">SUPPORT</text>
+<text x="622.5185185185185" y="3603.1111111111113" class="s">14.3 x 7.4 m</text>
+<rect x="728.3148148148147" y="3542.6666666666665" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<text x="1170" y="3388" class="s">Purple: vertical access</text>
+<text x="1170" y="3410" class="s">White: door opening</text>
+<text x="1170" y="3432" class="s">Green: clear corridor</text>
+<text x="1170" y="3458" class="warn">All room uses proposed</text>
+<text x="1170" y="3480" class="s">See JSON for coordinates</text>
+<text x="40" y="3760" class="dim">DECK 8: floor Y=28.6 m / ceiling Y=31.8 m / LOCAL PLAN</text>
+<rect x="40" y="3778" width="826.6666666666666" height="310.0" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<rect x="40" y="3912.3333333333335" width="826.6666666666666" height="41.33333333333333" fill="#103c2b" stroke="#12996a" stroke-width="1.4"/>
+<rect x="43.44444444444444" y="3781.4444444444443" width="62.0" height="303.11111111111114" fill="none" stroke="#d19af5" stroke-width="1.4"/>
+<rect x="112.33333333333333" y="3781.4444444444443" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="117.33333333333333" y="3795.4444444444443" class="s">D8-P1</text>
+<text x="117.33333333333333" y="3809.4444444444443" class="s">CREW</text>
+<text x="117.33333333333333" y="3822.4444444444443" class="s">SUPPORT</text>
+<text x="117.33333333333333" y="3837.4444444444443" class="s">14.3 x 7.4 m</text>
+<rect x="223.12962962962962" y="3911.3333333333335" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="112.33333333333333" y="3957.1111111111113" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="117.33333333333333" y="3971.1111111111113" class="s">D8-S1</text>
+<text x="117.33333333333333" y="3985.1111111111113" class="s">HYGIENE</text>
+<text x="117.33333333333333" y="3998.1111111111113" class="s">STORES</text>
+<text x="117.33333333333333" y="4013.1111111111113" class="s">14.3 x 7.4 m</text>
+<rect x="223.12962962962962" y="3952.6666666666665" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="364.92592592592587" y="3781.4444444444443" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="369.92592592592587" y="3795.4444444444443" class="s">D8-P2</text>
+<text x="369.92592592592587" y="3809.4444444444443" class="s">WORKSHOP</text>
+<text x="369.92592592592587" y="3822.4444444444443" class="s">STORES</text>
+<text x="369.92592592592587" y="3837.4444444444443" class="s">14.3 x 7.4 m</text>
+<rect x="475.72222222222223" y="3911.3333333333335" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="364.92592592592587" y="3957.1111111111113" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="369.92592592592587" y="3971.1111111111113" class="s">D8-S2</text>
+<text x="369.92592592592587" y="3985.1111111111113" class="s">CREW REST</text>
+<text x="369.92592592592587" y="4013.1111111111113" class="s">14.3 x 7.4 m</text>
+<rect x="475.72222222222223" y="3952.6666666666665" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="617.5185185185185" y="3781.4444444444443" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="622.5185185185185" y="3795.4444444444443" class="s">D8-P3</text>
+<text x="622.5185185185185" y="3809.4444444444443" class="s">OPERATIONS</text>
+<text x="622.5185185185185" y="3822.4444444444443" class="s">RESERVE</text>
+<text x="622.5185185185185" y="3837.4444444444443" class="s">14.3 x 7.4 m</text>
+<rect x="728.3148148148147" y="3911.3333333333335" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="617.5185185185185" y="3957.1111111111113" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="622.5185185185185" y="3971.1111111111113" class="s">D8-S3</text>
+<text x="622.5185185185185" y="3985.1111111111113" class="s">SERVICE</text>
+<text x="622.5185185185185" y="3998.1111111111113" class="s">SUPPORT</text>
+<text x="622.5185185185185" y="4013.1111111111113" class="s">14.3 x 7.4 m</text>
+<rect x="728.3148148148147" y="3952.6666666666665" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<text x="1170" y="3798" class="s">Purple: vertical access</text>
+<text x="1170" y="3820" class="s">White: door opening</text>
+<text x="1170" y="3842" class="s">Green: clear corridor</text>
+<text x="1170" y="3868" class="warn">All room uses proposed</text>
+<text x="1170" y="3890" class="s">See JSON for coordinates</text>
+<text x="40" y="4170" class="dim">DECK 9: floor Y=32.4 m / ceiling Y=35.6 m / LOCAL PLAN</text>
+<rect x="40" y="4188" width="826.6666666666666" height="310.0" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<rect x="40" y="4322.333333333333" width="826.6666666666666" height="41.33333333333333" fill="#103c2b" stroke="#12996a" stroke-width="1.4"/>
+<rect x="43.44444444444444" y="4191.444444444444" width="62.0" height="303.11111111111114" fill="none" stroke="#d19af5" stroke-width="1.4"/>
+<rect x="112.33333333333333" y="4191.444444444444" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="117.33333333333333" y="4205.444444444444" class="s">D9-P1</text>
+<text x="117.33333333333333" y="4219.444444444444" class="s">CREW</text>
+<text x="117.33333333333333" y="4232.444444444444" class="s">SUPPORT</text>
+<text x="117.33333333333333" y="4247.444444444444" class="s">14.3 x 7.4 m</text>
+<rect x="223.12962962962962" y="4321.333333333333" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="112.33333333333333" y="4367.111111111111" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="117.33333333333333" y="4381.111111111111" class="s">D9-S1</text>
+<text x="117.33333333333333" y="4395.111111111111" class="s">HYGIENE</text>
+<text x="117.33333333333333" y="4408.111111111111" class="s">STORES</text>
+<text x="117.33333333333333" y="4423.111111111111" class="s">14.3 x 7.4 m</text>
+<rect x="223.12962962962962" y="4362.666666666667" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="364.92592592592587" y="4191.444444444444" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="369.92592592592587" y="4205.444444444444" class="s">D9-P2</text>
+<text x="369.92592592592587" y="4219.444444444444" class="s">WORKSHOP</text>
+<text x="369.92592592592587" y="4232.444444444444" class="s">STORES</text>
+<text x="369.92592592592587" y="4247.444444444444" class="s">14.3 x 7.4 m</text>
+<rect x="475.72222222222223" y="4321.333333333333" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="364.92592592592587" y="4367.111111111111" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="369.92592592592587" y="4381.111111111111" class="s">D9-S2</text>
+<text x="369.92592592592587" y="4395.111111111111" class="s">CREW REST</text>
+<text x="369.92592592592587" y="4423.111111111111" class="s">14.3 x 7.4 m</text>
+<rect x="475.72222222222223" y="4362.666666666667" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="617.5185185185185" y="4191.444444444444" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="622.5185185185185" y="4205.444444444444" class="s">D9-P3</text>
+<text x="622.5185185185185" y="4219.444444444444" class="s">OPERATIONS</text>
+<text x="622.5185185185185" y="4232.444444444444" class="s">RESERVE</text>
+<text x="622.5185185185185" y="4247.444444444444" class="s">14.3 x 7.4 m</text>
+<rect x="728.3148148148147" y="4321.333333333333" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="617.5185185185185" y="4367.111111111111" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="622.5185185185185" y="4381.111111111111" class="s">D9-S3</text>
+<text x="622.5185185185185" y="4395.111111111111" class="s">SERVICE</text>
+<text x="622.5185185185185" y="4408.111111111111" class="s">SUPPORT</text>
+<text x="622.5185185185185" y="4423.111111111111" class="s">14.3 x 7.4 m</text>
+<rect x="728.3148148148147" y="4362.666666666667" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<text x="1170" y="4208" class="s">Purple: vertical access</text>
+<text x="1170" y="4230" class="s">White: door opening</text>
+<text x="1170" y="4252" class="s">Green: clear corridor</text>
+<text x="1170" y="4278" class="warn">All room uses proposed</text>
+<text x="1170" y="4300" class="s">See JSON for coordinates</text>
+<text x="40" y="4580" class="dim">DECK 10: floor Y=36.2 m / ceiling Y=39.4 m / LOCAL PLAN</text>
+<rect x="40" y="4598" width="826.6666666666666" height="310.0" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<rect x="40" y="4732.333333333333" width="826.6666666666666" height="41.33333333333333" fill="#103c2b" stroke="#12996a" stroke-width="1.4"/>
+<rect x="43.44444444444444" y="4601.444444444444" width="62.0" height="303.11111111111114" fill="none" stroke="#d19af5" stroke-width="1.4"/>
+<rect x="112.33333333333333" y="4601.444444444444" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="117.33333333333333" y="4615.444444444444" class="s">D10-P1</text>
+<text x="117.33333333333333" y="4629.444444444444" class="s">CREW</text>
+<text x="117.33333333333333" y="4642.444444444444" class="s">SUPPORT</text>
+<text x="117.33333333333333" y="4657.444444444444" class="s">14.3 x 7.4 m</text>
+<rect x="223.12962962962962" y="4731.333333333333" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="112.33333333333333" y="4777.111111111111" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="117.33333333333333" y="4791.111111111111" class="s">D10-S1</text>
+<text x="117.33333333333333" y="4805.111111111111" class="s">HYGIENE</text>
+<text x="117.33333333333333" y="4818.111111111111" class="s">STORES</text>
+<text x="117.33333333333333" y="4833.111111111111" class="s">14.3 x 7.4 m</text>
+<rect x="223.12962962962962" y="4772.666666666667" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="364.92592592592587" y="4601.444444444444" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="369.92592592592587" y="4615.444444444444" class="s">D10-P2</text>
+<text x="369.92592592592587" y="4629.444444444444" class="s">WORKSHOP</text>
+<text x="369.92592592592587" y="4642.444444444444" class="s">STORES</text>
+<text x="369.92592592592587" y="4657.444444444444" class="s">14.3 x 7.4 m</text>
+<rect x="475.72222222222223" y="4731.333333333333" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="364.92592592592587" y="4777.111111111111" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="369.92592592592587" y="4791.111111111111" class="s">D10-S2</text>
+<text x="369.92592592592587" y="4805.111111111111" class="s">CREW REST</text>
+<text x="369.92592592592587" y="4833.111111111111" class="s">14.3 x 7.4 m</text>
+<rect x="475.72222222222223" y="4772.666666666667" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="617.5185185185185" y="4601.444444444444" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="622.5185185185185" y="4615.444444444444" class="s">D10-P3</text>
+<text x="622.5185185185185" y="4629.444444444444" class="s">OPERATIONS</text>
+<text x="622.5185185185185" y="4642.444444444444" class="s">RESERVE</text>
+<text x="622.5185185185185" y="4657.444444444444" class="s">14.3 x 7.4 m</text>
+<rect x="728.3148148148147" y="4731.333333333333" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="617.5185185185185" y="4777.111111111111" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="622.5185185185185" y="4791.111111111111" class="s">D10-S3</text>
+<text x="622.5185185185185" y="4805.111111111111" class="s">SERVICE</text>
+<text x="622.5185185185185" y="4818.111111111111" class="s">SUPPORT</text>
+<text x="622.5185185185185" y="4833.111111111111" class="s">14.3 x 7.4 m</text>
+<rect x="728.3148148148147" y="4772.666666666667" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<text x="1170" y="4618" class="s">Purple: vertical access</text>
+<text x="1170" y="4640" class="s">White: door opening</text>
+<text x="1170" y="4662" class="s">Green: clear corridor</text>
+<text x="1170" y="4688" class="warn">All room uses proposed</text>
+<text x="1170" y="4710" class="s">See JSON for coordinates</text>
+<text x="40" y="4990" class="dim">DECK 11: floor Y=40 m / ceiling Y=43.2 m / LOCAL PLAN</text>
+<rect x="40" y="5008" width="826.6666666666666" height="310.0" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<rect x="40" y="5142.333333333333" width="826.6666666666666" height="41.33333333333333" fill="#103c2b" stroke="#12996a" stroke-width="1.4"/>
+<rect x="43.44444444444444" y="5011.444444444444" width="62.0" height="303.11111111111114" fill="none" stroke="#d19af5" stroke-width="1.4"/>
+<rect x="112.33333333333333" y="5011.444444444444" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="117.33333333333333" y="5025.444444444444" class="s">D11-P1</text>
+<text x="117.33333333333333" y="5039.444444444444" class="s">CREW</text>
+<text x="117.33333333333333" y="5052.444444444444" class="s">SUPPORT</text>
+<text x="117.33333333333333" y="5067.444444444444" class="s">14.3 x 7.4 m</text>
+<rect x="223.12962962962962" y="5141.333333333333" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="112.33333333333333" y="5187.111111111111" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="117.33333333333333" y="5201.111111111111" class="s">D11-S1</text>
+<text x="117.33333333333333" y="5215.111111111111" class="s">HYGIENE</text>
+<text x="117.33333333333333" y="5228.111111111111" class="s">STORES</text>
+<text x="117.33333333333333" y="5243.111111111111" class="s">14.3 x 7.4 m</text>
+<rect x="223.12962962962962" y="5182.666666666667" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="364.92592592592587" y="5011.444444444444" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="369.92592592592587" y="5025.444444444444" class="s">D11-P2</text>
+<text x="369.92592592592587" y="5039.444444444444" class="s">WORKSHOP</text>
+<text x="369.92592592592587" y="5052.444444444444" class="s">STORES</text>
+<text x="369.92592592592587" y="5067.444444444444" class="s">14.3 x 7.4 m</text>
+<rect x="475.72222222222223" y="5141.333333333333" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="364.92592592592587" y="5187.111111111111" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="369.92592592592587" y="5201.111111111111" class="s">D11-S2</text>
+<text x="369.92592592592587" y="5215.111111111111" class="s">CREW REST</text>
+<text x="369.92592592592587" y="5243.111111111111" class="s">14.3 x 7.4 m</text>
+<rect x="475.72222222222223" y="5182.666666666667" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="617.5185185185185" y="5011.444444444444" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="622.5185185185185" y="5025.444444444444" class="s">D11-P3</text>
+<text x="622.5185185185185" y="5039.444444444444" class="s">OPERATIONS</text>
+<text x="622.5185185185185" y="5052.444444444444" class="s">RESERVE</text>
+<text x="622.5185185185185" y="5067.444444444444" class="s">14.3 x 7.4 m</text>
+<rect x="728.3148148148147" y="5141.333333333333" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="617.5185185185185" y="5187.111111111111" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="622.5185185185185" y="5201.111111111111" class="s">D11-S3</text>
+<text x="622.5185185185185" y="5215.111111111111" class="s">SERVICE</text>
+<text x="622.5185185185185" y="5228.111111111111" class="s">SUPPORT</text>
+<text x="622.5185185185185" y="5243.111111111111" class="s">14.3 x 7.4 m</text>
+<rect x="728.3148148148147" y="5182.666666666667" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<text x="1170" y="5028" class="s">Purple: vertical access</text>
+<text x="1170" y="5050" class="s">White: door opening</text>
+<text x="1170" y="5072" class="s">Green: clear corridor</text>
+<text x="1170" y="5098" class="warn">All room uses proposed</text>
+<text x="1170" y="5120" class="s">See JSON for coordinates</text>
+<text x="40" y="5400" class="dim">DECK 12: floor Y=43.8 m / ceiling Y=47 m / LOCAL PLAN</text>
+<rect x="40" y="5418" width="826.6666666666666" height="310.0" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<rect x="40" y="5552.333333333333" width="826.6666666666666" height="41.33333333333333" fill="#103c2b" stroke="#12996a" stroke-width="1.4"/>
+<rect x="43.44444444444444" y="5421.444444444444" width="62.0" height="303.11111111111114" fill="none" stroke="#d19af5" stroke-width="1.4"/>
+<rect x="112.33333333333333" y="5421.444444444444" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="117.33333333333333" y="5435.444444444444" class="s">D12-P1</text>
+<text x="117.33333333333333" y="5449.444444444444" class="s">BRIDGE</text>
+<text x="117.33333333333333" y="5462.444444444444" class="s">NAV</text>
+<text x="117.33333333333333" y="5477.444444444444" class="s">14.3 x 7.4 m</text>
+<rect x="223.12962962962962" y="5551.333333333333" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="112.33333333333333" y="5597.111111111111" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="117.33333333333333" y="5611.111111111111" class="s">D12-S1</text>
+<text x="117.33333333333333" y="5625.111111111111" class="s">CREW</text>
+<text x="117.33333333333333" y="5638.111111111111" class="s">GALLEY</text>
+<text x="117.33333333333333" y="5653.111111111111" class="s">14.3 x 7.4 m</text>
+<rect x="223.12962962962962" y="5592.666666666667" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="364.92592592592587" y="5421.444444444444" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="369.92592592592587" y="5435.444444444444" class="s">D12-P2</text>
+<text x="369.92592592592587" y="5449.444444444444" class="s">SENSORS</text>
+<text x="369.92592592592587" y="5462.444444444444" class="s">COMMS</text>
+<text x="369.92592592592587" y="5477.444444444444" class="s">14.3 x 7.4 m</text>
+<rect x="475.72222222222223" y="5551.333333333333" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="364.92592592592587" y="5597.111111111111" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="369.92592592592587" y="5611.111111111111" class="s">D12-S2</text>
+<text x="369.92592592592587" y="5625.111111111111" class="s">MEDICAL</text>
+<text x="369.92592592592587" y="5638.111111111111" class="s">REST</text>
+<text x="369.92592592592587" y="5653.111111111111" class="s">14.3 x 7.4 m</text>
+<rect x="475.72222222222223" y="5592.666666666667" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="617.5185185185185" y="5421.444444444444" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="622.5185185185185" y="5435.444444444444" class="s">D12-P3</text>
+<text x="622.5185185185185" y="5449.444444444444" class="s">OPERATIONS</text>
+<text x="622.5185185185185" y="5477.444444444444" class="s">14.3 x 7.4 m</text>
+<rect x="728.3148148148147" y="5551.333333333333" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<rect x="617.5185185185185" y="5597.111111111111" width="245.70370370370367" height="127.44444444444443" fill="none" stroke="#17bd7b" stroke-width="1.4"/>
+<text x="622.5185185185185" y="5611.111111111111" class="s">D12-S3</text>
+<text x="622.5185185185185" y="5625.111111111111" class="s">LIFE SUPPORT</text>
+<text x="622.5185185185185" y="5653.111111111111" class="s">14.3 x 7.4 m</text>
+<rect x="728.3148148148147" y="5592.666666666667" width="24.111111111111107" height="2" fill="#fff" stroke="#fff" stroke-width="1.4"/>
+<text x="1170" y="5438" class="s">Purple: vertical access</text>
+<text x="1170" y="5460" class="s">White: door opening</text>
+<text x="1170" y="5482" class="s">Green: clear corridor</text>
+<text x="1170" y="5508" class="warn">All room uses proposed</text>
+<text x="1170" y="5530" class="s">See JSON for coordinates</text>
+</svg>

@@ -1,0 +1,37 @@
+# Pioneer — concept history
+
+Design proposals only. The current review sheet is not a production mesh, exact hull CAD or implemented interior. Source values, dimensioned reservations and implementation gaps are linked below.
+
+[Fleet index](../README.md) · [Dimensioned plan](plan.svg) · [Coordinates and source values](specification.json) · [Systems layout](systems.svg) · [Systems specification](systems.json)
+
+## Current review
+
+![Pioneer current concept](images/v05-interior-review.jpg)
+
+## Version history
+
+Superseded images are retained for review. Early drafts include rejected pale hulls, drill-like equipment, invented brand marks, misleading checkboxes or inconsistent dimensions. Their annotations are not authoritative. The accepted direction is black/emerald industrial construction styling with articulated laser mining turrets.
+
+### v00-initial-study
+
+![Pioneer v00-initial-study](images/v00-initial-study.jpg)
+
+### v01-drill-draft-superseded
+
+![Pioneer v01-drill-draft-superseded](images/v01-drill-draft-superseded.jpg)
+
+### v02-laser-correction
+
+![Pioneer v02-laser-correction](images/v02-laser-correction.jpg)
+
+### v03-black-green-construction
+
+![Pioneer v03-black-green-construction](images/v03-black-green-construction.jpg)
+
+### v04-interior-draft
+
+![Pioneer v04-interior-draft](images/v04-interior-draft.jpg)
+
+## Provenance
+
+Generated concept illustrations for this design discussion; not Tripo exports or third-party game assets. Repository JPEGs are compressed documentation previews of every original. The review ZIP contains the unmodified PNGs; image-manifest.json records their hashes. No executable game assets are supplied.
