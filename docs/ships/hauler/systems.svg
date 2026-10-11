@@ -1,0 +1,391 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="3400" viewBox="0 0 1800 3400" role="img" aria-label="Hauler proposed systems schematic">
+<style>text{font-family:Menlo,monospace;fill:#dde9e5} .small{font-size:14px}.body{font-size:16px}.head{font-size:24px;font-weight:bold}.title{font-size:44px;font-weight:bold}</style>
+<rect width="1800" height="3400" fill="#091312"/>
+<text x="48" y="65" class="title">ARKLINE / HAULER</text>
+<text x="48" y="104" class="head">PROPOSED SHIP SYSTEMS • functional topology and placement anchors, not fabrication drawings</text>
+<text x="48" y="137" class="small">Source cb76d975421937d4cb4ae5da57cb5488843b108b • all interiors remain proposed</text>
+<text x="48" y="170" class="body">GAMEPLAY ONLY: 600,000 J charge | 2,200 W regen | 70,000 J warp | 5,000 J / turret cycle</text>
+<text x="48" y="198" class="body">Drone mining 1,500 J/cycle • drone attack 2,000 J/event • cargo 16,000 game units</text>
+<text x="48" y="227" class="body" style="fill:#eeb74f">No voltage, crew, flow, pressure, RF or endurance budgets assigned. See JSON endpoints and sizing=null.</text>
+<rect x="48" y="260" width="840" height="423" rx="12" fill="#101f1d" stroke="#eeb74f"/>
+<text x="68" y="294" class="head" style="fill:#eeb74f">POWER / isolated network</text>
+<path d="M323,345 L339,345" stroke="#eeb74f" stroke-width="2" fill="none"/>
+<path d="M333,341 L339,345 L333,349" stroke="#eeb74f" fill="none"/>
+<path d="M596,345 L612,345" stroke="#eeb74f" stroke-width="2" fill="none"/>
+<path d="M606,341 L612,345 L606,349" stroke="#eeb74f" fill="none"/>
+<path d="M323,416 L339,416" stroke="#eeb74f" stroke-width="2" fill="none"/>
+<path d="M333,412 L339,416 L333,420" stroke="#eeb74f" fill="none"/>
+<rect x="66" y="315" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="75" y="337" class="small">P01 Primary source</text>
+<text x="75" y="360" class="small" style="fill:#eeb74f">ENGINE reserve</text>
+<rect x="339" y="315" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="348" y="337" class="small">P02 Main breaker</text>
+<text x="348" y="360" class="small" style="fill:#eeb74f">ENGINE reserve</text>
+<rect x="612" y="315" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="621" y="337" class="small">P03 Charge bank</text>
+<text x="621" y="360" class="small" style="fill:#eeb74f">ENGINE reserve</text>
+<rect x="66" y="386" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="75" y="408" class="small">P04 Distribution A</text>
+<text x="75" y="431" class="small" style="fill:#eeb74f">D1-S1</text>
+<rect x="339" y="386" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="348" y="408" class="small">P05 Industrial feeder</text>
+<text x="348" y="431" class="small" style="fill:#eeb74f">CARGO reserve</text>
+<rect x="612" y="386" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="621" y="408" class="small">P06 Hotel feeder</text>
+<text x="621" y="431" class="small" style="fill:#eeb74f">D1-S1</text>
+<rect x="66" y="457" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="75" y="479" class="small">P07 Warp / propulsion</text>
+<text x="75" y="502" class="small" style="fill:#eeb74f">ENGINE reserve</text>
+<rect x="339" y="457" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="348" y="479" class="small">P08 Turret 0 / 1 feeds</text>
+<text x="348" y="502" class="small" style="fill:#eeb74f">CARGO reserve</text>
+<rect x="612" y="457" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="621" y="479" class="small">P09 Drone bay feeder</text>
+<text x="621" y="502" class="small" style="fill:#eeb74f">D1-P2</text>
+<text x="68" y="542" class="small" style="fill:#eeb74f">Endpoint links (direction →; full ports in JSON)</text>
+<text x="68" y="569" class="small">P-01 P01 → P02</text>
+<text x="341" y="569" class="small">P-02 P02 → P03</text>
+<text x="614" y="569" class="small">P-03 P03 → P04</text>
+<text x="68" y="592" class="small">P-04 P04 → P05</text>
+<text x="341" y="592" class="small">P-05 P04 → P06</text>
+<text x="614" y="592" class="small">P-06 P05 → P07</text>
+<text x="68" y="615" class="small">P-07 P05 → P08</text>
+<text x="341" y="615" class="small">P-08 P05 → P09</text>
+<text x="68" y="666" class="small">Breakers per feeder; no unsized conductor is approved.</text>
+<rect x="912" y="260" width="840" height="423" rx="12" fill="#101f1d" stroke="#b097ef"/>
+<text x="932" y="294" class="head" style="fill:#b097ef">DATA / isolated network</text>
+<path d="M1187,345 L1203,345" stroke="#b097ef" stroke-width="2" fill="none"/>
+<path d="M1197,341 L1203,345 L1197,349" stroke="#b097ef" fill="none"/>
+<path d="M1460,345 L1476,345" stroke="#b097ef" stroke-width="2" fill="none"/>
+<path d="M1470,341 L1476,345 L1470,349" stroke="#b097ef" fill="none"/>
+<path d="M1460,416 L1476,416" stroke="#b097ef" stroke-width="2" fill="none"/>
+<path d="M1470,412 L1476,416 L1470,420" stroke="#b097ef" fill="none"/>
+<path d="M1187,487 L1203,487" stroke="#b097ef" stroke-width="2" fill="none"/>
+<path d="M1197,483 L1203,487 L1197,491" stroke="#b097ef" fill="none"/>
+<rect x="930" y="315" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="939" y="337" class="small">N01 Bridge control</text>
+<text x="939" y="360" class="small" style="fill:#b097ef">D4-P1</text>
+<rect x="1203" y="315" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="1212" y="337" class="small">N02 Core router A</text>
+<text x="1212" y="360" class="small" style="fill:#b097ef">D4-P2</text>
+<rect x="1476" y="315" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="1485" y="337" class="small">N03 Local control switch</text>
+<text x="1485" y="360" class="small" style="fill:#b097ef">D1-S1</text>
+<rect x="930" y="386" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="939" y="408" class="small">N04 Room data trunk</text>
+<text x="939" y="431" class="small" style="fill:#b097ef">D4-P2</text>
+<rect x="1203" y="386" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="1212" y="408" class="small">N05 RF transceiver</text>
+<text x="1212" y="431" class="small" style="fill:#b097ef">D4-P2</text>
+<rect x="1476" y="386" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="1485" y="408" class="small">N06 Antenna interface</text>
+<text x="1485" y="431" class="small" style="fill:#b097ef">D4-P2</text>
+<rect x="930" y="457" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="939" y="479" class="small">N07 Industrial gateway</text>
+<text x="939" y="502" class="small" style="fill:#b097ef">CARGO reserve</text>
+<rect x="1203" y="457" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="1212" y="479" class="small">N08 Module controllers</text>
+<text x="1212" y="502" class="small" style="fill:#b097ef">CARGO reserve</text>
+<rect x="1476" y="457" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="1485" y="479" class="small">N09 Drone telemetry</text>
+<text x="1485" y="502" class="small" style="fill:#b097ef">D1-P2</text>
+<text x="932" y="542" class="small" style="fill:#b097ef">Endpoint links (direction →; full ports in JSON)</text>
+<text x="932" y="569" class="small">N-01 N01 → N02</text>
+<text x="1205" y="569" class="small">N-02 N02 → N03</text>
+<text x="1478" y="569" class="small">N-03 N02 → N04</text>
+<text x="932" y="592" class="small">N-04 N02 → N05</text>
+<text x="1205" y="592" class="small">N-05 N05 → N06</text>
+<text x="1478" y="592" class="small">N-06 N03 → N07</text>
+<text x="932" y="615" class="small">N-07 N07 → N08</text>
+<text x="1205" y="615" class="small">N-08 N07 → N09</text>
+<text x="932" y="666" class="small">RF gateway separated from local fail-safe controls.</text>
+<rect x="48" y="705" width="840" height="423" rx="12" fill="#101f1d" stroke="#74d4a7"/>
+<text x="68" y="739" class="head" style="fill:#74d4a7">AIR / isolated network</text>
+<path d="M323,790 L339,790" stroke="#74d4a7" stroke-width="2" fill="none"/>
+<path d="M333,786 L339,790 L333,794" stroke="#74d4a7" fill="none"/>
+<path d="M596,790 L612,790" stroke="#74d4a7" stroke-width="2" fill="none"/>
+<path d="M606,786 L612,790 L606,794" stroke="#74d4a7" fill="none"/>
+<path d="M323,861 L339,861" stroke="#74d4a7" stroke-width="2" fill="none"/>
+<path d="M333,857 L339,861 L333,865" stroke="#74d4a7" fill="none"/>
+<path d="M323,932 L339,932" stroke="#74d4a7" stroke-width="2" fill="none"/>
+<path d="M333,928 L339,932 L333,936" stroke="#74d4a7" fill="none"/>
+<rect x="66" y="760" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="75" y="782" class="small">A01 Makeup gas interface</text>
+<text x="75" y="805" class="small" style="fill:#74d4a7">D3-P3</text>
+<rect x="339" y="760" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="348" y="782" class="small">A02 Air handler</text>
+<text x="348" y="805" class="small" style="fill:#74d4a7">D3-P3</text>
+<rect x="612" y="760" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="621" y="782" class="small">A03 Supply manifold</text>
+<text x="621" y="805" class="small" style="fill:#74d4a7">D3-P3</text>
+<rect x="66" y="831" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="75" y="853" class="small">A04 Room air branches</text>
+<text x="75" y="876" class="small" style="fill:#74d4a7">D3-P3</text>
+<rect x="339" y="831" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="348" y="853" class="small">A05 Return / CO2 removal</text>
+<text x="348" y="876" class="small" style="fill:#74d4a7">D3-P3</text>
+<rect x="612" y="831" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="621" y="853" class="small">A06 Emergency gas reserve</text>
+<text x="621" y="876" class="small" style="fill:#74d4a7">D3-P3</text>
+<rect x="66" y="902" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="75" y="924" class="small">A07 Airlock controller</text>
+<text x="75" y="947" class="small" style="fill:#74d4a7">D1-P1</text>
+<rect x="339" y="902" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="348" y="924" class="small">A08 Recovery / exhaust</text>
+<text x="348" y="947" class="small" style="fill:#74d4a7">D1-P1</text>
+<rect x="612" y="902" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="621" y="924" class="small">A09 Industrial extraction</text>
+<text x="621" y="947" class="small" style="fill:#74d4a7">D1-P2</text>
+<text x="68" y="987" class="small" style="fill:#74d4a7">Endpoint links (direction →; full ports in JSON)</text>
+<text x="68" y="1014" class="small">A-01 A01 → A02</text>
+<text x="341" y="1014" class="small">A-02 A02 → A03</text>
+<text x="614" y="1014" class="small">A-03 A03 → A04</text>
+<text x="68" y="1037" class="small">A-04 A04 → A05</text>
+<text x="341" y="1037" class="small">A-05 A05 → A02</text>
+<text x="614" y="1037" class="small">A-06 A06 → A03</text>
+<text x="68" y="1060" class="small">A-07 A03 → A07</text>
+<text x="341" y="1060" class="small">A-08 A07 → A08</text>
+<text x="614" y="1060" class="small">A-09 A09 → A08</text>
+<text x="68" y="1111" class="small">Return air treatment; airlock/dirty exhaust isolated.</text>
+<rect x="912" y="705" width="840" height="423" rx="12" fill="#101f1d" stroke="#64bce9"/>
+<text x="932" y="739" class="head" style="fill:#64bce9">WATER / isolated network</text>
+<path d="M1187,790 L1203,790" stroke="#64bce9" stroke-width="2" fill="none"/>
+<path d="M1197,786 L1203,790 L1197,794" stroke="#64bce9" fill="none"/>
+<path d="M1460,790 L1476,790" stroke="#64bce9" stroke-width="2" fill="none"/>
+<path d="M1470,786 L1476,790 L1470,794" stroke="#64bce9" fill="none"/>
+<path d="M1187,861 L1203,861" stroke="#64bce9" stroke-width="2" fill="none"/>
+<path d="M1197,857 L1203,861 L1197,865" stroke="#64bce9" fill="none"/>
+<path d="M1460,861 L1476,861" stroke="#64bce9" stroke-width="2" fill="none"/>
+<path d="M1470,857 L1476,861 L1470,865" stroke="#64bce9" fill="none"/>
+<rect x="930" y="760" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="939" y="782" class="small">W01 Potable reserve</text>
+<text x="939" y="805" class="small" style="fill:#64bce9">D3-P3</text>
+<rect x="1203" y="760" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="1212" y="782" class="small">W02 Pump + check valve</text>
+<text x="1212" y="805" class="small" style="fill:#64bce9">D3-P3</text>
+<rect x="1476" y="760" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="1485" y="782" class="small">W03 Fixture manifold</text>
+<text x="1485" y="805" class="small" style="fill:#64bce9">D3-P3</text>
+<rect x="930" y="831" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="939" y="853" class="small">W04 Galley / hygiene</text>
+<text x="939" y="876" class="small" style="fill:#64bce9">D2-P1</text>
+<rect x="1203" y="831" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="1212" y="853" class="small">W05 Graywater collection</text>
+<text x="1212" y="876" class="small" style="fill:#64bce9">D3-P3</text>
+<rect x="1476" y="831" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="1485" y="853" class="small">W06 Treatment / test</text>
+<text x="1485" y="876" class="small" style="fill:#64bce9">D3-P3</text>
+<rect x="930" y="902" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="939" y="924" class="small">W07 Quarantine buffer</text>
+<text x="939" y="947" class="small" style="fill:#64bce9">D3-P3</text>
+<rect x="1203" y="902" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="1212" y="924" class="small">W08 Blackwater retention</text>
+<text x="1212" y="947" class="small" style="fill:#64bce9">D3-P3</text>
+<rect x="1476" y="902" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="1485" y="924" class="small">W09 Service fill / drain</text>
+<text x="1485" y="947" class="small" style="fill:#64bce9">D1-P1</text>
+<text x="932" y="987" class="small" style="fill:#64bce9">Endpoint links (direction →; full ports in JSON)</text>
+<text x="932" y="1014" class="small">W-01 W01 → W02</text>
+<text x="1205" y="1014" class="small">W-02 W02 → W03</text>
+<text x="1478" y="1014" class="small">W-03 W03 → W04</text>
+<text x="932" y="1037" class="small">W-04 W04 → W05</text>
+<text x="1205" y="1037" class="small">W-05 W05 → W06</text>
+<text x="1478" y="1037" class="small">W-06 W06 → W07</text>
+<text x="932" y="1060" class="small">W-07 W07 → W01</text>
+<text x="1205" y="1060" class="small">W-08 W04 → W08</text>
+<text x="1478" y="1060" class="small">W-09 W09 → W01</text>
+<text x="932" y="1111" class="small">Quality-gated reuse; blackwater never joins potable.</text>
+<rect x="48" y="1150" width="840" height="423" rx="12" fill="#101f1d" stroke="#ef8e82"/>
+<text x="68" y="1184" class="head" style="fill:#ef8e82">COOLING / isolated network</text>
+<path d="M323,1235 L339,1235" stroke="#ef8e82" stroke-width="2" fill="none"/>
+<path d="M333,1231 L339,1235 L333,1239" stroke="#ef8e82" fill="none"/>
+<path d="M596,1235 L612,1235" stroke="#ef8e82" stroke-width="2" fill="none"/>
+<path d="M606,1231 L612,1235 L606,1239" stroke="#ef8e82" fill="none"/>
+<path d="M596,1306 L612,1306" stroke="#ef8e82" stroke-width="2" fill="none"/>
+<path d="M606,1302 L612,1306 L606,1310" stroke="#ef8e82" fill="none"/>
+<rect x="66" y="1205" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="75" y="1227" class="small">C01 Primary loop pump</text>
+<text x="75" y="1250" class="small" style="fill:#ef8e82">ENGINE reserve</text>
+<rect x="339" y="1205" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="348" y="1227" class="small">C02 Plant heat pickup</text>
+<text x="348" y="1250" class="small" style="fill:#ef8e82">ENGINE reserve</text>
+<rect x="612" y="1205" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="621" y="1227" class="small">C03 Heat exchanger</text>
+<text x="621" y="1250" class="small" style="fill:#ef8e82">ENGINE reserve</text>
+<rect x="66" y="1276" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="75" y="1298" class="small">C04 Radiator interface</text>
+<text x="75" y="1321" class="small" style="fill:#ef8e82">ENGINE reserve</text>
+<rect x="339" y="1276" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="348" y="1298" class="small">C05 Secondary loop pump</text>
+<text x="348" y="1321" class="small" style="fill:#ef8e82">D3-P3</text>
+<rect x="612" y="1276" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="621" y="1298" class="small">C06 Hotel electronics HX</text>
+<text x="621" y="1321" class="small" style="fill:#ef8e82">D4-P2</text>
+<rect x="66" y="1347" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="75" y="1369" class="small">C07 Air handler coil</text>
+<text x="75" y="1392" class="small" style="fill:#ef8e82">D3-P3</text>
+<rect x="339" y="1347" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="348" y="1369" class="small">C08 Expansion / isolation</text>
+<text x="348" y="1392" class="small" style="fill:#ef8e82">ENGINE reserve</text>
+<rect x="612" y="1347" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="621" y="1369" class="small">C09 Industrial pickup</text>
+<text x="621" y="1392" class="small" style="fill:#ef8e82">CARGO reserve</text>
+<text x="68" y="1432" class="small" style="fill:#ef8e82">Endpoint links (direction →; full ports in JSON)</text>
+<text x="68" y="1459" class="small">C-01 C01 → C02</text>
+<text x="341" y="1459" class="small">C-02 C02 → C03</text>
+<text x="614" y="1459" class="small">C-03 C03 → C01</text>
+<text x="68" y="1482" class="small">C-04 C03 → C04</text>
+<text x="341" y="1482" class="small">C-05 C04 → C03</text>
+<text x="614" y="1482" class="small">C-06 C05 → C06</text>
+<text x="68" y="1505" class="small">C-07 C06 → C07</text>
+<text x="341" y="1505" class="small">C-08 C07 → C03</text>
+<text x="614" y="1505" class="small">C-09 C03 → C05</text>
+<text x="68" y="1528" class="small">C-10 C09 → C03</text>
+<text x="341" y="1528" class="small">C-11 C03 → C09</text>
+<text x="614" y="1528" class="small">C-12 C08 → C01</text>
+<text x="68" y="1556" class="small">Primary/secondary isolated by HX; radiator interface only.</text>
+<rect x="912" y="1150" width="840" height="423" rx="12" fill="#101f1d" stroke="#f17ea1"/>
+<text x="932" y="1184" class="head" style="fill:#f17ea1">EMERGENCY / isolated network</text>
+<path d="M1187,1235 L1203,1235" stroke="#f17ea1" stroke-width="2" fill="none"/>
+<path d="M1197,1231 L1203,1235 L1197,1239" stroke="#f17ea1" fill="none"/>
+<path d="M1460,1235 L1476,1235" stroke="#f17ea1" stroke-width="2" fill="none"/>
+<path d="M1470,1231 L1476,1235 L1470,1239" stroke="#f17ea1" fill="none"/>
+<path d="M1460,1306 L1476,1306" stroke="#f17ea1" stroke-width="2" fill="none"/>
+<path d="M1470,1302 L1476,1306 L1470,1310" stroke="#f17ea1" fill="none"/>
+<rect x="930" y="1205" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="939" y="1227" class="small">E01 Independent reserve</text>
+<text x="939" y="1250" class="small" style="fill:#f17ea1">D1-P3</text>
+<rect x="1203" y="1205" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="1212" y="1227" class="small">E02 Emergency breaker</text>
+<text x="1212" y="1250" class="small" style="fill:#f17ea1">D1-P3</text>
+<rect x="1476" y="1205" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="1485" y="1227" class="small">E03 Essential bus B</text>
+<text x="1485" y="1250" class="small" style="fill:#f17ea1">D1-P3</text>
+<rect x="930" y="1276" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="939" y="1298" class="small">E04 Lights / alarms</text>
+<text x="939" y="1321" class="small" style="fill:#f17ea1">D1-P3</text>
+<rect x="1203" y="1276" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="1212" y="1298" class="small">E05 Local safe-state PLC</text>
+<text x="1212" y="1321" class="small" style="fill:#f17ea1">D1-S1</text>
+<rect x="1476" y="1276" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="1485" y="1298" class="small">E06 Manual trip / valves</text>
+<text x="1485" y="1321" class="small" style="fill:#f17ea1">D1-P1</text>
+<rect x="930" y="1347" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="939" y="1369" class="small">E07 Refuge interface</text>
+<text x="939" y="1392" class="small" style="fill:#f17ea1">D2-P2</text>
+<rect x="1203" y="1347" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="1212" y="1369" class="small">E08 Fallback beacon</text>
+<text x="1212" y="1392" class="small" style="fill:#f17ea1">D4-P2</text>
+<rect x="1476" y="1347" width="257" height="60" rx="5" fill="#172c28" stroke="#36564f"/>
+<text x="1485" y="1369" class="small">E09 Reserved escape route</text>
+<text x="1485" y="1392" class="small" style="fill:#f17ea1">D1-P1</text>
+<text x="932" y="1432" class="small" style="fill:#f17ea1">Endpoint links (direction →; full ports in JSON)</text>
+<text x="932" y="1459" class="small">E-01 E01 → E02</text>
+<text x="1205" y="1459" class="small">E-02 E02 → E03</text>
+<text x="1478" y="1459" class="small">E-03 E03 → E04</text>
+<text x="932" y="1482" class="small">E-04 E03 → E05</text>
+<text x="1205" y="1482" class="small">E-05 E05 → E06</text>
+<text x="1478" y="1482" class="small">E-06 E03 → E07</text>
+<text x="932" y="1505" class="small">E-07 E03 → E08</text>
+<text x="1205" y="1505" class="small">E-08 E04 → E09</text>
+<text x="932" y="1556" class="small">Independent reserve; backup feed is not proven endurance.</text>
+<text x="48" y="1620" class="head">INTERSYSTEM ENDPOINTS / no shared medium</text>
+<text x="48" y="1652" class="small" style="fill:#eeb74f">X-01 P06.essential-loads → N02.power [power]</text>
+<text x="912" y="1652" class="small" style="fill:#eeb74f">X-02 P06.air → A02.motor [power]</text>
+<text x="48" y="1677" class="small" style="fill:#eeb74f">X-03 P06.water → W02.motor [power]</text>
+<text x="912" y="1677" class="small" style="fill:#eeb74f">X-04 P06.thermal → C05.motor [power]</text>
+<text x="48" y="1702" class="small" style="fill:#eeb74f">X-05 P05.plant → C01.motor [power]</text>
+<text x="912" y="1702" class="small" style="fill:#f17ea1">X-06 E03.QF-EA → A02.essential-only [emergency]</text>
+<text x="48" y="1727" class="small" style="fill:#f17ea1">X-07 E03.QF-EN → N02.backup [emergency]</text>
+<text x="912" y="1727" class="small" style="fill:#b097ef">X-08 N03.monitor → P04.telemetry [data]</text>
+<text x="48" y="1752" class="small" style="fill:#b097ef">X-09 N03.monitor → A02.telemetry [data]</text>
+<text x="912" y="1752" class="small" style="fill:#b097ef">X-10 N03.monitor → W06.telemetry [data]</text>
+<text x="48" y="1777" class="small" style="fill:#b097ef">X-11 N03.monitor → C03.telemetry [data]</text>
+<text x="912" y="1777" class="small" style="fill:#b097ef">X-12 N03.monitor → E05.telemetry [data]</text>
+<text x="48" y="1825" class="head">PROPOSED PLACEMENT REGISTER / X, Y, Z metres</text>
+<text x="48" y="1853" class="small">Point anchors only. Each is inside its inherited room or industrial zone; equipment size/fit unresolved.</text>
+<text x="48" y="1885" class="small">P01 23.8/1.2/60.0             ENGINE   Primary source</text>
+<text x="48" y="1907" class="small">P02 35.0/1.2/60.0             ENGINE   Main breaker</text>
+<text x="48" y="1929" class="small">P03 46.2/1.2/60.0             ENGINE   Charge bank</text>
+<text x="48" y="1951" class="small">P04 237.6/3.2/92.6            D1-S1    Distribution A</text>
+<text x="48" y="1973" class="small">P05 112.0/1.2/60.0            CARGO    Industrial feeder</text>
+<text x="48" y="1995" class="small">P06 240.0/3.2/92.6            D1-S1    Hotel feeder</text>
+<text x="48" y="2017" class="small">P07 57.4/1.2/60.0             ENGINE   Warp / propulsion</text>
+<text x="48" y="2039" class="small">P08 131.6/1.2/60.0            CARGO    Turret 0 / 1 feeds</text>
+<text x="48" y="2061" class="small">P09 252.2/3.2/82.4            D1-P2    Drone bay feeder</text>
+<text x="48" y="2083" class="small">N01 237.6/14.6/82.4           D4-P1    Bridge control</text>
+<text x="48" y="2105" class="small">N02 252.2/14.6/82.4           D4-P2    Core router A</text>
+<text x="48" y="2127" class="small">N03 242.3/3.2/92.6            D1-S1    Local control switch</text>
+<text x="48" y="2149" class="small">N04 254.6/14.6/82.4           D4-P2    Room data trunk</text>
+<text x="48" y="2171" class="small">N05 257.0/14.6/82.4           D4-P2    RF transceiver</text>
+<text x="48" y="2193" class="small">N06 259.4/14.6/82.4           D4-P2    Antenna interface</text>
+<text x="48" y="2215" class="small">N07 151.2/1.2/60.0            CARGO    Industrial gateway</text>
+<text x="48" y="2237" class="small">N08 170.8/1.2/60.0            CARGO    Module controllers</text>
+<text x="48" y="2259" class="small">N09 254.6/3.2/82.4            D1-P2    Drone telemetry</text>
+<text x="48" y="2281" class="small">A01 266.9/10.8/82.4           D3-P3    Makeup gas interface</text>
+<text x="48" y="2303" class="small">A02 269.3/10.8/82.4           D3-P3    Air handler</text>
+<text x="48" y="2325" class="small">A03 271.7/10.8/82.4           D3-P3    Supply manifold</text>
+<text x="48" y="2347" class="small">A04 274.0/10.8/82.4           D3-P3    Room air branches</text>
+<text x="48" y="2369" class="small">A05 276.4/10.8/82.4           D3-P3    Return / CO2 removal</text>
+<text x="48" y="2391" class="small">A06 266.9/10.8/83.7           D3-P3    Emergency gas reserve</text>
+<text x="48" y="2413" class="small">A07 237.6/3.2/82.4            D1-P1    Airlock controller</text>
+<text x="48" y="2435" class="small">A08 240.0/3.2/82.4            D1-P1    Recovery / exhaust</text>
+<text x="48" y="2457" class="small">A09 257.0/3.2/82.4            D1-P2    Industrial extraction</text>
+<text x="912" y="1885" class="small">W01 269.3/10.8/83.7           D3-P3    Potable reserve</text>
+<text x="912" y="1907" class="small">W02 271.7/10.8/83.7           D3-P3    Pump + check valve</text>
+<text x="912" y="1929" class="small">W03 274.0/10.8/83.7           D3-P3    Fixture manifold</text>
+<text x="912" y="1951" class="small">W04 237.6/7.0/82.4            D2-P1    Galley / hygiene</text>
+<text x="912" y="1973" class="small">W05 276.4/10.8/83.7           D3-P3    Graywater collection</text>
+<text x="912" y="1995" class="small">W06 266.9/10.8/84.9           D3-P3    Treatment / test</text>
+<text x="912" y="2017" class="small">W07 269.3/10.8/84.9           D3-P3    Quarantine buffer</text>
+<text x="912" y="2039" class="small">W08 271.7/10.8/84.9           D3-P3    Blackwater retention</text>
+<text x="912" y="2061" class="small">W09 242.3/3.2/82.4            D1-P1    Service fill / drain</text>
+<text x="912" y="2083" class="small">C01 68.6/1.2/60.0             ENGINE   Primary loop pump</text>
+<text x="912" y="2105" class="small">C02 23.8/1.2/75.0             ENGINE   Plant heat pickup</text>
+<text x="912" y="2127" class="small">C03 35.0/1.2/75.0             ENGINE   Heat exchanger</text>
+<text x="912" y="2149" class="small">C04 46.2/1.2/75.0             ENGINE   Radiator interface</text>
+<text x="912" y="2171" class="small">C05 274.0/10.8/84.9           D3-P3    Secondary loop pump</text>
+<text x="912" y="2193" class="small">C06 261.8/14.6/82.4           D4-P2    Hotel electronics HX</text>
+<text x="912" y="2215" class="small">C07 276.4/10.8/84.9           D3-P3    Air handler coil</text>
+<text x="912" y="2237" class="small">C08 57.4/1.2/75.0             ENGINE   Expansion / isolation</text>
+<text x="912" y="2259" class="small">C09 190.4/1.2/60.0            CARGO    Industrial pickup</text>
+<text x="912" y="2281" class="small">E01 266.9/3.2/82.4            D1-P3    Independent reserve</text>
+<text x="912" y="2303" class="small">E02 269.3/3.2/82.4            D1-P3    Emergency breaker</text>
+<text x="912" y="2325" class="small">E03 271.7/3.2/82.4            D1-P3    Essential bus B</text>
+<text x="912" y="2347" class="small">E04 274.0/3.2/82.4            D1-P3    Lights / alarms</text>
+<text x="912" y="2369" class="small">E05 244.7/3.2/92.6            D1-S1    Local safe-state PLC</text>
+<text x="912" y="2391" class="small">E06 244.7/3.2/82.4            D1-P1    Manual trip / valves</text>
+<text x="912" y="2413" class="small">E07 252.2/7.0/82.4            D2-P2    Refuge interface</text>
+<text x="912" y="2435" class="small">E08 252.2/14.6/83.7           D4-P2    Fallback beacon</text>
+<text x="912" y="2457" class="small">E09 247.1/3.2/82.4            D1-P1    Reserved escape route</text>
+<text x="48" y="2528" class="head">DECK DISTRIBUTION / compact human core only</text>
+<text x="48" y="2562" class="small">D01 service waypoint 255.0/5.0/90.0 • P / E / N / W / A / C</text>
+<text x="48" y="2587" class="small">D02 service waypoint 255.0/8.8/90.0 • P / E / N / W / A / C</text>
+<text x="48" y="2612" class="small">D03 service waypoint 255.0/12.6/90.0 • P / E / N / W / A / C</text>
+<text x="48" y="2637" class="small">D04 service waypoint 255.0/16.4/90.0 • P / E / N / W / A / C</text>
+<text x="48" y="2738" class="body">All 24 room service endpoints + branch isolators are expanded individually in Hauler.json.</text>
+<text x="48" y="2768" class="small">Dry power/data and wet water/cooling require separate raceways. Emergency path B cannot share a single failure point.</text>
+<text x="48" y="2800" class="head">HUMAN SUPPORT vs INDUSTRIAL VOLUMES</text>
+<text x="48" y="2830" class="body">Human core: supplied/returned air, hotel circuits, data, selected wet fixtures. Occupancy/endurance unresolved.</text>
+<text x="48" y="2858" class="body">Engine and cargo reserves: normally unmanned, locally isolated; no automatic cabin atmosphere or crew capacity.</text>
+<text x="48" y="2886" class="small">External antennas/radiators are interfaces only. Pressure hull penetrations, skin positions and vessel-scale routing remain open.</text>
+<text x="48" y="2940" class="head">GAPS / ACCEPTANCE GATES</text>
+<text x="48" y="2975" class="small">Electrical: Voltages, currents, protection discrimination, conductor gauges and fault energy unknown.</text>
+<text x="68" y="2993" class="small" style="fill:#8caaa2">Approve load inventory; size conductors and coordinated breaker trips; test safe shedding.</text>
+<text x="48" y="3014" class="small">Life support: Crew count, occupancy hours, gas mixture and reserve endurance unknown.</text>
+<text x="68" y="3032" class="small" style="fill:#8caaa2">Set occupancy scenarios; size and test atmosphere control and independent reserve.</text>
+<text x="48" y="3053" class="small">Water: Tank volume, flow, pressure, treatment chemistry and consumption unknown.</text>
+<text x="68" y="3071" class="small" style="fill:#8caaa2">Close mass balance; test isolation, contamination detection and quarantine.</text>
+<text x="48" y="3092" class="small">Cooling: Heat loads, fluids, flow, radiator area and operating temperatures unknown.</text>
+<text x="68" y="3110" class="small" style="fill:#8caaa2">Close thermal balance; validate independent loops, leak response and heat rejection.</text>
+<text x="48" y="3131" class="small">RF / data: Frequencies, link budget, bandwidth, EMC and security boundaries unresolved.</text>
+<text x="68" y="3149" class="small" style="fill:#8caaa2">Define permissions and protocols; test segmented control and comms-loss behavior.</text>
+<text x="48" y="3170" class="small">Physical routing: Nodes are anchors, not fitted equipment; cables/pipes lack sizes and collision paths.</text>
+<text x="68" y="3188" class="small" style="fill:#8caaa2">Fit actual mesh, trays, supports, wall penetrations and maintenance clearance.</text>
+<text x="48" y="3209" class="small">Emergency access: One reserved access core is not independent dual egress.</text>
+<text x="68" y="3227" class="small" style="fill:#8caaa2">Prove refuge/escape routes, fire zoning, door/lift failure and trapped-person recovery.</text>
+<text x="48" y="3248" class="small">Gameplay: Scalar charge is implemented; physical circuits and human-support simulation are not.</text>
+<text x="68" y="3266" class="small" style="fill:#8caaa2">Define server state, faults, repair, persistence and authoritative multiplayer acceptance.</text>
+<text x="48" y="3340" class="small" style="fill:#eeb74f">CURRENT GAME: station collision blocks hull entry. No ship-interior movement, physical plumbing or circuit simulation supplied.</text>
+<text x="48" y="3370" class="small">Numbered endpoints are logical connections, not installed hardware. Planned routes require geometry, safety and runtime validation.</text>
+</svg>

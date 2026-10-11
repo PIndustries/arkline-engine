@@ -1,5 +1,7 @@
 # Models and community artwork
 
+Browse the [ship design archive](ships/README.md) for the current seven-ship fleet, concept history, dimensioned planning reservations and proposed onboard systems. These are review documents; they do not imply that GLB importing or walkable ship interiors have shipped.
+
 ## What runs today
 
 The client creates its geometry in Rust. `apps/client/src/flight3d.rs` builds vertex

@@ -1,0 +1,3155 @@
+{
+  "ship": "Prospector",
+  "source_commit": "cb76d975421937d4cb4ae5da57cb5488843b108b",
+  "status": "PROPOSED FUNCTIONAL TOPOLOGY \u2014 not certified engineering or implemented interior",
+  "coordinate_system": "XYZ metres: X forward from aft face; Y up; Z starboard from port face. Bounding-box origin, not mesh origin.",
+  "gameplay": {
+    "hull_bounds_m": [
+      180,
+      92,
+      64
+    ],
+    "cargo_game_units": 2500,
+    "power": {
+      "capacity_j": 360000,
+      "regen_w": 1600,
+      "warp_cost_j": 45000,
+      "mining_cycle_cost_j": 6000,
+      "drone_mining_cycle_cost_j": 1500,
+      "drone_attack_cost_j": 2000
+    },
+    "mining_module_ids": [
+      0,
+      1
+    ],
+    "avatar_height_m": 1.8,
+    "station_avatar_radius_m": 0.3
+  },
+  "gameplay_note": "Exact scalar gameplay power; regeneration is not a physical reactor design rating. Proposed loads are not charged by current simulation.",
+  "inherited_zones": [
+    {
+      "name": "ENGINE / POWER RESERVE",
+      "bounds_xzy_lwh_m": [
+        5.3999999999999995,
+        23.0,
+        0.0,
+        28.8,
+        46.0,
+        41.6
+      ],
+      "status": "proposed equipment envelope; not reactor sizing"
+    },
+    {
+      "name": "ORE / CARGO RESERVE",
+      "bounds_xzy_lwh_m": [
+        39.6,
+        23.0,
+        0.0,
+        50.400000000000006,
+        46.0,
+        41.6
+      ],
+      "status": "proposed; game cargo units have no physical volume conversion"
+    },
+    {
+      "name": "HUMAN CORE",
+      "bounds_xzy_lwh_m": [
+        99.00000000000001,
+        37.0,
+        2,
+        48,
+        18,
+        11.399999999999999
+      ],
+      "status": "proposed deck envelope"
+    }
+  ],
+  "human_core": [
+    99.00000000000001,
+    37.0,
+    2
+  ],
+  "nodes": [
+    {
+      "id": "P01",
+      "name": "Primary source",
+      "system": "power",
+      "status": "proposed",
+      "zone": "ENGINE / POWER RESERVE",
+      "room_id": null,
+      "position_xyz_m": [
+        10.2,
+        1.2,
+        30.667
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "out"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "P02",
+      "name": "Main breaker",
+      "system": "power",
+      "status": "proposed",
+      "zone": "ENGINE / POWER RESERVE",
+      "room_id": null,
+      "position_xyz_m": [
+        15.0,
+        1.2,
+        30.667
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "line",
+        "protected"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "P03",
+      "name": "Charge bank",
+      "system": "power",
+      "status": "proposed",
+      "zone": "ENGINE / POWER RESERVE",
+      "room_id": null,
+      "position_xyz_m": [
+        19.8,
+        1.2,
+        30.667
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "charge",
+        "discharge"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "P04",
+      "name": "Distribution A",
+      "system": "power",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D1-S1",
+      "position_xyz_m": [
+        105.578,
+        3.2,
+        48.633
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "source",
+        "QF-I",
+        "QF-H",
+        "telemetry"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "P05",
+      "name": "Industrial feeder",
+      "system": "power",
+      "status": "proposed",
+      "zone": "ORE / CARGO RESERVE",
+      "room_id": null,
+      "position_xyz_m": [
+        48.0,
+        1.2,
+        30.667
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "in",
+        "QF-W",
+        "QF-T0/T1",
+        "QF-D",
+        "plant"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "P06",
+      "name": "Hotel feeder",
+      "system": "power",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D1-S1",
+      "position_xyz_m": [
+        107.956,
+        3.2,
+        48.633
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "in",
+        "essential-loads",
+        "air",
+        "water",
+        "thermal",
+        "room-feed"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "P07",
+      "name": "Warp / propulsion",
+      "system": "power",
+      "status": "proposed",
+      "zone": "ENGINE / POWER RESERVE",
+      "room_id": null,
+      "position_xyz_m": [
+        24.6,
+        1.2,
+        30.667
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "in"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "P08",
+      "name": "Turret 0 / 1 feeds",
+      "system": "power",
+      "status": "proposed",
+      "zone": "ORE / CARGO RESERVE",
+      "room_id": null,
+      "position_xyz_m": [
+        56.4,
+        1.2,
+        30.667
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "in"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "P09",
+      "name": "Drone bay feeder",
+      "system": "power",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D1-P2",
+      "position_xyz_m": [
+        120.244,
+        3.2,
+        38.433
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "in"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "N01",
+      "name": "Bridge control",
+      "system": "data",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D3-P1",
+      "position_xyz_m": [
+        105.578,
+        10.8,
+        38.433
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "LAN"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "N02",
+      "name": "Core router A",
+      "system": "data",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D3-P2",
+      "position_xyz_m": [
+        120.244,
+        10.8,
+        38.433
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "bridge",
+        "control",
+        "services",
+        "gateway",
+        "power",
+        "backup"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "N03",
+      "name": "Local control switch",
+      "system": "data",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D1-S1",
+      "position_xyz_m": [
+        110.333,
+        3.2,
+        48.633
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "uplink",
+        "isolated",
+        "monitor"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "N04",
+      "name": "Room data trunk",
+      "system": "data",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D3-P2",
+      "position_xyz_m": [
+        122.622,
+        10.8,
+        38.433
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "uplink",
+        "room-network"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "N05",
+      "name": "RF transceiver",
+      "system": "data",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D3-P2",
+      "position_xyz_m": [
+        125.0,
+        10.8,
+        38.433
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "LAN",
+        "RF"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "N06",
+      "name": "Antenna interface",
+      "system": "data",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D3-P2",
+      "position_xyz_m": [
+        127.378,
+        10.8,
+        38.433
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "feed"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "N07",
+      "name": "Industrial gateway",
+      "system": "data",
+      "status": "proposed",
+      "zone": "ORE / CARGO RESERVE",
+      "room_id": null,
+      "position_xyz_m": [
+        64.8,
+        1.2,
+        30.667
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "uplink",
+        "fieldbus",
+        "filtered"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "N08",
+      "name": "Module controllers",
+      "system": "data",
+      "status": "proposed",
+      "zone": "ORE / CARGO RESERVE",
+      "room_id": null,
+      "position_xyz_m": [
+        73.2,
+        1.2,
+        30.667
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "control"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "N09",
+      "name": "Drone telemetry",
+      "system": "data",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D1-P2",
+      "position_xyz_m": [
+        122.622,
+        3.2,
+        38.433
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "control"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "A01",
+      "name": "Makeup gas interface",
+      "system": "air",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D3-S3",
+      "position_xyz_m": [
+        134.911,
+        10.8,
+        48.633
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "V-A1"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "A02",
+      "name": "Air handler",
+      "system": "air",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D3-S3",
+      "position_xyz_m": [
+        137.289,
+        10.8,
+        48.633
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "makeup",
+        "supply",
+        "return",
+        "motor",
+        "essential-only",
+        "telemetry"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "A03",
+      "name": "Supply manifold",
+      "system": "air",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D3-S3",
+      "position_xyz_m": [
+        139.667,
+        10.8,
+        48.633
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "V-A2",
+        "dampers",
+        "emergency",
+        "V-AL",
+        "supply"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "A04",
+      "name": "Room air branches",
+      "system": "air",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D3-S3",
+      "position_xyz_m": [
+        142.044,
+        10.8,
+        48.633
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "supply",
+        "return"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "A05",
+      "name": "Return / CO2 removal",
+      "system": "air",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D3-S3",
+      "position_xyz_m": [
+        144.422,
+        10.8,
+        48.633
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "filter",
+        "scrubbed",
+        "return"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "A06",
+      "name": "Emergency gas reserve",
+      "system": "air",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D3-S3",
+      "position_xyz_m": [
+        134.911,
+        10.8,
+        49.867
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "V-AE"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "A07",
+      "name": "Airlock controller",
+      "system": "air",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D1-P1",
+      "position_xyz_m": [
+        105.578,
+        3.2,
+        38.433
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "supply",
+        "V-AR"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "A08",
+      "name": "Recovery / exhaust",
+      "system": "air",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D1-P1",
+      "position_xyz_m": [
+        107.956,
+        3.2,
+        38.433
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "capture",
+        "extract",
+        "isolated-exhaust"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "A09",
+      "name": "Industrial extraction",
+      "system": "air",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D1-P2",
+      "position_xyz_m": [
+        125.0,
+        3.2,
+        38.433
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "isolated"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "W01",
+      "name": "Potable reserve",
+      "system": "water",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D3-S3",
+      "position_xyz_m": [
+        137.289,
+        10.8,
+        49.867
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "V-W1",
+        "refill",
+        "fill"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "W02",
+      "name": "Pump + check valve",
+      "system": "water",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D3-S3",
+      "position_xyz_m": [
+        139.667,
+        10.8,
+        49.867
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "in",
+        "check",
+        "motor"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "W03",
+      "name": "Fixture manifold",
+      "system": "water",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D3-S3",
+      "position_xyz_m": [
+        142.044,
+        10.8,
+        49.867
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "V-W2",
+        "branch valves",
+        "potable"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "W04",
+      "name": "Galley / hygiene",
+      "system": "water",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D2-P1",
+      "position_xyz_m": [
+        105.578,
+        7.0,
+        38.433
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "potable",
+        "gray",
+        "black"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "W05",
+      "name": "Graywater collection",
+      "system": "water",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D3-S3",
+      "position_xyz_m": [
+        144.422,
+        10.8,
+        49.867
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "collect",
+        "V-W5",
+        "collection"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "W06",
+      "name": "Treatment / test",
+      "system": "water",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D3-S3",
+      "position_xyz_m": [
+        134.911,
+        10.8,
+        51.1
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "in",
+        "sample",
+        "telemetry"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "W07",
+      "name": "Quarantine buffer",
+      "system": "water",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D3-S3",
+      "position_xyz_m": [
+        137.289,
+        10.8,
+        51.1
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "in",
+        "quality-gated"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "W08",
+      "name": "Blackwater retention",
+      "system": "water",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D3-S3",
+      "position_xyz_m": [
+        139.667,
+        10.8,
+        51.1
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "isolated",
+        "collection"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "W09",
+      "name": "Service fill / drain",
+      "system": "water",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D1-P1",
+      "position_xyz_m": [
+        110.333,
+        3.2,
+        38.433
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "test + check"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "C01",
+      "name": "Primary loop pump",
+      "system": "cooling",
+      "status": "proposed",
+      "zone": "ENGINE / POWER RESERVE",
+      "room_id": null,
+      "position_xyz_m": [
+        29.4,
+        1.2,
+        30.667
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "supply",
+        "return",
+        "branch",
+        "motor"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "C02",
+      "name": "Plant heat pickup",
+      "system": "cooling",
+      "status": "proposed",
+      "zone": "ENGINE / POWER RESERVE",
+      "room_id": null,
+      "position_xyz_m": [
+        10.2,
+        1.2,
+        38.333
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "V-C1",
+        "hot"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "C03",
+      "name": "Heat exchanger",
+      "system": "cooling",
+      "status": "proposed",
+      "zone": "ENGINE / POWER RESERVE",
+      "room_id": null,
+      "position_xyz_m": [
+        15.0,
+        1.2,
+        38.333
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "primary-in",
+        "primary-return",
+        "reject",
+        "reject-return",
+        "secondary-in",
+        "secondary-return",
+        "branch-HX",
+        "industrial-cool",
+        "telemetry"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "C04",
+      "name": "Radiator interface",
+      "system": "cooling",
+      "status": "proposed",
+      "zone": "ENGINE / POWER RESERVE",
+      "room_id": null,
+      "position_xyz_m": [
+        19.8,
+        1.2,
+        38.333
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "interface",
+        "cooled"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "C05",
+      "name": "Secondary loop pump",
+      "system": "cooling",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D3-S3",
+      "position_xyz_m": [
+        142.044,
+        10.8,
+        51.1
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "V-C5",
+        "return",
+        "motor"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "C06",
+      "name": "Hotel electronics HX",
+      "system": "cooling",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D3-P2",
+      "position_xyz_m": [
+        129.756,
+        10.8,
+        38.433
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "supply",
+        "warm"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "C07",
+      "name": "Air handler coil",
+      "system": "cooling",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D3-S3",
+      "position_xyz_m": [
+        144.422,
+        10.8,
+        51.1
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "coil",
+        "secondary-hot"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "C08",
+      "name": "Expansion / isolation",
+      "system": "cooling",
+      "status": "proposed",
+      "zone": "ENGINE / POWER RESERVE",
+      "room_id": null,
+      "position_xyz_m": [
+        24.6,
+        1.2,
+        38.333
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "pressure-manage"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "C09",
+      "name": "Industrial pickup",
+      "system": "cooling",
+      "status": "proposed",
+      "zone": "ORE / CARGO RESERVE",
+      "room_id": null,
+      "position_xyz_m": [
+        81.6,
+        1.2,
+        30.667
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "industrial-hot",
+        "return"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "E01",
+      "name": "Independent reserve",
+      "system": "emergency",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D1-P3",
+      "position_xyz_m": [
+        134.911,
+        3.2,
+        38.433
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "out"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "E02",
+      "name": "Emergency breaker",
+      "system": "emergency",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D1-P3",
+      "position_xyz_m": [
+        137.289,
+        3.2,
+        38.433
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "line",
+        "protected"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "E03",
+      "name": "Essential bus B",
+      "system": "emergency",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D1-P3",
+      "position_xyz_m": [
+        139.667,
+        3.2,
+        38.433
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "in",
+        "QF-EL",
+        "QF-EC",
+        "QF-ER",
+        "QF-EB",
+        "QF-EA",
+        "QF-EN",
+        "essential-room-feed"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "E04",
+      "name": "Lights / alarms",
+      "system": "emergency",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D1-P3",
+      "position_xyz_m": [
+        142.044,
+        3.2,
+        38.433
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "in",
+        "guidance"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "E05",
+      "name": "Local safe-state PLC",
+      "system": "emergency",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D1-S1",
+      "position_xyz_m": [
+        112.711,
+        3.2,
+        48.633
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "in",
+        "safe-command",
+        "telemetry"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "E06",
+      "name": "Manual trip / valves",
+      "system": "emergency",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D1-P1",
+      "position_xyz_m": [
+        112.711,
+        3.2,
+        38.433
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "control"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "E07",
+      "name": "Refuge interface",
+      "system": "emergency",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D2-P2",
+      "position_xyz_m": [
+        120.244,
+        7.0,
+        38.433
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "in"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "E08",
+      "name": "Fallback beacon",
+      "system": "emergency",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D3-P2",
+      "position_xyz_m": [
+        120.244,
+        10.8,
+        39.667
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "in"
+      ],
+      "physical_sizing": "unresolved"
+    },
+    {
+      "id": "E09",
+      "name": "Reserved escape route",
+      "system": "emergency",
+      "status": "proposed",
+      "zone": "HUMAN CORE",
+      "room_id": "D1-P1",
+      "position_xyz_m": [
+        115.089,
+        3.2,
+        38.433
+      ],
+      "equipment_envelope_m": null,
+      "ports": [
+        "route"
+      ],
+      "physical_sizing": "unresolved"
+    }
+  ],
+  "connections": [
+    {
+      "id": "P-01",
+      "system": "power",
+      "source": "P01.out",
+      "target": "P02.line",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "dedicated breaker and lockout",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "P-02",
+      "system": "power",
+      "source": "P02.protected",
+      "target": "P03.charge",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "dedicated breaker and lockout",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "P-03",
+      "system": "power",
+      "source": "P03.discharge",
+      "target": "P04.source",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "dedicated breaker and lockout",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "P-04",
+      "system": "power",
+      "source": "P04.QF-I",
+      "target": "P05.in",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "dedicated breaker and lockout",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "P-05",
+      "system": "power",
+      "source": "P04.QF-H",
+      "target": "P06.in",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "dedicated breaker and lockout",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "P-06",
+      "system": "power",
+      "source": "P05.QF-W",
+      "target": "P07.in",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "dedicated breaker and lockout",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "P-07",
+      "system": "power",
+      "source": "P05.QF-T0/T1",
+      "target": "P08.in",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "dedicated breaker and lockout",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "P-08",
+      "system": "power",
+      "source": "P05.QF-D",
+      "target": "P09.in",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "dedicated breaker and lockout",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "N-01",
+      "system": "data",
+      "source": "N01.LAN",
+      "target": "N02.bridge",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "segmentation / local safe state",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "N-02",
+      "system": "data",
+      "source": "N02.control",
+      "target": "N03.uplink",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "segmentation / local safe state",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "N-03",
+      "system": "data",
+      "source": "N02.services",
+      "target": "N04.uplink",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "segmentation / local safe state",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "N-04",
+      "system": "data",
+      "source": "N02.gateway",
+      "target": "N05.LAN",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "segmentation / local safe state",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "N-05",
+      "system": "data",
+      "source": "N05.RF",
+      "target": "N06.feed",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "segmentation / local safe state",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "N-06",
+      "system": "data",
+      "source": "N03.isolated",
+      "target": "N07.uplink",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "segmentation / local safe state",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "N-07",
+      "system": "data",
+      "source": "N07.fieldbus",
+      "target": "N08.control",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "segmentation / local safe state",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "N-08",
+      "system": "data",
+      "source": "N07.filtered",
+      "target": "N09.control",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "segmentation / local safe state",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "A-01",
+      "system": "air",
+      "source": "A01.V-A1",
+      "target": "A02.makeup",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "closing damper / manual override",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "A-02",
+      "system": "air",
+      "source": "A02.supply",
+      "target": "A03.V-A2",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "closing damper / manual override",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "A-03",
+      "system": "air",
+      "source": "A03.dampers",
+      "target": "A04.supply",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "closing damper / manual override",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "A-04",
+      "system": "air",
+      "source": "A04.return",
+      "target": "A05.filter",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "closing damper / manual override",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "A-05",
+      "system": "air",
+      "source": "A05.scrubbed",
+      "target": "A02.return",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "closing damper / manual override",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "A-06",
+      "system": "air",
+      "source": "A06.V-AE",
+      "target": "A03.emergency",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "closing damper / manual override",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "A-07",
+      "system": "air",
+      "source": "A03.V-AL",
+      "target": "A07.supply",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "closing damper / manual override",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "A-08",
+      "system": "air",
+      "source": "A07.V-AR",
+      "target": "A08.capture",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "closing damper / manual override",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "A-09",
+      "system": "air",
+      "source": "A09.isolated",
+      "target": "A08.extract",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "closing damper / manual override",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "W-01",
+      "system": "water",
+      "source": "W01.V-W1",
+      "target": "W02.in",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "branch valve / dry-break and leak detection",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "W-02",
+      "system": "water",
+      "source": "W02.check",
+      "target": "W03.V-W2",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "branch valve / dry-break and leak detection",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "W-03",
+      "system": "water",
+      "source": "W03.branch valves",
+      "target": "W04.potable",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "branch valve / dry-break and leak detection",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "W-04",
+      "system": "water",
+      "source": "W04.gray",
+      "target": "W05.collect",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "branch valve / dry-break and leak detection",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "W-05",
+      "system": "water",
+      "source": "W05.V-W5",
+      "target": "W06.in",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "branch valve / dry-break and leak detection",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "W-06",
+      "system": "water",
+      "source": "W06.sample",
+      "target": "W07.in",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "branch valve / dry-break and leak detection",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "W-07",
+      "system": "water",
+      "source": "W07.quality-gated",
+      "target": "W01.refill",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "branch valve / dry-break and leak detection",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "W-08",
+      "system": "water",
+      "source": "W04.black",
+      "target": "W08.isolated",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "branch valve / dry-break and leak detection",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "W-09",
+      "system": "water",
+      "source": "W09.test + check",
+      "target": "W01.fill",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "branch valve / dry-break and leak detection",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "C-01",
+      "system": "cooling",
+      "source": "C01.supply",
+      "target": "C02.V-C1",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "branch valve / dry-break and leak detection",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "C-02",
+      "system": "cooling",
+      "source": "C02.hot",
+      "target": "C03.primary-in",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "branch valve / dry-break and leak detection",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "C-03",
+      "system": "cooling",
+      "source": "C03.primary-return",
+      "target": "C01.return",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "branch valve / dry-break and leak detection",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "C-04",
+      "system": "cooling",
+      "source": "C03.reject",
+      "target": "C04.interface",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "branch valve / dry-break and leak detection",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "C-05",
+      "system": "cooling",
+      "source": "C04.cooled",
+      "target": "C03.reject-return",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "branch valve / dry-break and leak detection",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "C-06",
+      "system": "cooling",
+      "source": "C05.V-C5",
+      "target": "C06.supply",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "branch valve / dry-break and leak detection",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "C-07",
+      "system": "cooling",
+      "source": "C06.warm",
+      "target": "C07.coil",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "branch valve / dry-break and leak detection",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "C-08",
+      "system": "cooling",
+      "source": "C07.secondary-hot",
+      "target": "C03.secondary-in",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "branch valve / dry-break and leak detection",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "C-09",
+      "system": "cooling",
+      "source": "C03.secondary-return",
+      "target": "C05.return",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "branch valve / dry-break and leak detection",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "C-10",
+      "system": "cooling",
+      "source": "C09.industrial-hot",
+      "target": "C03.branch-HX",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "branch valve / dry-break and leak detection",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "C-11",
+      "system": "cooling",
+      "source": "C03.industrial-cool",
+      "target": "C09.return",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "branch valve / dry-break and leak detection",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "C-12",
+      "system": "cooling",
+      "source": "C08.pressure-manage",
+      "target": "C01.branch",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "branch valve / dry-break and leak detection",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "E-01",
+      "system": "emergency",
+      "source": "E01.out",
+      "target": "E02.line",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "dedicated breaker and lockout",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "E-02",
+      "system": "emergency",
+      "source": "E02.protected",
+      "target": "E03.in",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "dedicated breaker and lockout",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "E-03",
+      "system": "emergency",
+      "source": "E03.QF-EL",
+      "target": "E04.in",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "dedicated breaker and lockout",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "E-04",
+      "system": "emergency",
+      "source": "E03.QF-EC",
+      "target": "E05.in",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "dedicated breaker and lockout",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "E-05",
+      "system": "emergency",
+      "source": "E05.safe-command",
+      "target": "E06.control",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "dedicated breaker and lockout",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "E-06",
+      "system": "emergency",
+      "source": "E03.QF-ER",
+      "target": "E07.in",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "dedicated breaker and lockout",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "E-07",
+      "system": "emergency",
+      "source": "E03.QF-EB",
+      "target": "E08.in",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "dedicated breaker and lockout",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "E-08",
+      "system": "emergency",
+      "source": "E04.guidance",
+      "target": "E09.route",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "dedicated breaker and lockout",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "X-01",
+      "system": "power",
+      "source": "P06.essential-loads",
+      "target": "N02.power",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "dedicated breaker and lockout",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "X-02",
+      "system": "power",
+      "source": "P06.air",
+      "target": "A02.motor",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "dedicated breaker and lockout",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "X-03",
+      "system": "power",
+      "source": "P06.water",
+      "target": "W02.motor",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "dedicated breaker and lockout",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "X-04",
+      "system": "power",
+      "source": "P06.thermal",
+      "target": "C05.motor",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "dedicated breaker and lockout",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "X-05",
+      "system": "power",
+      "source": "P05.plant",
+      "target": "C01.motor",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "dedicated breaker and lockout",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "X-06",
+      "system": "emergency",
+      "source": "E03.QF-EA",
+      "target": "A02.essential-only",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "dedicated breaker and lockout",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "X-07",
+      "system": "emergency",
+      "source": "E03.QF-EN",
+      "target": "N02.backup",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "dedicated breaker and lockout",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "X-08",
+      "system": "data",
+      "source": "N03.monitor",
+      "target": "P04.telemetry",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "segmentation / local safe state",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "X-09",
+      "system": "data",
+      "source": "N03.monitor",
+      "target": "A02.telemetry",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "segmentation / local safe state",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "X-10",
+      "system": "data",
+      "source": "N03.monitor",
+      "target": "W06.telemetry",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "segmentation / local safe state",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "X-11",
+      "system": "data",
+      "source": "N03.monitor",
+      "target": "C03.telemetry",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "segmentation / local safe state",
+      "normal_state": "available; operational logic unresolved"
+    },
+    {
+      "id": "X-12",
+      "system": "data",
+      "source": "N03.monitor",
+      "target": "E05.telemetry",
+      "status": "proposed logical connection",
+      "physical_route_xyz_m": null,
+      "isolation": "segmentation / local safe state",
+      "normal_state": "available; operational logic unresolved"
+    }
+  ],
+  "room_services": [
+    {
+      "room_id": "D1-P1",
+      "role": "AIRLOCK / EVA",
+      "deck": 1,
+      "anchor_xyz_m": [
+        110.333,
+        4.8,
+        40.9
+      ],
+      "services": [
+        "power",
+        "emergency_power",
+        "data",
+        "air_supply",
+        "air_return"
+      ],
+      "branch_isolation": {
+        "power": "D1-P1-POWER",
+        "emergency_power": "D1-P1-EMERGENCY_POWER",
+        "data": "D1-P1-DATA",
+        "air_supply": "D1-P1-AIR_SUPPLY",
+        "air_return": "D1-P1-AIR_RETURN"
+      },
+      "notes": "Airlock and dirty workshop returns isolated from cabin return. Wet services only proposals; no crew/flow sizing.",
+      "connections": [
+        {
+          "from": "P06.room-feed",
+          "to": "D1-P1.power",
+          "isolator": "D1-P1-POWER",
+          "medium": "power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "E03.essential-room-feed",
+          "to": "D1-P1.emergency_power",
+          "isolator": "D1-P1-EMERGENCY_POWER",
+          "medium": "emergency_power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "N04.room-network",
+          "to": "D1-P1.data",
+          "isolator": "D1-P1-DATA",
+          "medium": "data",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "A03.supply",
+          "to": "D1-P1.air_supply",
+          "isolator": "D1-P1-AIR_SUPPLY",
+          "medium": "air_supply",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "D1-P1.air_return",
+          "to": "A08.isolated-exhaust",
+          "isolator": "D1-P1-AIR_RETURN",
+          "medium": "air_return",
+          "route": "separate deck raceway; geometry unresolved"
+        }
+      ]
+    },
+    {
+      "room_id": "D1-S1",
+      "role": "POWER CONTROL",
+      "deck": 1,
+      "anchor_xyz_m": [
+        110.333,
+        4.8,
+        51.1
+      ],
+      "services": [
+        "power",
+        "emergency_power",
+        "data",
+        "air_supply",
+        "air_return"
+      ],
+      "branch_isolation": {
+        "power": "D1-S1-POWER",
+        "emergency_power": "D1-S1-EMERGENCY_POWER",
+        "data": "D1-S1-DATA",
+        "air_supply": "D1-S1-AIR_SUPPLY",
+        "air_return": "D1-S1-AIR_RETURN"
+      },
+      "notes": "Airlock and dirty workshop returns isolated from cabin return. Wet services only proposals; no crew/flow sizing.",
+      "connections": [
+        {
+          "from": "P06.room-feed",
+          "to": "D1-S1.power",
+          "isolator": "D1-S1-POWER",
+          "medium": "power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "E03.essential-room-feed",
+          "to": "D1-S1.emergency_power",
+          "isolator": "D1-S1-EMERGENCY_POWER",
+          "medium": "emergency_power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "N04.room-network",
+          "to": "D1-S1.data",
+          "isolator": "D1-S1-DATA",
+          "medium": "data",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "A03.supply",
+          "to": "D1-S1.air_supply",
+          "isolator": "D1-S1-AIR_SUPPLY",
+          "medium": "air_supply",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "D1-S1.air_return",
+          "to": "A05.return",
+          "isolator": "D1-S1-AIR_RETURN",
+          "medium": "air_return",
+          "route": "separate deck raceway; geometry unresolved"
+        }
+      ]
+    },
+    {
+      "room_id": "D1-P2",
+      "role": "DRONE WORKSHOP",
+      "deck": 1,
+      "anchor_xyz_m": [
+        125.0,
+        4.8,
+        40.9
+      ],
+      "services": [
+        "power",
+        "emergency_power",
+        "data",
+        "air_supply",
+        "air_return"
+      ],
+      "branch_isolation": {
+        "power": "D1-P2-POWER",
+        "emergency_power": "D1-P2-EMERGENCY_POWER",
+        "data": "D1-P2-DATA",
+        "air_supply": "D1-P2-AIR_SUPPLY",
+        "air_return": "D1-P2-AIR_RETURN"
+      },
+      "notes": "Airlock and dirty workshop returns isolated from cabin return. Wet services only proposals; no crew/flow sizing.",
+      "connections": [
+        {
+          "from": "P06.room-feed",
+          "to": "D1-P2.power",
+          "isolator": "D1-P2-POWER",
+          "medium": "power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "E03.essential-room-feed",
+          "to": "D1-P2.emergency_power",
+          "isolator": "D1-P2-EMERGENCY_POWER",
+          "medium": "emergency_power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "N04.room-network",
+          "to": "D1-P2.data",
+          "isolator": "D1-P2-DATA",
+          "medium": "data",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "A03.supply",
+          "to": "D1-P2.air_supply",
+          "isolator": "D1-P2-AIR_SUPPLY",
+          "medium": "air_supply",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "D1-P2.air_return",
+          "to": "A08.isolated-exhaust",
+          "isolator": "D1-P2-AIR_RETURN",
+          "medium": "air_return",
+          "route": "separate deck raceway; geometry unresolved"
+        }
+      ]
+    },
+    {
+      "room_id": "D1-S2",
+      "role": "CARGO ACCESS",
+      "deck": 1,
+      "anchor_xyz_m": [
+        125.0,
+        4.8,
+        51.1
+      ],
+      "services": [
+        "power",
+        "emergency_power",
+        "data",
+        "air_supply",
+        "air_return"
+      ],
+      "branch_isolation": {
+        "power": "D1-S2-POWER",
+        "emergency_power": "D1-S2-EMERGENCY_POWER",
+        "data": "D1-S2-DATA",
+        "air_supply": "D1-S2-AIR_SUPPLY",
+        "air_return": "D1-S2-AIR_RETURN"
+      },
+      "notes": "Airlock and dirty workshop returns isolated from cabin return. Wet services only proposals; no crew/flow sizing.",
+      "connections": [
+        {
+          "from": "P06.room-feed",
+          "to": "D1-S2.power",
+          "isolator": "D1-S2-POWER",
+          "medium": "power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "E03.essential-room-feed",
+          "to": "D1-S2.emergency_power",
+          "isolator": "D1-S2-EMERGENCY_POWER",
+          "medium": "emergency_power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "N04.room-network",
+          "to": "D1-S2.data",
+          "isolator": "D1-S2-DATA",
+          "medium": "data",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "A03.supply",
+          "to": "D1-S2.air_supply",
+          "isolator": "D1-S2-AIR_SUPPLY",
+          "medium": "air_supply",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "D1-S2.air_return",
+          "to": "A05.return",
+          "isolator": "D1-S2-AIR_RETURN",
+          "medium": "air_return",
+          "route": "separate deck raceway; geometry unresolved"
+        }
+      ]
+    },
+    {
+      "room_id": "D1-P3",
+      "role": "STORES / SERVICE",
+      "deck": 1,
+      "anchor_xyz_m": [
+        139.667,
+        4.8,
+        40.9
+      ],
+      "services": [
+        "power",
+        "emergency_power",
+        "data",
+        "air_supply",
+        "air_return"
+      ],
+      "branch_isolation": {
+        "power": "D1-P3-POWER",
+        "emergency_power": "D1-P3-EMERGENCY_POWER",
+        "data": "D1-P3-DATA",
+        "air_supply": "D1-P3-AIR_SUPPLY",
+        "air_return": "D1-P3-AIR_RETURN"
+      },
+      "notes": "Airlock and dirty workshop returns isolated from cabin return. Wet services only proposals; no crew/flow sizing.",
+      "connections": [
+        {
+          "from": "P06.room-feed",
+          "to": "D1-P3.power",
+          "isolator": "D1-P3-POWER",
+          "medium": "power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "E03.essential-room-feed",
+          "to": "D1-P3.emergency_power",
+          "isolator": "D1-P3-EMERGENCY_POWER",
+          "medium": "emergency_power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "N04.room-network",
+          "to": "D1-P3.data",
+          "isolator": "D1-P3-DATA",
+          "medium": "data",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "A03.supply",
+          "to": "D1-P3.air_supply",
+          "isolator": "D1-P3-AIR_SUPPLY",
+          "medium": "air_supply",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "D1-P3.air_return",
+          "to": "A05.return",
+          "isolator": "D1-P3-AIR_RETURN",
+          "medium": "air_return",
+          "route": "separate deck raceway; geometry unresolved"
+        }
+      ]
+    },
+    {
+      "room_id": "D1-S3",
+      "role": "WORKSHOP",
+      "deck": 1,
+      "anchor_xyz_m": [
+        139.667,
+        4.8,
+        51.1
+      ],
+      "services": [
+        "power",
+        "emergency_power",
+        "data",
+        "air_supply",
+        "air_return"
+      ],
+      "branch_isolation": {
+        "power": "D1-S3-POWER",
+        "emergency_power": "D1-S3-EMERGENCY_POWER",
+        "data": "D1-S3-DATA",
+        "air_supply": "D1-S3-AIR_SUPPLY",
+        "air_return": "D1-S3-AIR_RETURN"
+      },
+      "notes": "Airlock and dirty workshop returns isolated from cabin return. Wet services only proposals; no crew/flow sizing.",
+      "connections": [
+        {
+          "from": "P06.room-feed",
+          "to": "D1-S3.power",
+          "isolator": "D1-S3-POWER",
+          "medium": "power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "E03.essential-room-feed",
+          "to": "D1-S3.emergency_power",
+          "isolator": "D1-S3-EMERGENCY_POWER",
+          "medium": "emergency_power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "N04.room-network",
+          "to": "D1-S3.data",
+          "isolator": "D1-S3-DATA",
+          "medium": "data",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "A03.supply",
+          "to": "D1-S3.air_supply",
+          "isolator": "D1-S3-AIR_SUPPLY",
+          "medium": "air_supply",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "D1-S3.air_return",
+          "to": "A08.isolated-exhaust",
+          "isolator": "D1-S3-AIR_RETURN",
+          "medium": "air_return",
+          "route": "separate deck raceway; geometry unresolved"
+        }
+      ]
+    },
+    {
+      "room_id": "D2-P1",
+      "role": "CREW / GALLEY",
+      "deck": 2,
+      "anchor_xyz_m": [
+        110.333,
+        8.6,
+        40.9
+      ],
+      "services": [
+        "power",
+        "emergency_power",
+        "data",
+        "air_supply",
+        "air_return",
+        "potable",
+        "graywater",
+        "sealed_waste"
+      ],
+      "branch_isolation": {
+        "power": "D2-P1-POWER",
+        "emergency_power": "D2-P1-EMERGENCY_POWER",
+        "data": "D2-P1-DATA",
+        "air_supply": "D2-P1-AIR_SUPPLY",
+        "air_return": "D2-P1-AIR_RETURN",
+        "potable": "D2-P1-POTABLE",
+        "graywater": "D2-P1-GRAYWATER",
+        "sealed_waste": "D2-P1-SEALED_WASTE"
+      },
+      "notes": "Airlock and dirty workshop returns isolated from cabin return. Wet services only proposals; no crew/flow sizing.",
+      "connections": [
+        {
+          "from": "P06.room-feed",
+          "to": "D2-P1.power",
+          "isolator": "D2-P1-POWER",
+          "medium": "power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "E03.essential-room-feed",
+          "to": "D2-P1.emergency_power",
+          "isolator": "D2-P1-EMERGENCY_POWER",
+          "medium": "emergency_power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "N04.room-network",
+          "to": "D2-P1.data",
+          "isolator": "D2-P1-DATA",
+          "medium": "data",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "A03.supply",
+          "to": "D2-P1.air_supply",
+          "isolator": "D2-P1-AIR_SUPPLY",
+          "medium": "air_supply",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "D2-P1.air_return",
+          "to": "A05.return",
+          "isolator": "D2-P1-AIR_RETURN",
+          "medium": "air_return",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "W03.potable",
+          "to": "D2-P1.potable",
+          "isolator": "D2-P1-POTABLE",
+          "medium": "potable",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "D2-P1.graywater",
+          "to": "W05.collection",
+          "isolator": "D2-P1-GRAYWATER",
+          "medium": "graywater",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "D2-P1.sealed_waste",
+          "to": "W08.collection",
+          "isolator": "D2-P1-SEALED_WASTE",
+          "medium": "sealed_waste",
+          "route": "separate deck raceway; geometry unresolved"
+        }
+      ]
+    },
+    {
+      "room_id": "D2-S1",
+      "role": "HYGIENE / STORES",
+      "deck": 2,
+      "anchor_xyz_m": [
+        110.333,
+        8.6,
+        51.1
+      ],
+      "services": [
+        "power",
+        "emergency_power",
+        "data",
+        "air_supply",
+        "air_return",
+        "potable",
+        "graywater",
+        "sealed_waste"
+      ],
+      "branch_isolation": {
+        "power": "D2-S1-POWER",
+        "emergency_power": "D2-S1-EMERGENCY_POWER",
+        "data": "D2-S1-DATA",
+        "air_supply": "D2-S1-AIR_SUPPLY",
+        "air_return": "D2-S1-AIR_RETURN",
+        "potable": "D2-S1-POTABLE",
+        "graywater": "D2-S1-GRAYWATER",
+        "sealed_waste": "D2-S1-SEALED_WASTE"
+      },
+      "notes": "Airlock and dirty workshop returns isolated from cabin return. Wet services only proposals; no crew/flow sizing.",
+      "connections": [
+        {
+          "from": "P06.room-feed",
+          "to": "D2-S1.power",
+          "isolator": "D2-S1-POWER",
+          "medium": "power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "E03.essential-room-feed",
+          "to": "D2-S1.emergency_power",
+          "isolator": "D2-S1-EMERGENCY_POWER",
+          "medium": "emergency_power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "N04.room-network",
+          "to": "D2-S1.data",
+          "isolator": "D2-S1-DATA",
+          "medium": "data",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "A03.supply",
+          "to": "D2-S1.air_supply",
+          "isolator": "D2-S1-AIR_SUPPLY",
+          "medium": "air_supply",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "D2-S1.air_return",
+          "to": "A05.return",
+          "isolator": "D2-S1-AIR_RETURN",
+          "medium": "air_return",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "W03.potable",
+          "to": "D2-S1.potable",
+          "isolator": "D2-S1-POTABLE",
+          "medium": "potable",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "D2-S1.graywater",
+          "to": "W05.collection",
+          "isolator": "D2-S1-GRAYWATER",
+          "medium": "graywater",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "D2-S1.sealed_waste",
+          "to": "W08.collection",
+          "isolator": "D2-S1-SEALED_WASTE",
+          "medium": "sealed_waste",
+          "route": "separate deck raceway; geometry unresolved"
+        }
+      ]
+    },
+    {
+      "room_id": "D2-P2",
+      "role": "MEDICAL / HYGIENE",
+      "deck": 2,
+      "anchor_xyz_m": [
+        125.0,
+        8.6,
+        40.9
+      ],
+      "services": [
+        "power",
+        "emergency_power",
+        "data",
+        "air_supply",
+        "air_return",
+        "potable",
+        "graywater",
+        "sealed_waste"
+      ],
+      "branch_isolation": {
+        "power": "D2-P2-POWER",
+        "emergency_power": "D2-P2-EMERGENCY_POWER",
+        "data": "D2-P2-DATA",
+        "air_supply": "D2-P2-AIR_SUPPLY",
+        "air_return": "D2-P2-AIR_RETURN",
+        "potable": "D2-P2-POTABLE",
+        "graywater": "D2-P2-GRAYWATER",
+        "sealed_waste": "D2-P2-SEALED_WASTE"
+      },
+      "notes": "Airlock and dirty workshop returns isolated from cabin return. Wet services only proposals; no crew/flow sizing.",
+      "connections": [
+        {
+          "from": "P06.room-feed",
+          "to": "D2-P2.power",
+          "isolator": "D2-P2-POWER",
+          "medium": "power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "E03.essential-room-feed",
+          "to": "D2-P2.emergency_power",
+          "isolator": "D2-P2-EMERGENCY_POWER",
+          "medium": "emergency_power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "N04.room-network",
+          "to": "D2-P2.data",
+          "isolator": "D2-P2-DATA",
+          "medium": "data",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "A03.supply",
+          "to": "D2-P2.air_supply",
+          "isolator": "D2-P2-AIR_SUPPLY",
+          "medium": "air_supply",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "D2-P2.air_return",
+          "to": "A05.return",
+          "isolator": "D2-P2-AIR_RETURN",
+          "medium": "air_return",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "W03.potable",
+          "to": "D2-P2.potable",
+          "isolator": "D2-P2-POTABLE",
+          "medium": "potable",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "D2-P2.graywater",
+          "to": "W05.collection",
+          "isolator": "D2-P2-GRAYWATER",
+          "medium": "graywater",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "D2-P2.sealed_waste",
+          "to": "W08.collection",
+          "isolator": "D2-P2-SEALED_WASTE",
+          "medium": "sealed_waste",
+          "route": "separate deck raceway; geometry unresolved"
+        }
+      ]
+    },
+    {
+      "room_id": "D2-S2",
+      "role": "CREW REST",
+      "deck": 2,
+      "anchor_xyz_m": [
+        125.0,
+        8.6,
+        51.1
+      ],
+      "services": [
+        "power",
+        "emergency_power",
+        "data",
+        "air_supply",
+        "air_return"
+      ],
+      "branch_isolation": {
+        "power": "D2-S2-POWER",
+        "emergency_power": "D2-S2-EMERGENCY_POWER",
+        "data": "D2-S2-DATA",
+        "air_supply": "D2-S2-AIR_SUPPLY",
+        "air_return": "D2-S2-AIR_RETURN"
+      },
+      "notes": "Airlock and dirty workshop returns isolated from cabin return. Wet services only proposals; no crew/flow sizing.",
+      "connections": [
+        {
+          "from": "P06.room-feed",
+          "to": "D2-S2.power",
+          "isolator": "D2-S2-POWER",
+          "medium": "power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "E03.essential-room-feed",
+          "to": "D2-S2.emergency_power",
+          "isolator": "D2-S2-EMERGENCY_POWER",
+          "medium": "emergency_power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "N04.room-network",
+          "to": "D2-S2.data",
+          "isolator": "D2-S2-DATA",
+          "medium": "data",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "A03.supply",
+          "to": "D2-S2.air_supply",
+          "isolator": "D2-S2-AIR_SUPPLY",
+          "medium": "air_supply",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "D2-S2.air_return",
+          "to": "A05.return",
+          "isolator": "D2-S2-AIR_RETURN",
+          "medium": "air_return",
+          "route": "separate deck raceway; geometry unresolved"
+        }
+      ]
+    },
+    {
+      "room_id": "D2-P3",
+      "role": "CREW REST",
+      "deck": 2,
+      "anchor_xyz_m": [
+        139.667,
+        8.6,
+        40.9
+      ],
+      "services": [
+        "power",
+        "emergency_power",
+        "data",
+        "air_supply",
+        "air_return"
+      ],
+      "branch_isolation": {
+        "power": "D2-P3-POWER",
+        "emergency_power": "D2-P3-EMERGENCY_POWER",
+        "data": "D2-P3-DATA",
+        "air_supply": "D2-P3-AIR_SUPPLY",
+        "air_return": "D2-P3-AIR_RETURN"
+      },
+      "notes": "Airlock and dirty workshop returns isolated from cabin return. Wet services only proposals; no crew/flow sizing.",
+      "connections": [
+        {
+          "from": "P06.room-feed",
+          "to": "D2-P3.power",
+          "isolator": "D2-P3-POWER",
+          "medium": "power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "E03.essential-room-feed",
+          "to": "D2-P3.emergency_power",
+          "isolator": "D2-P3-EMERGENCY_POWER",
+          "medium": "emergency_power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "N04.room-network",
+          "to": "D2-P3.data",
+          "isolator": "D2-P3-DATA",
+          "medium": "data",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "A03.supply",
+          "to": "D2-P3.air_supply",
+          "isolator": "D2-P3-AIR_SUPPLY",
+          "medium": "air_supply",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "D2-P3.air_return",
+          "to": "A05.return",
+          "isolator": "D2-P3-AIR_RETURN",
+          "medium": "air_return",
+          "route": "separate deck raceway; geometry unresolved"
+        }
+      ]
+    },
+    {
+      "room_id": "D2-S3",
+      "role": "SERVICE / SUPPORT",
+      "deck": 2,
+      "anchor_xyz_m": [
+        139.667,
+        8.6,
+        51.1
+      ],
+      "services": [
+        "power",
+        "emergency_power",
+        "data",
+        "air_supply",
+        "air_return"
+      ],
+      "branch_isolation": {
+        "power": "D2-S3-POWER",
+        "emergency_power": "D2-S3-EMERGENCY_POWER",
+        "data": "D2-S3-DATA",
+        "air_supply": "D2-S3-AIR_SUPPLY",
+        "air_return": "D2-S3-AIR_RETURN"
+      },
+      "notes": "Airlock and dirty workshop returns isolated from cabin return. Wet services only proposals; no crew/flow sizing.",
+      "connections": [
+        {
+          "from": "P06.room-feed",
+          "to": "D2-S3.power",
+          "isolator": "D2-S3-POWER",
+          "medium": "power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "E03.essential-room-feed",
+          "to": "D2-S3.emergency_power",
+          "isolator": "D2-S3-EMERGENCY_POWER",
+          "medium": "emergency_power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "N04.room-network",
+          "to": "D2-S3.data",
+          "isolator": "D2-S3-DATA",
+          "medium": "data",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "A03.supply",
+          "to": "D2-S3.air_supply",
+          "isolator": "D2-S3-AIR_SUPPLY",
+          "medium": "air_supply",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "D2-S3.air_return",
+          "to": "A05.return",
+          "isolator": "D2-S3-AIR_RETURN",
+          "medium": "air_return",
+          "route": "separate deck raceway; geometry unresolved"
+        }
+      ]
+    },
+    {
+      "room_id": "D3-P1",
+      "role": "BRIDGE / NAV",
+      "deck": 3,
+      "anchor_xyz_m": [
+        110.333,
+        12.4,
+        40.9
+      ],
+      "services": [
+        "power",
+        "emergency_power",
+        "data",
+        "air_supply",
+        "air_return"
+      ],
+      "branch_isolation": {
+        "power": "D3-P1-POWER",
+        "emergency_power": "D3-P1-EMERGENCY_POWER",
+        "data": "D3-P1-DATA",
+        "air_supply": "D3-P1-AIR_SUPPLY",
+        "air_return": "D3-P1-AIR_RETURN"
+      },
+      "notes": "Airlock and dirty workshop returns isolated from cabin return. Wet services only proposals; no crew/flow sizing.",
+      "connections": [
+        {
+          "from": "P06.room-feed",
+          "to": "D3-P1.power",
+          "isolator": "D3-P1-POWER",
+          "medium": "power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "E03.essential-room-feed",
+          "to": "D3-P1.emergency_power",
+          "isolator": "D3-P1-EMERGENCY_POWER",
+          "medium": "emergency_power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "N04.room-network",
+          "to": "D3-P1.data",
+          "isolator": "D3-P1-DATA",
+          "medium": "data",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "A03.supply",
+          "to": "D3-P1.air_supply",
+          "isolator": "D3-P1-AIR_SUPPLY",
+          "medium": "air_supply",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "D3-P1.air_return",
+          "to": "A05.return",
+          "isolator": "D3-P1-AIR_RETURN",
+          "medium": "air_return",
+          "route": "separate deck raceway; geometry unresolved"
+        }
+      ]
+    },
+    {
+      "room_id": "D3-S1",
+      "role": "CREW / GALLEY",
+      "deck": 3,
+      "anchor_xyz_m": [
+        110.333,
+        12.4,
+        51.1
+      ],
+      "services": [
+        "power",
+        "emergency_power",
+        "data",
+        "air_supply",
+        "air_return",
+        "potable",
+        "graywater",
+        "sealed_waste"
+      ],
+      "branch_isolation": {
+        "power": "D3-S1-POWER",
+        "emergency_power": "D3-S1-EMERGENCY_POWER",
+        "data": "D3-S1-DATA",
+        "air_supply": "D3-S1-AIR_SUPPLY",
+        "air_return": "D3-S1-AIR_RETURN",
+        "potable": "D3-S1-POTABLE",
+        "graywater": "D3-S1-GRAYWATER",
+        "sealed_waste": "D3-S1-SEALED_WASTE"
+      },
+      "notes": "Airlock and dirty workshop returns isolated from cabin return. Wet services only proposals; no crew/flow sizing.",
+      "connections": [
+        {
+          "from": "P06.room-feed",
+          "to": "D3-S1.power",
+          "isolator": "D3-S1-POWER",
+          "medium": "power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "E03.essential-room-feed",
+          "to": "D3-S1.emergency_power",
+          "isolator": "D3-S1-EMERGENCY_POWER",
+          "medium": "emergency_power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "N04.room-network",
+          "to": "D3-S1.data",
+          "isolator": "D3-S1-DATA",
+          "medium": "data",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "A03.supply",
+          "to": "D3-S1.air_supply",
+          "isolator": "D3-S1-AIR_SUPPLY",
+          "medium": "air_supply",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "D3-S1.air_return",
+          "to": "A05.return",
+          "isolator": "D3-S1-AIR_RETURN",
+          "medium": "air_return",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "W03.potable",
+          "to": "D3-S1.potable",
+          "isolator": "D3-S1-POTABLE",
+          "medium": "potable",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "D3-S1.graywater",
+          "to": "W05.collection",
+          "isolator": "D3-S1-GRAYWATER",
+          "medium": "graywater",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "D3-S1.sealed_waste",
+          "to": "W08.collection",
+          "isolator": "D3-S1-SEALED_WASTE",
+          "medium": "sealed_waste",
+          "route": "separate deck raceway; geometry unresolved"
+        }
+      ]
+    },
+    {
+      "room_id": "D3-P2",
+      "role": "SENSORS / COMMS",
+      "deck": 3,
+      "anchor_xyz_m": [
+        125.0,
+        12.4,
+        40.9
+      ],
+      "services": [
+        "power",
+        "emergency_power",
+        "data",
+        "air_supply",
+        "air_return"
+      ],
+      "branch_isolation": {
+        "power": "D3-P2-POWER",
+        "emergency_power": "D3-P2-EMERGENCY_POWER",
+        "data": "D3-P2-DATA",
+        "air_supply": "D3-P2-AIR_SUPPLY",
+        "air_return": "D3-P2-AIR_RETURN"
+      },
+      "notes": "Airlock and dirty workshop returns isolated from cabin return. Wet services only proposals; no crew/flow sizing.",
+      "connections": [
+        {
+          "from": "P06.room-feed",
+          "to": "D3-P2.power",
+          "isolator": "D3-P2-POWER",
+          "medium": "power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "E03.essential-room-feed",
+          "to": "D3-P2.emergency_power",
+          "isolator": "D3-P2-EMERGENCY_POWER",
+          "medium": "emergency_power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "N04.room-network",
+          "to": "D3-P2.data",
+          "isolator": "D3-P2-DATA",
+          "medium": "data",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "A03.supply",
+          "to": "D3-P2.air_supply",
+          "isolator": "D3-P2-AIR_SUPPLY",
+          "medium": "air_supply",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "D3-P2.air_return",
+          "to": "A05.return",
+          "isolator": "D3-P2-AIR_RETURN",
+          "medium": "air_return",
+          "route": "separate deck raceway; geometry unresolved"
+        }
+      ]
+    },
+    {
+      "room_id": "D3-S2",
+      "role": "MEDICAL / REST",
+      "deck": 3,
+      "anchor_xyz_m": [
+        125.0,
+        12.4,
+        51.1
+      ],
+      "services": [
+        "power",
+        "emergency_power",
+        "data",
+        "air_supply",
+        "air_return",
+        "potable",
+        "graywater",
+        "sealed_waste"
+      ],
+      "branch_isolation": {
+        "power": "D3-S2-POWER",
+        "emergency_power": "D3-S2-EMERGENCY_POWER",
+        "data": "D3-S2-DATA",
+        "air_supply": "D3-S2-AIR_SUPPLY",
+        "air_return": "D3-S2-AIR_RETURN",
+        "potable": "D3-S2-POTABLE",
+        "graywater": "D3-S2-GRAYWATER",
+        "sealed_waste": "D3-S2-SEALED_WASTE"
+      },
+      "notes": "Airlock and dirty workshop returns isolated from cabin return. Wet services only proposals; no crew/flow sizing.",
+      "connections": [
+        {
+          "from": "P06.room-feed",
+          "to": "D3-S2.power",
+          "isolator": "D3-S2-POWER",
+          "medium": "power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "E03.essential-room-feed",
+          "to": "D3-S2.emergency_power",
+          "isolator": "D3-S2-EMERGENCY_POWER",
+          "medium": "emergency_power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "N04.room-network",
+          "to": "D3-S2.data",
+          "isolator": "D3-S2-DATA",
+          "medium": "data",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "A03.supply",
+          "to": "D3-S2.air_supply",
+          "isolator": "D3-S2-AIR_SUPPLY",
+          "medium": "air_supply",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "D3-S2.air_return",
+          "to": "A05.return",
+          "isolator": "D3-S2-AIR_RETURN",
+          "medium": "air_return",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "W03.potable",
+          "to": "D3-S2.potable",
+          "isolator": "D3-S2-POTABLE",
+          "medium": "potable",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "D3-S2.graywater",
+          "to": "W05.collection",
+          "isolator": "D3-S2-GRAYWATER",
+          "medium": "graywater",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "D3-S2.sealed_waste",
+          "to": "W08.collection",
+          "isolator": "D3-S2-SEALED_WASTE",
+          "medium": "sealed_waste",
+          "route": "separate deck raceway; geometry unresolved"
+        }
+      ]
+    },
+    {
+      "room_id": "D3-P3",
+      "role": "OPERATIONS",
+      "deck": 3,
+      "anchor_xyz_m": [
+        139.667,
+        12.4,
+        40.9
+      ],
+      "services": [
+        "power",
+        "emergency_power",
+        "data",
+        "air_supply",
+        "air_return"
+      ],
+      "branch_isolation": {
+        "power": "D3-P3-POWER",
+        "emergency_power": "D3-P3-EMERGENCY_POWER",
+        "data": "D3-P3-DATA",
+        "air_supply": "D3-P3-AIR_SUPPLY",
+        "air_return": "D3-P3-AIR_RETURN"
+      },
+      "notes": "Airlock and dirty workshop returns isolated from cabin return. Wet services only proposals; no crew/flow sizing.",
+      "connections": [
+        {
+          "from": "P06.room-feed",
+          "to": "D3-P3.power",
+          "isolator": "D3-P3-POWER",
+          "medium": "power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "E03.essential-room-feed",
+          "to": "D3-P3.emergency_power",
+          "isolator": "D3-P3-EMERGENCY_POWER",
+          "medium": "emergency_power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "N04.room-network",
+          "to": "D3-P3.data",
+          "isolator": "D3-P3-DATA",
+          "medium": "data",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "A03.supply",
+          "to": "D3-P3.air_supply",
+          "isolator": "D3-P3-AIR_SUPPLY",
+          "medium": "air_supply",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "D3-P3.air_return",
+          "to": "A05.return",
+          "isolator": "D3-P3-AIR_RETURN",
+          "medium": "air_return",
+          "route": "separate deck raceway; geometry unresolved"
+        }
+      ]
+    },
+    {
+      "room_id": "D3-S3",
+      "role": "LIFE SUPPORT",
+      "deck": 3,
+      "anchor_xyz_m": [
+        139.667,
+        12.4,
+        51.1
+      ],
+      "services": [
+        "power",
+        "emergency_power",
+        "data",
+        "air_supply",
+        "air_return"
+      ],
+      "branch_isolation": {
+        "power": "D3-S3-POWER",
+        "emergency_power": "D3-S3-EMERGENCY_POWER",
+        "data": "D3-S3-DATA",
+        "air_supply": "D3-S3-AIR_SUPPLY",
+        "air_return": "D3-S3-AIR_RETURN"
+      },
+      "notes": "Airlock and dirty workshop returns isolated from cabin return. Wet services only proposals; no crew/flow sizing.",
+      "connections": [
+        {
+          "from": "P06.room-feed",
+          "to": "D3-S3.power",
+          "isolator": "D3-S3-POWER",
+          "medium": "power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "E03.essential-room-feed",
+          "to": "D3-S3.emergency_power",
+          "isolator": "D3-S3-EMERGENCY_POWER",
+          "medium": "emergency_power",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "N04.room-network",
+          "to": "D3-S3.data",
+          "isolator": "D3-S3-DATA",
+          "medium": "data",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "A03.supply",
+          "to": "D3-S3.air_supply",
+          "isolator": "D3-S3-AIR_SUPPLY",
+          "medium": "air_supply",
+          "route": "separate deck raceway; geometry unresolved"
+        },
+        {
+          "from": "D3-S3.air_return",
+          "to": "A05.return",
+          "isolator": "D3-S3-AIR_RETURN",
+          "medium": "air_return",
+          "route": "separate deck raceway; geometry unresolved"
+        }
+      ]
+    }
+  ],
+  "deck_service_routes": [
+    {
+      "deck": 1,
+      "service_waypoint_xyz_m": [
+        123.0,
+        5.0,
+        46.0
+      ],
+      "routes": [
+        "P-A dry power tray",
+        "E-B independently isolated emergency tray",
+        "N fiber/data tray",
+        "W potable + separate waste tray",
+        "A supply/return ducts",
+        "C sealed secondary coolant"
+      ],
+      "segregation": "Separate protected raceways, wet below/away from dry; no shared connector or pipe. Actual offsets/penetrations unassigned; corridor clearance not yet proved."
+    },
+    {
+      "deck": 2,
+      "service_waypoint_xyz_m": [
+        123.0,
+        8.8,
+        46.0
+      ],
+      "routes": [
+        "P-A dry power tray",
+        "E-B independently isolated emergency tray",
+        "N fiber/data tray",
+        "W potable + separate waste tray",
+        "A supply/return ducts",
+        "C sealed secondary coolant"
+      ],
+      "segregation": "Separate protected raceways, wet below/away from dry; no shared connector or pipe. Actual offsets/penetrations unassigned; corridor clearance not yet proved."
+    },
+    {
+      "deck": 3,
+      "service_waypoint_xyz_m": [
+        123.0,
+        12.6,
+        46.0
+      ],
+      "routes": [
+        "P-A dry power tray",
+        "E-B independently isolated emergency tray",
+        "N fiber/data tray",
+        "W potable + separate waste tray",
+        "A supply/return ducts",
+        "C sealed secondary coolant"
+      ],
+      "segregation": "Separate protected raceways, wet below/away from dry; no shared connector or pipe. Actual offsets/penetrations unassigned; corridor clearance not yet proved."
+    }
+  ],
+  "industrial_policy": "Engine/cargo equipment zones are unmanned in normal operation; isolation and maintenance access required before entry. Not automatically habitable. No walking through current hull collision.",
+  "emergency_policy": "Reserve E01 and bus E03 are independent proposals; no endurance assigned. Manual local isolation survives data loss. Dual egress, separate risers, refuge capacity and reserve sizing remain unproved.",
+  "rf_policy": "N06 is an interior RF bulkhead interface only; external antenna positions, spectrum, link budgets and propagation unresolved. No wireless dependency for emergency stop.",
+  "sizing": {
+    "nominal_voltage_v": null,
+    "peak_current_a": null,
+    "crew_count": null,
+    "endurance_hours": null,
+    "potable_volume_l": null,
+    "gas_pressure_pa": null,
+    "water_flow_l_s": null,
+    "coolant_flow_l_s": null,
+    "heat_rejection_w": null,
+    "rf_frequency_hz": null,
+    "network_rate_bps": null
+  },
+  "gaps": [
+    {
+      "system": "Electrical",
+      "gap": "Voltages, currents, protection discrimination, conductor gauges and fault energy unknown.",
+      "acceptance": "Approve load inventory; size conductors and coordinated breaker trips; test safe shedding."
+    },
+    {
+      "system": "Life support",
+      "gap": "Crew count, occupancy hours, gas mixture and reserve endurance unknown.",
+      "acceptance": "Set occupancy scenarios; size and test atmosphere control and independent reserve."
+    },
+    {
+      "system": "Water",
+      "gap": "Tank volume, flow, pressure, treatment chemistry and consumption unknown.",
+      "acceptance": "Close mass balance; test isolation, contamination detection and quarantine."
+    },
+    {
+      "system": "Cooling",
+      "gap": "Heat loads, fluids, flow, radiator area and operating temperatures unknown.",
+      "acceptance": "Close thermal balance; validate independent loops, leak response and heat rejection."
+    },
+    {
+      "system": "RF / data",
+      "gap": "Frequencies, link budget, bandwidth, EMC and security boundaries unresolved.",
+      "acceptance": "Define permissions and protocols; test segmented control and comms-loss behavior."
+    },
+    {
+      "system": "Physical routing",
+      "gap": "Nodes are anchors, not fitted equipment; cables/pipes lack sizes and collision paths.",
+      "acceptance": "Fit actual mesh, trays, supports, wall penetrations and maintenance clearance."
+    },
+    {
+      "system": "Emergency access",
+      "gap": "One reserved access core is not independent dual egress.",
+      "acceptance": "Prove refuge/escape routes, fire zoning, door/lift failure and trapped-person recovery."
+    },
+    {
+      "system": "Gameplay",
+      "gap": "Scalar charge is implemented; physical circuits and human-support simulation are not.",
+      "acceptance": "Define server state, faults, repair, persistence and authoritative multiplayer acceptance."
+    }
+  ]
+}
