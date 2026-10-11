@@ -25,6 +25,17 @@ class PublicationSafety(unittest.TestCase):
             with self.subTest(field=field), self.assertRaises(ValueError):
                 p.validate_run(dict(run, **{field: value}), 7)
 
+    def test_release_tag_is_precreated_exact_lightweight_and_never_changed(self):
+        good = {"ref": "refs/tags/v26.10.11.7", "object": {"type": "commit", "sha": "a" * 40}}
+        with patch.object(p, "gh", return_value=good) as request:
+            p.verify_release_tag("26.10.11.7", "a" * 40)
+            request.assert_called_once_with("git/ref/tags/v26.10.11.7")
+        for ref in [{}, dict(good, ref="refs/tags/other"), dict(good, object={"type": "tag", "sha": "a" * 40}), dict(good, object={"type": "commit", "sha": "b" * 40})]:
+            with patch.object(p, "gh", return_value=ref), self.assertRaises(ValueError):
+                p.verify_release_tag("26.10.11.7", "a" * 40)
+        with patch.object(p, "gh", side_effect=p.subprocess.CalledProcessError(1, "gh")), self.assertRaisesRegex(ValueError, "Precreate"):
+            p.verify_release_tag("26.10.11.7", "a" * 40)
+
     def test_zip_traversal_symlink_and_duplicates_rejected_before_writes(self):
         for case in ["traversal", "symlink", "duplicate"]:
             with self.subTest(case=case), tempfile.TemporaryDirectory() as temp:

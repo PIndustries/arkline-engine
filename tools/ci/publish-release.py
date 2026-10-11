@@ -38,6 +38,18 @@ def gh(path):
     return json.loads(command("gh", "api", f"repos/{REPO}/{path}"))
 
 
+def verify_release_tag(version, commit):
+    """A maintainer precreates this exact lightweight tag; the job never moves it."""
+    try:
+        ref = gh(f"git/ref/tags/v{version}")
+    except subprocess.CalledProcessError as error:
+        raise ValueError("Precreate and verify the exact release tag before publication") from error
+    if (ref.get("ref") != f"refs/tags/v{version}"
+            or ref.get("object", {}).get("type") != "commit"
+            or ref["object"].get("sha") != commit):
+        raise ValueError("Release tag must be a lightweight tag at the verified artifact source")
+
+
 def digest(path):
     with path.open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").hexdigest()
@@ -331,6 +343,7 @@ def main():
     if command("git", "show", f"{commit}:BUILD_VERSION").decode().strip() != args.version:
         raise ValueError("Requested version differs from release source")
     if args.apply:
+        verify_release_tag(args.version, commit)
         # Refuse overwriting an existing GitHub release even if CDN state differs.
         result = subprocess.run(["gh", "api", f"repos/{REPO}/releases/tags/v{args.version}"], capture_output=True)
         if result.returncode == 0:
@@ -456,7 +469,7 @@ def publish(args, out, folders, browser, commit, plan):
         notes = out / "release-notes.txt"
         notes.write_text(f"Arkline {version}\n\nExact source: {commit}\nRelease-build run: {args.run_id}\n\nDownloads include matching vendored source and third-party notices. Windows is cross-built and Wine-tested; native Windows GUI/audio acceptance remains separate. macOS is ad-hoc signed, not notarized.\n")
         command("gh", "release", "create", f"v{version}", "--repo", REPO, "--target", commit,
-                "--title", f"Arkline {version}", "--notes-file", notes, *sorted(dest.iterdir()), capture=False)
+                "--verify-tag", "--title", f"Arkline {version}", "--notes-file", notes, *sorted(dest.iterdir()), capture=False)
         patch_publication(plan["publication"])
         print("Public artifact hashes verified; GitHub release and Bastion download links updated. Runtime/browser acceptance remains separate.")
     finally:
