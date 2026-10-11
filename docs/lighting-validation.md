@@ -30,3 +30,7 @@ Use an isolated local server and client built from the same revision; keep produ
 7. Repeat in the browser, check WebGL errors and compare screenshots against native. Validate reduced GPU budgets on a modest device before choosing any performance claims.
 
 At integration time the client unit suite, native offscreen GPU fixtures and native/WASM strict compilation passed. Interactive native/browser visual quality, sustained frame pacing and hardware coverage remain release gates; nothing in this change deploys a release.
+
+## Station planet appearance
+
+The station is about 120 km above the planet's north pole. The visible globe cap has `abs(sphere.y)` approximately 0.98–1.0, above the existing polar-ice mask's 0.94 upper threshold. A broad pale disk from the station is therefore expected polar ice, not evidence of clipped exposure. The planet branch and final `ark_display` transfer function are unchanged from `e590a068`. Geography has not been rotated or altered for the lighting update. Station metal can appear dark blue because it reflects the procedural sky rather than the previous artificial diffuse fill.
