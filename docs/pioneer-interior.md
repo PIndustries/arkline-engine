@@ -36,3 +36,9 @@ The interior uses its own local coordinates, with floor Y=0, X equal to plan U a
 - Native and browser compilation do not substitute for a final interactive packaged/browser walkthrough. That acceptance remains a merge/release gate.
 
 Track the full interior and systems backlog in [issue #23](https://github.com/PIndustries/arkline-engine/issues/23). This foundation does not close that issue.
+
+### Input-driven application acceptance
+
+Run `cargo test --locked -p arkline-client both_decks_pointer_keyboard -- --ignored --nocapture` for the deterministic full-application journey. It runs `Cockpit::update` through real egui pointer press/release and held-key events, drains the actual command/control mailboxes at a 20 Hz control cadence, and applies those emitted requests to the authoritative server with a simulated clock. It visits all twelve rooms, clicks both lift transitions, returns through the airlock, boards, and undocks. It also checks that changing decks preserves camera look direction. The tested journey emitted 1,152 client requests.
+
+This is stronger than injecting walking commands directly into the server, but it is **not** an operating-system keyboard/window, TCP transport, or GPU UI-compositing test. The separate native GPU captures inspect the actual room/character geometry; they do not prove OS event delivery. Native accessibility could activate entry during review, but short injected key pulses did not produce a complete walkthrough. Do not report the full native OS journey as passed from these tests alone.

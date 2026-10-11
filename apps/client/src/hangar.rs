@@ -79,19 +79,21 @@ impl HangarView {
             .as_ref()
             .is_some_and(|a| a.onboard_interior);
         let interior_deck = pilot.station_avatar.as_ref().map_or(1, |a| a.interior_deck);
-        if self.interior_deck != interior_deck
-            || self.walking != walking
+        let reset_heading = self.walking != walking
             || self.interior != interior
-            || self.class != Some(pilot.ship_class)
-        {
+            || self.class != Some(pilot.ship_class);
+        if self.interior_deck != interior_deck || reset_heading {
             self.interior = interior;
             self.interior_deck = interior_deck;
             self.zoom = 1.0;
             self.follow = None;
             self.gait = Default::default();
             self.pitch = if walking { 0.23 } else { 0.32 };
-            if let Some(avatar) = &pilot.station_avatar {
-                self.yaw = avatar.heading as f32;
+            // A lift changes the floor, not the direction the user is looking.
+            if reset_heading {
+                if let Some(avatar) = &pilot.station_avatar {
+                    self.yaw = avatar.heading as f32;
+                }
             }
             self.walking = walking;
             self.class = Some(pilot.ship_class);
@@ -737,7 +739,31 @@ mod tests {
                 let vp = Mat4::perspective_rh_gl(1.2, 1280.0 / 720.0, 0.08, 100.0)
                     * Mat4::look_at_rh(eye, Vec3::new(20.0, 1.4, 7.0), Vec3::Y);
                 for deck in [1, 2] {
-                    paint(&renderer, vp, eye, &pioneer_interior::parts(deck));
+                    let (eye, vp) = if deck == 2 {
+                        let eye = Vec3::new(10.6, 2.2, 12.8);
+                        (
+                            eye,
+                            Mat4::perspective_rh_gl(1.2, 1280.0 / 720.0, 0.08, 100.0)
+                                * Mat4::look_at_rh(eye, Vec3::new(6.2, 1.0, 9.6), Vec3::Y),
+                        )
+                    } else {
+                        (eye, vp)
+                    };
+                    let mut parts = pioneer_interior::parts(deck);
+                    if deck == 2 {
+                        let avatar = StationAvatar {
+                            onboard_interior: true,
+                            interior_deck: 2,
+                            jump_started_ms: None,
+                            seated: false,
+                            position: [8.5, 0.0, 11.0],
+                            heading: -std::f64::consts::FRAC_PI_2,
+                            moving: false,
+                            updated_at_ms: 0,
+                        };
+                        parts.extend(avatar_parts(&avatar, Default::default(), None));
+                    }
+                    paint(&renderer, vp, eye, &parts);
                     let mut rgba = vec![0u8; 1280 * 720 * 4];
                     gl.read_pixels(
                         0,

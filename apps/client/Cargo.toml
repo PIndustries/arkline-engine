@@ -30,3 +30,6 @@ wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
 gloo-timers = { version = "0.3", features = ["futures"] }
 web-sys = { version = "0.3", features = ["Window", "Document", "HtmlCanvasElement", "Storage", "WebSocket", "MessageEvent", "CloseEvent", "ErrorEvent", "Location"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+arkline-server = { path = "../server" }

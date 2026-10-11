@@ -6197,3 +6197,6 @@ mod tests {
 fn main() {
     browser::start();
 }
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod interior_acceptance;
