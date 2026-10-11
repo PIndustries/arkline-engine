@@ -12,7 +12,7 @@ Start with the [component and deployment map](component-map.md), then the [imple
 - [Shared-account investigation and implementation plan](identity-plan.md) — proposed, not a working login feature
 - [Flight and cockpit controls](flight-controls.md), [browser client](browser.md), [sound](sound.md)
 - [Station and quarters](station-hangar.md), [station asset audit boundaries](station-assets-audit.md)
-- [Resource gathering jobs](resource-jobs.md), [living-world design](living-world-design.md)
+- [Resource gathering jobs](resource-jobs.md), [mining-loop acceptance](mining-loop-validation.md), [living-world design](living-world-design.md)
 - [Migration](migration.md), [validation record](validation.md), [preview readiness](public-preview-readiness.md)
 - [Deployment](../deploy/README.md), [self-hosted runners](../deploy/CI_RUNNERS.md), [release publication](../tools/ci/PUBLISH.md)
 - [Public transport limits](../apps/server/PUBLIC_TRANSPORT.md), [licensing](licensing.md), [security policy](../SECURITY.md)
