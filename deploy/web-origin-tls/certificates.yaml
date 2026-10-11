@@ -1,0 +1,24 @@
+# Requires the dedicated ClusterIssuer in ../origin-certificates.yaml.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: {name: arkline-web-origin, namespace: arkline}
+spec:
+  secretName: arkline-web-origin-tls
+  duration: 2160h
+  renewBefore: 720h
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  usages: [digital signature, server auth]
+  dnsNames: [web.origin.arkline.network]
+  issuerRef: {name: arkline-origin-ca, kind: ClusterIssuer}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: {name: arkline-marketing-origin, namespace: bastion}
+spec:
+  secretName: arkline-marketing-origin-tls
+  duration: 2160h
+  renewBefore: 720h
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  usages: [digital signature, server auth]
+  dnsNames: [marketing.origin.arkline.network]
+  issuerRef: {name: arkline-origin-ca, kind: ClusterIssuer}

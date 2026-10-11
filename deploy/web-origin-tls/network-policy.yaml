@@ -1,0 +1,33 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: tunnel-web-tls-egress, namespace: arkline}
+spec:
+  podSelector: {matchLabels: {app: arkline-tunnel}}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: arkline}}
+          podSelector: {matchLabels: {app: arkline-web}}
+      ports: [{protocol: TCP, port: 8443}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: tunnel-marketing-tls-egress, namespace: arkline}
+spec:
+  podSelector: {matchLabels: {app: arkline-tunnel}}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: bastion}}
+          podSelector: {matchLabels: {app: bastion}}
+      ports: [{protocol: TCP, port: 8443}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: web-tls-from-tunnel, namespace: arkline}
+spec:
+  podSelector: {matchLabels: {app: arkline-web}}
+  policyTypes: [Ingress]
+  ingress:
+    - from: [{podSelector: {matchLabels: {app: arkline-tunnel}}}]
+      ports: [{protocol: TCP, port: 8443}]

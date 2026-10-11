@@ -6,6 +6,9 @@ transit; it is not application encryption that hides them from the game authorit
 When Cloudflare terminates public TLS, the edge can also read those messages.
 Private end-to-end encrypted chat would require a separate protocol and key design.
 
+The [web origin configuration](../deploy/web-origin-tls/README.md) covers marketing
+and browser/download TLS, including the same-pod marketing proxy boundary.
+
 ## Native client trust
 
 Desktop clients explicitly select Rustls's ring provider and the public WebPKI
@@ -21,14 +24,22 @@ public relays:
 cargo test -p arkline-client native_verified_wss_reaches_both_official_relays -- --ignored
 ```
 
-## Current deployment and new server support
+## Official deployment and server support
 
-The initial official deployment uses certificate-verified public WSS, an encrypted
-Cloudflare Tunnel, and a private plaintext connector-to-origin hop. NetworkPolicy
-limits access to that origin, but does not encrypt it. Native origin TLS support
-is now available in source; this statement is **not evidence that the running
-official deployment has switched to TLS origins**. Rollout evidence is tracked in
+On 2026-10-11, the official Production and Test relays moved to native TLS origins
+with certificate authority and hostname verification enabled. Marketing, browser
+play and download routes also use verified HTTPS origins. The public edge requires
+TLS 1.2 or newer and redirects HTTP to HTTPS on the same host. The marketing
+application's final hop is loopback inside its TLS proxy's pod.
+
+The game rollout preserved both worlds' saved economic state and passed public
+WSS reconnect checks using the standalone native client transport. Test also
+passed a live jump, landing, walk, boarding and resume journey. Deployment and
+validation evidence is tracked in
 [issue #15](https://github.com/PIndustries/arkline-engine/issues/15).
+This describes the checked deployment, not a guarantee for forks or future
+configuration changes. The account/developer portal is a separate deployment and
+must pass its own transport checks before becoming public.
 
 The native Rust server can terminate TLS itself:
 
@@ -96,7 +107,8 @@ projected Secret files resolve through one `..data` generation so a rotation
 cannot pair a new certificate with an old key. A malformed or mismatched update
 rejects new connections; it never falls back to plaintext or an older identity.
 Use a dedicated cert-manager CA Issuer/Certificate or your operator's issuer to
-renew leaves before expiry. Keep the CA key in the issuer's protected Secret,
+renew leaves before expiry. Keep the CA key in the issuer's protected Secret in cert-manager's
+cluster-resource namespace,
 never mounted in game pods. Secret projection can lag renewal; verify the leaf
 serial/expiry actually presented by each server after rotation. For ordinary
 files, atomically switch a directory containing the matching pair. Rotation does

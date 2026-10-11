@@ -1,0 +1,41 @@
+# Strategic merge patch. The existing application container/image is preserved.
+# The TLS proxy and application share one pod; upstream is loopback only.
+spec:
+  template:
+    spec:
+      securityContext: {fsGroup: 101}
+      containers:
+        - name: origin-tls
+          image: nginxinc/nginx-unprivileged@sha256:7377697a821c131a924a7105fafbe7414db4e9fcc77a6f08f776f33f141ec3f8
+          command: [nginx, -c, /etc/arkline-nginx/nginx.conf, -g, 'daemon off;']
+          ports: [{name: origin-https, containerPort: 8443}]
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 101
+            runAsGroup: 101
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+            seccompProfile: {type: RuntimeDefault}
+          resources:
+            requests: {cpu: 25m, memory: 32Mi}
+            limits: {cpu: 500m, memory: 128Mi}
+          readinessProbe:
+            httpGet:
+              scheme: HTTPS
+              path: /health
+              port: origin-https
+              httpHeaders: [{name: Host, value: arkline.network}]
+            periodSeconds: 10
+            timeoutSeconds: 3
+          volumeMounts:
+            - {name: origin-tls, mountPath: /run/arkline-tls, readOnly: true}
+            - {name: origin-nginx, mountPath: /etc/arkline-nginx, readOnly: true}
+            - {name: origin-temporary, mountPath: /tmp}
+      volumes:
+        - name: origin-tls
+          secret: {secretName: arkline-marketing-origin-tls, defaultMode: 0440}
+        - name: origin-nginx
+          configMap: {name: arkline-marketing-tls-nginx}
+        - name: origin-temporary
+          emptyDir: {sizeLimit: 64Mi}
