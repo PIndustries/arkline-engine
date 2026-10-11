@@ -27,7 +27,8 @@ jobs:
           python3 tools/tests/test_origin_tls.py -v
           cargo clippy --locked -p arkline-server --all-targets -- -D warnings
           cargo test --locked -p arkline-server
-          export DOCKER_CONFIG="$(mktemp -d)"
+          DOCKER_CONFIG="$(mktemp -d)"
+          export DOCKER_CONFIG
           builder="arkline-tls-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           cleanup() { docker buildx rm "$builder" >/dev/null 2>&1 || true; rm -rf "$DOCKER_CONFIG"; }
           trap cleanup EXIT
