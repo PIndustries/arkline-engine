@@ -1048,13 +1048,28 @@ impl Cockpit {
                 MUTED,
             );
         };
-        if pilot.station_avatar.is_some() {
-            return (
-                "ON FOOT / STATION HANGAR".into(),
-                "Walk to the boarding marker to enter your ship".into(),
-                None,
-                self.accent(),
-            );
+        if let Some(avatar) = &pilot.station_avatar {
+            let (title, guidance) = if avatar.onboard_interior {
+                (
+                    format!("ON FOOT / PIONEER DECK {}", avatar.interior_deck),
+                    if avatar.interior_deck == 1 {
+                        "Return to the airlock to leave; access-core lift leads to deck 2".into()
+                    } else {
+                        "Use the access-core lift to deck 1 for the airlock exit".into()
+                    },
+                )
+            } else if self.in_captains_quarters() {
+                (
+                    "ON FOOT / CAPTAIN'S QUARTERS".into(),
+                    "Return through the doorway to the hangar boarding marker".into(),
+                )
+            } else {
+                (
+                    "ON FOOT / STATION HANGAR".into(),
+                    "Walk to the boarding marker to enter your ship".into(),
+                )
+            };
+            return (title, guidance, None, self.accent());
         }
         let now = self.presentation_time();
         if let Location::InTransit {
@@ -3343,10 +3358,17 @@ impl eframe::App for Cockpit {
                                 },
                             );
                             if in_hangar {
-                                ui.strong(if self.in_captains_quarters() {
-                                    "CAPTAIN'S QUARTERS"
+                                let interior_deck = self
+                                    .own()
+                                    .and_then(|p| p.station_avatar)
+                                    .filter(|a| a.onboard_interior)
+                                    .map(|a| a.interior_deck);
+                                ui.strong(if let Some(deck) = interior_deck {
+                                    format!("PIONEER INTERIOR · DECK {deck}")
+                                } else if self.in_captains_quarters() {
+                                    "CAPTAIN'S QUARTERS".into()
                                 } else {
-                                    "STATION HANGAR"
+                                    "STATION HANGAR".into()
                                 });
                             } else {
                                 self.view_selector(ui);

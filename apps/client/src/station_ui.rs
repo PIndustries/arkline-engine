@@ -386,6 +386,20 @@ mod tests {
                 updated_at_ms: 1000,
             });
             frame(&ctx, &mut c, vec![]);
+            assert_eq!(c.operation_status().0, "ON FOOT / PIONEER DECK 1");
+            assert!(c.operation_status().1.contains("airlock"));
+            c.snapshot.as_mut().unwrap().pilots[0]
+                .station_avatar
+                .as_mut()
+                .unwrap()
+                .interior_deck = 2;
+            assert_eq!(c.operation_status().0, "ON FOOT / PIONEER DECK 2");
+            assert!(c.operation_status().1.contains("lift"));
+            c.snapshot.as_mut().unwrap().pilots[0]
+                .station_avatar
+                .as_mut()
+                .unwrap()
+                .interior_deck = 1;
             let point = frame(&ctx, &mut c, vec![])
                 .iter()
                 .find(|(t, _)| t == "Use lift to deck 2")
