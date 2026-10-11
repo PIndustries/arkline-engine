@@ -6,15 +6,18 @@ This is a library foundation for issue [#9](https://github.com/PIndustries/arkli
 
 ## Proposed access-token contract
 
-The first profile accepts RS256-signed RFC 9068 JWT access tokens with `typ` exactly `at+jwt` or `application/at+jwt`. It rejects absent/generic `JWT`/ID-token types, symmetric algorithms, unknown keys, unsupported critical headers, token-supplied key URLs/embedded keys, and encrypted/compressed tokens. It never performs a network request.
+Both profiles accept RS256-signed access tokens with JOSE `typ` exactly `at+jwt` or `application/at+jwt`. The default `rfc9068` profile requires the signed `client_id` claim. The opt-in `rauthy037` profile instead requires signed `azp` and payload `typ: "Bearer"`; it never falls back to `client_id`. The operator selects the profile in trusted configuration, never from token content. It rejects absent/generic `JWT`/ID-token types, symmetric algorithms, unknown keys, unsupported critical headers, token-supplied key URLs/embedded keys, and encrypted/compressed tokens. It never performs a network request. **Any `cnf` claim, including null, is rejected in both profiles** until sender-constrained proof validation (such as DPoP or mTLS binding) is implemented.
 
-**Compatibility with the official account provider is not yet verified.** Its current identity-only tokens are not a game API contract. Before integration, the issuer must demonstrably issue this access-token type with a game resource audience and approved game scopes. An issuer must not label ID tokens with this access-token type. If it cannot support this profile, choose and independently review a different unambiguous access-token contract; do not relax validation to accept generic identity tokens.
+**Live provider compatibility is not yet verified.** The optional Rauthy 0.37 profile is grounded in upstream commit `ce35a70fbc43203b1a6910d3db30389228825f46`: access tokens use `azp`, payload `Bearer`, JOSE `at+jwt` and resource audiences; ID tokens use payload `Id` and JOSE `JWT`. See the pinned [token construction](https://github.com/sebadob/rauthy/blob/ce35a70fbc43203b1a6910d3db30389228825f46/src/service/src/token_set.rs#L190-L220), [JOSE signing type](https://github.com/sebadob/rauthy/blob/ce35a70fbc43203b1a6910d3db30389228825f46/src/service/src/token_set.rs#L294-L296) and [claims](https://github.com/sebadob/rauthy/blob/ce35a70fbc43203b1a6910d3db30389228825f46/src/jwt/src/claims.rs#L14-L36). This source evidence is not a successful live fixture.
+
+Game clients must explicitly configure RS256, a lifetime within the verifier's maximum, and approved/requested game scopes; provider defaults are not sufficient. The intended game resource must be authorized up front; token exchange must not be used to add a previously ungranted resource. Machine credentials are not player ownership: requiring `sub` is necessary but does not replace an issuer policy excluding inappropriate grants. Before integration, verify real user access tokens and ID-token denial against a disposable provider fixture. Never relax these profiles into a generic identity-token fallback.
 
 Example library configuration (illustrative values, not deployed endpoints or existing grants):
 
 ```json
 {
   "access_tokens": {
+    "profile": "rfc9068",
     "issuer": "https://issuer.example.test/",
     "audience": "arkline:test-world",
     "required_scopes": ["game.connect"],
@@ -27,7 +30,7 @@ Example library configuration (illustrative values, not deployed endpoints or ex
 
 The exact HTTPS issuer string must match; URL equivalence is not account identity. Audience matching requires the configured resource in the signed audience string/array. Audience arrays are intentionally supported: membership is sufficient, not a single-audience-only restriction. Production and Test must configure different audiences, and the issuing policy must not put both into a token intended for only one environment. All configured scopes are required as exact space-separated values, never substring matches. Scope names here are proposals, not available grants.
 
-`iss`, `sub`, `aud`, `exp`, `iat`, `jti`, `client_id` and `scope` are mandatory. The signature, issuer, audience, expiry and optional not-before use the maintained `jsonwebtoken` verifier. Additional policy bounds signed lifetime to the configured maximum (at most 900 seconds), future issuance/not-before skew to at most 30 seconds, and identifiers/scope lengths. Expired tokens are rejected without expiry grace. The returned expiry must be enforced on every future external command. There is no refresh token, token persistence, replay cache or immediate-revocation promise in this module; `jti` is required metadata, not replay protection.
+`iss`, `sub`, `aud`, `exp`, `iat`, `jti` and `scope` are mandatory in both profiles. `client_id` is mandatory only in the default RFC profile; `azp` and payload `typ: "Bearer"` are mandatory only in the explicitly selected Rauthy profile. The signature, issuer, audience, expiry and optional not-before use the maintained `jsonwebtoken` verifier. Additional policy bounds signed lifetime to the configured maximum (at most 900 seconds), future issuance/not-before skew to at most 30 seconds, and identifiers/scope lengths. Expired tokens are rejected without expiry grace. The returned expiry must be enforced on every future external command. There is no refresh token, token persistence, replay cache or immediate-revocation promise in this module; `jti` is required metadata, not replay protection.
 
 ## Key provenance and limits
 
@@ -39,7 +42,7 @@ Key rotation is an explicit replacement of an immutable verifier after validatin
 
 ## Tests and remaining gates
 
-Signed-token tests generate ephemeral RSA fixture keys in memory. They cover default-disabled configuration, exact issuer/resource audience/scopes, missing claims, expiry/future issuance/not-before/lifetime, ID-token rejection despite matching key and audience, signature/algorithm/key confusion, token-controlled key sources, duplicate/missing IDs, private/weak/misused keys, size bounds and explicit trusted-key replacement.
+Signed-token tests generate ephemeral RSA fixture keys in memory. They cover default-disabled configuration, exact issuer/resource audience/scopes, missing claims, expiry/future issuance/not-before/lifetime, ID-token rejection despite matching key and audience, signature/algorithm/key confusion, token-controlled key sources, duplicate/missing IDs, private/weak/misused keys, size bounds and explicit trusted-key replacement. Profile tests verify no `azp`/`client_id` fallback, reject ID payloads and wrong JOSE types, and reject `cnf` in every profile.
 
 Before exposing login:
 

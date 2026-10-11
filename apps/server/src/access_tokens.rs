@@ -1,6 +1,6 @@
 //! Dormant game access-token validation. Not connected to any transport or login path.
 //!
-//! Only RFC 9068 `at+jwt` tokens for an explicitly configured resource are accepted.
+//! Only explicitly profiled `at+jwt` access tokens for a configured resource are accepted.
 //! Provider compatibility is not yet established. A validated identity is NOT a pilot
 //! session: admission still requires scoped principals and explicit dual-proof linking.
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
@@ -27,6 +27,8 @@ pub struct GameAuthConfig {
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct AccessTokenConfig {
+    #[serde(default)]
+    pub profile: AccessTokenProfile,
     pub issuer: String,
     pub audience: String,
     pub required_scopes: Vec<String>,
@@ -35,6 +37,17 @@ pub struct AccessTokenConfig {
     pub max_lifetime_seconds: u64,
     /// Accepted clock skew; must be <=30 seconds.
     pub clock_skew_seconds: u64,
+}
+
+/// Operator-selected signed-claim contract. Never inferred from token contents.
+#[derive(Clone, Copy, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AccessTokenProfile {
+    #[default]
+    Rfc9068,
+    /// Pinned upstream 0.37 format: signed `azp` and payload `typ: Bearer`.
+    /// This is source-backed, not yet validated with a live game-token fixture.
+    Rauthy037,
 }
 
 /// Intentionally narrow first profile. No symmetric, token-selected, or `none` algorithms.
@@ -230,12 +243,22 @@ impl AccessTokenVerifier {
         let claims = decode::<Claims>(token, key, &self.validation)
             .map_err(|_| bad)?
             .claims;
+        let client_id = match self.config.profile {
+            AccessTokenProfile::Rfc9068 => claims.client_id.as_deref().ok_or(bad)?,
+            AccessTokenProfile::Rauthy037 => {
+                // No generic client_id/azp fallback or token-selected profile.
+                if claims.typ.as_deref() != Some("Bearer") || claims.client_id.is_some() {
+                    return Err(bad);
+                }
+                claims.azp.as_deref().ok_or(bad)?
+            }
+        };
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|_| ValidationError::ClockUnavailable)?
             .as_secs();
         if !bounded_text(&claims.sub, 256)
-            || !bounded_text(&claims.client_id, 256)
+            || !bounded_text(client_id, 256)
             || !bounded_text(&claims.jti, 256)
             || claims.iss != self.config.issuer
             || claims.exp <= now
@@ -263,7 +286,7 @@ impl AccessTokenVerifier {
         Ok(VerifiedIdentity {
             issuer: claims.iss,
             subject: claims.sub,
-            client_id: claims.client_id,
+            client_id: client_id.to_owned(),
             scopes: scopes.into_iter().map(str::to_owned).collect(),
             expires_at_seconds: claims.exp,
         })
@@ -274,10 +297,21 @@ impl AccessTokenVerifier {
 struct Claims {
     iss: String,
     sub: String,
-    client_id: String,
+    client_id: Option<String>,
+    azp: Option<String>,
+    typ: Option<String>,
+    // Reject presence even when null: no DPoP/mTLS proof validation exists here.
+    #[serde(default, rename = "cnf", deserialize_with = "reject_sender_constraint")]
+    _cnf: (),
     jti: String,
     exp: u64,
     iat: u64,
     nbf: Option<u64>,
     scope: String,
+}
+
+fn reject_sender_constraint<'de, D: serde::Deserializer<'de>>(_: D) -> Result<(), D::Error> {
+    Err(serde::de::Error::custom(
+        "sender-constrained access tokens require proof validation",
+    ))
 }

@@ -304,3 +304,75 @@ fn explicit_key_rotation_requires_new_trusted_configuration() {
     assert!(config.build(b"broken JWKS").is_err());
     assert!(next.verify(&token).is_ok());
 }
+
+fn rauthy_claims() -> Value {
+    let mut claims = claims();
+    claims.as_object_mut().unwrap().remove("client_id");
+    claims["azp"] = json!("public-client");
+    claims["typ"] = json!("Bearer");
+    claims["aud"] = json!(["public-client", "arkline:test-world"]);
+    claims
+}
+fn rauthy_verifier() -> arkline_server::access_tokens::AccessTokenVerifier {
+    let mut config = config_json();
+    config["access_tokens"]["profile"] = json!("rauthy037");
+    let config: GameAuthConfig = serde_json::from_value(config).unwrap();
+    config
+        .build(&serde_json::to_vec(&json!({"keys":[public_key()]})).unwrap())
+        .unwrap()
+        .unwrap()
+}
+#[test]
+fn rauthy_profile_is_explicit_and_never_a_generic_claim_fallback() {
+    let strict = verifier();
+    let rauthy = rauthy_verifier();
+    let token = signed(&header(), &rauthy_claims());
+    assert_eq!(rauthy.verify(&token).unwrap().client_id, "public-client");
+    rejected(&strict, &token);
+    rejected(&rauthy, &signed(&header(), &claims()));
+    let mut missing_azp = rauthy_claims();
+    missing_azp.as_object_mut().unwrap().remove("azp");
+    missing_azp["client_id"] = json!("public-client");
+    rejected(&rauthy, &signed(&header(), &missing_azp));
+    for (field, value) in [
+        ("azp", json!("")),
+        ("azp", Value::Null),
+        ("typ", json!("Id")),
+        ("typ", Value::Null),
+        ("typ", json!("bearer")),
+        ("client_id", json!("conflicting-client")),
+        ("aud", json!(["public-client"])),
+        ("scope", json!("openid profile")),
+        ("iss", json!("https://other.example.test/")),
+    ] {
+        let mut value_claims = rauthy_claims();
+        value_claims[field] = value;
+        rejected(&rauthy, &signed(&header(), &value_claims));
+    }
+    let mut head = header();
+    head.typ = Some("JWT".into());
+    rejected(&rauthy, &signed(&head, &rauthy_claims()));
+    let mut id_claims = rauthy_claims();
+    id_claims["typ"] = json!("Id");
+    // Even a signed ID payload under an access-token JOSE type is denied.
+    rejected(&rauthy, &signed(&header(), &id_claims));
+    let mut config = config_json();
+    config["access_tokens"]["profile"] = json!("automatic");
+    assert!(serde_json::from_value::<GameAuthConfig>(config).is_err());
+}
+#[test]
+fn sender_constrained_tokens_are_rejected_in_every_profile_until_proofs_exist() {
+    for (verifier, claims) in [(verifier(), claims()), (rauthy_verifier(), rauthy_claims())] {
+        for cnf in [
+            json!({"jkt":"thumbprint"}),
+            json!({"x5t#S256":"thumbprint"}),
+            json!({}),
+            Value::Null,
+        ] {
+            let mut value = claims.clone();
+            value["cnf"] = cnf;
+            rejected(&verifier, &signed(&header(), &value));
+        }
+        assert!(verifier.verify(&signed(&header(), &claims)).is_ok());
+    }
+}
