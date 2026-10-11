@@ -28,7 +28,7 @@ The private service requires a reviewed authorization-code + PKCE implementation
 
 ## Integration design
 
-Choose whether Arkline uses the shared P.Industries account realm or a separate realm before configuring clients. Prefer an existing verified, maintained identity provider; otherwise select a maintained authorization server rather than growing a custom OAuth issuer inside the game. Both the website and game can be relying parties of that provider. Existing Bastion magic-link/passkey users need an explicit migration/linking strategy if the chosen provider does not already own those identities.
+Arkline will use a separate private Rust account service and account store on an Arkline-controlled domain; accounts.arkline.network is the planned account host. Do not implicitly import or link Bastion users by matching email. Use a maintained Rust authorization-server component, with original Arkline account integration, rather than growing a custom OAuth issuer inside the game. Website and game clients can use this provider through their own registered standard interfaces.
 
 ```text
 Native app or browser game -- external browser authorization --> identity provider

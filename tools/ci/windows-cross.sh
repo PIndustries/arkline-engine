@@ -9,7 +9,7 @@ case "$mode" in
   test|package) ;;
   *) echo "Usage: $0 build-image|test|package [output-directory]" >&2; exit 2 ;;
 esac
-args=(--rm --init --tmpfs /tmp:rw,nosuid,size=3g -v "$repo:/workspace" -w /workspace -e WINEDEBUG=-all -e WINEPREFIX=/tmp/arkline-wine -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/workspace)
+args=(--rm --init --tmpfs /tmp:rw,exec,nosuid,size=3g -v "$repo:/workspace" -w /workspace -e WINEDEBUG=-all -e WINEPREFIX=/tmp/arkline-wine -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/workspace)
 if [[ "$mode" == package ]]; then
   [[ $# == 2 ]] || { echo 'package requires an empty output directory outside the repository' >&2; exit 2; }
   mkdir -p "$2"
