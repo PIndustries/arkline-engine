@@ -1,7 +1,6 @@
 name: Validate Arkline
 on:
   push:
-  pull_request:
   workflow_dispatch:
 permissions:
   contents: read
@@ -10,7 +9,6 @@ concurrency:
   cancel-in-progress: true
 jobs:
   linux:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, Linux, X64, phx, fleet, org]
     timeout-minutes: 60
     steps:
@@ -19,8 +17,9 @@ jobs:
           persist-credentials: false
       - run: bash tools/ci/linux.sh build-image
       - run: bash tools/ci/linux.sh test
+      - name: Validate publication boundaries
+        run: python3 tools/ci/test_publish_release.py
   macos:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, macOS, ARM64, arkline]
     timeout-minutes: 60
     steps:
@@ -34,7 +33,6 @@ jobs:
       - name: Compile native speech bridge
         run: swiftc -target "$(uname -m)-apple-macos14.0" -swift-version 5 -warnings-as-errors tools/arkline-speech.swift -o "$RUNNER_TEMP/arkline-speech"
   browser:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, Linux, X64, phx, fleet, org]
     timeout-minutes: 30
     steps:

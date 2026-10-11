@@ -1,5 +1,4 @@
 name: Prepare release downloads
-# Deliberately creates review artifacts only; publishing a public release is separate.
 on:
   workflow_dispatch:
     inputs:
@@ -11,61 +10,74 @@ on:
         options: [all, windows, linux, macos]
 permissions:
   contents: read
-env:
-  PYTHONUTF8: "1"
+concurrency:
+  group: arkline-release-build
+  cancel-in-progress: false
 jobs:
   package:
+    if: github.ref == 'refs/heads/main'
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON(inputs.platform == 'windows' && '["windows-2022"]' || inputs.platform == 'linux' && '["ubuntu-22.04"]' || inputs.platform == 'macos' && '["macos-14"]' || '["ubuntu-22.04","windows-2022","macos-14"]') }}
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+        include:
+          - platform: linux
+            labels: '["self-hosted","Linux","X64","phx","fleet","org"]'
+          - platform: windows
+            labels: '["self-hosted","Linux","X64","phx","fleet","org"]'
+          - platform: macos
+            labels: '["self-hosted","macOS","ARM64","arkline"]'
+    runs-on: ${{ fromJSON(matrix.labels) }}
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.89.0
-      - uses: actions/setup-python@v5
+        if: inputs.platform == 'all' || inputs.platform == matrix.platform
         with:
-          python-version: '3.12'
-      - name: Linux graphics and audio build dependencies
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev libxi-dev libxrandr-dev libxcursor-dev libgl1-mesa-dev libasound2-dev
-      - uses: Swatinem/rust-cache@v2
+          persist-credentials: false
+      - name: Prepare selected platform
+        if: inputs.platform == 'all' || inputs.platform == matrix.platform
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          destination="$RUNNER_TEMP/arkline-downloads-$GITHUB_RUN_ID-$PLATFORM"
+          case "$PLATFORM" in
+            linux)
+              bash tools/ci/linux.sh build-image
+              bash tools/ci/linux.sh test
+              bash tools/ci/linux.sh package "$destination" ;;
+            windows)
+              bash tools/ci/windows-cross.sh build-image
+              bash tools/ci/windows-cross.sh test
+              bash tools/ci/windows-cross.sh package "$destination" ;;
+            macos)
+              cargo test --workspace --locked
+              python3 tools/test_package_release.py
+              python3 tools/package-release.py "$destination" ;;
+          esac
+          echo "DOWNLOADS=$destination" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@v4
+        if: inputs.platform == 'all' || inputs.platform == matrix.platform
         with:
-          cache-on-failure: true
-      - name: Check packaging rules
-        run: python tools/test_package_release.py
-      - name: Test the selected release source
-        run: cargo test --workspace --locked
-      - name: Prepare client, server, source, notices and checksums
-        run: python tools/package-release.py "${{ runner.temp }}/arkline-downloads"
-      - name: Preserve review downloads (no public publication)
-        uses: actions/upload-artifact@v4
-        with:
-          name: arkline-downloads-${{ matrix.os }}
-          path: ${{ runner.temp }}/arkline-downloads/*
+          name: arkline-downloads-${{ matrix.platform }}
+          path: ${{ env.DOWNLOADS }}/*
           compression-level: 0
           if-no-files-found: error
           retention-days: 30
   browser:
-    if: inputs.platform == 'all'
-    runs-on: ubuntu-22.04
-    timeout-minutes: 60
+    if: github.ref == 'refs/heads/main' && inputs.platform == 'all'
+    runs-on: [self-hosted, Linux, X64, phx, fleet, org]
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.89.0
         with:
-          targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-      - name: Install matching WebAssembly bindings tool
-        run: cargo install wasm-bindgen-cli --version 0.2.129 --locked
-      - name: Build the shared game for the browser
-        run: bash apps/client/web/build.sh "${{ runner.temp }}/arkline-browser"
+          persist-credentials: false
+      - name: Fleet Rust toolchain
+        run: echo '/opt/gha-org-runner/.cargo/bin' >> "$GITHUB_PATH"
+      - run: bash apps/client/web/build.sh "$RUNNER_TEMP/arkline-browser-$GITHUB_RUN_ID"
       - uses: actions/upload-artifact@v4
         with:
           name: arkline-browser
-          path: ${{ runner.temp }}/arkline-browser/*
+          path: ${{ runner.temp }}/arkline-browser-${{ github.run_id }}/*
           if-no-files-found: error
           retention-days: 30

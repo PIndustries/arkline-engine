@@ -9,7 +9,9 @@ if [[ "$MODE" == build-image ]]; then
 fi
 CACHE="${RUNNER_TEMP:-/tmp}/arkline-linux-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-1}"
 mkdir -p "$CACHE"
-ARGS=(--rm --user "$(id -u):$(id -g)" -e HOME=/cache -e CARGO_HOME=/cache/cargo -e RUSTUP_HOME=/usr/local/rustup -e CARGO_BUILD_JOBS=4 -v "$ROOT:/src" -v "$CACHE:/cache" -w /src)
+# Test worlds are disposable. Keep their many SQLite commits off Docker's shared
+# overlay disk; files still survive connection close/reopen within each test.
+ARGS=(--rm --tmpfs /tmp:rw,nosuid,size=2g --user "$(id -u):$(id -g)" -e HOME=/cache -e CARGO_HOME=/cache/cargo -e RUSTUP_HOME=/usr/local/rustup -e CARGO_BUILD_JOBS=4 -v "$ROOT:/src" -v "$CACHE:/cache" -w /src)
 case "$MODE" in
  test) docker run "${ARGS[@]}" "$IMAGE" bash -lc 'export PATH=/usr/local/cargo/bin:$PATH; cargo fmt --all -- --check && cargo clippy --workspace --all-targets --locked -- -D warnings && cargo test --workspace --locked && python3 tools/test_package_release.py' ;;
  package)

@@ -2,7 +2,7 @@
 
 Fleet's existing organization runners use `self-hosted`, `Linux`, `X64`, `phx`, `fleet`, and `org` labels. The private Default group includes phx through phx-4 and permits private organization repositories. phx-5 belongs to public-release. Repository runner listings omit these organization-owned runners.
 
-These existing runners share a privileged Docker host and passwordless administrative access. Run only trusted main-branch push/manual jobs; do not execute untrusted fork code. Namespace-scoped deploy credentials constrain workflow intent, but do not isolate hostile code from the shared host. Runner registrations and global permissions were not changed by this setup.
+These existing runners share a privileged Docker host and passwordless administrative access. Build CI runs only for pushes to trusted repository branches or manual dispatch; there is no pull_request trigger. Deployment/publication dispatch is main-only. Do not execute untrusted fork code. Namespace-scoped deploy credentials constrain workflow intent, but do not isolate hostile code from the shared host. Runner registrations and global permissions were not changed by this setup.
 
 ## Fleet toolchain
 
@@ -33,3 +33,67 @@ Use a temporary0600 kubeconfig file inside the job and remove it on exit. Never 
 The approved service-account tokens are persistent and require operator rotation. Create a replacement annotated service-account-token Secret for the same scoped identity, wait for controller population, and construct a kubeconfig using only that token plus the verified API endpoint/CA. Replace the corresponding GitHub repository secret through encrypted stdin, run positive/negative authorization checks and a read-only pod-health check, then delete the old token Secret. Do not print token data during these steps.
 
 For emergency revocation, remove the relevant RoleBindings and delete the token Secret, then remove the repository secret. Removing the Arkline identity also requires removing its cross-namespace Bastion RoleBinding. Recreate/rotate credentials only after identifying why revocation was required. No automatic token rotation or automatic backup service is claimed.
+
+## Dedicated macOS runner
+
+The repository-scoped `arkline-macos-arm64` runner is installed at
+`/Users/Shared/arkline-macos-runner` with labels `self-hosted`, `macOS`,
+`ARM64`, and `arkline`. Its single listener executes one job at a time.
+The runner directory is mode 0700 and registration credentials are mode 0600.
+Do not copy those files into source, release archives, or diagnostics.
+
+The user LaunchAgent is
+`~/Library/LaunchAgents/actions.runner.PIndustries-arkline-engine.arkline-macos-arm64.plist`.
+It runs in the `thepherm` login session: the Mac must be awake, connected, and
+that user logged in for availability. From the runner directory, use
+`./svc.sh status`, `./svc.sh stop`, and `./svc.sh start` for lifecycle management.
+The directory is outside Documents because macOS privacy controls prevented
+LaunchAgent access to the initial workspace location.
+
+The runner PATH explicitly selects installed Python 3.12, Rust, Homebrew tools,
+and system tools. Rust 1.89.0, Python 3.12.13 and Swift 6.2.3 were verified.
+The runner includes its own Node runtime for Actions. Do not infer an installed
+Node version from Homebrew's directory name; inspect the executable version.
+Registration used a short-lived repository token supplied through the runner's
+supported environment input, without printing it or placing it in command-line
+arguments. This is a persistent runner: repository scope is not a sandbox.
+Workflow trusted-source gates are essential, and unrelated repositories must
+not be granted access to this runner.
+
+Actual self-hosted macOS CI completed successfully in run `38121079749`.
+CLI/tests/build success does not establish interactive GPU/audio acceptance or
+Apple notarization; those remain separate release checks.
+
+## Windows cross-build on Fleet
+
+`tools/ci/windows-cross.sh build-image` prepares the private Docker toolchain;
+`test` cross-compiles the MSVC workspace and runs tests through Wine;
+`package /absolute/output/path` creates Windows ZIP downloads and matching vendored-source
+archives. Use an empty output directory outside the checkout. The wrapper
+restores generated output ownership to the calling runner. `ARKLINE_WINDOWS_IMAGE`
+can select an explicitly prepared toolchain image.
+
+This path targets `x86_64-pc-windows-msvc` from Fleet's x86_64 Linux host. It does
+not switch Windows releases to GNU/MinGW. The build uses Rust 1.89.0,
+cargo-xwin 0.20.2, LLVM, Microsoft's SDK/CRT and Wine in an isolated build image.
+The Dockerfile records the base-image digest and SDK/CRT versions. SDK files
+remain private build dependencies; they are not added to source or binary
+release archives. Provisioning requires compliance with the Microsoft SDK/CRT
+terms referenced by cargo-xwin. Toolchain versions and the resolved Docker image
+ID should be retained with the workflow evidence.
+
+`--windows-cross` explicitly separates target identity from host identity,
+selects `target/x86_64-pc-windows-msvc/release`, produces `.exe`/ZIP output, and
+marks the release manifest's validation runtime as Wine compatibility only.
+Passing these checks is not native Windows acceptance: real Windows graphics,
+audio, device handling, installer/runtime availability, and signing still need
+separate validation. Windows binaries retain their Microsoft Visual C++ runtime
+requirement. No SDK shim or replacement Windows DLL is shipped with Arkline.
+
+The initial Fleet proof used Wine 10.0 (`10.0~repack-6`), LLVM 19,
+SDK `10.0.26100`, and CRT package selector `14.44.17.14` (whose headers identify
+CRT 14.44.35220). Wine 8 failed to load Rust binaries because it lacks
+`bcryptprimitives.dll`; do not downgrade the compatibility runtime or ship a
+replacement DLL to work around that. All four cross-built debug executables
+(client, server, CLI, verifier) completed `--help` under Wine 10. Final release
+workflows still rebuild and test their selected committed source.
