@@ -1,3 +1,4 @@
+mod tls;
 mod websocket;
 use anyhow::{bail, Context, Result};
 use arkline_protocol::{Request, Response};
@@ -16,6 +17,11 @@ const MAX_REQUEST_BYTES: usize = 16 * 1024;
 fn main() -> Result<()> {
     let mut bind = "127.0.0.1:7777".to_string();
     let mut ws_bind: Option<String> = None;
+    let mut tls_cert = None;
+    let mut tls_key = None;
+    let mut tls_health = None;
+    let mut tls_ca = None;
+    let mut tls_server_name = None;
     let mut origins = vec![
         "https://arkline.network".into(),
         "https://www.arkline.network".into(),
@@ -29,6 +35,18 @@ fn main() -> Result<()> {
         match arg.as_str() {
             "--bind" => bind = args.next().context("--bind requires an address")?,
             "--ws-bind" => ws_bind = Some(args.next().context("--ws-bind requires an address")?),
+            "--tls-health" => {
+                tls_health = Some(args.next().context("--tls-health requires an address")?)
+            }
+            "--tls-ca" => tls_ca = Some(args.next().context("--tls-ca requires a PEM path")?),
+            "--tls-server-name" => {
+                tls_server_name = Some(
+                    args.next()
+                        .context("--tls-server-name requires a DNS name")?,
+                )
+            }
+            "--tls-cert" => tls_cert = Some(args.next().context("--tls-cert requires a PEM path")?),
+            "--tls-key" => tls_key = Some(args.next().context("--tls-key requires a PEM path")?),
             "--ws-origin" => origins.push(
                 args.next()
                     .context("--ws-origin requires an exact HTTPS origin")?,
@@ -44,12 +62,23 @@ fn main() -> Result<()> {
             }
             "--db" => db = args.next().context("--db requires a path")?,
             "--help" | "-h" => {
-                println!("arkline-server [--bind 127.0.0.1:7777] [--db data/arkline.sqlite]\nRaw TCP is plaintext and must stay private. Optional --ws-bind ADDRESS enables /ws behind a trusted TLS edge. --ws-origin ORIGIN adds an allowed browser origin; --ws-max-pilots COUNT (default256).");
+                println!("arkline-server [--bind 127.0.0.1:7777] [--db data/arkline.sqlite]\nRaw TCP is plaintext and must stay private. Optional --ws-bind ADDRESS enables /ws. Add both --tls-cert PEM and --tls-key PEM for native TLS; without them the listener is plaintext and must stay private. --ws-origin ORIGIN adds an allowed browser origin; --ws-max-pilots COUNT (default256).\nVerified readiness: --tls-health ADDRESS --tls-ca PEM --tls-server-name DNS.");
                 return Ok(());
             }
             _ => bail!("unknown argument: {arg}"),
         }
     }
+    if let Some(address) = tls_health {
+        return tls::check_health(
+            &address,
+            &tls_ca.context("--tls-health requires --tls-ca")?,
+            &tls_server_name.context("--tls-health requires --tls-server-name")?,
+        );
+    }
+    if tls_ca.is_some() || tls_server_name.is_some() {
+        bail!("--tls-ca and --tls-server-name require --tls-health");
+    }
+    let tls = tls::load(tls_cert.as_deref(), tls_key.as_deref(), ws_bind.is_some())?;
     let server = Arc::new(Mutex::new(Server::open(db)?));
     let tick_server = server.clone();
     let health = Arc::new(Health {
@@ -96,10 +125,11 @@ fn main() -> Result<()> {
                 let limits = limits.clone();
                 let origins = origins.clone();
                 let health = health.clone();
+                let tls = tls.clone();
                 std::thread::spawn(move || {
                     let _guard = guard;
                     // Never include handshake headers or message data in logs.
-                    if websocket::serve_ws(stream, server, limits, origins, max_pilots, health)
+                    if websocket::serve_ws(stream, server, limits, origins, max_pilots, health, tls)
                         .is_err()
                     {
                         eprintln!("WebSocket connection ended");

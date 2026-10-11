@@ -12,6 +12,21 @@ mod native {
         Tcp(BufReader<TcpStream>),
         WebSocket(Box<WebSocket<MaybeTlsStream<TcpStream>>>),
     }
+    fn tls_connector() -> Result<tungstenite::Connector, String> {
+        // Do not depend on another workspace binary to select a crypto provider.
+        // Standalone desktop builds must have a complete, explicit TLS setup.
+        let roots = rustls::RootCertStore {
+            roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
+        };
+        let config = rustls::ClientConfig::builder_with_provider(std::sync::Arc::new(
+            rustls::crypto::ring::default_provider(),
+        ))
+        .with_safe_default_protocol_versions()
+        .map_err(|e| e.to_string())?
+        .with_root_certificates(roots)
+        .with_no_client_auth();
+        Ok(tungstenite::Connector::Rustls(std::sync::Arc::new(config)))
+    }
     impl Connection {
         pub fn connect(server: &str) -> Result<Self, String> {
             if server.starts_with("wss://") || server.starts_with("ws://") {
@@ -19,7 +34,13 @@ mod native {
                     .max_message_size(Some(8 * 1024 * 1024))
                     .max_frame_size(Some(8 * 1024 * 1024));
                 use tungstenite::client::IntoClientRequest;
-                let request = server.into_client_request().map_err(|e| e.to_string())?;
+                let mut request = server.into_client_request().map_err(|e| e.to_string())?;
+                request.headers_mut().insert(
+                    "User-Agent",
+                    format!("Arkline/{}", arkline_protocol::BUILD_VERSION.trim())
+                        .parse()
+                        .map_err(|e| format!("Invalid client version: {e}"))?,
+                );
                 let host = request.uri().host().ok_or("WebSocket URL needs a host")?;
                 let port = request
                     .uri()
@@ -48,9 +69,13 @@ mod native {
                     .set_write_timeout(Some(Duration::from_secs(5)))
                     .map_err(|e| e.to_string())?;
                 stream.set_nodelay(true).map_err(|e| e.to_string())?;
-                let (ws, _) =
-                    tungstenite::client_tls_with_config(request, stream, Some(config), None)
-                        .map_err(|e| format!("WebSocket handshake failed: {e}"))?;
+                let (ws, _) = tungstenite::client_tls_with_config(
+                    request,
+                    stream,
+                    Some(config),
+                    Some(tls_connector()?),
+                )
+                .map_err(|e| format!("WebSocket handshake failed: {e}"))?;
                 Ok(Self::WebSocket(Box::new(ws)))
             } else {
                 super::super::connect_transport(server).map(Self::Tcp)
@@ -121,6 +146,19 @@ mod tests {
     use super::*;
     use arkline_protocol::{Request, Response, PROTOCOL_VERSION};
     use std::{net::TcpListener, thread};
+    #[test]
+    #[ignore = "requires the official public relays; read-only snapshot checks"]
+    fn native_verified_wss_reaches_both_official_relays() {
+        for endpoint in [OFFICIAL_SERVER, TEST_SERVER] {
+            let mut client = Connection::connect(endpoint).expect("verified native WSS handshake");
+            let response = client
+                .exchange(&Request::Snapshot)
+                .expect("real snapshot response");
+            assert!(response.ok);
+            assert!(response.snapshot.is_some());
+            client.close();
+        }
+    }
     #[test]
     fn websocket_round_trip_preserves_json_and_authentication_boundary() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();

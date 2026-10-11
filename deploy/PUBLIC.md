@@ -44,9 +44,11 @@ at one SQLite file or share production pilot credentials with another operator.
    only after origin checks pass; do not overwrite unrelated DNS records.
 
 TLS terminates at Cloudflare, and the connector uses an encrypted outbound
-Cloudflare Tunnel. Origin HTTP/WS is limited by Kubernetes NetworkPolicy to the
+Cloudflare Tunnel. The initial deployment uses origin HTTP/WS, limited by Kubernetes NetworkPolicy to the
 connector inside the cluster. This is not end-to-end application encryption
-against the edge provider or a compromised cluster.
+against the edge provider or a compromised cluster. Native origin TLS is supported
+with `--tls-cert` and `--tls-key`; see [verified transport and rotation](../docs/transport-security.md).
+Do not treat source support as proof of a deployed TLS migration.
 
 ## Validation and rollback
 
