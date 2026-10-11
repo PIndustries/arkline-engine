@@ -148,7 +148,7 @@ pub(super) fn serve_ws(
     origins: Arc<Vec<String>>,
     max_pilots: usize,
     health: Arc<Health>,
-    tls: Option<Arc<rustls::ServerConfig>>,
+    tls: Option<Arc<tls::Identity>>,
 ) -> Result<()> {
     stream.set_write_timeout(Some(Duration::from_secs(10)))?;
     stream.set_nodelay(true)?;

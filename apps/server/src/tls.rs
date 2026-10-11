@@ -5,20 +5,60 @@ use std::{
     fs::File,
     io::{self, BufReader, Read, Write},
     net::TcpStream,
+    path::{Path, PathBuf},
     sync::Arc,
     time::{Duration, Instant},
 };
+
+pub(super) struct Identity {
+    certificate: PathBuf,
+    private_key: PathBuf,
+}
+impl Identity {
+    fn config(&self) -> Result<Arc<ServerConfig>> {
+        let mut certificate = self.certificate.clone();
+        let mut private_key = self.private_key.clone();
+        // Kubernetes projects both files through one atomically swapped ..data
+        // directory. Resolve that generation once, so rotation cannot mix keys.
+        if certificate.parent() == private_key.parent() {
+            if let Some(parent) = certificate.parent() {
+                let projected = |path: &Path| {
+                    std::fs::read_link(path).is_ok_and(|link| link.starts_with("..data"))
+                };
+                if projected(&certificate) && projected(&private_key) {
+                    let generation = std::fs::canonicalize(parent.join("..data"))?;
+                    certificate = generation.join(
+                        certificate
+                            .file_name()
+                            .context("invalid certificate path")?,
+                    );
+                    private_key =
+                        generation.join(private_key.file_name().context("invalid key path")?);
+                }
+            }
+        }
+        configure(&certificate, &private_key)
+    }
+}
 
 pub(super) fn load(
     cert: Option<&str>,
     key: Option<&str>,
     listener: bool,
-) -> Result<Option<Arc<ServerConfig>>> {
+) -> Result<Option<Arc<Identity>>> {
     let (cert, key) = match (cert, key) {
         (None, None) => return Ok(None),
         (Some(cert), Some(key)) if listener => (cert, key),
         _ => bail!("TLS requires --ws-bind, --tls-cert and --tls-key together"),
     };
+    let identity = Identity {
+        certificate: cert.into(),
+        private_key: key.into(),
+    };
+    identity.config()?;
+    Ok(Some(Arc::new(identity)))
+}
+fn configure(cert: &Path, key: &Path) -> Result<Arc<ServerConfig>> {
     let chain = rustls_pemfile::certs(&mut BufReader::new(
         File::open(cert).context("cannot open TLS certificate")?,
     ))
@@ -35,7 +75,7 @@ pub(super) fn load(
             .with_single_cert(chain, key)
             .context("TLS certificate and key are invalid or do not match")?;
     config.alpn_protocols = vec![b"http/1.1".to_vec()];
-    Ok(Some(Arc::new(config)))
+    Ok(Arc::new(config))
 }
 
 // Apply an absolute deadline to every underlying operation, including repeated
@@ -75,7 +115,7 @@ pub(super) enum Transport {
 impl Transport {
     pub(super) fn accept(
         socket: TcpStream,
-        config: Option<Arc<ServerConfig>>,
+        config: Option<Arc<Identity>>,
         timeout: Duration,
     ) -> Result<Self> {
         let deadline = Instant::now() + timeout;
@@ -85,7 +125,7 @@ impl Transport {
             write_deadline: deadline,
         };
         if let Some(config) = config {
-            let mut conn = ServerConnection::new(config)?;
+            let mut conn = ServerConnection::new(config.config()?)?;
             while conn.is_handshaking() {
                 conn.complete_io(&mut socket)?;
             }

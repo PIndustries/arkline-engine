@@ -66,17 +66,26 @@ arkline-server --tls-health 127.0.0.1:7778 \
 
 It checks the leaf name, CA trust and simulation health with bounded connection
 and I/O timeouts. Use a literal loopback address in probes to avoid DNS latency.
-The [example patch](../deploy/origin-tls.example.yaml) shows the server-side
+The [cert-manager example](../deploy/origin-certificates.yaml) renews separate
+90-day leaves 30 days before expiry; CA expiry and issuer health still require
+operator monitoring. The [example patch](../deploy/origin-tls.example.yaml) shows the server-side
 mounts and probe; it is not a standalone deployment or a tunnel route change.
 Check expiry separately and alert well
 before renewal. Do not replace simulation readiness with a bare TCP-open probe.
 
 ## Rotation and failure recovery
 
-Certificates load at process startup. Stage the renewed matching key/certificate
-as a versioned Secret, validate offline, update its mount and perform a controlled
-single-writer restart. Existing sessions reconnect; persistent state remains on
-its existing volume. Hot reload is not implemented.
+Certificates are validated before startup and reloaded for each admitted new
+TLS connection. Existing TLS sessions keep their established identity. Kubernetes
+projected Secret files resolve through one `..data` generation so a rotation
+cannot pair a new certificate with an old key. A malformed or mismatched update
+rejects new connections; it never falls back to plaintext or an older identity.
+Use a dedicated cert-manager CA Issuer/Certificate or your operator's issuer to
+renew leaves before expiry. Keep the CA key in the issuer's protected Secret,
+never mounted in game pods. Secret projection can lag renewal; verify the leaf
+serial/expiry actually presented by each server after rotation. For ordinary
+files, atomically switch a directory containing the matching pair. Rotation does
+not require a world restart. Invalid credentials fail readiness until repaired.
 
 For CA rotation: distribute a bundle trusting old and new CAs to all connectors;
 verify they rolled out, rotate Test then Production leaves, then remove the old

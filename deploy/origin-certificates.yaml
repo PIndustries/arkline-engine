@@ -1,0 +1,45 @@
+# Optional cert-manager resources for a dedicated private origin CA.
+# Provision arkline-origin-ca (tls.crt/tls.key) securely out of band.
+# Mount only leaf Secrets in game pods and only the public CA in connectors.
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: arkline-origin-ca
+  namespace: arkline
+spec:
+  ca:
+    secretName: arkline-origin-ca
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: arkline-production-origin
+  namespace: arkline
+spec:
+  secretName: arkline-production-origin-tls
+  duration: 2160h
+  renewBefore: 720h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages: [digital signature, server auth]
+  dnsNames: [production.origin.arkline.network]
+  issuerRef: {name: arkline-origin-ca, kind: Issuer}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: arkline-test-origin
+  namespace: arkline
+spec:
+  secretName: arkline-test-origin-tls
+  duration: 2160h
+  renewBefore: 720h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages: [digital signature, server auth]
+  dnsNames: [test.origin.arkline.network]
+  issuerRef: {name: arkline-origin-ca, kind: Issuer}

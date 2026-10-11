@@ -44,13 +44,13 @@ spec:
                 - --tls-ca
                 - /run/arkline-ca/ca.crt
                 - --tls-server-name
-                - test-relay-origin.example
+                - test.origin.arkline.network
             timeoutSeconds: 7
             periodSeconds: 10
       volumes:
         - name: origin-tls
           secret:
-            secretName: arkline-test-origin-tls-v1
+            secretName: arkline-test-origin-tls
             defaultMode: 0440
         - name: origin-ca
           configMap:

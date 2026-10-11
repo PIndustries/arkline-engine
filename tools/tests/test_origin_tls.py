@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import socket
+import shutil
 import ssl
 import subprocess
 import tempfile
@@ -42,6 +43,16 @@ class OriginTLS(unittest.TestCase):
         (cls.directory / "leaf.ext").write_text("subjectAltName=DNS:localhost\nbasicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\n")
         openssl("x509", "-req", "-in", cls.directory / "leaf.csr", "-CA", cls.ca, "-CAkey", cls.directory / "ca.key",
                 "-CAcreateserial", "-days", "1", "-extfile", cls.directory / "leaf.ext", "-out", cls.cert)
+        cls.projection = cls.directory / "projected"
+        cls.projection.mkdir()
+        first = cls.projection / "generation-1"
+        first.mkdir()
+        shutil.copy(cls.cert, first / "cert.pem")
+        shutil.copy(cls.key, first / "key.pem")
+        (cls.projection / "..data").symlink_to("generation-1")
+        (cls.projection / "cert.pem").symlink_to("..data/cert.pem")
+        (cls.projection / "key.pem").symlink_to("..data/key.pem")
+        cls.cert, cls.key = cls.projection / "cert.pem", cls.projection / "key.pem"
         cls.raw, cls.tls = port(), port()
         cls.process = subprocess.Popen([str(BINARY), "--bind", f"127.0.0.1:{cls.raw}",
             "--ws-bind", f"127.0.0.1:{cls.tls}", "--tls-cert", str(cls.cert), "--tls-key", str(cls.key),
@@ -70,6 +81,41 @@ class OriginTLS(unittest.TestCase):
         except BaseException:
             sock.close()
             raise
+
+    def test_projected_rotation_and_invalid_pair_fail_closed(self):
+        generation = self.projection / "generation-2"
+        generation.mkdir()
+        shutil.copy(self.key, generation / "key.pem")
+        subprocess.run(["openssl", "x509", "-req", "-in", str(self.directory / "leaf.csr"), "-CA", str(self.ca),
+            "-CAkey", str(self.directory / "ca.key"), "-set_serial", "424242", "-days", "1", "-extfile", str(self.directory / "leaf.ext"), "-out", str(generation / "cert.pem")], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        def switch(name):
+            pending = self.projection / "..data-next"
+            pending.symlink_to(name)
+            pending.replace(self.projection / "..data")
+        try:
+            with self.connect() as existing:
+                old = existing.getpeercert(binary_form=True)
+                switch("generation-2")
+                with self.connect() as renewed:
+                    self.assertNotEqual(old, renewed.getpeercert(binary_form=True))
+                bad = self.projection / "generation-bad"
+                bad.mkdir()
+                shutil.copy(generation / "cert.pem", bad / "cert.pem")
+                shutil.copy(self.directory / "ca.key", bad / "key.pem")
+                switch("generation-bad")
+                with self.assertRaises((ssl.SSLError, ConnectionResetError)):
+                    self.connect()
+                # An already established session remains usable during rotation.
+                existing.sendall(b"GET /health HTTP/1.1\r\nHost: localhost\r\n\r\n")
+                reply = b""
+                while chunk := existing.recv(4096):
+                    reply += chunk
+                self.assertIn(b"200 OK", reply)
+        finally:
+            switch("generation-1")
+        with self.connect() as recovered:
+            self.assertEqual(old, recovered.getpeercert(binary_form=True))
+        self.assertIsNone(self.process.poll())
 
     def test_verified_readiness_command(self):
         result = subprocess.run([str(BINARY), "--tls-health", f"127.0.0.1:{self.tls}", "--tls-ca", str(self.ca), "--tls-server-name", "localhost"], capture_output=True)
