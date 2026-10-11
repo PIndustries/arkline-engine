@@ -1661,6 +1661,10 @@ fn hull() -> Vec<Vertex> {
     }
     out
 }
+#[path = "materials.rs"]
+mod materials;
+use materials::Material;
+
 struct Mesh {
     vao: glow::VertexArray,
     buffer: glow::Buffer,
@@ -1673,6 +1677,9 @@ struct Uniforms {
     vp: Option<glow::UniformLocation>,
     eye: Option<glow::UniformLocation>,
     material: Option<glow::UniformLocation>,
+    material_params: Option<glow::UniformLocation>,
+    environment_atmosphere: Option<glow::UniformLocation>,
+    environment_up: Option<glow::UniformLocation>,
     sky_inverse: Option<glow::UniformLocation>,
     sky_eye: Option<glow::UniformLocation>,
     planet_center: Option<glow::UniformLocation>,
@@ -1805,6 +1812,9 @@ impl Renderer {
             vp: gl.get_uniform_location(program, "view_projection"),
             eye: gl.get_uniform_location(program, "eye"),
             material: gl.get_uniform_location(program, "material_kind"),
+            material_params: gl.get_uniform_location(program, "material_params"),
+            environment_atmosphere: gl.get_uniform_location(program, "environment_atmosphere"),
+            environment_up: gl.get_uniform_location(program, "environment_up"),
             sky_inverse: gl.get_uniform_location(background, "inverse_view_projection"),
             sky_eye: gl.get_uniform_location(background, "camera_eye"),
         };
@@ -1861,6 +1871,24 @@ impl Renderer {
         })
     }
     unsafe fn draw(&self, mesh: usize, model: Mat4, color: Vec3, emission: f32) {
+        self.draw_material(mesh, model, color, emission, Material::PaintedHull);
+    }
+    unsafe fn draw_material(
+        &self,
+        mesh: usize,
+        model: Mat4,
+        color: Vec3,
+        emission: f32,
+        material: Material,
+    ) {
+        let params = material.parameters();
+        self.gl.uniform_4_f32(
+            self.uniforms.material_params.as_ref(),
+            params[0],
+            params[1],
+            params[2],
+            params[3],
+        );
         let gl = &self.gl;
         gl.uniform_matrix_4_f32_slice(self.uniforms.model.as_ref(), false, &model.to_cols_array());
         gl.uniform_3_f32(self.uniforms.color.as_ref(), color.x, color.y, color.z);
@@ -2152,11 +2180,13 @@ impl Renderer {
             frame.eye.y,
             frame.eye.z,
         );
+        gl.uniform_1_f32(self.uniforms.environment_atmosphere.as_ref(), density);
+        gl.uniform_3_f32(self.uniforms.environment_up.as_ref(), up.x, up.y, up.z);
         self.paint_environment(frame);
         if space.scene(STATION_CENTER_POSITION).distance(frame.eye) < 1100.0 {
             let model = Mat4::from_translation(space.scene(STATION_CENTER_POSITION));
             for &(mesh, color, emission) in &self.station_batches {
-                self.draw(mesh, model, color, emission);
+                self.draw_material(mesh, model, color, emission, Material::BareMetal);
             }
         }
         for asteroid in frame
@@ -2169,7 +2199,17 @@ impl Renderer {
             } else {
                 Vec3::new(0.36, 0.29, 0.18)
             };
-            self.draw(3, asteroid_model(asteroid, space, frame.now), color, 0.0);
+            self.draw_material(
+                3,
+                asteroid_model(asteroid, space, frame.now),
+                color,
+                0.0,
+                if asteroid.ore > 0 {
+                    Material::Ore
+                } else {
+                    Material::Rock
+                },
+            );
         }
         for gate in frame
             .gates
@@ -2177,7 +2217,13 @@ impl Renderer {
             .filter(|g| space.scene(g.position).distance(frame.eye) < 1100.0)
         {
             for model in gate_models(gate, space) {
-                self.draw(1, model, Vec3::new(0.16, 0.43, 0.65), 0.7);
+                self.draw_material(
+                    1,
+                    model,
+                    Vec3::new(0.16, 0.43, 0.65),
+                    0.7,
+                    Material::BareMetal,
+                );
             }
         }
         for pilot in &frame.pilots {
@@ -2192,7 +2238,7 @@ impl Renderer {
             );
             if !frame.cockpit || !own {
                 for (mesh, model, color, emission) in ship_parts(pilot.ship_class) {
-                    self.draw(mesh, ship * model, color, emission);
+                    self.draw_material(mesh, ship * model, color, emission, Material::BareMetal);
                 }
             }
             for module_id in 0..2 {
@@ -2441,7 +2487,7 @@ impl Renderer {
                 glow * 0.23,
                 0.25,
             );
-            self.draw(
+            self.draw_material(
                 0,
                 base * transform(
                     center - Vec3::X * 0.025,
@@ -2450,6 +2496,7 @@ impl Renderer {
                 ),
                 Vec3::new(0.004, 0.012, 0.010),
                 0.1,
+                Material::Glass,
             );
         }
     }
@@ -4039,27 +4086,19 @@ in vec3 position;in vec3 normal;uniform mat4 model;uniform mat4 view_projection;
 out vec3 world;out vec3 surface_normal;out vec3 local_position;
 void main(){local_position=position;vec4 p=model*vec4(position,1.0);world=p.xyz;surface_normal=transpose(inverse(mat3(model)))*normal;gl_Position=view_projection*p;}
 "#;
-const FRAGMENT: &str = r#"#version 150
+const FRAGMENT: &str = concat!(
+    "#version 150\n",
+    include_str!("shaders/sky.glsl"),
+    include_str!("shaders/materials.glsl"),
+    r#"
 in vec3 world;in vec3 surface_normal;in vec3 local_position;
+uniform vec4 material_params;uniform float environment_atmosphere;uniform vec3 environment_up;
 uniform vec3 planet_center;uniform vec3 base_color;uniform vec3 eye;uniform float emission;uniform int material_kind;out vec4 color;
 float ark_hash3(vec3 p){return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5453);}
 float ark_noise3(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
 return mix(mix(mix(ark_hash3(i),ark_hash3(i+vec3(1,0,0)),f.x),mix(ark_hash3(i+vec3(0,1,0)),ark_hash3(i+vec3(1,1,0)),f.x),f.y),
 mix(mix(ark_hash3(i+vec3(0,0,1)),ark_hash3(i+vec3(1,0,1)),f.x),mix(ark_hash3(i+vec3(0,1,1)),ark_hash3(i+vec3(1,1,1)),f.x),f.y),f.z);}
 float ark_terrain(vec3 p){return ark_noise3(p)*0.53+ark_noise3(p*2.07+13.8)*0.27+ark_noise3(p*4.13-7.1)*0.13+ark_noise3(p*8.41+29.4)*0.07;}
-// Scene values stay linear until one filmic shoulder and one sRGB conversion.
-// The egui_glow callback target has FRAMEBUFFER_SRGB disabled.
-vec3 ark_display(vec3 x){x=max(x,vec3(0.0))*1.12;vec3 film=clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14),0.0,1.0);return mix(film*12.92,1.055*pow(film,vec3(1.0/2.4))-0.055,step(vec3(0.0031308),film));}
-vec3 ark_brdf(vec3 n,vec3 v,vec3 l,vec3 albedo,float roughness){
-    vec3 h=normalize(v+l);float nv=max(dot(n,v),0.001),nl=max(dot(n,l),0.0),nh=max(dot(n,h),0.0),vh=max(dot(v,h),0.0);
-    float a=roughness*roughness,a2=a*a,d=nh*nh*(a2-1.0)+1.0;
-    float distribution=a2/(3.14159265*d*d+0.0001);
-    float k=(roughness+1.0)*(roughness+1.0)/8.0;
-    float visibility=(nv/(nv*(1.0-k)+k))*(nl/(nl*(1.0-k)+k));
-    vec3 f0=mix(vec3(0.04),albedo,0.35);vec3 fresnel=f0+(1.0-f0)*pow(1.0-vh,5.0);
-    vec3 specular=distribution*visibility*fresnel/max(4.0*nv*nl,0.001);
-    return ((1.0-fresnel)*albedo/3.14159265+specular)*nl;
-}
 void main(){vec3 n=normalize(surface_normal);if(!gl_FrontFacing)n=-n;vec3 l=normalize(vec3(-0.5,0.8,0.65));vec3 v=normalize(eye-world);
 float diffuse=max(dot(n,l),0.0);float facing=max(dot(n,v),0.0);float rim=pow(1.0-facing,3.0);
 vec3 lit;
@@ -4082,15 +4121,21 @@ if(material_kind==1 || material_kind==2){
     lit+=vec3(0.11,0.36,0.75)*pow(1.0-facing,4.0)*(0.23+diffuse*0.85);
 }else{
     vec3 albedo=max(base_color,vec3(0.0));
-    float roughness=mix(0.68,0.40,smoothstep(0.05,0.6,max(albedo.r,max(albedo.g,albedo.b))));
-    vec3 fill=normalize(vec3(0.65,0.16,-0.72));
-    lit=ark_brdf(n,v,l,albedo,roughness)*vec3(3.8,3.45,2.95);
-    lit+=ark_brdf(n,v,fill,albedo,roughness)*vec3(0.24,0.36,0.55);
-    lit+=albedo*mix(vec3(0.055,0.065,0.085),vec3(0.13,0.17,0.23),n.y*0.5+0.5);
+    float roughness=material_params.x,metallic=material_params.y;
+    if(material_params.z>0.5){
+        float vein=1.0-smoothstep(0.045,0.11,abs(ark_noise3(local_position*5.0)-0.52));
+        metallic=mix(0.0,0.82,vein);roughness=mix(0.90,0.34,vein);
+        albedo=mix(albedo,vec3(0.48,0.38,0.22),vein*0.72);
+    }
+    // Existing screen panels use a dark dielectric backing; no canopy transmission is invented.
+    if(material_params.w>0.5) albedo*=0.70;
+    lit=ark_brdf(n,v,l,albedo,roughness,metallic)*vec3(3.8,3.45,2.95);
+    lit+=ark_environment(n,v,albedo,roughness,metallic,environment_atmosphere,environment_up);
     lit+=albedo*max(emission,0.0);
 }
 color=vec4(ark_display(lit),1.0);}
-"#;
+"#
+);
 const BACK_VERTEX: &str = r#"#version 150
 out vec2 uv;void main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);uv=p;gl_Position=vec4(p*2.0-1.0,0.999,1.0);}
 "#;
@@ -4099,18 +4144,22 @@ const FEED_FRAGMENT: &str = r#"#version 150
 in vec2 uv; uniform sampler2D image; out vec4 color;
 void main(){color=texture(image,uv);}
 "#;
-const BACK_FRAGMENT: &str = r#"#version 150
+const BACK_FRAGMENT: &str = concat!(
+    "#version 150\n",
+    include_str!("shaders/sky.glsl"),
+    r#"
 in vec2 uv;uniform float atmosphere;uniform vec3 planet_up;uniform mat4 inverse_view_projection;uniform vec3 camera_eye;out vec4 color;
 float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
 float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
 void main(){vec4 farpoint=inverse_view_projection*vec4(uv*2.0-1.0,1.0,1.0);vec3 direction=normalize(farpoint.xyz/farpoint.w-camera_eye);vec2 p=vec2(atan(direction.z,direction.x)/6.2831853+0.5,asin(clamp(direction.y,-1.0,1.0))/3.1415927+0.5);float mist=noise(p*4.0)+noise(p*9.0)*0.5+noise(p*23.0)*0.18;
-float band=exp(-pow((p.y-0.4+sin(p.x*3.4)*0.16)*3.0,2.0));vec3 c=vec3(0.008,0.014,0.032)+vec3(0.032,0.07,0.125)*mist*band;
+float band=exp(-pow((p.y-0.4+sin(p.x*3.4)*0.16)*3.0,2.0));vec3 c=ark_space_radiance(direction)+vec3(0.015,0.025,0.045)*mist*band;
 c+=vec3(0.055,0.022,0.055)*pow(mist*0.6,3.0)*band;
 for(int i=0;i<2;i++){float scale=180.0+float(i)*155.0;vec2 grid=p*scale;vec2 cell=floor(grid);vec2 offset=vec2(hash(cell),hash(cell+13.7));float d=length(fract(grid)-offset);float seed=hash(cell+71.1);float star=(1.0-smoothstep(0.0,0.09,d))*step(0.972,seed);c+=mix(vec3(0.53,0.7,1.0),vec3(1.0,0.87,0.65),seed)*star*(0.5+seed*0.7);}
 float sunFacing=max(dot(direction,normalize(vec3(-0.5,0.8,0.65))),0.0);float flare=pow(sunFacing,64.0)*0.15+pow(sunFacing,800.0)*0.45+smoothstep(0.99982,0.99996,sunFacing)*1.8;c+=vec3(1.0,0.88,0.70)*flare;float horizon=pow(1.0-abs(dot(direction,planet_up)),3.0);
 vec3 sky=mix(vec3(0.065,0.17,0.29),vec3(0.44,0.55,0.60),horizon);
-c=mix(c,sky,atmosphere);color=vec4(c,1.0);}
-"#;
+c=mix(c,sky,atmosphere);color=vec4(ark_display(c),1.0);}
+"#
+);
 
 #[cfg(test)]
 mod tests {
@@ -4291,6 +4340,125 @@ mod tests {
                 .map(|cache| cache.texture)
                 .collect();
             assert_eq!(gl.get_error(), glow::NO_ERROR);
+            // Actual GPU readback: identical geometry/color must retain distinct
+            // dielectric/conductor response, independent of base-color brightness.
+            gl.bind_framebuffer(glow::FRAMEBUFFER, Some(target.framebuffer));
+            gl.viewport(0, 0, 128, 128);
+            gl.disable(glow::SCISSOR_TEST);
+            gl.disable(glow::BLEND);
+            gl.enable(glow::DEPTH_TEST);
+            gl.depth_mask(true);
+            gl.use_program(Some(renderer.program));
+            let material_eye = Vec3::new(0.0, 0.0, 4.0);
+            let material_vp = Mat4::perspective_rh_gl(0.8, 1.0, 0.1, 100.0)
+                * Mat4::look_at_rh(material_eye, Vec3::ZERO, Vec3::Y);
+            gl.uniform_matrix_4_f32_slice(
+                renderer.uniforms.vp.as_ref(),
+                false,
+                &material_vp.to_cols_array(),
+            );
+            gl.uniform_3_f32(
+                renderer.uniforms.eye.as_ref(),
+                material_eye.x,
+                material_eye.y,
+                material_eye.z,
+            );
+            gl.uniform_1_i32(renderer.uniforms.material.as_ref(), 0);
+            gl.uniform_1_f32(renderer.uniforms.environment_atmosphere.as_ref(), 0.0);
+            gl.uniform_3_f32(renderer.uniforms.environment_up.as_ref(), 0.0, 1.0, 0.0);
+            let mut material_pixels = Vec::new();
+            for material in [
+                Material::Rock,
+                Material::Ore,
+                Material::PaintedHull,
+                Material::BareMetal,
+                Material::Glass,
+            ] {
+                gl.clear_color(0.0, 0.0, 0.0, 1.0);
+                gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
+                renderer.draw_material(
+                    0,
+                    Mat4::IDENTITY,
+                    Vec3::new(0.25, 0.32, 0.38),
+                    0.0,
+                    material,
+                );
+                let mut pixel = [0u8; 4];
+                gl.read_pixels(
+                    64,
+                    64,
+                    1,
+                    1,
+                    glow::RGBA,
+                    glow::UNSIGNED_BYTE,
+                    glow::PixelPackData::Slice(Some(&mut pixel)),
+                );
+                assert_eq!(pixel[3], 255);
+                assert!(
+                    pixel[..3].iter().any(|c| *c > 8),
+                    "material must remain visible: {material:?}"
+                );
+                material_pixels.push(pixel);
+            }
+            assert!(
+                material_pixels[2][..3]
+                    .iter()
+                    .zip(&material_pixels[3][..3])
+                    .any(|(a, b)| a.abs_diff(*b) > 5),
+                "paint and bare metal must differ at equal color: {material_pixels:?}"
+            );
+            assert_ne!(
+                material_pixels[0], material_pixels[4],
+                "rock and screen glass cannot share roughness response"
+            );
+            assert_eq!(gl.get_error(), glow::NO_ERROR);
+            // Evaluate the real shared environment shader: smooth conductors
+            // reflect sky direction, fully rough ones converge to the same mean.
+            let environment_fragment = concat!(
+                "#version 150\n",
+                include_str!("shaders/sky.glsl"),
+                include_str!("shaders/materials.glsl"),
+                r#"
+                uniform vec3 test_view; uniform float test_roughness; out vec4 color;
+                void main(){color=vec4(ark_display(ark_environment(vec3(0,0,1),normalize(test_view),vec3(0.7),test_roughness,1.0,0.0,vec3(0,1,0))),1.0);}
+            "#
+            );
+            let environment_program = compile(&gl, BACK_VERTEX, environment_fragment).unwrap();
+            gl.use_program(Some(environment_program));
+            gl.bind_vertex_array(Some(renderer.empty));
+            gl.disable(glow::DEPTH_TEST);
+            let view_uniform = gl.get_uniform_location(environment_program, "test_view");
+            let rough_uniform = gl.get_uniform_location(environment_program, "test_roughness");
+            let mut sky_pixels = Vec::new();
+            for roughness in [0.12, 1.0] {
+                for x in [-0.7, 0.7] {
+                    gl.uniform_3_f32(view_uniform.as_ref(), x, 0.0, 0.7);
+                    gl.uniform_1_f32(rough_uniform.as_ref(), roughness);
+                    gl.draw_arrays(glow::TRIANGLES, 0, 3);
+                    let mut pixel = [0u8; 4];
+                    gl.read_pixels(
+                        64,
+                        64,
+                        1,
+                        1,
+                        glow::RGBA,
+                        glow::UNSIGNED_BYTE,
+                        glow::PixelPackData::Slice(Some(&mut pixel)),
+                    );
+                    sky_pixels.push(pixel);
+                }
+            }
+            assert_ne!(
+                sky_pixels[0], sky_pixels[1],
+                "smooth metal samples directional sky"
+            );
+            assert_eq!(
+                sky_pixels[2], sky_pixels[3],
+                "roughness broadens the reflection toward a hemispheric mean"
+            );
+            assert_eq!(gl.get_error(), glow::NO_ERROR);
+            gl.use_program(None);
+            gl.delete_program(environment_program);
             renderer.destroy();
             assert!(renderer.feed_cache.is_empty());
             assert!(live_textures
