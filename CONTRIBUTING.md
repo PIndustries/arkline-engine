@@ -1,6 +1,9 @@
-# Contributing during private validation
+# Contributing to Arkline
 
-Keep the repository private until the owner explicitly approves publication.
+Arkline is an early-access community project. Report reproducible bugs and propose
+changes through GitHub issues and pull requests. For a substantial feature or asset
+pipeline change, open an issue first so contributors can agree on interfaces and scope.
+Use [SECURITY.md](SECURITY.md) for private vulnerability reports.
 Contributions to first-party Arkline code are accepted under AGPL-3.0-only, the
 same license as the project. Contributors retain their copyright. By submitting
 a contribution for inclusion, you agree to license it on those terms and confirm
@@ -19,3 +22,12 @@ an explicit version decision and tests in both producer and consumer.
 Use pull requests with the problem, resulting behavior, validation, and remaining
 limitations. Do not claim deployment, real-world scale, or player acceptance from
 a passing unit test or successful compile.
+
+Public fork pull requests do not run automatically on our persistent self-hosted
+build machines. Include your local validation results; maintainers review changes
+before running trusted CI. Do not add secrets or production world data to a PR.
+
+Start with the [documentation index](docs/README.md), [component map](docs/component-map.md),
+and [API reference](docs/api.md). The official account service is operated separately;
+local worlds currently use the documented pilot credentials. Configurable OAuth/OIDC
+integration is planned, not part of the current login implementation.

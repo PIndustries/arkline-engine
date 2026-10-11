@@ -2,6 +2,7 @@
 
 Start with the [component and deployment map](component-map.md), then the [implemented API](api.md). The source protocol is the final field/type contract; these documents describe behavior and trust boundaries.
 
+- [Models and community artwork](models.md) — procedural meshes today; GLB import is planned
 - [Architecture and economic verification](architecture.md)
 - [Shared-account investigation and implementation plan](identity-plan.md) — proposed, not a working login feature
 - [Flight and cockpit controls](flight-controls.md), [browser client](browser.md), [sound](sound.md)

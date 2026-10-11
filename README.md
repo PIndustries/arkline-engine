@@ -4,7 +4,7 @@ A shared space sandbox built in Rust by P.Industries and contributors. Fly a shi
 mine finite resources, manage drones, and trade in a persistent, server-authoritative
 universe. The current test world contains three connected star systems.
 
-**Early access · 26.10.11.6.** Arkline is under active development. Expect
+**Early-access source · 26.10.11.6.** See [Releases](https://github.com/PIndustries/arkline-engine/releases) for the latest downloadable build; source changes may be ahead of deployed clients. Arkline is under active development. Expect
 unfinished systems and visual rough edges. Desktop and browser clients share the
 official relay at `wss://relay.arkline.network/ws`. The connection screen also offers
 a separate Test world and custom servers. See [public hosting](deploy/PUBLIC.md)
@@ -12,8 +12,9 @@ for operating limits and the deployment validation required before announcing av
 
 Code and original assets are licensed under **AGPL-3.0-only**, unless marked
 otherwise. See [LICENSE](LICENSE), [third-party licensing notes](docs/licensing.md),
-and [branding policy](TRADEMARKS.md). The repository is currently private while
-release checks are completed.
+and [branding policy](TRADEMARKS.md). Contributions are welcome through
+[issues and pull requests](CONTRIBUTING.md). Independent worlds are welcome; we
+encourage experiments and improvements that can also strengthen the official network.
 
 ## Current preview
 
@@ -46,6 +47,13 @@ behavior and remaining owner acceptance.
 Drone screens provide Raised, Top down, Orbit and POV angles, plus up to four
 individual feeds per page. Cached bounded-resolution feeds and smoothed camera
 poses reduce repeated rendering and snapshot stepping.
+
+## Models and community artwork
+
+Current ships, stations, drones and scenery use lightweight geometry generated
+in Rust. There is no GLB/glTF asset importer yet. GLB is the intended interchange
+format for a future community model pipeline; see [model contributions](docs/models.md)
+for the current boundary and proposed asset requirements.
 
 ## Run the model
 
@@ -436,8 +444,8 @@ view-mode Settings under More.
 Cockpit field of view is 70 degrees. The slim service rail uses hover labels;
 other view modes retain compact floating windows.
 
-See [public preview readiness](docs/public-preview-readiness.md) for the remaining
-publication gates. The repository remains private; its source is now licensed under AGPL-3.0-only.
+See [public preview readiness](docs/public-preview-readiness.md) for remaining
+release work and historical validation evidence. Public source availability does not imply production readiness.
 
 ### Ship power and clear cockpit actions
 
