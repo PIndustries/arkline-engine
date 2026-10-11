@@ -1,0 +1,18 @@
+# Allow only source needed to resolve the workspace and compile the server.
+**
+!Cargo.toml
+!Cargo.lock
+!BUILD_VERSION
+!crates/
+!crates/*/
+!crates/*/Cargo.toml
+!crates/*/src/
+!crates/*/src/**
+!apps/
+!apps/*/
+!apps/*/Cargo.toml
+!apps/*/src/
+!apps/*/src/**
+
+!LICENSE
+!TRADEMARKS.md

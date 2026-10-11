@@ -1,0 +1,106 @@
+# PRIVATE VALIDATION ONLY. Set an immutable private-registry digest before applying.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: arkline
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: arkline
+  namespace: arkline
+spec:
+  type: ClusterIP
+  selector:
+    app: arkline
+  ports:
+    - name: game
+      port: 7777
+      targetPort: game
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: private-validation-only
+  namespace: arkline
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress: []
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: arkline
+  namespace: arkline
+spec:
+  serviceName: arkline
+  replicas: 1
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  selector:
+    matchLabels:
+      app: arkline
+  template:
+    metadata:
+      labels:
+        app: arkline
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: server
+          image: arkline-server:REPLACE_WITH_IMMUTABLE_PRIVATE_IMAGE
+          imagePullPolicy: Always
+          args: [--bind, "0.0.0.0:7777", --db, /data/world.sqlite]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          ports:
+            - name: game
+              containerPort: 7777
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: "2"
+              memory: 1Gi
+          startupProbe:
+            tcpSocket:
+              port: game
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            tcpSocket:
+              port: game
+            periodSeconds: 10
+          volumeMounts:
+            - name: world
+              mountPath: /data
+  volumeClaimTemplates:
+    - metadata:
+        name: world
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: general
+        resources:
+          requests:
+            storage: 10Gi
