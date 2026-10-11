@@ -61,6 +61,8 @@ fn storage_view(storage: &BTreeMap<u32, u64>) -> Vec<StationStorage> {
 pub(super) fn view(world: &World, name: &str) -> Option<AssetsView> {
     let a = world.accounts.get(name)?;
     Some(AssetsView {
+        pioneer_interior_available: true,
+        pioneer_interior_decks: 2,
         ships: a.ships.clone(),
         storage: storage_view(&a.storage),
         invitations: world

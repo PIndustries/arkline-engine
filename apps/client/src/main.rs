@@ -819,7 +819,8 @@ impl Cockpit {
     fn can_fly(&self) -> bool {
         self.can_operate()
             && self.own().is_some_and(|p| {
-                p.flight.is_some()
+                p.station_avatar.is_none()
+                    && p.flight.is_some()
                     && !matches!(
                         p.location,
                         Location::Docked | Location::InTransit { .. } | Location::Jumping { .. }
@@ -843,6 +844,25 @@ impl Cockpit {
         if !self.can_operate() {
             return;
         }
+        if self.own().is_some_and(|p| p.station_avatar.is_some())
+            && (request.is_remote_gameplay()
+                || matches!(
+                    request,
+                    Request::SelectShip { .. }
+                        | Request::Mine { .. }
+                        | Request::MineAsteroid { .. }
+                        | Request::StartResourceJob { .. }
+                        | Request::BeginRemoteControl { .. }
+                        | Request::RemoteControl { .. }
+                        | Request::SpawnSurfaceProp { .. }
+                        | Request::MoveSurfaceProp { .. }
+                        | Request::RemoveSurfaceProp { .. }
+                ))
+        {
+            self.notice =
+                "On foot: return through the airlock and board your ship to operate it.".into();
+            return;
+        }
         if matches!(request, Request::Warp { .. }) && !self.warp_power_ready() {
             self.notice = "Insufficient capacitor for warp. Wait for reactor recharge.".into();
             return;
@@ -855,6 +875,9 @@ impl Cockpit {
                 | Request::Dock
                 | Request::Undock
                 | Request::DisembarkShip
+                | Request::EnterInterior
+                | Request::ExitInterior
+                | Request::InteriorLift { .. }
                 | Request::StationSit { .. }
                 | Request::EnterShip
                 | Request::Jump { .. }
@@ -1048,13 +1071,28 @@ impl Cockpit {
                 MUTED,
             );
         };
-        if pilot.station_avatar.is_some() {
-            return (
-                "ON FOOT / STATION HANGAR".into(),
-                "Walk to the boarding marker to enter your ship".into(),
-                None,
-                self.accent(),
-            );
+        if let Some(avatar) = &pilot.station_avatar {
+            let (title, guidance) = if avatar.onboard_interior {
+                (
+                    format!("ON FOOT / PIONEER DECK {}", avatar.interior_deck),
+                    if avatar.interior_deck == 1 {
+                        "Return to the airlock to leave; access-core lift leads to deck 2".into()
+                    } else {
+                        "Use the access-core lift to deck 1 for the airlock exit".into()
+                    },
+                )
+            } else if self.in_captains_quarters() {
+                (
+                    "ON FOOT / CAPTAIN'S QUARTERS".into(),
+                    "Return through the doorway to the hangar boarding marker".into(),
+                )
+            } else {
+                (
+                    "ON FOOT / STATION HANGAR".into(),
+                    "Walk to the boarding marker to enter your ship".into(),
+                )
+            };
+            return (title, guidance, None, self.accent());
         }
         let now = self.presentation_time();
         if let Location::InTransit {
@@ -1222,6 +1260,10 @@ impl Cockpit {
         }
     }
     fn view_selector(&mut self, ui: &mut egui::Ui) {
+        if self.own().is_some_and(|p| p.station_avatar.is_some()) {
+            self.on_foot_view_selector(ui);
+            return;
+        }
         ui.selectable_value(&mut self.view_mode, ViewMode::Tactical, "2D Tactical");
         ui.selectable_value(&mut self.view_mode, ViewMode::Tactical3d, "3D Tactical");
         ui.selectable_value(&mut self.view_mode, ViewMode::External, "3D External");
@@ -1508,6 +1550,18 @@ impl Cockpit {
             ui.small("Capacitor data unavailable");
         }
     }
+    fn service_visible(&self, tab: ServiceTab) -> bool {
+        self.own().is_none_or(|p| p.station_avatar.is_none())
+            || !matches!(
+                tab,
+                ServiceTab::Navigation
+                    | ServiceTab::Hangar
+                    | ServiceTab::Modules
+                    | ServiceTab::Drones
+                    | ServiceTab::ShipComputer
+                    | ServiceTab::Sandbox
+            )
+    }
     fn service_tabs(&mut self, ui: &mut egui::Ui) {
         // Every destination stays visible; narrow physical screens wrap the grid.
         let columns = ((ui.available_width() / 72.0).floor() as usize).clamp(3, 6);
@@ -1551,6 +1605,9 @@ impl Cockpit {
                     ),
                     (ServiceTab::Sandbox, "Surface", "Surface construction tools"),
                 ] {
+                    if !self.service_visible(tab) {
+                        continue;
+                    }
                     if ui
                         .add_sized(
                             Vec2::new(width, 24.0),
@@ -1570,6 +1627,23 @@ impl Cockpit {
         });
     }
     fn service_content(&mut self, ui: &mut egui::Ui) {
+        if self.own().is_some_and(|p| p.station_avatar.is_some())
+            && matches!(
+                self.service_tab,
+                ServiceTab::Navigation
+                    | ServiceTab::Modules
+                    | ServiceTab::Drones
+                    | ServiceTab::ShipComputer
+                    | ServiceTab::Sandbox
+                    | ServiceTab::Hangar
+                    | ServiceTab::Station
+            )
+        {
+            self.station_actions(ui);
+            ui.separator();
+            ui.label("Ship controls are unavailable on foot. Inventory, room plans and account services remain accessible.");
+            return;
+        }
         match self.service_tab {
             ServiceTab::Layouts => {
                 ui.label("Ship layout viewer is open in its own window.");
@@ -3289,6 +3363,9 @@ impl eframe::App for Cockpit {
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::F11)) {
             toggle_fullscreen(ctx);
         }
+        if !self.service_visible(self.service_tab) {
+            self.service_tab = ServiceTab::Station;
+        }
         let in_hangar = self.in_station_hangar();
         let bounds = ctx.screen_rect().shrink(8.0);
         self.layout.begin_frame(bounds);
@@ -3343,10 +3420,17 @@ impl eframe::App for Cockpit {
                                 },
                             );
                             if in_hangar {
-                                ui.strong(if self.in_captains_quarters() {
-                                    "CAPTAIN'S QUARTERS"
+                                let interior_deck = self
+                                    .own()
+                                    .and_then(|p| p.station_avatar)
+                                    .filter(|a| a.onboard_interior)
+                                    .map(|a| a.interior_deck);
+                                ui.strong(if let Some(deck) = interior_deck {
+                                    format!("PIONEER INTERIOR · DECK {deck}")
+                                } else if self.in_captains_quarters() {
+                                    "CAPTAIN'S QUARTERS".into()
                                 } else {
-                                    "STATION HANGAR"
+                                    "STATION HANGAR".into()
                                 });
                             } else {
                                 self.view_selector(ui);
@@ -3391,10 +3475,11 @@ impl eframe::App for Cockpit {
                 .show(ctx, |ui| {
                     self.overlay_frame(ctx).show(ui, |ui| {
                         ui.set_width(28.0);
-                        if ui
-                            .add_sized([28.0, 26.0], egui::Button::new("◎"))
-                            .on_hover_text("Overview")
-                            .clicked()
+                        if self.service_visible(ServiceTab::Navigation)
+                            && ui
+                                .add_sized([28.0, 26.0], egui::Button::new("◎"))
+                                .on_hover_text("Overview")
+                                .clicked()
                         {
                             if self.view_mode == ViewMode::Cockpit {
                                 self.service_tab = ServiceTab::Navigation;
@@ -3416,6 +3501,9 @@ impl eframe::App for Cockpit {
                             (ServiceTab::Ledger, "✓", "Ledger audit"),
                             (ServiceTab::Settings, "⚙", "Settings"),
                         ] {
+                            if !self.service_visible(tab) {
+                                continue;
+                            }
                             if ui
                                 .add_sized(
                                     [28.0, 26.0],
@@ -3727,8 +3815,14 @@ impl eframe::App for Cockpit {
             && self.can_operate()
             && (self.manual_remote.is_none() || self.controlled_remote().is_some())
             && self.own().is_some_and(|p| {
-                p.flight.is_some() && matches!(p.location, Location::Station | Location::Belt)
+                p.station_avatar.is_none()
+                    && p.flight.is_some()
+                    && matches!(p.location, Location::Station | Location::Belt)
             });
+        if self.own().is_some_and(|p| p.station_avatar.is_some()) {
+            // Discard flight release state without erasing a queued StationWalk stop.
+            let _ = self.pilot_input.update(false, Default::default());
+        }
         if let Some(control) = self.pilot_input.sample(
             ctx,
             flight_allowed,
@@ -5593,6 +5687,8 @@ mod tests {
     }
     fn asset_test_fixture() -> AssetsView {
         AssetsView {
+            pioneer_interior_available: true,
+            pioneer_interior_decks: 2,
             ships: vec![
                 HangarShip {
                     power: None,
@@ -5813,6 +5909,8 @@ mod tests {
             }],
         });
         cockpit.assets = Some(AssetsView {
+            pioneer_interior_available: true,
+            pioneer_interior_decks: 2,
             ships: ALL_SHIP_CLASSES
                 .into_iter()
                 .filter(|c| *c != ShipClass::Pioneer)
@@ -6171,3 +6269,6 @@ mod tests {
 fn main() {
     browser::start();
 }
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod interior_acceptance;

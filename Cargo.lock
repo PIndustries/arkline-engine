@@ -247,6 +247,7 @@ name = "arkline-client"
 version = "0.1.0"
 dependencies = [
  "arkline-protocol",
+ "arkline-server",
  "arkline-verifier",
  "cpal",
  "eframe",
