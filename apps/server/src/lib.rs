@@ -162,6 +162,7 @@ impl Server {
         power::advance(&mut world, now)?;
         world.remote_controls.clear();
         resource_jobs::cancel_all(&mut world, now, "Server restarted");
+        station::migrate(&mut world);
         for pilot in world.pilots.values_mut() {
             mining::stop_all(pilot, "Server restarted");
             pilot.controls = None;
@@ -437,7 +438,8 @@ impl Server {
             }
         }
         match request {
-            request @ (Request::DisembarkShip
+            request @ (Request::StationSit { .. }
+            | Request::DisembarkShip
             | Request::EnterShip
             | Request::StationWalk { .. }) => {
                 let name = session

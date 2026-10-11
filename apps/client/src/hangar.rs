@@ -1,6 +1,9 @@
 //! Private station bay in actual meters, using the same hull meshes as flight.
 use super::*;
 use arkline_protocol::{hangar_layout, StationAvatar};
+#[path = "quarters.rs"]
+mod quarters;
+pub use quarters::HangarAction;
 
 pub struct HangarView {
     renderer: Option<Arc<Mutex<Renderer>>>,
@@ -48,7 +51,13 @@ impl HangarView {
             }
         }
     }
-    pub fn ui(&mut self, ui: &mut egui::Ui, pilot: &PilotView, now: u64) {
+    pub fn ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        pilot: &PilotView,
+        now: u64,
+        live: bool,
+    ) -> Option<HangarAction> {
         let (rect, response) =
             ui.allocate_exact_size(ui.available_size(), egui::Sense::click_and_drag());
         self.surface = Some((rect, ui.layer_id()));
@@ -98,6 +107,9 @@ impl HangarView {
         let mut eye =
             target - forward * distance * self.pitch.cos() + Vec3::Y * distance * self.pitch.sin();
         eye.y = eye.y.max(0.6);
+        if walking {
+            eye = quarters::camera_eye(pilot.ship_class, target, eye);
+        }
         let vp = Mat4::perspective_rh_gl(
             55f32.to_radians(),
             rect.aspect_ratio().max(0.1),
@@ -105,6 +117,7 @@ impl HangarView {
             30000.0,
         ) * Mat4::look_at_rh(eye, target, Vec3::Y);
         let mut parts = bay_parts(pilot.ship_class);
+        parts.extend(quarters::room_parts(pilot.ship_class, now));
         if let Some(avatar) = &pilot.station_avatar {
             parts.extend(avatar_parts(avatar, now, self.follow));
         }
@@ -144,6 +157,7 @@ impl HangarView {
             egui::FontId::proportional(14.0),
             egui::Color32::from_rgb(150, 220, 185),
         );
+        quarters::terminals(ui, rect, vp, eye, pilot, unobstructed, live)
     }
 }
 
@@ -246,6 +260,15 @@ fn bay_parts(class: ShipClass) -> Vec<ModelPart> {
             0.1,
         );
     }
+    let room = arkline_protocol::quarters_layout(class);
+    p.0.retain(|(_, m, _, _)| {
+        let c = m.w_axis;
+        c.y < 0.0
+            || c.x < room.min[0] as f32 - 1.5
+            || c.x > room.max[0] as f32 + 1.5
+            || c.z < room.min[2] as f32
+            || c.z > room.max[2] as f32 + 1.5
+    });
     let parent = Mat4::from_scale_rotation_translation(
         Vec3::splat(100.0),
         Quat::IDENTITY,
@@ -406,7 +429,7 @@ fn avatar_parts(avatar: &StationAvatar, now: u64, smooth: Option<Vec3>) -> Vec<M
                 emission,
             );
         }
-        for (a, b, r) in [
+        for (index, (mut a, mut b, r)) in [
             (
                 Vec3::new(0.0, 0.94, side * 0.13),
                 Vec3::new(step * 0.5, 0.52, side * 0.13),
@@ -427,9 +450,32 @@ fn avatar_parts(avatar: &StationAvatar, now: u64, smooth: Option<Vec3>) -> Vec<M
                 Vec3::new(-step, 0.87, side * 0.31),
                 0.06,
             ),
-        ] {
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            if avatar.seated && index < 2 {
+                let hip = Vec3::new(-0.32, 0.63, side * 0.13);
+                let knee = Vec3::new(0.08, 0.55, side * 0.13);
+                let foot = Vec3::new(0.08, 0.09, side * 0.13);
+                (a, b) = if index == 0 {
+                    (hip, knee)
+                } else {
+                    (knee, foot)
+                };
+            }
             if let Some(m) = segment_model(a, b, r) {
                 p.draw(0, root * m, suit, 0.0);
+            }
+        }
+    }
+    if avatar.seated {
+        let inverse = root.inverse();
+        for (_, model, _, _) in &mut p.0 {
+            let local = inverse * *model;
+            let y = local.w_axis.y;
+            if y > 0.92 {
+                *model = root * Mat4::from_translation(Vec3::new(-0.32, -0.32, 0.0)) * local;
             }
         }
     }
@@ -502,7 +548,8 @@ mod tests {
                         ..Default::default()
                     },
                     |ctx| {
-                        egui::CentralPanel::default().show(ctx, |ui| hangar.ui(ui, &pilot, 1000));
+                        egui::CentralPanel::default()
+                            .show(ctx, |ui| hangar.ui(ui, &pilot, 1000, true));
                     },
                 );
             }
@@ -515,6 +562,7 @@ mod tests {
     #[test]
     fn avatar_has_human_scale_and_walk_articulation() {
         let mut avatar = StationAvatar {
+            seated: false,
             position: [0.0; 3],
             heading: 0.0,
             moving: false,
@@ -615,6 +663,58 @@ mod tests {
             assert_eq!(gl.get_error(), glow::NO_ERROR);
             let lit = pixels.chunks_exact(4).filter(|p| p[1] > 25).count();
             assert!(lit > 500, "Hangar must cover meaningful image area: {lit}");
+            if let Ok(path) = std::env::var("ARKLINE_HANGAR_CAPTURE") {
+                let capture = CachedFeed::create(&gl, 1000, 1280, 720).unwrap();
+                gl.bind_framebuffer(glow::FRAMEBUFFER, Some(capture.framebuffer));
+                gl.viewport(0, 0, 1280, 720);
+                let q = arkline_protocol::quarters_layout(ShipClass::Pioneer);
+                let eye = Vec3::new(-1.5, 2.4, q.min[2] as f32 + 0.9);
+                let aim = Vec3::new(1.0, 1.1, q.max[2] as f32 - 2.0);
+                let vp = Mat4::perspective_rh_gl(1.3, 1280.0 / 720.0, 0.08, 30000.0)
+                    * Mat4::look_at_rh(eye, aim, Vec3::Y);
+                let mut parts = bay_parts(ShipClass::Pioneer);
+                parts.extend(quarters::room_parts(ShipClass::Pioneer, 1000));
+                paint(&renderer, vp, eye, &parts);
+                let mut rgba = vec![0u8; 1280 * 720 * 4];
+                gl.read_pixels(
+                    0,
+                    0,
+                    1280,
+                    720,
+                    glow::RGBA,
+                    glow::UNSIGNED_BYTE,
+                    glow::PixelPackData::Slice(Some(&mut rgba)),
+                );
+                let mut ppm = b"P6\n1280 720\n255\n".to_vec();
+                for row in rgba.chunks_exact(1280 * 4).rev() {
+                    for pixel in row.chunks_exact(4) {
+                        ppm.extend_from_slice(&pixel[..3]);
+                    }
+                }
+                std::fs::write(&path, ppm).unwrap();
+                let eye = Vec3::new(0.0, 2.1, q.max[2] as f32 - 2.0);
+                let aim = Vec3::new(0.0, 1.7, q.min[2] as f32 - 8.0);
+                let vp = Mat4::perspective_rh_gl(1.3, 1280.0 / 720.0, 0.08, 30000.0)
+                    * Mat4::look_at_rh(eye, aim, Vec3::Y);
+                paint(&renderer, vp, eye, &parts);
+                gl.read_pixels(
+                    0,
+                    0,
+                    1280,
+                    720,
+                    glow::RGBA,
+                    glow::UNSIGNED_BYTE,
+                    glow::PixelPackData::Slice(Some(&mut rgba)),
+                );
+                let mut ppm = b"P6\n1280 720\n255\n".to_vec();
+                for row in rgba.chunks_exact(1280 * 4).rev() {
+                    for pixel in row.chunks_exact(4) {
+                        ppm.extend_from_slice(&pixel[..3]);
+                    }
+                }
+                std::fs::write(format!("{path}.overlook.ppm"), ppm).unwrap();
+                capture.destroy(&gl);
+            }
             renderer.destroy();
             target.destroy(&gl);
             CGLSetCurrentContext(std::ptr::null_mut());

@@ -1,6 +1,39 @@
 //! Station embodiment is confirmed by the server; camera motion never boards a ship.
 use super::*;
 impl Cockpit {
+    pub(super) fn activate_quarters_terminal(&mut self, action: flight3d::hangar::HangarAction) {
+        use flight3d::hangar::HangarAction;
+        if !self.in_station_hangar() || self.own().is_none_or(|p| p.station_avatar.is_none()) {
+            return;
+        }
+        self.service_tab = match action {
+            HangarAction::Overview => ServiceTab::Navigation,
+            HangarAction::Ship => ServiceTab::Hangar,
+            HangarAction::Inventory => ServiceTab::Cargo,
+            HangarAction::Corporation => ServiceTab::Corporation,
+            HangarAction::Ai => ServiceTab::ShipComputer,
+            HangarAction::Sit => {
+                if self.can_operate() {
+                    self.send(Request::StationSit { seated: true });
+                }
+                return;
+            }
+        };
+        self.services_open = true;
+    }
+
+    pub(super) fn in_captains_quarters(&self) -> bool {
+        self.in_station_hangar()
+            && self.own().is_some_and(|p| {
+                let q = quarters_layout(p.ship_class);
+                p.station_avatar.is_some_and(|a| {
+                    a.position[0] >= q.min[0]
+                        && a.position[0] <= q.max[0]
+                        && a.position[2] >= q.min[2]
+                        && a.position[2] <= q.max[2]
+                })
+            })
+    }
     pub(super) fn in_station_hangar(&self) -> bool {
         self.manual_remote.is_none() && self.own().is_some_and(|p| p.location == Location::Docked)
     }
@@ -17,7 +50,20 @@ impl Cockpit {
                 .map(|(a, b)| (a - b).powi(2))
                 .sum::<f64>()
                 .sqrt();
-            ui.strong("ON FOOT · STATION HANGAR");
+            ui.strong(if avatar.seated {
+                "SEATED · CAPTAIN'S QUARTERS"
+            } else if self.in_captains_quarters() {
+                "ON FOOT · CAPTAIN'S QUARTERS"
+            } else {
+                "ON FOOT · STATION HANGAR"
+            });
+            if avatar.seated
+                && ui
+                    .add_enabled(self.can_operate(), egui::Button::new("Stand up"))
+                    .clicked()
+            {
+                self.send(Request::StationSit { seated: false });
+            }
             ui.small(format!(
                 "{} · boarding access {:.1} m",
                 pilot.ship_class.spec().name,
@@ -33,7 +79,10 @@ impl Cockpit {
                 self.send(Request::EnterShip);
             }
             ui.small("W/S walk · A/D strafe · ←/→ turn · hold RMB to look");
-            ui.small("Walk to the illuminated boarding marker to enter. Board before undocking.");
+            ui.small(
+                "Follow the green path to your quarters. Approach a terminal and click to use it.",
+            );
+            ui.small("Return to the illuminated boarding marker to enter your ship.");
         } else {
             ui.strong("ABOARD · DOCKED");
             ui.horizontal(|ui| {
@@ -98,10 +147,7 @@ impl Cockpit {
             });
         let (forward, strafe, turn) = if allowed {
             ctx.input(|i| {
-                let axis = |a, b| {
-                    f64::from(i.key_down(a) || i.key_pressed(a))
-                        - f64::from(i.key_down(b) || i.key_pressed(b))
-                };
+                let axis = |a, b| f64::from(i.key_down(a)) - f64::from(i.key_down(b));
                 let f = axis(egui::Key::W, egui::Key::S);
                 let s = axis(egui::Key::D, egui::Key::A);
                 let delta = self.hangar_view.camera_yaw() - avatar.as_ref().unwrap().heading;
@@ -137,6 +183,7 @@ mod tests {
         let p = &mut cockpit.snapshot.as_mut().unwrap().pilots[0];
         p.location = Location::Docked;
         p.station_avatar = Some(StationAvatar {
+            seated: false,
             position: hangar_layout(p.ship_class).boarding_point,
             heading: 0.,
             moving: false,
@@ -184,12 +231,70 @@ mod tests {
         assert!(cockpit.controls.take().is_none());
     }
     #[test]
+    fn walk_key_release_replaces_pending_thrust_with_neutral() {
+        let ctx = egui::Context::default();
+        let mut cockpit = crate::tests::view_test_cockpit(&ctx);
+        let p = &mut cockpit.snapshot.as_mut().unwrap().pilots[0];
+        p.location = Location::Docked;
+        p.station_avatar = Some(StationAvatar {
+            seated: false,
+            position: hangar_layout(p.ship_class).boarding_point,
+            heading: 0.,
+            moving: false,
+            updated_at_ms: 0,
+        });
+        let key = |pressed| egui::Event::Key {
+            key: egui::Key::W,
+            physical_key: None,
+            pressed,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        };
+        for events in [vec![key(true)], vec![key(false)]] {
+            let _ = ctx.run(
+                egui::RawInput {
+                    focused: true,
+                    events,
+                    ..Default::default()
+                },
+                |ctx| cockpit.sample_station_walk(ctx, true),
+            );
+        }
+        assert!(matches!(
+            cockpit.controls.take(),
+            Some(Request::StationWalk {
+                forward: 0.,
+                strafe: 0.,
+                turn: 0.
+            })
+        ));
+        let _ = ctx.run(
+            egui::RawInput {
+                focused: true,
+                ..Default::default()
+            },
+            |ctx| cockpit.sample_station_walk(ctx, true),
+        );
+        assert!(cockpit.controls.take().is_none());
+        // Fast press/release in one render frame must not leave a walk lease.
+        let _ = ctx.run(
+            egui::RawInput {
+                focused: true,
+                events: vec![key(true), key(false)],
+                ..Default::default()
+            },
+            |ctx| cockpit.sample_station_walk(ctx, true),
+        );
+        assert!(cockpit.controls.take().is_none());
+    }
+    #[test]
     fn docked_hangar_requires_own_view_and_gathering_requires_embarked_pilot() {
         let ctx = egui::Context::default();
         let mut cockpit = crate::tests::view_test_cockpit(&ctx);
         let p = &mut cockpit.snapshot.as_mut().unwrap().pilots[0];
         p.location = Location::Docked;
         p.station_avatar = Some(StationAvatar {
+            seated: false,
             position: hangar_layout(p.ship_class).boarding_point,
             heading: 0.,
             moving: false,
@@ -199,5 +304,42 @@ mod tests {
         assert!(cockpit.resource_start_reason().unwrap().contains("Enter"));
         cockpit.manual_remote = Some("worker".into());
         assert!(!cockpit.in_station_hangar());
+    }
+    #[test]
+    fn quarters_terminal_routes_services_and_seating_clears_movement() {
+        use flight3d::hangar::HangarAction;
+        let ctx = egui::Context::default();
+        let mut cockpit = crate::tests::view_test_cockpit(&ctx);
+        let p = &mut cockpit.snapshot.as_mut().unwrap().pilots[0];
+        p.location = Location::Docked;
+        p.station_avatar = Some(StationAvatar {
+            seated: false,
+            position: quarters_layout(p.ship_class).seat_point,
+            heading: 0.,
+            moving: false,
+            updated_at_ms: 1000,
+        });
+        assert!(cockpit.in_captains_quarters());
+        for (action, tab) in [
+            (HangarAction::Overview, ServiceTab::Navigation),
+            (HangarAction::Ship, ServiceTab::Hangar),
+            (HangarAction::Inventory, ServiceTab::Cargo),
+            (HangarAction::Corporation, ServiceTab::Corporation),
+            (HangarAction::Ai, ServiceTab::ShipComputer),
+        ] {
+            cockpit.activate_quarters_terminal(action);
+            assert!(cockpit.services_open && cockpit.service_tab == tab);
+        }
+        let (tx, rx) = mpsc::channel();
+        cockpit.commands = Some(tx);
+        cockpit.controls.publish_station(1., 0., 0.);
+        cockpit.station_walk_active = true;
+        cockpit.activate_quarters_terminal(HangarAction::Sit);
+        assert!(cockpit.controls.take().is_none());
+        assert!(!cockpit.station_walk_active);
+        assert!(matches!(
+            rx.try_recv().unwrap(),
+            Request::StationSit { seated: true }
+        ));
     }
 }

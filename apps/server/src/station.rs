@@ -25,6 +25,7 @@ pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result
             ensure!(p.view.station_avatar.is_none(), "already on foot");
             p.controls = None;
             p.view.station_avatar = Some(StationAvatar {
+                seated: false,
                 position: layout.boarding_point,
                 heading: 0.0,
                 moving: false,
@@ -38,6 +39,26 @@ pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result
                 "walk to your ship boarding point first"
             );
             p.view.station_avatar = None;
+            p.walk_input = None;
+        }
+        Request::StationSit { seated } => {
+            let a = p
+                .view
+                .station_avatar
+                .as_mut()
+                .context("disembark before using quarters seating")?;
+            if seated {
+                let seat = quarters_layout(p.view.ship_class).seat_point;
+                ensure!(
+                    flight::distance(a.position, seat) <= 2.0,
+                    "walk closer to the quarters sofa first"
+                );
+                a.position = seat;
+                a.heading = std::f64::consts::FRAC_PI_2;
+            }
+            a.seated = seated;
+            a.moving = false;
+            a.updated_at_ms = a.updated_at_ms.max(now);
             p.walk_input = None;
         }
         Request::StationWalk {
@@ -56,6 +77,9 @@ pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result
                 .station_avatar
                 .as_mut()
                 .context("disembark before walking")?;
+            if forward != 0.0 || strafe != 0.0 || turn != 0.0 {
+                a.seated = false;
+            }
             a.updated_at_ms = a.updated_at_ms.max(now);
             a.moving = forward != 0.0 || strafe != 0.0 || turn != 0.0;
             p.walk_input = Some(WalkInput {
@@ -68,6 +92,29 @@ pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result
         _ => bail!("unsupported station command"),
     }
     Ok(())
+}
+fn in_obstacle(position: [f64; 3], obstacle: &StationObstacle) -> bool {
+    let r = STATION_AVATAR_RADIUS_M;
+    position[0] > obstacle.min[0] - r
+        && position[0] < obstacle.max[0] + r
+        && position[2] > obstacle.min[2] - r
+        && position[2] < obstacle.max[2] + r
+}
+/// Existing saves may place an avatar where new walls or furnishings now stand.
+pub(super) fn migrate(w: &mut World) {
+    for p in w.pilots.values_mut() {
+        if let Some(a) = &mut p.view.station_avatar {
+            if station_obstacles(p.view.ship_class)
+                .iter()
+                .any(|o| in_obstacle(a.position, o))
+            {
+                a.position = hangar_layout(p.view.ship_class).boarding_point;
+                a.seated = false;
+                a.moving = false;
+                p.walk_input = None;
+            }
+        }
+    }
 }
 pub(super) fn advance(w: &mut World, now: u64) {
     for p in w.pilots.values_mut() {
@@ -92,6 +139,7 @@ pub(super) fn advance(w: &mut World, now: u64) {
             / 1000.0;
         let layout = hangar_layout(p.view.ship_class);
         let hull = p.view.ship_class.spec();
+        let obstacles = station_obstacles(p.view.ship_class);
         let norm = input.forward.hypot(input.strafe).max(1.0);
         while remaining > 0.0 {
             let dt = remaining.min(0.025);
@@ -104,8 +152,17 @@ pub(super) fn advance(w: &mut World, now: u64) {
             let z = (a.position[2]
                 + (sin * input.forward + cos * input.strafe) / norm * WALK_SPEED_MPS * dt)
                 .clamp(-layout.half_width + 0.3, layout.half_width - 0.3);
-            if x.abs() >= hull.length_m / 2.0 + 0.3 || z.abs() >= hull.width_m / 2.0 + 0.3 {
-                a.position = [x, 0.0, z];
+            let clear = |position: [f64; 3]| {
+                (position[0].abs() >= hull.length_m / 2.0 + STATION_AVATAR_RADIUS_M
+                    || position[2].abs() >= hull.width_m / 2.0 + STATION_AVATAR_RADIUS_M)
+                    && !obstacles.iter().any(|o| in_obstacle(position, o))
+            };
+            // Slide along boundaries instead of freezing diagonal movement.
+            if clear([x, 0.0, a.position[2]]) {
+                a.position[0] = x;
+            }
+            if clear([a.position[0], 0.0, z]) {
+                a.position[2] = z;
             }
         }
         a.updated_at_ms = a.updated_at_ms.max(now);
@@ -126,7 +183,10 @@ pub(super) fn validate(w: &World) -> Result<()> {
                     && a.position.iter().all(|v| v.is_finite())
                     && a.position[1] == 0.0
                     && a.position[0].abs() <= l.half_length
-                    && a.position[2].abs() <= l.half_width,
+                    && a.position[2].abs() <= l.half_width
+                    && !station_obstacles(p.view.ship_class)
+                        .iter()
+                        .any(|o| in_obstacle(a.position, o)),
                 "invalid station avatar"
             );
         }

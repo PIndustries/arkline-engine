@@ -749,6 +749,7 @@ impl Cockpit {
                 | Request::Dock
                 | Request::Undock
                 | Request::DisembarkShip
+                | Request::StationSit { .. }
                 | Request::EnterShip
                 | Request::Jump { .. }
                 | Request::StartResourceJob { .. }
@@ -3205,7 +3206,11 @@ impl eframe::App for Cockpit {
                                 },
                             );
                             if in_hangar {
-                                ui.strong("STATION HANGAR");
+                                ui.strong(if self.in_captains_quarters() {
+                                    "CAPTAIN'S QUARTERS"
+                                } else {
+                                    "STATION HANGAR"
+                                });
                             } else {
                                 self.view_selector(ui);
                             }
@@ -3493,7 +3498,15 @@ impl eframe::App for Cockpit {
             .show(ctx, |ui| {
                 if in_hangar {
                     if let Some(pilot) = self.own() {
-                        self.hangar_view.ui(ui, &pilot, self.presentation_time());
+                        let now = self.presentation_time();
+                        let live = self.connected
+                            && self
+                                .snapshot
+                                .as_ref()
+                                .is_some_and(|s| now.saturating_sub(s.server_time_ms) <= 1500);
+                        if let Some(action) = self.hangar_view.ui(ui, &pilot, now, live) {
+                            self.activate_quarters_terminal(action);
+                        }
                     }
                 } else if self.view_mode != ViewMode::Tactical {
                     let now = self.presentation_time();

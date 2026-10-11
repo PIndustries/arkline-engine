@@ -8,11 +8,12 @@ has played the model, validated the direction, and explicitly approved publicati
 An open-source license has not been selected. This preview is not a public MMO or a
 financial network.
 
-## Preview 26.10.10.22
+## Preview 26.10.10.23
 
 Docking opens a [station hangar](docs/station-hangar.md) with a correctly scaled
 ship and an animated on-foot pilot. Leave the ship, walk around its berth, then
-return to the boarding marker before entering and undocking. See the
+return to the boarding marker before entering and undocking. A connected captain’s
+room adds furniture, live operational displays and in-world station terminals. See the
 [stability audit](docs/stability-audit.md) for remaining foundation gaps.
 
 The ship computer retains short conversations and combines follow-up instructions
@@ -197,8 +198,9 @@ they do not mine, trade, consume stock, create credits or change the ledger.
 ## Station assets and corporations
 
 Docking opens **Station** services with the active vessel, **Undock**, and shortcuts
-to **Hangar**, **Inventory**, **Corporation**, and **Exchange**. In Cockpit these services use the physical console; other views use floating
-windows. A modeled station interior is not included yet.
+to **Hangar**, **Inventory**, **Corporation**, and **Exchange**. The station interior
+contains a private berth and connected captain’s room, with service terminals
+opening the same functional panels. It is not a shared station concourse.
 
 **Inventory** is available in space as well as while docked. It shows active cargo,
 stored hull cargo, personal station ore, and market escrow. You can inspect remote

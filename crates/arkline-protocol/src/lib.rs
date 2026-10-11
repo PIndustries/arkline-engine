@@ -419,6 +419,9 @@ pub const GENESIS_HASH: &str = "000000000000000000000000000000000000000000000000
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "command", rename_all = "snake_case")]
 pub enum Request {
+    StationSit {
+        seated: bool,
+    },
     DisembarkShip,
     EnterShip,
     StationWalk {
@@ -877,6 +880,8 @@ pub const STATION_WALK_LEASE_MS: u64 = 500;
 pub const STATION_BOARD_RANGE_M: f64 = 3.0;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct StationAvatar {
+    #[serde(default)]
+    pub seated: bool,
     /// Feet position in the private hangar, meters; floor is y=0.
     pub position: [f64; 3],
     /// Radians; zero faces +X, positive turns toward +Z.
@@ -901,6 +906,65 @@ pub fn hangar_layout(class: ShipClass) -> HangarLayout {
         ship_center: [0.0, spec.height_m / 2.0, 0.0],
         boarding_point: [0.0, 0.0, spec.width_m / 2.0 + 3.0],
     }
+}
+
+/// A human-scale room in the positive-Z margin of each private hangar.
+#[derive(Debug, Clone, Copy)]
+pub struct QuartersLayout {
+    pub min: [f64; 3],
+    pub max: [f64; 3],
+    pub doorway_center: [f64; 3],
+    pub doorway_width: f64,
+    pub seat_point: [f64; 3],
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StationObstacleKind {
+    Wall,
+    Bed,
+    Desk,
+    Sofa,
+    Table,
+    Storage,
+}
+#[derive(Debug, Clone, Copy)]
+pub struct StationObstacle {
+    pub kind: StationObstacleKind,
+    pub min: [f64; 3],
+    pub max: [f64; 3],
+}
+pub const STATION_AVATAR_RADIUS_M: f64 = 0.3;
+pub fn quarters_layout(class: ShipClass) -> QuartersLayout {
+    let z = hangar_layout(class).half_width;
+    QuartersLayout {
+        min: [-9.0, 0.0, z - 13.0],
+        max: [9.0, 3.2, z - 1.0],
+        doorway_center: [0.0, 0.0, z - 13.0],
+        doorway_width: 4.0,
+        seat_point: [6.0, 0.0, z - 13.0 + 3.6],
+    }
+}
+pub fn station_obstacles(class: ShipClass) -> Vec<StationObstacle> {
+    use StationObstacleKind::*;
+    let q = quarters_layout(class);
+    let front = q.min[2];
+    let back = q.max[2];
+    let box_at = |kind, x0, x1, z0, z1, h| StationObstacle {
+        kind,
+        min: [x0, 0.0, z0],
+        max: [x1, h, z1],
+    };
+    vec![
+        box_at(Wall, -9.0, -2.0, front, front + 0.3, 3.2),
+        box_at(Wall, 2.0, 9.0, front, front + 0.3, 3.2),
+        box_at(Wall, -9.0, -8.7, front, back, 3.2),
+        box_at(Wall, 8.7, 9.0, front, back, 3.2),
+        box_at(Wall, -9.0, 9.0, back - 0.3, back, 3.2),
+        box_at(Bed, -8.0, -5.0, back - 5.0, back - 1.0, 0.65),
+        box_at(Desk, -7.0, -3.0, front + 1.5, front + 2.4, 0.9),
+        box_at(Sofa, 4.0, 8.0, front + 2.0, front + 3.2, 1.1),
+        box_at(Table, 4.5, 7.5, front + 4.0, front + 5.4, 0.6),
+        box_at(Storage, 6.5, 8.2, back - 3.0, back - 0.4, 2.2),
+    ]
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

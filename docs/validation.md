@@ -658,3 +658,28 @@ polish passed geometry and lint checks after the screenshot; its final native
 appearance has not been visually accepted. Private berth rendering and a
 procedurally articulated avatar are foundations, not a shared station concourse
 or production character rig. Public-release and owner acceptance remain open.
+
+## Connected captain's quarters — 26.10.10.23
+
+Local workspace tests passed, followed by 132 final client tests (9 opt-in ignored)
+and strict workspace Clippy. Explicit native GL rendering exported two room views
+for inspection; intersecting bay gantries and floor markers were removed before
+final capture. The export checks actual engine geometry, not the native input
+journey or complete GUI composition. A real egui pointer test covers terminal
+action, distance gating and overlay obstruction; text is clipped within an
+inscribed area of the projected physical screen.
+
+Server tests cover doorway/furniture collision, seating distance, neutral input
+while seated, reconnect persistence and old-save obstacle overlap migration. An
+independent journey walks both Pioneer and Monolith pilots into quarters, approaches
+the desk and sofa, sits, stands, returns to boarding and undocks; walking leaves
+ship position and economy unchanged. A reproduced same-frame key press/release
+bug no longer queues a stray walking command. Seating clears pending walking input.
+
+The packaged app connected QuartersQA23 and displayed build identity and station
+controls. Native state subsequently showed an on-foot pilot and correct out-of-range
+boarding restriction with the user interacting. Automated UI work stopped to avoid
+interfering with that session. Full native room/terminal/seating acceptance remains
+open. The room uses procedural prototype meshes and shading; production interior
+art, natural character/seat transitions and visual-fidelity acceptance remain work
+ahead, not completed claims. Repository visibility remains private.

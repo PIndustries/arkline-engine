@@ -21,6 +21,22 @@ saved position but neutralize walking. Leaving the ship releases manual remote
 control. Ship flight, undocking and resource jobs for the on-foot pilot are rejected;
 station movement cannot be submitted through a remote ship-control wrapper.
 
+## Captain's quarters
+
+The connected private room is 18 by 12 metres with a 3.2-metre ceiling regardless
+of hull class. Follow the boarding-deck path through its central doorway. Room
+walls, bed, desk, sofa, table and locker share their collision layout with the
+server. Nearby wall terminals open navigation, owned vessels, inventory,
+corporation services and the ship computer. Displays use current ship data and
+mark stale/disconnected telemetry as last known data. The hologram uses the active
+hull model. Existing service shortcuts remain available.
+
+Approach the sofa and click **Sit on sofa**. The server requires being within
+2 metres; **Stand up** or a movement key returns to walking. Neutral input and
+reconnection retain sitting. Boarding still requires returning to the ship marker.
+Newly introduced obstacles can overlap an old saved walking position; only such
+positions move to the safe boarding marker when the world loads.
+
 This foundation does not yet include a walkable ship interior, multiple-player
 concourse, animated boarding ramp or arbitrary station construction. The on-foot
 model has procedural articulation rather than a production character asset/rig.
