@@ -238,6 +238,40 @@ impl Layout {
         }
         Ok(())
     }
+    /// Shutdown-only bounded drain. Normal frames never wait for disk writes.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn flush_on_exit(&mut self, budget: std::time::Duration) -> Result<(), String> {
+        let deadline = std::time::Instant::now() + budget;
+        loop {
+            if let Some(receiver) = self.pending_save.take() {
+                match receiver
+                    .recv_timeout(deadline.saturating_duration_since(std::time::Instant::now()))
+                {
+                    Ok(Ok(())) => {}
+                    Ok(Err(error)) => {
+                        self.changed = true;
+                        return Err(error);
+                    }
+                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                        self.pending_save = Some(receiver);
+                        return Err("Layout save is still pending at shutdown".into());
+                    }
+                    Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                        self.changed = true;
+                        return Err("Layout save worker stopped at shutdown".into());
+                    }
+                }
+            }
+            if !self.changed {
+                return Ok(());
+            }
+            if std::time::Instant::now() >= deadline {
+                return Err("Latest layout could not be saved within shutdown deadline".into());
+            }
+            self.retry_after = None;
+            self.finish_frame(false)?;
+        }
+    }
     pub fn reset(&mut self) {
         self.generation += 1;
         self.entries.clear();
@@ -361,6 +395,34 @@ mod tests {
         assert!(layout.changed && layout.retry_after.is_some());
         layout.finish_frame(false).unwrap();
         assert!(layout.pending_save.is_none());
+    }
+    #[test]
+    fn shutdown_flush_saves_latest_after_older_writer_and_bounds_stalls() {
+        let dir =
+            std::env::temp_dir().join(format!("arkline-layout-shutdown-{}", std::process::id()));
+        let mut layout = Layout::load(&dir);
+        let (done, receiver) = std::sync::mpsc::channel();
+        layout.pending_save = Some(receiver);
+        layout.pinned = true;
+        layout.settings_changed();
+        assert!(layout.flush_on_exit(std::time::Duration::ZERO).is_err());
+        assert!(layout.pending_save.is_some() && layout.changed);
+        assert!(
+            !dir.join("layout.json").exists(),
+            "must not start second writer"
+        );
+        done.send(Ok(())).unwrap();
+        layout
+            .flush_on_exit(std::time::Duration::from_secs(2))
+            .unwrap();
+        assert!(Layout::load(&dir).pinned);
+        layout.pinned = false;
+        layout.settings_changed();
+        layout
+            .flush_on_exit(std::time::Duration::from_secs(2))
+            .unwrap();
+        assert!(!Layout::load(&dir).pinned);
+        fs::remove_dir_all(dir).unwrap();
     }
     #[test]
     fn reflow_ignores_pointer_capture_and_reset_restores_default_anchors() {

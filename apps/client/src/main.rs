@@ -3249,6 +3249,10 @@ fn location_label(location: &Location) -> &'static str {
 }
 impl eframe::App for Cockpit {
     fn on_exit(&mut self, _: Option<&eframe::glow::Context>) {
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Err(error) = self.layout.flush_on_exit(Duration::from_secs(1)) {
+            eprintln!("{error}");
+        }
         // macOS application termination may bypass unwinding main's stack.
         // Shut down only this cockpit's owned host inside the lifecycle callback.
         #[cfg(not(target_arch = "wasm32"))]
