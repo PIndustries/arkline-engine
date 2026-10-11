@@ -52,7 +52,8 @@ fn multi_trip_delivery_survives_takeover_disconnect_and_crash_without_economic_r
         assert!(pilot.ore <= cargo_capacity(pilot.ship_class));
         saw_full |= pilot.ore == cargo_capacity(pilot.ship_class);
         saw_mining_drone |= pilot.drones.iter().any(|d| d.mining_cycle.is_some());
-        saw_two_turrets |= pilot.mining_modules.iter().all(|m| m.target_id.is_some());
+        saw_two_turrets |= pilot.mining_modules.len() == 2
+            && pilot.mining_modules.iter().all(|m| m.target_id.is_some());
         let job = &world.resource_jobs[0];
         if job.phase.is_terminal() {
             assert_eq!(job.phase, ResourceJobPhase::Completed, "{}", job.message);

@@ -50,6 +50,33 @@ class Pilot:
         self.socket.close()
 
 
+
+def wait_for_server(proc, log_path, offset, timeout=5):
+    """Read only this child's startup output; never reserve/release a guessed port."""
+    deadline = time.monotonic() + timeout
+    with log_path.open('rb') as reader:
+        reader.seek(offset)
+        pending = b''
+        total = 0
+        while time.monotonic() < deadline:
+            assert proc.poll() is None, 'local server exited'
+            chunk = reader.read(4096)
+            total += len(chunk)
+            assert total <= 65536, 'local server startup output exceeded limit'
+            pending += chunk
+            while b'\n' in pending:
+                line, pending = pending.split(b'\n', 1)
+                prefix = b'Arkline server listening on 127.0.0.1:'
+                if line.startswith(prefix):
+                    value = line[len(prefix):]
+                    assert value.isdigit(), 'invalid local server readiness port'
+                    port = int(value)
+                    assert 0 < port <= 65535, 'invalid local server readiness port'
+                    return port
+            time.sleep(.05)
+    raise AssertionError('local server startup timeout')
+
+
 def run(binary_dir):
     receipt = {'stages': [], 'transport': 'isolated loopback TCP', 'tokens_logged': False}
     started = time.monotonic()
@@ -64,18 +91,10 @@ def run(binary_dir):
         log = (tmp/'server.log').open('w')
         def start():
             nonlocal proc
-            with socket.socket() as reservation:
-                reservation.bind(('127.0.0.1', 0))
-                port = reservation.getsockname()[1]
-            proc = subprocess.Popen([str(binary_dir/'arkline-server'), '--bind', f'127.0.0.1:{port}', '--db', str(tmp/'world.sqlite')], stdout=log, stderr=log)
-            for _ in range(100):
-                assert proc.poll() is None, 'local server exited'
-                try:
-                    with socket.create_connection(('127.0.0.1', port), timeout=.2):
-                        return port
-                except OSError:
-                    time.sleep(.05)
-            raise AssertionError('local server startup timeout')
+            log.flush()
+            offset = (tmp/'server.log').stat().st_size
+            proc = subprocess.Popen([str(binary_dir/'arkline-server'), '--bind', '127.0.0.1:0', '--db', str(tmp/'world.sqlite')], stdout=log, stderr=log)
+            return wait_for_server(proc, tmp/'server.log', offset)
         try:
             port = start()
             manual = Pilot(port, 'ManualMiner'); ai = Pilot(port, 'JobMiner')
