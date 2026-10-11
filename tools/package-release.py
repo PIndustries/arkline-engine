@@ -21,6 +21,14 @@ def run(*args, cwd=ROOT, capture=False):
                           stdout=subprocess.PIPE if capture else None).stdout
 
 
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
 def archive(directory, output, windows=False):
     if windows:
         with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED, compresslevel=6, strict_timestamps=False) as handle:
@@ -92,10 +100,20 @@ def notices(source, destination):
     (destination / "dependencies.json").write_text(json.dumps(inventory, indent=2) + "\n")
 
 
+def build_plan(host, system, windows_cross=False):
+    if windows_cross:
+        if system != "Linux" or not host.startswith("x86_64-"):
+            raise ValueError("Windows cross packaging requires an x86_64 Linux host")
+        target = "x86_64-pc-windows-msvc"
+        return target, True, ["cargo", "xwin", "build", "--target", target], Path(target) / "release", ["wine"]
+    return host, system == "Windows", ["cargo", "build"], Path("release"), []
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output", type=Path, help="New or empty directory outside the repository")
     parser.add_argument("--allow-dirty", action="store_true", help="Local review only; mark source as uncommitted")
+    parser.add_argument("--windows-cross", action="store_true", help="Linux x64 cargo-xwin build; Wine compatibility smoke, not native Windows QA")
     args = parser.parse_args()
     output = args.output.resolve()
     if output == ROOT or ROOT in output.parents:
@@ -112,7 +130,10 @@ def main():
     system = platform.system()
     if system not in {"Darwin", "Linux", "Windows"}:
         parser.error(f"Unsupported packaging host: {system}")
-    windows = system == "Windows"
+    try:
+        target, windows, build_command, binary_subdir, executable_runner = build_plan(target, system, args.windows_cross)
+    except ValueError as error:
+        parser.error(str(error))
     suffix = ".zip" if windows else ".tar.gz"
     extension = ".exe" if windows else ""
     output.mkdir(parents=True, exist_ok=True)
@@ -136,13 +157,15 @@ def main():
                     "uncommitted_source": dirty, "target": target,
                     "rustc": run("rustc", "-V", capture=True).strip(),
                     "source_archive": source_name + ".tar.gz",
+                    "build_host": platform.system(),
+                    "validation_runtime": "Wine compatibility only; native Windows GUI/audio not tested" if args.windows_cross else "native host",
                     "license": "AGPL-3.0-only", "apple_signing": "ad-hoc; not notarized" if system == "Darwin" else None}
         (source / "RELEASE.json").write_text(json.dumps(manifest, indent=2) + "\n")
         # Compile from the exact snapshot that will ship, with vendored dependencies.
         env = os.environ.copy()
         env["CARGO_TARGET_DIR"] = str(ROOT / "target")
-        subprocess.run(["cargo", "build", "--workspace", "--locked", "--offline", "--release"], cwd=source, env=env, check=True)
-        binaries = ROOT / "target/release"
+        subprocess.run(build_command + ["--workspace", "--locked", "--offline", "--release"], cwd=source, env=env, check=True)
+        binaries = ROOT / "target" / binary_subdir
         client = stage / f"Arkline-{version}-{target}-client"
         server = stage / f"Arkline-{version}-{target}-server"
         client.mkdir()
@@ -179,7 +202,7 @@ def main():
             "listener behind a trusted HTTPS reverse proxy or tunnel. Never expose plaintext tokens.\n"
             "See deploy/ in the matching source and docs/ for limits and source-license obligations.\n")
         for binary in ["arkline-server", "arkline", "arkline-verifier"]:
-            run(str(server / (binary + extension)), "--help", cwd=server, capture=True)
+            run(*executable_runner, str(server / (binary + extension)), "--help", cwd=server, capture=True)
         for directory in [client, server]:
             archive(directory, output / (directory.name + suffix), windows)
         archive(source, output / (source.name + ".tar.gz"))
@@ -187,8 +210,7 @@ def main():
     checksums = []
     for path in sorted(output.iterdir()):
         if path.is_file():
-            with path.open("rb") as handle:
-                digest = hashlib.file_digest(handle, "sha256").hexdigest()
+            digest = sha256_file(path)
             checksums.append(f"{digest}  {path.name}")
     (output / "SHA256SUMS").write_text("\n".join(checksums) + "\n")
     print(f"Prepared {output}; no artifacts were published.")

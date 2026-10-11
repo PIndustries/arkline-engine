@@ -17,6 +17,27 @@ spec.loader.exec_module(package)
 
 
 class PackagingTests(unittest.TestCase):
+    def test_windows_cross_uses_target_artifacts_and_explicit_wine(self):
+        target, windows, command, directory, runner = package.build_plan("x86_64-unknown-linux-gnu", "Linux", True)
+        self.assertEqual(target, "x86_64-pc-windows-msvc")
+        self.assertTrue(windows)
+        self.assertEqual(command, ["cargo", "xwin", "build", "--target", target])
+        self.assertEqual(directory, Path(target) / "release")
+        self.assertEqual(runner, ["wine"])
+        with self.assertRaises(ValueError):
+            package.build_plan("aarch64-apple-darwin", "Darwin", True)
+
+    def test_streaming_checksum_matches_known_bytes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "archive"
+            path.write_bytes(b"abc")
+            self.assertEqual(package.sha256_file(path),
+                             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+
+    def test_native_windows_stays_native(self):
+        self.assertEqual(package.build_plan("x86_64-pc-windows-msvc", "Windows"),
+                         ("x86_64-pc-windows-msvc", True, ["cargo", "build"], Path("release"), []))
+
     def test_notices_include_embedded_font_terms(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
