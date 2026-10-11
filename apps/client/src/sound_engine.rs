@@ -1,6 +1,8 @@
 //! Original procedural audio. Device lifetime belongs to a worker; the callback
 //! only copies a mix, consumes bounded cues, and renders into CPAL's buffer.
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+#[cfg(not(target_arch = "wasm32"))]
+use cpal::traits::HostTrait;
+use cpal::traits::{DeviceTrait, StreamTrait};
 use std::sync::{
     atomic::{AtomicU64, Ordering},
     mpsc::{self, Receiver, SyncSender},
@@ -151,9 +153,25 @@ impl Drop for SoundEngine {
     }
 }
 fn open_stream(shared: Arc<Shared>, cues: Receiver<Cue>) -> Result<cpal::Stream, String> {
+    #[cfg(not(target_arch = "wasm32"))]
     let device = cpal::default_host()
         .default_output_device()
         .ok_or("No default output device")?;
+    #[cfg(target_arch = "wasm32")]
+    let device: cpal::Device = {
+        // CPAL 0.15's enumeration probes AudioContext through eval, which a
+        // restrictive site CSP correctly rejects. Probe the global property
+        // without executing code, then use CPAL's public Web Audio device.
+        let context = js_sys::Reflect::get(
+            &js_sys::global(),
+            &wasm_bindgen::JsValue::from_str("AudioContext"),
+        )
+        .map_err(|_| "Browser AudioContext capability check failed")?;
+        if !context.is_function() {
+            return Err("This browser has no Web Audio output".into());
+        }
+        cpal::platform::WebAudioDevice.into()
+    };
     let supported = device.default_output_config().map_err(|e| e.to_string())?;
     let config = supported.config();
     let stream = match supported.sample_format() {
