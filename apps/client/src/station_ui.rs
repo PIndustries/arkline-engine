@@ -191,16 +191,15 @@ impl Cockpit {
             ui.small("Return to the illuminated boarding marker to enter your ship.");
         } else {
             ui.strong("ABOARD · DOCKED");
-            if pilot.ship_class == ShipClass::Pioneer {
-                if ui
+            if pilot.ship_class == ShipClass::Pioneer
+                && ui
                     .add_enabled(
                         self.can_operate() && interior_available,
                         egui::Button::new("Explore Pioneer interior"),
                     )
                     .clicked()
-                {
-                    self.send(Request::EnterInterior);
-                }
+            {
+                self.send(Request::EnterInterior);
             }
 
             ui.horizontal(|ui| {
