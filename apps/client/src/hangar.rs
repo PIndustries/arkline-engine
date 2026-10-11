@@ -189,7 +189,12 @@ impl HangarView {
             rect.left_top() + egui::vec2(20.0, 85.0),
             egui::Align2::LEFT_TOP,
             format!(
-                "PRIVATE BAY  /  {}\n{}",
+                "{}  /  {}\n{}",
+                if interior {
+                    "ONBOARD · DECK ONE"
+                } else {
+                    "PRIVATE BAY"
+                },
                 pilot.ship_class.spec().name,
                 if walking {
                     "ON FOOT · WASD / arrows walk · Right-drag look · Wheel zoom"
