@@ -159,3 +159,5 @@ Pioneer is the first implementation target. The large ships' compact human cores
 | Save and restart | Ownership, cargo, job progress and implemented persistent state survive without duplication. |
 
 Operational state belongs on the server. The client visualizes it and submits requests. Sound, lighting, animations and cockpit displays should follow the same confirmed state transitions, so they explain what is happening rather than inventing activity.
+
+See the [vessel engineering contract](engineering-contract.md) for proposed lifecycle states, energy/mass/heat accounting and structural load requirements.

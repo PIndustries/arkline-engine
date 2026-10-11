@@ -35,3 +35,5 @@ Tracking: [GLB and artwork pipeline #10](https://github.com/PIndustries/arkline-
 [Room-by-room fixture plans and connection schedules](room-services.md).
 
 [How the ship subsystems work together](subsystem-behavior.md).
+
+See the [vessel engineering contract](engineering-contract.md) for proposed lifecycle states, energy/mass/heat accounting and structural load requirements.
