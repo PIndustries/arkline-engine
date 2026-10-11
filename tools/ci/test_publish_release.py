@@ -3,6 +3,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import stat
 import tarfile
@@ -120,6 +121,27 @@ class PublicationSafety(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError,"rollback failed"):
                 p.deploy_verified_web("new@digest","old@digest",[("url","hash")],"26.10.11.6")
 
+    def test_public_staging_is_readable_with_private_umask_without_touching_credentials(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); stage = root / "public"
+            previous_umask = os.umask(0o077)
+            try:
+                stage.mkdir()
+                folder = stage / "web"; folder.mkdir()
+                page = folder / "index.html"; page.write_text("public")
+                config = stage / "nginx.conf"; config.write_text("public config")
+                secret = root / "credential"; secret.write_text("private")
+            finally:
+                os.umask(previous_umask)
+            self.assertEqual(stat.S_IMODE(config.stat().st_mode), 0o600)
+            p.prepare_public_tree(stage)
+            for directory in [stage, folder]: self.assertEqual(stat.S_IMODE(directory.stat().st_mode), 0o755)
+            for file in [page, config]: self.assertEqual(stat.S_IMODE(file.stat().st_mode), 0o644)
+            self.assertEqual(stat.S_IMODE(secret.stat().st_mode), 0o600)
+            (stage / "link").symlink_to(secret)
+            with self.assertRaises(ValueError): p.prepare_public_tree(stage)
+            self.assertEqual(stat.S_IMODE(secret.stat().st_mode), 0o600)
+
     def test_image_build_requires_isolated_explicit_builder_and_loaded_output(self):
         image = "ghcr.io/pindustries/arkline-server"
         calls = []
@@ -137,7 +159,7 @@ class PublicationSafety(unittest.TestCase):
         self.assertEqual(result, image + "@sha256:" + "a" * 64)
         build = calls[1]
         self.assertEqual(build[:7], ("docker", "buildx", "build", "--builder", "arkline-publish-123-1", "--load", "--platform"))
-        self.assertEqual(calls[2], ("docker", "push", image + ":revision"))
+        self.assertEqual(calls[2], ("docker", "push", image + ":revision-arkline-publish-123-1"))
         for builder, driver in [("", b"Driver: docker-container"), ("default", b"Driver: docker"), ("arkline-publish-123-1", b"Driver: docker"), ("arkline-publish-123-1", b"Name: missing driver"), ("arkline-publish-123-1", b"Driver: docker-container\nDriver: docker-container")]:
             with self.subTest(builder=builder, driver=driver), patch.dict(p.os.environ, {"ARKLINE_BUILDER": builder}), patch.object(p, "command", return_value=driver) as command:
                 with self.assertRaises(ValueError):

@@ -190,11 +190,21 @@ def rollout(kind, name, namespace, image):
     kube("-n", namespace, "rollout", "status", f"{kind}/{name}", "--timeout=300s")
 
 
+def prepare_public_tree(root):
+    """Only the public web-image staging tree: credentials stay outside it."""
+    paths = [root, *root.rglob("*")]
+    if any(path.is_symlink() for path in paths):
+        raise ValueError("Public image staging must not contain symlinks")
+    for path in paths:
+        path.chmod(0o755 if path.is_dir() else 0o644)
+
+
 def private_image(name, tag, context, dockerfile, commit):
-    image = f"ghcr.io/pindustries/{name}:{tag}"
     builder = os.environ.get("ARKLINE_BUILDER", "")
     if not re.fullmatch(r"arkline-publish-[0-9]+-[0-9]+", builder):
         raise ValueError("An explicit job-scoped Arkline publication builder is required")
+    # Each publication attempt gets distinct registry tags; prior images remain intact.
+    image = f"ghcr.io/pindustries/{name}:{tag}-{builder}"
     inspection = command("docker", "buildx", "inspect", builder)
     if isinstance(inspection, bytes):
         inspection = inspection.decode("utf-8", errors="strict")
@@ -426,6 +436,7 @@ def publish(args, out, folders, browser, commit, plan):
         shutil.copy2(source / "deploy/web-nginx.conf", stage / "nginx.conf")
         (stage / "release.conf").write_text(release_redirect(version))
         shutil.copy2(source / "deploy/web.Dockerfile", stage / "Dockerfile")
+        prepare_public_tree(stage)
         server_image = private_image("arkline-server", commit, source, source / "deploy/Dockerfile", commit)
         web_image = private_image("arkline-web", f"{commit}-release-{args.run_id}", stage, stage / "Dockerfile", commit)
         plan.update(server_image=server_image, web_image=web_image, previous_web_image=old)
