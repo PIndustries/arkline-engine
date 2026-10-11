@@ -1,0 +1,17 @@
+# Strategic merge patch for the existing arkline-web Deployment.
+spec:
+  template:
+    spec:
+      securityContext: {fsGroup: 101}
+      containers:
+        - name: web
+          command: [nginx, -c, /etc/arkline-nginx/nginx.conf, -g, 'daemon off;']
+          ports: [{name: origin-https, containerPort: 8443}]
+          volumeMounts:
+            - {name: origin-tls, mountPath: /run/arkline-tls, readOnly: true}
+            - {name: origin-nginx, mountPath: /etc/arkline-nginx, readOnly: true}
+      volumes:
+        - name: origin-tls
+          secret: {secretName: arkline-web-origin-tls, defaultMode: 0440}
+        - name: origin-nginx
+          configMap: {name: arkline-web-tls-nginx}

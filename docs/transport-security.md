@@ -6,6 +6,9 @@ transit; it is not application encryption that hides them from the game authorit
 When Cloudflare terminates public TLS, the edge can also read those messages.
 Private end-to-end encrypted chat would require a separate protocol and key design.
 
+The [web origin configuration](../deploy/web-origin-tls/README.md) covers marketing
+and browser/download TLS, including the same-pod marketing proxy boundary.
+
 ## Native client trust
 
 Desktop clients explicitly select Rustls's ring provider and the public WebPKI
@@ -96,7 +99,8 @@ projected Secret files resolve through one `..data` generation so a rotation
 cannot pair a new certificate with an old key. A malformed or mismatched update
 rejects new connections; it never falls back to plaintext or an older identity.
 Use a dedicated cert-manager CA Issuer/Certificate or your operator's issuer to
-renew leaves before expiry. Keep the CA key in the issuer's protected Secret,
+renew leaves before expiry. Keep the CA key in the issuer's protected Secret in cert-manager's
+cluster-resource namespace,
 never mounted in game pods. Secret projection can lag renewal; verify the leaf
 serial/expiry actually presented by each server after rotation. For ordinary
 files, atomically switch a directory containing the matching pair. Rotation does

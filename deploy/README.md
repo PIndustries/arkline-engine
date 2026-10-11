@@ -1,6 +1,6 @@
-# Private official-world validation
+# Deploying Arkline
 
-This directory prepares Arkline for **P.Industries' selected private Kubernetes cluster**. It does not publish an endpoint. No cluster deployment is implied by these files.
+This directory contains the private-world baseline and the public transport examples. Applying `private-world.yaml` alone does not publish an endpoint. See [public relays](PUBLIC.md), [verified transport](../docs/transport-security.md), and [web origin TLS](web-origin-tls/README.md) for the additional components. Source manifests alone are not evidence of a completed deployment.
 
 ## Target prerequisites
 
@@ -10,11 +10,11 @@ The target's existing ingress and tunnel services are outside this deployment's 
 
 ## Server constraints
 
-The server is plaintext JSON-lines over TCP, with a bearer resume token in Connect. It has no native TLS and is not an HTTP/WebSocket service. An ordinary HTTP Ingress is not an appropriate game transport. Do not expose TCP7777 publicly. First access is an authenticated Kubernetes port-forward over SSH, bound to loopback on both machines.
+The server supports JSON-lines over private TCP and the same game protocol over WebSocket. `--ws-bind` enables `/ws` and simulation-aware `/health`; adding `--tls-cert` and `--tls-key` terminates native TLS on that listener. Public clients use certificate-verified WSS. Keep the raw TCP listener on loopback/private operator access because Connect carries a bearer resume token. Do not expose TCP7777 publicly. The baseline below uses authenticated Kubernetes port-forward over SSH for initial private validation; the public path uses a verified HTTPS tunnel origin.
 
 One process owns one SQLite world, including its WAL and lifetime lock file. Use exactly **one replica** and one block-backed RWO volume. Extra pods are not scale-out or high availability. Do not force-delete a pod while its node may still be writing; confirm fencing before recovery. Every node/process restart cancels live automation and restores durable economy according to existing server rules.
 
-The transport currently allows 64 connections, one blocking worker thread each. A global mutex serializes simulation and requests. Resource requests/limits here are initial validation budgets, not load-test results. TCP readiness proves a listening socket, not healthy simulation progress; no misleading TCP-only liveness restart is configured.
+The transport currently allows 64 connections, one blocking worker thread each. A global mutex serializes simulation and requests. Resource requests/limits here are initial validation budgets, not load-test results. The baseline TCP readiness check proves only a listening socket. For a TLS origin use the certificate-verified `--tls-health` executable probe described in the transport guide; it also requires a recent successful simulation tick.
 
 ## Build and release boundary
 
@@ -59,4 +59,4 @@ Required evidence before calling this hosted validation successful:
 4. An unauthorized direct in-cluster connection is blocked; there is no public game listener or ingress route.
 5. A SQLite-consistent backup and separate restore are tested. Use SQLite's backup API or stop the sole writer before backing up the volume; copying only a live `.sqlite` file can omit WAL data. Longhorn replication is not a backup.
 
-A public official endpoint remains separate work: encrypted client transport, admission/account abuse controls, appropriate rate limits and capacity testing, monitoring of ticks/ledger/volume health, and an operator recovery procedure. Existing economic hash chains are not signed global consensus or a community reward system.
+Public deployment additionally needs admission/account abuse controls, appropriate rate limits and measured capacity, monitoring of ticks/ledger/volume health, and an operator recovery procedure. The public WebSocket implementation and TLS configuration do not by themselves establish availability or account-system readiness. Existing economic hash chains are not signed global consensus or a community reward system.
