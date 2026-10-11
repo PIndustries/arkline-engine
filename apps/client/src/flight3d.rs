@@ -17,6 +17,8 @@ pub mod hangar;
 #[path = "cockpit_maps.rs"]
 mod cockpit_maps;
 use cockpit_maps::*;
+#[path = "sun_shadows.rs"]
+mod sun_shadows;
 #[path = "world_visuals.rs"]
 mod world_visuals;
 use world_visuals::*;
@@ -788,10 +790,10 @@ impl FlightView {
                 let renderer = send_wrapper::SendWrapper::new(renderer);
                 ui.painter().add(egui::PaintCallback {
                     rect,
-                    callback: Arc::new(egui_glow::CallbackFn::new(move |_, _| {
+                    callback: Arc::new(egui_glow::CallbackFn::new(move |_, painter| {
                         if let Ok(mut renderer) = renderer.lock() {
                             unsafe {
-                                renderer.paint(&frame);
+                                renderer.paint(&frame, painter.intermediate_fbo());
                             }
                         }
                     })),
@@ -1789,6 +1791,9 @@ struct Renderer {
     station_batches: Vec<(usize, Vec3, f32)>,
     feed_cache: Vec<CachedFeed>,
     destroyed: bool,
+    sun_shadows: Vec<sun_shadows::SunShadows>,
+    shadow_fallback: glow::Texture,
+    shadow_failed: bool,
     turrets: std::collections::HashMap<(String, u8), TurretState>,
 }
 impl Renderer {
@@ -1796,7 +1801,15 @@ impl Renderer {
         if gl.version().is_embedded && gl.version().major < 3 {
             return Err("Arkline 3D requires WebGL2 / OpenGL ES 3 or newer".into());
         }
-        let program = compile(&gl, VERTEX, FRAGMENT)?;
+        let program = compile(
+            &gl,
+            VERTEX,
+            &FRAGMENT.replacen(
+                "#version 150",
+                &format!("#version 150\n{}", sun_shadows::GLSL),
+                1,
+            ),
+        )?;
         let background = compile(&gl, BACK_VERTEX, BACK_FRAGMENT)?;
         #[cfg(target_arch = "wasm32")]
         let feed_program = compile(&gl, BACK_VERTEX, FEED_FRAGMENT)?;
@@ -1855,6 +1868,7 @@ impl Renderer {
             });
         }
         gl.bind_vertex_array(None);
+        let shadow_fallback = sun_shadows::fallback(&gl)?;
         Ok(Self {
             gl,
             program,
@@ -1867,6 +1881,9 @@ impl Renderer {
             station_batches,
             feed_cache: Vec::new(),
             destroyed: false,
+            sun_shadows: Vec::new(),
+            shadow_fallback,
+            shadow_failed: false,
             turrets: std::collections::HashMap::new(),
         })
     }
@@ -1967,7 +1984,7 @@ impl Renderer {
                 gl.clear_color(0.0, 0.0, 0.0, 1.0);
                 gl.depth_mask(true);
                 gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
-                self.paint(frame);
+                self.paint(frame, Some(framebuffer));
                 self.feed_cache[index].painted_ms = Some(frame.now);
             }
             gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(framebuffer));
@@ -2076,7 +2093,7 @@ impl Renderer {
             gl.disable(glow::SCISSOR_TEST);
         }
     }
-    unsafe fn paint(&mut self, frame: &Frame) {
+    unsafe fn paint(&mut self, frame: &Frame, callback_target: Option<glow::Framebuffer>) {
         let space = frame.space;
         // Main and remote passes may show different systems. Keep recently drawn
         // turret state between passes so neither camera resets the other's slew.
@@ -2133,6 +2150,16 @@ impl Renderer {
         if self.destroyed {
             return;
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        let callback_target = self
+            .gl
+            .get_parameter_framebuffer(glow::DRAW_FRAMEBUFFER_BINDING)
+            .or(callback_target);
+        let shadow_texture = self.paint_sun_shadow(
+            frame,
+            callback_target,
+            if frame.drone_camera { 512 } else { 1024 },
+        );
         let gl = &self.gl;
         gl.disable(glow::CULL_FACE);
         gl.disable(glow::BLEND);
@@ -2346,6 +2373,7 @@ impl Renderer {
         gl.depth_mask(false);
         gl.bind_vertex_array(None);
         gl.use_program(None);
+        self.restore_shadow_texture(shadow_texture);
     }
     /// Additive, depth-tested effects do not write depth or obscure UI meshes.
     unsafe fn paint_warp_tunnel(&self, frame: &Frame) {
@@ -2778,6 +2806,10 @@ impl Renderer {
             return;
         }
         self.destroyed = true;
+        self.gl.delete_texture(self.shadow_fallback);
+        for shadow in self.sun_shadows.drain(..) {
+            shadow.destroy(&self.gl);
+        }
         for cache in self.feed_cache.drain(..) {
             cache.destroy(&self.gl);
         }
@@ -4129,7 +4161,7 @@ if(material_kind==1 || material_kind==2){
     }
     // Existing screen panels use a dark dielectric backing; no canopy transmission is invented.
     if(material_params.w>0.5) albedo*=0.70;
-    lit=ark_brdf(n,v,l,albedo,roughness,metallic)*vec3(3.8,3.45,2.95);
+    lit=ark_brdf(n,v,l,albedo,roughness,metallic)*vec3(3.8,3.45,2.95)*ark_sun_visibility(world,n,l);
     lit+=ark_environment(n,v,albedo,roughness,metallic,environment_atmosphere,environment_up);
     lit+=albedo*max(emission,0.0);
 }
@@ -4287,6 +4319,7 @@ mod tests {
                 own: "fixture".into(),
                 docking: None,
             };
+            sun_shadows::assert_occluder_depth(&mut renderer, &frame, target.framebuffer);
             let info = || egui::PaintCallbackInfo {
                 viewport: egui::Rect::from_min_size(egui::pos2(32., 32.), egui::vec2(64., 64.)),
                 clip_rect: egui::Rect::from_min_size(egui::pos2(40., 40.), egui::vec2(48., 48.)),
