@@ -448,6 +448,7 @@ mod remote_tests {
     }
     fn main_frame() -> Frame {
         Frame {
+            lighting_quality: Default::default(),
             cockpit_vp: Mat4::IDENTITY,
             snapshot_time: 1000,
             planet_vp: Mat4::IDENTITY,

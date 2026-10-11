@@ -301,6 +301,36 @@ impl Renderer {
         gl.active_texture(active);
         (old_texture, active, old_sampler)
     }
+    /// Hangar uses a separate coordinate space and must not reuse a flight shadow map.
+    pub(super) unsafe fn disable_sun_shadow(
+        &self,
+    ) -> (Option<glow::Texture>, u32, Option<glow::Sampler>) {
+        let gl = &self.gl;
+        let active = gl.get_parameter_i32(glow::ACTIVE_TEXTURE) as u32;
+        gl.active_texture(glow::TEXTURE0 + UNIT);
+        #[cfg(not(target_arch = "wasm32"))]
+        let old = (
+            gl.get_parameter_texture(glow::TEXTURE_BINDING_2D),
+            active,
+            gl.get_parameter_sampler(glow::SAMPLER_BINDING),
+        );
+        #[cfg(target_arch = "wasm32")]
+        let old = (None, active, None);
+        gl.bind_sampler(UNIT, None);
+        gl.bind_texture(glow::TEXTURE_2D, Some(self.shadow_fallback));
+        gl.uniform_1_f32(
+            gl.get_uniform_location(self.program, "ark_shadow_enabled")
+                .as_ref(),
+            0.0,
+        );
+        gl.uniform_1_i32(
+            gl.get_uniform_location(self.program, "ark_shadow_map")
+                .as_ref(),
+            UNIT as i32,
+        );
+        gl.active_texture(active);
+        old
+    }
     pub(super) unsafe fn restore_shadow_texture(
         &self,
         old: (Option<glow::Texture>, u32, Option<glow::Sampler>),
@@ -309,45 +339,6 @@ impl Renderer {
         self.gl.bind_texture(glow::TEXTURE_2D, old.0);
         self.gl.bind_sampler(UNIT, old.2);
         self.gl.active_texture(old.1);
-    }
-}
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn caster_budget_retains_nearest_geometry() {
-        let mut casters = Vec::new();
-        for x in (0..1024).rev() {
-            push_caster(
-                &mut casters,
-                (0, Mat4::from_translation(Vec3::X * x as f32)),
-                Vec3::ZERO,
-            );
-        }
-        assert_eq!(casters.len(), MAX_CASTERS);
-        assert!(casters.iter().all(|(_, m)| m.w_axis.x < MAX_CASTERS as f32));
-    }
-    #[test]
-    fn receiver_and_sun_caster_are_in_depth_volume() {
-        let eye = Vec3::new(14.0, -3.0, 91.0);
-        let matrix = light_matrix(eye, 1024);
-        for p in [eye, eye + Vec3::new(-0.5, 0.8, 0.65).normalize() * 120.0] {
-            let q = matrix.project_point3(p);
-            assert!(q.abs().max_element() < 1.0);
-        }
-    }
-    #[test]
-    fn camera_relative_au_origin_keeps_local_precision() {
-        let space = Space {
-            origin: [1.5e12, -3.0e12, 8.0e11],
-        };
-        let p = space.scene([1.5e12 + 72.0, -3.0e12, 8.0e11]);
-        assert!((p.x - 0.72).abs() < 1e-5);
-        assert!(light_matrix(p, 2048).is_finite());
-    }
-    #[test]
-    fn projection_is_finite_for_disabled_size() {
-        assert!(light_matrix(Vec3::ZERO, 0).is_finite());
     }
 }
 
@@ -425,4 +416,44 @@ pub(super) unsafe fn assert_occluder_depth(
     );
     gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(target));
     renderer.restore_shadow_texture(old);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn caster_budget_retains_nearest_geometry() {
+        let mut casters = Vec::new();
+        for x in (0..1024).rev() {
+            push_caster(
+                &mut casters,
+                (0, Mat4::from_translation(Vec3::X * x as f32)),
+                Vec3::ZERO,
+            );
+        }
+        assert_eq!(casters.len(), MAX_CASTERS);
+        assert!(casters.iter().all(|(_, m)| m.w_axis.x < MAX_CASTERS as f32));
+    }
+    #[test]
+    fn receiver_and_sun_caster_are_in_depth_volume() {
+        let eye = Vec3::new(14.0, -3.0, 91.0);
+        let matrix = light_matrix(eye, 1024);
+        for p in [eye, eye + Vec3::new(-0.5, 0.8, 0.65).normalize() * 120.0] {
+            let q = matrix.project_point3(p);
+            assert!(q.abs().max_element() < 1.0);
+        }
+    }
+    #[test]
+    fn camera_relative_au_origin_keeps_local_precision() {
+        let space = Space {
+            origin: [1.5e12, -3.0e12, 8.0e11],
+        };
+        let p = space.scene([1.5e12 + 72.0, -3.0e12, 8.0e11]);
+        assert!((p.x - 0.72).abs() < 1e-5);
+        assert!(light_matrix(p, 2048).is_finite());
+    }
+    #[test]
+    fn projection_is_finite_for_disabled_size() {
+        assert!(light_matrix(Vec3::ZERO, 0).is_finite());
+    }
 }

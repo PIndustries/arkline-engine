@@ -2164,7 +2164,7 @@ impl Renderer {
         let shadow_texture = self.paint_sun_shadow(
             frame,
             callback_target,
-            if frame.drone_camera { 512 } else { 1024 },
+            frame.lighting_quality.shadow_size(frame.drone_camera),
         );
         let gl = &self.gl;
         gl.disable(glow::CULL_FACE);
@@ -2206,7 +2206,12 @@ impl Renderer {
         gl.clear_depth_f32(1.0);
         gl.clear(glow::DEPTH_BUFFER_BIT);
         gl.use_program(Some(self.program));
-        self.local_lights.upload(gl, frame, &self.turrets, 8);
+        self.local_lights.upload(
+            gl,
+            frame,
+            &self.turrets,
+            frame.lighting_quality.local_light_limit(frame.drone_camera),
+        );
         gl.uniform_matrix_4_f32_slice(self.uniforms.vp.as_ref(), false, &frame.vp.to_cols_array());
         gl.uniform_3_f32(
             self.uniforms.eye.as_ref(),
@@ -4129,6 +4134,7 @@ const FRAGMENT: &str = concat!(
     "#version 150\n",
     include_str!("shaders/sky.glsl"),
     include_str!("shaders/materials.glsl"),
+    include_str!("shaders/local_lighting.glsl"),
     r#"
 in vec3 world;in vec3 surface_normal;in vec3 local_position;
 uniform vec4 material_params;uniform float environment_atmosphere;uniform vec3 environment_up;
@@ -4170,6 +4176,7 @@ if(material_kind==1 || material_kind==2){
     if(material_params.w>0.5) albedo*=0.70;
     lit=ark_brdf(n,v,l,albedo,roughness,metallic)*vec3(3.8,3.45,2.95)*ark_sun_visibility(world,n,l);
     lit+=ark_environment(n,v,albedo,roughness,metallic,environment_atmosphere,environment_up);
+    lit+=ark_local_lighting(world,n,v,albedo,roughness,metallic);
     lit+=albedo*max(emission,0.0);
 }
 color=vec4(ark_display(lit),1.0);}
@@ -4389,6 +4396,7 @@ mod tests {
             gl.enable(glow::DEPTH_TEST);
             gl.depth_mask(true);
             gl.use_program(Some(renderer.program));
+            let material_shadow = renderer.disable_sun_shadow();
             let material_eye = Vec3::new(0.0, 0.0, 4.0);
             let material_vp = Mat4::perspective_rh_gl(0.8, 1.0, 0.1, 100.0)
                 * Mat4::look_at_rh(material_eye, Vec3::ZERO, Vec3::Y);
@@ -4451,6 +4459,51 @@ mod tests {
                 material_pixels[0], material_pixels[4],
                 "rock and screen glass cannot share roughness response"
             );
+            // Exercise the integrated local-light hook through the actual mesh BRDF,
+            // not only the isolated attenuation shader test.
+            gl.uniform_1_i32(
+                gl.get_uniform_location(renderer.program, "ark_local_count")
+                    .as_ref(),
+                1,
+            );
+            gl.uniform_4_f32_slice(
+                gl.get_uniform_location(renderer.program, "ark_local_position_range[0]")
+                    .as_ref(),
+                &[0.0, 0.0, 3.0, 8.0],
+            );
+            gl.uniform_4_f32_slice(
+                gl.get_uniform_location(renderer.program, "ark_local_color_power[0]")
+                    .as_ref(),
+                &[1.0, 0.8, 0.6, 10.0],
+            );
+            gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
+            renderer.draw_material(
+                0,
+                Mat4::IDENTITY,
+                Vec3::new(0.25, 0.32, 0.38),
+                0.0,
+                Material::PaintedHull,
+            );
+            let mut illuminated = [0u8; 4];
+            gl.read_pixels(
+                64,
+                64,
+                1,
+                1,
+                glow::RGBA,
+                glow::UNSIGNED_BYTE,
+                glow::PixelPackData::Slice(Some(&mut illuminated)),
+            );
+            assert!(
+                illuminated[..3]
+                    .iter()
+                    .zip(&material_pixels[2][..3])
+                    .any(|(lit, unlit)| *lit > unlit.saturating_add(5)),
+                "integrated local light must illuminate painted hull: {illuminated:?} vs {:?}",
+                material_pixels[2]
+            );
+            renderer.local_lights.clear(&gl);
+            renderer.restore_shadow_texture(material_shadow);
             assert_eq!(gl.get_error(), glow::NO_ERROR);
             // Evaluate the real shared environment shader: smooth conductors
             // reflect sky direction, fully rough ones converge to the same mean.
