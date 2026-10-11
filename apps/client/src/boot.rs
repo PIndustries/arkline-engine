@@ -76,6 +76,7 @@ impl Boot {
         ready: bool,
         connected: bool,
         notice: &str,
+        logo: egui::TextureId,
     ) -> Action {
         if !self.visible {
             return Action::Enter;
@@ -126,8 +127,8 @@ impl Boot {
                     painter.add(egui::Shape::line(points, Stroke::new(if ring == 1 { 2.0 } else { 1.0 }, green.gamma_multiply(0.45 + ring as f32 * 0.2))));
                 }
             }
-            painter.text(center - Vec2::new(0.0, 13.0), egui::Align2::CENTER_CENTER, "P.", egui::FontId::proportional(radius * 0.52), green);
-            painter.text(center + Vec2::new(0.0, 27.0), egui::Align2::CENTER_CENTER, "I N D U S T R I E S", egui::FontId::monospace(12.0), green);
+            painter.image(logo, egui::Rect::from_center_size(center, Vec2::splat(radius * 1.25)),
+                egui::Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)), Color32::WHITE);
             let width = rect.width().min(440.0) - 32.0;
             let content = egui::Rect::from_min_size(Pos2::new(center.x - width / 2.0, center.y + radius * 1.5), Vec2::new(width, 210.0));
             ui.scope_builder(egui::UiBuilder::new().max_rect(content), |ui| {

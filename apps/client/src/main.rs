@@ -420,6 +420,7 @@ enum OverviewFilter {
 }
 
 struct Cockpit {
+    logo: egui::TextureHandle,
     boot: boot::Boot,
     server: String,
     pilot: String,
@@ -511,7 +512,23 @@ impl Cockpit {
         let theme = theme::Theme::load(&data_dir);
         let layout = layout::Layout::load(&data_dir);
         theme.apply(&cc.egui_ctx);
+        let logo_image = image::load_from_memory_with_format(
+            include_bytes!("../../../assets/Arkline-256.png"),
+            image::ImageFormat::Png,
+        )
+        .expect("bundled official Arkline logo")
+        .into_rgba8();
+        let logo = cc.egui_ctx.load_texture(
+            "official-arkline-logo",
+            egui::ColorImage::from_rgba_unmultiplied(
+                [logo_image.width() as usize, logo_image.height() as usize],
+                logo_image.as_raw(),
+            ),
+            egui::TextureOptions::LINEAR,
+        );
+
         Self {
+            logo,
             boot: boot::Boot::default(),
             server,
             pilot: String::new(),
@@ -3143,7 +3160,10 @@ impl eframe::App for Cockpit {
         self.update_sound();
         if self.boot.visible {
             let ready = self.connected && self.own().is_some();
-            match self.boot.show(ctx, ready, self.connected, &self.notice) {
+            match self
+                .boot
+                .show(ctx, ready, self.connected, &self.notice, self.logo.id())
+            {
                 boot::Action::Enter => {}
                 boot::Action::Retry => {
                     self.connect();
@@ -3177,6 +3197,7 @@ impl eframe::App for Cockpit {
         if !self.connected && self.snapshot.is_none() {
             egui::TopBottomPanel::top("login-brand").show(ctx, |ui| {
                 ui.horizontal(|ui| {
+                    ui.image((self.logo.id(), egui::vec2(36.0, 36.0)));
                     ui.heading(egui::RichText::new("ARKLINE").color(self.accent()));
                     ui.colored_label(AMBER, BUILD_VERSION.trim());
                     ui.small("EARLY ACCESS");

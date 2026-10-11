@@ -241,6 +241,7 @@ dependencies = [
  "glam",
  "gloo-timers",
  "hex",
+ "image",
  "js-sys",
  "rustls",
  "send_wrapper",
