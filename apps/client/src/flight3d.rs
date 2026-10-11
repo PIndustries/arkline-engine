@@ -3546,248 +3546,264 @@ fn ship_parts(class: ShipClass) -> Vec<ModelPart> {
     .clone()
 }
 fn build_ship_parts(class: ShipClass) -> Vec<ModelPart> {
+    // Original procedural interpretation of the construction-fleet dossiers.
+    // Model-space proportions are fitted to measured public bounds below.
     let mut parts = Parts(Vec::new());
-    let hull_color = Vec3::new(0.25, 0.32, 0.38);
-    let cargo = Vec3::new(0.36, 0.28, 0.15);
-    let accent = Vec3::new(0.07, 0.48, 0.35);
-    match class {
-        ShipClass::Pioneer => {
-            parts.draw(
-                4,
-                Mat4::from_scale(Vec3::new(0.6, 0.5, 0.6)),
-                hull_color,
+    let graphite = Vec3::new(0.075, 0.095, 0.105);
+    let plate = Vec3::new(0.15, 0.18, 0.19);
+    let edge = Vec3::new(0.24, 0.28, 0.29);
+    let green = Vec3::new(0.025, 0.28, 0.15);
+    let amber = Vec3::new(0.72, 0.39, 0.09);
+    let glass = Vec3::new(0.04, 0.30, 0.27);
+    let twin = matches!(class, ShipClass::Prospector | ShipClass::Borealis);
+    let sections = match class {
+        ShipClass::Pioneer => 3,
+        ShipClass::Prospector => 3,
+        ShipClass::Hauler => 5,
+        ShipClass::Vanguard => 5,
+        ShipClass::Borealis => 4,
+        ShipClass::Stratum => 6,
+        ShipClass::Monolith => 8,
+    };
+    let industrial = matches!(class, ShipClass::Stratum | ShipClass::Monolith);
+    // Box helper takes half-extents, preserving the existing mesh convention.
+    let mut block = |p: Vec3, size: Vec3, color: Vec3, emission: f32| {
+        parts.draw(0, transform(p, size, Quat::IDENTITY), color, emission);
+    };
+    if twin {
+        // Two long extraction booms and a rear bridge; an open central channel.
+        for side in [-1.0, 1.0] {
+            block(
+                Vec3::new(0.0, 0.0, side * 0.72),
+                Vec3::new(1.85, 0.32, 0.29),
+                graphite,
                 0.0,
             );
-            for side in [-1.0, 1.0] {
-                parts.draw(
-                    0,
-                    transform(
-                        Vec3::new(-0.7, 0.0, side * 0.8),
-                        Vec3::new(0.8, 0.12, 0.45),
-                        Quat::from_rotation_y(side * 0.25),
-                    ),
-                    hull_color,
-                    0.0,
-                );
-            }
+            block(
+                Vec3::new(1.72, 0.03, side * 0.72),
+                Vec3::new(0.24, 0.24, 0.23),
+                green,
+                0.0,
+            );
         }
-        ShipClass::Prospector => {
-            parts.draw(
-                0,
-                Mat4::from_scale(Vec3::new(1.6, 0.4, 0.5)),
-                hull_color,
+        block(
+            Vec3::new(-1.05, 0.04, 0.0),
+            Vec3::new(0.48, 0.30, 0.80),
+            plate,
+            0.0,
+        );
+        // Crossbeam under the unchanged inner turret pedestals.
+        block(
+            Vec3::new(0.65, -0.02, 0.0),
+            Vec3::new(0.38, 0.13, 0.76),
+            graphite,
+            0.0,
+        );
+    } else {
+        block(
+            Vec3::new(0.0, -0.13, 0.0),
+            Vec3::new(1.78, 0.16, 0.32),
+            graphite,
+            0.0,
+        );
+        block(
+            Vec3::new(1.50, 0.02, 0.0),
+            Vec3::new(0.34, 0.29, 0.48),
+            plate,
+            0.0,
+        );
+        block(
+            Vec3::new(1.49, 0.29, 0.0),
+            Vec3::new(0.23, 0.10, 0.38),
+            green,
+            0.0,
+        );
+    }
+    // Broad non-emissive identification bands and structural longitudinal rails.
+    for side in [-1.0, 1.0] {
+        for y in [-0.34, 0.34] {
+            block(
+                Vec3::new(-0.08, y, side * 0.94),
+                Vec3::new(1.74, 0.035, 0.045),
+                edge,
                 0.0,
             );
-            parts.draw(
-                4,
-                transform(
-                    Vec3::new(0.6, 0.0, 0.0),
-                    Vec3::new(0.32, 0.5, 0.4),
-                    Quat::IDENTITY,
+        }
+        for x in [-1.58, 1.20] {
+            block(
+                Vec3::new(x, 0.0, side * 0.89),
+                Vec3::new(0.11, 0.36, 0.13),
+                green,
+                0.0,
+            );
+        }
+        for i in 0..sections {
+            let x = -1.35 + i as f32 * 2.55 / sections as f32;
+            let half = 0.92 / sections as f32;
+            let z = if twin { 0.92 } else { 0.60 };
+            block(
+                Vec3::new(x, 0.0, side * z),
+                Vec3::new(
+                    half,
+                    if industrial { 0.23 } else { 0.29 },
+                    if twin { 0.11 } else { 0.28 },
                 ),
-                hull_color,
+                if class == ShipClass::Hauler {
+                    plate
+                } else {
+                    graphite * 1.45
+                },
                 0.0,
             );
-            for side in [-1.0, 1.0] {
-                parts.draw(
-                    0,
-                    transform(
-                        Vec3::new(-0.2, -0.1, side * 0.9),
-                        Vec3::new(0.9, 0.5, 0.3),
-                        Quat::IDENTITY,
-                    ),
-                    cargo,
-                    0.0,
-                );
-                parts.draw(
-                    0,
-                    transform(
-                        Vec3::new(1.0, -0.4, side * 0.8),
-                        Vec3::new(1.0, 0.08, 0.09),
-                        Quat::IDENTITY,
-                    ),
-                    hull_color,
-                    0.0,
+            block(
+                Vec3::new(x - half, 0.0, side * (z + 0.12)),
+                Vec3::new(0.018, 0.33, 0.035),
+                edge,
+                0.0,
+            );
+            // Alternate lamps leave a bounded geometry budget for cargo tops.
+            if i % 2 == 0 {
+                block(
+                    Vec3::new(x, -0.27, side * (z + 0.12)),
+                    Vec3::new(0.033, 0.012, 0.018),
+                    amber,
+                    0.45,
                 );
             }
         }
-        ShipClass::Borealis | ShipClass::Stratum | ShipClass::Monolith => {
-            let tier = class.spec().mining_tier.unwrap() as usize;
-            parts.draw(
-                0,
-                transform(Vec3::ZERO, Vec3::new(2.8, 0.3, 0.48), Quat::IDENTITY),
-                hull_color,
-                0.0,
-            );
-            for row in 0..tier {
-                let x = -1.8 + row as f32 * 0.7;
-                for side in [-1.0, 1.0] {
-                    parts.draw(
-                        0,
-                        transform(
-                            Vec3::new(x, -0.08, side * 0.82),
-                            Vec3::new(0.29, 0.46, 0.34),
-                            Quat::IDENTITY,
-                        ),
-                        cargo * (0.8 + row as f32 * 0.05),
-                        0.0,
-                    );
-                    parts.draw(
-                        0,
-                        transform(
-                            Vec3::new(x, 0.43, side * 0.82),
-                            Vec3::new(0.22, 0.015, 0.27),
-                            Quat::IDENTITY,
-                        ),
-                        accent,
-                        0.9,
-                    );
-                }
-            }
-            parts.draw(
-                4,
-                transform(
-                    Vec3::new(2.15, 0.26, 0.0),
-                    Vec3::new(0.20, 0.45, 0.44),
-                    Quat::IDENTITY,
+        // Engine housings and recessed luminous exhaust faces; no drill shapes.
+        block(
+            Vec3::new(-1.94, -0.02, side * 0.59),
+            Vec3::new(0.27, 0.26, 0.24),
+            graphite,
+            0.0,
+        );
+        block(
+            Vec3::new(-2.215, -0.02, side * 0.59),
+            Vec3::new(0.012, 0.17, 0.16),
+            green,
+            0.9,
+        );
+    }
+    if !twin && class != ShipClass::Hauler {
+        for i in 0..sections {
+            let x = -1.35 + i as f32 * 2.55 / sections as f32;
+            block(
+                Vec3::new(x, if industrial { 0.15 } else { 0.22 }, 0.0),
+                Vec3::new(
+                    0.88 / sections as f32,
+                    0.12,
+                    if industrial { 0.48 } else { 0.40 },
                 ),
-                hull_color * 1.15,
-                0.0,
-            );
-            for side in [-1.0, 1.0] {
-                parts.draw(
-                    0,
-                    transform(
-                        Vec3::new(1.3, -0.3, side * 1.22),
-                        Vec3::new(1.1, 0.12, 0.14),
-                        Quat::IDENTITY,
-                    ),
-                    hull_color,
-                    0.0,
-                );
-                parts.draw(
-                    0,
-                    transform(
-                        Vec3::new(-1.7, 0.0, side * 1.12),
-                        Vec3::new(0.55, 0.35, 0.27),
-                        Quat::IDENTITY,
-                    ),
-                    hull_color * 0.6,
-                    0.0,
-                );
-            }
-            if class == ShipClass::Monolith {
-                parts.draw(
-                    1,
-                    transform(
-                        Vec3::new(-1.0, 0.5, 0.0),
-                        Vec3::splat(0.65),
-                        Quat::from_rotation_z(std::f32::consts::FRAC_PI_2),
-                    ),
-                    hull_color,
-                    0.0,
-                );
-                parts.draw(
-                    0,
-                    transform(
-                        Vec3::new(-0.5, 0.75, 0.0),
-                        Vec3::new(0.7, 0.2, 0.27),
-                        Quat::IDENTITY,
-                    ),
-                    cargo,
-                    0.0,
-                );
-            }
-        }
-        ShipClass::Hauler => {
-            parts.draw(
-                0,
-                Mat4::from_scale(Vec3::new(2.2, 0.18, 0.4)),
-                hull_color,
-                0.0,
-            );
-            for x in [-1.3, -0.4, 0.5] {
-                for side in [-1.0, 1.0] {
-                    parts.draw(
-                        0,
-                        transform(
-                            Vec3::new(x, 0.0, side * 0.65),
-                            Vec3::new(0.4, 0.48, 0.35),
-                            Quat::IDENTITY,
-                        ),
-                        cargo,
-                        0.0,
-                    );
-                }
-            }
-            parts.draw(
-                0,
-                transform(
-                    Vec3::new(1.7, 0.45, 0.0),
-                    Vec3::new(0.42, 0.3, 0.65),
-                    Quat::IDENTITY,
-                ),
-                hull_color,
+                if i % 3 == 0 { green } else { plate },
                 0.0,
             );
         }
-        ShipClass::Vanguard => {
-            parts.draw(
-                4,
-                Mat4::from_scale(Vec3::new(0.9, 0.55, 0.65)),
-                hull_color,
+    }
+    let tower_x = if industrial {
+        -1.18
+    } else if twin {
+        -0.85
+    } else {
+        0.86
+    };
+    let tower_levels = match class {
+        ShipClass::Monolith => 3,
+        ShipClass::Stratum | ShipClass::Vanguard => 2,
+        _ => 1,
+    };
+    for level in 0..tower_levels {
+        let y = 0.42 + level as f32 * 0.13;
+        let scale = 1.0 - level as f32 * 0.18;
+        block(
+            Vec3::new(tower_x, y, 0.0),
+            Vec3::new(0.34 * scale, 0.065, 0.33 * scale),
+            graphite,
+            0.0,
+        );
+        block(
+            Vec3::new(tower_x + 0.345 * scale, y, 0.0),
+            Vec3::new(0.008, 0.027, 0.25 * scale),
+            glass,
+            0.25,
+        );
+    }
+    if class == ShipClass::Hauler {
+        // Exposed top cargo cassettes differ from the extraction-boom silhouettes.
+        for i in 0..4 {
+            block(
+                Vec3::new(-1.12 + i as f32 * 0.48, 0.35, 0.0),
+                Vec3::new(0.20, 0.12, 0.52),
+                plate,
                 0.0,
             );
-            for side in [-1.0, 1.0] {
-                parts.draw(
-                    0,
-                    transform(
-                        Vec3::new(-0.8, 0.0, side * 0.8),
-                        Vec3::new(1.4, 0.25, 0.25),
-                        Quat::IDENTITY,
-                    ),
-                    hull_color,
-                    0.0,
+        }
+    }
+    if class == ShipClass::Vanguard {
+        block(
+            Vec3::new(-0.35, 0.39, 0.0),
+            Vec3::new(1.1, 0.07, 0.31),
+            green,
+            0.0,
+        );
+    }
+    // End of helper borrow: diagonal structural braces use rotated cube beams.
+    if industrial || class == ShipClass::Borealis {
+        for side in [-1.0, 1.0] {
+            for i in 0..sections {
+                let x = -1.40 + i as f32 * 2.60 / sections as f32;
+                let a = Vec3::new(x, -0.28, side * if twin { 1.07 } else { 0.96 });
+                let b = Vec3::new(
+                    x + 2.35 / sections as f32,
+                    0.28,
+                    side * if twin { 1.07 } else { 0.96 },
                 );
-            }
-            for i in 0..4 {
+                let delta = b - a;
                 parts.draw(
                     0,
                     transform(
-                        Vec3::new(-1.4 + i as f32 * 0.45, 0.55, 0.0),
-                        Vec3::new(0.3, 0.22, 0.25),
-                        Quat::IDENTITY,
+                        (a + b) * 0.5,
+                        Vec3::new(delta.length() * 0.5, 0.018, 0.022),
+                        Quat::from_rotation_arc(Vec3::X, delta.normalize()),
                     ),
-                    hull_color * 1.2,
+                    edge,
                     0.0,
                 );
             }
         }
     }
-    for side in [-1.0, 1.0] {
+    // Blunt armored brows: optical turrets remain the only extraction tools.
+    for z in if twin { vec![-0.72, 0.72] } else { vec![0.0] } {
         parts.draw(
             0,
             transform(
-                Vec3::new(-1.8, 0.0, side * 0.5),
-                Vec3::new(0.3, 0.22, 0.22),
-                Quat::IDENTITY,
+                Vec3::new(1.71, 0.26, z),
+                Vec3::new(0.23, 0.04, if twin { 0.22 } else { 0.54 }),
+                Quat::from_rotation_z(-0.16),
             ),
-            hull_color * 0.6,
+            green,
             0.0,
-        );
-        parts.draw(
-            0,
-            transform(
-                Vec3::new(-2.11, 0.0, side * 0.5),
-                Vec3::new(0.01, 0.16, 0.16),
-                Quat::IDENTITY,
-            ),
-            accent,
-            1.0,
         );
     }
     // Fit measured vertices, including all appendages, to the public meter spec.
     let (min, max) = parts_bounds(&parts.0);
+    // Keep a solid service core at the fitted center for all six reaction axes.
+    // Segmented cargo bays must not leave an axis nozzle firing from empty space.
+    // Its lower edge joins the keel/crossbeam; all vertices stay inside the
+    // measured envelope, preserving the public dimensions and turret supports.
+    let center = (min + max) * 0.5;
+    let bottom = -0.20;
+    let top = center.y + 0.10;
+    parts.draw(
+        0,
+        transform(
+            Vec3::new(center.x, (bottom + top) * 0.5, center.z),
+            Vec3::new(0.50, (top - bottom) * 0.5, 0.34),
+            Quat::IDENTITY,
+        ),
+        graphite,
+        0.0,
+    );
     let spec = class.spec();
     let dimensions = Vec3::new(
         spec.length_m as f32,
@@ -4553,6 +4569,72 @@ mod tests {
             assert_eq!(gl.get_error(), glow::NO_ERROR);
             gl.use_program(None);
             gl.delete_program(environment_program);
+            if let Ok(directory) = std::env::var("ARKLINE_SHIP_CAPTURE_DIR") {
+                std::fs::create_dir_all(&directory).unwrap();
+                let capture = CachedFeed::create(&gl, 1100, 1280, 800).unwrap();
+                for class in arkline_protocol::ALL_SHIP_CLASSES {
+                    gl.bind_framebuffer(glow::FRAMEBUFFER, Some(capture.framebuffer));
+                    gl.viewport(0, 0, 1280, 800);
+                    gl.disable(glow::SCISSOR_TEST);
+                    gl.disable(glow::BLEND);
+                    gl.disable(glow::CULL_FACE);
+                    gl.enable(glow::DEPTH_TEST);
+                    gl.depth_mask(true);
+                    gl.color_mask(true, true, true, true);
+                    gl.clear_color(0.012, 0.022, 0.024, 1.0);
+                    gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
+                    assert_eq!(gl.get_error(), glow::NO_ERROR, "capture target");
+                    let length = class.spec().length_m as f32 / 100.0;
+                    let eye = Vec3::new(0.8, 0.65, 1.0) * length;
+                    let vp = Mat4::perspective_rh_gl(0.75, 1.6, length * 0.001, length * 10.0)
+                        * Mat4::look_at_rh(eye, Vec3::ZERO, Vec3::Y);
+                    gl.use_program(Some(renderer.program));
+                    let old = renderer.disable_sun_shadow();
+                    renderer.local_lights.clear(&gl);
+                    gl.uniform_1_i32(renderer.uniforms.material.as_ref(), 0);
+                    gl.uniform_1_f32(renderer.uniforms.environment_atmosphere.as_ref(), 0.0);
+                    gl.uniform_3_f32(renderer.uniforms.environment_up.as_ref(), 0.0, 1.0, 0.0);
+                    gl.uniform_3_f32(renderer.uniforms.eye.as_ref(), eye.x, eye.y, eye.z);
+                    gl.uniform_matrix_4_f32_slice(
+                        renderer.uniforms.vp.as_ref(),
+                        false,
+                        &vp.to_cols_array(),
+                    );
+                    assert_eq!(gl.get_error(), glow::NO_ERROR, "capture uniforms");
+                    for (mesh, model, color, emission) in ship_parts(class)
+                        .into_iter()
+                        .chain(turret_parts(class, Quat::IDENTITY, 0))
+                        .chain(turret_parts(class, Quat::IDENTITY, 1))
+                    {
+                        renderer.draw(mesh, model, color, emission);
+                    }
+                    let mut rgba = vec![0; 1280 * 800 * 4];
+                    gl.read_pixels(
+                        0,
+                        0,
+                        1280,
+                        800,
+                        glow::RGBA,
+                        glow::UNSIGNED_BYTE,
+                        glow::PixelPackData::Slice(Some(&mut rgba)),
+                    );
+                    assert_eq!(gl.get_error(), glow::NO_ERROR);
+                    let mut ppm = b"P6\n1280 800\n255\n".to_vec();
+                    for y in (0..800).rev() {
+                        for x in 0..1280 {
+                            let i = (y * 1280 + x) * 4;
+                            ppm.extend_from_slice(&rgba[i..i + 3]);
+                        }
+                    }
+                    std::fs::write(
+                        std::path::Path::new(&directory).join(format!("{class:?}.ppm")),
+                        ppm,
+                    )
+                    .unwrap();
+                    renderer.restore_shadow_texture(old);
+                }
+                capture.destroy(&gl);
+            }
             renderer.destroy();
             assert!(renderer.feed_cache.is_empty());
             assert!(live_textures
@@ -4586,9 +4668,9 @@ mod tests {
             let mounts = reaction_mounts(class);
             assert!(mounts[0].is_some(), "braking nozzle missing for {class:?}");
             for (index, mount) in mounts.iter().enumerate() {
-                let Some(mount) = mount else {
-                    continue;
-                };
+                let mount = mount
+                    .as_ref()
+                    .unwrap_or_else(|| panic!("reaction nozzle {index} missing for {class:?}"));
                 let out = [Vec3::X, -Vec3::X, Vec3::Y, -Vec3::Y, Vec3::Z, -Vec3::Z][index];
                 let nearest = ship_geometry(class, Mat4::IDENTITY)
                     .iter()
@@ -4945,6 +5027,37 @@ mod tests {
                 muzzle.y > spec.height_m as f32 / 200.0,
                 "turret is a roof appendage, excluded from published body dimensions"
             );
+        }
+    }
+    #[test]
+    fn construction_fleet_geometry_has_bounded_parts_and_restrained_lamps() {
+        for class in arkline_protocol::ALL_SHIP_CLASSES {
+            let parts = ship_parts(class);
+            assert!(
+                parts.len() <= 96,
+                "{class:?} exceeds procedural detail budget"
+            );
+            assert!(
+                parts
+                    .iter()
+                    .filter(|(_, _, c, e)| c.y > c.x * 2.0 && *e == 0.0)
+                    .count()
+                    >= 4
+            );
+            assert!(parts
+                .iter()
+                .all(|(_, m, c, e)| m.is_finite() && c.is_finite() && *e <= 0.9));
+            let (lo, hi) = parts_bounds(&parts);
+            let bound = hi - lo;
+            for (mesh, model, _, emission) in &parts {
+                if *emission > 0.0 {
+                    let (a, b) = parts_bounds(&[(*mesh, *model, Vec3::ONE, *emission)]);
+                    assert!(
+                        (b - a).max_element() < bound.max_element() * 0.20,
+                        "large luminous hull plate"
+                    );
+                }
+            }
         }
     }
     #[test]
