@@ -125,6 +125,7 @@ mod tests {
                 .handle_at(
                     &mut session,
                     Request::Connect {
+                        supports_pioneer_interior: true,
                         protocol_version: PROTOCOL_VERSION,
                         pilot: "PowerPilot".into(),
                         resume_token: None

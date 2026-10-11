@@ -12,6 +12,7 @@ fn setup(s: &mut Server) -> (Option<String>, u64, Vec<Asteroid>) {
         s,
         &mut p,
         Request::Connect {
+            supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
             pilot: "Targeter".into(),
             resume_token: None,

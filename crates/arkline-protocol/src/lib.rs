@@ -532,6 +532,9 @@ pub enum Request {
         units: u64,
     },
     Connect {
+        /// Missing on older clients; only visual clients with interior support opt in.
+        #[serde(default)]
+        supports_pioneer_interior: bool,
         protocol_version: u32,
         pilot: String,
         resume_token: Option<String>,

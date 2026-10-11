@@ -18,6 +18,7 @@ fn explicit_asteroid_lock_depletion_and_legacy_migration_conserve_ore() {
         &mut s,
         &mut p,
         Request::Connect {
+            supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
             pilot: "Miner".into(),
             resume_token: None,

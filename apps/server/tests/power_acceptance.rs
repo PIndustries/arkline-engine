@@ -47,6 +47,7 @@ fn connect(s: &mut Server) -> Option<String> {
         s,
         &mut p,
         Request::Connect {
+            supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
             pilot: "Power".into(),
             resume_token: None,
@@ -208,6 +209,7 @@ fn attack_drone_draws_only_for_actual_shot_and_holds_when_empty() {
         &mut s,
         &mut b,
         Request::Connect {
+            supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
             pilot: "Target".into(),
             resume_token: None,

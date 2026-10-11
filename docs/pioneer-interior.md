@@ -44,3 +44,27 @@ Run `cargo test --locked -p arkline-client both_decks_pointer_keyboard -- --igno
 This is stronger than injecting walking commands directly into the server, but it is **not** an operating-system keyboard/window, TCP transport, or GPU UI-compositing test. The separate native GPU captures inspect the actual room/character geometry; they do not prove OS event delivery. Native accessibility could activate entry during review, but short injected key pulses did not produce a complete walkthrough. Do not report the full native OS journey as passed from these tests alone.
 
 The regular application-input regression clicks both on-foot camera modes, walks forward/backward with WASD and arrow keys, checks preserved heading, turns the authoritative avatar with an unobstructed RMB drag, and verifies ship-only requests cannot escape the on-foot command boundary. It also checks ship-operation service tabs show on-foot navigation instead of operational controls.
+
+## Older clients and safe rollback
+
+Connect now includes optional `supports_pioneer_interior` (default false). The
+current visual client declares support; old clients and terminal clients do not.
+Only after valid resume-token proof, an incompatible reconnect safely moves an
+interior avatar to its existing hangar boarding marker, stops walking/jumping,
+and clears seating. It preserves the ship, cargo, storage and economic ledger.
+A capable reconnect retains the interior deck and position.
+
+A conservative per-pilot compatibility latch blocks interior entry while any
+session remains after an incompatible connection. Closing just the old connection
+cannot identify and clear this latch: close older/terminal connections, then
+reconnect **all** remaining sessions using current visual clients. This protects
+simultaneously connected older clients; claiming support cannot clear another
+session's protection. It does not prohibit normal flight/mining with old clients.
+The latch is ephemeral and clears on the last disconnect or server restart.
+
+This is forward-client recovery, not save downgrade compatibility. Before a server
+binary downgrade, evacuate all interior avatars with supported clients or use a
+reviewed consistent backup/restore procedure. Old servers ignore the new fields
+and cannot interpret interior coordinates/decks correctly. Do not blindly restore
+a stale world backup over subsequent economic transactions. Validate Test first,
+including old/new concurrent sessions and restart, before a Production upgrade.

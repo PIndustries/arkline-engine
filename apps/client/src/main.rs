@@ -254,6 +254,7 @@ fn worker(
         fs::create_dir_all(&dir).map_err(|e| format!("Credential directory unavailable: {e}"))?;
         let mut reader = transport::Connection::connect(&server)?;
         let mut response = reader.exchange(&Request::Connect {
+            supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
             pilot: pilot.clone(),
             resume_token: token.clone(),
@@ -331,6 +332,7 @@ fn worker(
                         let attempt = (|| {
                             let mut next = transport::Connection::connect(&server)?;
                             let mut resumed = next.exchange(&Request::Connect {
+                                supports_pioneer_interior: true,
                                 protocol_version: PROTOCOL_VERSION,
                                 pilot: pilot.clone(),
                                 resume_token: token.clone(),
@@ -6197,6 +6199,7 @@ mod tests {
                 reader.read_line(&mut line).unwrap();
                 match serde_json::from_str::<Request>(&line).unwrap() {
                     Request::Connect {
+                        supports_pioneer_interior: _,
                         protocol_version,
                         pilot,
                         resume_token,

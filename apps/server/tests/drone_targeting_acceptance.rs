@@ -20,6 +20,7 @@ fn setup() -> (Server, Option<String>, u64, Snapshot) {
         &mut server,
         &mut session,
         Request::Connect {
+            supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
             pilot: "Acceptance".into(),
             resume_token: None,

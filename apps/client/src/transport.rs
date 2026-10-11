@@ -172,7 +172,7 @@ mod tests {
                 let request: Request = serde_json::from_str(message.to_text().unwrap()).unwrap();
                 if expected_connect {
                     assert!(
-                        matches!(request, Request::Connect { protocol_version: PROTOCOL_VERSION, ref pilot, resume_token: None } if pilot == "web-pilot")
+                        matches!(request, Request::Connect { supports_pioneer_interior: true, protocol_version: PROTOCOL_VERSION, ref pilot, resume_token: None } if pilot == "web-pilot")
                     );
                 } else {
                     assert!(matches!(request, Request::Snapshot));
@@ -186,6 +186,7 @@ mod tests {
         let mut client = Connection::connect(&endpoint).unwrap();
         let response: Response = client
             .exchange(&Request::Connect {
+                supports_pioneer_interior: true,
                 protocol_version: PROTOCOL_VERSION,
                 pilot: "web-pilot".into(),
                 resume_token: None,

@@ -811,6 +811,7 @@ mod tests {
             let r = send(
                 &mut s,
                 Request::Connect {
+                    supports_pioneer_interior: true,
                     protocol_version: PROTOCOL_VERSION,
                     pilot: name.into(),
                     resume_token: None,
@@ -900,6 +901,7 @@ mod tests {
         let r = send(
             &mut worker,
             Request::Connect {
+                supports_pioneer_interior: true,
                 protocol_version: PROTOCOL_VERSION,
                 pilot: "WorkerQA".into(),
                 resume_token: initial.resume_token,

@@ -23,6 +23,7 @@ impl Journey {
         let response = server.handle_at(
             &mut session,
             Request::Connect {
+                supports_pioneer_interior: true,
                 protocol_version: PROTOCOL_VERSION,
                 pilot: "pilot".into(),
                 resume_token: None,

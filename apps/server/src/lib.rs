@@ -104,6 +104,8 @@ fn token_hash(token: &str) -> String {
 pub struct Server {
     db: Connection,
     online_sessions: BTreeMap<String, usize>,
+    // Conservative latch: clear only after ALL sessions for this pilot leave.
+    interior_incompatible: std::collections::BTreeSet<String>,
     // Kept after db so SQLite closes before authority is released. Never unlink
     // the sidecar: replacing its inode would allow competing locks.
     _ownership_lock: Option<std::fs::File>,
@@ -190,6 +192,7 @@ impl Server {
         Ok(Self {
             db,
             online_sessions: BTreeMap::new(),
+            interior_incompatible: Default::default(),
             _ownership_lock: ownership_lock,
         })
     }
@@ -256,6 +259,20 @@ impl Server {
         now: u64,
     ) -> Response {
         let previous = session.clone();
+        let legacy_connect = matches!(
+            &request,
+            Request::Connect {
+                supports_pioneer_interior: false,
+                ..
+            }
+        );
+        if matches!(&request, Request::EnterInterior)
+            && session
+                .as_ref()
+                .is_some_and(|name| self.interior_incompatible.contains(name))
+        {
+            return Response::error("Close older or terminal clients, then disconnect and reconnect all sessions for this pilot before entering the interior");
+        }
         match self.execute(session, request, now, false) {
             Ok(mut response) => {
                 // execute changes the session only after a successful durable
@@ -266,6 +283,11 @@ impl Server {
                     }
                     if let Some(current) = session.as_ref() {
                         *self.online_sessions.entry(current.clone()).or_default() += 1;
+                    }
+                }
+                if legacy_connect {
+                    if let Some(name) = session.as_ref() {
+                        self.interior_incompatible.insert(name.clone());
                     }
                 }
                 let online = self.online_sessions.keys().cloned().collect::<Vec<_>>();
@@ -292,6 +314,7 @@ impl Server {
             *count -= 1;
             if *count == 0 {
                 self.online_sessions.remove(pilot);
+                self.interior_incompatible.remove(pilot);
                 if let Err(error) = self.stop_disconnected(pilot) {
                     eprintln!("Could not persist disconnected flight stop: {error}");
                 }
@@ -618,6 +641,7 @@ impl Server {
                 message = "Station assets updated";
             }
             Request::Connect {
+                supports_pioneer_interior,
                 protocol_version,
                 pilot,
                 resume_token,
@@ -641,6 +665,25 @@ impl Server {
                         token_hash(&supplied) == existing.token_hash,
                         "invalid resume token"
                     );
+                    if !supports_pioneer_interior {
+                        let existing = world.pilots.get_mut(&pilot).unwrap();
+                        if existing
+                            .view
+                            .station_avatar
+                            .as_ref()
+                            .is_some_and(|a| a.onboard_interior)
+                        {
+                            let point = hangar_layout(existing.view.ship_class).boarding_point;
+                            let avatar = existing.view.station_avatar.as_mut().unwrap();
+                            avatar.onboard_interior = false;
+                            avatar.interior_deck = 1;
+                            avatar.position = point;
+                            avatar.heading = 0.0;
+                            avatar.seated = false;
+                            avatar.updated_at_ms = now;
+                            station::stop(existing);
+                        }
+                    }
                 } else {
                     ensure!(
                         resume_token.is_none(),
@@ -1194,6 +1237,7 @@ mod tests {
         let connected = server.handle_at(
             &mut session,
             Request::Connect {
+                supports_pioneer_interior: true,
                 protocol_version: PROTOCOL_VERSION,
                 pilot: "Traveler".into(),
                 resume_token: None,

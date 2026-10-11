@@ -23,6 +23,7 @@ fn walking_is_authoritative_bounded_and_stops_on_expiry_logout_and_restart() {
         &mut s,
         &mut p,
         Request::Connect {
+            supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
             pilot: "Walker".into(),
             resume_token: None,
@@ -157,6 +158,7 @@ fn walking_is_authoritative_bounded_and_stops_on_expiry_logout_and_restart() {
         &mut s,
         &mut p,
         Request::Connect {
+            supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
             pilot: "Walker".into(),
             resume_token: token,
@@ -183,6 +185,7 @@ fn walking_cannot_impersonate_worker_and_disembarking_releases_remote_control() 
             &mut s,
             session,
             Request::Connect {
+                supports_pioneer_interior: true,
                 protocol_version: PROTOCOL_VERSION,
                 pilot: name.into(),
                 resume_token: None,
