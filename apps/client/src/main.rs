@@ -1,4 +1,4 @@
-//! Native Arkline cockpit. All displayed world data originates from the server.
+//! Native Arkline cockpit. Live world data is server-authoritative; ship layouts are labeled design references.
 #[cfg(not(target_arch = "wasm32"))]
 mod audit;
 mod boot;
@@ -19,6 +19,7 @@ mod ship_ai;
 #[cfg(target_arch = "wasm32")]
 #[path = "browser_ship_ai.rs"]
 mod ship_ai;
+mod ship_layouts;
 mod sound_engine;
 mod sound_scene;
 mod sound_settings;
@@ -387,6 +388,7 @@ fn worker(
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ServiceTab {
+    Layouts,
     Navigation,
     Station,
     Corporation,
@@ -461,6 +463,7 @@ struct Cockpit {
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     local_server: Option<LocalServer>,
     service_tab: ServiceTab,
+    ship_layout: ship_layouts::LayoutViewer,
     selected_object: SelectedObject,
     mining_target: Option<u64>,
     drone_camera: bool,
@@ -573,6 +576,7 @@ impl Cockpit {
             focus_on_first_frame: true,
             local_server: None,
             service_tab: ServiceTab::Modules,
+            ship_layout: ship_layouts::LayoutViewer::default(),
             selected_object: SelectedObject::Station,
             mining_target: None,
             drone_camera: true,
@@ -1515,6 +1519,11 @@ impl Cockpit {
                     (ServiceTab::Navigation, "Flight", "Targets and navigation"),
                     (ServiceTab::Hangar, "Ship", "Owned ship hangar"),
                     (
+                        ServiceTab::Layouts,
+                        "Layouts",
+                        "Decks, rooms and proposed fittings",
+                    ),
+                    (
                         ServiceTab::Modules,
                         "Modules",
                         "Mining turrets and target locks",
@@ -1551,6 +1560,9 @@ impl Cockpit {
                         .clicked()
                     {
                         self.service_tab = tab;
+                        if tab == ServiceTab::Layouts {
+                            self.services_open = true;
+                        }
                         self.sound.cue(sound_engine::Cue::Ui);
                     }
                 }
@@ -1559,6 +1571,9 @@ impl Cockpit {
     }
     fn service_content(&mut self, ui: &mut egui::Ui) {
         match self.service_tab {
+            ServiceTab::Layouts => {
+                ui.label("Ship layout viewer is open in its own window.");
+            }
             ServiceTab::Navigation => {
                 self.flight_deck(ui);
                 self.surface_status(ui);
@@ -3390,6 +3405,7 @@ impl eframe::App for Cockpit {
                         for (tab, icon, label) in [
                             (ServiceTab::Station, "⌂", "Station"),
                             (ServiceTab::Hangar, "H", "Hangar"),
+                            (ServiceTab::Layouts, "L", "Ship layouts"),
                             (ServiceTab::Cargo, "▣", "Inventory"),
                             (ServiceTab::Modules, "M", "Mining modules"),
                             (ServiceTab::Drones, "D", "Drone fleet"),
@@ -3511,7 +3527,29 @@ impl eframe::App for Cockpit {
                 );
             }
         }
-        if self.services_open && (self.view_mode != ViewMode::Cockpit || in_hangar) {
+        if self.services_open && self.service_tab == ServiceTab::Layouts {
+            let mut open = true;
+            egui::Window::new("Ship layout viewer")
+                .id(egui::Id::new("ship_layout_viewer"))
+                .open(&mut open)
+                .default_pos(Pos2::new(
+                    (bounds.right() - 675.0).max(bounds.left() + 64.0),
+                    bounds.top() + 32.0,
+                ))
+                .default_size(Vec2::new(650.0, (bounds.height() - 80.0).max(300.0)))
+                .max_width(bounds.width() - 24.0)
+                .max_height(bounds.height() - 24.0)
+                .constrain_to(bounds)
+                .vscroll(true)
+                .show(ctx, |ui| self.ship_layout_panel(ui));
+            if !open {
+                self.service_tab = ServiceTab::Modules;
+            }
+        }
+        if self.services_open
+            && self.service_tab != ServiceTab::Layouts
+            && (self.view_mode != ViewMode::Cockpit || in_hangar)
+        {
             let mut open = true;
             let (panel_pos, panel_size) = self.layout.position(
                 "services",
@@ -4781,6 +4819,7 @@ mod tests {
             frame(&ctx, &mut cockpit, vec![]);
         }
         for tab in [
+            ServiceTab::Layouts,
             ServiceTab::Modules,
             ServiceTab::Navigation,
             ServiceTab::Hangar,

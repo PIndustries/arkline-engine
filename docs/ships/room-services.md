@@ -21,3 +21,7 @@ Browse a ship directory for its complete room index. See systems-reference.md an
 - [Prospector](prospector/rooms/README.md)
 - [Stratum](stratum/rooms/README.md)
 - [Vanguard](vanguard/rooms/README.md)
+
+## In-game viewer
+
+Open **Layouts** from the client service tabs or **L** on the service rail. Choose a hull, deck and room, then filter the service types and select a fitting to inspect its room/ship coordinates and connected system port. **My ship** selects the player’s hull. This works while docked or in flight and reads the bundled design data without a network download. It is a design reference, not live sensor telemetry; it does not imply that the proposed interiors or fixtures exist in the simulation.
