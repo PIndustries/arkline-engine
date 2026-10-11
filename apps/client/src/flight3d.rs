@@ -11,6 +11,9 @@ use glam::{Mat4, Quat, Vec3};
 use glow::HasContext;
 use std::sync::{Arc, Mutex};
 
+#[path = "local_lighting.rs"]
+mod local_lighting;
+
 #[path = "hangar.rs"]
 pub mod hangar;
 
@@ -1788,6 +1791,7 @@ struct Renderer {
     empty: glow::VertexArray,
     meshes: Vec<Mesh>,
     uniforms: Uniforms,
+    local_lights: local_lighting::Uniforms,
     station_batches: Vec<(usize, Vec3, f32)>,
     feed_cache: Vec<CachedFeed>,
     destroyed: bool,
@@ -1810,6 +1814,7 @@ impl Renderer {
                 1,
             ),
         )?;
+        let local_lights = local_lighting::Uniforms::new(&gl, program);
         let background = compile(&gl, BACK_VERTEX, BACK_FRAGMENT)?;
         #[cfg(target_arch = "wasm32")]
         let feed_program = compile(&gl, BACK_VERTEX, FEED_FRAGMENT)?;
@@ -1878,6 +1883,7 @@ impl Renderer {
             empty,
             meshes,
             uniforms,
+            local_lights,
             station_batches,
             feed_cache: Vec::new(),
             destroyed: false,
@@ -2200,6 +2206,7 @@ impl Renderer {
         gl.clear_depth_f32(1.0);
         gl.clear(glow::DEPTH_BUFFER_BIT);
         gl.use_program(Some(self.program));
+        self.local_lights.upload(gl, frame, &self.turrets, 8);
         gl.uniform_matrix_4_f32_slice(self.uniforms.vp.as_ref(), false, &frame.vp.to_cols_array());
         gl.uniform_3_f32(
             self.uniforms.eye.as_ref(),

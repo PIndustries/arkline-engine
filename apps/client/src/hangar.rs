@@ -505,6 +505,7 @@ unsafe fn paint(renderer: &Renderer, vp: Mat4, eye: Vec3, parts: &[ModelPart]) {
     gl.clear_color(0.008, 0.014, 0.019, 1.0);
     gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
     gl.use_program(Some(renderer.program));
+    renderer.local_lights.clear(gl);
     gl.uniform_matrix_4_f32_slice(renderer.uniforms.vp.as_ref(), false, &vp.to_cols_array());
     gl.uniform_3_f32(renderer.uniforms.eye.as_ref(), eye.x, eye.y, eye.z);
     gl.uniform_1_i32(renderer.uniforms.material.as_ref(), 0);
