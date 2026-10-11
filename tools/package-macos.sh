@@ -39,15 +39,23 @@ if [ "$PROFILE" = release ]; then
 else
   cargo build --workspace --locked
 fi
+BINARIES="${CARGO_TARGET_DIR:-$ROOT/target}/$PROFILE"
 APP="$OUTPUT/Arkline.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$OUTPUT/command-tools"
-cp -f "target/$PROFILE/arkline-client" "$APP/Contents/MacOS/Arkline"
-cp -f "target/$PROFILE/arkline-server" "$APP/Contents/MacOS/arkline-server"
-cp -f "target/$PROFILE/arkline" "$OUTPUT/command-tools/arkline"
-cp -f "target/$PROFILE/arkline-verifier" "$OUTPUT/command-tools/arkline-verifier"
+cp -f "$BINARIES/arkline-client" "$APP/Contents/MacOS/Arkline"
+cp -f "$BINARIES/arkline-server" "$APP/Contents/MacOS/arkline-server"
+cp -f "$BINARIES/arkline" "$OUTPUT/command-tools/arkline"
+cp -f "$BINARIES/arkline-verifier" "$OUTPUT/command-tools/arkline-verifier"
 cp -f README.md LICENSE TRADEMARKS.md BUILD_VERSION "$OUTPUT/"
 mkdir -p "$OUTPUT/docs"
 cp -f docs/licensing.md "$OUTPUT/docs/licensing.md"
+cp -f LICENSE TRADEMARKS.md BUILD_VERSION "$APP/Contents/Resources/"
+if [ -d ThirdParty ]; then
+  cp -R ThirdParty "$APP/Contents/Resources/ThirdParty"
+fi
+if [ -f RELEASE.json ]; then
+  cp -f RELEASE.json "$APP/Contents/Resources/RELEASE.json"
+fi
 cp -f assets/Arkline.icns "$APP/Contents/Resources/Arkline.icns"
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

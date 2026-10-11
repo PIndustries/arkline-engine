@@ -1,0 +1,38 @@
+name: Prepare release downloads
+# Deliberately creates review artifacts only; publishing a public release is separate.
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-2022, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.89.0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Linux graphics and audio build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev libxi-dev libxrandr-dev libxcursor-dev libgl1-mesa-dev libasound2-dev
+      - uses: Swatinem/rust-cache@v2
+      - name: Check packaging rules
+        run: python tools/test_package_release.py
+      - name: Test the selected release source
+        run: cargo test --workspace --locked
+      - name: Prepare client, server, source, notices and checksums
+        run: python tools/package-release.py "${{ runner.temp }}/arkline-downloads"
+      - name: Preserve review downloads (no public publication)
+        uses: actions/upload-artifact@v4
+        with:
+          name: arkline-downloads-${{ matrix.os }}
+          path: ${{ runner.temp }}/arkline-downloads/*
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30

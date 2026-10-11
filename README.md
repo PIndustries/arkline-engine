@@ -1,15 +1,19 @@
 # Arkline
 
-A Rust space-universe prototype by P.Industries. Pilots share a server-authoritative
-universe of three connected test systems, mine finite ore, trade through escrow, and independently audit the economy.
+A shared space sandbox built in Rust by P.Industries and contributors. Fly a ship,
+mine finite resources, manage drones, and trade in a persistent, server-authoritative
+universe. The current test world contains three connected star systems.
 
-**Private validation preview, v0.1.0.** Keep this repository private until the owner
-has played the model, validated the direction, and explicitly approved publication.
-The project is licensed under **AGPL-3.0-only**; see [LICENSE](LICENSE) and
-[licensing notes](docs/licensing.md). Licensing does not authorize publishing this
-private repository. This preview is not a public MMO or a financial network.
+**Developer preview · 26.10.11.1.** Arkline is under active development. Expect
+unfinished systems and visual rough edges. Start with a local universe; public
+access to the official network is not available yet.
 
-## Preview 26.10.10.24
+Code and original assets are licensed under **AGPL-3.0-only**, unless marked
+otherwise. See [LICENSE](LICENSE), [third-party licensing notes](docs/licensing.md),
+and [branding policy](TRADEMARKS.md). The repository is currently private while
+release checks are completed.
+
+## Current preview
 
 Docking opens a [station hangar](docs/station-hangar.md) with a correctly scaled
 ship and an animated on-foot pilot. Walking uses a continuous full gait cycle,
@@ -50,7 +54,15 @@ not Developer ID signed or notarized.
 
 For source development:
 
-Install Rust through rustup. The repository pins Rust 1.89.0. From the repository:
+Install Rust through rustup. The repository pins Rust 1.89.0. On Ubuntu, install
+the native window, graphics and audio development packages first:
+
+```sh
+sudo apt-get update
+sudo apt-get install -y build-essential pkg-config libxkbcommon-dev libwayland-dev libx11-dev libxi-dev libxrandr-dev libxcursor-dev libgl1-mesa-dev libasound2-dev
+```
+
+Then, from the repository:
 
 ```sh
 cargo build --workspace --locked
