@@ -4296,6 +4296,7 @@ mod tests {
             }));
             let mut renderer = Renderer::new(gl.clone()).unwrap();
             let target = CachedFeed::create(&gl, 999, 128, 128).unwrap();
+            sun_shadows::test_sloped_pcf(&gl, &renderer, target.framebuffer);
             gl.bind_framebuffer(glow::FRAMEBUFFER, Some(target.framebuffer));
             gl.viewport(0, 0, 128, 128);
             gl.disable(glow::SCISSOR_TEST);

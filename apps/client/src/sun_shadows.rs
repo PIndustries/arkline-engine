@@ -418,6 +418,126 @@ pub(super) unsafe fn assert_occluder_depth(
     renderer.restore_shadow_texture(old);
 }
 
+/// GPU regression: a sloped receiver must not shadow itself under the nine PCF
+/// samples; a genuinely nearer blocker must still darken that same receiver.
+#[cfg(all(test, target_os = "macos"))]
+pub(super) unsafe fn test_sloped_pcf(
+    gl: &glow::Context,
+    renderer: &Renderer,
+    target: glow::Framebuffer,
+) {
+    let size = 512usize;
+    let mut depth: Vec<u8> = (0..size * size)
+        .flat_map(|i| {
+            let u = (i % size) as f32 / size as f32 + 0.5 / size as f32;
+            let z = 0.5 + 0.3 * (u - 0.5);
+            ((z as f64 * u32::MAX as f64) as u32).to_ne_bytes()
+        })
+        .collect();
+    let texture = gl.create_texture().unwrap();
+    gl.active_texture(glow::TEXTURE0 + UNIT);
+    gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+    gl.tex_image_2d(
+        glow::TEXTURE_2D,
+        0,
+        glow::DEPTH_COMPONENT24 as i32,
+        size as i32,
+        size as i32,
+        0,
+        glow::DEPTH_COMPONENT,
+        glow::UNSIGNED_INT,
+        glow::PixelUnpackData::Slice(Some(&depth)),
+    );
+    gl.tex_parameter_i32(
+        glow::TEXTURE_2D,
+        glow::TEXTURE_MIN_FILTER,
+        glow::NEAREST as i32,
+    );
+    gl.tex_parameter_i32(
+        glow::TEXTURE_2D,
+        glow::TEXTURE_MAG_FILTER,
+        glow::NEAREST as i32,
+    );
+    let fragment=format!("#version 150\n{}\nin vec2 uv;out vec4 color;void main(){{vec2 q=mix(vec2(0.2),vec2(0.8),uv);float z=0.5+0.3*(q.x-0.5);float v=ark_sun_visibility(vec3(q*2.0-1.0,z*2.0-1.0),normalize(vec3(-0.3,0,1)),vec3(0,0,1));color=vec4(v,v,v,1);}}",GLSL);
+    let program = compile(gl, BACK_VERTEX, &fragment).unwrap();
+    gl.bind_framebuffer(glow::FRAMEBUFFER, Some(target));
+    gl.viewport(0, 0, 128, 128);
+    gl.disable(glow::DEPTH_TEST);
+    gl.disable(glow::SCISSOR_TEST);
+    gl.disable(glow::BLEND);
+    gl.color_mask(true, true, true, true);
+    gl.use_program(Some(program));
+    gl.bind_vertex_array(Some(renderer.empty));
+    gl.uniform_1_f32(
+        gl.get_uniform_location(program, "ark_shadow_enabled")
+            .as_ref(),
+        1.0,
+    );
+    gl.uniform_1_f32(
+        gl.get_uniform_location(program, "ark_shadow_texel")
+            .as_ref(),
+        1.0 / size as f32,
+    );
+    gl.uniform_1_i32(
+        gl.get_uniform_location(program, "ark_shadow_map").as_ref(),
+        UNIT as i32,
+    );
+    gl.uniform_matrix_4_f32_slice(
+        gl.get_uniform_location(program, "ark_shadow_matrix")
+            .as_ref(),
+        false,
+        &Mat4::IDENTITY.to_cols_array(),
+    );
+    gl.draw_arrays(glow::TRIANGLES, 0, 3);
+    let mut pixels = vec![0u8; 128 * 128 * 4];
+    gl.read_pixels(
+        0,
+        0,
+        128,
+        128,
+        glow::RGBA,
+        glow::UNSIGNED_BYTE,
+        glow::PixelPackData::Slice(Some(&mut pixels)),
+    );
+    assert!(
+        pixels.chunks_exact(4).all(|p| p[0] > 250),
+        "sloped receiver produced shadow acne"
+    );
+    for y in 200..312 {
+        for x in 200..312 {
+            let i = (y * size + x) * 4;
+            depth[i..i + 4].copy_from_slice(&(u32::MAX / 4).to_ne_bytes());
+        }
+    }
+    gl.tex_image_2d(
+        glow::TEXTURE_2D,
+        0,
+        glow::DEPTH_COMPONENT24 as i32,
+        size as i32,
+        size as i32,
+        0,
+        glow::DEPTH_COMPONENT,
+        glow::UNSIGNED_INT,
+        glow::PixelUnpackData::Slice(Some(&depth)),
+    );
+    gl.draw_arrays(glow::TRIANGLES, 0, 3);
+    let mut center = [0u8; 4];
+    gl.read_pixels(
+        64,
+        64,
+        1,
+        1,
+        glow::RGBA,
+        glow::UNSIGNED_BYTE,
+        glow::PixelPackData::Slice(Some(&mut center)),
+    );
+    assert!(center[0] < 5, "real blocker failed to cast shadow");
+    gl.delete_program(program);
+    gl.delete_texture(texture);
+    gl.bind_texture(glow::TEXTURE_2D, None);
+    gl.active_texture(glow::TEXTURE0);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
