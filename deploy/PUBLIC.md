@@ -74,3 +74,17 @@ and reconnect behavior before increasing traffic. Add durable monitoring,
 scheduled off-cluster backups and measured load budgets as the audience grows.
 Native platform signing/notarization and device-specific graphics/audio testing
 are separate release checks.
+
+## Browser release paths
+
+Stage each complete browser build under `web/VERSION/`, retaining previous version
+directories. Create `release.conf` in the reviewed image build context with
+`location = / { return 302 /VERSION/$is_args$args; }`, replacing VERSION with the
+verified build number. Relative module and WASM imports then stay within that
+release even during rolling deployments. Do not change files within a published
+version. The same origin preserves existing browser pilot credentials.
+
+For `play.arkline.network`, configure Cloudflare to bypass edge caching and respect
+origin browser cache headers. The origin sends `Cache-Control: no-cache`; do not
+override it with a browser TTL. Purge legacy unversioned browser assets when
+introducing this layout. Download archives remain versioned independently.
