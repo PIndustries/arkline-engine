@@ -21,6 +21,7 @@ Example library configuration (illustrative values, not deployed endpoints or ex
     "issuer": "https://issuer.example.test/",
     "audience": "arkline:test-world",
     "required_scopes": ["game.connect"],
+    "allowed_client_ids": ["approved-game-client"],
     "allowed_algorithms": ["RS256"],
     "max_lifetime_seconds": 300,
     "clock_skew_seconds": 5
@@ -54,3 +55,5 @@ Before exposing login:
 - Complete real admission/link/restart/authorization-denial tests before enabling any official environment.
 
 References: [RFC 9068](https://www.rfc-editor.org/rfc/rfc9068.html), [OAuth security BCP](https://www.rfc-editor.org/rfc/rfc9700.html), [jsonwebtoken](https://docs.rs/jsonwebtoken/11.1.0/jsonwebtoken/).
+
+Approved client IDs are mandatory when enabled: 1–32 distinct, bounded identifiers, exact case-sensitive membership only. Wildcards and whitespace are rejected. The signed profile-specific client identifier must match; a portal or developer client does not gain game access merely by sharing an issuer. This supplements resource audience and scope checks, not user consent or proof of pilot ownership.

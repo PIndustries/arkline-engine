@@ -19,7 +19,7 @@ fn public_key() -> Value {
     json!({"kty":"RSA","alg":"RS256","use":"sig","kid":"fixture-1", "n":URL_SAFE_NO_PAD.encode(key().n().to_bytes_be()),"e":URL_SAFE_NO_PAD.encode(key().e().to_bytes_be())})
 }
 fn config_json() -> Value {
-    json!({"access_tokens":{"issuer":"https://issuer.example.test/","audience":"arkline:test-world","required_scopes":["game.connect"],"allowed_algorithms":["RS256"],"max_lifetime_seconds":300,"clock_skew_seconds":5}})
+    json!({"access_tokens":{"issuer":"https://issuer.example.test/","audience":"arkline:test-world","required_scopes":["game.connect"],"allowed_client_ids":["public-client"],"allowed_algorithms":["RS256"],"max_lifetime_seconds":300,"clock_skew_seconds":5}})
 }
 fn verifier() -> arkline_server::access_tokens::AccessTokenVerifier {
     let config: GameAuthConfig = serde_json::from_value(config_json()).unwrap();
@@ -374,5 +374,66 @@ fn sender_constrained_tokens_are_rejected_in_every_profile_until_proofs_exist() 
             rejected(&verifier, &signed(&header(), &value));
         }
         assert!(verifier.verify(&signed(&header(), &claims)).is_ok());
+    }
+}
+
+#[test]
+fn approved_clients_are_exact_bounded_and_profile_specific() {
+    let keys = serde_json::to_vec(&json!({"keys":[public_key()]})).unwrap();
+    let mut missing = config_json();
+    missing["access_tokens"]
+        .as_object_mut()
+        .unwrap()
+        .remove("allowed_client_ids");
+    assert!(serde_json::from_value::<GameAuthConfig>(missing).is_err());
+    for ids in [
+        json!([]),
+        json!([""]),
+        json!(["*"]),
+        json!(["public-client", "public-client"]),
+        json!([" public-client"]),
+        json!(["public client"]),
+        json!(["x".repeat(257)]),
+        json!(vec!["x"; 33]),
+    ] {
+        let mut config = config_json();
+        config["access_tokens"]["allowed_client_ids"] = ids;
+        let config: GameAuthConfig = serde_json::from_value(config).unwrap();
+        assert!(matches!(
+            config.build(&keys),
+            Err(ValidationError::InvalidConfiguration)
+        ));
+    }
+    for (profile, field, base) in [
+        ("rfc9068", "client_id", claims()),
+        ("rauthy037", "azp", rauthy_claims()),
+    ] {
+        let mut config = config_json();
+        config["access_tokens"]["profile"] = json!(profile);
+        config["access_tokens"]["allowed_client_ids"] = json!(["public-client", "second-client"]);
+        let config: GameAuthConfig = serde_json::from_value(config).unwrap();
+        let verifier = config.build(&keys).unwrap().unwrap();
+        for client in ["public-client", "second-client"] {
+            let mut value = base.clone();
+            value[field] = json!(client);
+            assert_eq!(
+                verifier
+                    .verify(&signed(&header(), &value))
+                    .unwrap()
+                    .client_id,
+                client
+            );
+        }
+        for client in [
+            "Public-client",
+            "public-client-other",
+            "",
+            "portal-client",
+            "public-client ",
+        ] {
+            let mut value = base.clone();
+            value[field] = json!(client);
+            rejected(&verifier, &signed(&header(), &value));
+        }
     }
 }

@@ -32,6 +32,8 @@ pub struct AccessTokenConfig {
     pub issuer: String,
     pub audience: String,
     pub required_scopes: Vec<String>,
+    /// Explicit operator-approved game clients; no wildcard or claim-selected policy.
+    pub allowed_client_ids: Vec<String>,
     pub allowed_algorithms: Vec<SigningAlgorithm>,
     /// Maximum signed exp-iat lifetime; must be 1..=900 seconds.
     pub max_lifetime_seconds: u64,
@@ -128,6 +130,17 @@ impl AccessTokenVerifier {
             || !bounded_text(&config.issuer, 2048)
             || !bounded_text(&config.audience, 256)
             || config.audience.trim() != config.audience
+            || config.allowed_client_ids.is_empty()
+            || config.allowed_client_ids.len() > 32
+            || !config.allowed_client_ids.iter().all(|id| {
+                bounded_text(id, 256) && !id.chars().any(char::is_whitespace) && id != "*"
+            })
+            || config
+                .allowed_client_ids
+                .iter()
+                .collect::<BTreeSet<_>>()
+                .len()
+                != config.allowed_client_ids.len()
             || config.required_scopes.is_empty()
             || config.required_scopes.len() > 16
             || !config.required_scopes.iter().all(|s| scope_name(s))
@@ -259,6 +272,11 @@ impl AccessTokenVerifier {
             .as_secs();
         if !bounded_text(&claims.sub, 256)
             || !bounded_text(client_id, 256)
+            || !self
+                .config
+                .allowed_client_ids
+                .iter()
+                .any(|id| id == client_id)
             || !bounded_text(&claims.jti, 256)
             || claims.iss != self.config.issuer
             || claims.exp <= now
