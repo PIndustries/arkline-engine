@@ -19,6 +19,10 @@ tungstenite = { version = "0.28", default-features = false, features = ["handsha
 
 rustls = { version = "0.23", default-features = false, features = ["std", "ring", "tls12"] }
 rustls-pemfile = "2"
+jsonwebtoken = { version = "11.1", default-features = false, features = ["rust_crypto"] }
+url = "2.5"
+base64 = "0.22"
 
 [dev-dependencies]
+rsa = "0.9"
 arkline-verifier = { path = "../verifier" }
