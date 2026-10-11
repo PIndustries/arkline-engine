@@ -1,4 +1,4 @@
-//! Native GPU flight view. Presentation only: never issues simulation commands.
+//! Desktop and WebGL2 GPU flight view. Presentation only: never issues simulation commands.
 use arkline_protocol::{
     gates, systems, Asteroid, Destination, Location, NavigationMode, NavigationTarget, PilotView,
     ShipClass, Snapshot, Stargate, BELT_POSITION, HOME_SYSTEM_ID, JUMP_DURATION_MS, SPACE_BOUND,
@@ -245,6 +245,8 @@ pub struct FlightView {
     space: Space,
 }
 impl FlightView {
+    // egui callbacks share ownership on one browser thread; SendWrapper guards access.
+    #[cfg_attr(target_arch = "wasm32", allow(clippy::arc_with_non_send_sync))]
     pub fn new(gl: Option<&Arc<glow::Context>>) -> Self {
         let renderer = gl
             .ok_or_else(|| {
@@ -778,6 +780,9 @@ impl FlightView {
                     }
                 }
                 let drone_renderer = renderer.clone();
+                // WebGL objects stay on the browser thread; guard callback access.
+                #[cfg(target_arch = "wasm32")]
+                let renderer = send_wrapper::SendWrapper::new(renderer);
                 ui.painter().add(egui::PaintCallback {
                     rect,
                     callback: Arc::new(egui_glow::CallbackFn::new(move |_, _| {
@@ -1147,6 +1152,8 @@ impl FlightView {
                                 connected && now.saturating_sub(snapshot.server_time_ms) <= 1500;
                             if drone.is_none_or(|d| d.signal_strength > 0.0) {
                                 let renderer = drone_renderer.clone();
+                                #[cfg(target_arch = "wasm32")]
+                                let renderer = send_wrapper::SendWrapper::new(renderer);
                                 let key = egui::Id::new((
                                     pilot_name,
                                     drone.map(|d| d.id),
@@ -1158,11 +1165,15 @@ impl FlightView {
                                     egui::PaintCallback {
                                         rect: screen,
                                         callback: Arc::new(egui_glow::CallbackFn::new(
-                                            move |info, _| {
+                                            move |info, painter| {
                                                 if let Ok(mut renderer) = renderer.lock() {
                                                     unsafe {
                                                         renderer.paint_cached_feed(
-                                                            &feed, key, info, feed_count,
+                                                            &feed,
+                                                            key,
+                                                            info,
+                                                            feed_count,
+                                                            painter.intermediate_fbo(),
                                                         );
                                                     }
                                                 }
@@ -1759,6 +1770,8 @@ struct Renderer {
     gl: Arc<glow::Context>,
     program: glow::Program,
     background: glow::Program,
+    #[cfg(target_arch = "wasm32")]
+    feed_program: glow::Program,
     empty: glow::VertexArray,
     meshes: Vec<Mesh>,
     uniforms: Uniforms,
@@ -1769,8 +1782,13 @@ struct Renderer {
 }
 impl Renderer {
     unsafe fn new(gl: Arc<glow::Context>) -> Result<Self, String> {
+        if gl.version().is_embedded && gl.version().major < 3 {
+            return Err("Arkline 3D requires WebGL2 / OpenGL ES 3 or newer".into());
+        }
         let program = compile(&gl, VERTEX, FRAGMENT)?;
         let background = compile(&gl, BACK_VERTEX, BACK_FRAGMENT)?;
+        #[cfg(target_arch = "wasm32")]
+        let feed_program = compile(&gl, BACK_VERTEX, FEED_FRAGMENT)?;
         let empty = gl.create_vertex_array()?;
         let mut meshes = vec![];
         let uniforms = Uniforms {
@@ -1827,6 +1845,8 @@ impl Renderer {
             gl,
             program,
             background,
+            #[cfg(target_arch = "wasm32")]
+            feed_program,
             empty,
             meshes,
             uniforms,
@@ -1850,12 +1870,20 @@ impl Renderer {
         key: u64,
         info: egui::PaintCallbackInfo,
         count: usize,
+        _callback_target: Option<glow::Framebuffer>,
     ) {
         let gl = self.gl.clone();
         let viewport = info.viewport_in_pixels();
         let (width, height) = feed_resolution(viewport.width_px, viewport.height_px);
-        let draw = gl.get_parameter_framebuffer(glow::DRAW_FRAMEBUFFER_BINDING);
-        let read = gl.get_parameter_framebuffer(glow::READ_FRAMEBUFFER_BINDING);
+        // glow 0.16 cannot look up WebGL's null/default framebuffer safely.
+        // egui supplies the documented callback target instead.
+        #[cfg(target_arch = "wasm32")]
+        let (draw, read) = (_callback_target, _callback_target);
+        #[cfg(not(target_arch = "wasm32"))]
+        let (draw, read) = (
+            gl.get_parameter_framebuffer(glow::DRAW_FRAMEBUFFER_BINDING),
+            gl.get_parameter_framebuffer(glow::READ_FRAMEBUFFER_BINDING),
+        );
         let mut old_viewport = [0; 4];
         let mut old_scissor = [0; 4];
         gl.get_parameter_i32_slice(glow::VIEWPORT, &mut old_viewport);
@@ -1863,7 +1891,9 @@ impl Renderer {
         let scissor = gl.is_enabled(glow::SCISSOR_TEST);
         let depth_enabled = gl.is_enabled(glow::DEPTH_TEST);
         let blend_enabled = gl.is_enabled(glow::BLEND);
-        let srgb = gl.is_enabled(glow::FRAMEBUFFER_SRGB);
+        // WebGL2 does not expose the desktop FRAMEBUFFER_SRGB capability.
+        let desktop_srgb = !gl.version().is_embedded;
+        let srgb = desktop_srgb && gl.is_enabled(glow::FRAMEBUFFER_SRGB);
         let depth_mask = gl.get_parameter_bool(glow::DEPTH_WRITEMASK);
         let color_mask = gl.get_parameter_bool_array::<4>(glow::COLOR_WRITEMASK);
         let blend = [
@@ -1877,7 +1907,9 @@ impl Renderer {
             gl.get_parameter_i32(glow::BLEND_EQUATION_ALPHA),
         ];
         gl.color_mask(true, true, true, true);
-        gl.disable(glow::FRAMEBUFFER_SRGB);
+        if desktop_srgb {
+            gl.disable(glow::FRAMEBUFFER_SRGB);
+        }
         if let Some(index) = self
             .feed_cache
             .iter()
@@ -1928,6 +1960,7 @@ impl Renderer {
             if srgb {
                 gl.enable(glow::FRAMEBUFFER_SRGB);
             }
+            #[cfg(not(target_arch = "wasm32"))]
             gl.blit_framebuffer(
                 0,
                 0,
@@ -1940,6 +1973,30 @@ impl Renderer {
                 glow::COLOR_BUFFER_BIT,
                 glow::LINEAR,
             );
+            #[cfg(target_arch = "wasm32")]
+            {
+                // WebGL cannot blit into every browser-owned default framebuffer.
+                // Sample the cached image into the callback target instead.
+                gl.bind_framebuffer(glow::FRAMEBUFFER, draw);
+                gl.viewport(
+                    viewport.left_px,
+                    viewport.from_bottom_px,
+                    viewport.width_px,
+                    viewport.height_px,
+                );
+                gl.disable(glow::DEPTH_TEST);
+                gl.disable(glow::BLEND);
+                gl.use_program(Some(self.feed_program));
+                gl.bind_vertex_array(Some(self.empty));
+                gl.active_texture(glow::TEXTURE0);
+                gl.bind_texture(glow::TEXTURE_2D, Some(self.feed_cache[index].texture));
+                gl.uniform_1_i32(
+                    gl.get_uniform_location(self.feed_program, "image").as_ref(),
+                    0,
+                );
+                gl.draw_arrays(glow::TRIANGLES, 0, 3);
+                gl.bind_texture(glow::TEXTURE_2D, None);
+            }
         }
         gl.depth_mask(depth_mask);
         gl.color_mask(color_mask[0], color_mask[1], color_mask[2], color_mask[3]);
@@ -1953,12 +2010,18 @@ impl Renderer {
         for (state, enabled) in [
             (glow::DEPTH_TEST, depth_enabled),
             (glow::BLEND, blend_enabled),
-            (glow::FRAMEBUFFER_SRGB, srgb),
         ] {
             if enabled {
                 gl.enable(state);
             } else {
                 gl.disable(state);
+            }
+        }
+        if desktop_srgb {
+            if srgb {
+                gl.enable(glow::FRAMEBUFFER_SRGB);
+            } else {
+                gl.disable(glow::FRAMEBUFFER_SRGB);
             }
         }
         gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, draw);
@@ -2674,6 +2737,8 @@ impl Renderer {
         self.gl.delete_vertex_array(self.empty);
         self.gl.delete_program(self.program);
         self.gl.delete_program(self.background);
+        #[cfg(target_arch = "wasm32")]
+        self.gl.delete_program(self.feed_program);
     }
 }
 fn rebased_camera_target(target: Vec3, old: Space, new: Space, warp: bool) -> Vec3 {
@@ -3935,7 +4000,16 @@ unsafe fn compile(
         (glow::FRAGMENT_SHADER, fragment),
     ] {
         let shader = gl.create_shader(kind)?;
-        gl.shader_source(shader, source);
+        let source = if gl.version().is_embedded {
+            source.replacen(
+                "#version 150",
+                "#version 300 es\nprecision highp float;\nprecision highp int;",
+                1,
+            )
+        } else {
+            source.to_owned()
+        };
+        gl.shader_source(shader, &source);
         gl.compile_shader(shader);
         if !gl.get_shader_compile_status(shader) {
             let error = gl.get_shader_info_log(shader);
@@ -4015,6 +4089,11 @@ color=vec4(ark_display(lit),1.0);}
 "#;
 const BACK_VERTEX: &str = r#"#version 150
 out vec2 uv;void main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);uv=p;gl_Position=vec4(p*2.0-1.0,0.999,1.0);}
+"#;
+#[cfg(target_arch = "wasm32")]
+const FEED_FRAGMENT: &str = r#"#version 150
+in vec2 uv; uniform sampler2D image; out vec4 color;
+void main(){color=texture(image,uv);}
 "#;
 const BACK_FRAGMENT: &str = r#"#version 150
 in vec2 uv;uniform float atmosphere;uniform vec3 planet_up;uniform mat4 inverse_view_projection;uniform vec3 camera_eye;out vec4 color;
@@ -4160,7 +4239,7 @@ mod tests {
                 pixels_per_point: 1.,
                 screen_size_px: [128, 128],
             };
-            renderer.paint_cached_feed(&frame, 1, info(), 1);
+            renderer.paint_cached_feed(&frame, 1, info(), 1, None);
             assert_eq!(
                 gl.get_parameter_framebuffer(glow::DRAW_FRAMEBUFFER_BINDING),
                 Some(target.framebuffer)
@@ -4194,10 +4273,10 @@ mod tests {
             );
             assert_eq!(pixels, [255, 0, 255, 255], "outside clip stays untouched");
             frame.now = 1008;
-            renderer.paint_cached_feed(&frame, 1, info(), 1);
+            renderer.paint_cached_feed(&frame, 1, info(), 1, None);
             assert_eq!(renderer.feed_cache[0].painted_ms, Some(1000));
             for key in 2..=5 {
-                renderer.paint_cached_feed(&frame, key, info(), 4);
+                renderer.paint_cached_feed(&frame, key, info(), 4, None);
             }
             assert_eq!(renderer.feed_cache.len(), 4);
             assert!(!renderer.feed_cache.iter().any(|cache| cache.key == 1));

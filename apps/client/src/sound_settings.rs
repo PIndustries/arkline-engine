@@ -1,9 +1,11 @@
 //! Local audio preferences; never part of shared ship or economy state.
 use eframe::egui;
+#[cfg(not(target_arch = "wasm32"))]
+use std::io::{Read, Write};
+use std::path::Path;
+#[cfg(not(target_arch = "wasm32"))]
 use std::{
     fs,
-    io::{Read, Write},
-    path::Path,
     sync::atomic::{AtomicU64, Ordering},
 };
 
@@ -38,12 +40,20 @@ impl SoundSettings {
     }
     pub fn load(data_dir: &Path) -> Self {
         let result = (|| -> Option<Self> {
-            let mut bytes = Vec::new();
-            fs::File::open(data_dir.join("sound.json"))
+            #[cfg(target_arch = "wasm32")]
+            let bytes = super::browser::read(&data_dir.join("sound.json"))
                 .ok()?
-                .take(16_385)
-                .read_to_end(&mut bytes)
-                .ok()?;
+                .into_bytes();
+            #[cfg(not(target_arch = "wasm32"))]
+            let bytes = {
+                let mut bytes = Vec::new();
+                fs::File::open(data_dir.join("sound.json"))
+                    .ok()?
+                    .take(16_385)
+                    .read_to_end(&mut bytes)
+                    .ok()?;
+                bytes
+            };
             if bytes.len() > 16_384 {
                 return None;
             }
@@ -66,31 +76,38 @@ impl SoundSettings {
         if !self.valid() {
             return Err("Sound levels must be finite values between 0 and 1".into());
         }
-        static NEXT: AtomicU64 = AtomicU64::new(0);
-        fs::create_dir_all(data_dir).map_err(|e| e.to_string())?;
-        let temporary = data_dir.join(format!(
-            ".sound-{}-{}.tmp",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        let result = (|| -> std::io::Result<()> {
-            let mut options = fs::OpenOptions::new();
-            options.write(true).create_new(true);
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::OpenOptionsExt;
-                options.mode(0o600);
-            }
-            let mut file = options.open(&temporary)?;
-            let json = serde_json::json!({"master":self.master,"ambience":self.ambience,"effects":self.effects,"muted":self.muted});
-            file.write_all(json.to_string().as_bytes())?;
-            file.sync_all()?;
-            fs::rename(&temporary, data_dir.join("sound.json"))
-        })();
-        if result.is_err() {
-            let _ = fs::remove_file(&temporary);
+        #[cfg(target_arch = "wasm32")]
+        {
+            super::browser::write(&data_dir.join("sound.json"), &serde_json::json!({"master":self.master,"ambience":self.ambience,"effects":self.effects,"muted":self.muted}).to_string())
         }
-        result.map_err(|e| format!("Could not save sound preferences: {e}"))
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            static NEXT: AtomicU64 = AtomicU64::new(0);
+            fs::create_dir_all(data_dir).map_err(|e| e.to_string())?;
+            let temporary = data_dir.join(format!(
+                ".sound-{}-{}.tmp",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            let result = (|| -> std::io::Result<()> {
+                let mut options = fs::OpenOptions::new();
+                options.write(true).create_new(true);
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::OpenOptionsExt;
+                    options.mode(0o600);
+                }
+                let mut file = options.open(&temporary)?;
+                let json = serde_json::json!({"master":self.master,"ambience":self.ambience,"effects":self.effects,"muted":self.muted});
+                file.write_all(json.to_string().as_bytes())?;
+                file.sync_all()?;
+                fs::rename(&temporary, data_dir.join("sound.json"))
+            })();
+            if result.is_err() {
+                let _ = fs::remove_file(&temporary);
+            }
+            result.map_err(|e| format!("Could not save sound preferences: {e}"))
+        }
     }
     pub fn ui(&mut self, ui: &mut egui::Ui, status: &str) -> SoundAction {
         let mut action = SoundAction::default();

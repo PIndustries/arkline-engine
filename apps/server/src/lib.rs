@@ -193,6 +193,59 @@ impl Server {
             _ownership_lock: ownership_lock,
         })
     }
+    /// Additional public-WebSocket admission bounds; local operator transport remains available.
+    /// Returns true only for an attempt to register a new pilot.
+    pub fn check_public_request(
+        &self,
+        pilot: Option<&str>,
+        request: &Request,
+        max_pilots: usize,
+    ) -> Result<bool> {
+        if matches!(request, Request::ExportLedger) {
+            let entries: u64 = self
+                .db
+                .query_row("SELECT COUNT(*) FROM ledger", [], |r| r.get(0))?;
+            ensure!(
+                entries <= 10_000,
+                "ledger exceeds public export limit; request an operator export"
+            );
+        }
+        if !matches!(
+            request,
+            Request::Connect {
+                resume_token: None,
+                ..
+            } | Request::PlaceSell { .. }
+        ) {
+            return Ok(false);
+        }
+        let raw: String = self
+            .db
+            .query_row("SELECT json FROM world WHERE id=1", [], |r| r.get(0))?;
+        let w: World = serde_json::from_str(&raw)?;
+        match request {
+            Request::Connect { pilot, .. } if !w.pilots.contains_key(pilot) => {
+                ensure!(
+                    w.pilots.len() < max_pilots,
+                    "public world registration capacity reached"
+                );
+                Ok(true)
+            }
+            Request::PlaceSell { .. } => {
+                ensure!(w.orders.len() < 1024, "public open-order capacity reached");
+                ensure!(
+                    w.orders
+                        .values()
+                        .filter(|o| Some(o.seller.as_str()) == pilot)
+                        .count()
+                        < 64,
+                    "pilot open-order capacity reached"
+                );
+                Ok(false)
+            }
+            _ => Ok(false),
+        }
+    }
     pub fn handle(&mut self, session: &mut Option<String>, request: Request) -> Response {
         self.handle_at(session, request, now_ms())
     }

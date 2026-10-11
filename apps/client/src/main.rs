@@ -1,6 +1,9 @@
 //! Native Arkline cockpit. All displayed world data originates from the server.
+#[cfg(not(target_arch = "wasm32"))]
 mod audit;
 mod boot;
+#[cfg(target_arch = "wasm32")]
+mod browser;
 mod effects;
 mod flight3d;
 mod layout;
@@ -10,6 +13,10 @@ mod remote_control_ui;
 mod resource_jobs_ui;
 mod sandbox;
 mod services;
+#[cfg(not(target_arch = "wasm32"))]
+mod ship_ai;
+#[cfg(target_arch = "wasm32")]
+#[path = "browser_ship_ai.rs"]
 mod ship_ai;
 mod sound_engine;
 mod sound_scene;
@@ -17,22 +24,62 @@ mod sound_settings;
 mod station_ui;
 mod target_controls;
 mod theme;
+mod transport;
 #[cfg(test)]
 mod transport_tests;
+#[cfg(not(target_arch = "wasm32"))]
+mod voice;
+#[cfg(target_arch = "wasm32")]
+#[path = "browser_voice.rs"]
 mod voice;
 use arkline_protocol::*;
 use eframe::egui::{self, Color32, Pos2, Stroke, Vec2};
 use sha2::{Digest, Sha256};
 use std::{
     collections::VecDeque,
+    path::PathBuf,
+    sync::mpsc::{self, Receiver, Sender},
+    time::Duration,
+};
+
+#[cfg(not(target_arch = "wasm32"))]
+use std::{
     fs,
     io::{BufRead, BufReader, Write},
     net::{TcpStream, ToSocketAddrs},
-    path::PathBuf,
     process::{Child, Command, Stdio},
-    sync::mpsc::{self, Receiver, Sender},
-    time::{Duration, Instant},
 };
+use web_time::Instant;
+
+fn is_fullscreen(ctx: &egui::Context) -> bool {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = ctx;
+        web_sys::window()
+            .and_then(|w| w.document())
+            .is_some_and(|d| d.fullscreen_element().is_some())
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        ctx.input(|i| i.viewport().fullscreen.unwrap_or(false))
+    }
+}
+fn toggle_fullscreen(ctx: &egui::Context) {
+    #[cfg(target_arch = "wasm32")]
+    {
+        if let Some(document) = web_sys::window().and_then(|w| w.document()) {
+            if is_fullscreen(ctx) {
+                document.exit_fullscreen();
+            } else if let Some(canvas) = document.get_element_by_id("arkline_canvas") {
+                let _ = canvas.request_fullscreen();
+            }
+        }
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!is_fullscreen(ctx)));
+    }
+}
 
 const TEAL: Color32 = Color32::from_rgb(70, 235, 133);
 const AMBER: Color32 = Color32::from_rgb(255, 192, 104);
@@ -48,6 +95,7 @@ pub(crate) enum ViewMode {
 
 enum Update {
     Ready,
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     Reconnecting(String),
     Response(Box<Response>, bool),
     Failure(String),
@@ -60,9 +108,11 @@ fn credentials_path(dir: &std::path::Path, server: &str, pilot: &str) -> PathBuf
         hex::encode(Sha256::digest(identity))
     ))
 }
+#[cfg(not(target_arch = "wasm32"))]
 fn exchange(reader: &mut BufReader<TcpStream>, request: &Request) -> Result<Response, String> {
     exchange_with_timeout(reader, request, Duration::from_secs(5))
 }
+#[cfg(not(target_arch = "wasm32"))]
 fn exchange_with_timeout(
     reader: &mut BufReader<TcpStream>,
     request: &Request,
@@ -129,6 +179,7 @@ fn exchange_with_timeout(
         }
     }
 }
+#[cfg(not(target_arch = "wasm32"))]
 fn connect_transport(server: &str) -> Result<BufReader<TcpStream>, String> {
     let addresses: Vec<_> = server
         .to_socket_addrs()
@@ -147,6 +198,7 @@ fn connect_transport(server: &str) -> Result<BufReader<TcpStream>, String> {
     Ok(BufReader::new(stream))
 }
 /// Drop all requests accumulated before recovery, never replay actions or controls.
+#[cfg(not(target_arch = "wasm32"))]
 fn discard_pending(commands: &Receiver<Request>, controls: &pilot_input::Mailbox) -> bool {
     controls.clear();
     loop {
@@ -157,6 +209,7 @@ fn discard_pending(commands: &Receiver<Request>, controls: &pilot_input::Mailbox
         }
     }
 }
+#[cfg(not(target_arch = "wasm32"))]
 fn save_token(path: &std::path::Path, token: &str) -> Result<(), String> {
     let parent = path.parent().ok_or("Invalid credential directory")?;
     fs::create_dir_all(parent).map_err(|e| format!("Cannot create credential directory: {e}"))?;
@@ -178,6 +231,7 @@ fn save_token(path: &std::path::Path, token: &str) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     file.sync_all().map_err(|e| e.to_string())
 }
+#[cfg(not(target_arch = "wasm32"))]
 fn worker(
     server: String,
     pilot: String,
@@ -196,15 +250,12 @@ fn worker(
         };
         // Check storage before creating a server-side identity.
         fs::create_dir_all(&dir).map_err(|e| format!("Credential directory unavailable: {e}"))?;
-        let mut reader = connect_transport(&server)?;
-        let mut response = exchange(
-            &mut reader,
-            &Request::Connect {
-                protocol_version: PROTOCOL_VERSION,
-                pilot: pilot.clone(),
-                resume_token: token.clone(),
-            },
-        )?;
+        let mut reader = transport::Connection::connect(&server)?;
+        let mut response = reader.exchange(&Request::Connect {
+            protocol_version: PROTOCOL_VERSION,
+            pilot: pilot.clone(),
+            resume_token: token.clone(),
+        })?;
         if !response.ok {
             return Err(response.message);
         }
@@ -240,7 +291,7 @@ fn worker(
             ) {
                 controls.clear();
             }
-            let response = match exchange(&mut reader, &request) {
+            let response = match reader.exchange(&request) {
                 Ok(response) => response,
                 Err(error) => {
                     let uncertainty = if visible {
@@ -252,7 +303,7 @@ fn worker(
                     updates
                         .send(Update::Reconnecting(explanation.clone()))
                         .map_err(|e| e.to_string())?;
-                    let _ = reader.get_mut().shutdown(std::net::Shutdown::Both);
+                    reader.close();
                     if token.is_none() {
                         return Err(format!("{explanation} No saved identity is available for safe automatic recovery."));
                     }
@@ -276,15 +327,12 @@ fn worker(
                             }
                         }
                         let attempt = (|| {
-                            let mut next = connect_transport(&server)?;
-                            let mut resumed = exchange(
-                                &mut next,
-                                &Request::Connect {
-                                    protocol_version: PROTOCOL_VERSION,
-                                    pilot: pilot.clone(),
-                                    resume_token: token.clone(),
-                                },
-                            )?;
+                            let mut next = transport::Connection::connect(&server)?;
+                            let mut resumed = next.exchange(&Request::Connect {
+                                protocol_version: PROTOCOL_VERSION,
+                                pilot: pilot.clone(),
+                                resume_token: token.clone(),
+                            })?;
                             if !resumed.ok {
                                 return Err(format!("Resume rejected: {}", resumed.message));
                             }
@@ -408,6 +456,7 @@ struct Cockpit {
     station_walk_active: bool,
     frozen_time: Option<u64>,
     focus_on_first_frame: bool,
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     local_server: Option<LocalServer>,
     service_tab: ServiceTab,
     selected_object: SelectedObject,
@@ -648,6 +697,8 @@ impl Cockpit {
         })
     }
     fn connect(&mut self) {
+        #[cfg(target_arch = "wasm32")]
+        self.sound.start();
         self.sound_scene.reset();
         self.invalidate_ai_session();
         self.resource_pilot = None;
@@ -681,12 +732,22 @@ impl Cockpit {
         let dir = self.data_dir.clone();
         let scope = self.credential_scope.clone();
         let controls = self.controls.clone();
+        #[cfg(not(target_arch = "wasm32"))]
         std::thread::spawn(move || worker(server, pilot, dir, scope, rx, out_tx, controls));
+        #[cfg(target_arch = "wasm32")]
+        browser::worker(server, pilot, dir, scope, rx, out_tx, controls);
         self.commands = Some(tx);
         self.updates = Some(out_rx);
         self.connecting = true;
         self.notice = "Connecting…".into();
     }
+    #[cfg(target_arch = "wasm32")]
+    fn second_cockpit(&mut self) {
+        if let Some(window) = web_sys::window() {
+            let _ = window.open_with_url("?network=production");
+        }
+    }
+    #[cfg(not(target_arch = "wasm32"))]
     fn second_cockpit(&mut self) {
         let result = std::env::current_exe().and_then(|exe| {
             let mut command = Command::new(exe);
@@ -2182,9 +2243,12 @@ impl Cockpit {
                 ));
                 let (tx, rx) = mpsc::channel();
                 self.audit_updates = Some(rx);
+                #[cfg(not(target_arch = "wasm32"))]
                 std::thread::spawn(move || {
                     let _ = tx.send(audit::audit(&server, &path));
                 });
+                #[cfg(target_arch = "wasm32")]
+                { let _ = (server, path); let _ = tx.send(Err("Independent ledger export auditing currently requires the native client or arkline-verifier CLI.".into())); }
             }
             if self.audit_updates.is_some() {
                 ui.spinner();
@@ -3055,6 +3119,7 @@ impl eframe::App for Cockpit {
     fn on_exit(&mut self, _: Option<&eframe::glow::Context>) {
         // macOS application termination may bypass unwinding main's stack.
         // Shut down only this cockpit's owned host inside the lifecycle callback.
+        #[cfg(not(target_arch = "wasm32"))]
         drop(self.local_server.take());
         self.flight_view.destroy();
         self.hangar_view.destroy();
@@ -3114,7 +3179,7 @@ impl eframe::App for Cockpit {
                 ui.horizontal(|ui| {
                     ui.heading(egui::RichText::new("ARKLINE").color(self.accent()));
                     ui.colored_label(AMBER, BUILD_VERSION.trim());
-                    ui.small("PRIVATE");
+                    ui.small("EARLY ACCESS");
                 });
             });
             egui::CentralPanel::default().show(ctx, |ui| {
@@ -3126,9 +3191,15 @@ impl eframe::App for Cockpit {
                     ui.scope(|ui| {
                         ui.set_max_width(400.0);
                         ui.add_enabled_ui(!self.connecting, |ui| {
+                            ui.horizontal(|ui| {
+                                for (label, endpoint) in [("Production", transport::OFFICIAL_SERVER), ("Test", transport::TEST_SERVER)] {
+                                    if ui.add_enabled(self.credential_scope.is_none(), egui::Button::new(label).selected(self.server == endpoint)).clicked() { self.server = endpoint.into(); }
+                                }
+                                ui.label("or custom:");
+                            });
                             ui.label("Server address"); ui.add_enabled(self.credential_scope.is_none(), egui::TextEdit::singleline(&mut self.server).desired_width(380.0));
                             ui.label("Pilot name"); ui.add(egui::TextEdit::singleline(&mut self.pilot).hint_text("Choose a pilot name").desired_width(380.0));
-                            ui.small("Creates a pilot on first connection. Saved credentials resume it automatically on this computer.");
+                            ui.small("Creates a pilot on first connection. Saved credentials resume it automatically on this device.");
                             ui.add_space(10.0);
                             if ui.add_enabled(!self.pilot.trim().is_empty() && !self.server.trim().is_empty(), egui::Button::new("Enter the universe").min_size(Vec2::new(380.0, 44.0))).clicked() { self.connect(); }
                         });
@@ -3142,15 +3213,21 @@ impl eframe::App for Cockpit {
                             ui.label("Start a local universe from the repository:");
                             ui.code("cargo run -p arkline-server");
                         }
-                        ui.small("This prototype uses local TCP. Use a secure tunnel for remote play.");
+                        ui.small("Official servers use encrypted WSS. Production and Test have separate pilots and worlds.");
+                        let version = BUILD_VERSION.trim();
+                        ui.horizontal_wrapped(|ui| {
+                            ui.hyperlink_to("Source (AGPL-3.0)", format!("https://downloads.arkline.network/{version}/Arkline-{version}-aarch64-apple-darwin-source.tar.gz"));
+                            ui.hyperlink_to("License", "https://play.arkline.network/LICENSE");
+                        });
+                        #[cfg(target_arch = "wasm32")]
+                        ui.small("Browser credentials are saved in this browser. Clearing site data loses your resume key. Native speech, SSH model orders, and independent ledger auditing require the native client.");
                     });
                 });
             });
             return;
         }
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::F11)) {
-            let fullscreen = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
-            ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!fullscreen));
+            toggle_fullscreen(ctx);
         }
         let in_hangar = self.in_station_hangar();
         let bounds = ctx.screen_rect().shrink(8.0);
@@ -3180,7 +3257,7 @@ impl eframe::App for Cockpit {
                                     .strong(),
                             );
                             ui.colored_label(AMBER, BUILD_VERSION.trim());
-                            ui.small("PRIVATE");
+                            ui.small("EARLY ACCESS");
                             let frame_ms = self.frame_intervals.iter().sum::<f64>()
                                 / self.frame_intervals.len().max(1) as f64
                                 * 1000.0;
@@ -3214,8 +3291,7 @@ impl eframe::App for Cockpit {
                             } else {
                                 self.view_selector(ui);
                             }
-                            let fullscreen =
-                                ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
+                            let fullscreen = is_fullscreen(ctx);
                             if ui
                                 .small_button(if fullscreen {
                                     "Windowed (F11)"
@@ -3224,9 +3300,7 @@ impl eframe::App for Cockpit {
                                 })
                                 .clicked()
                             {
-                                ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(
-                                    !fullscreen,
-                                ));
+                                toggle_fullscreen(ctx);
                             }
                         });
                         self.ship_connection_panel(ui);
@@ -3590,13 +3664,18 @@ impl eframe::App for Cockpit {
     }
 }
 /// Only the process that spawned a local host owns its lifetime.
+#[cfg(not(target_arch = "wasm32"))]
 struct LocalServer(Child);
+#[cfg(target_arch = "wasm32")]
+struct LocalServer;
+#[cfg(not(target_arch = "wasm32"))]
 impl Drop for LocalServer {
     fn drop(&mut self) {
         let _ = self.0.kill();
         let _ = self.0.wait();
     }
 }
+#[cfg(not(target_arch = "wasm32"))]
 fn start_local_server(dir: &std::path::Path) -> Result<(LocalServer, String), String> {
     fs::create_dir_all(dir).map_err(|e| format!("Cannot create preview storage: {e}"))?;
     let executable = std::env::current_exe()
@@ -3651,14 +3730,15 @@ fn start_local_server(dir: &std::path::Path) -> Result<(LocalServer, String), St
     }
     Ok((guard, address))
 }
+#[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result<()> {
     let bundled = std::env::current_exe()
         .ok()
         .is_some_and(|path| path.parent().is_some_and(|p| p.ends_with("Contents/MacOS")));
-    let mut local = bundled;
+    let mut local = false;
     let mut remote_only = false;
     let mut explicit_server = false;
-    let mut server = "127.0.0.1:7777".to_string();
+    let mut server = transport::OFFICIAL_SERVER.to_string();
     let mut data_dir = if bundled {
         std::env::var_os("HOME")
             .map(PathBuf::from)
@@ -3677,7 +3757,7 @@ fn main() -> eframe::Result<()> {
                 return Ok(());
             }
             "--help" | "-h" => {
-                println!("Arkline native client\n\nUsage: arkline-client [--local | --remote-only] [--server HOST:PORT] [--data-dir PATH] [--pilot NAME]\n\n--pilot creates or resumes the named pilot immediately.\n--local starts a sibling arkline-server on a private loopback port.\nA macOS app bundle starts locally by default and saves in ~/Library/Application Support/Arkline/Preview.\n--server selects an existing server; --remote-only prevents bundle auto-hosting.\nCLI defaults: 127.0.0.1:7777, data/client.\n--credential-scope NAME selects a stable credential namespace (used by local preview cockpits).\nResume credentials are private local files. Development TCP requires a secure tunnel for remote use.");
+                println!("Arkline native client\n\nUsage: arkline-client [--local | --remote-only] [--server WSS_URL_OR_HOST:PORT] [--data-dir PATH] [--pilot NAME]\n\n--pilot creates or resumes the named pilot immediately.\n--local starts a sibling arkline-server on a private loopback port.\nThe macOS bundle saves in ~/Library/Application Support/Arkline/Preview.\n--server selects an existing server; --remote-only disables an explicit --local option.\nDefault server: wss://relay.arkline.network/ws (Production). CLI storage: data/client.\n--credential-scope NAME selects a stable credential namespace (used by local preview cockpits).\nResume credentials are private local files. WSS verifies TLS certificates. Plain TCP is retained for local development.");
                 return Ok(());
             }
             "--local" => local = true,
@@ -6001,4 +6081,9 @@ mod tests {
         }
         fs::remove_dir_all(dir).unwrap();
     }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn main() {
+    browser::start();
 }

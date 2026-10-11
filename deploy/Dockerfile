@@ -12,6 +12,6 @@ WORKDIR /data
 COPY --from=build /src/target/release/arkline-server /usr/local/bin/arkline-server
 COPY LICENSE TRADEMARKS.md /usr/share/doc/arkline/
 USER 10001:10001
-EXPOSE 7777
+EXPOSE 7777 7778
 ENTRYPOINT ["/usr/local/bin/arkline-server"]
 CMD ["--bind", "0.0.0.0:7777", "--db", "/data/world.sqlite"]

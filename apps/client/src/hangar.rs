@@ -20,6 +20,8 @@ pub struct HangarView {
     gait: avatar_animation::Gait,
 }
 impl HangarView {
+    // egui callbacks share ownership on one browser thread; SendWrapper guards access.
+    #[cfg_attr(target_arch = "wasm32", allow(clippy::arc_with_non_send_sync))]
     pub fn new(gl: Option<&Arc<glow::Context>>) -> Self {
         let result = gl.map(|gl| unsafe { Renderer::new(gl.clone()) });
         let (renderer, error) = match result {
@@ -138,6 +140,8 @@ impl HangarView {
         }
         if let Some(renderer) = &self.renderer {
             let renderer = renderer.clone();
+            #[cfg(target_arch = "wasm32")]
+            let renderer = send_wrapper::SendWrapper::new(renderer);
             ui.painter().add(egui::PaintCallback {
                 rect,
                 callback: Arc::new(egui_glow::CallbackFn::new(move |_, _| {

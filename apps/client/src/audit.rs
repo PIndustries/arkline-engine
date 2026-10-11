@@ -26,60 +26,64 @@ pub fn audit(server: &str, checkpoint_path: &Path) -> Result<String, String> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
         Err(e) => return Err(format!("Cannot read audit checkpoint: {e}")),
     };
-    let deadline = Instant::now() + Duration::from_secs(15);
-    let addresses = server
-        .to_socket_addrs()
-        .map_err(|e| format!("Cannot resolve audit server: {e}"))?;
-    let mut connected = None;
-    for address in addresses {
-        let remaining = deadline.saturating_duration_since(Instant::now());
-        if remaining.is_zero() {
-            break;
+    let response = if server.starts_with("wss://") || server.starts_with("ws://") {
+        super::transport::Connection::connect(server)?.exchange(&Request::ExportLedger)?
+    } else {
+        let deadline = Instant::now() + Duration::from_secs(15);
+        let addresses = server
+            .to_socket_addrs()
+            .map_err(|e| format!("Cannot resolve audit server: {e}"))?;
+        let mut connected = None;
+        for address in addresses {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                break;
+            }
+            if let Ok(socket) =
+                TcpStream::connect_timeout(&address, remaining.min(Duration::from_secs(3)))
+            {
+                connected = Some(socket);
+                break;
+            }
         }
-        if let Ok(socket) =
-            TcpStream::connect_timeout(&address, remaining.min(Duration::from_secs(3)))
-        {
-            connected = Some(socket);
-            break;
-        }
-    }
-    let mut socket = connected.ok_or_else(|| "Cannot connect to audit server".to_string())?;
-    socket
-        .set_write_timeout(Some(Duration::from_secs(3)))
-        .map_err(|e| e.to_string())?;
-    let mut request = serde_json::to_vec(&Request::ExportLedger).map_err(|e| e.to_string())?;
-    request.push(b'\n');
-    socket
-        .write_all(&request)
-        .map_err(|e| format!("Cannot request ledger: {e}"))?;
-    let mut bytes = Vec::new();
-    loop {
-        let remaining = deadline.saturating_duration_since(Instant::now());
-        if remaining.is_zero() {
-            return Err("Audit export timed out".into());
-        }
+        let mut socket = connected.ok_or_else(|| "Cannot connect to audit server".to_string())?;
         socket
-            .set_read_timeout(Some(remaining))
+            .set_write_timeout(Some(Duration::from_secs(3)))
             .map_err(|e| e.to_string())?;
-        let mut chunk = [0u8; 8192];
-        let n = socket
-            .read(&mut chunk)
-            .map_err(|e| format!("Cannot read ledger export: {e}"))?;
-        if n == 0 {
-            return Err("Audit server disconnected before completing export".into());
+        let mut request = serde_json::to_vec(&Request::ExportLedger).map_err(|e| e.to_string())?;
+        request.push(b'\n');
+        socket
+            .write_all(&request)
+            .map_err(|e| format!("Cannot request ledger: {e}"))?;
+        let mut bytes = Vec::new();
+        loop {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                return Err("Audit export timed out".into());
+            }
+            socket
+                .set_read_timeout(Some(remaining))
+                .map_err(|e| e.to_string())?;
+            let mut chunk = [0u8; 8192];
+            let n = socket
+                .read(&mut chunk)
+                .map_err(|e| format!("Cannot read ledger export: {e}"))?;
+            if n == 0 {
+                return Err("Audit server disconnected before completing export".into());
+            }
+            let end = chunk[..n].iter().position(|b| *b == b'\n');
+            let count = end.unwrap_or(n);
+            if bytes.len() + count > MAX_EXPORT_BYTES {
+                return Err("Audit export exceeds the 64 MiB preview limit".into());
+            }
+            bytes.extend_from_slice(&chunk[..count]);
+            if end.is_some() {
+                break;
+            }
         }
-        let end = chunk[..n].iter().position(|b| *b == b'\n');
-        let count = end.unwrap_or(n);
-        if bytes.len() + count > MAX_EXPORT_BYTES {
-            return Err("Audit export exceeds the 64 MiB preview limit".into());
-        }
-        bytes.extend_from_slice(&chunk[..count]);
-        if end.is_some() {
-            break;
-        }
-    }
-    let response: Response =
-        serde_json::from_slice(&bytes).map_err(|e| format!("Invalid ledger response: {e}"))?;
+        serde_json::from_slice::<Response>(&bytes)
+            .map_err(|e| format!("Invalid ledger response: {e}"))?
+    };
     if !response.ok {
         return Err(format!(
             "Audit server rejected export: {}",

@@ -162,17 +162,22 @@ def main():
             shutil.copytree(third_party, directory / "ThirdParty")
             shutil.copy2(source / "RELEASE.json", directory / "RELEASE.json")
         (client / "START-HERE.txt").write_text(
-            "Arkline client\n\n" + ("Open Arkline.app to start a local universe.\n"
+            "Arkline client\n\n" + ("Open Arkline.app.\n"
             "This build is ad-hoc signed, not Apple notarized.\n" if system == "Darwin" else
-            "Run arkline-client --local to start a local universe.\n") +
-            "Use --server HOST:PORT --remote-only for an existing universe.\n"
+            "Run arkline-client" + extension + ".\n") +
+            "The client defaults to the official production relay over encrypted WSS.\n"
+            "Use the connection screen to choose Production, Test, or a custom server.\n"
+            "Production and Test have separate pilots and saved worlds.\n"
+            "Use --local to start a private local universe; use --server wss://HOST/ws for another relay.\n"
+            "Windows requires the x64 Microsoft Visual C++ v14 runtime and Universal CRT.\n"
             "See docs/ for controls, network limits, saved data and server operation.\n"
             "The matching source archive named in RELEASE.json includes vendored dependencies.\n")
         (server / "START-HERE.txt").write_text(
             "Arkline server\n\nRun arkline-server --bind 127.0.0.1:7777 --db world.sqlite\n"
             "Keep the database and credentials outside this extracted download.\n"
-            "This prototype uses unencrypted TCP. Do not expose it directly to the public Internet.\n"
-            "See README.md and docs/ for deployment limits and source-license obligations.\n")
+            "Raw TCP is local/private only. For browser or public access use the optional WebSocket\n"
+            "listener behind a trusted HTTPS reverse proxy or tunnel. Never expose plaintext tokens.\n"
+            "See deploy/ in the matching source and docs/ for limits and source-license obligations.\n")
         for binary in ["arkline-server", "arkline", "arkline-verifier"]:
             run(str(server / (binary + extension)), "--help", cwd=server, capture=True)
         for directory in [client, server]:

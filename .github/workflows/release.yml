@@ -47,3 +47,25 @@ jobs:
           compression-level: 0
           if-no-files-found: error
           retention-days: 30
+  browser:
+    if: inputs.platform == 'all'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.89.0
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+      - name: Install matching WebAssembly bindings tool
+        run: cargo install wasm-bindgen-cli --version 0.2.129 --locked
+      - name: Build the shared game for the browser
+        run: bash apps/client/web/build.sh "${{ runner.temp }}/arkline-browser"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arkline-browser
+          path: ${{ runner.temp }}/arkline-browser/*
+          if-no-files-found: error
+          retention-days: 30

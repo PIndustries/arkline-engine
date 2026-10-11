@@ -1,13 +1,10 @@
 //! Original procedural audio. Device lifetime belongs to a worker; the callback
 //! only copies a mix, consumes bounded cues, and renders into CPAL's buffer.
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use std::{
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        mpsc::{self, Receiver, SyncSender},
-        Arc, Mutex,
-    },
-    thread,
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    mpsc::{self, Receiver, SyncSender},
+    Arc, Mutex,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -69,6 +66,8 @@ pub struct SoundEngine {
     shared: Arc<Shared>,
     cues: Option<SyncSender<Cue>>,
     stop: Option<mpsc::Sender<()>>,
+    #[cfg(target_arch = "wasm32")]
+    stream: Option<cpal::Stream>,
 }
 impl Default for SoundEngine {
     fn default() -> Self {
@@ -80,10 +79,13 @@ impl Default for SoundEngine {
             }),
             cues: None,
             stop: None,
+            #[cfg(target_arch = "wasm32")]
+            stream: None,
         }
     }
 }
 impl SoundEngine {
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn start(&mut self) {
         if self.stop.is_some() {
             return;
@@ -94,7 +96,7 @@ impl SoundEngine {
         self.stop = Some(stop);
         *self.shared.status.lock().unwrap() = "Opening audio output…".into();
         let shared = self.shared.clone();
-        thread::spawn(move || match open_stream(shared.clone(), receiver) {
+        std::thread::spawn(move || match open_stream(shared.clone(), receiver) {
             Ok(stream) => {
                 let _ = done.recv();
                 drop(stream);
@@ -104,6 +106,21 @@ impl SoundEngine {
                     format!("Audio unavailable: {error}. Retry audio output in Settings.");
             }
         });
+    }
+    #[cfg(target_arch = "wasm32")]
+    pub fn start(&mut self) {
+        if self.stream.is_some() {
+            return;
+        }
+        let (sender, receiver) = mpsc::sync_channel(32);
+        self.cues = Some(sender);
+        match open_stream(self.shared.clone(), receiver) {
+            Ok(stream) => self.stream = Some(stream),
+            Err(error) => {
+                *self.shared.status.lock().unwrap() =
+                    format!("Browser audio unavailable: {error}. Retry after clicking Settings.")
+            }
+        }
     }
     pub fn set_mix(&mut self, mix: Mix) {
         *self.shared.mix.lock().unwrap() = mix;
@@ -688,7 +705,7 @@ mod tests {
             engine: 0.25,
             ..Mix::default()
         });
-        thread::sleep(std::time::Duration::from_secs(2));
+        std::thread::sleep(std::time::Duration::from_secs(2));
         assert!(
             engine.shared.callbacks.load(Ordering::Relaxed) > 0,
             "{}",

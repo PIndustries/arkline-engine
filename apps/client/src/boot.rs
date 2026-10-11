@@ -1,6 +1,6 @@
 //! Presentation-only relay startup. Completion requires a real authenticated snapshot.
 use eframe::egui::{self, Color32, Pos2, Stroke, Vec2};
-use std::time::Instant;
+use web_time::Instant;
 
 pub struct Boot {
     started: Instant,
@@ -133,7 +133,7 @@ impl Boot {
             ui.scope_builder(egui::UiBuilder::new().max_rect(content), |ui| {
                 ui.vertical_centered(|ui| {
                     ui.label(egui::RichText::new("A R K L I N E").size(25.0).color(green));
-                    ui.small(format!("{}  /  PRIVATE PREVIEW", super::BUILD_VERSION.trim()));
+                    ui.small(format!("{}  /  EARLY ACCESS", super::BUILD_VERSION.trim()));
                     ui.add_space(12.0);
                     let stage = stage_label(elapsed, self.connecting, connected, ready, self.failed);
                     ui.colored_label(green, stage);

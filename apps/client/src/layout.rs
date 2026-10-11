@@ -1,8 +1,9 @@
 //! Local edge-relative overlay placement, independent of universe state.
 use eframe::egui::{Pos2, Rect, Vec2};
+#[cfg(not(target_arch = "wasm32"))]
+use std::fs;
 use std::{
     collections::BTreeMap,
-    fs,
     path::{Path, PathBuf},
 };
 #[derive(Clone, Debug)]
@@ -24,7 +25,7 @@ pub struct Layout {
     pub snap: bool,
     changed: bool,
     dragging: bool,
-    retry_after: Option<std::time::Instant>,
+    retry_after: Option<web_time::Instant>,
 }
 impl Layout {
     pub fn load(dir: &Path) -> Self {
@@ -40,7 +41,7 @@ impl Layout {
             dragging: false,
             retry_after: None,
         };
-        if let Ok(bytes) = fs::read(&result.path) {
+        if let Ok(bytes) = read_preferences(&result.path) {
             if let Ok(v) = serde_json::from_slice::<serde_json::Value>(&bytes) {
                 result.pinned = v["pinned"].as_bool().unwrap_or(false);
                 result.snap = v["snap"].as_bool().unwrap_or(true);
@@ -191,7 +192,7 @@ impl Layout {
             && self.changed
             && self
                 .retry_after
-                .is_none_or(|time| std::time::Instant::now() >= time)
+                .is_none_or(|time| web_time::Instant::now() >= time)
         {
             self.dragging = false;
             for p in self.entries.values_mut() {
@@ -204,7 +205,7 @@ impl Layout {
                 }
                 Err(error) => {
                     self.retry_after =
-                        Some(std::time::Instant::now() + std::time::Duration::from_secs(2));
+                        Some(web_time::Instant::now() + std::time::Duration::from_secs(2));
                     return Err(error);
                 }
             }
@@ -224,30 +225,49 @@ impl Layout {
     fn save(&self) -> Result<(), String> {
         let entries:serde_json::Map<String,serde_json::Value>=self.entries.iter().map(|(key,p)|(key.clone(),serde_json::json!({"anchor":p.anchor,"offset":[p.offset.x,p.offset.y],"size":[p.size.x,p.size.y]}))).collect();
         let value = serde_json::json!({"pinned":self.pinned,"snap":self.snap,"panels":entries});
-        fs::create_dir_all(self.path.parent().unwrap()).map_err(|e| e.to_string())?;
-        let temporary = self
-            .path
-            .with_extension(format!("{}.tmp", std::process::id()));
-        let mut opts = fs::OpenOptions::new();
-        opts.write(true).create(true).truncate(true);
-        #[cfg(unix)]
+        #[cfg(target_arch = "wasm32")]
         {
-            use std::os::unix::fs::OpenOptionsExt;
-            opts.mode(0o600);
+            super::browser::write(&self.path, &value.to_string())
         }
-        use std::io::Write;
-        let result = (|| -> std::io::Result<()> {
-            let mut file = opts.open(&temporary)?;
-            file.write_all(value.to_string().as_bytes())?;
-            file.sync_all()?;
-            fs::rename(&temporary, &self.path)
-        })();
-        if result.is_err() {
-            let _ = fs::remove_file(temporary);
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            fs::create_dir_all(self.path.parent().unwrap()).map_err(|e| e.to_string())?;
+            let temporary = self
+                .path
+                .with_extension(format!("{}.tmp", std::process::id()));
+            let mut opts = fs::OpenOptions::new();
+            opts.write(true).create(true).truncate(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                opts.mode(0o600);
+            }
+            use std::io::Write;
+            let result = (|| -> std::io::Result<()> {
+                let mut file = opts.open(&temporary)?;
+                file.write_all(value.to_string().as_bytes())?;
+                file.sync_all()?;
+                fs::rename(&temporary, &self.path)
+            })();
+            if result.is_err() {
+                let _ = fs::remove_file(temporary);
+            }
+            result.map_err(|e| format!("Layout could not be saved: {e}"))
         }
-        result.map_err(|e| format!("Layout could not be saved: {e}"))
     }
 }
+
+fn read_preferences(path: &Path) -> Result<Vec<u8>, String> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        super::browser::read(path).map(String::into_bytes)
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        fs::read(path).map_err(|e| e.to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

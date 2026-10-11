@@ -1,3 +1,4 @@
+mod websocket;
 use anyhow::{bail, Context, Result};
 use arkline_protocol::{Request, Response};
 use arkline_server::Server;
@@ -5,23 +6,45 @@ use std::{
     io::{BufRead, BufReader, Write},
     net::{TcpListener, TcpStream},
     sync::{
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicU64, AtomicUsize, Ordering},
         Arc, Mutex,
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 const MAX_REQUEST_BYTES: usize = 16 * 1024;
 fn main() -> Result<()> {
     let mut bind = "127.0.0.1:7777".to_string();
+    let mut ws_bind: Option<String> = None;
+    let mut origins = vec![
+        "https://arkline.network".into(),
+        "https://www.arkline.network".into(),
+        "https://play.arkline.network".into(),
+        "https://test.arkline.network".into(),
+    ];
+    let mut max_pilots = 256usize;
     let mut db = "data/arkline.sqlite".to_string();
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--bind" => bind = args.next().context("--bind requires an address")?,
+            "--ws-bind" => ws_bind = Some(args.next().context("--ws-bind requires an address")?),
+            "--ws-origin" => origins.push(
+                args.next()
+                    .context("--ws-origin requires an exact HTTPS origin")?,
+            ),
+            "--ws-max-pilots" => {
+                max_pilots = args
+                    .next()
+                    .context("--ws-max-pilots requires a count")?
+                    .parse()?;
+                if !(1..=1024).contains(&max_pilots) {
+                    bail!("public pilot cap must be1..1024");
+                }
+            }
             "--db" => db = args.next().context("--db requires a path")?,
             "--help" | "-h" => {
-                println!("arkline-server [--bind 127.0.0.1:7777] [--db data/arkline.sqlite]\nLocal prototype: plaintext transport. Keep on loopback or a trusted encrypted tunnel.");
+                println!("arkline-server [--bind 127.0.0.1:7777] [--db data/arkline.sqlite]\nRaw TCP is plaintext and must stay private. Optional --ws-bind ADDRESS enables /ws behind a trusted TLS edge. --ws-origin ORIGIN adds an allowed browser origin; --ws-max-pilots COUNT (default256).");
                 return Ok(());
             }
             _ => bail!("unknown argument: {arg}"),
@@ -29,6 +52,11 @@ fn main() -> Result<()> {
     }
     let server = Arc::new(Mutex::new(Server::open(db)?));
     let tick_server = server.clone();
+    let health = Arc::new(Health {
+        started: Instant::now(),
+        last_tick: AtomicU64::new(0),
+    });
+    let tick_health = health.clone();
     std::thread::spawn(move || loop {
         std::thread::sleep(Duration::from_millis(100));
         let Ok(mut server) = tick_server.lock() else {
@@ -36,30 +64,60 @@ fn main() -> Result<()> {
         };
         if let Err(error) = server.tick() {
             eprintln!("Flight tick failed: {error}");
+        } else {
+            tick_health.last_tick.store(
+                tick_health.started.elapsed().as_millis() as u64 + 1,
+                Ordering::Release,
+            );
         }
     });
     let listener = TcpListener::bind(&bind)?;
     println!("Arkline server listening on {}", listener.local_addr()?);
     let active = Arc::new(AtomicUsize::new(0));
+    if let Some(bind) = ws_bind {
+        let listener = TcpListener::bind(&bind)?;
+        println!(
+            "Arkline WebSocket listening on {} /ws",
+            listener.local_addr()?
+        );
+        let server = server.clone();
+        let active = active.clone();
+        let origins = Arc::new(origins);
+        let limits = Arc::new(Mutex::new(websocket::Limits::default()));
+        std::thread::spawn(move || {
+            for stream in listener.incoming().flatten() {
+                if !limits.lock().is_ok_and(|mut l| l.admit()) {
+                    continue;
+                }
+                let Some(guard) = ConnectionGuard::claim(active.clone()) else {
+                    continue;
+                };
+                let server = server.clone();
+                let limits = limits.clone();
+                let origins = origins.clone();
+                let health = health.clone();
+                std::thread::spawn(move || {
+                    let _guard = guard;
+                    // Never include handshake headers or message data in logs.
+                    if websocket::serve_ws(stream, server, limits, origins, max_pilots, health)
+                        .is_err()
+                    {
+                        eprintln!("WebSocket connection ended");
+                    }
+                });
+            }
+        });
+    }
     for stream in listener.incoming() {
         let Ok(stream) = stream else {
             continue;
         };
-        if active.fetch_add(1, Ordering::SeqCst) >= 64 {
-            active.fetch_sub(1, Ordering::SeqCst);
-            drop(stream);
+        let Some(guard) = ConnectionGuard::claim(active.clone()) else {
             continue;
-        }
+        };
         let server = server.clone();
-        let active = active.clone();
         std::thread::spawn(move || {
-            struct Guard(Arc<AtomicUsize>);
-            impl Drop for Guard {
-                fn drop(&mut self) {
-                    self.0.fetch_sub(1, Ordering::SeqCst);
-                }
-            }
-            let _guard = Guard(active);
+            let _guard = guard;
             // Do not log requests: Connect contains a bearer credential.
             if let Err(error) = serve(stream, server) {
                 eprintln!("Connection ended: {error}");
@@ -67,6 +125,32 @@ fn main() -> Result<()> {
         });
     }
     Ok(())
+}
+struct Health {
+    started: Instant,
+    last_tick: AtomicU64,
+}
+impl Health {
+    fn ready(&self) -> bool {
+        let last = self.last_tick.load(Ordering::Acquire);
+        last != 0 && (self.started.elapsed().as_millis() as u64).saturating_sub(last - 1) <= 3000
+    }
+}
+struct ConnectionGuard(Arc<AtomicUsize>);
+impl ConnectionGuard {
+    fn claim(active: Arc<AtomicUsize>) -> Option<Self> {
+        if active.fetch_add(1, Ordering::SeqCst) >= 64 {
+            active.fetch_sub(1, Ordering::SeqCst);
+            None
+        } else {
+            Some(Self(active))
+        }
+    }
+}
+impl Drop for ConnectionGuard {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
 }
 struct TransportSession {
     server: Arc<Mutex<Server>>,

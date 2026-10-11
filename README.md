@@ -4,9 +4,11 @@ A shared space sandbox built in Rust by P.Industries and contributors. Fly a shi
 mine finite resources, manage drones, and trade in a persistent, server-authoritative
 universe. The current test world contains three connected star systems.
 
-**Developer preview · 26.10.11.3.** Arkline is under active development. Expect
-unfinished systems and visual rough edges. Start with a local universe; public
-access to the official network is not available yet.
+**Early access · 26.10.11.4.** Arkline is under active development. Expect
+unfinished systems and visual rough edges. Desktop and browser clients share the
+official relay at `wss://relay.arkline.network/ws`. The connection screen also offers
+a separate Test world and custom servers. See [public hosting](deploy/PUBLIC.md)
+for operating limits and the deployment validation required before announcing availability.
 
 Code and original assets are licensed under **AGPL-3.0-only**, unless marked
 otherwise. See [LICENSE](LICENSE), [third-party licensing notes](docs/licensing.md),
@@ -45,12 +47,16 @@ poses reduce repeated rendering and snapshot stepping.
 
 ## Run the model
 
-For the packaged macOS preview, open `Arkline.app`. It starts a private local
-server automatically and stores its world and credentials in
-`~/Library/Application Support/Arkline/Preview`. Use **Open second cockpit** to
-join that same world as another pilot. Closing the hosting cockpit stops its
-server; reopening it restores the saved world. The preview bundle is ad-hoc signed,
-not Developer ID signed or notarized.
+Open `Arkline.app` on macOS or run `arkline-client.exe` on Windows. The client
+defaults to the official Production relay. Production and Test have separate pilots,
+credentials, and economies; Test progress does not transfer to Production.
+The browser client uses the same Rust game at `https://play.arkline.network`.
+Browser capabilities and build instructions are in [the browser guide](docs/browser.md).
+
+To host a private local universe, use `arkline-client --local`. Closing its hosting
+cockpit stops the local server; reopening it restores the world. Credentials must
+be retained to resume a pilot. The macOS bundle is ad-hoc signed, not notarized;
+Windows binaries are unsigned and need the x64 Microsoft Visual C++ v14 runtime.
 
 For source development:
 
@@ -77,7 +83,7 @@ cargo run -p arkline-server -- --bind 127.0.0.1:7777 --db data/arkline.sqlite
 In a second terminal:
 
 ```sh
-cargo run -p arkline-client
+cargo run -p arkline-client -- --server 127.0.0.1:7777 --remote-only
 ```
 
 Enter a new pilot name in the cockpit. Names use 1–24 letters, numbers, underscores,
