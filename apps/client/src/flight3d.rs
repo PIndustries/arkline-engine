@@ -219,6 +219,7 @@ fn navigation_destination(
 }
 
 pub struct FlightView {
+    pub lighting_quality: super::lighting_settings::LightingQuality,
     renderer: Result<Arc<Mutex<Renderer>>, String>,
     head_look: [f32; 2],
     yaw: f32,
@@ -255,6 +256,7 @@ impl FlightView {
             .and_then(|gl| unsafe { Renderer::new(gl.clone()) })
             .map(|r| Arc::new(Mutex::new(r)));
         Self {
+            lighting_quality: Default::default(),
             renderer,
             head_look: [0.0; 2],
             yaw: 0.72,
@@ -639,6 +641,7 @@ impl FlightView {
             Ok(renderer) => {
                 let renderer = renderer.clone();
                 let frame = Frame {
+                    lighting_quality: self.lighting_quality,
                     cockpit_vp,
                     snapshot_time: snapshot.server_time_ms,
                     planet_vp: Mat4::perspective_rh_gl(
@@ -1514,6 +1517,7 @@ impl FlightView {
 }
 #[derive(Clone)]
 struct Frame {
+    lighting_quality: super::lighting_settings::LightingQuality,
     cockpit_vp: Mat4,
     snapshot_time: u64,
     planet_vp: Mat4,
@@ -4211,6 +4215,7 @@ mod tests {
             let view = Mat4::look_at_rh(Vec3::ZERO, Vec3::X, Vec3::Y);
             let vp = Mat4::perspective_rh_gl(1.05, 1., 0.002, 1200.) * view;
             let mut frame = Frame {
+                lighting_quality: Default::default(),
                 cockpit_vp: vp,
                 snapshot_time: 1000,
                 planet_vp: vp,
