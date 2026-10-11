@@ -9,6 +9,7 @@ cargo build --locked --release -p arkline-client --target wasm32-unknown-unknown
 mkdir -p "$DEST"
 wasm-bindgen --target web --no-typescript --out-dir "$DEST" "$ROOT/target/wasm32-unknown-unknown/release/arkline-client.wasm"
 cp apps/client/web/index.html apps/client/web/bootstrap.js "$DEST/"
+cp assets/Arkline-256.png "$DEST/arkline-logo.png"
 cp LICENSE TRADEMARKS.md BUILD_VERSION "$DEST/"
 python3 - "$ROOT" "$DEST" <<'PYNOTICES'
 import importlib.util, pathlib, sys
