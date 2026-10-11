@@ -6,6 +6,21 @@ transit; it is not application encryption that hides them from the game authorit
 When Cloudflare terminates public TLS, the edge can also read those messages.
 Private end-to-end encrypted chat would require a separate protocol and key design.
 
+## Native client trust
+
+Desktop clients explicitly select Rustls's ring provider and the public WebPKI
+root store. This must work when building the client alone; workspace feature
+unification is not a substitute for configuring its TLS dependency. Build .7
+fixes the missing provider in earlier standalone native clients. The browser uses
+its platform TLS stack. Both verify the public relay certificate and hostname.
+
+An opt-in read-only test exercises the actual native transport against both
+public relays:
+
+```sh
+cargo test -p arkline-client native_verified_wss_reaches_both_official_relays -- --ignored
+```
+
 ## Current deployment and new server support
 
 The initial official deployment uses certificate-verified public WSS, an encrypted

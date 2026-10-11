@@ -16,6 +16,8 @@ web-time = "=1.1.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 arkline-verifier = { path = "../verifier" }
+rustls = { version = "0.23", default-features = false, features = ["std", "ring", "tls12"] }
+webpki-roots = "1"
 cpal = "=0.15.3"
 tungstenite = { version = "=0.28.0", features = ["rustls-tls-webpki-roots"] }
 
