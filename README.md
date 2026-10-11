@@ -10,7 +10,8 @@ unfinished systems and visual rough edges. Source can be ahead of deployed clien
 
 [Website](https://arkline.network) · [Play in your browser](https://play.arkline.network) ·
 [Downloads](https://github.com/PIndustries/arkline-engine/releases) ·
-[Official Wiki](https://github.com/PIndustries/arkline-engine/wiki)
+[Official Wiki](https://github.com/PIndustries/arkline-engine/wiki) ·
+[Roadmap](https://github.com/orgs/PIndustries/projects/14)
 
 ## One community, room to explore
 

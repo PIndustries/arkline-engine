@@ -33,3 +33,21 @@ Start with the [documentation source index](docs/README.md), [component map](doc
 and [API reference](docs/api.md). The official account service is operated separately;
 local worlds currently use the documented pilot credentials. Configurable OAuth/OIDC
 integration is planned, not part of the current login implementation.
+
+## Track work in GitHub
+
+Use the [community roadmap](https://github.com/orgs/PIndustries/projects/14),
+[issues](https://github.com/PIndustries/arkline-engine/issues) and
+[milestones](https://github.com/PIndustries/arkline-engine/milestones) to coordinate.
+Search for an existing issue before opening another. Include the problem, scope,
+reproduction steps where relevant, and the checks that would demonstrate completion.
+Ideas stay labeled `proposal` until their scope is agreed. Milestones describe
+outcomes, not delivery-date promises.
+
+Link implementation pull requests to the issue. Mark work in progress when it is
+actively being implemented; close it when its acceptance checks have evidence.
+If deployment is part of acceptance, a merged pull request alone is not completion.
+Record blockers and remaining limits in the issue so contributors can pick up work.
+
+Write commits in plain, specific language describing the resulting change. Preserve
+accurate Git authorship and attribution; do not add promotional or generated filler.
