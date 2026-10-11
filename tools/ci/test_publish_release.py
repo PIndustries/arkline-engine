@@ -126,7 +126,7 @@ class PublicationSafety(unittest.TestCase):
         def fake(*args, **kwargs):
             calls.append(args)
             if args[:3] == ("docker", "buildx", "inspect"):
-                return b"docker-container\n"
+                return b"Name: arkline-publish-123-1\nDriver:        docker-container\n"
             if args[:2] == ("gh", "api"):
                 return json.dumps({"visibility": "private"}).encode()
             if args[:3] == ("docker", "image", "inspect"):
@@ -138,7 +138,7 @@ class PublicationSafety(unittest.TestCase):
         build = calls[1]
         self.assertEqual(build[:7], ("docker", "buildx", "build", "--builder", "arkline-publish-123-1", "--load", "--platform"))
         self.assertEqual(calls[2], ("docker", "push", image + ":revision"))
-        for builder, driver in [("", b"docker-container"), ("default", b"docker"), ("arkline-publish-123-1", b"docker")]:
+        for builder, driver in [("", b"Driver: docker-container"), ("default", b"Driver: docker"), ("arkline-publish-123-1", b"Driver: docker"), ("arkline-publish-123-1", b"Name: missing driver"), ("arkline-publish-123-1", b"Driver: docker-container\nDriver: docker-container")]:
             with self.subTest(builder=builder, driver=driver), patch.dict(p.os.environ, {"ARKLINE_BUILDER": builder}), patch.object(p, "command", return_value=driver) as command:
                 with self.assertRaises(ValueError):
                     p.private_image("arkline-server", "revision", Path("source"), Path("Dockerfile"), "b" * 40)

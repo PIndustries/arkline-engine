@@ -195,8 +195,11 @@ def private_image(name, tag, context, dockerfile, commit):
     builder = os.environ.get("ARKLINE_BUILDER", "")
     if not re.fullmatch(r"arkline-publish-[0-9]+-[0-9]+", builder):
         raise ValueError("An explicit job-scoped Arkline publication builder is required")
-    driver = command("docker", "buildx", "inspect", builder, "--format", "{{.Driver}}").strip()
-    if driver not in ("docker-container", b"docker-container"):
+    inspection = command("docker", "buildx", "inspect", builder)
+    if isinstance(inspection, bytes):
+        inspection = inspection.decode("utf-8", errors="strict")
+    drivers = re.findall(r"^Driver:[ \t]*([^\r\n]+)$", inspection, flags=re.MULTILINE)
+    if [driver.strip() for driver in drivers] != ["docker-container"]:
         raise ValueError("Publication requires an isolated docker-container builder")
     command("docker", "buildx", "build", "--builder", builder, "--load",
             "--platform", "linux/amd64", "-f", dockerfile,
