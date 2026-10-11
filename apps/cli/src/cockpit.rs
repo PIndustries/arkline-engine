@@ -28,7 +28,7 @@ enum Update {
     Response(Response, bool),
     Failed(String),
 }
-fn worker(login: Login, rx: mpsc::Receiver<Command>, tx: mpsc::Sender<Update>) {
+fn worker(login: Login, rx: mpsc::Receiver<Command>, tx: mpsc::SyncSender<Update>) {
     let mut connection = None;
     let mut reconnect = true;
     loop {
@@ -245,7 +245,7 @@ pub fn run(endpoint: String, pilot: String, path: Option<PathBuf>) -> Result<()>
     let login = Login::new(endpoint.clone(), pilot.clone(), path)?;
     let (commands, rx) = mpsc::sync_channel::<Command>(1);
     // A bounded UI queue plus a single pending mutation prevents accidental repeated actions.
-    let (updates, incoming) = mpsc::channel();
+    let (updates, incoming) = mpsc::sync_channel(2);
     std::thread::spawn(move || worker(login, rx, updates));
     enable_raw_mode()?;
     let _guard = ScreenGuard;
