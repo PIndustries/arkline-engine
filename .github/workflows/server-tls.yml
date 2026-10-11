@@ -50,7 +50,7 @@ jobs:
           assert digest.startswith('sha256:') and len(digest) == 71
           receipt = {'source_commit': os.environ['GITHUB_SHA'], 'version': Path('BUILD_VERSION').read_text().strip(),
                      'image': 'ghcr.io/pindustries/arkline-server@' + digest,
-                     'deployed': False, 'protocol_compatibility': '26.10.11.6 clients'}
+                     'deployed': False, 'runtime_acceptance': 'pending operator validation'}
           Path('tls-server-receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
           print(json.dumps(receipt))
           PY
