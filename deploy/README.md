@@ -18,7 +18,7 @@ The transport currently allows 64 connections, one blocking worker thread each. 
 
 ## Build and release boundary
 
-Root must first commit the exact source being deployed. Build from an export of that clean commit, never a working tree containing credentials or unreviewed edits:
+Commit the exact source being deployed before building its image. Build from an export of that clean commit, never a working tree containing credentials or unreviewed edits:
 
 ```sh
 # Substitute an approved exact commit and an existing private registry repository.
