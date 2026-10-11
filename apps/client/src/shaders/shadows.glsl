@@ -18,7 +18,10 @@ float ark_sun_visibility(vec3 p, vec3 n, vec3 l) {
     // degenerate projected derivatives without weakening distant occluders.
     float nl=clamp(dot(n,l),0.0,1.0);
     float slope=sqrt(max(0.0,1.0-nl*nl))/max(nl,0.15);
-    float bias=max(0.000002,ark_shadow_texel*0.075*(plane_valid ? 0.15 : (0.75+1.5*slope)));
+    // Three quarters of a texel also covers taps crossing adjacent low-poly
+    // facets, where a single receiver plane no longer describes the blocker.
+    // Bounded to ~3.5m at1024/~1.8m at2048; no global brightness change.
+    float bias=max(0.000002,ark_shadow_texel*0.075*(plane_valid ? 0.75 : (0.75+1.5*slope)));
     float visible=0.0;
     for(int y=-1;y<=1;y++) for(int x=-1;x<=1;x++) {
         vec2 uv=q.xy+vec2(float(x),float(y))*ark_shadow_texel;

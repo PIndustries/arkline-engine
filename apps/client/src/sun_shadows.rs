@@ -506,7 +506,11 @@ pub(super) unsafe fn test_sloped_pcf(
     for y in 200..312 {
         for x in 200..312 {
             let i = (y * size + x) * 4;
-            depth[i..i + 4].copy_from_slice(&(u32::MAX / 4).to_ne_bytes());
+            let receiver = u32::from_ne_bytes(depth[i..i + 4].try_into().unwrap());
+            // A nearby blocker only two shadow texel footprints ahead must
+            // survive the bias; this is not a distant black-box occluder.
+            let separation = (0.075 * 2.0 / size as f64 * u32::MAX as f64) as u32;
+            depth[i..i + 4].copy_from_slice(&(receiver - separation).to_ne_bytes());
         }
     }
     gl.tex_image_2d(
