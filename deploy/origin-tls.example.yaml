@@ -1,0 +1,57 @@
+# Strategic merge example, NOT a standalone production manifest.
+# Apply only after replacing the image with a new tested immutable TLS-capable
+# release, issuing an environment-specific certificate and coordinating routes.
+# Preserve existing args such as explicit allowed origins and database location.
+# Create Secrets out of band; never place private key material in this file.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: arkline-test
+  namespace: arkline
+spec:
+  template:
+    spec:
+      securityContext:
+        fsGroup: 10001
+      containers:
+        - name: server
+          args:
+            - --bind
+            - 127.0.0.1:7777
+            - --ws-bind
+            - 0.0.0.0:7778
+            - --db
+            - /data/arkline.sqlite
+            - --tls-cert
+            - /run/arkline-tls/tls.crt
+            - --tls-key
+            - /run/arkline-tls/tls.key
+          volumeMounts:
+            - name: origin-tls
+              mountPath: /run/arkline-tls
+              readOnly: true
+            - name: origin-ca
+              mountPath: /run/arkline-ca
+              readOnly: true
+          readinessProbe:
+            httpGet: null
+            tcpSocket: null
+            exec:
+              command:
+                - arkline-server
+                - --tls-health
+                - 127.0.0.1:7778
+                - --tls-ca
+                - /run/arkline-ca/ca.crt
+                - --tls-server-name
+                - test-relay-origin.example
+            timeoutSeconds: 7
+            periodSeconds: 10
+      volumes:
+        - name: origin-tls
+          secret:
+            secretName: arkline-test-origin-tls-v1
+            defaultMode: 0440
+        - name: origin-ca
+          configMap:
+            name: arkline-origin-ca

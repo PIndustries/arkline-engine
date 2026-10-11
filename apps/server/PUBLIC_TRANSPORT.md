@@ -1,6 +1,6 @@
 # Public WebSocket transport
 
-Run the optional listener with `--ws-bind 0.0.0.0:7778` behind a trusted TLS edge. The origin service is plaintext: expose only the edge WSS endpoint, keep raw TCP private, and restrict origin network access to the proxy. Both transports share one authoritative world, database and session cleanup.
+Run the optional listener with `--ws-bind 0.0.0.0:7778` behind a trusted TLS edge. Without TLS flags the origin is plaintext: expose only the edge WSS endpoint, keep raw TCP private, and restrict origin network access to the proxy. Add `--tls-cert PEM --tls-key PEM` to terminate native Rust TLS on the WebSocket listener. See [transport security](../../docs/transport-security.md) for verified origin setup, rotation and deployment limitations. Both transports share one authoritative world, database and session cleanup.
 
 `/ws` accepts one existing protocol JSON Request per text message and replies with one JSON Response per text message. Connect requires the current protocol version; existing identities require their bearer resume credential. Never place credentials in URLs. Binary messages are rejected. Native clients may omit Origin; browser Origins must exactly match `https://arkline.network`, `https://www.arkline.network`, `https://play.arkline.network`, or `https://test.arkline.network`. `--ws-origin ORIGIN` adds an exact operator-approved origin. Origin checking supplements authentication; it does not authenticate native clients.
 

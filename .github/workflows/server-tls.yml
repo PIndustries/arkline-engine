@@ -1,0 +1,60 @@
+name: Build verified TLS server
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: write
+concurrency:
+  group: arkline-server-tls
+  cancel-in-progress: false
+jobs:
+  server:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Linux, X64, phx, fleet, org]
+    environment: production
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build, exercise TLS, and publish immutable server image
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          export PATH="/opt/gha-org-runner/.cargo/bin:$PATH"
+          cargo build --locked -p arkline-server
+          python3 tools/tests/test_origin_tls.py -v
+          cargo clippy --locked -p arkline-server --all-targets -- -D warnings
+          cargo test --locked -p arkline-server
+          export DOCKER_CONFIG="$(mktemp -d)"
+          builder="arkline-tls-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cleanup() { docker buildx rm "$builder" >/dev/null 2>&1 || true; rm -rf "$DOCKER_CONFIG"; }
+          trap cleanup EXIT
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker buildx create --name "$builder" --driver docker-container \
+            --driver-opt 'image=moby/buildkit:v0.34.0@sha256:3eea2ed5d1766c44eb4740853abf56ba85ad40b2c8d4a22e047cbacf15f463c8' \
+            --driver-opt 'cpu-quota=400000' --driver-opt 'memory=8g'
+          docker buildx inspect "$builder" --bootstrap
+          test "$(docker buildx inspect "$builder" | awk '$1 == "Driver:" {print $2}')" = docker-container
+          image="ghcr.io/pindustries/arkline-server:tls-${GITHUB_SHA}"
+          docker buildx build --builder "$builder" --platform linux/amd64 \
+            --build-arg "SOURCE_COMMIT=$GITHUB_SHA" -f deploy/Dockerfile \
+            -t "$image" --push --metadata-file tls-image.json .
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          metadata = json.loads(Path('tls-image.json').read_text())
+          digest = metadata['containerimage.digest']
+          assert digest.startswith('sha256:') and len(digest) == 71
+          receipt = {'source_commit': os.environ['GITHUB_SHA'], 'version': Path('BUILD_VERSION').read_text().strip(),
+                     'image': 'ghcr.io/pindustries/arkline-server@' + digest,
+                     'deployed': False, 'protocol_compatibility': '26.10.11.6 clients'}
+          Path('tls-server-receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
+          print(json.dumps(receipt))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-tls-server
+          path: tls-server-receipt.json
+          if-no-files-found: error

@@ -1,4 +1,4 @@
-//! Bounded private-origin WebSocket transport. TLS is terminated by the trusted edge.
+//! Bounded WebSocket transport with optional native TLS.
 use super::*;
 use std::{
     io::{self, Cursor, Read},
@@ -64,7 +64,7 @@ impl Limits {
     }
 }
 struct DeadlineStream {
-    socket: TcpStream,
+    socket: tls::Transport,
     deadline: Instant,
     handshake_remaining: Option<usize>,
     prefix: Cursor<Vec<u8>>,
@@ -75,12 +75,12 @@ impl Read for DeadlineStream {
         if self.prefix.position() < self.prefix.get_ref().len() as u64 {
             return self.prefix.read(bytes);
         }
-        let remaining = self
+        let _remaining = self
             .deadline
             .checked_duration_since(Instant::now())
             .filter(|d| !d.is_zero())
             .ok_or_else(|| io::Error::new(io::ErrorKind::TimedOut, "message deadline"))?;
-        self.socket.set_read_timeout(Some(remaining))?;
+        self.socket.set_read_deadline(self.deadline);
         if self.handshake_remaining == Some(0) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -99,12 +99,12 @@ impl Read for DeadlineStream {
 }
 impl Write for DeadlineStream {
     fn write(&mut self, b: &[u8]) -> io::Result<usize> {
-        let remaining = self
+        let _remaining = self
             .write_deadline
             .checked_duration_since(Instant::now())
             .filter(|d| !d.is_zero())
             .ok_or_else(|| io::Error::new(io::ErrorKind::TimedOut, "write deadline"))?;
-        self.socket.set_write_timeout(Some(remaining))?;
+        self.socket.set_write_deadline(self.write_deadline);
         self.socket.write(b)
     }
     fn flush(&mut self) -> io::Result<()> {
@@ -148,11 +148,12 @@ pub(super) fn serve_ws(
     origins: Arc<Vec<String>>,
     max_pilots: usize,
     health: Arc<Health>,
+    tls: Option<Arc<rustls::ServerConfig>>,
 ) -> Result<()> {
     stream.set_write_timeout(Some(Duration::from_secs(10)))?;
     stream.set_nodelay(true)?;
     let mut stream = DeadlineStream {
-        socket: stream,
+        socket: tls::Transport::accept(stream, tls, HANDSHAKE_TIMEOUT)?,
         deadline: Instant::now() + HANDSHAKE_TIMEOUT,
         handshake_remaining: Some(MAX_REQUEST_BYTES),
         prefix: Cursor::new(Vec::new()),
