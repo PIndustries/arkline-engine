@@ -683,3 +683,20 @@ interfering with that session. Full native room/terminal/seating acceptance rema
 open. The room uses procedural prototype meshes and shading; production interior
 art, natural character/seat transitions and visual-fidelity acceptance remain work
 ahead, not completed claims. Repository visibility remains private.
+
+## Continuous avatar gait — 26.10.10.24
+
+The final client suite passed135 tests with9 opt-in tests ignored. Dedicated gait
+regressions cover epoch-size independence, complete left/right cycles, planted
+stance versus lifted return, stop settling, restart, seated state and stationary
+turns. The native GPU test explicitly rendered eight evenly spaced poses; the
+contact sheet was inspected for leg articulation and opposing arms. This is
+rendered pose evidence, not hands-on acceptance of cadence while walking through
+the packaged station. No server or economic behavior changed in this build.
+
+The public developer-alpha readiness document was refreshed from current evidence.
+Gitleaks reported zero findings across33 locally available history commits through
+ebfa4c9. Cargo metadata inventoried456 resolved external packages, each declaring
+a license. These checks do not settle asset provenance, license compatibility or
+required redistribution notices. The repository remains private and unlicensed
+for open-source use until the owner chooses a license and approves publication.

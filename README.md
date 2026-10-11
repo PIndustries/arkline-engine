@@ -8,10 +8,11 @@ has played the model, validated the direction, and explicitly approved publicati
 An open-source license has not been selected. This preview is not a public MMO or a
 financial network.
 
-## Preview 26.10.10.23
+## Preview 26.10.10.24
 
 Docking opens a [station hangar](docs/station-hangar.md) with a correctly scaled
-ship and an animated on-foot pilot. Leave the ship, walk around its berth, then
+ship and an animated on-foot pilot. Walking uses a continuous full gait cycle,
+with alternating foot contact/lift and a smooth return to idle. Leave the ship, walk around its berth, then
 return to the boarding marker before entering and undocking. A connected captain’s
 room adds furniture, live operational displays and in-world station terminals. See the
 [stability audit](docs/stability-audit.md) for remaining foundation gaps.

@@ -1,6 +1,8 @@
 //! Private station bay in actual meters, using the same hull meshes as flight.
 use super::*;
 use arkline_protocol::{hangar_layout, StationAvatar};
+#[path = "avatar_animation.rs"]
+mod avatar_animation;
 #[path = "quarters.rs"]
 mod quarters;
 pub use quarters::HangarAction;
@@ -15,6 +17,7 @@ pub struct HangarView {
     walking: bool,
     class: Option<ShipClass>,
     follow: Option<Vec3>,
+    gait: avatar_animation::Gait,
 }
 impl HangarView {
     pub fn new(gl: Option<&Arc<glow::Context>>) -> Self {
@@ -34,6 +37,7 @@ impl HangarView {
             walking: false,
             class: None,
             follow: None,
+            gait: Default::default(),
         }
     }
     pub fn input_surface(&self) -> Option<(egui::Rect, egui::LayerId)> {
@@ -65,6 +69,7 @@ impl HangarView {
         if self.walking != walking || self.class != Some(pilot.ship_class) {
             self.zoom = 1.0;
             self.follow = None;
+            self.gait = Default::default();
             self.pitch = if walking { 0.23 } else { 0.32 };
             self.walking = walking;
             self.class = Some(pilot.ship_class);
@@ -119,7 +124,17 @@ impl HangarView {
         let mut parts = bay_parts(pilot.ship_class);
         parts.extend(quarters::room_parts(pilot.ship_class, now));
         if let Some(avatar) = &pilot.station_avatar {
-            parts.extend(avatar_parts(avatar, now, self.follow));
+            let position = self
+                .follow
+                .unwrap_or_else(|| Vec3::from_array(avatar.position.map(|v| v as f32)));
+            let pose = self.gait.update(
+                now,
+                position,
+                avatar.heading,
+                avatar.moving && live,
+                avatar.seated,
+            );
+            parts.extend(avatar_parts(avatar, pose, self.follow));
         }
         if let Some(renderer) = &self.renderer {
             let renderer = renderer.clone();
@@ -281,16 +296,15 @@ fn bay_parts(class: ShipClass) -> Vec<ModelPart> {
     );
     p.0
 }
-fn avatar_parts(avatar: &StationAvatar, now: u64, smooth: Option<Vec3>) -> Vec<ModelPart> {
+fn avatar_parts(
+    avatar: &StationAvatar,
+    pose: avatar_animation::Pose,
+    smooth: Option<Vec3>,
+) -> Vec<ModelPart> {
     let root = Mat4::from_rotation_translation(
         Quat::from_rotation_y(-avatar.heading as f32),
         smooth.unwrap_or_else(|| Vec3::from_array(avatar.position.map(|v| v as f32))),
     );
-    let swing = if avatar.moving {
-        (now as f32 * 0.009).sin() * 0.28
-    } else {
-        0.0
-    };
     let mut p = Parts(Vec::new());
     let suit = Vec3::new(0.025, 0.038, 0.042);
     p.draw(
@@ -383,7 +397,9 @@ fn avatar_parts(avatar: &StationAvatar, now: u64, smooth: Option<Vec3>) -> Vec<M
         );
     }
     for side in [-1.0, 1.0] {
-        let step = swing * side;
+        let foot = pose.foot(side);
+        let knee = pose.knee(side);
+        let hand = pose.hand(side);
         for (position, scale, color, emission) in [
             (
                 Vec3::new(0.0, 1.40, side * 0.28),
@@ -398,23 +414,18 @@ fn avatar_parts(avatar: &StationAvatar, now: u64, smooth: Option<Vec3>) -> Vec<M
                 0.7,
             ),
             (
-                Vec3::new(step + 0.035, 0.075, side * 0.13),
+                foot + Vec3::X * 0.035,
                 Vec3::new(0.15, 0.075, 0.105),
                 armor,
                 0.0,
             ),
             (
-                Vec3::new(step * 0.5 + 0.075, 0.52, side * 0.13),
+                knee + Vec3::X * 0.075,
                 Vec3::new(0.045, 0.08, 0.09),
                 armor,
                 0.0,
             ),
-            (
-                Vec3::new(-step, 0.87, side * 0.31),
-                Vec3::new(0.07, 0.075, 0.07),
-                armor,
-                0.0,
-            ),
+            (hand, Vec3::new(0.07, 0.075, 0.07), armor, 0.0),
             (
                 Vec3::new(0.03, 1.01, side * 0.255),
                 Vec3::new(0.07, 0.075, 0.035),
@@ -430,24 +441,16 @@ fn avatar_parts(avatar: &StationAvatar, now: u64, smooth: Option<Vec3>) -> Vec<M
             );
         }
         for (index, (mut a, mut b, r)) in [
-            (
-                Vec3::new(0.0, 0.94, side * 0.13),
-                Vec3::new(step * 0.5, 0.52, side * 0.13),
-                0.09,
-            ),
-            (
-                Vec3::new(step * 0.5, 0.52, side * 0.13),
-                Vec3::new(step, 0.09, side * 0.13),
-                0.075,
-            ),
+            (Vec3::new(0.0, 0.94, side * 0.13), knee, 0.09),
+            (knee, foot, 0.075),
             (
                 Vec3::new(0.0, 1.40, side * 0.28),
-                Vec3::new(-step * 0.5, 1.08, side * 0.31),
+                Vec3::new(0.0, 1.4, side * 0.28).lerp(hand, 0.55),
                 0.07,
             ),
             (
-                Vec3::new(-step * 0.5, 1.08, side * 0.31),
-                Vec3::new(-step, 0.87, side * 0.31),
+                Vec3::new(0.0, 1.4, side * 0.28).lerp(hand, 0.55),
+                hand,
                 0.06,
             ),
         ]
@@ -568,11 +571,19 @@ mod tests {
             moving: false,
             updated_at_ms: 0,
         };
-        let still = avatar_parts(&avatar, 0, None);
+        let still = avatar_parts(&avatar, Default::default(), None);
         let (_, max) = parts_bounds(&still);
         assert!((max.y - 1.8).abs() < 0.01);
         avatar.moving = true;
-        let walking = avatar_parts(&avatar, 175, None);
+        let walking = avatar_parts(
+            &avatar,
+            avatar_animation::Pose {
+                phase: 0.1,
+                weight: 1.0,
+                direction: Vec3::X,
+            },
+            None,
+        );
         assert!(still.iter().zip(&walking).any(|(a, b)| a.1 != b.1));
         assert!(walking.iter().all(|p| p.1.is_finite()));
     }
@@ -713,6 +724,72 @@ mod tests {
                     }
                 }
                 std::fs::write(format!("{path}.overlook.ppm"), ppm).unwrap();
+                capture.destroy(&gl);
+            }
+            if let Ok(directory) = std::env::var("ARKLINE_GAIT_CAPTURE_DIR") {
+                let directory = std::path::PathBuf::from(directory);
+                std::fs::create_dir_all(&directory).unwrap();
+                let tile = 384usize;
+                let capture = CachedFeed::create(&gl, 1001, tile as i32, tile as i32).unwrap();
+                gl.bind_framebuffer(glow::FRAMEBUFFER, Some(capture.framebuffer));
+                gl.viewport(0, 0, tile as i32, tile as i32);
+                let avatar = StationAvatar {
+                    position: [0.0; 3],
+                    heading: 0.0,
+                    moving: true,
+                    seated: false,
+                    updated_at_ms: 0,
+                };
+                let eye = Vec3::new(2.8, 1.8, 3.0);
+                let vp = Mat4::perspective_rh_gl(0.7, 1.0, 0.08, 100.0)
+                    * Mat4::look_at_rh(eye, Vec3::new(0.0, 0.9, 0.0), Vec3::Y);
+                let mut sheet = vec![0u8; tile * 4 * tile * 2 * 3];
+                for index in 0..8 {
+                    let mut parts = avatar_parts(
+                        &avatar,
+                        avatar_animation::Pose {
+                            phase: index as f32 / 8.0,
+                            weight: 1.0,
+                            direction: Vec3::X,
+                        },
+                        None,
+                    );
+                    parts.push((
+                        0,
+                        transform(
+                            Vec3::new(0.0, -0.04, 0.0),
+                            Vec3::new(2.0, 0.04, 2.0),
+                            Quat::IDENTITY,
+                        ),
+                        Vec3::new(0.045, 0.07, 0.07),
+                        0.0,
+                    ));
+                    paint(&renderer, vp, eye, &parts);
+                    let mut rgba = vec![0u8; tile * tile * 4];
+                    gl.read_pixels(
+                        0,
+                        0,
+                        tile as i32,
+                        tile as i32,
+                        glow::RGBA,
+                        glow::UNSIGNED_BYTE,
+                        glow::PixelPackData::Slice(Some(&mut rgba)),
+                    );
+                    assert_eq!(gl.get_error(), glow::NO_ERROR);
+                    let mut ppm = format!("P6\n{tile} {tile}\n255\n").into_bytes();
+                    for (y, row) in rgba.chunks_exact(tile * 4).rev().enumerate() {
+                        for (x, pixel) in row.chunks_exact(4).enumerate() {
+                            ppm.extend_from_slice(&pixel[..3]);
+                            let offset =
+                                ((index / 4 * tile + y) * tile * 4 + index % 4 * tile + x) * 3;
+                            sheet[offset..offset + 3].copy_from_slice(&pixel[..3]);
+                        }
+                    }
+                    std::fs::write(directory.join(format!("gait-{index:02}.ppm")), ppm).unwrap();
+                }
+                let mut ppm = format!("P6\n{} {}\n255\n", tile * 4, tile * 2).into_bytes();
+                ppm.extend(sheet);
+                std::fs::write(directory.join("gait-contact-sheet.ppm"), ppm).unwrap();
                 capture.destroy(&gl);
             }
             renderer.destroy();
