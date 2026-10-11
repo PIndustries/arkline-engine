@@ -56,7 +56,19 @@ jobs:
           mkdir -p "$DOCKER_CONFIG"
           printf '%s' "$DEPLOY_CONFIG" > "$KUBECONFIG"
           unset DEPLOY_CONFIG
-          trap 'rm -f "$KUBECONFIG"; rm -rf "$DOCKER_CONFIG"' EXIT
+          export ARKLINE_BUILDER="arkline-publish-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          builder_config="$RUNNER_TEMP/$ARKLINE_BUILDER.toml"
+          cleanup() {
+            docker buildx rm --force "$ARKLINE_BUILDER" || true
+            rm -f "$KUBECONFIG" "$builder_config"
+            rm -rf "$DOCKER_CONFIG"
+          }
+          trap cleanup EXIT
+          printf '[worker.oci]\n  max-parallelism = 2\n' > "$builder_config"
+          docker buildx create --name "$ARKLINE_BUILDER" --driver docker-container \
+            --driver-opt 'image=moby/buildkit:v0.34.0@sha256:3eea2ed5d1766c44eb4740853abf56ba85ad40b2c8d4a22e047cbacf15f463c8,memory=8g,memory-swap=8g,cpu-period=100000,cpu-quota=400000' \
+            --buildkitd-config "$builder_config"
+          docker buildx inspect "$ARKLINE_BUILDER" --bootstrap
           printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
           args=(--run-id "$RELEASE_RUN" --version "$RELEASE_VERSION" --output "$RUNNER_TEMP/arkline-publish-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --apply)
           if [[ "$UPGRADE_SERVERS" == true ]]; then

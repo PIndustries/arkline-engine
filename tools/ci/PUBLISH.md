@@ -26,3 +26,19 @@ Public web rollout/hash/redirect failure attempts restoration of the previous im
 Each workflow attempt has its own staging directory, so a validation/build failure before changing the web image can be retried normally. After successful web verification, immutable version paths intentionally prevent blind rerun. Download the failed attempt's plan, compare the recorded web/server digests and public hashes, and inspect the GitHub release and Bastion URLs. If bytes are already published, either finish only the remaining publication metadata manually after verifying those exact hashes, or issue a new version through a new successful build run. Do not replace existing version bytes or delete a GitHub release to bypass the guard. Any server-upgrade failure requires independent world/backup assessment; there is no automated database rollback.
 
 The publisher does not manage Cloudflare ingress. Dedicated apex/www routing to Bastion therefore remains intact across web-image releases, even when an older source image contains an unused apex redirect server block.
+
+## Isolated image builder
+
+Publication uses a job-scoped `docker-container` Buildx builder rather than the
+Docker daemon's embedded BuildKit. Its Linux AMD64 BuildKit 0.34.0 image is pinned
+by manifest digest; the worker permits two parallel build steps and is limited
+to four CPU cores and 8 GiB memory. Builds explicitly select that builder and
+load their output for the existing private push and digest checks. Missing or
+non-container builder configuration fails closed. The exit trap removes only
+the job's builder and temporary configuration, including on publication failure.
+No shared Docker daemon restart, history query, or cache pruning is performed.
+
+A publisher-only workflow update can publish an earlier successful release run:
+source identity is taken from that run's commit, not the publisher checkout's
+HEAD. All receipts, tracked source bytes and BUILD_VERSION are still checked
+against the selected release commit before any publication.

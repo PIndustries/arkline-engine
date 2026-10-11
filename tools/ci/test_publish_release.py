@@ -120,6 +120,30 @@ class PublicationSafety(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError,"rollback failed"):
                 p.deploy_verified_web("new@digest","old@digest",[("url","hash")],"26.10.11.6")
 
+    def test_image_build_requires_isolated_explicit_builder_and_loaded_output(self):
+        image = "ghcr.io/pindustries/arkline-server"
+        calls = []
+        def fake(*args, **kwargs):
+            calls.append(args)
+            if args[:3] == ("docker", "buildx", "inspect"):
+                return b"docker-container\n"
+            if args[:2] == ("gh", "api"):
+                return json.dumps({"visibility": "private"}).encode()
+            if args[:3] == ("docker", "image", "inspect"):
+                return json.dumps([{"RepoDigests": [image + "@sha256:" + "a" * 64]}]).encode()
+            return b""
+        with patch.dict(p.os.environ, {"ARKLINE_BUILDER": "arkline-publish-123-1"}), patch.object(p, "command", fake):
+            result = p.private_image("arkline-server", "revision", Path("source"), Path("Dockerfile"), "b" * 40)
+        self.assertEqual(result, image + "@sha256:" + "a" * 64)
+        build = calls[1]
+        self.assertEqual(build[:7], ("docker", "buildx", "build", "--builder", "arkline-publish-123-1", "--load", "--platform"))
+        self.assertEqual(calls[2], ("docker", "push", image + ":revision"))
+        for builder, driver in [("", b"docker-container"), ("default", b"docker"), ("arkline-publish-123-1", b"docker")]:
+            with self.subTest(builder=builder, driver=driver), patch.dict(p.os.environ, {"ARKLINE_BUILDER": builder}), patch.object(p, "command", return_value=driver) as command:
+                with self.assertRaises(ValueError):
+                    p.private_image("arkline-server", "revision", Path("source"), Path("Dockerfile"), "b" * 40)
+                self.assertFalse(any(call.args[:3] == ("docker", "buildx", "build") for call in command.call_args_list))
+
     def test_publication_urls_are_versioned_and_platform_correct(self):
         env=p.publication_env("26.10.11.6")
         self.assertTrue(env['ARKLINE_CLIENT_WINDOWS_URL'].endswith('-client.zip'))

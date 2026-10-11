@@ -192,7 +192,14 @@ def rollout(kind, name, namespace, image):
 
 def private_image(name, tag, context, dockerfile, commit):
     image = f"ghcr.io/pindustries/{name}:{tag}"
-    command("docker", "build", "--platform", "linux/amd64", "-f", dockerfile,
+    builder = os.environ.get("ARKLINE_BUILDER", "")
+    if not re.fullmatch(r"arkline-publish-[0-9]+-[0-9]+", builder):
+        raise ValueError("An explicit job-scoped Arkline publication builder is required")
+    driver = command("docker", "buildx", "inspect", builder, "--format", "{{.Driver}}").strip()
+    if driver not in ("docker-container", b"docker-container"):
+        raise ValueError("Publication requires an isolated docker-container builder")
+    command("docker", "buildx", "build", "--builder", builder, "--load",
+            "--platform", "linux/amd64", "-f", dockerfile,
             "--build-arg", f"SOURCE_COMMIT={commit}", "--label",
             f"org.opencontainers.image.revision={commit}", "-t", image, context, capture=False)
     command("docker", "push", image, capture=False)
