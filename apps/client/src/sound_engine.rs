@@ -46,8 +46,11 @@ pub enum Cue {
     Undock,
     Dock,
     WarpCharge,
+    WarpEnter,
     WarpArrival,
     Jump,
+    MiningStart,
+    MiningStop,
     MiningCycle,
     DroneLaunch,
     DroneRecall,
@@ -192,6 +195,11 @@ fn stream<T: cpal::SizedSample + cpal::FromSample<f32>>(
 #[derive(Clone, Copy, Default)]
 struct Tone {
     phase: f32,
+    secondary_phase: f32,
+    delay: f32,
+    attack: f32,
+    release: f32,
+    harmonic: f32,
     elapsed: f32,
     duration: f32,
     frequency: f32,
@@ -202,7 +210,7 @@ struct Tone {
 struct Synth {
     mix: Mix,
     rate: f32,
-    phase: [f32; 4],
+    phase: [f32; 8],
     levels: [f32; 7],
     texture: [f32; 2],
     modulation: f32,
@@ -223,7 +231,7 @@ impl Synth {
         Self {
             mix: Mix::default(),
             rate,
-            phase: [0.; 4],
+            phase: [0.; 8],
             levels: [0.; 7],
             texture: [0.; 2],
             modulation: 0.0,
@@ -234,25 +242,81 @@ impl Synth {
         }
     }
     fn cue(&mut self, cue: Cue) {
-        let (frequency, glide, duration, amplitude, noise) = match cue {
-            Cue::Connect => (330., 165., 0.55, 0.16, 0.),
-            Cue::Disconnect => (330., -110., 0.5, 0.14, 0.),
-            Cue::Undock => (65., 65., 0.9, 0.18, 0.012),
-            Cue::Dock => (130., -65., 0.75, 0.16, 0.008),
-            Cue::WarpCharge => (55., 165., 1.6, 0.19, 0.018),
-            Cue::WarpArrival => (220., -165., 1.0, 0.18, 0.02),
-            Cue::Jump => (110., 330., 1.2, 0.2, 0.02),
-            Cue::MiningCycle => (440., 110., 0.28, 0.13, 0.),
-            Cue::DroneLaunch => (165., 165., 0.45, 0.14, 0.008),
-            Cue::DroneRecall => (330., -165., 0.5, 0.14, 0.),
-            Cue::DroneShot => (130., -65., 0.22, 0.18, 0.025),
-            Cue::Lock => (660., 165., 0.3, 0.12, 0.),
-            Cue::LowPower => (165., -35., 0.75, 0.16, 0.),
-            Cue::CargoFull => (440., -110., 0.6, 0.14, 0.),
-            Cue::Ui => (660., -110., 0.09, 0.075, 0.),
-        };
-        // Never reset an audible oscillator when the bounded voice pool is full.
-        let Some(index) = self.tones.iter().position(|t| t.elapsed >= t.duration) else {
+        // Each signature is an original, bounded set of tonal/mechanical layers.
+        // No recorded samples are loaded; delayed accents share the fixed pool.
+        match cue {
+            Cue::WarpCharge => {
+                self.layer(44., 86., 1.9, 0.22, 0.012, 0., 1.2, 0.3, 0.28);
+                self.layer(132., 154., 1.6, 0.07, 0., 0.2, 0.9, 0.35, 0.1);
+            }
+            Cue::WarpEnter => {
+                self.layer(92., -48., 1.1, 0.29, 0.02, 0., 0.018, 0.65, 0.42);
+                self.layer(220., -140., 0.65, 0.1, 0.01, 0.03, 0.025, 0.5, 0.2);
+            }
+            Cue::WarpArrival => {
+                self.layer(68., -34., 1.5, 0.28, 0.018, 0., 0.018, 1.1, 0.5);
+                self.layer(210., -145., 0.9, 0.08, 0.012, 0., 0.03, 0.6, 0.15);
+                self.layer(330., 0., 0.28, 0.045, 0., 0.45, 0.035, 0.2, 0.1);
+            }
+            Cue::Jump => {
+                self.layer(48., 70., 1.0, 0.23, 0.015, 0., 0.32, 0.5, 0.35);
+                self.layer(180., -100., 0.8, 0.09, 0.01, 0.25, 0.04, 0.6, 0.2);
+            }
+            Cue::MiningStart => {
+                self.layer(82., 90., 0.75, 0.14, 0.008, 0., 0.2, 0.3, 0.45);
+                self.layer(420., -90., 0.3, 0.055, 0., 0.12, 0.04, 0.2, 0.2);
+            }
+            Cue::MiningStop => self.layer(170., -90., 0.65, 0.13, 0.008, 0., 0.04, 0.5, 0.4),
+            Cue::MiningCycle => self.layer(390., 24., 0.22, 0.07, 0., 0., 0.025, 0.17, 0.35),
+            Cue::Connect => {
+                self.layer(330., 0., 0.25, 0.11, 0., 0., 0.025, 0.18, 0.15);
+                self.layer(495., 0., 0.35, 0.1, 0., 0.14, 0.025, 0.25, 0.15);
+            }
+            Cue::Disconnect => {
+                self.layer(330., 0., 0.25, 0.1, 0., 0., 0.025, 0.18, 0.15);
+                self.layer(220., 0., 0.35, 0.09, 0., 0.14, 0.025, 0.25, 0.15);
+            }
+            Cue::Undock => self.layer(52., 36., 0.95, 0.18, 0.012, 0., 0.2, 0.35, 0.6),
+            Cue::Dock => {
+                self.layer(105., -45., 0.65, 0.18, 0.018, 0., 0.035, 0.5, 0.6);
+                self.layer(440., 0., 0.2, 0.055, 0., 0.35, 0.025, 0.15, 0.1);
+            }
+            Cue::DroneLaunch => self.layer(180., 110., 0.45, 0.1, 0.006, 0., 0.05, 0.25, 0.4),
+            Cue::DroneRecall => self.layer(290., -110., 0.45, 0.1, 0., 0., 0.05, 0.3, 0.4),
+            Cue::DroneShot => self.layer(125., -65., 0.24, 0.16, 0.02, 0., 0.018, 0.18, 0.55),
+            Cue::Lock => {
+                self.layer(620., 0., 0.12, 0.075, 0., 0., 0.012, 0.09, 0.15);
+                self.layer(830., 0., 0.16, 0.065, 0., 0.11, 0.015, 0.12, 0.15);
+            }
+            Cue::LowPower => {
+                self.layer(196., 0., 0.26, 0.12, 0., 0., 0.035, 0.15, 0.2);
+                self.layer(165., 0., 0.3, 0.11, 0., 0.3, 0.035, 0.2, 0.2);
+            }
+            Cue::CargoFull => {
+                self.layer(440., 0., 0.18, 0.075, 0., 0., 0.025, 0.12, 0.2);
+                self.layer(330., 0., 0.28, 0.08, 0., 0.18, 0.025, 0.2, 0.2);
+            }
+            Cue::Ui => self.layer(720., -60., 0.06, 0.055, 0., 0., 0.01, 0.045, 0.1),
+        }
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn layer(
+        &mut self,
+        frequency: f32,
+        glide: f32,
+        duration: f32,
+        amplitude: f32,
+        noise: f32,
+        delay: f32,
+        attack: f32,
+        release: f32,
+        harmonic: f32,
+    ) {
+        let Some(index) = self
+            .tones
+            .iter()
+            .position(|t| t.elapsed >= t.duration && t.delay <= 0.)
+        else {
             return;
         };
         self.tones[index] = Tone {
@@ -261,6 +325,10 @@ impl Synth {
             duration,
             amplitude,
             noise,
+            delay,
+            attack,
+            release,
+            harmonic,
             ..Tone::default()
         };
     }
@@ -299,9 +367,13 @@ impl Synth {
         self.modulation = (self.modulation + 0.7 * dt).fract();
         let frequencies = [
             31.0 + self.levels[6] * 12.0,
-            55. + self.levels[2] * 90.,
-            230. + self.levels[3] * 50.,
-            70. + self.levels[4] * 620.,
+            46.0 + self.levels[2] * 52.0,
+            174.0 + self.levels[3] * 28.0,
+            38.0 + self.levels[4] * 125.0,
+            46.3 + self.levels[2] * 52.4,
+            (174.0 + self.levels[3] * 28.0) * 2.37,
+            76.7 + self.levels[4] * 250.3,
+            6.0 + self.levels[3] * 1.5,
         ];
         for (phase, freq) in self.phase.iter_mut().zip(frequencies) {
             *phase = (*phase + freq * dt).fract();
@@ -309,33 +381,50 @@ impl Synth {
         let tau = std::f32::consts::TAU;
         let flutter = 0.94 + (self.modulation * tau).sin() * 0.06;
         let mut sample = self.levels[1]
-            * ((self.phase[0] * tau).sin() * 0.05
-                + (self.phase[0] * tau * 3.0).sin() * 0.012
-                + texture * 0.008);
+            * ((self.phase[0] * tau).sin() * 0.042
+                + (self.phase[0] * tau * 2.0).sin() * 0.012
+                + (self.phase[0] * tau * 3.0).sin() * 0.006
+                + texture * 0.006);
         sample += self.levels[2]
             * flutter
-            * ((self.phase[1] * tau).sin() * 0.14
-                + (self.phase[1] * tau * 2.0).sin() * 0.03
-                + texture * 0.015);
+            * ((self.phase[1] * tau).sin() * 0.095
+                + (self.phase[4] * tau).sin() * 0.035
+                + (self.phase[1] * tau * 2.0).sin() * 0.028
+                + (self.phase[1] * tau * 3.0).sin() * 0.01
+                + texture * 0.012);
+        let resonance = 0.91 + 0.09 * (self.phase[7] * tau).sin();
         sample += self.levels[3]
-            * ((self.phase[2] * tau).sin() * 0.055
-                + (self.phase[2] * tau * 2.0).sin() * 0.012
-                + texture * 0.016);
-        sample += self.levels[4] * ((self.phase[3] * tau).sin() * 0.095 + texture * 0.025);
+            * resonance
+            * ((self.phase[2] * tau).sin() * 0.045
+                + (self.phase[5] * tau).sin() * 0.021
+                + (self.phase[2] * tau * 3.0).sin() * 0.008
+                + texture * 0.012);
+        sample += self.levels[4]
+            * flutter
+            * ((self.phase[3] * tau).sin() * 0.09
+                + (self.phase[6] * tau).sin() * 0.027
+                + texture * 0.018);
         let voice_count = self
             .tones
             .iter()
-            .filter(|tone| tone.elapsed < tone.duration)
+            .filter(|tone| tone.elapsed < tone.duration && tone.delay <= 0.)
             .count();
         let voice_target = 1.0 / (voice_count.max(1) as f32).sqrt();
         self.voice_gain += (voice_target - self.voice_gain) * (dt * 40.0).min(1.0);
         let voice_gain = self.voice_gain;
         for tone in &mut self.tones {
+            if tone.delay > 0.0 {
+                tone.delay -= dt;
+                continue;
+            }
             if tone.elapsed < tone.duration {
                 let progress = tone.elapsed / tone.duration;
-                tone.phase = (tone.phase + (tone.frequency + tone.glide * progress) * dt).fract();
-                let attack = (tone.elapsed / 0.025).min(1.0);
-                let release = ((tone.duration - tone.elapsed) / 0.08).min(1.0);
+                let contour = progress * progress * (3.0 - 2.0 * progress);
+                let frequency = tone.frequency + tone.glide * contour;
+                tone.phase = (tone.phase + frequency * dt).fract();
+                tone.secondary_phase = (tone.secondary_phase + frequency * 1.007 * dt).fract();
+                let attack = (tone.elapsed / tone.attack).min(1.0);
+                let release = ((tone.duration - tone.elapsed) / tone.release).min(1.0);
                 let envelope = (0.5 - 0.5 * (attack * std::f32::consts::PI).cos())
                     * (0.5 - 0.5 * (release * std::f32::consts::PI).cos())
                     * (1.0 - progress * 0.65);
@@ -343,7 +432,11 @@ impl Synth {
                     * voice_gain
                     * tone.amplitude
                     * envelope
-                    * ((tone.phase * tau).sin() * (1. - tone.noise) + texture * tone.noise);
+                    * ((tone.phase * tau).sin() * (0.84 - tone.harmonic * 0.3)
+                        + (tone.secondary_phase * tau).sin() * 0.16
+                        + (tone.phase * tau * 2.0).sin() * tone.harmonic * 0.2
+                        + (tone.phase * tau * 3.0).sin() * tone.harmonic * 0.1
+                        + texture * tone.noise);
                 tone.elapsed += dt;
             }
         }
@@ -461,6 +554,129 @@ mod tests {
             previous = sample;
         }
         assert!(step < 0.015, "transient step {step}");
+    }
+    #[test]
+    fn complete_palette_has_finite_bounded_transients_and_silent_tails() {
+        for cue in [
+            Cue::Connect,
+            Cue::Disconnect,
+            Cue::Undock,
+            Cue::Dock,
+            Cue::WarpCharge,
+            Cue::WarpEnter,
+            Cue::WarpArrival,
+            Cue::Jump,
+            Cue::MiningStart,
+            Cue::MiningStop,
+            Cue::MiningCycle,
+            Cue::DroneLaunch,
+            Cue::DroneRecall,
+            Cue::DroneShot,
+            Cue::Lock,
+            Cue::LowPower,
+            Cue::CargoFull,
+            Cue::Ui,
+        ] {
+            let mut synth = Synth::new(48000.);
+            synth.mix.master = 1.;
+            synth.mix.effects = 1.;
+            synth.cue(cue);
+            let mut energy = 0.;
+            let mut peak = 0.0_f32;
+            for _ in 0..(48000 * 3) {
+                let sample = synth.next();
+                assert!(sample.is_finite());
+                energy += sample * sample;
+                peak = peak.max(sample.abs());
+            }
+            assert!(energy > 0.01, "{cue:?} is silent");
+            assert!(peak < 0.5, "{cue:?} peak {peak}");
+            assert!(synth.next().abs() < 1e-8, "{cue:?} never decayed");
+        }
+    }
+    #[test]
+    #[ignore = "Explicit offline WAV export; set ARKLINE_AUDIO_PREVIEW_PATH to a new output file"]
+    fn export_audio_preview() {
+        use std::io::Write;
+        let path =
+            std::env::var("ARKLINE_AUDIO_PREVIEW_PATH").expect("Explicit output path required");
+        let mut writer = std::io::BufWriter::new(
+            std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&path)
+                .unwrap(),
+        );
+        let rate = 48000_u32;
+        let count = rate * 22;
+        let bytes = count * 2;
+        writer.write_all(b"RIFF").unwrap();
+        writer.write_all(&(36 + bytes).to_le_bytes()).unwrap();
+        writer.write_all(b"WAVEfmt ").unwrap();
+        writer.write_all(&16_u32.to_le_bytes()).unwrap();
+        writer.write_all(&1_u16.to_le_bytes()).unwrap();
+        writer.write_all(&1_u16.to_le_bytes()).unwrap();
+        writer.write_all(&rate.to_le_bytes()).unwrap();
+        writer.write_all(&(rate * 2).to_le_bytes()).unwrap();
+        writer.write_all(&2_u16.to_le_bytes()).unwrap();
+        writer.write_all(&16_u16.to_le_bytes()).unwrap();
+        writer.write_all(b"data").unwrap();
+        writer.write_all(&bytes.to_le_bytes()).unwrap();
+        let mut synth = Synth::new(rate as f32);
+        let mut peak = 0.0_f32;
+        let mut squares = 0.0_f64;
+        let mut nonzero = 0_u64;
+        for index in 0..count {
+            let time = index as f32 / rate as f32;
+            match index {
+                48000 => synth.cue(Cue::Connect),
+                96000 => synth.cue(Cue::Undock),
+                288000 => synth.cue(Cue::MiningStart),
+                408000 => synth.cue(Cue::MiningCycle),
+                504000 => synth.cue(Cue::MiningStop),
+                576000 => synth.cue(Cue::WarpCharge),
+                672000 => synth.cue(Cue::WarpEnter),
+                768000 => synth.cue(Cue::WarpArrival),
+                864000 => synth.cue(Cue::Lock),
+                888000 => synth.cue(Cue::LowPower),
+                936000 => synth.cue(Cue::CargoFull),
+                _ => {}
+            }
+            synth.mix.active = (2.0..4.5).contains(&time)
+                || (6.0..10.5).contains(&time)
+                || (12.0..16.0).contains(&time);
+            synth.mix.engine = if (2.0..4.5).contains(&time) {
+                ((time - 2.0) / 1.5).min(0.7)
+            } else {
+                0.
+            };
+            synth.mix.mining = if (6.0..10.5).contains(&time) {
+                0.85
+            } else {
+                0.
+            };
+            synth.mix.warp = if (12.0..14.0).contains(&time) {
+                (time - 12.0) / 2.0 * 0.75
+            } else if (14.0..16.0).contains(&time) {
+                1.0
+            } else {
+                0.
+            };
+            let sample = synth.next();
+            assert!(sample.is_finite());
+            peak = peak.max(sample.abs());
+            squares += (sample as f64).powi(2);
+            let pcm = (sample.clamp(-1.0, 1.0) * i16::MAX as f32).round() as i16;
+            if pcm != 0 {
+                nonzero += 1;
+            }
+            writer.write_all(&pcm.to_le_bytes()).unwrap();
+        }
+        writer.flush().unwrap();
+        assert!(peak > 0.01 && peak < 0.8);
+        assert!(nonzero > count as u64 / 4);
+        eprintln!("Preview {path}: 22.000s mono PCM16 48000Hz; peak={peak:.6}, RMS={:.6}, nonzero={nonzero}/{count}",(squares/count as f64).sqrt());
+        eprintln!("Timeline: 0–1 silence;1 Connect;2–4.5 Undock+engine;4.5–6 fade/silence;6 MiningStart;6–10.5 mining loop;8.5 MiningCycle;10.5 MiningStop;11.2–12 silence;12 WarpCharge;12–14 buildup;14 WarpEnter;14–16 transit;16 WarpArrival;17.5–18 silence;18 Lock;18.5 LowPower;19.5 CargoFull;20.1–22 silence.");
     }
     #[test]
     #[ignore = "Explicit invocation plays procedural sound on the actual default device"]

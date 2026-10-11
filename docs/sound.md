@@ -12,6 +12,21 @@ system also produces a cue; stale arrivals do not replay. Repeated snapshots mus
 stale/disconnected state silences continuous machinery rather than implying that
 unobserved work continues. Sounds do not submit gameplay commands or award ore.
 
+## Event signatures
+
+The reactor bed stays quiet under other events. Engine harmonics follow measured
+thrust; coasting does not produce a full-power engine loop. Mining has a spin-up,
+a restrained resonant loop, a short confirmed extraction cue and a spin-down.
+Continuous cycles do not replay start/stop cues each time a cycle rolls over.
+Warp uses related low-frequency layers for charge, entry, travel and arrival.
+Entry is emitted once when the confirmed trajectory crosses its warmup boundary;
+repeated frames, reconnects and stale samples do not replay it. Docking, drone
+operations, target lock, low capacitor and full cargo retain distinct signatures.
+
+All layers are synthesized from original oscillator/envelope definitions. Filtered
+mechanical texture stays behind the tonal layers. A fixed voice pool, gain smoothing
+and limiter retain callback bounds and leave headroom for overlapping events.
+
 ## Controls and output
 
 Sound preferences provide Master, Ambience and Effects levels, a game-sound mute,

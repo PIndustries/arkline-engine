@@ -10,6 +10,8 @@ pub struct Scene {
 }
 struct Sample {
     time: u64,
+    audio_time: u64,
+    mining_engaged: bool,
     pilot: PilotView,
     drone_health: BTreeMap<(String, u64), u32>,
     incoming: BTreeMap<String, u64>,
@@ -53,19 +55,39 @@ impl Scene {
         {
             self.previous = None;
         }
-        if let Some(previous) = &self.previous {
+        if let Some(previous) = &mut self.previous {
             if snapshot.server_time_ms < previous.time {
                 return (Mix::default(), cues);
             }
             if snapshot.server_time_ms == previous.time {
-                return (loops(snapshot, &previous.pilot, now_ms), cues);
+                if warp_entry(previous, &previous.pilot, now_ms) {
+                    cues.push(Cue::WarpEnter);
+                }
+                previous.audio_time = previous.audio_time.max(now_ms);
+                return (loops(snapshot, &previous.pilot, now_ms, false), cues);
             }
             if snapshot.server_time_ms.saturating_sub(previous.time) <= STALE_MS {
                 transitions(previous, snapshot, current, &mut cues);
+                if warp_entry(previous, current, now_ms) {
+                    cues.push(Cue::WarpEnter);
+                }
+                let engaged = loops(snapshot, current, snapshot.server_time_ms, true).mining > 0.0;
+                if engaged != previous.mining_engaged {
+                    cues.push(if engaged {
+                        Cue::MiningStart
+                    } else {
+                        Cue::MiningStop
+                    });
+                }
             }
         }
         self.previous = Some(Sample {
             time: snapshot.server_time_ms,
+            audio_time: self
+                .previous
+                .as_ref()
+                .map_or(now_ms, |p| p.audio_time.max(now_ms)),
+            mining_engaged: loops(snapshot, current, snapshot.server_time_ms, true).mining > 0.0,
             pilot: current.clone(),
             incoming: snapshot
                 .pilots
@@ -91,7 +113,7 @@ impl Scene {
                 })
                 .collect(),
         });
-        (loops(snapshot, current, now_ms), cues)
+        (loops(snapshot, current, now_ms, false), cues)
     }
 }
 fn normal(p: &PilotView) -> bool {
@@ -107,7 +129,27 @@ fn locks(p: &PilotView) -> BTreeSet<u64> {
 fn magnitude(v: [f64; 3]) -> f64 {
     v.iter().map(|v| v * v).sum::<f64>().sqrt()
 }
-fn loops(snapshot: &Snapshot, p: &PilotView, now: u64) -> Mix {
+fn warp_entry(previous: &Sample, current: &PilotView, now: u64) -> bool {
+    let path = |p: &PilotView| {
+        if !matches!(p.location, Location::InTransit { .. }) {
+            return None;
+        }
+        p.flight.as_ref().and_then(|f| f.warp.as_ref()).map(|w| {
+            (
+                w.started_at_ms,
+                w.started_at_ms.saturating_add(w.warmup_ms),
+                w.arrives_at_ms,
+            )
+        })
+    };
+    path(current).is_some_and(|key| {
+        path(&previous.pilot) == Some(key)
+            && previous.audio_time < key.1
+            && now >= key.1
+            && now < key.2
+    })
+}
+fn loops(snapshot: &Snapshot, p: &PilotView, now: u64, lifecycle: bool) -> Mix {
     let mut mix = Mix {
         active: true,
         docked: p.location == Location::Docked,
@@ -136,7 +178,7 @@ fn loops(snapshot: &Snapshot, p: &PilotView, now: u64) -> Mix {
                 };
                 end > start
                     && now >= start
-                    && now < end
+                    && (lifecycle || now < end)
                     && confirmed.contains(&id)
                     && snapshot.asteroids.iter().any(|a| {
                         a.id == id
@@ -154,9 +196,9 @@ fn loops(snapshot: &Snapshot, p: &PilotView, now: u64) -> Mix {
             .iter()
             .filter(|d| {
                 matches!(d.mode,DroneMode::Mining{target_id} if confirmed.contains(&target_id))
-                    && d.mining_cycle
-                        .as_ref()
-                        .is_some_and(|c| now >= c.started_at_ms && now < c.completes_at_ms)
+                    && d.mining_cycle.as_ref().is_some_and(|c| {
+                        now >= c.started_at_ms && (lifecycle || now < c.completes_at_ms)
+                    })
             })
             .count();
         mix.mining = (modules as f32 * 0.35 + drones as f32 * 0.08).min(1.0);
@@ -520,6 +562,102 @@ mod tests {
                 .iter()
                 .any(|c| matches!(c, Cue::WarpArrival)));
         }
+    }
+    #[test]
+    fn warp_entry_live_clock_crossing_is_latched_without_initial_replay() {
+        let mut s = snapshot(2500);
+        let path = plan_warp([0.0; 3], [1_000_000.0, 0.0, 0.0], 1000);
+        let launch = path.started_at_ms + path.warmup_ms;
+        s.pilots[0].location = Location::InTransit {
+            destination: Destination::Belt,
+            arrives_at_ms: path.arrives_at_ms,
+        };
+        s.pilots[0].flight.as_mut().unwrap().warp = Some(path);
+        let mut scene = Scene::default();
+        assert!(!scene
+            .update(Some(&s), "Pilot", true, launch - 1)
+            .1
+            .iter()
+            .any(|c| matches!(c, Cue::WarpEnter)));
+        assert_eq!(
+            scene
+                .update(Some(&s), "Pilot", true, launch)
+                .1
+                .iter()
+                .filter(|c| matches!(c, Cue::WarpEnter))
+                .count(),
+            1
+        );
+        assert!(scene
+            .update(Some(&s), "Pilot", true, launch + 1)
+            .1
+            .is_empty());
+        // A clock correction cannot re-arm the same boundary.
+        scene.update(Some(&s), "Pilot", true, launch - 1);
+        assert!(scene
+            .update(Some(&s), "Pilot", true, launch + 2)
+            .1
+            .is_empty());
+        scene.reset();
+        assert!(scene
+            .update(Some(&s), "Pilot", true, launch + 3)
+            .1
+            .is_empty());
+    }
+    #[test]
+    fn mining_lifecycle_coalesces_modules_and_ignores_cycle_boundaries() {
+        let mut s = snapshot(1000);
+        s.pilots[0].locked_asteroids = vec![1];
+        s.asteroids.push(Asteroid {
+            id: 1,
+            system_id: HOME_SYSTEM_ID,
+            name: "Rock".into(),
+            position: [0.0; 3],
+            radius: 100.0,
+            ore: 1000,
+        });
+        let mut scene = Scene::default();
+        scene.update(Some(&s), "Pilot", true, 1000);
+        s.server_time_ms = 1100;
+        s.pilots[0].mining_modules = (0..2)
+            .map(|module_id| MiningModule {
+                module_id,
+                target_id: Some(1),
+                cycle_started_at_ms: Some(1100),
+                cycle_completes_at_ms: Some(1200),
+                stop_reason: None,
+            })
+            .collect();
+        let cues = scene.update(Some(&s), "Pilot", true, 1100).1;
+        assert_eq!(
+            cues.iter()
+                .filter(|c| matches!(c, Cue::MiningStart))
+                .count(),
+            1
+        );
+        s.server_time_ms = 1200;
+        assert!(scene.update(Some(&s), "Pilot", true, 1200).1.is_empty());
+        s.server_time_ms = 1250;
+        for m in &mut s.pilots[0].mining_modules {
+            m.cycle_started_at_ms = Some(1200);
+            m.cycle_completes_at_ms = Some(1300);
+        }
+        assert!(scene.update(Some(&s), "Pilot", true, 1250).1.is_empty());
+        s.server_time_ms = 1260;
+        s.pilots[0].mining_modules.pop();
+        assert!(scene.update(Some(&s), "Pilot", true, 1260).1.is_empty());
+        s.server_time_ms = 1270;
+        s.pilots[0].mining_modules.clear();
+        assert_eq!(
+            scene
+                .update(Some(&s), "Pilot", true, 1270)
+                .1
+                .iter()
+                .filter(|c| matches!(c, Cue::MiningStop))
+                .count(),
+            1
+        );
+        assert!(scene.update(Some(&s), "Pilot", true, 1271).1.is_empty());
     }
     #[test]
     fn drone_launch_recall_and_shot_need_real_state_evidence() {

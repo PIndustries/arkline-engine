@@ -613,3 +613,19 @@ recon drones and switched Split feeds → Top down. Four separate labeled scene
 feeds were visible within the cockpit screen. The HUD reported roughly118–120FPS
 in that scene; this is not a general performance benchmark. Full workspace tests
 passed, followed by the final client suite and Clippy after graphics-cache changes.
+
+## Layered lifecycle audio — 26.10.10.21
+
+The client suite passed122 tests with8 opt-in tests ignored; formatting and
+warnings-denied workspace Clippy passed. The actual default-output callback test
+was explicitly run separately and passed. Eight scene tests cover confirmed
+transitions, stale-state handling and new mining lifecycle/warp entry behavior:
+continuous extraction does not replay start/stop on each cycle, and warp entry
+fires once at the live-clock warmup boundary even across duplicate snapshots.
+
+An explicit offline export rendered22seconds of the actual mixer at48kHz PCM16,
+including machinery, mining, charge/entry/arrival and alerts. Samples were finite,
+peak0.068994 and RMS0.009057 at default levels;721639 of1056000 samples were nonzero.
+A generated preview and successful device callbacks prove rendering/output activity,
+not subjective similarity, audible quality on every device or owner acceptance.
+No external sound samples were copied into the repository.

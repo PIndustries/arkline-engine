@@ -8,7 +8,7 @@ has played the model, validated the direction, and explicitly approved publicati
 An open-source license has not been selected. This preview is not a public MMO or a
 financial network.
 
-## Preview 26.10.10.20
+## Preview 26.10.10.21
 
 The ship computer retains short conversations and combines follow-up instructions
 with current ship telemetry. Gathering starts from space as well as a station;
@@ -23,8 +23,8 @@ The 2D map supports cursor-centered wheel zoom and empty-space drag panning.
 with volume, mute, test and retry controls in Settings. Directional lighting,
 material highlights and tone mapping improve the existing renderer; this is not
 HDR-display output. Asteroids rotate slowly with matching selection and mining
-impact geometry. The sound mix uses filtered machinery textures and softened
-transients. See [validation evidence](docs/validation.md) for tested
+impact geometry. The sound mix uses layered machinery harmonics, distinct mining start/stop
+feedback and a connected warp charge, entry and arrival sequence. See [validation evidence](docs/validation.md) for tested
 behavior and remaining owner acceptance.
 
 Drone screens provide Raised, Top down, Orbit and POV angles, plus up to four
