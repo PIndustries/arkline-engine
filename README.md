@@ -20,9 +20,14 @@ and developing a shared universe with the community. Open source gives players
 and contributors a direct way to inspect the engine, improve its security and
 balance, and shape how it plays.
 
-You are welcome to host your own world, run local experiments, or build a fork.
-We hope useful ideas return as issues and pull requests that strengthen the shared
-ecosystem. Independent networks and different perspectives are welcome too.
+We recommend running your own server to test changes, experiment with ideas, and
+develop improvements that can return to the official repository through issues
+and pull requests. Our goal is one community building a shared, lasting universe.
+
+You are also welcome to host an independent community or take a fork in a new
+direction. Contributing back is an invitation, not a condition of hosting. We are
+excited to see what people create, and P.Industries will focus its development and
+operations on the official network.
 See the [community direction](https://github.com/PIndustries/arkline-engine/wiki/Community-and-Roadmap).
 
 ## Start here

@@ -9,7 +9,7 @@ The official host layout is:
 
 | Host | Purpose |
 | --- | --- |
-| `arkline.network`, `www.arkline.network` | Project website redirect |
+| `arkline.network`, `www.arkline.network` | Standalone Arkline project website |
 | `play.arkline.network` | Rust/WebAssembly client |
 | `relay.arkline.network/ws` | Production WebSocket world |
 | `test-relay.arkline.network/ws` | Separate Test WebSocket world |
@@ -19,6 +19,18 @@ A production channel names the persistent official world; it does not imply a
 completed game, unlimited capacity, or an availability guarantee. This is early
 access. Test uses its own database and credentials. Never point both processes
 at one SQLite file or share production pilot credentials with another operator.
+
+## Why run your own server?
+
+We recommend self-hosting for local development, testing, and experiments that
+can feed improvements back into the official repository. Our focus is one
+community building the shared engine and official universe together. Report
+findings and propose changes through issues and pull requests.
+
+Hosting your own community or fork is welcome as well; contributing upstream is
+an invitation, not a condition of running a server. Independent servers have
+separate worlds and operators and do not automatically join the official network.
+See the [community direction](../docs/ecosystem.md) for how these paths fit together.
 
 ## Origin deployment
 

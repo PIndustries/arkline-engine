@@ -8,20 +8,28 @@ or official-network service is finished.
 
 ## Community projects and the official network
 
-Independent forks and independently operated worlds are welcome. Developers can
-run Arkline locally, change the rules, test new interfaces and explore a different
-direction under the repository's license. Local experiments are useful work, not
-second-class contributions. When an improvement would help the shared engine,
-open an issue or pull request with a reproducible example and relevant validation.
-A fork does not have to become part of the official service to be worthwhile.
+Our goal is one community building Arkline together: a shared engine and a
+lasting official universe shaped by the people who play and contribute.
+P.Industries focuses its development and operations on that official network.
 
-P.Industries focuses its development and operations on the official Arkline
-network. That focus does not prevent community projects or require independent
-worlds to use official account infrastructure. Shared engine improvements,
-clear interfaces and documented limits should make both paths easier. Official
+For contributors, we recommend self-hosting as a place to test changes, experiment
+with mechanics, reproduce bugs, and develop new features without affecting the
+live universe. Bring useful discoveries back as issues and pull requests with
+reproduction steps and relevant validation. Reviewed improvements can then become
+part of an official release; running an experiment does not change the official
+world automatically.
+
+Independent community servers and forks are welcome too. You can explore a
+different direction under the repository's license, and we are excited to see
+what the community makes. This recommendation is not a hosting restriction or a
+requirement to submit changes upstream. A separate world can still be part of the
+broader Arkline community through shared knowledge, tools, and contributions.
+
+Independent worlds do not have to use official account infrastructure. Official
 network admission, authority and any future operator programme remain separate
-from the ability to run the open-source code; operating a node does not currently
-confer official status or rewards.
+from the ability to run the open-source code; operating a server does not currently
+confer official status or rewards. P.Industries operates the official network;
+independent operators are responsible for their own worlds.
 
 Keep attribution and license obligations, and distinguish independent projects
 from the official service under the [branding policy](../TRADEMARKS.md). See
