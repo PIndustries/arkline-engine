@@ -33,3 +33,7 @@ Keep future revisions under the appropriate ship's `images/` directory, preserve
 Tracking: [GLB and artwork pipeline #10](https://github.com/PIndustries/arkline-engine/issues/10), [walkable ship interiors #23](https://github.com/PIndustries/arkline-engine/issues/23), [client stability #7](https://github.com/PIndustries/arkline-engine/issues/7).
 
 [Room-by-room fixture plans and connection schedules](room-services.md).
+
+[How the ship subsystems work together](subsystem-behavior.md).
+
+See the [vessel engineering contract](engineering-contract.md) for proposed lifecycle states, energy/mass/heat accounting and structural load requirements.

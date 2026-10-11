@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/arkline-protocol", "apps/server", "apps/client", "apps/verifier", "apps/cli"]
+members = ["crates/arkline-protocol", "apps/server", "apps/client", "apps/verifier", "apps/cli", "apps/asset-tool"]
 resolver = "2"
 
 [workspace.package]
