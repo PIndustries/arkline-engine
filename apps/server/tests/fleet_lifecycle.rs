@@ -22,6 +22,7 @@ fn restart_clears_deployed_fleet_without_reusing_ids_or_changing_economy() {
             &mut s,
             &mut p,
             Request::Connect {
+                supports_pioneer_interior: true,
                 protocol_version: PROTOCOL_VERSION,
                 pilot: "Owner".into(),
                 resume_token: None,
@@ -52,6 +53,7 @@ fn restart_clears_deployed_fleet_without_reusing_ids_or_changing_economy() {
             &mut s,
             &mut p,
             Request::Connect {
+                supports_pioneer_interior: true,
                 protocol_version: PROTOCOL_VERSION,
                 pilot: "Owner".into(),
                 resume_token: Some(token),
@@ -103,6 +105,7 @@ fn legacy_singleton_schema_recovers_safely_once() {
             &mut s,
             &mut p,
             Request::Connect {
+                supports_pioneer_interior: true,
                 protocol_version: PROTOCOL_VERSION,
                 pilot: "Legacy".into(),
                 resume_token: None,

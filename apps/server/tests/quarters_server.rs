@@ -54,6 +54,7 @@ fn setup(path: &std::path::Path) -> (Server, Option<String>, Option<String>) {
         &mut s,
         &mut p,
         Request::Connect {
+            supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
             pilot: "Resident".into(),
             resume_token: None,
@@ -109,6 +110,7 @@ fn sofa_requires_proximity_survives_reconnect_and_walking_stands_in_place() {
         &mut s,
         &mut p,
         Request::Connect {
+            supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
             pilot: "Resident".into(),
             resume_token: token,

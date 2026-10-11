@@ -18,6 +18,7 @@ fn connect(server: &mut Server, name: &str) -> (Option<String>, String) {
         server,
         &mut session,
         Request::Connect {
+            supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
             pilot: name.into(),
             resume_token: None,
@@ -79,6 +80,7 @@ fn unauthorized_and_failed_trade_leave_ledger_unchanged() {
             .handle_at(
                 &mut stranger,
                 Request::Connect {
+                    supports_pioneer_interior: true,
                     protocol_version: 1,
                     pilot: "Alice".into(),
                     resume_token: Some("incorrect".into())
@@ -261,6 +263,7 @@ fn restart_preserves_auth_travel_and_completed_mining() {
             &mut server,
             &mut session,
             Request::Connect {
+                supports_pioneer_interior: true,
                 protocol_version: 1,
                 pilot: "Traveler".into(),
                 resume_token: Some(token.clone()),
@@ -286,6 +289,7 @@ fn restart_preserves_auth_travel_and_completed_mining() {
             &mut server,
             &mut session,
             Request::Connect {
+                supports_pioneer_interior: true,
                 protocol_version: 1,
                 pilot: "Traveler".into(),
                 resume_token: Some(token),

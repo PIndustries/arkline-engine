@@ -266,6 +266,7 @@ fn run() -> Result<()> {
         let response = exchange(
             &mut stream,
             &Request::Connect {
+                supports_pioneer_interior: false,
                 protocol_version: PROTOCOL_VERSION,
                 pilot: pilot.clone(),
                 resume_token,

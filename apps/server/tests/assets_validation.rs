@@ -15,6 +15,7 @@ fn corrupt_hangar_and_storage_fail_open_without_panicking() {
                     .handle_at(
                         &mut None,
                         Request::Connect {
+                            supports_pioneer_interior: true,
                             protocol_version: PROTOCOL_VERSION,
                             pilot: "Pilot".into(),
                             resume_token: None

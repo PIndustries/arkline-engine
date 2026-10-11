@@ -72,6 +72,7 @@ impl Client {
     }
     fn login(&mut self, pilot: &str, token: Option<String>) -> Response {
         self.ok(Request::Connect {
+            supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
             pilot: pilot.into(),
             resume_token: token,
@@ -178,6 +179,7 @@ fn two_pilots_trade_recover_and_export_consistent_history() {
     assert!(
         !attacker
             .send(Request::Connect {
+                supports_pioneer_interior: true,
                 protocol_version: PROTOCOL_VERSION,
                 pilot: "Alice".into(),
                 resume_token: None
@@ -342,6 +344,7 @@ fn transport_presence_counts_sessions_without_removing_persistent_ships() {
     // Reauthentication on the same connection must not leak an extra reference.
     second.login("PresencePilot", Some(token.clone()));
     let rejected = second.send(Request::Connect {
+        supports_pioneer_interior: true,
         protocol_version: PROTOCOL_VERSION,
         pilot: "PresencePilot".into(),
         resume_token: Some("wrong".into()),

@@ -11,6 +11,7 @@ fn setup(s: &mut Server) -> (Option<String>, u64, u64) {
         s,
         &mut p,
         Request::Connect {
+            supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
             pilot: "Miner".into(),
             resume_token: None,

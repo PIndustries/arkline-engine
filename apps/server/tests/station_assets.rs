@@ -19,6 +19,7 @@ fn connect(
         s,
         p,
         Request::Connect {
+            supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
             pilot: name.into(),
             resume_token: token,
