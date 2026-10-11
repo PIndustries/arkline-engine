@@ -223,3 +223,120 @@ fn both_decks_pointer_keyboard_airlock_board_undock() {
     assert_eq!(j.app.own().unwrap().location, Location::Station);
     println!("12 rooms / 2 lift transitions / airlock / boarding / undock passed with {} UI-emitted requests",j.emitted);
 }
+
+#[test]
+fn on_foot_camera_buttons_and_ship_command_boundary() {
+    use flight3d::hangar::OnFootView;
+    let mut j = Journey::new();
+    j.click("Explore Pioneer interior");
+    let start = j.avatar();
+    j.click("First person");
+    assert_eq!(j.app.hangar_view.on_foot_view, OnFootView::FirstPerson);
+    assert_eq!(j.avatar().position, start.position);
+    for key in [
+        egui::Key::W,
+        egui::Key::S,
+        egui::Key::ArrowUp,
+        egui::Key::ArrowDown,
+    ] {
+        let before = j.avatar().position;
+        for _ in 0..8 {
+            j.key(Some(key));
+        }
+        j.key(None);
+        assert!(distance_m(before, j.avatar().position) > 0.4);
+        assert!(
+            (j.avatar().heading - start.heading).abs() < 0.01,
+            "walking/backpedalling must not spin camera"
+        );
+    }
+    let before_turn = j.avatar();
+    let (surface, layer) = j.app.hangar_view.input_surface().unwrap();
+    let start_pointer = (2..10)
+        .flat_map(|y| (2..10).map(move |x| Pos2::new(x as f32 * 100., y as f32 * 60.)))
+        .find(|p| {
+            surface.contains(*p)
+                && j.ctx.layer_id_at(*p) == Some(layer)
+                && j.ctx.layer_id_at(*p + Vec2::new(70., 0.)) == Some(layer)
+        })
+        .unwrap();
+    j.step(vec![egui::Event::PointerMoved(start_pointer)]);
+    j.step(vec![
+        egui::Event::PointerMoved(start_pointer),
+        egui::Event::PointerButton {
+            pos: start_pointer,
+            button: egui::PointerButton::Secondary,
+            pressed: true,
+            modifiers: Default::default(),
+        },
+    ]);
+    let end_pointer = start_pointer + Vec2::new(70.0, 0.0);
+    j.step(vec![egui::Event::PointerMoved(end_pointer)]);
+    j.step(vec![egui::Event::PointerButton {
+        pos: end_pointer,
+        button: egui::PointerButton::Secondary,
+        pressed: false,
+        modifiers: Default::default(),
+    }]);
+    for _ in 0..40 {
+        j.step(vec![]);
+    }
+    assert!(
+        (j.avatar().heading - before_turn.heading).abs() > 0.1,
+        "RMB must turn actual avatar, not detach third-person orbit: desired {}, before {}, after {} at {:?}", j.app.hangar_view.camera_yaw(), before_turn.heading, j.avatar().heading, start_pointer
+    );
+    assert!(distance_m(j.avatar().position, before_turn.position) < 0.001);
+    j.click("Third person");
+    assert_eq!(j.app.hangar_view.on_foot_view, OnFootView::ThirdPerson);
+    for request in [
+        Request::Undock,
+        Request::Dock,
+        Request::Navigate {
+            mode: NavigationMode::Stop,
+        },
+        Request::PilotInput {
+            translation: [1., 0., 0.],
+            rotation: [0.; 3],
+        },
+        Request::SelectShip {
+            ship_class: ShipClass::Hauler,
+        },
+        Request::StartMining {
+            module_id: 0,
+            target_id: 1,
+        },
+        Request::LaunchDrone,
+        Request::StartResourceJob {
+            target_units: 1,
+            pilot: None,
+        },
+        Request::BeginRemoteControl {
+            pilot: "worker".into(),
+        },
+    ] {
+        j.app.send(request);
+        assert!(
+            j.commands.try_recv().is_err(),
+            "ship command escaped on-foot guard"
+        );
+    }
+    for tab in [
+        ServiceTab::Navigation,
+        ServiceTab::Modules,
+        ServiceTab::Drones,
+        ServiceTab::Hangar,
+    ] {
+        j.app.service_tab = tab;
+        j.app.services_open = true;
+        j.step(vec![]);
+        let text = j
+            .step(vec![])
+            .into_iter()
+            .map(|(text, _)| text)
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(text.contains("ON FOOT"));
+        assert!(!text.contains("Undock active vessel"));
+        assert!(!text.contains("Activate turret"));
+    }
+}

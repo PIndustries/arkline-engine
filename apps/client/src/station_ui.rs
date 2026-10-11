@@ -1,6 +1,20 @@
 //! Station embodiment is confirmed by the server; camera motion never boards a ship.
 use super::*;
 impl Cockpit {
+    pub(super) fn on_foot_view_selector(&mut self, ui: &mut egui::Ui) {
+        use flight3d::hangar::OnFootView;
+        ui.selectable_value(
+            &mut self.hangar_view.on_foot_view,
+            OnFootView::FirstPerson,
+            "First person",
+        );
+        ui.selectable_value(
+            &mut self.hangar_view.on_foot_view,
+            OnFootView::ThirdPerson,
+            "Third person",
+        );
+    }
+
     pub(super) fn activate_quarters_terminal(&mut self, action: flight3d::hangar::HangarAction) {
         use flight3d::hangar::HangarAction;
         if !self.in_station_hangar() || self.own().is_none_or(|p| p.station_avatar.is_none()) {
@@ -46,7 +60,11 @@ impl Cockpit {
             .assets
             .as_ref()
             .is_some_and(|a| a.pioneer_interior_available);
+        if pilot.ship_class == ShipClass::Pioneer && !interior_available {
+            ui.small("This server has not enabled the Pioneer walkable interior. Connect to a server with interior support; other hull interiors remain planned.");
+        }
         if let Some(avatar) = &pilot.station_avatar {
+            ui.horizontal(|ui| self.on_foot_view_selector(ui));
             if avatar.onboard_interior {
                 let distance = avatar
                     .position
@@ -56,7 +74,17 @@ impl Cockpit {
                     .sum::<f64>()
                     .sqrt();
                 ui.strong(format!("ON FOOT · PIONEER DECK {}", avatar.interior_deck));
-                ui.small("WASD / arrows walk · Space jump · RMB look");
+                let room = pioneer_rooms(avatar.interior_deck)
+                    .iter()
+                    .find(|(_, x, z)| {
+                        avatar.position[0] >= *x
+                            && avatar.position[0] <= x + 8.9333333333
+                            && avatar.position[2] >= *z
+                            && avatar.position[2] <= z + 5.4
+                    })
+                    .map_or("CORRIDOR / ACCESS CORE", |(name, _, _)| *name);
+                ui.label(room);
+                ui.small("WASD / arrows walk · Space jump · RMB turn / look");
                 ui.small(
                     "Room fixtures are prototypes. Power/cargo screens read actual ship data.",
                 );
@@ -173,9 +201,6 @@ impl Cockpit {
                 {
                     self.send(Request::EnterInterior);
                 }
-                if !interior_available {
-                    ui.small("Walkable interior unavailable on this server");
-                }
             }
 
             ui.horizontal(|ui| {
@@ -199,17 +224,21 @@ impl Cockpit {
         }
     }
     pub(super) fn station_overlay(&mut self, ctx: &egui::Context) {
-        egui::Window::new("Hangar access")
-            .id(egui::Id::new("station_embodiment_controls"))
-            .anchor(egui::Align2::CENTER_BOTTOM, [0.0, -14.0])
-            .resizable(false)
-            .collapsible(false)
-            .movable(false)
-            .frame(self.overlay_frame(ctx))
-            .show(ctx, |ui| {
-                self.station_actions(ui);
-                self.power_gauge(ui);
-            });
+        egui::Window::new(if self.own().is_some_and(|p| p.station_avatar.is_some()) {
+            "On-foot navigation"
+        } else {
+            "Hangar access"
+        })
+        .id(egui::Id::new("station_embodiment_controls"))
+        .anchor(egui::Align2::CENTER_BOTTOM, [0.0, -14.0])
+        .resizable(false)
+        .collapsible(false)
+        .movable(false)
+        .frame(self.overlay_frame(ctx))
+        .show(ctx, |ui| {
+            self.station_actions(ui);
+            self.power_gauge(ui);
+        });
     }
     pub(super) fn sample_station_walk(&mut self, ctx: &egui::Context, in_hangar: bool) {
         let avatar = self.own().and_then(|p| p.station_avatar);
@@ -245,21 +274,12 @@ impl Cockpit {
                     - f64::from(down(egui::Key::S, egui::Key::ArrowDown));
                 let s = f64::from(down(egui::Key::D, egui::Key::ArrowRight))
                     - f64::from(down(egui::Key::A, egui::Key::ArrowLeft));
-                let delta = self.hangar_view.camera_yaw() - avatar.as_ref().unwrap().heading;
-                let (sin, cos) = delta.sin_cos();
+                // Body-local walking avoids a camera-follow/auto-turn feedback loop:
+                // strafing stays sideways and backwards walking never spins the camera.
                 (
-                    (f * cos - s * sin).clamp(-1., 1.),
-                    (f * sin + s * cos).clamp(-1., 1.),
-                    if f != 0.0 || s != 0.0 {
-                        let desired = self.hangar_view.camera_yaw() + s.atan2(f);
-                        let angle = (desired - avatar.as_ref().unwrap().heading
-                            + std::f64::consts::PI)
-                            .rem_euclid(std::f64::consts::TAU)
-                            - std::f64::consts::PI;
-                        (angle * 3.0).clamp(-1.0, 1.0)
-                    } else {
-                        0.0
-                    },
+                    f,
+                    s,
+                    self.hangar_view.walk_turn(avatar.as_ref().unwrap().heading),
                 )
             })
         } else {

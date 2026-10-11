@@ -9,7 +9,14 @@ mod pioneer_interior;
 mod quarters;
 pub use quarters::HangarAction;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OnFootView {
+    FirstPerson,
+    ThirdPerson,
+}
+
 pub struct HangarView {
+    pub on_foot_view: OnFootView,
     renderer: Option<Arc<Mutex<Renderer>>>,
     error: Option<String>,
     surface: Option<(egui::Rect, egui::LayerId)>,
@@ -34,6 +41,7 @@ impl HangarView {
             None => (None, Some("Hangar needs a GPU rendering context".into())),
         };
         Self {
+            on_foot_view: OnFootView::ThirdPerson,
             renderer,
             error,
             surface: None,
@@ -53,6 +61,19 @@ impl HangarView {
     }
     pub fn camera_yaw(&self) -> f64 {
         self.yaw as f64
+    }
+    pub fn walk_turn(&self, heading: f64) -> f64 {
+        if !self.walking {
+            return 0.0;
+        }
+        let angle = (self.camera_yaw() - heading + std::f64::consts::PI)
+            .rem_euclid(std::f64::consts::TAU)
+            - std::f64::consts::PI;
+        if angle.abs() < 0.005 {
+            0.0
+        } else {
+            (angle * 3.0).clamp(-1.0, 1.0)
+        }
     }
     pub fn destroy(&mut self) {
         if let Some(renderer) = self.renderer.take() {
@@ -109,7 +130,8 @@ impl HangarView {
             ui.input(|i| {
                 if dragging {
                     self.yaw -= i.pointer.delta().x * 0.007;
-                    self.pitch = (self.pitch + i.pointer.delta().y * 0.005).clamp(0.06, 1.25);
+                    self.pitch = (self.pitch + i.pointer.delta().y * 0.005)
+                        .clamp(if walking { -0.8 } else { 0.06 }, 1.25);
                 }
                 self.zoom = (self.zoom * (-i.smooth_scroll_delta.y * 0.002).exp()).clamp(0.45, 2.5);
             });
@@ -132,9 +154,13 @@ impl HangarView {
         } else {
             pilot.ship_class.spec().length_m as f32 * 0.88
         } * self.zoom;
-        let forward = Vec3::new(self.yaw.cos(), 0.0, self.yaw.sin());
-        let mut eye =
-            target - forward * distance * self.pitch.cos() + Vec3::Y * distance * self.pitch.sin();
+        // Follow the authoritative body heading, including stationary turns.
+        let view_yaw = pilot
+            .station_avatar
+            .as_ref()
+            .map_or(self.yaw, |a| a.heading as f32);
+        let forward = Vec3::new(view_yaw.cos(), 0.0, view_yaw.sin());
+        let mut eye = third_person_eye(target, view_yaw, self.pitch, distance);
         eye.y = eye.y.max(0.6);
         if walking {
             eye = if interior {
@@ -143,12 +169,19 @@ impl HangarView {
                 quarters::camera_eye(pilot.ship_class, target, eye)
             };
         }
+        let first_person = walking && self.on_foot_view == OnFootView::FirstPerson;
+        let look_target = if first_person {
+            eye = self.follow.unwrap() + Vec3::Y * 1.65;
+            eye + forward * self.pitch.cos() - Vec3::Y * self.pitch.sin()
+        } else {
+            target
+        };
         let vp = Mat4::perspective_rh_gl(
             55f32.to_radians(),
             rect.aspect_ratio().max(0.1),
             0.08,
             30000.0,
-        ) * Mat4::look_at_rh(eye, target, Vec3::Y);
+        ) * Mat4::look_at_rh(eye, look_target, Vec3::Y);
         let mut parts = if interior {
             pioneer_interior::parts(interior_deck)
         } else {
@@ -167,7 +200,9 @@ impl HangarView {
                 avatar.moving && live,
                 avatar.seated,
             );
-            parts.extend(avatar_parts(avatar, pose, self.follow));
+            if !first_person {
+                parts.extend(avatar_parts(avatar, pose, self.follow));
+            }
         }
         if let Some(renderer) = &self.renderer {
             let renderer = renderer.clone();
@@ -208,7 +243,7 @@ impl HangarView {
                 },
                 pilot.ship_class.spec().name,
                 if walking {
-                    "ON FOOT · WASD / arrows walk · Right-drag look · Wheel zoom"
+                    "ON FOOT · WASD / arrows walk · Right-drag turn / look · Space jump"
                 } else {
                     "SHIP INSPECTION · Drag orbit · Wheel zoom · Disembark to explore"
                 }
@@ -223,6 +258,11 @@ impl HangarView {
             quarters::terminals(ui, rect, vp, eye, pilot, unobstructed, live)
         }
     }
+}
+
+fn third_person_eye(target: Vec3, heading: f32, pitch: f32, distance: f32) -> Vec3 {
+    let forward = Vec3::new(heading.cos(), 0.0, heading.sin());
+    target - forward * distance * pitch.cos() + Vec3::Y * distance * pitch.sin()
 }
 
 fn bay_parts(class: ShipClass) -> Vec<ModelPart> {
@@ -563,6 +603,20 @@ unsafe fn paint(renderer: &Renderer, vp: Mat4, eye: Vec3, parts: &[ModelPart]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn third_person_remains_behind_avatar_at_every_heading() {
+        for heading in [0.0, 1.2, -2.7, std::f32::consts::PI] {
+            let target = Vec3::new(8.0, 1.25, 7.0);
+            let forward = Vec3::new(heading.cos(), 0.0, heading.sin());
+            for pitch in [-0.8, 0.23, 1.25] {
+                let eye = third_person_eye(target, heading, pitch, 5.5);
+                assert!((eye - target).dot(forward) < 0.0);
+                assert!((eye - target).cross(Vec3::Y).dot(forward).abs() < 0.00001);
+                let clipped = pioneer_interior::camera(target, eye);
+                assert!((clipped - target).dot(forward) <= 0.0);
+            }
+        }
+    }
     #[test]
     fn hovered_and_dragged_egui_frames_finish_without_context_reentry() {
         let (tx, rx) = std::sync::mpsc::channel();

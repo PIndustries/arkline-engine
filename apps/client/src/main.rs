@@ -819,7 +819,8 @@ impl Cockpit {
     fn can_fly(&self) -> bool {
         self.can_operate()
             && self.own().is_some_and(|p| {
-                p.flight.is_some()
+                p.station_avatar.is_none()
+                    && p.flight.is_some()
                     && !matches!(
                         p.location,
                         Location::Docked | Location::InTransit { .. } | Location::Jumping { .. }
@@ -843,6 +844,25 @@ impl Cockpit {
         if !self.can_operate() {
             return;
         }
+        if self.own().is_some_and(|p| p.station_avatar.is_some())
+            && (request.is_remote_gameplay()
+                || matches!(
+                    request,
+                    Request::SelectShip { .. }
+                        | Request::Mine { .. }
+                        | Request::MineAsteroid { .. }
+                        | Request::StartResourceJob { .. }
+                        | Request::BeginRemoteControl { .. }
+                        | Request::RemoteControl { .. }
+                        | Request::SpawnSurfaceProp { .. }
+                        | Request::MoveSurfaceProp { .. }
+                        | Request::RemoveSurfaceProp { .. }
+                ))
+        {
+            self.notice =
+                "On foot: return through the airlock and board your ship to operate it.".into();
+            return;
+        }
         if matches!(request, Request::Warp { .. }) && !self.warp_power_ready() {
             self.notice = "Insufficient capacitor for warp. Wait for reactor recharge.".into();
             return;
@@ -855,6 +875,9 @@ impl Cockpit {
                 | Request::Dock
                 | Request::Undock
                 | Request::DisembarkShip
+                | Request::EnterInterior
+                | Request::ExitInterior
+                | Request::InteriorLift { .. }
                 | Request::StationSit { .. }
                 | Request::EnterShip
                 | Request::Jump { .. }
@@ -1237,6 +1260,10 @@ impl Cockpit {
         }
     }
     fn view_selector(&mut self, ui: &mut egui::Ui) {
+        if self.own().is_some_and(|p| p.station_avatar.is_some()) {
+            self.on_foot_view_selector(ui);
+            return;
+        }
         ui.selectable_value(&mut self.view_mode, ViewMode::Tactical, "2D Tactical");
         ui.selectable_value(&mut self.view_mode, ViewMode::Tactical3d, "3D Tactical");
         ui.selectable_value(&mut self.view_mode, ViewMode::External, "3D External");
@@ -1585,6 +1612,23 @@ impl Cockpit {
         });
     }
     fn service_content(&mut self, ui: &mut egui::Ui) {
+        if self.own().is_some_and(|p| p.station_avatar.is_some())
+            && matches!(
+                self.service_tab,
+                ServiceTab::Navigation
+                    | ServiceTab::Modules
+                    | ServiceTab::Drones
+                    | ServiceTab::ShipComputer
+                    | ServiceTab::Sandbox
+                    | ServiceTab::Hangar
+                    | ServiceTab::Station
+            )
+        {
+            self.station_actions(ui);
+            ui.separator();
+            ui.label("Ship controls are unavailable on foot. Inventory, room plans and account services remain accessible.");
+            return;
+        }
         match self.service_tab {
             ServiceTab::Layouts => {
                 ui.label("Ship layout viewer is open in its own window.");
@@ -3749,8 +3793,14 @@ impl eframe::App for Cockpit {
             && self.can_operate()
             && (self.manual_remote.is_none() || self.controlled_remote().is_some())
             && self.own().is_some_and(|p| {
-                p.flight.is_some() && matches!(p.location, Location::Station | Location::Belt)
+                p.station_avatar.is_none()
+                    && p.flight.is_some()
+                    && matches!(p.location, Location::Station | Location::Belt)
             });
+        if self.own().is_some_and(|p| p.station_avatar.is_some()) {
+            // Discard flight release state without erasing a queued StationWalk stop.
+            let _ = self.pilot_input.update(false, Default::default());
+        }
         if let Some(control) = self.pilot_input.sample(
             ctx,
             flight_allowed,
