@@ -9,7 +9,7 @@ positions and normals from primitive meshes, assembles ship parts, and fits thei
 measured bounds to hull dimensions from the protocol. Station and cockpit geometry
 also come from the renderer. Current geometry is not loaded from GLB, FBX or OBJ files.
 
-There is no glTF/GLB parser, model browser or import command in this release. A GLB
+The offline `arkline-asset-tool inspect` command can validate a bounded GLB submission and report its geometry, scene bounds and named nodes. It does not install a model. A GLB
 file cannot yet be dropped into the game and rendered. Current animation and
 interactive cockpit behavior are implemented in code; imported animation, materials,
 collision and attachment points need their own integration.
@@ -32,3 +32,16 @@ material support, coordinate/scale conversion, mesh selection and collision hand
 attachment/animation conventions, and performance checks on desktop and browser.
 Triangle and texture budgets will be defined from measured performance; there is no
 published numeric budget yet.
+
+## Inspect a contribution
+
+```sh
+cargo run --locked -p arkline-asset-tool -- inspect assets/examples/calibration-cube.glb
+cargo run --locked -p arkline-asset-tool -- inspect /path/to/your-ship.glb > inspection.json
+```
+
+The original calibration cube is one meter along each axis; regenerate it with `python3 tools/make-example-glb.py`. The tool reports SHA-256, counts, transformed scene bounds, named nodes, materials, embedded image count, animation and skin count. It uses the validated [gltf parser](https://docs.rs/gltf/1.4.1/gltf/struct.Gltf.html). It never fetches external buffers, images or URLs.
+
+The inspection profile requires a self-contained GLB with an explicit scene and triangle primitives. It caps file size at 32 MiB, decoded vertices at one million, total triangles at one million, and scene traversal depth/work. Sparse accessors must be expanded before inspection; empty, overlapping-stride, misaligned or out-of-range accessor layouts are rejected before decoding. These are tool resource limits, not a promise that an asset performs well in-game. Textures/animations are counted, not decoded or simulated.
+
+See the [contribution checklist](art-contribution-checklist.md) for the required source, ownership/license, scale, attachment and review information. Runtime loading, textures/materials, animation, attachments and collision remain separate implementation work.

@@ -77,3 +77,5 @@ The machinery loop, hotel loop and industrial branches use separated interfaces 
 These checks do not prove electrical safety, pressure integrity, safe water treatment, thermal adequacy, egress, hull fit, installed clearances, crew endurance or runtime gameplay. No repository code, Git history, wiki content or production state was changed by creating these files.
 
 [Room-by-room fixture plans and connection schedules](room-services.md).
+
+[How the ship subsystems work together](subsystem-behavior.md).

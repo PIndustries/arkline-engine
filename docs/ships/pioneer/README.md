@@ -39,3 +39,9 @@ Ship concept illustrations documenting the fleet’s design direction. Repositor
 ## Room fixtures
 
 [Room-by-room service plans](rooms/README.md) identify proposed outlets, network jacks, sensors, lighting, air terminals, door controls and suppression fittings.
+
+## Procedural exterior development preview
+
+![Pioneer engine surface preview](images/engine-surface-preview.jpg)
+
+Actual native renderer capture of the enclosed cutter silhouette: sloped cockpit body, inset service panels, armored green collars and beveled surfaces. This is an interim procedural exterior, not the finished concept model. The published hull envelope and two articulated turret mounts remain unchanged. The interior instance is not yet fitted inside this mesh; structural materials, detailed PBR textures, equipment clearances and a shared exterior/interior specification remain open work in [issue #32](https://github.com/PIndustries/arkline-engine/issues/32).
