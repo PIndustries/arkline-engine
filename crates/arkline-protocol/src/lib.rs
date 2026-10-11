@@ -419,6 +419,13 @@ pub const GENESIS_HASH: &str = "000000000000000000000000000000000000000000000000
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "command", rename_all = "snake_case")]
 pub enum Request {
+    DisembarkShip,
+    EnterShip,
+    StationWalk {
+        forward: f64,
+        strafe: f64,
+        turn: f64,
+    },
     OrbitDrone {
         id: u64,
         target: NavigationTarget,
@@ -833,6 +840,8 @@ pub struct MiningModule {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PilotView {
     #[serde(default)]
+    pub station_avatar: Option<StationAvatar>,
+    #[serde(default)]
     pub surface: Option<SurfaceState>,
     #[serde(default)]
     pub power: Option<PowerState>,
@@ -860,6 +869,38 @@ pub struct PilotView {
     pub system_id: u32,
     #[serde(default)]
     pub locked_asteroid: Option<u64>,
+}
+
+pub const AVATAR_HEIGHT_M: f64 = 1.8;
+pub const WALK_SPEED_MPS: f64 = 4.0;
+pub const STATION_WALK_LEASE_MS: u64 = 500;
+pub const STATION_BOARD_RANGE_M: f64 = 3.0;
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct StationAvatar {
+    /// Feet position in the private hangar, meters; floor is y=0.
+    pub position: [f64; 3],
+    /// Radians; zero faces +X, positive turns toward +Z.
+    pub heading: f64,
+    pub moving: bool,
+    pub updated_at_ms: u64,
+}
+#[derive(Debug, Clone, Copy)]
+pub struct HangarLayout {
+    pub half_length: f64,
+    pub half_width: f64,
+    pub height: f64,
+    pub ship_center: [f64; 3],
+    pub boarding_point: [f64; 3],
+}
+pub fn hangar_layout(class: ShipClass) -> HangarLayout {
+    let spec = class.spec();
+    HangarLayout {
+        half_length: spec.length_m / 2.0 + 20.0,
+        half_width: spec.width_m / 2.0 + 20.0,
+        height: spec.height_m + 20.0,
+        ship_center: [0.0, spec.height_m / 2.0, 0.0],
+        boarding_point: [0.0, 0.0, spec.width_m / 2.0 + 3.0],
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

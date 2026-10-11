@@ -170,6 +170,7 @@ mod tests {
             }],
             pilots: vec![PilotView {
                 surface: None,
+                station_avatar: None,
                 power: None,
                 mining_modules: vec![],
                 ship_class: arkline_protocol::ShipClass::default(),

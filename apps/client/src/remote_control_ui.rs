@@ -89,9 +89,14 @@ impl Cockpit {
             ui.colored_label(AMBER, format!("WATCHING  {target}  ·  CAMERA ONLY"));
             ui.small(format!("You are flying your own ship: {}", self.pilot));
         } else {
+            let on_foot = self.own().is_some_and(|p| p.station_avatar.is_some());
             ui.colored_label(
                 self.accent(),
-                format!("YOUR SHIP  {}  ·  LOCAL CONTROLS", self.pilot),
+                if on_foot {
+                    format!("ON FOOT  {}  ·  SHIP DOCKED", self.pilot)
+                } else {
+                    format!("YOUR SHIP  {}  ·  LOCAL CONTROLS", self.pilot)
+                },
             );
         }
         if (self.manual_remote.is_some() || self.remote_ship.is_some())

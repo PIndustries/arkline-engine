@@ -28,6 +28,10 @@ pub(super) fn start(
 ) -> Result<()> {
     let p = w.pilots[name].view.clone();
     ensure!(
+        p.station_avatar.is_none(),
+        "board your ship before starting a resource job"
+    );
+    ensure!(
         !matches!(p.location, Location::Jumping { .. }),
         "wait for gate travel to finish before assigning a resource job"
     );
@@ -274,6 +278,14 @@ fn plan(w: &World, j: &mut Job, now: u64) -> Option<Request> {
             Some(Request::LockAsteroid { id: a.id })
         }
         Mining => {
+            if p.drones.len() < usize::from(j.drones_launched) {
+                block(
+                    j,
+                    "Mining fleet lost a drone; inspect the fleet and restart the job",
+                    now,
+                );
+                return None;
+            }
             if p.ore >= j.view.target_units.saturating_sub(j.view.stored_units)
                 || p.ore >= cargo_capacity(p.ship_class)
             {
@@ -397,6 +409,53 @@ fn save(s: &Server, w: &World) -> Result<()> {
     )?;
     Ok(())
 }
+/// Called inside the same transaction as the deposit and its economic event.
+/// A failed world write must roll back both inventory and delivery progress.
+pub(super) fn record_delivery(w: &mut World, name: &str, units: u64, now: u64) -> Result<()> {
+    let j = w
+        .resource_jobs
+        .get_mut(name)
+        .context("delivery job missing")?;
+    ensure!(
+        j.view.phase == ResourceJobPhase::Depositing,
+        "job is not depositing"
+    );
+    j.view.stored_units = j
+        .view
+        .stored_units
+        .checked_add(units)
+        .context("job delivery total overflow")?;
+    if j.view.stored_units >= j.view.target_units {
+        phase(
+            j,
+            ResourceJobPhase::Completed,
+            "Total delivery goal stored in personal station inventory",
+            now,
+        );
+    } else if !w
+        .asteroids
+        .iter()
+        .any(|a| a.system_id == j.home_system_id && a.ore > 0)
+    {
+        phase(
+            j,
+            ResourceJobPhase::Completed,
+            "Available partial haul stored; local resources exhausted",
+            now,
+        );
+    } else {
+        j.drones_launched = 0;
+        j.view.target_id = None;
+        phase(
+            j,
+            ResourceJobPhase::Undocking,
+            "Haul stored; departing for remaining delivery goal",
+            now,
+        );
+    }
+    Ok(())
+}
+
 pub(super) fn advance(s: &mut Server, now: u64) -> Result<()> {
     let names = load(s)?
         .resource_jobs
@@ -421,11 +480,6 @@ pub(super) fn advance(s: &mut Server, now: u64) -> Result<()> {
         w.resource_jobs.insert(name.clone(), job);
         save(s, &w)?;
         if let Some(command) = command {
-            let deposit = if let Request::DepositOre { units } = &command {
-                Some(*units)
-            } else {
-                None
-            };
             let launch = matches!(command, Request::LaunchDroneClass { .. });
             // This is the ordinary validated command handler, with a server-established
             // worker identity. Internal commands alone bypass manual takeover cancellation.
@@ -436,41 +490,6 @@ pub(super) fn advance(s: &mut Server, now: u64) -> Result<()> {
                 Ok(_) => {
                     if launch {
                         j.drones_launched += 1;
-                    }
-                    if let Some(units) = deposit {
-                        j.view.stored_units = j
-                            .view
-                            .stored_units
-                            .checked_add(units)
-                            .context("job delivery total overflow")?;
-                        if j.view.stored_units >= j.view.target_units {
-                            phase(
-                                j,
-                                ResourceJobPhase::Completed,
-                                "Total delivery goal stored in personal station inventory",
-                                now,
-                            );
-                        } else if !w
-                            .asteroids
-                            .iter()
-                            .any(|a| a.system_id == j.home_system_id && a.ore > 0)
-                        {
-                            phase(
-                                j,
-                                ResourceJobPhase::Completed,
-                                "Available partial haul stored; local resources exhausted",
-                                now,
-                            );
-                        } else {
-                            j.drones_launched = 0;
-                            j.view.target_id = None;
-                            phase(
-                                j,
-                                ResourceJobPhase::Undocking,
-                                "Haul stored; departing for remaining delivery goal",
-                                now,
-                            );
-                        }
                     }
                 }
                 Err(error) => {

@@ -5,6 +5,7 @@ mod mining;
 mod power;
 mod remote_control;
 mod resource_jobs;
+mod station;
 mod surface;
 mod traffic;
 mod universe;
@@ -30,6 +31,8 @@ struct Pilot {
     warp: Option<flight::WarpPath>,
     #[serde(default)]
     controls: Option<flight::ControlInput>,
+    #[serde(default)]
+    walk_input: Option<station::WalkInput>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 struct World {
@@ -162,6 +165,7 @@ impl Server {
         for pilot in world.pilots.values_mut() {
             mining::stop_all(pilot, "Server restarted");
             pilot.controls = None;
+            station::stop(pilot);
             pilot.view.target_locks.clear();
             universe::sync_lock_mirrors(pilot);
             drones::clear(pilot);
@@ -254,6 +258,7 @@ impl Server {
         drones::ensure_fleets(&mut world)?;
         power::advance(&mut world, now)?;
         flight::advance(&mut world, now);
+        station::advance(&mut world, now);
         surface::update(&mut world);
         universe::advance_locks(&mut world, now);
         let mut events = mining::advance(&mut world, now);
@@ -316,6 +321,7 @@ impl Server {
         if let Some(p) = world.pilots.get_mut(name) {
             mining::stop_all(p, "Pilot disconnected");
             p.controls = None;
+            station::stop(p);
             p.view.target_locks.clear();
             universe::sync_lock_mirrors(p);
             drones::clear(p);
@@ -360,6 +366,10 @@ impl Server {
                 .as_ref()
                 .context("connect before issuing commands")?;
             ensure!(!automated, "job controller cannot issue remote wrappers");
+            ensure!(
+                world.pilots[controller].view.station_avatar.is_none(),
+                "board your ship before remote control"
+            );
             remote_control::validate_request(&request)?;
             ensure!(
                 world.remote_controls.get(controller) == Some(&pilot),
@@ -379,6 +389,7 @@ impl Server {
         drones::ensure_fleets(&mut world)?;
         power::advance(&mut world, now)?;
         flight::advance(&mut world, now);
+        station::advance(&mut world, now);
         surface::update(&mut world);
         universe::advance_locks(&mut world, now);
         let mut token = None;
@@ -409,11 +420,47 @@ impl Server {
                 resource_jobs::cancel(&mut world, name, now, "Manual command took control");
             }
         }
+        if let Some(name) = session.as_ref() {
+            if world
+                .pilots
+                .get(name)
+                .is_some_and(|p| p.view.station_avatar.is_some())
+            {
+                ensure!(
+                    !request.is_remote_gameplay()
+                        && !matches!(
+                            request,
+                            Request::SelectShip { .. } | Request::BeginRemoteControl { .. }
+                        ),
+                    "board your ship before issuing ship commands"
+                );
+            }
+        }
         match request {
+            request @ (Request::DisembarkShip
+            | Request::EnterShip
+            | Request::StationWalk { .. }) => {
+                let name = session
+                    .as_ref()
+                    .context("connect before issuing commands")?;
+                ensure!(!remote, "station walking cannot be remotely delegated");
+                if matches!(request, Request::DisembarkShip) {
+                    remote_control::release_controller(&mut world, name);
+                }
+                station::execute(&mut world, name, request, now)?;
+                message = "Station action accepted";
+            }
             Request::BeginRemoteControl { pilot } => {
                 let controller = session
                     .as_ref()
                     .context("connect before issuing commands")?;
+                ensure!(
+                    world
+                        .pilots
+                        .get(&pilot)
+                        .is_none_or(|p| p.view.station_avatar.is_none()),
+                    "worker must board their ship before remote control"
+                );
                 remote_control::begin(&mut world, controller, &pilot, now)?;
                 message = "Remote control granted";
             }
@@ -549,6 +596,7 @@ impl Server {
                         pilot.clone(),
                         Pilot {
                             view: PilotView {
+                                station_avatar: None,
                                 surface: None,
                                 power: None,
                                 drones: Vec::new(),
@@ -570,6 +618,7 @@ impl Server {
                             last_mine_ms: None,
                             warp: None,
                             controls: None,
+                            walk_input: None,
                         },
                     );
                     token = Some(issued);
@@ -578,6 +627,7 @@ impl Server {
                     });
                 }
                 remote_control::release_worker(&mut world, &pilot);
+                station::stop(world.pilots.get_mut(&pilot).unwrap());
                 resource_jobs::cancel(
                     &mut world,
                     &pilot,
@@ -899,6 +949,11 @@ impl Server {
                 }
             }
         }
+        if automated {
+            if let Some(EconomicEvent::PersonalOreDeposited { pilot, units, .. }) = &event {
+                resource_jobs::record_delivery(&mut world, pilot, *units, now)?;
+            }
+        }
         for pilot in world.pilots.values_mut() {
             flight::ensure_flight(pilot, now);
         }
@@ -1033,6 +1088,7 @@ fn add_cargo(current: u64, units: u64, capacity: u64) -> Result<u64> {
     Ok(next)
 }
 fn validate(world: &World) -> Result<()> {
+    station::validate(world)?;
     remote_control::validate(world)?;
     resource_jobs::validate(world)?;
     surface::validate(world)?;

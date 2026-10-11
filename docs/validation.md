@@ -629,3 +629,32 @@ peak0.068994 and RMS0.009057 at default levels;721639 of1056000 samples were non
 A generated preview and successful device callbacks prove rendering/output activity,
 not subjective similarity, audible quality on every device or owner acceptance.
 No external sound samples were copied into the repository.
+
+## Station embodiment and transaction stability — 26.10.10.22
+
+The full workspace suite passed after protocol/client/server integration. The final
+client suite passed 127 tests (9 opt-in ignored); explicit native hangar GL rendering
+and readback passed separately. Formatting and warnings-denied workspace Clippy
+passed. Station tests cover normalized movement, bounds, hull collision, input
+expiry, boarding range, remote restrictions, persistence, and a real TCP
+leave → walk → disconnect → reconnect → board → undock journey.
+
+Resource delivery now commits ore, ledger and cumulative job progress in one
+transaction. A SQLite trigger injects failure during the commit and verifies that
+all three roll back; successful delivery and reopening persist them together.
+Mining-drone loss blocks the job with an explicit reason and recalls survivors.
+
+The packaged native app connected an isolated HangarQA22 pilot and displayed the
+hangar. Leave ship changed the UI and server to ON FOOT. Native walking changed
+the persisted position; walking beyond 3 m disabled Enter ship. A fullscreen
+screenshot showed the avatar, ship and station controls. A native camera-input
+deadlock was caught, fixed and covered by a bounded input regression before
+repackaging. HUD readings varied with focus; no general frame-rate claim is made.
+
+macOS ScreenCaptureKit then failed with SCStreamErrorDomain -3811, preventing
+further native return/board/undock verification. That complete journey is covered
+by TCP tests but remains a hands-on acceptance item. Final suit color/accessory
+polish passed geometry and lint checks after the screenshot; its final native
+appearance has not been visually accepted. Private berth rendering and a
+procedurally articulated avatar are foundations, not a shared station concourse
+or production character rig. Public-release and owner acceptance remain open.

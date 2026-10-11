@@ -8,7 +8,12 @@ has played the model, validated the direction, and explicitly approved publicati
 An open-source license has not been selected. This preview is not a public MMO or a
 financial network.
 
-## Preview 26.10.10.21
+## Preview 26.10.10.22
+
+Docking opens a [station hangar](docs/station-hangar.md) with a correctly scaled
+ship and an animated on-foot pilot. Leave the ship, walk around its berth, then
+return to the boarding marker before entering and undocking. See the
+[stability audit](docs/stability-audit.md) for remaining foundation gaps.
 
 The ship computer retains short conversations and combines follow-up instructions
 with current ship telemetry. Gathering starts from space as well as a station;

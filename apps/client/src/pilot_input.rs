@@ -33,7 +33,7 @@ struct MailState {
 }
 struct PendingControl {
     generation: u64,
-    control: Controls,
+    request: Request,
     remote: Option<String>,
 }
 impl Mailbox {
@@ -46,8 +46,21 @@ impl Mailbox {
         state.generation = state.generation.wrapping_add(1);
         state.pending = Some(PendingControl {
             generation: state.generation,
-            control,
+            request: control.request(),
             remote,
+        });
+    }
+    pub fn publish_station(&self, forward: f64, strafe: f64, turn: f64) {
+        let mut state = self.0.lock().unwrap();
+        state.generation = state.generation.wrapping_add(1);
+        state.pending = Some(PendingControl {
+            generation: state.generation,
+            request: Request::StationWalk {
+                forward,
+                strafe,
+                turn,
+            },
+            remote: None,
         });
     }
     pub fn clear(&self) {
@@ -65,7 +78,7 @@ impl Mailbox {
         if pending.generation != state.generation {
             return None;
         }
-        let request = pending.control.request();
+        let request = pending.request;
         Some(match pending.remote {
             Some(pilot) => Request::RemoteControl {
                 pilot,

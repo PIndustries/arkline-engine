@@ -77,6 +77,7 @@ fn checkpoint_advances_only_after_full_verification() {
     entry.hash = entry.calculate_hash();
     export.snapshot.belt_ore = INITIAL_BELT_ORE;
     export.snapshot.pilots.push(PilotView {
+        station_avatar: None,
         surface: None,
         power: None,
         drones: vec![],

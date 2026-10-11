@@ -59,6 +59,9 @@ impl Cockpit {
         {
             return Some("A job is already running. Cancel it first.");
         }
+        if p.station_avatar.is_some() {
+            return Some("Enter the selected ship before assigning a gathering job.");
+        }
         if matches!(p.location, Location::Jumping { .. }) {
             return Some("Wait for gate transit to finish before assigning a haul.");
         }

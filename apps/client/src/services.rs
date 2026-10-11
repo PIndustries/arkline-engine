@@ -30,14 +30,8 @@ impl Cockpit {
             cargo_capacity(pilot.ship_class),
             pilot.credits
         ));
-        if ui
-            .add_enabled(
-                self.can_operate() && pilot.location == Location::Docked,
-                egui::Button::new("Undock active vessel"),
-            )
-            .clicked()
-        {
-            self.send(Request::Undock);
+        if pilot.location == Location::Docked {
+            self.station_actions(ui);
         }
         ui.separator();
         ui.horizontal_wrapped(|ui| {
@@ -74,7 +68,7 @@ impl Cockpit {
             active.cargo_capacity
         ));
         self.power_gauge(ui);
-        ui.small("Each ship retains its cargo and capacitor charge. Board a stored ship only while docked at its station.");
+        ui.small("Each ship retains its cargo and capacitor charge. Enter your current ship before switching to a stored hull at its station.");
         let Some(mut assets) = self.assets.clone() else {
             ui.colored_label(AMBER, "Waiting for authenticated hangar inventory…");
             return;
@@ -97,7 +91,8 @@ impl Cockpit {
                 ));
                 let enabled = self.can_operate()
                     && pilot.location == Location::Docked
-                    && pilot.system_id == ship.system_id;
+                    && pilot.system_id == ship.system_id
+                    && pilot.station_avatar.is_none();
                 if ui
                     .add_enabled(enabled, egui::Button::new("Board ship"))
                     .on_hover_text("Requires docking at the ship's station")

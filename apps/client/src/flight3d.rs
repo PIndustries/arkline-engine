@@ -11,6 +11,9 @@ use glam::{Mat4, Quat, Vec3};
 use glow::HasContext;
 use std::sync::{Arc, Mutex};
 
+#[path = "hangar.rs"]
+pub mod hangar;
+
 #[path = "cockpit_maps.rs"]
 mod cockpit_maps;
 use cockpit_maps::*;
@@ -4721,6 +4724,7 @@ mod tests {
     fn extrapolation_is_bounded_and_warp_uses_server_position() {
         let space = Space::default();
         let mut pilot = PilotView {
+            station_avatar: None,
             surface: None,
             power: None,
             mining_modules: vec![],
@@ -5000,6 +5004,7 @@ mod tests {
     fn stable_pilot_lane_does_not_depend_on_roster_or_view() {
         let space = Space::default();
         let pilot = PilotView {
+            station_avatar: None,
             surface: None,
             power: None,
             mining_modules: vec![],

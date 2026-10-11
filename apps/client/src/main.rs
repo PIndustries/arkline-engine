@@ -14,6 +14,7 @@ mod ship_ai;
 mod sound_engine;
 mod sound_scene;
 mod sound_settings;
+mod station_ui;
 mod target_controls;
 mod theme;
 #[cfg(test)]
@@ -403,6 +404,8 @@ struct Cockpit {
     motion: motion::MotionHistory,
     timeline_origin: Option<u64>,
     flight_view: flight3d::FlightView,
+    hangar_view: flight3d::hangar::HangarView,
+    station_walk_active: bool,
     frozen_time: Option<u64>,
     focus_on_first_frame: bool,
     local_server: Option<LocalServer>,
@@ -492,6 +495,8 @@ impl Cockpit {
             motion: motion::MotionHistory::default(),
             timeline_origin: None,
             flight_view: flight3d::FlightView::new(cc.gl.as_ref()),
+            hangar_view: flight3d::hangar::HangarView::new(cc.gl.as_ref()),
+            station_walk_active: false,
             frozen_time: None,
             focus_on_first_frame: true,
             local_server: None,
@@ -743,10 +748,13 @@ impl Cockpit {
                 | Request::Warp { .. }
                 | Request::Dock
                 | Request::Undock
+                | Request::DisembarkShip
+                | Request::EnterShip
                 | Request::Jump { .. }
                 | Request::StartResourceJob { .. }
         ) {
             self.pilot_input.relinquish(&self.controls);
+            self.station_walk_active = false;
         }
         if !matches!(request, Request::Snapshot | Request::ExportLedger) {
             self.cancel_ai();
@@ -933,6 +941,14 @@ impl Cockpit {
                 MUTED,
             );
         };
+        if pilot.station_avatar.is_some() {
+            return (
+                "ON FOOT / STATION HANGAR".into(),
+                "Walk to the boarding marker to enter your ship".into(),
+                None,
+                self.accent(),
+            );
+        }
         let now = self.presentation_time();
         if let Location::InTransit {
             destination,
@@ -1316,7 +1332,11 @@ impl Cockpit {
         ui.horizontal_wrapped(|ui| {
             let docked = pilot.location == Location::Docked;
             let (label, enabled, command) = if docked {
-                ("UNDOCK", self.can_operate(), Request::Undock)
+                (
+                    "UNDOCK",
+                    self.can_operate() && pilot.station_avatar.is_none(),
+                    Request::Undock,
+                )
             } else {
                 ("DOCK", self.can_dock(&pilot), Request::Dock)
             };
@@ -3036,6 +3056,7 @@ impl eframe::App for Cockpit {
         // Shut down only this cockpit's owned host inside the lifecycle callback.
         drop(self.local_server.take());
         self.flight_view.destroy();
+        self.hangar_view.destroy();
     }
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
         if self.focus_on_first_frame {
@@ -3130,6 +3151,7 @@ impl eframe::App for Cockpit {
             let fullscreen = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
             ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!fullscreen));
         }
+        let in_hangar = self.in_station_hangar();
         let bounds = ctx.screen_rect().shrink(8.0);
         self.layout.begin_frame(bounds);
         // Floating layers are registered before the background consumes pointer input.
@@ -3182,7 +3204,11 @@ impl eframe::App for Cockpit {
                                     "○ Offline"
                                 },
                             );
-                            self.view_selector(ui);
+                            if in_hangar {
+                                ui.strong("STATION HANGAR");
+                            } else {
+                                self.view_selector(ui);
+                            }
                             let fullscreen =
                                 ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
                             if ui
@@ -3273,7 +3299,7 @@ impl eframe::App for Cockpit {
             None,
             ctx.input(|i| i.pointer.any_down()),
         );
-        if self.view_mode != ViewMode::Cockpit {
+        if self.view_mode != ViewMode::Cockpit && !in_hangar {
             let mut overview_open = self.overview_open;
             let (panel_pos, panel_size) = self.layout.position(
                 "overview",
@@ -3319,7 +3345,7 @@ impl eframe::App for Cockpit {
             }
             self.overview_open = overview_open;
         }
-        if self.view_mode != ViewMode::Cockpit {
+        if self.view_mode != ViewMode::Cockpit && !in_hangar {
             let ship_width = (bounds.width() - 70.0).min(760.0);
             let (panel_pos, panel_size) = self.layout.position(
                 "ship",
@@ -3361,14 +3387,18 @@ impl eframe::App for Cockpit {
                 );
             }
         }
-        if self.services_open && self.view_mode != ViewMode::Cockpit {
+        if self.services_open && (self.view_mode != ViewMode::Cockpit || in_hangar) {
             let mut open = true;
             let (panel_pos, panel_size) = self.layout.position(
                 "services",
                 bounds,
-                [0.0, 0.0],
-                Vec2::new(64.0, 164.0),
-                Vec2::new(620.0, 310.0),
+                if in_hangar { [1.0, 0.0] } else { [0.0, 0.0] },
+                if in_hangar {
+                    Vec2::new(-8.0, 164.0)
+                } else {
+                    Vec2::new(64.0, 164.0)
+                },
+                Vec2::new(if in_hangar { 350.0 } else { 620.0 }, 310.0),
             );
             let mut content_size = None;
             let panel_response = egui::Window::new(
@@ -3390,7 +3420,7 @@ impl eframe::App for Cockpit {
                     resize
                 }
             })
-            .min_width(400.0)
+            .min_width(if in_hangar { 280.0 } else { 400.0 })
             .max_height(bounds.height() - 30.0)
             .resizable(!self.layout.pinned)
             .movable(!self.layout.pinned)
@@ -3415,7 +3445,11 @@ impl eframe::App for Cockpit {
             }
             self.services_open = open;
         }
-        if self.view_mode == ViewMode::Cockpit
+        if in_hangar {
+            self.station_overlay(ctx);
+        }
+        if !in_hangar
+            && self.view_mode == ViewMode::Cockpit
             && !self.flight_view.head_looking()
             && !ctx.input(|i| i.modifiers.shift)
         {
@@ -3457,7 +3491,11 @@ impl eframe::App for Cockpit {
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
             .show(ctx, |ui| {
-                if self.view_mode != ViewMode::Tactical {
+                if in_hangar {
+                    if let Some(pilot) = self.own() {
+                        self.hangar_view.ui(ui, &pilot, self.presentation_time());
+                    }
+                } else if self.view_mode != ViewMode::Tactical {
                     let now = self.presentation_time();
                     let display = self.snapshot.as_ref().map(|s| self.motion.sample(s, now));
                     if let Some(snapshot) = &display {
@@ -3534,6 +3572,7 @@ impl eframe::App for Cockpit {
             self.controls
                 .publish_for(control, self.controlled_remote().map(str::to_owned));
         }
+        self.sample_station_walk(ctx, in_hangar);
         self.boot.paint_handoff(ctx);
     }
 }
@@ -3957,7 +3996,7 @@ mod tests {
         let mut cockpit = view_test_cockpit(&ctx);
         cockpit.view_mode = ViewMode::Cockpit;
         cockpit.service_tab = ServiceTab::ShipComputer;
-        cockpit.snapshot.as_mut().unwrap().pilots[0].location = Location::Docked;
+        cockpit.snapshot.as_mut().unwrap().pilots[0].location = Location::Belt;
         let viewport = egui::Rect::from_min_size(Pos2::ZERO, Vec2::new(1106., 768.));
         let console = flight3d::cockpit_console_bounds(viewport, ShipClass::Pioneer).shrink(1.);
         let mut prompt = None;
@@ -4108,7 +4147,7 @@ mod tests {
         assert!(rx.try_recv().is_err());
     }
 
-    fn view_test_cockpit(ctx: &egui::Context) -> Cockpit {
+    pub(crate) fn view_test_cockpit(ctx: &egui::Context) -> Cockpit {
         let cc = eframe::CreationContext::_new_kittest(ctx.clone());
         let mut cockpit = Cockpit::new(
             &cc,
@@ -4147,6 +4186,7 @@ mod tests {
                 target_locks: vec![],
                 locked_asteroids: vec![],
                 surface: None,
+                station_avatar: None,
                 power: None,
                 drones: vec![],
                 drone: None,
@@ -4555,7 +4595,7 @@ mod tests {
         ));
     }
     #[test]
-    fn physical_console_undock_is_visible_on_every_tab_and_disabled_offline() {
+    fn hangar_undock_is_visible_on_every_tab_and_disabled_offline() {
         let ctx = egui::Context::default();
         let mut cockpit = view_test_cockpit(&ctx);
         cockpit.view_mode = ViewMode::Cockpit;
@@ -4621,15 +4661,17 @@ mod tests {
             assert!(labels
                 .iter()
                 .any(|(text, _)| text.contains("Capacitor 2.5/10.0 kJ · +300 W")));
-            let rect = cockpit.flight_view.cockpit_console_rect().unwrap();
+            let rect = ctx
+                .memory(|m| m.area_rect(egui::Id::new("station_embodiment_controls")))
+                .unwrap();
             let point = labels
                 .iter()
-                .find(|(s, p)| s == "UNDOCK" && rect.contains(*p))
+                .find(|(s, p)| s == "Undock active vessel" && rect.contains(*p))
                 .unwrap()
                 .1;
             assert!(
-                rect.contains_rect(egui::Rect::from_center_size(point, Vec2::new(108.0, 32.0))),
-                "entire Undock button must fit physical console at minimum viewport: rect={rect:?}, center={point:?}"
+                rect.contains_rect(egui::Rect::from_center_size(point, Vec2::new(100.0, 16.0))),
+                "Undock button must fit hangar access panel at minimum viewport: rect={rect:?}, center={point:?}"
             );
             for pressed in [true, false] {
                 frame(
@@ -4655,10 +4697,12 @@ mod tests {
         cockpit.connected = false;
         cockpit.request_pending = false;
         let labels = frame(&ctx, &mut cockpit, vec![]);
-        let rect = cockpit.flight_view.cockpit_console_rect().unwrap();
+        let rect = ctx
+            .memory(|m| m.area_rect(egui::Id::new("station_embodiment_controls")))
+            .unwrap();
         let point = labels
             .iter()
-            .find(|(s, p)| s == "UNDOCK" && rect.contains(*p))
+            .find(|(s, p)| s == "Undock active vessel" && rect.contains(*p))
             .unwrap()
             .1;
         for pressed in [true, false] {
@@ -5579,6 +5623,7 @@ mod tests {
                 target_locks: vec![],
                 locked_asteroids: vec![],
                 surface: None,
+                station_avatar: None,
                 power: None,
                 drones: vec![],
                 drone: None,
@@ -5822,6 +5867,7 @@ mod tests {
             target_locks: vec![],
             locked_asteroids: vec![],
             surface: None,
+            station_avatar: None,
             power: None,
             drones: vec![],
             drone: None,

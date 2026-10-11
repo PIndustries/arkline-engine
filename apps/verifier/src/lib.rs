@@ -742,6 +742,7 @@ mod tests {
                 server_time_ms: 6000,
                 pilots: vec![
                     PilotView {
+                        station_avatar: None,
                         surface: None,
                         power: None,
                         drones: vec![],
@@ -760,6 +761,7 @@ mod tests {
                         flight: None,
                     },
                     PilotView {
+                        station_avatar: None,
                         surface: None,
                         power: None,
                         drones: vec![],
