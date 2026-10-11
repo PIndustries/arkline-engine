@@ -26,7 +26,7 @@ Current station avatars are 1.8 m tall and are blocked from entering the ship hu
 
 ## Storage and contribution workflow
 
-Repository images are compressed, full-resolution JPEG documentation previews; original PNGs remain in the downloadable review archive. This avoids adding production model packs or Git LFS to the code repository. [The image manifest](image-manifest.json) records every original and preview hash. No Tripo gallery asset was downloaded or incorporated.
+Repository images are compressed, full-resolution JPEG documentation previews; original PNGs remain in the downloadable review archive. This avoids adding production model packs or Git LFS to the code repository. [The image manifest](image-manifest.json) records every original and preview hash.
 
 Keep future revisions under the appropriate ship's `images/` directory, preserve previous versions and record what changed. Update the matching JSON, SVG and gap register when a design changes. Prefer pull requests with one coherent design change and link relevant issues. Publish the reviewed index to the official Wiki so artists and players can browse it without needing a checkout.
 

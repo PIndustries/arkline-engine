@@ -30,7 +30,7 @@ Superseded images are retained for review. Early drafts include rejected pale hu
 
 ## Provenance
 
-Generated concept illustrations for this design discussion; not Tripo exports or third-party game assets. Repository JPEGs are compressed documentation previews of every original. The review ZIP contains the unmodified PNGs; image-manifest.json records their hashes. No executable game assets are supplied.
+Ship concept illustrations documenting the fleet’s design direction. Repository JPEGs are compressed documentation previews of every original. The review ZIP contains the unmodified PNGs; image-manifest.json records their hashes. No executable game assets are supplied.
 
 ## Room fixtures
 
