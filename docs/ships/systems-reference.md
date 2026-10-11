@@ -75,3 +75,5 @@ The machinery loop, hotel loop and industrial branches use separated interfaces 
 `systems-validation.json` records all seven ships. Checks cover exact inherited gameplay values, node-ID and endpoint references, coordinate containment within inherited zones and rooms, deck waypoints, room service branch references, and SVG XML/layout bounds. Representative Pioneer and Monolith sheets were rendered for visual inspection, including the lower register/acceptance region; the remaining sheets share the same deterministic layout with validated text bounds.
 
 These checks do not prove electrical safety, pressure integrity, safe water treatment, thermal adequacy, egress, hull fit, installed clearances, crew endurance or runtime gameplay. No repository code, Git history, wiki content or production state was changed by creating these files.
+
+[Room-by-room fixture plans and connection schedules](room-services.md).

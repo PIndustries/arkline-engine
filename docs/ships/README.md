@@ -31,3 +31,5 @@ Repository images are compressed, full-resolution JPEG documentation previews; o
 Keep future revisions under the appropriate ship's `images/` directory, preserve previous versions and record what changed. Update the matching JSON, SVG and gap register when a design changes. Prefer pull requests with one coherent design change and link relevant issues. Publish the reviewed index to the official Wiki so artists and players can browse it without needing a checkout.
 
 Tracking: [GLB and artwork pipeline #10](https://github.com/PIndustries/arkline-engine/issues/10), [walkable ship interiors #23](https://github.com/PIndustries/arkline-engine/issues/23), [client stability #7](https://github.com/PIndustries/arkline-engine/issues/7).
+
+[Room-by-room fixture plans and connection schedules](room-services.md).
