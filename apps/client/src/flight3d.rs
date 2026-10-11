@@ -1576,6 +1576,98 @@ fn cube() -> Vec<Vertex> {
     }
     out
 }
+/// Chamfered armor block with the same [-1, 1] envelope as a cube.
+/// Face, edge and corner normals produce real geometric highlight transitions.
+fn armor_block() -> Vec<Vertex> {
+    let mut out = Vec::new();
+    let inset = 0.82;
+    let mut face = |points: &[Vec3]| {
+        for i in 1..points.len() - 1 {
+            let (a, mut b, mut c) = (points[0], points[i], points[i + 1]);
+            if (b - a).cross(c - a).dot(a + b + c) < 0.0 {
+                std::mem::swap(&mut b, &mut c);
+            }
+            triangle(&mut out, a, b, c);
+        }
+    };
+    let axes = [Vec3::X, Vec3::Y, Vec3::Z];
+    for axis in 0..3 {
+        let (u, v) = (axes[(axis + 1) % 3], axes[(axis + 2) % 3]);
+        for sign in [-1.0, 1.0] {
+            let n = axes[axis] * sign;
+            face(&[
+                n - u * inset - v * inset,
+                n + u * inset - v * inset,
+                n + u * inset + v * inset,
+                n - u * inset + v * inset,
+            ]);
+        }
+        for su in [-1.0, 1.0] {
+            for sv in [-1.0, 1.0] {
+                let (u, v, edge) = (u * su, v * sv, axes[axis] * inset);
+                face(&[
+                    u + v * inset - edge,
+                    u * inset + v - edge,
+                    u * inset + v + edge,
+                    u + v * inset + edge,
+                ]);
+            }
+        }
+    }
+    for x in [-1.0, 1.0] {
+        for y in [-1.0, 1.0] {
+            for z in [-1.0, 1.0] {
+                face(&[
+                    Vec3::new(x, y * inset, z * inset),
+                    Vec3::new(x * inset, y, z * inset),
+                    Vec3::new(x * inset, y * inset, z),
+                ]);
+            }
+        }
+    }
+    out
+}
+fn industrial_shell() -> Vec<Vertex> {
+    let mut out = Vec::new();
+    let section = |x: f32, width: f32, height: f32| {
+        [
+            [-0.72, -1.0],
+            [0.72, -1.0],
+            [1.0, -0.62],
+            [1.0, 0.62],
+            [0.72, 1.0],
+            [-0.72, 1.0],
+            [-1.0, 0.62],
+            [-1.0, -0.62],
+        ]
+        .map(|[z, y]| Vec3::new(x, y * height, z * width))
+    };
+    let rings = [
+        section(-1.0, 0.82, 0.82),
+        section(-0.78, 1.0, 1.0),
+        section(0.50, 1.0, 1.0),
+        section(1.0, 0.66, 0.70),
+    ];
+    let mut face = |a: Vec3, mut b: Vec3, mut c: Vec3| {
+        if (b - a).cross(c - a).dot(a + b + c) < 0.0 {
+            std::mem::swap(&mut b, &mut c);
+        }
+        triangle(&mut out, a, b, c);
+    };
+    for pair in rings.windows(2) {
+        for i in 0..8 {
+            let j = (i + 1) % 8;
+            face(pair[0][i], pair[1][i], pair[1][j]);
+            face(pair[0][i], pair[1][j], pair[0][j]);
+        }
+    }
+    for ring in [rings[0], rings[3]] {
+        for i in 1..7 {
+            face(ring[0], ring[i], ring[i + 1]);
+        }
+    }
+    out
+}
 fn torus(major: f32, minor: f32) -> Vec<Vertex> {
     let mut out = vec![];
     let point = |u: usize, v: usize| {
@@ -1845,6 +1937,8 @@ impl Renderer {
             sphere_with_resolution(false, 72, 48),
             torus(1.0, 0.008),
             surface_patch(),
+            armor_block(),
+            industrial_shell(),
         ];
         let mut station_batches = Vec::new();
         for (vertices, color, emission) in station_batches_geometry() {
@@ -3546,6 +3640,10 @@ fn ship_parts(class: ShipClass) -> Vec<ModelPart> {
     .clone()
 }
 fn build_ship_parts(class: ShipClass) -> Vec<ModelPart> {
+    if class == ShipClass::Pioneer {
+        return pioneer_construction_model();
+    }
+
     // Original procedural interpretation of the construction-fleet dossiers.
     // Model-space proportions are fitted to measured public bounds below.
     let mut parts = Parts(Vec::new());
@@ -3568,7 +3666,12 @@ fn build_ship_parts(class: ShipClass) -> Vec<ModelPart> {
     let industrial = matches!(class, ShipClass::Stratum | ShipClass::Monolith);
     // Box helper takes half-extents, preserving the existing mesh convention.
     let mut block = |p: Vec3, size: Vec3, color: Vec3, emission: f32| {
-        parts.draw(0, transform(p, size, Quat::IDENTITY), color, emission);
+        let mesh = if emission == 0.0 && size.min_element() > 0.06 {
+            8
+        } else {
+            0
+        };
+        parts.draw(mesh, transform(p, size, Quat::IDENTITY), color, emission);
     };
     if twin {
         // Two long extraction booms and a rear bridge; an open central channel.
@@ -3817,6 +3920,175 @@ fn build_ship_parts(class: ShipClass) -> Vec<ModelPart> {
     }
     parts.0
 }
+/// Enclosed cutter silhouette derived from Pioneer's concept: sloped bridge,
+/// shoulder armor, recessed service cassettes and rear drive housings.
+/// Still a procedural exterior; no claim of fitted structural/interior geometry.
+fn pioneer_construction_model() -> Vec<ModelPart> {
+    let mut p = Parts(Vec::new());
+    let dark = Vec3::new(0.055, 0.070, 0.075);
+    let steel = Vec3::new(0.15, 0.18, 0.19);
+    let trim = Vec3::new(0.25, 0.28, 0.29);
+    let green = Vec3::new(0.018, 0.20, 0.085);
+    let mut part = |mesh, pos, size, color, emission| {
+        p.draw(mesh, transform(pos, size, Quat::IDENTITY), color, emission)
+    };
+    part(9, Vec3::ZERO, Vec3::new(1.92, 0.42, 0.87), dark, 0.0);
+    // Nose is a continuous faceted pressure-body reservation, not stacked crates.
+    part(
+        9,
+        Vec3::new(1.20, 0.10, 0.0),
+        Vec3::new(0.80, 0.37, 0.88),
+        dark,
+        0.0,
+    );
+    part(
+        8,
+        Vec3::new(1.992, 0.10, 0.0),
+        Vec3::new(0.014, 0.19, 0.47),
+        trim,
+        0.0,
+    );
+    part(
+        8,
+        Vec3::new(2.010, 0.11, 0.0),
+        Vec3::new(0.008, 0.15, 0.42),
+        Vec3::new(0.025, 0.16, 0.17),
+        0.0,
+    );
+    for z in [-0.22, 0.0, 0.22] {
+        part(
+            0,
+            Vec3::new(2.020, 0.11, z),
+            Vec3::new(0.006, 0.16, 0.008),
+            trim,
+            0.0,
+        );
+    }
+    for side in [-1.0, 1.0] {
+        // Armored green collars and inset side service panels.
+        for x in [-1.40, 0.82] {
+            part(
+                8,
+                Vec3::new(x, 0.0, side * 0.78),
+                Vec3::new(0.22, 0.44, 0.21),
+                green,
+                0.0,
+            );
+            part(
+                8,
+                Vec3::new(x, 0.03, side * 0.988),
+                Vec3::new(0.14, 0.29, 0.018),
+                steel,
+                0.0,
+            );
+            for y in [-0.21, 0.21] {
+                part(
+                    0,
+                    Vec3::new(x, y, side * 1.01),
+                    Vec3::new(0.09, 0.012, 0.012),
+                    trim,
+                    0.0,
+                );
+            }
+        }
+        for x in [-0.81, -0.18, 0.45] {
+            part(
+                8,
+                Vec3::new(x, -0.015, side * 0.871),
+                Vec3::new(0.285, 0.285, 0.055),
+                steel,
+                0.0,
+            );
+            part(
+                8,
+                Vec3::new(x, -0.015, side * 0.928),
+                Vec3::new(0.24, 0.235, 0.014),
+                dark,
+                0.0,
+            );
+            part(
+                0,
+                Vec3::new(x, -0.292, side * 0.937),
+                Vec3::new(0.17, 0.006, 0.010),
+                Vec3::new(0.55, 0.30, 0.06),
+                0.4,
+            );
+        }
+        // Short service rails stay attached to the hull instead of framing empty air.
+        for y in [-0.32, 0.32] {
+            part(
+                8,
+                Vec3::new(-0.16, y, side * 0.92),
+                Vec3::new(0.92, 0.018, 0.025),
+                trim,
+                0.0,
+            );
+        }
+        part(
+            8,
+            Vec3::new(-1.85, -0.02, side * 0.55),
+            Vec3::new(0.30, 0.28, 0.27),
+            dark,
+            0.0,
+        );
+        part(
+            8,
+            Vec3::new(-2.15, -0.02, side * 0.55),
+            Vec3::new(0.016, 0.22, 0.21),
+            steel,
+            0.0,
+        );
+        part(
+            8,
+            Vec3::new(-2.17, -0.02, side * 0.55),
+            Vec3::new(0.008, 0.16, 0.15),
+            green,
+            0.75,
+        );
+        part(
+            8,
+            Vec3::new(1.35, 0.36, side * 0.55),
+            Vec3::new(0.33, 0.06, 0.19),
+            green,
+            0.0,
+        );
+        part(
+            0,
+            Vec3::new(1.72, -0.18, side * 0.57),
+            Vec3::new(0.04, 0.012, 0.020),
+            Vec3::new(0.50, 0.65, 0.63),
+            0.7,
+        );
+    }
+    for x in [-0.88, -0.25, 0.38] {
+        part(
+            8,
+            Vec3::new(x, 0.423, 0.0),
+            Vec3::new(0.285, 0.018, 0.57),
+            steel,
+            0.0,
+        );
+        part(
+            8,
+            Vec3::new(x, 0.444, 0.0),
+            Vec3::new(0.235, 0.006, 0.48),
+            dark,
+            0.0,
+        );
+    }
+    let (min, max) = parts_bounds(&p.0);
+    let spec = ShipClass::Pioneer.spec();
+    let extent = Vec3::new(
+        spec.length_m as f32,
+        spec.height_m as f32,
+        spec.width_m as f32,
+    ) / 100.0;
+    let fit = Mat4::from_scale(extent / (max - min)) * Mat4::from_translation(-(min + max) * 0.5);
+    for (_, m, _, _) in &mut p.0 {
+        *m = fit * *m;
+    }
+    p.0
+}
 fn parts_bounds(parts: &[(usize, Mat4, Vec3, f32)]) -> (Vec3, Vec3) {
     let mut min = Vec3::splat(f32::INFINITY);
     let mut max = Vec3::splat(f32::NEG_INFINITY);
@@ -3942,6 +4214,8 @@ fn mesh_vertices(mesh: usize) -> Vec<Vertex> {
         0 => cube(),
         1 => torus(1.0, 0.12),
         2 => sphere(false),
+        8 => armor_block(),
+        9 => industrial_shell(),
         _ => hull(),
     }
 }
@@ -4225,6 +4499,81 @@ c=mix(c,sky,atmosphere);color=vec4(ark_display(c),1.0);}
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn armor_surface_is_closed_outward_and_preserves_cube_envelope() {
+        use std::collections::BTreeMap;
+        let vertices = super::armor_block();
+        assert_eq!(vertices.len(), 44 * 3);
+        let mut edges = BTreeMap::new();
+        let mut min = glam::Vec3::splat(f32::INFINITY);
+        let mut max = glam::Vec3::splat(f32::NEG_INFINITY);
+        for tri in vertices.chunks_exact(3) {
+            let center = (tri[0].p + tri[1].p + tri[2].p) / 3.0;
+            assert!(tri[0].n.dot(center) > 0.0);
+            for i in 0..3 {
+                let v = tri[i];
+                assert!(v.p.is_finite() && v.n.is_finite());
+                assert!((v.n.length() - 1.0).abs() < 1e-5);
+                min = min.min(v.p);
+                max = max.max(v.p);
+                let mut pair = [
+                    v.p.to_array().map(f32::to_bits),
+                    tri[(i + 1) % 3].p.to_array().map(f32::to_bits),
+                ];
+                pair.sort();
+                *edges.entry(pair).or_insert(0) += 1;
+            }
+        }
+        assert_eq!(min, glam::Vec3::splat(-1.0));
+        assert_eq!(max, glam::Vec3::ONE);
+        assert!(edges.values().all(|count| *count == 2));
+    }
+    #[test]
+    fn industrial_shell_is_closed_outward_bounded_and_pickable() {
+        use std::collections::BTreeMap;
+        let mesh = super::industrial_shell();
+        assert_eq!(mesh.len(), 60 * 3);
+        let mut edges = BTreeMap::new();
+        let mut min = glam::Vec3::splat(f32::INFINITY);
+        let mut max = glam::Vec3::splat(f32::NEG_INFINITY);
+        for tri in mesh.chunks_exact(3) {
+            let geometric = (tri[1].p - tri[0].p).cross(tri[2].p - tri[0].p);
+            assert!(geometric.length() > 1e-6);
+            assert!(geometric.dot(tri[0].p + tri[1].p + tri[2].p) > 0.0);
+            for i in 0..3 {
+                let vertex = tri[i];
+                assert!(vertex.p.is_finite() && vertex.n.is_finite());
+                assert!((vertex.n.length() - 1.0).abs() < 1e-5);
+                assert!(geometric.normalize().dot(vertex.n) > 0.9999);
+                min = min.min(vertex.p);
+                max = max.max(vertex.p);
+                let a = vertex.p.to_array().map(f32::to_bits);
+                let b = tri[(i + 1) % 3].p.to_array().map(f32::to_bits);
+                let (key, direction) = if a < b { ([a, b], 1_i32) } else { ([b, a], -1) };
+                let edge = edges.entry(key).or_insert((0, 0));
+                edge.0 += 1;
+                edge.1 += direction;
+            }
+        }
+        assert_eq!(min, glam::Vec3::splat(-1.0));
+        assert_eq!(max, glam::Vec3::ONE);
+        assert!(edges.values().all(|edge| *edge == (2, 0)));
+        for axis in [glam::Vec3::X, glam::Vec3::Y, glam::Vec3::Z] {
+            for sign in [-1.0, 1.0] {
+                let outward = axis * sign;
+                let distance =
+                    super::ray_mesh_hit(outward * 3.0, -outward, glam::Mat4::IDENTITY, &mesh)
+                        .unwrap();
+                assert!((distance - 2.0).abs() < 1e-5);
+            }
+        }
+        let picked = super::mesh_vertices(9);
+        assert_eq!(picked.len(), mesh.len());
+        assert!(picked
+            .iter()
+            .zip(&mesh)
+            .all(|(a, b)| a.p == b.p && a.n == b.n));
+    }
     use super::*;
     #[test]
     fn drone_feed_budget_and_tiles_are_bounded() {
