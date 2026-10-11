@@ -4,6 +4,8 @@ Seven original concept images, one per current class, using black/graphite indus
 
 ## Files and authority
 
+The paths in this section refer to the downloadable review ZIP. In this repository, use the [fleet index](README.md): each lowercase ship directory contains `plan.svg`, `specification.json`, `systems.svg`, `systems.json` and compressed image previews.
+
 - `Pioneer.png` through `Monolith.png`: visual design dossiers, including physical hull, exterior elevations, interior zoning, human-scale rooms and holographic displays.
 - `Blueprints/<Ship>.svg`: editable, dimensioned vector planning sheets. Top and side envelopes use the same meter scale; front views and local deck plans have their own scale. Rectangles are bounding reservations, not hull profiles. Zoom these in a browser or vector editor.
 - `Blueprints/<Ship>.json`: exact meter coordinates, deck elevations, room rectangles, door centers, current gameplay values and proposal status.
