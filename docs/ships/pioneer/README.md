@@ -35,3 +35,7 @@ Superseded images are retained for review. Early drafts include rejected pale hu
 ## Provenance
 
 Generated concept illustrations for this design discussion; not Tripo exports or third-party game assets. Repository JPEGs are compressed documentation previews of every original. The review ZIP contains the unmodified PNGs; image-manifest.json records their hashes. No executable game assets are supplied.
+
+## Room fixtures
+
+[Room-by-room service plans](rooms/README.md) identify proposed outlets, network jacks, sensors, lighting, air terminals, door controls and suppression fittings.

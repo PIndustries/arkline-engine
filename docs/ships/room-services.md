@@ -1,0 +1,23 @@
+# Room-by-room service layouts
+
+Every room in the seven proposed occupied cores now has an individual SVG plan and explicit fixture coordinates in its ship's rooms.json. This is one identified plan per room and one identified endpoint per fitting, not a generic ship-level diagram.
+
+Includes two normal outlets, an essential outlet, two wired data jacks, an RF access point, smoke/heat/air/pressure/leak/occupancy and door sensors, alarm beacon, normal/emergency lights, supply/return air terminals, a service panel, door control and two candidate suppression heads. Inherited wet-service connections appear only where the systems plan declares them. Coordinates and selected quantities are design proposals, not approved equipment coverage or electrical capacity.
+
+Each fixture lists local XYZ and ship XYZ in meters, upstream endpoint and room isolation group. Local origin is the room aft/port floor corner; X forward, Y up, Z starboard. Shared wall jacks/outlets differ by mounting height. Figures preserve human-scale clearances based on the 1.8 m avatar, with proposed 1.4 × 2.4 m doors and 3.2 m clear rooms.
+
+Suppression has its own proposed deck branch and non-potable supply, not an assumed connection to drinking water. No agent, pressure, coverage radius, sprinkler count certification or real-world installation specification is implied. Equipment footprints, voltage/current/pinout, cable/pipe sizes, mounting structures, RF coverage, signal protocol, hazard classification, release/inhibit behavior and complete physical routes remain unresolved. Hardware must be fitted to actual room meshes before implementation.
+
+All current room placements are proposals. The game does not yet implement walking inside ship hulls, these physical outlets, room sensor telemetry, fire suppression or fluid circuits. This package covers the explicitly proposed human core, not every possible compartment on the large industrial hulls.
+
+Browse a ship directory for its complete room index. See systems-reference.md and each ship’s plan.svg for the topology and inherited deck reservations. The ZIP includes every earlier ship concept unchanged; this supplement adds room plans rather than replacing that history.
+
+## Ship room indexes
+
+- [Borealis](borealis/rooms/README.md)
+- [Hauler](hauler/rooms/README.md)
+- [Monolith](monolith/rooms/README.md)
+- [Pioneer](pioneer/rooms/README.md)
+- [Prospector](prospector/rooms/README.md)
+- [Stratum](stratum/rooms/README.md)
+- [Vanguard](vanguard/rooms/README.md)

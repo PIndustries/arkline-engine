@@ -1,0 +1,183 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="1550" viewBox="0 0 1500 1550">
+<style>text{font-family:monospace;fill:#d7ece5;font-size:15px}.h{font-size:26px;fill:#16e99d}.small{font-size:12px}.warn{fill:#ffbf68}</style><rect width="1500" height="1550" fill="#07150f"/>
+<text x="30" y="38" class="h">BOREALIS / D1-S2 / CARGO ACCESS</text>
+<text x="30" y="67" class="warn">PROPOSED ROOM FIXTURE PLAN — explicit meter coordinates, not installed or engineered systems</text>
+<text x="30" y="95" class="">Clear room: 14.27 m length × 7.40 m width × 3.20 m height | deck floor Y 2 m</text>
+<rect x="40" y="135" width="636.2162162162163" height="330.0" stroke="#35bf83" fill="none"/>
+<text x="40" y="122" class="small">TOP VIEW / U forward → / V starboard ↓</text>
+<rect x="326.8918918918919" y="132.0" width="62.43243243243243" height="6" stroke="#fff" fill="#fff"/>
+<circle cx="43.567567567567565" cy="207.6" r="4" fill="#ffd15d"/>
+<text x="51.567567567567565" y="199.6" class="small">P1</text>
+<circle cx="672.6635135135135" cy="372.6" r="4" fill="#ffd15d"/>
+<text x="647.6635135135135" y="364.6" class="small">P2</text>
+<circle cx="43.567567567567565" cy="372.6" r="4" fill="#ff9757"/>
+<text x="51.567567567567565" y="364.6" class="small">E1</text>
+<circle cx="43.567567567567565" cy="207.6" r="4" fill="#62d7ff"/>
+<text x="51.567567567567565" y="222.6" class="small">D1</text>
+<circle cx="672.6635135135135" cy="372.6" r="4" fill="#62d7ff"/>
+<text x="647.6635135135135" y="387.6" class="small">D2</text>
+<circle cx="358.09324324324325" cy="300.0" r="4" fill="#62d7ff"/>
+<text x="366.09324324324325" y="292.0" class="small">AP</text>
+<circle cx="262.66081081081086" cy="267.0" r="4" fill="#62d7ff"/>
+<text x="270.66081081081086" y="259.0" class="small">SM</text>
+<circle cx="453.5256756756757" cy="333.0" r="4" fill="#62d7ff"/>
+<text x="428.5256756756757" y="325.0" class="small">HT</text>
+<circle cx="43.567567567567565" cy="300.0" r="4" fill="#62d7ff"/>
+<text x="51.567567567567565" y="292.0" class="small">AT</text>
+<circle cx="672.6635135135135" cy="300.0" r="4" fill="#62d7ff"/>
+<text x="647.6635135135135" y="292.0" class="small">PR</text>
+<circle cx="548.9581081081081" cy="399.0" r="4" fill="#62d7ff"/>
+<text x="523.9581081081081" y="391.0" class="small">LK</text>
+<circle cx="358.09324324324325" cy="174.6" r="4" fill="#62d7ff"/>
+<text x="366.09324324324325" y="166.6" class="small">OC</text>
+<circle cx="199.06891891891894" cy="300.0" r="4" fill="#ff6f95"/>
+<text x="207.06891891891894" y="292.0" class="small">S1</text>
+<circle cx="517.1621621621621" cy="300.0" r="4" fill="#ff6f95"/>
+<text x="492.1621621621621" y="292.0" class="small">S2</text>
+<circle cx="43.567567567567565" cy="300.0" r="4" fill="#ff9757"/>
+<text x="51.567567567567565" y="315.0" class="small">FA</text>
+<circle cx="199.06891891891894" cy="405.6" r="4" fill="#70efbd"/>
+<text x="207.06891891891894" y="397.6" class="small">AS</text>
+<circle cx="517.1621621621621" cy="194.4" r="4" fill="#c4a9ff"/>
+<text x="492.1621621621621" y="186.4" class="small">AR</text>
+<circle cx="358.09324324324325" cy="366.0" r="4" fill="#ffd15d"/>
+<text x="366.09324324324325" y="358.0" class="small">LI</text>
+<circle cx="358.09324324324325" cy="234.0" r="4" fill="#ff9757"/>
+<text x="366.09324324324325" y="226.0" class="small">EL</text>
+<circle cx="672.6635135135135" cy="250.5" r="4" fill="#ffd15d"/>
+<text x="647.6635135135135" y="242.5" class="small">JB</text>
+<circle cx="404.9175675675676" cy="136.78378378378378" r="4" fill="#62d7ff"/>
+<text x="379.9175675675676" y="128.78378378378378" class="small">DR</text>
+<circle cx="404.9175675675676" cy="136.78378378378378" r="4" fill="#62d7ff"/>
+<text x="379.9175675675676" y="151.78378378378378" class="small">DS</text>
+<text x="790" y="130" class="h">ELEVATION / HUMAN CLEARANCE</text>
+<rect x="820" y="173.0" width="230" height="272.0" stroke="#35bf83" fill="none"/>
+<rect x="850" y="241.0" width="118.99999999999999" height="204.0" stroke="#fff" fill="none"/>
+<circle cx="908" cy="302.20000000000005" r="10" fill="#60dfae"/><path d="M 908 312.4 v 68 m 0 -45 l -24 35 m 24 -35 l 24 35 m -24 10 l -20 48 m 20 -48 l 20 48" stroke="#60dfae" fill="none" stroke-width="4"/>
+<text x="1080" y="180" class="">Avatar: 1.8 m</text>
+<text x="1080" y="208" class="">Door: 1.4 × 2.4 m</text>
+<text x="1080" y="236" class="">Clear height: 3.2 m</text>
+<text x="1080" y="270" class="warn">Footprints not reserved</text>
+<text x="40" y="505" class="h">FIXTURE REGISTER — local XYZ measured from room aft/port floor corner</text>
+<text x="40" y="533" class="">ID</text>
+<text x="150" y="533" class="">FUNCTION</text>
+<text x="525" y="533" class="">LOCAL X / Y / Z (m)</text>
+<text x="800" y="533" class="">SHIP X / Y / Z (m)</text>
+<text x="1130" y="533" class="small">CONNECTED SYSTEM PORT</text>
+<text x="40" y="558" class="">D1-S2-P1</text>
+<text x="150" y="558" class="">Normal outlet A</text>
+<text x="525" y="558" class="">0.08 / 0.45 / 1.63</text>
+<text x="800" y="558" class="">370.95 / 2.45 / 133.03</text>
+<text x="1130" y="558" class="small">P06.room-feed</text>
+<text x="40" y="583" class="">D1-S2-P2</text>
+<text x="150" y="583" class="">Normal outlet B</text>
+<text x="525" y="583" class="">14.19 / 0.45 / 5.33</text>
+<text x="800" y="583" class="">385.05 / 2.45 / 136.73</text>
+<text x="1130" y="583" class="small">P06.room-feed</text>
+<text x="40" y="608" class="">D1-S2-E1</text>
+<text x="150" y="608" class="">Essential outlet</text>
+<text x="525" y="608" class="">0.08 / 0.45 / 5.33</text>
+<text x="800" y="608" class="">370.95 / 2.45 / 136.73</text>
+<text x="1130" y="608" class="small">E03.essential-room-feed</text>
+<text x="40" y="633" class="">D1-S2-D1</text>
+<text x="150" y="633" class="">Wired network jack A</text>
+<text x="525" y="633" class="">0.08 / 0.65 / 1.63</text>
+<text x="800" y="633" class="">370.95 / 2.65 / 133.03</text>
+<text x="1130" y="633" class="small">N04.room-network</text>
+<text x="40" y="658" class="">D1-S2-D2</text>
+<text x="150" y="658" class="">Wired network jack B</text>
+<text x="525" y="658" class="">14.19 / 0.65 / 5.33</text>
+<text x="800" y="658" class="">385.05 / 2.65 / 136.73</text>
+<text x="1130" y="658" class="small">N04.room-network</text>
+<text x="40" y="683" class="">D1-S2-AP</text>
+<text x="150" y="683" class="">RF access point</text>
+<text x="525" y="683" class="">7.13 / 3.08 / 3.70</text>
+<text x="800" y="683" class="">378.00 / 5.08 / 135.10</text>
+<text x="1130" y="683" class="small">N04.room-network</text>
+<text x="40" y="708" class="">D1-S2-SM</text>
+<text x="150" y="708" class="">Smoke detector</text>
+<text x="525" y="708" class="">4.99 / 3.10 / 2.96</text>
+<text x="800" y="708" class="">375.86 / 5.10 / 134.36</text>
+<text x="1130" y="708" class="small">N04.room-network</text>
+<text x="40" y="733" class="">D1-S2-HT</text>
+<text x="150" y="733" class="">Heat detector</text>
+<text x="525" y="733" class="">9.27 / 3.10 / 4.44</text>
+<text x="800" y="733" class="">380.14 / 5.10 / 135.84</text>
+<text x="1130" y="733" class="small">N04.room-network</text>
+<text x="40" y="758" class="">D1-S2-AT</text>
+<text x="150" y="758" class="">Air / temperature sensor</text>
+<text x="525" y="758" class="">0.08 / 1.50 / 3.70</text>
+<text x="800" y="758" class="">370.95 / 3.50 / 135.10</text>
+<text x="1130" y="758" class="small">N04.room-network</text>
+<text x="40" y="783" class="">D1-S2-PR</text>
+<text x="150" y="783" class="">Pressure sensor</text>
+<text x="525" y="783" class="">14.19 / 1.50 / 3.70</text>
+<text x="800" y="783" class="">385.05 / 3.50 / 135.10</text>
+<text x="1130" y="783" class="small">N04.room-network</text>
+<text x="40" y="808" class="">D1-S2-LK</text>
+<text x="150" y="808" class="">Leak detector</text>
+<text x="525" y="808" class="">11.41 / 0.05 / 5.92</text>
+<text x="800" y="808" class="">382.28 / 2.05 / 137.32</text>
+<text x="1130" y="808" class="small">N04.room-network</text>
+<text x="40" y="833" class="">D1-S2-OC</text>
+<text x="150" y="833" class="">Occupancy sensor</text>
+<text x="525" y="833" class="">7.13 / 3.08 / 0.89</text>
+<text x="800" y="833" class="">378.00 / 5.08 / 132.29</text>
+<text x="1130" y="833" class="small">N04.room-network</text>
+<text x="40" y="858" class="">D1-S2-S1</text>
+<text x="150" y="858" class="">Suppression provision A</text>
+<text x="525" y="858" class="">3.57 / 3.08 / 3.70</text>
+<text x="800" y="858" class="">374.43 / 5.08 / 135.10</text>
+<text x="1130" y="858" class="small">PROPOSED-FS-DECK-1.branch</text>
+<text x="40" y="883" class="">D1-S2-S2</text>
+<text x="150" y="883" class="">Suppression provision B</text>
+<text x="525" y="883" class="">10.70 / 3.08 / 3.70</text>
+<text x="800" y="883" class="">381.57 / 5.08 / 135.10</text>
+<text x="1130" y="883" class="small">PROPOSED-FS-DECK-1.branch</text>
+<text x="40" y="908" class="">D1-S2-FA</text>
+<text x="150" y="908" class="">Alarm sounder / beacon</text>
+<text x="525" y="908" class="">0.08 / 2.20 / 3.70</text>
+<text x="800" y="908" class="">370.95 / 4.20 / 135.10</text>
+<text x="1130" y="908" class="small">E03.essential-room-feed</text>
+<text x="40" y="933" class="">D1-S2-AS</text>
+<text x="150" y="933" class="">Supply air terminal</text>
+<text x="525" y="933" class="">3.57 / 3.08 / 6.07</text>
+<text x="800" y="933" class="">374.43 / 5.08 / 137.47</text>
+<text x="1130" y="933" class="small">A03.supply</text>
+<text x="40" y="958" class="">D1-S2-AR</text>
+<text x="150" y="958" class="">Return air terminal</text>
+<text x="525" y="958" class="">10.70 / 3.08 / 1.33</text>
+<text x="800" y="958" class="">381.57 / 5.08 / 132.73</text>
+<text x="1130" y="958" class="small">A05.return</text>
+<text x="40" y="983" class="">D1-S2-LI</text>
+<text x="150" y="983" class="">Room luminaire</text>
+<text x="525" y="983" class="">7.13 / 3.12 / 5.18</text>
+<text x="800" y="983" class="">378.00 / 5.12 / 136.58</text>
+<text x="1130" y="983" class="small">P06.room-feed</text>
+<text x="40" y="1008" class="">D1-S2-EL</text>
+<text x="150" y="1008" class="">Emergency luminaire</text>
+<text x="525" y="1008" class="">7.13 / 3.12 / 2.22</text>
+<text x="800" y="1008" class="">378.00 / 5.12 / 133.62</text>
+<text x="1130" y="1008" class="small">E03.essential-room-feed</text>
+<text x="40" y="1033" class="">D1-S2-JB</text>
+<text x="150" y="1033" class="">Room service panel</text>
+<text x="525" y="1033" class="">14.19 / 1.40 / 2.59</text>
+<text x="800" y="1033" class="">385.05 / 3.40 / 133.99</text>
+<text x="1130" y="1033" class="small">P06.room-feed</text>
+<text x="40" y="1058" class="">D1-S2-DR</text>
+<text x="150" y="1058" class="">Door reader / manual release</text>
+<text x="525" y="1058" class="">8.18 / 1.10 / 0.04</text>
+<text x="800" y="1058" class="">379.05 / 3.10 / 131.44</text>
+<text x="1130" y="1058" class="small">N04.room-network</text>
+<text x="40" y="1083" class="">D1-S2-DS</text>
+<text x="150" y="1083" class="">Door position sensor</text>
+<text x="525" y="1083" class="">8.18 / 2.35 / 0.04</text>
+<text x="800" y="1083" class="">379.05 / 4.35 / 131.44</text>
+<text x="1130" y="1083" class="small">N04.room-network</text>
+<text x="40" y="1240" class="small">Yellow: normal power. Orange: essential power. Blue: data/RF/sensors. Pink: suppression provisions.</text>
+<text x="40" y="1268" class="small">Green/purple: supply/return air. Door panel: local manual release; network failure must not trap players.</text>
+<text x="40" y="1296" class="small">Suppression supply is separate from potable water. Agent, coverage and activation logic are UNRESOLVED.</text>
+<text x="40" y="1324" class="small">Sensors and alarm endpoints are explicit proposals; no live simulation or physical calibration is claimed.</text>
+<text x="40" y="1352" class="small">Coordinate validation proves points fit room bounds only. Equipment size, bend space and collisions remain open.</text>
+<text x="40" y="1380" class="small">Use per-ship JSON for branch isolators and exact XYZ values. Printed/resized drawing is not literal 1:1 scale.</text>
+</svg>
