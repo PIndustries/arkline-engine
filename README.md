@@ -5,8 +5,9 @@ universe of three connected test systems, mine finite ore, trade through escrow,
 
 **Private validation preview, v0.1.0.** Keep this repository private until the owner
 has played the model, validated the direction, and explicitly approved publication.
-An open-source license has not been selected. This preview is not a public MMO or a
-financial network.
+The project is licensed under **AGPL-3.0-only**; see [LICENSE](LICENSE) and
+[licensing notes](docs/licensing.md). Licensing does not authorize publishing this
+private repository. This preview is not a public MMO or a financial network.
 
 ## Preview 26.10.10.24
 
@@ -416,7 +417,7 @@ Cockpit field of view is 70 degrees. The slim service rail uses hover labels;
 other view modes retain compact floating windows.
 
 See [public preview readiness](docs/public-preview-readiness.md) for the remaining
-publication gates. The repository is still private and not yet open-source licensed.
+publication gates. The repository remains private; its source is now licensed under AGPL-3.0-only.
 
 ### Ship power and clear cockpit actions
 

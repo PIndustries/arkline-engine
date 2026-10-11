@@ -45,7 +45,9 @@ cp -f "target/$PROFILE/arkline-client" "$APP/Contents/MacOS/Arkline"
 cp -f "target/$PROFILE/arkline-server" "$APP/Contents/MacOS/arkline-server"
 cp -f "target/$PROFILE/arkline" "$OUTPUT/command-tools/arkline"
 cp -f "target/$PROFILE/arkline-verifier" "$OUTPUT/command-tools/arkline-verifier"
-cp -f README.md LICENSE BUILD_VERSION "$OUTPUT/"
+cp -f README.md LICENSE TRADEMARKS.md BUILD_VERSION "$OUTPUT/"
+mkdir -p "$OUTPUT/docs"
+cp -f docs/licensing.md "$OUTPUT/docs/licensing.md"
 cp -f assets/Arkline.icns "$APP/Contents/Resources/Arkline.icns"
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

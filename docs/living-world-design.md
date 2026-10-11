@@ -45,12 +45,12 @@ presented as an already shared economy or as automatically interoperable worlds.
 Cross-universe identity, assets, travel and trust would need explicit designs.
 
 That is a future direction. The repository remains private pending owner validation,
-and no open-source license has been selected. Community node registration, official
+with AGPL-3.0-only selected for the source. Community node registration, official
 node certification, uptime rewards, distributed authority/consensus and universe
 federation are **not implemented**. The existing independent verifier checks supplied
-economic history; it does not establish any of those network guarantees. Choosing a
-license and defining operator governance are still separate decisions before a
-public release. No future node or licensing proposal changes the current server's
+economic history; it does not establish any of those network guarantees. Defining
+operator governance and approving repository publication remain separate decisions
+before a public release. No future node or licensing proposal changes the current server's
 authority or the meaning of today's economic audit.
 
 ## Future MIDI device controls

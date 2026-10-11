@@ -700,3 +700,12 @@ ebfa4c9. Cargo metadata inventoried456 resolved external packages, each declarin
 a license. These checks do not settle asset provenance, license compatibility or
 required redistribution notices. The repository remains private and unlicensed
 for open-source use until the owner chooses a license and approves publication.
+
+## Source license selection after 26.10.10.24
+
+The owner approved AGPLv3. LICENSE now contains the canonical GNU AGPL version3
+text, and all five workspace packages inherit AGPL-3.0-only. Contribution terms
+and separate trademark guidance were aligned. Older entries describing licensing
+as unselected are historical. Publication remains unapproved; asset provenance,
+third-party notices and deployment source offers remain explicit review items.
+This metadata/documentation change does not rebuild prior binary releases.

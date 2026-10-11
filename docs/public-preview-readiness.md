@@ -1,7 +1,7 @@
 # Open-source developer alpha readiness
 
 Assessment: stabilization work for 26.10.10.24. The repository remains private.
-Source publication requires the owner's chosen license and explicit approval.
+The owner selected AGPL-3.0-only. Publication still requires explicit approval.
 A public source alpha does not imply that the official network is ready for
 untrusted Internet players.
 
@@ -16,7 +16,7 @@ all economic systems are not prerequisites for inviting source contributors.
 
 | Gate | Current evidence | Remaining work |
 |---|---|---|
-| License and rights | LICENSE still reserves all rights; no package license selected | Owner chooses source license and contribution terms. Review asset provenance and third-party notices; apply matching metadata. No license has been changed. |
+| License and rights | AGPL-3.0-only selected; LICENSE, five package manifests and contribution terms updated | Complete actual dependency-license, asset-provenance and redistribution-notice review. See licensing.md. |
 | Repository hygiene | Gitleaks scanned 33 commits across locally available refs through ebfa4c9, with zero findings; tracked filenames contained no token/database/key matches | Review asset/import provenance and release bundle contents; automated secret scanning is not proof that every private artifact is absent. Re-scan final release history. |
 | Reproducible onboarding | Locked Rust workspace, source commands, successful Linux/macOS CI for ebfa4c9 | Validate the documented local journey from a clean environment, document Linux native packages and supported-platform limits, and ensure no P.Industries credentials or Spark are required. |
 | Stable core loop | Automated flight/mining/economy/restore and quarters journeys; dated native observations in validation.md | Complete one current-build hands-on journey: connect, undock, mine repeatedly, store, walk/board, reconnect/restart, preserve ownership and balances. Fix blocking freezes; record remaining reproducible defects openly. |
@@ -50,11 +50,11 @@ independent consensus or proof of honest server operation.
 
 ## License decision
 
-AGPLv3 is a candidate when the intended policy is that operators of modified
+The selected AGPLv3 license supports the policy that operators of modified
 networked versions offer their corresponding source to their users. GPLv3 has
 copyleft obligations on distribution but lacks that additional network-use clause.
 Neither choice requires a fork to join the official network or submit changes
 upstream. Review the intended server/client/SDK boundaries and dependency notices
-before choosing; the current all-rights-reserved license remains in force.
+before public distribution. AGPL-3.0-only is now selected; asset/dependency review remains open.
 
 Official reference: https://www.gnu.org/licenses/why-affero-gpl.html

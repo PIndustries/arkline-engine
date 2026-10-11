@@ -3,6 +3,7 @@ name = "arkline-client"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [dependencies]
 arkline-protocol.workspace = true
