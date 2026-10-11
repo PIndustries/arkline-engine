@@ -73,6 +73,9 @@ impl HangarView {
             self.follow = None;
             self.gait = Default::default();
             self.pitch = if walking { 0.23 } else { 0.32 };
+            if let Some(avatar) = &pilot.station_avatar {
+                self.yaw = avatar.heading as f32;
+            }
             self.walking = walking;
             self.class = Some(pilot.ship_class);
         }
@@ -569,6 +572,7 @@ mod tests {
     #[test]
     fn avatar_has_human_scale_and_walk_articulation() {
         let mut avatar = StationAvatar {
+            jump_started_ms: None,
             seated: false,
             position: [0.0; 3],
             heading: 0.0,
@@ -738,6 +742,7 @@ mod tests {
                 gl.bind_framebuffer(glow::FRAMEBUFFER, Some(capture.framebuffer));
                 gl.viewport(0, 0, tile as i32, tile as i32);
                 let avatar = StationAvatar {
+                    jump_started_ms: None,
                     position: [0.0; 3],
                     heading: 0.0,
                     moving: true,

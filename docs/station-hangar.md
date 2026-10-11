@@ -5,7 +5,9 @@ The bay scales around that hull; the person remains 1.8 metres tall. This is a p
 berth scene for the authenticated pilot, not a shared station concourse.
 
 **Leave ship** creates a server-confirmed on-foot state at the boarding marker.
-W/S walk and A/D strafe relative to the camera; left/right arrows turn the character.
+WASD and the arrow keys provide equivalent movement relative to the camera;
+the character turns toward its movement direction. The camera follows its position.
+Press Space once to jump. Holding Space does not trigger repeated jumps.
 Hold the right mouse button to inspect the scene. A visible articulated suited
 character represents the pilot. Walk to the illuminated boarding marker and press
 **Enter ship** to return aboard. Boarding requires being within 3 metres. **Undock
@@ -17,7 +19,11 @@ available through their panels.
 The server owns avatar position and normalizes diagonal movement to 4 metres/second.
 Walk commands expire after 500 ms without renewal; focus loss releases input. Hangar
 walls and the ship footprint constrain movement. Disconnect and restart retain the
-saved position but neutralize walking. Leaving the ship releases manual remote
+saved horizontal position but neutralize walking and return airborne pilots to the floor.
+The server controls the jump arc (4.5 metres/second initial vertical speed, 9.81
+metres/second squared gravity, roughly 1.03 metres high and 0.92 seconds in the air).
+Jumping does not bypass wall or furniture collision. Boarding and seating require
+landing first. Leaving the ship releases manual remote
 control. Ship flight, undocking and resource jobs for the on-foot pilot are rejected;
 station movement cannot be submitted through a remote ship-control wrapper.
 

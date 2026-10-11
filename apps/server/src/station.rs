@@ -11,6 +11,8 @@ pub(super) fn stop(p: &mut Pilot) {
     p.walk_input = None;
     if let Some(a) = &mut p.view.station_avatar {
         a.moving = false;
+        a.jump_started_ms = None;
+        a.position[1] = 0.0;
     }
 }
 pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result<()> {
@@ -25,6 +27,7 @@ pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result
             ensure!(p.view.station_avatar.is_none(), "already on foot");
             p.controls = None;
             p.view.station_avatar = Some(StationAvatar {
+                jump_started_ms: None,
                 seated: false,
                 position: layout.boarding_point,
                 heading: 0.0,
@@ -34,6 +37,10 @@ pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result
         }
         Request::EnterShip => {
             let a = p.view.station_avatar.as_ref().context("already aboard")?;
+            ensure!(
+                a.jump_started_ms.is_none(),
+                "land before boarding your ship"
+            );
             ensure!(
                 flight::distance(a.position, layout.boarding_point) <= STATION_BOARD_RANGE_M,
                 "walk to your ship boarding point first"
@@ -47,6 +54,7 @@ pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result
                 .station_avatar
                 .as_mut()
                 .context("disembark before using quarters seating")?;
+            ensure!(a.jump_started_ms.is_none(), "land before using seating");
             if seated {
                 let seat = quarters_layout(p.view.ship_class).seat_point;
                 ensure!(
@@ -60,6 +68,17 @@ pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result
             a.moving = false;
             a.updated_at_ms = a.updated_at_ms.max(now);
             p.walk_input = None;
+        }
+        Request::StationJump => {
+            let a = p
+                .view
+                .station_avatar
+                .as_mut()
+                .context("disembark before jumping")?;
+            ensure!(!a.seated, "stand up before jumping");
+            ensure!(a.jump_started_ms.is_none(), "already airborne");
+            a.jump_started_ms = Some(now);
+            a.updated_at_ms = a.updated_at_ms.max(now);
         }
         Request::StationWalk {
             forward,
@@ -111,6 +130,8 @@ pub(super) fn migrate(w: &mut World) {
                 a.position = hangar_layout(p.view.ship_class).boarding_point;
                 a.seated = false;
                 a.moving = false;
+                a.jump_started_ms = None;
+                a.position[1] = 0.0;
                 p.walk_input = None;
             }
         }
@@ -125,6 +146,16 @@ pub(super) fn advance(w: &mut World, now: u64) {
             p.view.station_avatar = None;
             p.walk_input = None;
             continue;
+        }
+        if let Some(start) = a.jump_started_ms {
+            let elapsed = now.saturating_sub(start) as f64 / 1000.0;
+            if elapsed >= 2.0 * STATION_JUMP_SPEED_MPS / STATION_GRAVITY_MPS2 {
+                a.jump_started_ms = None;
+                a.position[1] = 0.0;
+            } else {
+                a.position[1] = STATION_JUMP_SPEED_MPS * elapsed
+                    - 0.5 * STATION_GRAVITY_MPS2 * elapsed * elapsed;
+            }
         }
         let Some(input) = &p.walk_input else {
             a.moving = false;
@@ -181,7 +212,11 @@ pub(super) fn validate(w: &World) -> Result<()> {
                 p.view.location == Location::Docked
                     && a.heading.is_finite()
                     && a.position.iter().all(|v| v.is_finite())
-                    && a.position[1] == 0.0
+                    && a.position[1] >= 0.0
+                    && a.position[1]
+                        <= STATION_JUMP_SPEED_MPS.powi(2) / (2.0 * STATION_GRAVITY_MPS2)
+                    && (a.jump_started_ms.is_some() || a.position[1] == 0.0)
+                    && !(a.seated && a.jump_started_ms.is_some())
                     && a.position[0].abs() <= l.half_length
                     && a.position[2].abs() <= l.half_width
                     && !station_obstacles(p.view.ship_class)

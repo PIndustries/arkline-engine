@@ -494,6 +494,7 @@ impl Server {
             request @ (Request::StationSit { .. }
             | Request::DisembarkShip
             | Request::EnterShip
+            | Request::StationJump
             | Request::StationWalk { .. }) => {
                 let name = session
                     .as_ref()

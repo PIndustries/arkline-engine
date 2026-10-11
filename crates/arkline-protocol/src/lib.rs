@@ -424,6 +424,7 @@ pub enum Request {
     },
     DisembarkShip,
     EnterShip,
+    StationJump,
     StationWalk {
         forward: f64,
         strafe: f64,
@@ -876,10 +877,15 @@ pub struct PilotView {
 
 pub const AVATAR_HEIGHT_M: f64 = 1.8;
 pub const WALK_SPEED_MPS: f64 = 4.0;
+pub const STATION_JUMP_SPEED_MPS: f64 = 4.5;
+pub const STATION_GRAVITY_MPS2: f64 = 9.81;
 pub const STATION_WALK_LEASE_MS: u64 = 500;
 pub const STATION_BOARD_RANGE_M: f64 = 3.0;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct StationAvatar {
+    /// Authoritative start time; absent when grounded. Older saves default to grounded.
+    #[serde(default)]
+    pub jump_started_ms: Option<u64>,
     #[serde(default)]
     pub seated: bool,
     /// Feet position in the private hangar, meters; floor is y=0.

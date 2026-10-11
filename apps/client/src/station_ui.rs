@@ -71,14 +71,16 @@ impl Cockpit {
             ));
             if ui
                 .add_enabled(
-                    self.can_operate() && distance <= STATION_BOARD_RANGE_M,
+                    self.can_operate()
+                        && distance <= STATION_BOARD_RANGE_M
+                        && avatar.jump_started_ms.is_none(),
                     egui::Button::new("Enter ship"),
                 )
                 .clicked()
             {
                 self.send(Request::EnterShip);
             }
-            ui.small("W/S walk · A/D strafe · ←/→ turn · hold RMB to look");
+            ui.small("WASD / arrows walk · Space jump · hold RMB to look");
             ui.small(
                 "Follow the green path to your quarters. Approach a terminal and click to use it.",
             );
@@ -147,20 +149,51 @@ impl Cockpit {
             });
         let (forward, strafe, turn) = if allowed {
             ctx.input(|i| {
-                let axis = |a, b| f64::from(i.key_down(a)) - f64::from(i.key_down(b));
-                let f = axis(egui::Key::W, egui::Key::S);
-                let s = axis(egui::Key::D, egui::Key::A);
+                let down = |a, b| i.key_down(a) || i.key_down(b);
+                let f = f64::from(down(egui::Key::W, egui::Key::ArrowUp))
+                    - f64::from(down(egui::Key::S, egui::Key::ArrowDown));
+                let s = f64::from(down(egui::Key::D, egui::Key::ArrowRight))
+                    - f64::from(down(egui::Key::A, egui::Key::ArrowLeft));
                 let delta = self.hangar_view.camera_yaw() - avatar.as_ref().unwrap().heading;
                 let (sin, cos) = delta.sin_cos();
                 (
                     (f * cos - s * sin).clamp(-1., 1.),
                     (f * sin + s * cos).clamp(-1., 1.),
-                    axis(egui::Key::ArrowRight, egui::Key::ArrowLeft),
+                    if f != 0.0 || s != 0.0 {
+                        let desired = self.hangar_view.camera_yaw() + s.atan2(f);
+                        let angle = (desired - avatar.as_ref().unwrap().heading
+                            + std::f64::consts::PI)
+                            .rem_euclid(std::f64::consts::TAU)
+                            - std::f64::consts::PI;
+                        (angle * 3.0).clamp(-1.0, 1.0)
+                    } else {
+                        0.0
+                    },
                 )
             })
         } else {
             (0., 0., 0.)
         };
+        if allowed
+            && ctx.input(|i| {
+                i.events.iter().any(|event| {
+                    matches!(
+                        event,
+                        egui::Event::Key {
+                            key: egui::Key::Space,
+                            pressed: true,
+                            repeat: false,
+                            ..
+                        }
+                    )
+                })
+            })
+            && avatar
+                .as_ref()
+                .is_some_and(|a| a.jump_started_ms.is_none() && !a.seated)
+        {
+            self.send(Request::StationJump);
+        }
         let active = forward != 0. || strafe != 0. || turn != 0.;
         if active || self.station_walk_active {
             if in_hangar && avatar.is_some() && self.connected {
@@ -177,12 +210,62 @@ impl Cockpit {
 mod tests {
     use super::*;
     #[test]
+    fn arrows_match_wasd_and_space_sends_one_authoritative_jump() {
+        let command_for = |key| {
+            let ctx = egui::Context::default();
+            let mut cockpit = crate::tests::view_test_cockpit(&ctx);
+            let p = &mut cockpit.snapshot.as_mut().unwrap().pilots[0];
+            p.location = Location::Docked;
+            p.station_avatar = Some(StationAvatar {
+                jump_started_ms: None,
+                seated: false,
+                position: hangar_layout(p.ship_class).boarding_point,
+                heading: 0.,
+                moving: false,
+                updated_at_ms: 0,
+            });
+            let (tx, rx) = mpsc::channel();
+            cockpit.commands = Some(tx);
+            let _ = ctx.run(
+                egui::RawInput {
+                    focused: true,
+                    events: vec![egui::Event::Key {
+                        key,
+                        physical_key: None,
+                        pressed: true,
+                        repeat: false,
+                        modifiers: egui::Modifiers::NONE,
+                    }],
+                    ..Default::default()
+                },
+                |ctx| cockpit.sample_station_walk(ctx, true),
+            );
+            (cockpit.controls.take(), rx.try_recv().ok())
+        };
+        for (wasd, arrow) in [
+            (egui::Key::W, egui::Key::ArrowUp),
+            (egui::Key::S, egui::Key::ArrowDown),
+            (egui::Key::A, egui::Key::ArrowLeft),
+            (egui::Key::D, egui::Key::ArrowRight),
+        ] {
+            assert_eq!(
+                serde_json::to_value(command_for(wasd).0).unwrap(),
+                serde_json::to_value(command_for(arrow).0).unwrap()
+            );
+        }
+        assert!(matches!(
+            command_for(egui::Key::Space).1,
+            Some(Request::StationJump)
+        ));
+    }
+    #[test]
     fn walk_controls_are_own_only_and_release_on_focus_loss() {
         let ctx = egui::Context::default();
         let mut cockpit = crate::tests::view_test_cockpit(&ctx);
         let p = &mut cockpit.snapshot.as_mut().unwrap().pilots[0];
         p.location = Location::Docked;
         p.station_avatar = Some(StationAvatar {
+            jump_started_ms: None,
             seated: false,
             position: hangar_layout(p.ship_class).boarding_point,
             heading: 0.,
@@ -237,6 +320,7 @@ mod tests {
         let p = &mut cockpit.snapshot.as_mut().unwrap().pilots[0];
         p.location = Location::Docked;
         p.station_avatar = Some(StationAvatar {
+            jump_started_ms: None,
             seated: false,
             position: hangar_layout(p.ship_class).boarding_point,
             heading: 0.,
@@ -294,6 +378,7 @@ mod tests {
         let p = &mut cockpit.snapshot.as_mut().unwrap().pilots[0];
         p.location = Location::Docked;
         p.station_avatar = Some(StationAvatar {
+            jump_started_ms: None,
             seated: false,
             position: hangar_layout(p.ship_class).boarding_point,
             heading: 0.,
@@ -313,6 +398,7 @@ mod tests {
         let p = &mut cockpit.snapshot.as_mut().unwrap().pilots[0];
         p.location = Location::Docked;
         p.station_avatar = Some(StationAvatar {
+            jump_started_ms: None,
             seated: false,
             position: quarters_layout(p.ship_class).seat_point,
             heading: 0.,

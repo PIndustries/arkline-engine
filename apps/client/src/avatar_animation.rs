@@ -6,6 +6,7 @@ pub(super) struct Gait {
     last_position: Option<Vec3>,
     phase: f32,
     weight: f32,
+    speed: f32,
     direction: Vec3,
 }
 #[derive(Clone, Copy)]
@@ -47,14 +48,18 @@ impl Gait {
         } else {
             0.0
         };
-        let active = moving && !seated && speed > 0.015 && speed < 20.0;
+        // Network samples arrive in bursts. Filter measured travel rather than
+        // rejecting a fast catch-up frame and repeatedly dropping the walk pose.
+        let active = moving && !seated && delta.length() < 4.0;
+        let measured = if active { speed.min(6.0) } else { 0.0 };
+        self.speed += (measured - self.speed) * (1.0 - (-dt * 8.0).exp());
         let desired = if active {
-            (speed / 4.0).clamp(0.0, 1.0)
+            (self.speed / 3.0).clamp(0.0, 1.0)
         } else {
             0.0
         };
         self.weight += (desired - self.weight) * (1.0 - (-dt * 12.0).exp());
-        if active {
+        if active && speed > 0.015 {
             let (sin, cos) = (heading as f32).sin_cos();
             let local = Vec3::new(
                 delta.x * cos + delta.z * sin,
@@ -71,12 +76,13 @@ impl Gait {
             self.direction = Vec3::X;
         }
         if self.weight > 0.001 {
-            self.phase = (self.phase + dt * (speed.min(4.0) / 1.6).max(0.75)).rem_euclid(1.0);
+            self.phase = (self.phase + dt * (self.speed.min(4.0) / 2.0).max(0.65)).rem_euclid(1.0);
         } else {
             self.weight = 0.0;
         }
         if seated {
             self.weight = 0.0;
+            self.speed = 0.0;
         }
         Pose {
             phase: self.phase,
@@ -116,6 +122,33 @@ impl Pose {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn sparse_network_samples_keep_a_full_cycle_in_motion() {
+        let mut gait = Gait::default();
+        let mut position = Vec3::ZERO;
+        let mut min_phase = 1.0_f32;
+        let mut max_phase = 0.0_f32;
+        let mut min_weight = 1.0_f32;
+        for frame in 0..600 {
+            // Same presentation smoothing as a 10 Hz authoritative position stream.
+            let authoritative = Vec3::X * ((frame / 10) as f32 * 0.4);
+            position = position.lerp(authoritative, 1.0 - (-0.01_f32 * 18.0).exp());
+            let pose = gait.update(1_795_000_000_000 + frame * 10, position, 0.0, true, false);
+            if frame > 100 {
+                min_phase = min_phase.min(pose.phase);
+                max_phase = max_phase.max(pose.phase);
+                min_weight = min_weight.min(pose.weight);
+            }
+        }
+        assert!(
+            min_phase < 0.03 && max_phase > 0.97,
+            "must complete the stride, not hold a pose"
+        );
+        assert!(
+            min_weight > 0.8,
+            "network intervals must not repeatedly erase the gait"
+        );
+    }
     #[test]
     fn epoch_size_does_not_change_gait() {
         let mut a = Gait::default();
