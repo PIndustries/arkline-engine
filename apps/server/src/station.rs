@@ -23,10 +23,61 @@ pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result
     );
     let layout = hangar_layout(p.view.ship_class);
     match r {
+        Request::EnterInterior => {
+            ensure!(
+                p.view.ship_class == ShipClass::Pioneer,
+                "only Pioneer deck one is walkable"
+            );
+            if let Some(a) = &p.view.station_avatar {
+                ensure!(
+                    !a.onboard_interior
+                        && a.jump_started_ms.is_none()
+                        && flight::distance(a.position, layout.boarding_point)
+                            <= STATION_BOARD_RANGE_M,
+                    "return to the boarding marker before entering the interior"
+                );
+            }
+            p.walk_input = None;
+            p.view.station_avatar = Some(StationAvatar {
+                onboard_interior: true,
+                jump_started_ms: None,
+                seated: false,
+                position: PIONEER_INTERIOR_ENTRY,
+                heading: std::f64::consts::FRAC_PI_2,
+                moving: false,
+                updated_at_ms: now,
+            });
+        }
+        Request::ExitInterior => {
+            let a = p
+                .view
+                .station_avatar
+                .as_ref()
+                .context("not inside the ship")?;
+            ensure!(
+                a.onboard_interior
+                    && a.jump_started_ms.is_none()
+                    && flight::distance(a.position, PIONEER_INTERIOR_ENTRY)
+                        <= STATION_BOARD_RANGE_M,
+                "return to the interior airlock before leaving"
+            );
+            p.walk_input = None;
+            p.view.station_avatar = Some(StationAvatar {
+                onboard_interior: false,
+                jump_started_ms: None,
+                seated: false,
+                position: layout.boarding_point,
+                heading: 0.0,
+                moving: false,
+                updated_at_ms: now,
+            });
+        }
+
         Request::DisembarkShip => {
             ensure!(p.view.station_avatar.is_none(), "already on foot");
             p.controls = None;
             p.view.station_avatar = Some(StationAvatar {
+                onboard_interior: false,
                 jump_started_ms: None,
                 seated: false,
                 position: layout.boarding_point,
@@ -37,6 +88,10 @@ pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result
         }
         Request::EnterShip => {
             let a = p.view.station_avatar.as_ref().context("already aboard")?;
+            ensure!(
+                !a.onboard_interior,
+                "leave the interior through its airlock before boarding"
+            );
             ensure!(
                 a.jump_started_ms.is_none(),
                 "land before boarding your ship"
@@ -54,6 +109,7 @@ pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result
                 .station_avatar
                 .as_mut()
                 .context("disembark before using quarters seating")?;
+            ensure!(!a.onboard_interior, "interior seats are not operational");
             ensure!(a.jump_started_ms.is_none(), "land before using seating");
             if seated {
                 let seat = quarters_layout(p.view.ship_class).seat_point;
@@ -123,11 +179,15 @@ fn in_obstacle(position: [f64; 3], obstacle: &StationObstacle) -> bool {
 pub(super) fn migrate(w: &mut World) {
     for p in w.pilots.values_mut() {
         if let Some(a) = &mut p.view.station_avatar {
-            if station_obstacles(p.view.ship_class)
+            if obstacles_for(p.view.ship_class, a.onboard_interior)
                 .iter()
                 .any(|o| in_obstacle(a.position, o))
             {
-                a.position = hangar_layout(p.view.ship_class).boarding_point;
+                a.position = if a.onboard_interior {
+                    PIONEER_INTERIOR_ENTRY
+                } else {
+                    hangar_layout(p.view.ship_class).boarding_point
+                };
                 a.seated = false;
                 a.moving = false;
                 a.jump_started_ms = None;
@@ -170,7 +230,17 @@ pub(super) fn advance(w: &mut World, now: u64) {
             / 1000.0;
         let layout = hangar_layout(p.view.ship_class);
         let hull = p.view.ship_class.spec();
-        let obstacles = station_obstacles(p.view.ship_class);
+        let obstacles = obstacles_for(p.view.ship_class, a.onboard_interior);
+        let (min_x, max_x, min_z, max_z) = if a.onboard_interior {
+            (0.3, 31.7, 0.3, 13.7)
+        } else {
+            (
+                -layout.half_length + 0.3,
+                layout.half_length - 0.3,
+                -layout.half_width + 0.3,
+                layout.half_width - 0.3,
+            )
+        };
         let norm = input.forward.hypot(input.strafe).max(1.0);
         while remaining > 0.0 {
             let dt = remaining.min(0.025);
@@ -179,12 +249,13 @@ pub(super) fn advance(w: &mut World, now: u64) {
             let (sin, cos) = a.heading.sin_cos();
             let x = (a.position[0]
                 + (cos * input.forward - sin * input.strafe) / norm * WALK_SPEED_MPS * dt)
-                .clamp(-layout.half_length + 0.3, layout.half_length - 0.3);
+                .clamp(min_x, max_x);
             let z = (a.position[2]
                 + (sin * input.forward + cos * input.strafe) / norm * WALK_SPEED_MPS * dt)
-                .clamp(-layout.half_width + 0.3, layout.half_width - 0.3);
+                .clamp(min_z, max_z);
             let clear = |position: [f64; 3]| {
-                (position[0].abs() >= hull.length_m / 2.0 + STATION_AVATAR_RADIUS_M
+                (a.onboard_interior
+                    || position[0].abs() >= hull.length_m / 2.0 + STATION_AVATAR_RADIUS_M
                     || position[2].abs() >= hull.width_m / 2.0 + STATION_AVATAR_RADIUS_M)
                     && !obstacles.iter().any(|o| in_obstacle(position, o))
             };
@@ -219,7 +290,13 @@ pub(super) fn validate(w: &World) -> Result<()> {
                     && !(a.seated && a.jump_started_ms.is_some())
                     && a.position[0].abs() <= l.half_length
                     && a.position[2].abs() <= l.half_width
-                    && !station_obstacles(p.view.ship_class)
+                    && (!a.onboard_interior
+                        || (p.view.ship_class == ShipClass::Pioneer
+                            && a.position[0] >= 0.3
+                            && a.position[0] <= 31.7
+                            && a.position[2] >= 0.3
+                            && a.position[2] <= 13.7))
+                    && !obstacles_for(p.view.ship_class, a.onboard_interior)
                         .iter()
                         .any(|o| in_obstacle(a.position, o)),
                 "invalid station avatar"
@@ -227,4 +304,12 @@ pub(super) fn validate(w: &World) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn obstacles_for(class: ShipClass, interior: bool) -> Vec<StationObstacle> {
+    if interior {
+        pioneer_interior_obstacles()
+    } else {
+        station_obstacles(class)
+    }
 }

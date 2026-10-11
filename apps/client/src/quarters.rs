@@ -199,7 +199,7 @@ fn inside_quad(point: egui::Pos2, quad: [egui::Pos2; 4]) -> bool {
     signs.iter().all(|v| *v >= -0.01) || signs.iter().all(|v| *v <= 0.01)
 }
 // Parameter of first intersection along segment, with a small camera envelope.
-fn segment_box(a: Vec3, b: Vec3, min: Vec3, max: Vec3) -> Option<f32> {
+pub(super) fn segment_box(a: Vec3, b: Vec3, min: Vec3, max: Vec3) -> Option<f32> {
     let d = b - a;
     let mut near = 0.0f32;
     let mut far = 1.0f32;

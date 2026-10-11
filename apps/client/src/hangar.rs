@@ -3,6 +3,8 @@ use super::*;
 use arkline_protocol::{hangar_layout, StationAvatar};
 #[path = "avatar_animation.rs"]
 mod avatar_animation;
+#[path = "pioneer_interior.rs"]
+mod pioneer_interior;
 #[path = "quarters.rs"]
 mod quarters;
 pub use quarters::HangarAction;
@@ -15,6 +17,7 @@ pub struct HangarView {
     pitch: f32,
     zoom: f32,
     walking: bool,
+    interior: bool,
     class: Option<ShipClass>,
     follow: Option<Vec3>,
     gait: avatar_animation::Gait,
@@ -37,6 +40,7 @@ impl HangarView {
             pitch: 0.32,
             zoom: 1.0,
             walking: false,
+            interior: false,
             class: None,
             follow: None,
             gait: Default::default(),
@@ -68,7 +72,15 @@ impl HangarView {
             ui.allocate_exact_size(ui.available_size(), egui::Sense::click_and_drag());
         self.surface = Some((rect, ui.layer_id()));
         let walking = pilot.station_avatar.is_some();
-        if self.walking != walking || self.class != Some(pilot.ship_class) {
+        let interior = pilot
+            .station_avatar
+            .as_ref()
+            .is_some_and(|a| a.onboard_interior);
+        if self.walking != walking
+            || self.interior != interior
+            || self.class != Some(pilot.ship_class)
+        {
+            self.interior = interior;
             self.zoom = 1.0;
             self.follow = None;
             self.gait = Default::default();
@@ -118,7 +130,11 @@ impl HangarView {
             target - forward * distance * self.pitch.cos() + Vec3::Y * distance * self.pitch.sin();
         eye.y = eye.y.max(0.6);
         if walking {
-            eye = quarters::camera_eye(pilot.ship_class, target, eye);
+            eye = if interior {
+                pioneer_interior::camera(target, eye)
+            } else {
+                quarters::camera_eye(pilot.ship_class, target, eye)
+            };
         }
         let vp = Mat4::perspective_rh_gl(
             55f32.to_radians(),
@@ -126,8 +142,13 @@ impl HangarView {
             0.08,
             30000.0,
         ) * Mat4::look_at_rh(eye, target, Vec3::Y);
-        let mut parts = bay_parts(pilot.ship_class);
-        parts.extend(quarters::room_parts(pilot.ship_class, now));
+        let mut parts = if interior {
+            pioneer_interior::parts()
+        } else {
+            let mut p = bay_parts(pilot.ship_class);
+            p.extend(quarters::room_parts(pilot.ship_class, now));
+            p
+        };
         if let Some(avatar) = &pilot.station_avatar {
             let position = self
                 .follow
@@ -171,7 +192,7 @@ impl HangarView {
                 "PRIVATE BAY  /  {}\n{}",
                 pilot.ship_class.spec().name,
                 if walking {
-                    "ON FOOT · WASD walk · Arrows turn · Right-drag look · Wheel zoom"
+                    "ON FOOT · WASD / arrows walk · Right-drag look · Wheel zoom"
                 } else {
                     "SHIP INSPECTION · Drag orbit · Wheel zoom · Disembark to explore"
                 }
@@ -179,7 +200,12 @@ impl HangarView {
             egui::FontId::proportional(14.0),
             egui::Color32::from_rgb(150, 220, 185),
         );
-        quarters::terminals(ui, rect, vp, eye, pilot, unobstructed, live)
+        if interior {
+            pioneer_interior::labels(ui, rect, vp, pilot, live);
+            None
+        } else {
+            quarters::terminals(ui, rect, vp, eye, pilot, unobstructed, live)
+        }
     }
 }
 
@@ -577,6 +603,7 @@ mod tests {
     #[test]
     fn avatar_has_human_scale_and_walk_articulation() {
         let mut avatar = StationAvatar {
+            onboard_interior: false,
             jump_started_ms: None,
             seated: false,
             position: [0.0; 3],
@@ -687,6 +714,34 @@ mod tests {
             assert_eq!(gl.get_error(), glow::NO_ERROR);
             let lit = pixels.chunks_exact(4).filter(|p| p[1] > 25).count();
             assert!(lit > 500, "Hangar must cover meaningful image area: {lit}");
+            if let Ok(path) = std::env::var("ARKLINE_PIONEER_INTERIOR_CAPTURE") {
+                let capture = CachedFeed::create(&gl, 1002, 1280, 720).unwrap();
+                gl.bind_framebuffer(glow::FRAMEBUFFER, Some(capture.framebuffer));
+                gl.viewport(0, 0, 1280, 720);
+                let eye = Vec3::new(5.0, 1.7, 7.0);
+                let vp = Mat4::perspective_rh_gl(1.2, 1280.0 / 720.0, 0.08, 100.0)
+                    * Mat4::look_at_rh(eye, Vec3::new(20.0, 1.4, 7.0), Vec3::Y);
+                paint(&renderer, vp, eye, &pioneer_interior::parts());
+                let mut rgba = vec![0u8; 1280 * 720 * 4];
+                gl.read_pixels(
+                    0,
+                    0,
+                    1280,
+                    720,
+                    glow::RGBA,
+                    glow::UNSIGNED_BYTE,
+                    glow::PixelPackData::Slice(Some(&mut rgba)),
+                );
+                assert_eq!(gl.get_error(), glow::NO_ERROR);
+                let mut ppm = b"P6\n1280 720\n255\n".to_vec();
+                for row in rgba.chunks_exact(1280 * 4).rev() {
+                    for pixel in row.chunks_exact(4) {
+                        ppm.extend_from_slice(&pixel[..3]);
+                    }
+                }
+                std::fs::write(path, ppm).unwrap();
+                capture.destroy(&gl);
+            }
             if let Ok(path) = std::env::var("ARKLINE_HANGAR_CAPTURE") {
                 let capture = CachedFeed::create(&gl, 1000, 1280, 720).unwrap();
                 gl.bind_framebuffer(glow::FRAMEBUFFER, Some(capture.framebuffer));
@@ -747,6 +802,7 @@ mod tests {
                 gl.bind_framebuffer(glow::FRAMEBUFFER, Some(capture.framebuffer));
                 gl.viewport(0, 0, tile as i32, tile as i32);
                 let avatar = StationAvatar {
+                    onboard_interior: false,
                     jump_started_ms: None,
                     position: [0.0; 3],
                     heading: 0.0,

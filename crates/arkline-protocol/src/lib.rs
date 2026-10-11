@@ -1,5 +1,7 @@
 //! Arkline v0.1 wire format and canonical economic event encoding.
 //! One JSON request/response per line over a local TCP connection.
+mod pioneer_interior;
+pub use pioneer_interior::*;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -424,6 +426,8 @@ pub enum Request {
     },
     DisembarkShip,
     EnterShip,
+    EnterInterior,
+    ExitInterior,
     StationJump,
     StationWalk {
         forward: f64,
@@ -883,6 +887,9 @@ pub const STATION_WALK_LEASE_MS: u64 = 500;
 pub const STATION_BOARD_RANGE_M: f64 = 3.0;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct StationAvatar {
+    /// Pioneer deck-one local coordinates when true; private hangar otherwise.
+    #[serde(default)]
+    pub onboard_interior: bool,
     /// Authoritative start time; absent when grounded. Older saves default to grounded.
     #[serde(default)]
     pub jump_started_ms: Option<u64>,
@@ -1003,6 +1010,8 @@ pub struct CorporationView {
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AssetsView {
+    #[serde(default)]
+    pub pioneer_interior_available: bool,
     /// Inactive owned hulls only; active hull and cargo remain in PilotView.
     pub ships: Vec<HangarShip>,
     pub storage: Vec<StationStorage>,
