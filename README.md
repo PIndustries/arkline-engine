@@ -4,7 +4,7 @@ A shared space sandbox built in Rust by P.Industries and contributors. Fly a shi
 mine finite resources, manage drones, and trade in a persistent, server-authoritative
 universe. The current test world contains three connected star systems.
 
-**Developer preview · 26.10.11.1.** Arkline is under active development. Expect
+**Developer preview · 26.10.11.2.** Arkline is under active development. Expect
 unfinished systems and visual rough edges. Start with a local universe; public
 access to the official network is not available yet.
 

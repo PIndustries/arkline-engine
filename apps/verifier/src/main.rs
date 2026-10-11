@@ -28,7 +28,11 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> Result<()> {
             .open(&temporary)?;
         file.write_all(bytes)?;
         file.sync_all()?;
+        // Windows cannot replace a pathname while our temporary handle is open.
+        drop(file);
         fs::rename(&temporary, path)?;
+        // Opening a directory as File is supported on Unix, not Windows.
+        #[cfg(unix)]
         fs::File::open(parent)?.sync_all()?;
         Ok(())
     })();
