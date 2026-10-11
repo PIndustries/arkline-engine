@@ -194,7 +194,7 @@ impl Renderer {
                         Vec3::ONE,
                         ship_orientation_at(p, frame.now),
                     );
-                    for (mesh, model, _, _) in ship_parts(p.ship_class) {
+                    for &(mesh, model, _, _) in cached_ship_parts(p.ship_class) {
                         push_caster(&mut casters, (mesh, ship * model), frame.eye);
                     }
                     for id in 0..2 {

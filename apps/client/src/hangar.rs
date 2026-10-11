@@ -266,6 +266,18 @@ fn third_person_eye(target: Vec3, heading: f32, pitch: f32, distance: f32) -> Ve
 }
 
 fn bay_parts(class: ShipClass) -> Vec<ModelPart> {
+    cached_bay_parts(class).to_vec()
+}
+fn cached_bay_parts(class: ShipClass) -> &'static [ModelPart] {
+    static BAYS: [std::sync::OnceLock<Vec<ModelPart>>; 7] =
+        [const { std::sync::OnceLock::new() }; 7];
+    let index = arkline_protocol::ALL_SHIP_CLASSES
+        .iter()
+        .position(|c| *c == class)
+        .unwrap();
+    BAYS[index].get_or_init(|| build_bay_parts(class))
+}
+fn build_bay_parts(class: ShipClass) -> Vec<ModelPart> {
     let bay = hangar_layout(class);
     let l = bay.half_length as f32;
     let w = bay.half_width as f32;
@@ -602,6 +614,37 @@ unsafe fn paint(renderer: &Renderer, vp: Mat4, eye: Vec3, parts: &[ModelPart]) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn cached_bays_preserve_every_transform_and_material() {
+        for class in arkline_protocol::ALL_SHIP_CLASSES {
+            assert_eq!(super::bay_parts(class), super::build_bay_parts(class));
+            assert!(std::ptr::eq(
+                super::cached_bay_parts(class),
+                super::cached_bay_parts(class)
+            ));
+        }
+    }
+    #[test]
+    #[ignore = "Explicit CPU preparation measurement, not a GPU frame-rate benchmark"]
+    fn static_bay_preparation_profile() {
+        use std::hint::black_box;
+        let class = arkline_protocol::ShipClass::Pioneer;
+        black_box(super::bay_parts(class));
+        let start = std::time::Instant::now();
+        for _ in 0..2000 {
+            black_box(super::build_bay_parts(class));
+        }
+        let rebuilt = start.elapsed();
+        let start = std::time::Instant::now();
+        for _ in 0..2000 {
+            black_box(super::bay_parts(class));
+        }
+        eprintln!(
+            "2000 actual bay preparation calls: rebuild={rebuilt:?}, cached_copy={:?}, parts={}",
+            start.elapsed(),
+            super::bay_parts(class).len()
+        );
+    }
     use super::*;
     #[test]
     fn third_person_remains_behind_avatar_at_every_heading() {
