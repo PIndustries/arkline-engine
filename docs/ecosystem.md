@@ -2,8 +2,32 @@
 
 Arkline should grow through complete, testable journeys. A panel is only a working
 feature when its action reaches an authoritative service and its result survives
-restart where appropriate. Keep the repository private until owner validation and
-explicit approval to publish.
+restart where appropriate. The public engine is a place to build, learn, test and
+contribute together; a source release is not a claim that every planned feature
+or official-network service is finished.
+
+## Community projects and the official network
+
+Independent forks and independently operated worlds are welcome. Developers can
+run Arkline locally, change the rules, test new interfaces and explore a different
+direction under the repository's license. Local experiments are useful work, not
+second-class contributions. When an improvement would help the shared engine,
+open an issue or pull request with a reproducible example and relevant validation.
+A fork does not have to become part of the official service to be worthwhile.
+
+P.Industries focuses its development and operations on the official Arkline
+network. That focus does not prevent community projects or require independent
+worlds to use official account infrastructure. Shared engine improvements,
+clear interfaces and documented limits should make both paths easier. Official
+network admission, authority and any future operator programme remain separate
+from the ability to run the open-source code; operating a node does not currently
+confer official status or rewards.
+
+Keep attribution and license obligations, and distinguish independent projects
+from the official service under the [branding policy](../TRADEMARKS.md). See
+[licensing](licensing.md) for the software boundary. The GitHub Wiki is the
+published reader documentation; versioned documents remain in the source
+repository so documentation changes can be reviewed alongside code.
 
 ## Current foundation
 

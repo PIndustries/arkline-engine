@@ -1,10 +1,20 @@
 # Website and game identity: current state and integration plan
 
-**Status: investigation and proposed design, not an implemented shared login.** A website account cannot currently authenticate an Arkline pilot. No OAuth issuer, game token exchange, account-linking migration or client browser callback is added by this document.
+**Status: private Rust identity foundation deployed and tested; public account access and game integration are not implemented.** The private provider has passed isolated account and OIDC lifecycle checks. Public signup and the account-domain route remain disabled. A website account cannot currently authenticate an Arkline pilot; no game token exchange, account-linking migration or client browser callback is implemented.
 
-## What exists
+## Current private foundation
 
-| Component | Source-backed capability | Missing boundary |
+Arkline has a separate private Rust account-service repository and account store, using a pinned maintained Rust identity provider. It is deployed as a private, persistent workload with registration disabled and no public account route. It does not import Bastion accounts or change existing game pilot credentials.
+
+Isolated acceptance covered registration with captured verification mail, password login and recovery, profile changes, logout, authorization code with S256 PKCE, token signature/claim checks, replay rejection, refresh/revocation, signing-key rotation, restart and backup restoration. The private workload's health, HTTPS issuer configuration and secure host-only cookie attributes were also checked. These results establish a foundation, not a completed public account launch or game sign-in journey.
+
+Owner administrator assignment/handoff, final public proxy/browser acceptance and game account-to-pilot linking remain separate work. Passkey support is not advertised as tested. Exact private runtime credentials and operator access details are intentionally outside this public document.
+
+## Historical website investigation
+
+The following inventory records the earlier Bastion/game investigation. It explains why existing website sessions were not reused as game credentials; it is not the current deployment inventory for the new private Rust provider.
+
+| Component | Source-backed capability at review | Missing boundary at review |
 | --- | --- | --- |
 | Bastion website | Magic-link and passkey sign-in; renewed signed session cookie; authenticated user and organization roles | No game credential issuance or pilot ownership mapping |
 | Bastion enterprise SSO | OIDC relying-party/client flow per organization, issuer discovery, authorization-code exchange, signed state and session nonce, RS256 ID-token signature/issuer/audience/expiry/nonce checks | Not an authorization server; current exchange does not implement PKCE |
@@ -16,19 +26,19 @@ Bastion source locations: `lib/bastion_web/controllers/oidc_controller.ex`, `lib
 
 Organization configuration stores `oidc.enabled`, `issuer`, `client_id` and a separate `secret_ref`. The current callback uses the canonical Bastion endpoint URL, then redirects into the website. The cookie is configured as signed with SameSite=Lax; that is not a cross-domain game-session mechanism. Website roles must never silently become game corporation, world-operator or delegated-pilot privileges.
 
-Read-only deployment discovery found no positively identified central identity-provider workload. Explicit Bastion Deployment variables describe Arkline release links, while other environment configuration comes from a Secret reference. Workload names and environment variable names alone cannot establish whether an external organization provider is configured. No credential values or organization identity data were exported, and no provider was selected or installed. A configured, reachable issuer and its supported client policies still need verification.
+At that earlier review, read-only deployment discovery found no positively identified central identity-provider workload. Explicit Bastion Deployment variables describe Arkline release links, while other environment configuration comes from a Secret reference. Workload names and environment variable names alone cannot establish whether an external organization provider is configured. No credential values or organization identity data were exported during that investigation, and no provider was selected or installed in that pass. The private Rust foundation described above was implemented and verified afterward; public availability and game trust integration remain unimplemented.
 
 ## Required private Rust identity boundary
 
-The account-registration, account-management and OAuth/OIDC service must be a separate **private Rust application**. It must not be implemented in Bastion/Elixir or embedded into the public game engine. Bastion may continue serving marketing pages; this does not make it the account authority. No new issuer or account portal is deployed yet.
+The account-registration, account-management and OAuth/OIDC service must be a separate **private Rust application**. It must not be implemented in Bastion/Elixir or embedded into the public game engine. Bastion may continue serving marketing pages; this does not make it the account authority. The private provider foundation is deployed; no public account portal or game admission integration is enabled.
 
 The public engine should integrate only through standard, configurable OpenID Connect/OAuth interfaces. Forks and independent operators must be able to select their own compliant issuer and register their own client IDs/redirects; official account infrastructure is not a mandatory proprietary dependency for local worlds. Provider configuration is operator-controlled, not supplied by an untrusted game server response.
 
-The private service requires a reviewed authorization-code + PKCE implementation, durable account and session storage, real email verification/recovery, key rotation and replay protection. Maintained Rust OIDC **client** crates do not by themselves implement an authorization server. A standards discovery document or a signed token alone is not a complete OAuth service. Implementation and conformance testing are separate work from publishing these docs.
+The private service uses a maintained provider for authorization code + PKCE, durable account/session storage, verification/recovery, key rotation and replay protection. Isolated acceptance exercises these boundaries; production public access still needs its own validation. Maintained Rust OIDC **client** crates do not by themselves implement an authorization server. A standards discovery document or a signed token alone is not a complete OAuth service. Implementation and conformance testing are separate work from publishing these docs.
 
 ## Integration design
 
-Arkline will use a separate private Rust account service and account store on an Arkline-controlled domain; accounts.arkline.network is the planned account host. Do not implicitly import or link Bastion users by matching email. Use a maintained Rust authorization-server component, with original Arkline account integration, rather than growing a custom OAuth issuer inside the game. Website and game clients can use this provider through their own registered standard interfaces.
+Arkline uses a separate private Rust account-service foundation and account store; accounts.arkline.network remains the planned public account host, with no account route enabled yet. Do not implicitly import or link Bastion users by matching email. Use a maintained Rust authorization-server component, with original Arkline account integration, rather than growing a custom OAuth issuer inside the game. Website and game clients can use this provider through their own registered standard interfaces.
 
 ```text
 Native app or browser game -- external browser authorization --> identity provider
@@ -61,7 +71,7 @@ The current game supports explicit worker delegation and remote-control leases. 
 
 | Stage | Concrete deliverable | Required evidence |
 | --- | --- | --- |
-| Provider decision | Realm, account lifecycle, verified discovery/JWKS, registered website/native/browser clients | Issuer reachable, correct redirect allowlist, PKCE enforced; actual sign-in tested |
+| Public provider readiness | Publish the privately validated provider through a reviewed account-host route; register production website/native/browser clients | Private lifecycle checks already pass; verify final TLS/proxy/browser/mail/admin behavior before public signup |
 | Website integration | Maintained OIDC client configuration, session renewal, explicit existing-user linking | CSRF/state/nonce/code-replay tests; correct logout and same-account behavior |
 | Durable account mapping | World/account/pilot ownership schema and migration | Backup/restore, duplicate/race rejection, no changed economic balances or history |
 | World admission | Versioned authenticated-connect contract and validated short-lived ticket/token | Wrong issuer/audience/world, expired/replayed token, key rotation and revocation rejected |

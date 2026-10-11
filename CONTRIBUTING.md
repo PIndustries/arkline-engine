@@ -12,7 +12,7 @@ license and attribution; do not assume the project license replaces those terms.
 Do not import proprietary third-party assets, credentials, or old production data.
 
 Changes should preserve a working two-pilot journey. Run formatting, Clippy, and
-the workspace tests from README.md. Add regression coverage for changes affecting
+the workspace tests in the [player and developer guide](https://github.com/PIndustries/arkline-engine/wiki/Player-Guide). Add regression coverage for changes affecting
 ownership, balances, retries, persistence, or protocol compatibility.
 
 Economic state changes and their ledger entry must commit together. The verifier
@@ -27,7 +27,9 @@ Public fork pull requests do not run automatically on our persistent self-hosted
 build machines. Include your local validation results; maintainers review changes
 before running trusted CI. Do not add secrets or production world data to a PR.
 
-Start with the [documentation index](docs/README.md), [component map](docs/component-map.md),
+The [official Wiki](https://github.com/PIndustries/arkline-engine/wiki) is the published documentation. Edit the versioned Markdown linked on each page and submit documentation changes through pull requests.
+
+Start with the [documentation source index](docs/README.md), [component map](docs/component-map.md),
 and [API reference](docs/api.md). The official account service is operated separately;
 local worlds currently use the documented pilot credentials. Configurable OAuth/OIDC
 integration is planned, not part of the current login implementation.

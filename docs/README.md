@@ -1,5 +1,9 @@
 # Arkline technical documentation
 
+Read the [official Wiki](https://github.com/PIndustries/arkline-engine/wiki) for the published documentation. These Markdown files are the reviewable sources; submit changes through pull requests, then synchronize the reviewed pages to the Wiki.
+
+- [Player and developer guide](player-guide.md)
+
 Start with the [component and deployment map](component-map.md), then the [implemented API](api.md). The source protocol is the final field/type contract; these documents describe behavior and trust boundaries.
 
 - [Models and community artwork](models.md) — procedural meshes today; GLB import is planned
