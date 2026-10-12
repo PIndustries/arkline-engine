@@ -106,6 +106,16 @@ fn token_hash(token: &str) -> String {
     hex::encode(Sha256::digest(token.as_bytes()))
 }
 
+/// Release flock explicitly: a concurrently forked child may still hold a copy
+/// of the open file description until exec, even though this File is CLOEXEC.
+/// Stored after SQLite in Server so authority is released only after DB close.
+struct OwnershipLock(std::fs::File);
+impl Drop for OwnershipLock {
+    fn drop(&mut self) {
+        let _ = FileExt::unlock(&self.0);
+    }
+}
+
 /// One connection, protected by the transport's mutex, serializes all writes.
 /// The durable state and its economic event commit in one SQLite transaction.
 pub struct Server {
@@ -120,7 +130,7 @@ pub struct Server {
     room_incompatible: std::collections::BTreeSet<String>,
     // Kept after db so SQLite closes before authority is released. Never unlink
     // the sidecar: replacing its inode would allow competing locks.
-    _ownership_lock: Option<std::fs::File>,
+    _ownership_lock: Option<OwnershipLock>,
 }
 impl Server {
     pub fn is_local_development(&self) -> bool {
@@ -172,7 +182,7 @@ impl Server {
                 .open(&sidecar)
                 .context("cannot open database ownership lock")?;
             file.try_lock_exclusive().context("world database is already owned by another server (or ownership lock is unavailable)")?;
-            Some(file)
+            Some(OwnershipLock(file))
         };
         let existed = path.exists();
         let mut db = Connection::open(path)?;
@@ -1483,5 +1493,46 @@ mod tests {
                 .ok
         );
         assert_eq!(server.db.total_changes(), before + 2);
+    }
+}
+
+#[cfg(all(test, unix))]
+mod ownership_release_tests {
+    use super::*;
+
+    #[test]
+    fn server_drop_releases_authority_with_inherited_descriptor_still_open() {
+        let root = std::env::temp_dir().join(format!(
+            "arkline-inherited-lock-{}-{}",
+            std::process::id(),
+            rand::random::<u64>()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        let path = root.join("world.sqlite");
+        let server = Server::open(&path).unwrap();
+        // dup has the same open-file-description lifetime as a fork-inherited FD.
+        // A concurrently spawning process can retain it briefly until exec.
+        let inherited = server
+            ._ownership_lock
+            .as_ref()
+            .unwrap()
+            .0
+            .try_clone()
+            .unwrap();
+        assert!(
+            Server::open(&path).is_err(),
+            "live writer must remain exclusive"
+        );
+        drop(server);
+        let reopened = Server::open(&path)
+            .expect("dropped server must release authority before an inherited FD closes");
+        drop(inherited);
+        assert!(
+            Server::open(&path).is_err(),
+            "closing the old descriptor must not release the new writer's lock"
+        );
+        drop(reopened);
+        assert!(Server::open(&path).is_ok());
+        std::fs::remove_dir_all(root).unwrap();
     }
 }
