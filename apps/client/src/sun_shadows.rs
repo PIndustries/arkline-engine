@@ -246,8 +246,8 @@ impl Renderer {
                         false,
                         &model.to_cols_array(),
                     );
-                    gl.bind_vertex_array(Some(self.meshes[mesh].vao));
-                    gl.draw_arrays(glow::TRIANGLES, 0, self.meshes[mesh].count);
+                    gl.bind_vertex_array(Some(self.meshes[mesh_index(mesh)].vao));
+                    gl.draw_arrays(glow::TRIANGLES, 0, self.meshes[mesh_index(mesh)].count);
                 }
             }
         }

@@ -17,6 +17,9 @@ mod ship_asset;
 #[path = "local_lighting.rs"]
 mod local_lighting;
 
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "asset_gallery.rs"]
+pub mod asset_gallery;
 #[path = "hangar.rs"]
 pub mod hangar;
 
@@ -319,6 +322,14 @@ impl FlightView {
     #[cfg(test)]
     pub fn cockpit_console_rect(&self) -> Option<egui::Rect> {
         self.console_rect
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn set_material_preview(&mut self, preview: Option<crate::EmbeddedMaterialPreview>) {
+        if let Ok(renderer) = &self.renderer {
+            if let Ok(mut renderer) = renderer.lock() {
+                renderer.set_material_preview(preview);
+            }
+        }
     }
     #[cfg(not(target_arch = "wasm32"))]
     pub fn set_debug_wireframe(&mut self, enabled: bool) {
@@ -1905,6 +1916,7 @@ pub struct DebugRenderMetrics {
     pub wireframe_draw_calls: u64,
 }
 struct Renderer {
+    material_preview: Option<crate::EmbeddedMaterialPreview>,
     #[cfg(not(target_arch = "wasm32"))]
     debug_wireframe: bool,
     #[cfg(not(target_arch = "wasm32"))]
@@ -2019,6 +2031,7 @@ impl Renderer {
             station_batches,
             feed_cache: Vec::new(),
             destroyed: false,
+            material_preview: None,
             #[cfg(not(target_arch = "wasm32"))]
             debug_wireframe: false,
             #[cfg(not(target_arch = "wasm32"))]
@@ -2028,6 +2041,17 @@ impl Renderer {
             shadow_failed: false,
             turrets: std::collections::HashMap::new(),
         })
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    fn set_material_preview(&mut self, preview: Option<crate::EmbeddedMaterialPreview>) {
+        let preview = preview.map(crate::EmbeddedMaterialPreview::validated);
+        if self.material_preview != preview {
+            self.material_preview = preview;
+            // Geometry is unchanged: only per-draw uniforms and cached camera pixels change.
+            for feed in &mut self.feed_cache {
+                feed.painted_ms = None;
+            }
+        }
     }
     unsafe fn draw(&self, mesh: usize, model: Mat4, color: Vec3, emission: f32) {
         self.draw_material(mesh, model, color, emission, Material::PaintedHull);
@@ -2040,10 +2064,19 @@ impl Renderer {
         emission: f32,
         material: Material,
     ) {
-        let params = embedded_primitive(mesh).map_or_else(
+        let (color, emission) = preview_material(mesh, color, emission, self.material_preview);
+        let mut params = embedded_primitive(mesh).map_or_else(
             || material.parameters(),
             |p| [p.roughness, p.metallic, 0.0, 0.0],
         );
+        if let Some(preview) = self.material_preview.filter(|_| preview_paint(mesh)) {
+            if let Some(roughness) = preview.roughness {
+                params[0] = roughness.clamp(0.08, 1.0);
+            }
+            if let Some(metallic) = preview.metallic {
+                params[1] = metallic;
+            }
+        }
         self.gl.uniform_4_f32(
             self.uniforms.material_params.as_ref(),
             params[0],
@@ -2070,13 +2103,13 @@ impl Renderer {
             light_color.y,
             light_color.z,
         );
-        gl.bind_vertex_array(Some(self.meshes[mesh].vao));
-        gl.draw_arrays(glow::TRIANGLES, 0, self.meshes[mesh].count);
+        gl.bind_vertex_array(Some(self.meshes[mesh_index(mesh)].vao));
+        gl.draw_arrays(glow::TRIANGLES, 0, self.meshes[mesh_index(mesh)].count);
         #[cfg(not(target_arch = "wasm32"))]
         {
             let mut metrics = self.debug_metrics.get();
             metrics.draw_calls += 1;
-            metrics.triangles += self.meshes[mesh].count as u64 / 3;
+            metrics.triangles += self.meshes[mesh_index(mesh)].count as u64 / 3;
             if self.debug_wireframe {
                 let mut modes = [0; 2];
                 gl.get_parameter_i32_slice(glow::POLYGON_MODE, &mut modes);
@@ -2089,7 +2122,7 @@ impl Renderer {
                 gl.uniform_3_f32(self.uniforms.color.as_ref(), 0.02, 0.9, 0.25);
                 gl.uniform_3_f32(self.uniforms.emissive_color.as_ref(), 0.02, 0.9, 0.25);
                 gl.uniform_1_f32(self.uniforms.emission.as_ref(), 1.5);
-                gl.draw_arrays(glow::TRIANGLES, 0, self.meshes[mesh].count);
+                gl.draw_arrays(glow::TRIANGLES, 0, self.meshes[mesh_index(mesh)].count);
                 // Core GL uses a shared front/back polygon mode.
                 gl.polygon_mode(glow::FRONT_AND_BACK, modes[0] as u32);
                 gl.polygon_offset(factor, units);
@@ -3809,6 +3842,48 @@ fn pioneer_asset() -> Result<&'static Vec<ship_asset::Primitive>, String> {
         .as_ref()
         .map_err(Clone::clone)
 }
+// Ship-only role tags preserve shared primitive geometry without tinting station parts.
+const HULL_ROLE: usize = 1 << 24;
+const TRIM_ROLE: usize = 2 << 24;
+const EMISSION_ROLE: usize = 3 << 24;
+fn mesh_index(mesh: usize) -> usize {
+    mesh & 0x00ff_ffff
+}
+fn paint_role(mesh: usize) -> usize {
+    match mesh & !0x00ff_ffff {
+        HULL_ROLE => HULL_ROLE,
+        TRIM_ROLE => TRIM_ROLE,
+        _ => match embedded_primitive(mesh).map(|p| p.material_name.as_str()) {
+            Some("Graphite ceramic armor") => HULL_ROLE,
+            Some("Emerald structural frames") => TRIM_ROLE,
+            _ => 0,
+        },
+    }
+}
+fn preview_paint(mesh: usize) -> bool {
+    paint_role(mesh) != 0
+}
+fn preview_material(
+    mesh: usize,
+    color: Vec3,
+    emission: f32,
+    preview: Option<crate::EmbeddedMaterialPreview>,
+) -> (Vec3, f32) {
+    let Some(preview) = preview else {
+        return (color, emission);
+    };
+    let color = match paint_role(mesh) {
+        HULL_ROLE => Vec3::from_array(preview.hull_rgb),
+        TRIM_ROLE => Vec3::from_array(preview.trim_rgb),
+        _ => color,
+    };
+    let emission = if embedded_primitive(mesh).is_some() || mesh & !0x00ff_ffff == EMISSION_ROLE {
+        emission * preview.emissive_strength
+    } else {
+        emission
+    };
+    (color, emission)
+}
 fn embedded_primitive(mesh: usize) -> Option<&'static ship_asset::Primitive> {
     mesh.checked_sub(10)
         .and_then(|i| pioneer_asset().ok()?.get(i))
@@ -4115,8 +4190,18 @@ fn build_ship_parts(class: ShipClass) -> Vec<ModelPart> {
     ) / 100.0;
     let fit =
         Mat4::from_scale(dimensions / (max - min)) * Mat4::from_translation(-(min + max) * 0.5);
-    for (_, model, _, _) in &mut parts.0 {
+    for (mesh, model, color, emission) in &mut parts.0 {
         *model = fit * *model;
+        // Roles assigned inside the ship builder, never inferred from scene colors.
+        if *emission > 0.0 {
+            *mesh |= EMISSION_ROLE;
+        } else if *emission == 0.0 {
+            if *color == graphite || *color == plate {
+                *mesh |= HULL_ROLE;
+            } else if *color == green {
+                *mesh |= TRIM_ROLE;
+            }
+        }
     }
     parts.0
 }
@@ -4413,7 +4498,7 @@ fn mesh_vertices(mesh: usize) -> Vec<Vertex> {
     if let Some(primitive) = embedded_primitive(mesh) {
         return primitive.vertices.clone();
     }
-    match mesh {
+    match mesh_index(mesh) {
         0 => cube(),
         1 => torus(1.0, 0.12),
         2 => sphere(false),
@@ -4703,6 +4788,45 @@ c=mix(c,sky,atmosphere);color=vec4(ark_display(c),1.0);}
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn fleet_preview_roles_change_finish_not_geometry_or_station() {
+        let preview = crate::EmbeddedMaterialPreview {
+            hull_rgb: [0.8, 0.1, 0.2],
+            trim_rgb: [0.2, 0.1, 0.8],
+            ..Default::default()
+        };
+        for class in arkline_protocol::ALL_SHIP_CLASSES {
+            let parts = cached_ship_parts(class);
+            assert!(
+                parts.iter().any(|p| paint_role(p.0) == HULL_ROLE),
+                "{class:?}"
+            );
+            assert!(
+                parts.iter().any(|p| paint_role(p.0) == TRIM_ROLE),
+                "{class:?}"
+            );
+            for &(mesh, _, color, emission) in parts {
+                let edited = preview_material(mesh, color, emission, Some(preview));
+                assert_eq!(
+                    preview_material(mesh, color, emission, None),
+                    (color, emission)
+                );
+                if paint_role(mesh) == HULL_ROLE {
+                    assert_eq!(edited.0, Vec3::from_array(preview.hull_rgb));
+                }
+                if mesh & !0x00ff_ffff != 0 {
+                    let a = mesh_vertices(mesh);
+                    let b = mesh_vertices(mesh_index(mesh));
+                    assert_eq!(a.len(), b.len());
+                    assert!(a.iter().zip(&b).all(|(a, b)| a.p == b.p && a.n == b.n));
+                }
+            }
+        }
+        assert_eq!(
+            preview_material(0, Vec3::ONE, 0.0, Some(preview)),
+            (Vec3::ONE, 0.0)
+        );
+    }
     #[test]
     fn armor_surface_is_closed_outward_and_preserves_cube_envelope() {
         use std::collections::BTreeMap;
@@ -5029,6 +5153,126 @@ mod tests {
                 material_pixels[0], material_pixels[4],
                 "rock and screen glass cannot share roughness response"
             );
+            // Live editor changes use the same draw path in flight and dock scenes.
+            // No mesh rebuild; paused feed pixels are invalidated on edits and reset.
+            let hull_index = pioneer_asset()
+                .unwrap()
+                .iter()
+                .position(|p| p.material_name == "Graphite ceramic armor")
+                .unwrap()
+                + 10;
+            let mut preview_pixels = Vec::new();
+            for preview in [
+                None,
+                Some(crate::EmbeddedMaterialPreview {
+                    hull_rgb: [0.9, 0.02, 0.03],
+                    roughness: Some(0.2),
+                    metallic: Some(0.7),
+                    ..Default::default()
+                }),
+                None,
+            ] {
+                renderer.set_material_preview(preview);
+                if preview.is_some() {
+                    assert!(renderer
+                        .feed_cache
+                        .iter()
+                        .all(|cache| cache.painted_ms.is_none()));
+                }
+                gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
+                let primitive = embedded_primitive(hull_index).unwrap();
+                for side in [-1.0, 1.0] {
+                    renderer.draw_material(
+                        hull_index,
+                        Mat4::from_translation(Vec3::new(side * 0.75, 0.0, 0.0))
+                            * Mat4::from_scale(Vec3::splat(1.7)),
+                        primitive.color,
+                        primitive.emission,
+                        Material::PaintedHull,
+                    );
+                }
+                let mut pixels = vec![0u8; 128 * 128 * 4];
+                gl.read_pixels(
+                    0,
+                    0,
+                    128,
+                    128,
+                    glow::RGBA,
+                    glow::UNSIGNED_BYTE,
+                    glow::PixelPackData::Slice(Some(&mut pixels)),
+                );
+                preview_pixels.push(pixels);
+            }
+            assert_ne!(
+                preview_pixels[0], preview_pixels[1],
+                "live hull preview must change GPU output"
+            );
+            for half in [0usize, 64] {
+                assert!(
+                    (0..128).any(|y| (half..half + 64).any(|x| {
+                        let i = (y * 128 + x) * 4;
+                        preview_pixels[0][i..i + 3] != preview_pixels[1][i..i + 3]
+                    })),
+                    "both Pioneer instances must receive live finish"
+                );
+            }
+            assert_eq!(
+                preview_pixels[0], preview_pixels[2],
+                "reset restores authored GPU output"
+            );
+            // Independent PBR controls: identical authored hull, base color, camera,
+            // lights and exposure. Each pair changes exactly one scalar uniform.
+            let mut pbr_pixels = Vec::new();
+            for (roughness, metallic) in [(0.15, 0.0), (0.85, 0.0), (0.4, 0.0), (0.4, 1.0)] {
+                renderer.set_material_preview(Some(crate::EmbeddedMaterialPreview {
+                    hull_rgb: [0.3, 0.3, 0.3],
+                    roughness: Some(roughness),
+                    metallic: Some(metallic),
+                    ..Default::default()
+                }));
+                gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
+                let primitive = embedded_primitive(hull_index).unwrap();
+                renderer.draw_material(
+                    hull_index,
+                    Mat4::from_scale(Vec3::splat(3.0)),
+                    primitive.color,
+                    primitive.emission,
+                    Material::PaintedHull,
+                );
+                let mut pixels = vec![0u8; 128 * 128 * 4];
+                gl.read_pixels(
+                    0,
+                    0,
+                    128,
+                    128,
+                    glow::RGBA,
+                    glow::UNSIGNED_BYTE,
+                    glow::PixelPackData::Slice(Some(&mut pixels)),
+                );
+                assert_eq!(gl.get_error(), glow::NO_ERROR);
+                assert!(
+                    pixels
+                        .chunks_exact(4)
+                        .filter(|p| p[..3].iter().any(|v| *v > 8))
+                        .count()
+                        > 64,
+                    "PBR fixture must contain visible hull pixels"
+                );
+                pbr_pixels.push(pixels);
+            }
+            for (name, a, b) in [("roughness", 0, 1), ("metallic", 2, 3)] {
+                let changed = pbr_pixels[a]
+                    .chunks_exact(4)
+                    .zip(pbr_pixels[b].chunks_exact(4))
+                    .filter(|(a, b)| a[..3].iter().zip(&b[..3]).any(|(a, b)| a.abs_diff(*b) >= 2))
+                    .count();
+                assert!(
+                    changed > 16,
+                    "{name} alone must visibly change the same RGB hull: {changed} pixels"
+                );
+                eprintln!("independent {name} GPU response: {changed} pixels differ by >=2/255");
+            }
+            renderer.set_material_preview(None);
             // Actual cached triangle-edge overlay and native GL-state restoration.
             let mut wire_pixels = Vec::new();
             for enabled in [false, true] {

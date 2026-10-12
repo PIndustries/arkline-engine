@@ -1,11 +1,15 @@
 #[cfg(not(target_arch = "wasm32"))]
+pub use flight3d::asset_gallery::EmbeddedAssetGallery;
+#[cfg(not(target_arch = "wasm32"))]
 pub use flight3d::DebugRenderMetrics;
 mod material_preview;
 pub use material_preview::EmbeddedMaterialPreview;
 #[cfg(not(target_arch = "wasm32"))]
 mod embedded;
 #[cfg(not(target_arch = "wasm32"))]
-pub use embedded::{EmbeddedClient, EmbeddedStatus};
+pub use embedded::{
+    EmbeddedClient, EmbeddedStatus, EmbeddedView, EmbeddedViewState, ViewTransition,
+};
 // Native Arkline cockpit. Live world data is server-authoritative; ship layouts are labeled design references.
 #[cfg(not(target_arch = "wasm32"))]
 mod account_login;

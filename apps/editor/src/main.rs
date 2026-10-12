@@ -8,7 +8,8 @@ mod inspector;
 mod materials;
 mod physics_lab;
 mod provenance;
-use arkline_client::{EmbeddedClient, EmbeddedStatus};
+mod render_debug;
+use arkline_client::{EmbeddedAssetGallery, EmbeddedClient, EmbeddedStatus};
 use eframe::egui::{self, Color32, RichText};
 use std::{collections::VecDeque, path::PathBuf, time::Duration};
 const BUILD: &str = include_str!("../../../BUILD_VERSION");
@@ -27,6 +28,9 @@ struct Editor {
     community: community::Community,
     workspace: usize,
     wireframe: bool,
+    asset_gallery: Option<EmbeddedAssetGallery>,
+    graphics: Option<std::sync::Arc<eframe::glow::Context>>,
+    render_debug: render_debug::RenderDebug,
     physics_lab: physics_lab::PhysicsLab,
     provenance: provenance::Provenance,
 }
@@ -39,6 +43,9 @@ impl Editor {
             community: community::Community::open(&project),
             workspace: 0,
             wireframe: false,
+            asset_gallery: None,
+            graphics: cc.gl.clone(),
+            render_debug: render_debug::RenderDebug::default(),
             physics_lab: physics_lab::PhysicsLab::default(),
             provenance: provenance::Provenance::default(),
             client,
@@ -159,6 +166,12 @@ impl eframe::App for Editor {
                     {
                         self.client.pause();
                     }
+                    if ui
+                        .selectable_value(&mut self.workspace, 3, "Fleet materials")
+                        .clicked()
+                    {
+                        self.client.pause();
+                    }
                     ui.label(RichText::new("Local sandbox").color(MUTED));
                 });
             });
@@ -180,6 +193,34 @@ impl eframe::App for Editor {
                 }
             });
         });
+        if self.workspace == 3 {
+            self.client.poll_hidden();
+            egui::SidePanel::right("fleet_materials_inspector")
+                .resizable(true)
+                .default_width(310.)
+                .width_range(270. ..=430.)
+                .show(ctx, |ui| {
+                    egui::ScrollArea::vertical()
+                        .id_salt("fleet_materials_scroll")
+                        .show(ui, |ui| {
+                            self.materials.show(ui, &self.project);
+                            self.provenance.show(
+                                ui,
+                                &self.project,
+                                provenance::AssetFile::Material,
+                                None,
+                            );
+                        });
+                });
+            egui::CentralPanel::default().show(ctx, |ui| {
+                self.asset_gallery
+                    .get_or_insert_with(|| EmbeddedAssetGallery::new(self.graphics.as_ref()))
+                    .show(ui, self.materials.preview());
+            });
+            self.client.set_material_preview(self.materials.preview());
+            ctx.request_repaint_after(Duration::from_millis(33));
+            return;
+        }
         if self.workspace == 2 {
             self.client.poll_hidden();
             self.physics_lab.show(ctx);
@@ -254,16 +295,8 @@ impl eframe::App for Editor {
                                 self.engineering.selected_component(),
                             );
                         } else if self.inspector_tab == 3 {
-                            ui.heading("Render inspection");
-                            ui.checkbox(&mut self.wireframe, "Mesh wireframe");
-                            let metrics = self.client.debug_render_metrics();
-                            ui.label(format!("Submitted mesh triangles: {}",metrics.triangles));
-                            ui.label(format!("Mesh draw calls: {}",metrics.draw_calls));
-                            ui.label(format!("Wireframe draw calls: {}",metrics.wireframe_draw_calls));
-                            ui.small("Actual cached mesh edges in native hangar and flight scenes. Counts describe the last GPU scene pass, which may be a camera feed; they exclude sky and shadow passes. Wireframe adds rendering work.");
-                            ui.separator();
-                            ui.label("Use the game viewport to change camera modes, board or leave the ship.");
-                            ui.small("Automatic transition traces, collision/interest overlays and GPU timing are not available yet.");
+                            self.render_debug
+                                .show(ui, &mut self.client, &mut self.wireframe);
                         } else {
                             inspector::show(
                                 ui,
@@ -286,6 +319,9 @@ impl eframe::App for Editor {
     }
     fn on_exit(&mut self, _: Option<&eframe::glow::Context>) {
         self.client.on_exit();
+        if let Some(gallery) = &mut self.asset_gallery {
+            gallery.destroy();
+        }
     }
 }
 fn main() -> eframe::Result<()> {

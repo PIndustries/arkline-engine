@@ -32,13 +32,21 @@ impl Materials {
                 hull_rgb: doc.hull_color,
                 trim_rgb: doc.trim_color,
                 emissive_strength: doc.emissive_strength,
+                roughness: doc.roughness,
+                metallic: doc.metallic,
             }
         })
     }
     pub fn show(&mut self, ui: &mut egui::Ui, project: &Path) {
-        ui.heading("Pioneer materials");
-        ui.small("Live hangar preview · local project only");
-        ui.checkbox(&mut self.enabled, "Preview project materials");
+        ui.heading("Project fleet materials");
+        ui.small("Shared project finish · all matching fleet hulls");
+        ui.checkbox(&mut self.enabled, "Use project materials");
+        ui.collapsing("Material targets · 7 ship classes", |ui| {
+            for class in arkline_protocol::ALL_SHIP_CLASSES {
+                ui.label(class.spec().name);
+            }
+            ui.small("Shared hull/trim roles across these classes; this is not a per-vessel paint job. Inspector pilot selection does not change the target.");
+        });
         let mut draft = self.history.current().clone();
         ui.separator();
         ui.label("Hull · linear RGB");
@@ -64,7 +72,25 @@ impl Materials {
             draft.emissive_strength = emissive_strength;
             changed = true;
         }
+        changed |= optional_factor(ui, "Override roughness", &mut draft.roughness, 0.5);
+        changed |= optional_factor(ui, "Override metallic", &mut draft.metallic, 0.0);
+        ui.small("Unchecked retains each surface's authored value. Roughness controls highlight spread (renderer minimum 0.08); metallic controls metal-like reflection. No material textures are authored here.");
         ui.small("Emission scales the authored glow; it does not change reactor power or illumination from physical lights.");
+        ui.horizontal_wrapped(|ui| {
+            if ui.button("Industrial satin").clicked() {
+                draft.roughness = Some(0.38);
+                draft.metallic = Some(0.75);
+                changed = true;
+            }
+            if ui.button("Weathered coating").clicked() {
+                draft.roughness = Some(0.72);
+                draft.metallic = Some(0.15);
+                changed = true;
+            }
+        });
+        ui.small(
+            "Finish presets change roughness and metallic only; they preserve colors and emission.",
+        );
         if ui.button("Inspection finish").clicked() {
             changed = true;
             draft.hull_color = [0.55, 0.6, 0.58];
@@ -78,7 +104,7 @@ impl Materials {
             match self.history.apply(draft) {
                 Ok(_) => {
                     self.enabled = true;
-                    self.message = "Preview updated; save to keep this finish".into();
+                    self.message = "Live finish updated; save to keep it after reopening".into();
                 }
                 Err(error) => self.message = error,
             }
@@ -131,8 +157,25 @@ impl Materials {
         }
         ui.label(&self.message);
         ui.separator();
-        ui.small("This edits the Pioneer hull, structural trim and emission in the hangar. Geometry, roughness, shader source and system connections are not editable here yet.");
+        ui.small("Edits apply to tagged hull/trim surfaces across the seven ship classes in hangar and flight, including 3D tactical and camera feeds. Stations, glass and interior fittings retain their authored materials. A 2D map has no hull mesh. Geometry, shader source and system connections are not editable here yet.");
     }
+}
+
+fn optional_factor(ui: &mut egui::Ui, label: &str, value: &mut Option<f32>, initial: f32) -> bool {
+    let mut enabled = value.is_some();
+    let mut changed = false;
+    if ui.checkbox(&mut enabled, label).changed() {
+        *value = enabled.then_some(initial);
+        changed = true;
+    }
+    if let Some(current) = *value {
+        let mut edited = current;
+        if ui.add(egui::Slider::new(&mut edited, 0.0..=1.0)).changed() {
+            *value = Some(edited);
+            changed = true;
+        }
+    }
+    changed
 }
 
 #[cfg(test)]

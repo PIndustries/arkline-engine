@@ -11,6 +11,57 @@ pub enum EmbeddedStatus {
     Stopped,
     Error(String),
 }
+/// Local renderer modes only; selecting one never changes server embodiment.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EmbeddedView {
+    Cockpit,
+    External,
+    Tactical,
+    Tactical3d,
+    Hangar,
+    FirstPerson,
+    ThirdPerson,
+}
+impl EmbeddedView {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Cockpit => "Cockpit",
+            Self::External => "3D External",
+            Self::Tactical => "2D Tactical",
+            Self::Tactical3d => "3D Tactical",
+            Self::Hangar => "Hangar inspection",
+            Self::FirstPerson => "On foot · first person",
+            Self::ThirdPerson => "On foot · third person",
+        }
+    }
+}
+#[derive(Clone, Debug)]
+pub struct ViewTransition {
+    pub sequence: u64,
+    pub from: Option<EmbeddedView>,
+    pub to: Option<EmbeddedView>,
+    pub reason: String,
+    pub simulation_time_ms: Option<u64>,
+    /// Monotonic host elapsed time since this embedded client was created.
+    pub observed_at_ms: u64,
+}
+#[derive(Clone, Debug)]
+pub struct EmbeddedViewState {
+    pub current: Option<EmbeddedView>,
+    pub available: Vec<EmbeddedView>,
+    pub wireframe: bool,
+    pub viewed_pilot: String,
+    pub scene: String,
+    pub transitions: Vec<ViewTransition>,
+}
+#[derive(Default)]
+struct ViewDiagnostics {
+    previous: Option<EmbeddedView>,
+    sequence: u64,
+    started: Option<Instant>,
+    events: VecDeque<ViewTransition>,
+    wireframe: bool,
+}
 enum ClockCommand {
     Play,
     Pause,
@@ -25,6 +76,7 @@ pub struct EmbeddedClient {
     states: Receiver<EmbeddedStatus>,
     state: EmbeddedStatus,
     destroyed: bool,
+    views: ViewDiagnostics,
 }
 impl EmbeddedClient {
     pub fn new(cc: &eframe::CreationContext<'_>, data_dir: PathBuf, pilot: String) -> Self {
@@ -70,6 +122,10 @@ impl EmbeddedClient {
             states,
             state: EmbeddedStatus::Loading,
             destroyed: false,
+            views: ViewDiagnostics {
+                started: Some(Instant::now()),
+                ..Default::default()
+            },
         }
     }
     /// Drain authority updates while another editor workspace owns the viewport.
@@ -81,6 +137,7 @@ impl EmbeddedClient {
         self.cockpit.embedded_paused = self.state != EmbeddedStatus::Running;
         self.cockpit.embedded_input = false;
         self.cockpit.poll();
+        self.observe_view("Authoritative state or observed client view changed");
         if self.cockpit.embedded_paused {
             self.cockpit.frozen_time = self.cockpit.snapshot.as_ref().map(|s| s.server_time_ms);
         }
@@ -97,6 +154,7 @@ impl EmbeddedClient {
             .pointer_latest_pos()
             .is_some_and(|p| ctx.available_rect().contains(p));
         self.cockpit.update(ctx, frame);
+        self.observe_view("In-game view control changed");
         // Paused editor time never advances because of UI rendering.
         if self.cockpit.embedded_paused {
             self.cockpit.frozen_time = self.cockpit.snapshot.as_ref().map(|s| s.server_time_ms);
@@ -143,7 +201,112 @@ impl EmbeddedClient {
     pub fn pilot(&self) -> &str {
         &self.cockpit.pilot
     }
+    fn current_view(&self) -> Option<EmbeddedView> {
+        let pilot = self.cockpit.own()?;
+        if self.cockpit.in_station_hangar() {
+            return Some(if pilot.station_avatar.is_some() {
+                match self.cockpit.hangar_view.on_foot_view {
+                    flight3d::hangar::OnFootView::FirstPerson => EmbeddedView::FirstPerson,
+                    flight3d::hangar::OnFootView::ThirdPerson => EmbeddedView::ThirdPerson,
+                }
+            } else {
+                EmbeddedView::Hangar
+            });
+        }
+        Some(match self.cockpit.view_mode {
+            ViewMode::Cockpit => EmbeddedView::Cockpit,
+            ViewMode::External => EmbeddedView::External,
+            ViewMode::Tactical => EmbeddedView::Tactical,
+            ViewMode::Tactical3d => EmbeddedView::Tactical3d,
+        })
+    }
+    fn available_views(&self) -> Vec<EmbeddedView> {
+        if !self.ready() || !self.cockpit.connected {
+            return vec![];
+        }
+        match self.current_view() {
+            None => vec![],
+            Some(EmbeddedView::Hangar) => vec![EmbeddedView::Hangar],
+            Some(EmbeddedView::FirstPerson | EmbeddedView::ThirdPerson) => {
+                vec![EmbeddedView::FirstPerson, EmbeddedView::ThirdPerson]
+            }
+            _ => vec![
+                EmbeddedView::Cockpit,
+                EmbeddedView::External,
+                EmbeddedView::Tactical,
+                EmbeddedView::Tactical3d,
+            ],
+        }
+    }
+    fn observe_view(&mut self, reason: &str) {
+        let current = self.current_view();
+        if current == self.views.previous {
+            return;
+        }
+        self.views.sequence = self.views.sequence.saturating_add(1);
+        self.views.events.push_back(ViewTransition {
+            sequence: self.views.sequence,
+            from: self.views.previous,
+            to: current,
+            reason: reason.into(),
+            simulation_time_ms: self.cockpit.snapshot.as_ref().map(|s| s.server_time_ms),
+            observed_at_ms: self
+                .views
+                .started
+                .get_or_insert_with(Instant::now)
+                .elapsed()
+                .as_millis()
+                .min(u64::MAX as u128) as u64,
+        });
+        self.views.previous = current;
+        while self.views.events.len() > 32 {
+            self.views.events.pop_front();
+        }
+    }
+    pub fn debug_view_state(&self) -> EmbeddedViewState {
+        let scene = match self.cockpit.own() {
+            None => "No authoritative pilot snapshot".into(),
+            Some(p) if self.cockpit.in_station_hangar() => match p.station_avatar {
+                Some(a) if a.onboard_interior => {
+                    format!("Pioneer interior · deck {}", a.interior_deck)
+                }
+                Some(_) => "Station · on foot".into(),
+                None => "Station · aboard docked ship".into(),
+            },
+            Some(p) => format!("System {} · {:?}", p.system_id, p.location),
+        };
+        EmbeddedViewState {
+            current: self.current_view(),
+            available: self.available_views(),
+            wireframe: self.views.wireframe,
+            viewed_pilot: self.cockpit.controlled_name().into(),
+            scene,
+            transitions: self.views.events.iter().cloned().collect(),
+        }
+    }
+    pub fn set_debug_view(&mut self, view: EmbeddedView) -> Result<(), String> {
+        if !self.available_views().contains(&view) {
+            return Err("View unavailable for the current confirmed pilot state. Camera controls cannot dock, board, or disembark.".into());
+        }
+        self.observe_view("Initial confirmed view");
+        match view {
+            EmbeddedView::Cockpit => self.cockpit.view_mode = ViewMode::Cockpit,
+            EmbeddedView::External => self.cockpit.view_mode = ViewMode::External,
+            EmbeddedView::Tactical => self.cockpit.view_mode = ViewMode::Tactical,
+            EmbeddedView::Tactical3d => self.cockpit.view_mode = ViewMode::Tactical3d,
+            EmbeddedView::FirstPerson => {
+                self.cockpit.hangar_view.on_foot_view = flight3d::hangar::OnFootView::FirstPerson
+            }
+            EmbeddedView::ThirdPerson => {
+                self.cockpit.hangar_view.on_foot_view = flight3d::hangar::OnFootView::ThirdPerson
+            }
+            EmbeddedView::Hangar => {}
+        }
+        self.observe_view("Editor requested local view change");
+        Ok(())
+    }
     pub fn set_debug_wireframe(&mut self, enabled: bool) {
+        self.views.wireframe = enabled;
         self.cockpit.hangar_view.set_debug_wireframe(enabled);
         self.cockpit.flight_view.set_debug_wireframe(enabled);
     }
@@ -157,6 +320,7 @@ impl EmbeddedClient {
         }
     }
     pub fn set_material_preview(&mut self, preview: Option<EmbeddedMaterialPreview>) {
+        self.cockpit.flight_view.set_material_preview(preview);
         self.cockpit
             .hangar_view
             .set_material_preview(preview.map(EmbeddedMaterialPreview::validated));
@@ -289,6 +453,89 @@ fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn debug_fixture() -> (EmbeddedClient, Receiver<Request>) {
+        let ctx = egui::Context::default();
+        let mut cockpit = crate::tests::view_test_cockpit(&ctx);
+        cockpit.embedded = true;
+        cockpit.connected = true;
+        cockpit.snapshot.as_mut().unwrap().pilots[0].location = Location::Station;
+        cockpit.snapshot.as_mut().unwrap().pilots[0].station_avatar = None;
+        let (commands, requests) = mpsc::channel();
+        cockpit.commands = Some(commands);
+        let (clock, _) = mpsc::channel();
+        let (_, states) = mpsc::channel();
+        (
+            EmbeddedClient {
+                cockpit,
+                clock,
+                states,
+                state: EmbeddedStatus::Paused,
+                destroyed: false,
+                views: ViewDiagnostics {
+                    started: Some(Instant::now()),
+                    ..Default::default()
+                },
+            },
+            requests,
+        )
+    }
+    #[test]
+    fn debug_view_changes_only_camera_and_logs_bounded_ordered_transitions() {
+        let (mut client, requests) = debug_fixture();
+        let authority = serde_json::to_value(client.snapshot()).unwrap();
+        for i in 0..40 {
+            client
+                .set_debug_view(if i % 2 == 0 {
+                    EmbeddedView::External
+                } else {
+                    EmbeddedView::Tactical3d
+                })
+                .unwrap();
+        }
+        assert_eq!(serde_json::to_value(client.snapshot()).unwrap(), authority);
+        assert!(requests.try_recv().is_err());
+        let state = client.debug_view_state();
+        assert_eq!(state.current, Some(EmbeddedView::Tactical3d));
+        assert_eq!(state.transitions.len(), 32);
+        assert!(state
+            .transitions
+            .windows(2)
+            .all(|w| w[0].sequence < w[1].sequence && w[0].observed_at_ms <= w[1].observed_at_ms));
+        assert!(state
+            .transitions
+            .iter()
+            .all(|e| e.simulation_time_ms == Some(1000)));
+        assert_eq!(state.viewed_pilot, "pilot");
+        client.cockpit.view_mode = ViewMode::Cockpit;
+        client.observe_view("In-game view control changed");
+        assert_eq!(
+            client.debug_view_state().transitions.last().unwrap().to,
+            Some(EmbeddedView::Cockpit)
+        );
+    }
+    #[test]
+    fn debug_view_rejects_embodiment_changes_and_disconnected_controls() {
+        let (mut client, requests) = debug_fixture();
+        client.cockpit.snapshot.as_mut().unwrap().pilots[0].location = Location::Docked;
+        assert_eq!(
+            client.debug_view_state().available,
+            vec![EmbeddedView::Hangar]
+        );
+        assert!(client.set_debug_view(EmbeddedView::Cockpit).is_err());
+        client.cockpit.snapshot.as_mut().unwrap().pilots[0].station_avatar=Some(serde_json::from_value(serde_json::json!({"position":[0,0,0],"heading":0,"moving":false,"updated_at_ms":1000,"onboard_interior":true,"interior_deck":2})).unwrap());
+        client.set_debug_view(EmbeddedView::FirstPerson).unwrap();
+        assert_eq!(
+            client.cockpit.hangar_view.on_foot_view,
+            flight3d::hangar::OnFootView::FirstPerson
+        );
+        assert!(client.debug_view_state().scene.contains("deck 2"));
+        assert!(client.set_debug_view(EmbeddedView::External).is_err());
+        client.set_debug_view(EmbeddedView::ThirdPerson).unwrap();
+        client.cockpit.connected = false;
+        assert!(client.debug_view_state().available.is_empty());
+        assert!(client.set_debug_view(EmbeddedView::FirstPerson).is_err());
+        assert!(requests.try_recv().is_err());
+    }
     #[test]
     fn hidden_poll_drains_state_without_paint_or_input() {
         let ctx = egui::Context::default();
@@ -313,6 +560,10 @@ mod tests {
             states: receiver,
             state: EmbeddedStatus::Loading,
             destroyed: false,
+            views: ViewDiagnostics {
+                started: Some(Instant::now()),
+                ..Default::default()
+            },
         };
         client.cockpit.frame_intervals.push_back(1.245);
         client.cockpit.frame_observed = Instant::now() - Duration::from_secs(30);

@@ -19,6 +19,10 @@ pub struct MaterialDocument {
     pub hull_color: [f32; 3],
     pub trim_color: [f32; 3],
     pub emissive_strength: f32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub roughness: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metallic: Option<f32>,
 }
 impl Default for MaterialDocument {
     fn default() -> Self {
@@ -27,6 +31,8 @@ impl Default for MaterialDocument {
             hull_color: [0.055, 0.075, 0.072],
             trim_color: [0.015, 0.3, 0.115],
             emissive_strength: 1.0,
+            roughness: None,
+            metallic: None,
         }
     }
 }
@@ -45,6 +51,13 @@ impl MaterialDocument {
         }
         if !self.emissive_strength.is_finite() || !(0.0..=4.0).contains(&self.emissive_strength) {
             return Err("Emissive strength must be finite and between 0 and 4".into());
+        }
+        for value in [self.roughness, self.metallic].into_iter().flatten() {
+            if !value.is_finite() || !(0.0..=1.0).contains(&value) {
+                return Err(
+                    "Roughness and metallic overrides must be finite and between 0 and 1".into(),
+                );
+            }
         }
         Ok(())
     }
@@ -224,6 +237,49 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
         }
+    }
+    #[test]
+    fn legacy_materials_keep_authored_pbr_and_override_history_roundtrips() {
+        let legacy = r#"{"schema_version":1,"hull_color":[0.1,0.2,0.3],"trim_color":[0.0,0.5,0.1],"emissive_strength":1.0}"#;
+        let original: MaterialDocument = serde_json::from_str(legacy).unwrap();
+        original.validate().unwrap();
+        assert_eq!(original.roughness, None);
+        assert_eq!(original.metallic, None);
+        assert!(!serde_json::to_string(&original)
+            .unwrap()
+            .contains("roughness"));
+        let mut modified = original.clone();
+        modified.roughness = Some(0.2);
+        modified.metallic = Some(0.9);
+        let mut history = MaterialHistory::new(original.clone()).unwrap();
+        history.apply(modified.clone()).unwrap();
+        assert!(history.undo());
+        assert_eq!(history.current(), &original);
+        assert!(history.redo());
+        assert_eq!(history.current(), &modified);
+        let path = std::env::temp_dir().join(format!(
+            "arkline-pbr-test-{}-{}",
+            std::process::id(),
+            TEMP_ID.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir(&path).unwrap();
+        save(&path, &modified).unwrap();
+        assert_eq!(load(&path).unwrap(), modified);
+        for bad in [f32::NAN, f32::INFINITY, -0.1, 1.1] {
+            for roughness in [true, false] {
+                let mut invalid = modified.clone();
+                if roughness {
+                    invalid.roughness = Some(bad);
+                } else {
+                    invalid.metallic = Some(bad);
+                }
+                assert!(save(&path, &invalid).is_err());
+                assert_eq!(load(&path).unwrap(), modified);
+            }
+        }
+        save(&path, &original).unwrap();
+        assert_eq!(load(&path).unwrap(), original);
+        fs::remove_dir_all(path).unwrap();
     }
     #[test]
     fn save_load_and_invalid_save_preserve_previous_document() {

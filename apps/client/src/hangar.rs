@@ -21,7 +21,6 @@ pub enum OnFootView {
 
 pub struct HangarView {
     pub on_foot_view: OnFootView,
-    material_preview: Option<crate::EmbeddedMaterialPreview>,
     renderer: Option<Arc<Mutex<Renderer>>>,
     error: Option<String>,
     surface: Option<(egui::Rect, egui::LayerId)>,
@@ -49,7 +48,6 @@ impl HangarView {
         };
         Self {
             on_foot_view: OnFootView::ThirdPerson,
-            material_preview: None,
             renderer,
             error,
             surface: None,
@@ -68,7 +66,11 @@ impl HangarView {
     }
     #[cfg(not(target_arch = "wasm32"))]
     pub fn set_material_preview(&mut self, preview: Option<crate::EmbeddedMaterialPreview>) {
-        self.material_preview = preview;
+        if let Some(renderer) = &self.renderer {
+            if let Ok(mut renderer) = renderer.lock() {
+                renderer.set_material_preview(preview);
+            }
+        }
     }
     #[cfg(not(target_arch = "wasm32"))]
     pub fn set_debug_wireframe(&mut self, enabled: bool) {
@@ -243,9 +245,6 @@ impl HangarView {
             p.extend(quarters::room_parts(pilot.ship_class, now));
             p
         };
-        if let Some(preview) = self.material_preview {
-            apply_material_preview(&mut parts, preview);
-        }
         if let Some(avatar) = &pilot.station_avatar {
             let position = self
                 .follow
@@ -652,21 +651,13 @@ fn avatar_parts(
     }
     p.0
 }
+#[cfg(test)]
 fn apply_material_preview(parts: &mut [ModelPart], preview: crate::EmbeddedMaterialPreview) {
-    let preview = preview.validated();
     for (mesh, _, color, emission) in parts {
-        let Some(material) = embedded_primitive(*mesh) else {
-            continue;
-        };
-        match material.material_name.as_str() {
-            "Graphite ceramic armor" => *color = Vec3::from_array(preview.hull_rgb),
-            "Emerald structural frames" => *color = Vec3::from_array(preview.trim_rgb),
-            _ => {}
-        }
-        *emission *= preview.emissive_strength;
+        (*color, *emission) = preview_material(*mesh, *color, *emission, Some(preview.validated()));
     }
 }
-unsafe fn paint(renderer: &Renderer, vp: Mat4, eye: Vec3, parts: &[ModelPart]) {
+pub(super) unsafe fn paint(renderer: &Renderer, vp: Mat4, eye: Vec3, parts: &[ModelPart]) {
     #[cfg(not(target_arch = "wasm32"))]
     renderer.debug_metrics.set(Default::default());
     if renderer.destroyed {
@@ -722,6 +713,7 @@ mod tests {
             hull_rgb: [0.7, 0.03, 0.1],
             trim_rgb: [0.1, 0.2, 0.9],
             emissive_strength: 0.,
+            ..Default::default()
         };
         apply_material_preview(&mut preview_parts, preview);
         let mut hull_changed = false;

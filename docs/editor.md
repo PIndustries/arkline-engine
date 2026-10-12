@@ -31,11 +31,19 @@ The central viewport runs normal gameplay. Editor toolbar and side panels reserv
 
 The inspector reports actual simulation values: ship class and dimensions, cargo, position or deck-local avatar coordinates, velocity, power, drones, mining modules and the connected Pioneer room catalog. It does not invent sensor values or imply that every catalog connection is independently simulated.
 
-## Live Pioneer materials
+## Shared ship finish and Fleet materials — 26.10.12.4
 
-Select **Materials** in the right panel to preview hull and trim colors and authored emission in the hangar. Parameters apply immediately, including while paused. **Inspection finish** provides a bright inspection preset; **Authored defaults** restores the source palette. Undo/redo retain up to 100 edits. The preview checkbox lets you compare against packaged materials without changing the document.
+**Materials** edits a shared local preview finish: hull and trim colors, authored-emission multiplier and optional roughness/metallic overrides. Matching paint/trim surfaces across all seven ship classes use the same policy in the embedded hangar, undocked 3D views and rendered camera feeds. The 2D tactical map is schematic rather than a shaded material preview. Cockpit interiors, station geometry and unrelated surfaces are not repainted. Changing a preview invalidates cached feeds so their next render can reflect the edit; this does not guarantee an instantaneous frame while a feed is hidden.
 
-**Save material** atomically saves `Assets/Pioneer.material.json` in the project. Saved materials load on startup. **Reload saved material** is undoable. Colors use linear RGB in the 0–1 range; emission is an authored multiplier from 0–4, not a reactor-power setting. Invalid or oversized documents are rejected. Preview changes only Pioneer instances in the embedded hangar; it does not overwrite packaged assets or update public servers. Material color editing is not yet a physically complete shader/material authoring system.
+Roughness and metallic controls accept 0–1; the shader retains its minimum roughness of 0.08. Unchecking an override preserves each surface's authored factor. **Industrial satin** and **Weathered coating** change those two factors while preserving colors/emission. **Inspection finish** changes the inspection palette; **Authored defaults** restores document defaults. These controls adjust the existing shading response, not texture maps, mesh detail, ship geometry or authoritative engineering properties.
+
+Undo/redo retain up to 100 material edits. The preview checkbox compares against packaged materials without editing the document. **Save material** atomically saves `Assets/Pioneer.material.json`; this legacy filename now stores the common preview finish, not a Pioneer-only material override. Existing color/emission-only documents retain authored roughness/metallic. Saved materials load on startup; **Reload saved material** is undoable. RGB values are linear 0–1; emission is an authored multiplier 0–4, not reactor power. Invalid or oversized documents are rejected. No packaged assets or public servers are overwritten.
+
+**Fleet materials** pauses the gameplay workspace and opens a render-only asset comparison with the same Materials document/panel. Choose any of the seven classes to see two matching instances of its real cached model, its source dimensions, and whether it uses the embedded Pioneer GLB or a procedural class model. Both instances receive the same finish. Drag to orbit, scroll to zoom, or reset the camera.
+
+The comparison is explicitly **not world scale**: each selected class is normalized for display while preserving aspect ratio. Instances are asset samples, not owned ships or spawned entities; no gameplay state or credentials are fabricated. One renderer and two instances avoid seven independent camera renders. GPU allocation happens on first opening the workspace.
+
+Automated checks verify all seven classes use the same cached geometry/material roles for both display instances. An actual offscreen native GPU test confirms both Pioneer instances change under the shared color/PBR preview and reset to the original pixels. Native checks for this build confirmed the same saved magenta finish on both gallery Pioneers and the undocked exterior. While Play advanced simulation time, applying Inspection finish immediately made the exterior hull white; undo restored the saved document with no unsaved changes. The finish saved in the earlier build persisted across the restart into this build. Other six-class visual comparisons, PBR preset interaction and remote/camera-feed native propagation remain pending. Gallery header/class controls needed a canvas-clipping fix; automated clipping/GPU checks pass, with the rebuilt UI recheck pending. These observations are not complete realism or full workflow acceptance.
 
 ## Current scope
 
@@ -57,6 +65,14 @@ The candidate engineering work describes entered component masses and box envelo
 
 Materials and Engineering include manual **Inspect saved source history**. For a project inside a Git working tree, this runs bounded read-only Git inspection against the fixed saved asset file. Component selection maps to its persisted ID line; otherwise attribution uses the document's first line. The report distinguishes untracked files, working-tree edits and committed attribution. It is not per-property semantic history, model-surface picking or automated Rust code editing. The default standalone FirstProject is not a Git checkout, and the panel reports that fact. Launch with `--project /path/to/checkout` to author in an existing repository.
 
+## Context-aware view debugging — 26.10.12.4
+
+The right-side **Render Debug** panel provides explicit view buttons alongside the active scene and viewed pilot. Available camera modes follow the actual client context: cockpit, exterior, 2D tactical and 3D tactical in flight; Hangar while aboard a docked ship; first-person and third-person while on foot. Offline/stopped or incompatible selections are rejected. Changing the camera does not issue an authority request, teleport the pilot or enter/leave a ship.
+
+The panel retains the latest 32 observed client-mode transitions. Entries contain a sequence, previous/new mode, reason, monotonic host elapsed milliseconds since client creation, and optional world simulation time. This records observed camera-mode changes, not every server event, asset load, visibility decision or rendered frame. Host elapsed time and simulation time are distinct clocks; neither is a measured GPU latency.
+
+Two API tests cover 40 view changes without gameplay requests or snapshot mutation, bounded/ordered history, on-foot/deck context, docked availability and offline/incompatible rejection. Native interaction confirmed the paused Cockpit → 3D External button changed the actual viewport and recorded history entry #2 while world simulation time stayed unchanged. This checks that particular transition, not the complete view/scene transition matrix. Existing last-scene draw counters retain the scope described below.
+
 ## Physics and render experiments
 
 **Physics lab** is isolated from the saved gameplay world. It provides fixed 20 ms stepping, Play/Pause, time speed and explicit parameter Apply/Reset. The thrust example is one-dimensional constant acceleration `F/m - g` under uniform gravity. Its seeded point cloud uses linear radial scaling; it is not a cosmological, orbital or particle-interaction simulation. Neither replaces Pioneer runtime physics. Explanations and numerical bounds are visible in the lab.
@@ -64,3 +80,14 @@ Materials and Engineering include manual **Inspect saved source history**. For a
 **Render debug → Mesh wireframe** overlays actual cached mesh triangles in native hangar and flight scenes. It reports submitted triangles, mesh draws and added wireframe draws from the last GPU scene pass; the last pass can be a camera feed. It excludes sky/shadow passes and is not a total frame profiler. Debug rendering adds work. Automatic transition captures, collision/interest overlays and GPU timestamps remain pending. Changing workspace pauses gameplay, and hidden viewport time is excluded from subsequent frame samples.
 
 Native checks for 26.10.12.3 confirmed real GitHub issues/wiki reading, wireframe and draw counters, one 20 ms physics step, engineering add/remove/save and the not-a-Git-project history message. Automated checks cover deterministic physics, source attribution in disposable Git repositories, bounded workers, component IDs and material persistence. These checks do not establish full ship-building or performance acceptance.
+
+## Package a local macOS editor
+
+```sh
+tools/package-editor-macos.sh work/editor-local-check debug
+# Omit the second argument, or use release, for an optimized local build.
+```
+
+The script requires macOS, Cargo, Python 3 and codesign. It reads `BUILD_VERSION`, builds the locked editor target, takes the executable path from Cargo's artifact report, and creates `Arkline Editor.app` with the official icon and build identity. Use a fresh output directory: an existing app is never overwritten. Verify the app's shown build before recording acceptance so a running older copy is not mistaken for the new artifact.
+
+The bundle uses a local ad-hoc signature verified by codesign. It is **not Developer ID signed or notarized distribution**, and creating it does not upload, release or deploy anything. The application identifier is `industries.p.arkline.editor.embedded`; the Arkline build version is stored separately from the bundle's product version. Local developer packaging is distinct from public release publication.
