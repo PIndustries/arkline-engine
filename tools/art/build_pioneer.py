@@ -13,7 +13,7 @@ def mat(name,color,metal=.0,rough=.5,emission=0):
  p=m.node_tree.nodes.get('Principled BSDF'); p.inputs['Base Color'].default_value=(*color,1); p.inputs['Metallic'].default_value=metal;p.inputs['Roughness'].default_value=rough
  p.inputs['Emission Color'].default_value=(*color,1);p.inputs['Emission Strength'].default_value=emission
  return m
-mats=[mat('Graphite ceramic armor',(.055,.075,.072),.65,.32),mat('Emerald structural frames',(.015,.30,.115),.6,.3),mat('Titanium machinery',(.26,.32,.33),.85,.28),mat('Recessed carbon',(.008,.012,.014),.3,.62),mat('Navigation glass',(.025,.22,.25),.7,.17,.25),mat('Safety amber',(.8,.36,.025),.5,.4),mat('Working lights',(.65,.9,.8),.1,.25,3),mat('Drive emission',(.01,.8,.25),.2,.3,4)]
+mats=[mat('Graphite ceramic armor',(.055,.075,.072),.08,.38),mat('Emerald structural frames',(.015,.30,.115),.06,.32),mat('Titanium machinery',(.26,.32,.33),.85,.28),mat('Recessed carbon',(.008,.012,.014),.3,.62),mat('Navigation glass',(.025,.22,.25),.7,.17,.25),mat('Safety amber',(.8,.36,.025),.5,.4),mat('Working lights',(.65,.9,.8),.1,.25,3),mat('Drive emission',(.01,.8,.25),.2,.3,4)]
 def mesh(name,verts,faces,mi):
  me=bpy.data.meshes.new(name);me.from_pydata([v(p) for p in verts],[],faces);me.update();o=bpy.data.objects.new(name,me);bpy.context.collection.objects.link(o);o.data.materials.append(mats[mi]);return o
 def bevel(o,width=.12):
