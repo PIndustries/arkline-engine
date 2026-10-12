@@ -626,6 +626,22 @@ mod tests {
         assert!(c.validate().is_err());
     }
     #[test]
+    fn expired_account_never_downgrades_to_legacy_connect() {
+        let identity = crate::WorkerIdentity {
+            scope: None,
+            link_existing: false,
+            account: Some(Credential {
+                token: "expired".into(),
+                server: "wss://test.example".into(),
+                pilot: "A".into(),
+                expires: Instant::now(),
+            }),
+        };
+        assert!(identity
+            .request("wss://test.example", "A", Some("legacy".into()))
+            .is_err());
+    }
+    #[test]
     fn tokens_are_bound_to_endpoint_pilot_and_expiration() {
         let mut c = Credential {
             token: "secret".into(),

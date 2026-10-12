@@ -1,6 +1,6 @@
 # Website and game identity: current state and integration plan
 
-**Status: private Rust identity foundation deployed and tested; public account access and game integration are not implemented.** The private provider has passed isolated account and OIDC lifecycle checks. Public signup and the account-domain route remain disabled. A website account cannot currently authenticate an Arkline pilot; no game token exchange, account-linking migration or client browser callback is implemented.
+**Status: opt-in server account admission and native browser sign-in are implemented on the integration branch; official rollout is not verified.** The private provider previously passed isolated lifecycle checks. The engine now has resource-token validation, explicit dual-proof pilot linking, expiring transport sessions and a native PKCE callback flow. These require operator configuration and real provider acceptance before becoming official login. Browser/TUI account sign-in and lost-credential recovery remain unfinished. See [native sign-in](native-account-sign-in.md), [server admission](game-account-admission.md), [local development identities](local-development-identity.md), and the [Editor](editor.md).
 
 ## Current private foundation
 

@@ -108,8 +108,10 @@ fn main() -> Result<()> {
         bail!("--tls-ca and --tls-server-name require --tls-health");
     }
     if local_development.is_some() {
-        anyhow::ensure!(!auth_required && auth_config.is_none() && auth_jwks.is_none(),
-            "local development and official account authentication are mutually exclusive");
+        anyhow::ensure!(
+            !auth_required && auth_config.is_none() && auth_jwks.is_none(),
+            "local development and official account authentication are mutually exclusive"
+        );
         anyhow::ensure!(
             !explicit_db,
             "--local-development and --db are mutually exclusive"
@@ -132,7 +134,9 @@ fn main() -> Result<()> {
     let mut authority = if let Some(directory) = local_development {
         eprintln!("Local development realm: loopback only; pilot permissions remain enforced");
         Server::open_local_development(directory)?
-    } else { Server::open(db)? };
+    } else {
+        Server::open(db)?
+    };
     match (auth_config, auth_jwks) {
         (Some(config), Some(keys)) => {
             let config = read_bounded(&config, 16384)?;

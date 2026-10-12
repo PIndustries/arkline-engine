@@ -503,6 +503,8 @@ struct Cockpit {
     account_login: account_login::Login,
     #[cfg(not(target_arch = "wasm32"))]
     link_existing_account: bool,
+    #[cfg(not(target_arch = "wasm32"))]
+    oauth_config_path: Option<PathBuf>,
     commands: Option<Sender<Request>>,
     controls: pilot_input::Mailbox,
     pilot_input: pilot_input::PilotInput,
@@ -613,6 +615,8 @@ impl Cockpit {
             account_login: account_login::Login::default(),
             #[cfg(not(target_arch = "wasm32"))]
             link_existing_account: false,
+            #[cfg(not(target_arch = "wasm32"))]
+            oauth_config_path: None,
             boot: boot::Boot::default(),
             server,
             pilot: String::new(),
@@ -876,11 +880,13 @@ impl Cockpit {
         {
             let identity = WorkerIdentity {
                 scope,
-                account: self
-                    .account_login
-                    .credential
-                    .clone()
-                    .filter(|a| a.matches(&server, &pilot)),
+                // Preserve account mode across expiry races; the worker rejects expired
+                // credentials rather than silently issuing a legacy Connect.
+                account: if self.account_login.configured(&server) {
+                    self.account_login.credential.clone()
+                } else {
+                    None
+                },
                 link_existing: self.link_existing_account,
             };
             std::thread::spawn(move || worker(server, pilot, dir, identity, rx, out_tx, controls));
@@ -908,6 +914,9 @@ impl Cockpit {
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
                 .stderr(Stdio::null());
+            if let Some(path) = &self.oauth_config_path {
+                command.arg("--oauth-config").arg(path);
+            }
             if let Some(scope) = &self.credential_scope {
                 command.args(["--credential-scope", scope]);
             }
@@ -3458,9 +3467,9 @@ impl eframe::App for Cockpit {
                     ui.add_space(28.0);
                     ui.scope(|ui| {
                         ui.set_max_width(400.0);
-                        let mut login_pending = self.connecting;
+                        let login_pending = self.connecting;
                         #[cfg(not(target_arch = "wasm32"))]
-                        { login_pending |= self.account_login.pending(); }
+                        let login_pending = login_pending || self.account_login.pending();
                         ui.add_enabled_ui(!login_pending, |ui| {
                             ui.horizontal(|ui| {
                                 for (label, endpoint) in [("Production", transport::OFFICIAL_SERVER), ("Test", transport::TEST_SERVER)] {
@@ -4088,6 +4097,7 @@ fn main() -> eframe::Result<()> {
     let mut credential_scope = None;
     let mut startup_pilot = None;
     let mut oauth_config = None;
+    let mut oauth_config_path = None;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -4104,6 +4114,10 @@ fn main() -> eframe::Result<()> {
                     eprintln!("--oauth-config requires PATH");
                     std::process::exit(2)
                 });
+                oauth_config_path = Some(std::fs::canonicalize(&path).unwrap_or_else(|_| {
+                    eprintln!("Cannot resolve OAuth configuration path");
+                    std::process::exit(2)
+                }));
                 oauth_config = Some(
                     account_login::Config::load(std::path::Path::new(&path)).unwrap_or_else(|e| {
                         eprintln!("{e}");
@@ -4195,6 +4209,7 @@ fn main() -> eframe::Result<()> {
         Box::new(move |cc| {
             let mut cockpit = Cockpit::new(cc, server, data_dir, credential_scope);
             cockpit.account_login.config = oauth_config;
+            cockpit.oauth_config_path = oauth_config_path;
             cockpit.sound.start();
             cockpit.local_server = local_server;
             if let Some(error) = startup_error {

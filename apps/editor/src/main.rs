@@ -81,7 +81,7 @@ impl eframe::App for Editor {
                 if ui.add_enabled(!self.busy,egui::Button::new("Start local world")).clicked(){self.busy=true;self.status="Starting…".into();self.runtime.send(Action::Start(Configuration{project:self.project.clone().into(),binaries:self.binaries.clone().into()}));}
                 if ui.add_enabled(self.busy,egui::Button::new("Stop world and test clients")).clicked(){self.runtime.send(Action::Stop);self.status="Stopping owned processes…".into();}
             });
-            ui.colored_label(egui::Color32::from_rgb(100,225,165),&self.status);
+            ui.colored_label(if self.error { egui::Color32::from_rgb(255,190,90) } else { egui::Color32::from_rgb(100,225,165) },&self.status);
             ui.separator();ui.horizontal(|ui|{ui.label("Test pilot");ui.text_edit_singleline(&mut self.pilot);});
             ui.horizontal(|ui|{if ui.add_enabled(self.address.is_some()&&self.clients<8,egui::Button::new("Launch real client")).clicked(){self.runtime.send(Action::Launch(self.pilot.trim().into()));}ui.label(format!("{} owned test clients",self.clients));});
             ui.small("Existing pilots require their saved resume credentials. New names register through normal server authentication. Restarting this project preserves its world and credential scope.");
@@ -102,6 +102,13 @@ fn main() -> eframe::Result<()> {
         .ok()
         .and_then(|p| p.parent().map(PathBuf::from))
         .unwrap_or_else(|| PathBuf::from("target/debug"));
+    #[cfg(target_os = "macos")]
+    if binaries.ends_with("Contents/MacOS") {
+        if let Some(home) = std::env::var_os("HOME") {
+            project =
+                PathBuf::from(home).join("Library/Application Support/Arkline/Editor/FirstProject");
+        }
+    }
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -128,6 +135,7 @@ fn main() -> eframe::Result<()> {
     }
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
+            .with_title(format!("Arkline Editor — {}", BUILD.trim()))
             .with_inner_size([850., 620.])
             .with_min_inner_size([680., 480.]),
         ..Default::default()
