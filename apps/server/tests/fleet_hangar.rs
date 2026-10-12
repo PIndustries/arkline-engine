@@ -35,6 +35,22 @@ fn walk_board_restart_identity_and_ownership() {
     let token = r.resume_token;
     let h = r.assets.unwrap().hangar.unwrap();
     assert_eq!(h.berths.len(), 7);
+    let before = ok(&mut s, &mut p, Request::ExportLedger, 0).ledger.unwrap();
+    assert!(
+        !s.handle_at(
+            &mut p,
+            Request::SelectShip {
+                ship_class: ShipClass::Prospector
+            },
+            0
+        )
+        .ok
+    );
+    let after = ok(&mut s, &mut p, Request::ExportLedger, 0).ledger.unwrap();
+    assert_eq!(
+        serde_json::to_value(before).unwrap(),
+        serde_json::to_value(after).unwrap()
+    );
     let target = h
         .berths
         .iter()
@@ -243,4 +259,25 @@ fn old_client_recovery_is_authenticated_and_latched_until_all_sessions_close() {
         .unwrap()
         .hangar
         .is_some());
+}
+
+#[test]
+fn legacy_private_hangar_keeps_class_selection() {
+    let path = std::env::temp_dir().join(format!("fleet-legacy-{}.sqlite", rand::random::<u64>()));
+    let mut s = Server::open(&path).unwrap();
+    let mut p = None;
+    connect(&mut s, &mut p, "Legacy", None, false, 0);
+    let r = ok(
+        &mut s,
+        &mut p,
+        Request::SelectShip {
+            ship_class: ShipClass::Prospector,
+        },
+        0,
+    );
+    assert_eq!(
+        r.snapshot.unwrap().pilots[0].ship_class,
+        ShipClass::Prospector
+    );
+    assert!(r.assets.unwrap().hangar.is_none());
 }

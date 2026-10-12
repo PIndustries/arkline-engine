@@ -667,6 +667,11 @@ impl Server {
                 let name = session
                     .as_ref()
                     .context("connect before issuing commands")?;
+                ensure!(
+                    !matches!(request, Request::SelectShip { .. })
+                        || !world.accounts[name].fleet_hangar,
+                    "walk to the vessel boarding marker and use BoardShip"
+                );
                 let outcome = assets::execute(&mut world, name, request, now)?;
                 event = outcome;
                 message = "Station assets updated";
