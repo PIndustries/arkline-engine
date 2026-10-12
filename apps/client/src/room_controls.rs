@@ -161,7 +161,7 @@ pub(crate) fn show(
                     .filter(|link| link.from_equipment == device.id)
                 {
                     ui.small(format!(
-                        "{:?}: {} → {} / {}",
+                        "{:?}: {} to {} / {}",
                         link.kind, link.from_port, link.to_equipment, link.to_port
                     ));
                 }
