@@ -99,6 +99,7 @@ impl HangarView {
         now: u64,
         live: bool,
         fleet: Option<&arkline_protocol::HangarView>,
+        room: Option<&arkline_protocol::PioneerRoomState>,
     ) -> Option<HangarAction> {
         let (rect, response) =
             ui.allocate_exact_size(ui.available_size(), egui::Sense::click_and_drag());
@@ -185,7 +186,7 @@ impl HangarView {
         eye.y = eye.y.max(0.6);
         if walking {
             eye = if interior {
-                pioneer_interior::camera(target, eye)
+                pioneer_interior::camera_with_room(target, eye, interior_deck, room)
             } else if let Some(fleet) = fleet {
                 fleet_hangar::camera(fleet, target, eye)
             } else {
@@ -206,7 +207,7 @@ impl HangarView {
             30000.0,
         ) * Mat4::look_at_rh(eye, look_target, Vec3::Y);
         let mut parts = if interior {
-            pioneer_interior::parts(interior_deck)
+            pioneer_interior::parts_with_room(interior_deck, room)
         } else if let Some(fleet) = fleet {
             let mut p = fleet_hangar::parts(fleet, eye);
             let t = Mat4::from_translation(fleet_hangar::quarters_offset());
@@ -290,6 +291,7 @@ impl HangarView {
         );
         if interior {
             pioneer_interior::labels(ui, rect, vp, pilot, live);
+            pioneer_interior::device_labels(ui, rect, vp, pilot, room, live);
             None
         } else if let Some(fleet) = fleet {
             let terminal = quarters::fleet_terminals(ui, rect, vp, eye, pilot, unobstructed, live);
@@ -762,7 +764,7 @@ mod tests {
                     },
                     |ctx| {
                         egui::CentralPanel::default()
-                            .show(ctx, |ui| hangar.ui(ui, &pilot, 1000, true, None));
+                            .show(ctx, |ui| hangar.ui(ui, &pilot, 1000, true, None, None));
                     },
                 );
             }
@@ -790,7 +792,7 @@ mod tests {
             view.follow_heading = Some(2.);
             let _ = ctx.run(Default::default(), |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    view.ui(ui, &pilot, 1000, true, fleet_mode.then_some(&fleet));
+                    view.ui(ui, &pilot, 1000, true, fleet_mode.then_some(&fleet), None);
                 });
             });
             assert_eq!(view.fleet_mode, fleet_mode);
@@ -913,6 +915,63 @@ mod tests {
             assert_eq!(gl.get_error(), glow::NO_ERROR);
             let lit = pixels.chunks_exact(4).filter(|p| p[1] > 25).count();
             assert!(lit > 500, "Hangar must cover meaningful image area: {lit}");
+            if let Ok(directory) = std::env::var("ARKLINE_ROOM_DEVICE_CAPTURE") {
+                std::fs::create_dir_all(&directory).unwrap();
+                let capture = CachedFeed::create(&gl, 1006, 1280, 720).unwrap();
+                gl.bind_framebuffer(glow::FRAMEBUFFER, Some(capture.framebuffer));
+                gl.viewport(0, 0, 1280, 720);
+                let eye = Vec3::new(11.8, 1.65, 4.8);
+                let vp = Mat4::perspective_rh_gl(1.3, 1280. / 720., 0.08, 100.)
+                    * Mat4::look_at_rh(eye, Vec3::new(6.1, 1.8, 2.7), Vec3::Y);
+                let mut images = Vec::new();
+                for mode in ["normal", "off", "emergency"] {
+                    let mut state =
+                        arkline_protocol::PioneerRoomState::uncommissioned("capture".into());
+                    state.commissioned = true;
+                    state.breaker_closed = mode == "normal";
+                    state.light_on = mode == "normal";
+                    state.emergency_light_on = mode == "emergency";
+                    state.door_open = false;
+                    paint(
+                        &renderer,
+                        vp,
+                        eye,
+                        &pioneer_interior::parts_with_room(1, Some(&state)),
+                    );
+                    let mut rgba = vec![0u8; 1280 * 720 * 4];
+                    gl.read_pixels(
+                        0,
+                        0,
+                        1280,
+                        720,
+                        glow::RGBA,
+                        glow::UNSIGNED_BYTE,
+                        glow::PixelPackData::Slice(Some(&mut rgba)),
+                    );
+                    assert_eq!(gl.get_error(), glow::NO_ERROR);
+                    let mut ppm = b"P6\n1280 720\n255\n".to_vec();
+                    for row in rgba.chunks_exact(1280 * 4).rev() {
+                        for pixel in row.chunks_exact(4) {
+                            ppm.extend_from_slice(&pixel[..3]);
+                        }
+                    }
+                    std::fs::write(
+                        std::path::Path::new(&directory).join(format!("{mode}.ppm")),
+                        ppm,
+                    )
+                    .unwrap();
+                    images.push(rgba);
+                }
+                assert_ne!(
+                    images[0], images[1],
+                    "Confirmed main light must affect rendering"
+                );
+                assert_ne!(
+                    images[1], images[2],
+                    "Emergency output must affect rendering"
+                );
+                capture.destroy(&gl);
+            }
             if let Ok(path) = std::env::var("ARKLINE_PIONEER_INTERIOR_CAPTURE") {
                 let capture = CachedFeed::create(&gl, 1002, 1280, 720).unwrap();
                 gl.bind_framebuffer(glow::FRAMEBUFFER, Some(capture.framebuffer));

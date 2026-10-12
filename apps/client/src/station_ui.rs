@@ -1,6 +1,13 @@
 //! Station embodiment is confirmed by the server; camera motion never boards a ship.
 use super::*;
 impl Cockpit {
+    fn pioneer_room_controls(&mut self, ui: &mut egui::Ui, access: bool) {
+        let state = self.assets.as_ref().and_then(|a| a.pioneer_room.as_ref());
+        if let Some(command) = crate::room_controls::show(ui, state, self.can_operate() && access) {
+            self.send(Request::SetPioneerRoom { action: command });
+        }
+    }
+
     fn berth_ready(&self, id: &str) -> bool {
         self.can_operate()
             && self
@@ -122,7 +129,7 @@ impl Cockpit {
                 ui.label(room);
                 ui.small("WASD / arrows walk · Space jump · RMB turn / look");
                 ui.small(
-                    "Room fixtures are prototypes. Power/cargo screens read actual ship data.",
+                    "Airlock engineering uses server-confirmed devices. Other room fixtures remain prototypes.",
                 );
                 if ui
                     .add_enabled(
@@ -166,6 +173,7 @@ impl Cockpit {
                 } else {
                     ui.small("Airlock exit is on deck 1. Return via the access-core lift.");
                 }
+                self.pioneer_room_controls(ui, avatar.interior_deck == 1);
                 return;
             }
 
@@ -296,6 +304,9 @@ impl Cockpit {
                 }
             });
             ui.small("Drag with RMB to inspect your ship · wheel to zoom");
+            if pilot.ship_class == ShipClass::Pioneer {
+                self.pioneer_room_controls(ui, true);
+            }
         }
     }
     pub(super) fn station_overlay(&mut self, ctx: &egui::Context) {
@@ -404,6 +415,7 @@ mod tests {
         p.station_avatar=Some(serde_json::from_value(serde_json::json!({"position":[0,0,0],"heading":0,"moving":false,"updated_at_ms":1000})).unwrap());
         let (position, boarding_point) = arkline_protocol::fleet_berth(ShipClass::Pioneer);
         c.assets = Some(AssetsView {
+            pioneer_room: None,
             hangar: Some(arkline_protocol::HangarView {
                 layout: arkline_protocol::fleet_hangar_layout(),
                 berths: vec![arkline_protocol::HangarBerth {
@@ -500,6 +512,7 @@ mod tests {
             let mut c = crate::tests::view_test_cockpit(&ctx);
             c.snapshot.as_mut().unwrap().pilots[0].location = Location::Docked;
             c.assets = Some(AssetsView {
+                pioneer_room: None,
                 hangar: None,
                 pioneer_interior_available: supported,
                 pioneer_interior_decks: if supported { 2 } else { 0 },

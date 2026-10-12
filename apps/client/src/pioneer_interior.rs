@@ -134,7 +134,183 @@ fn build_parts(deck: u8) -> Vec<ModelPart> {
         Vec3::new(0.15, 0.5, 0.25),
         0.3,
     );
+    if deck == arkline_protocol::PIONEER_CONNECTED_ROOM.deck {
+        let d = arkline_protocol::PIONEER_CONNECTED_ROOM;
+        // Wall-flush service panel and ceiling conduit do not change walkable clearance.
+        let panel = Vec3::from_array(d.breaker_position.map(|v| v as f32));
+        block(
+            &mut p,
+            panel - Vec3::new(0.04, 0.5, 0.35),
+            panel + Vec3::new(-0.01, 0.5, 0.35),
+            steel * 1.8,
+            0.,
+        );
+        for z in [2.72, 2.9, 3.08, 3.26] {
+            block(
+                &mut p,
+                Vec3::new(4.241, 1.15, z),
+                Vec3::new(4.245, 1.65, z + 0.025),
+                steel * 0.3,
+                0.,
+            );
+        }
+        block(
+            &mut p,
+            Vec3::new(4.28, 2.9, 0.3),
+            Vec3::new(4.32, 2.94, 5.3),
+            Vec3::new(0.1, 0.14, 0.12),
+            0.,
+        );
+        block(
+            &mut p,
+            Vec3::new(4.3, 2.9, 0.28),
+            Vec3::new(10.8, 2.94, 0.32),
+            Vec3::new(0.1, 0.14, 0.12),
+            0.,
+        );
+        let vent = Vec3::from_array(d.vent_position.map(|v| v as f32));
+        block(
+            &mut p,
+            vent - Vec3::new(0.42, 0.25, 0.04),
+            vent + Vec3::new(0.42, 0.25, 0.04),
+            steel * 1.5,
+            0.,
+        );
+        for i in 0..6 {
+            let x = vent.x - 0.35 + i as f32 * 0.13;
+            block(
+                &mut p,
+                Vec3::new(x, vent.y - 0.2, vent.z + 0.04),
+                Vec3::new(x + 0.045, vent.y + 0.2, vent.z + 0.06),
+                steel * 0.3,
+                0.,
+            );
+        }
+    }
     p.0
+}
+/// State-dependent parts are tiny; the detailed room shell stays cached.
+pub(super) fn parts_with_room(
+    deck: u8,
+    room: Option<&arkline_protocol::PioneerRoomState>,
+) -> Vec<ModelPart> {
+    let mut parts = parts(deck);
+    let Some(s) = room.filter(|_| deck == arkline_protocol::PIONEER_CONNECTED_ROOM.deck) else {
+        return parts;
+    };
+    // Suppress the legacy decorative airlock strips: only actual outputs emit here.
+    parts.retain(|(_, m, _, e)| {
+        let c = m.w_axis;
+        !(*e > 0. && c.x >= 4.2 && c.x <= 13.14 && c.z < 5.9)
+    });
+    let d = arkline_protocol::PIONEER_CONNECTED_ROOM;
+    let mut p = Parts(parts);
+    for (point, half, color, on) in [
+        (
+            d.light_position,
+            Vec3::new(1.5, 0.025, 0.16),
+            Vec3::new(0.50, 0.65, 0.55),
+            s.light_on,
+        ),
+        (
+            d.emergency_position,
+            Vec3::new(0.2, 0.08, 0.03),
+            Vec3::new(1., 0.55, 0.27),
+            s.emergency_light_on,
+        ),
+        (
+            d.breaker_position,
+            Vec3::new(0.012, 0.10, 0.12),
+            Vec3::new(0.03, 0.6, 0.2),
+            s.commissioned && s.breaker_closed,
+        ),
+        (
+            d.vent_position,
+            Vec3::new(0.05, 0.03, 0.07),
+            Vec3::new(0.03, 0.5, 0.25),
+            s.vent_running,
+        ),
+    ] {
+        let center = Vec3::from_array(point.map(|v| v as f32));
+        block(
+            &mut p,
+            center - half,
+            center + half,
+            if on { color } else { Vec3::splat(0.025) },
+            if on { 0.8 } else { 0. },
+        );
+    }
+    if !s.door_open {
+        block(
+            &mut p,
+            Vec3::from_array(d.door_min.map(|v| v as f32)),
+            Vec3::from_array(d.door_max.map(|v| v as f32)),
+            Vec3::new(0.10, 0.14, 0.15),
+            0.,
+        );
+    }
+    p.0
+}
+pub(super) fn camera_with_room(
+    target: Vec3,
+    desired: Vec3,
+    deck: u8,
+    room: Option<&arkline_protocol::PioneerRoomState>,
+) -> Vec3 {
+    let desired = camera(target, desired);
+    if deck == 1 && room.is_some_and(|s| !s.door_open) {
+        let d = arkline_protocol::PIONEER_CONNECTED_ROOM;
+        if let Some(t) = quarters::segment_box(
+            target,
+            desired,
+            Vec3::from_array(d.door_min.map(|v| v as f32)) - Vec3::splat(0.12),
+            Vec3::from_array(d.door_max.map(|v| v as f32)) + Vec3::splat(0.12),
+        ) {
+            return target.lerp(desired, (t - 0.03).max(0.));
+        }
+    }
+    desired
+}
+pub(super) fn device_labels(
+    ui: &mut egui::Ui,
+    rect: egui::Rect,
+    vp: Mat4,
+    pilot: &PilotView,
+    room: Option<&arkline_protocol::PioneerRoomState>,
+    live: bool,
+) {
+    let Some(a) = pilot
+        .station_avatar
+        .as_ref()
+        .filter(|a| a.interior_deck == 1)
+    else {
+        return;
+    };
+    let Some(s) = room else {
+        return;
+    };
+    let at = Vec3::from_array(
+        arkline_protocol::PIONEER_CONNECTED_ROOM
+            .breaker_position
+            .map(|v| v as f32),
+    ) + Vec3::new(0.08, 0.65, 0.);
+    let eye = Vec3::from_array(a.position.map(|v| v as f32)) + Vec3::Y * 1.65;
+    if eye.distance(at) > 5. || camera_with_room(eye, at, 1, room).distance(at) > 0.1 {
+        return;
+    }
+    if let Some(screen) = project_point(vp, rect, at) {
+        ui.painter_at(rect).text(
+            screen,
+            egui::Align2::CENTER_BOTTOM,
+            format!(
+                "AIRLOCK ENGINEERING\n{:.1} kPa · {}\nStation controls → engineering",
+                s.pressure_pa as f64 / 1000.,
+                if live { "SERVER STATE" } else { "LAST KNOWN" }
+            ),
+            egui::FontId::proportional(12.),
+            egui::Color32::LIGHT_GREEN,
+        );
+    }
 }
 pub(super) fn camera(target: Vec3, desired: Vec3) -> Vec3 {
     let desired = Vec3::new(
@@ -186,7 +362,7 @@ pub(super) fn labels(ui: &mut egui::Ui, rect: egui::Rect, vp: Mat4, pilot: &Pilo
             arkline_protocol::cargo_capacity(pilot.ship_class)
         )
     } else {
-        "Fixtures: proposed / non-operational. Lift landing is in the access core.".into()
+        "Other fixtures remain proposed. Airlock device status is in Station engineering; lift is in the access core.".into()
     };
     ui.painter().text(
         rect.left_top() + egui::vec2(20.0, 135.0),
@@ -229,6 +405,39 @@ pub(super) fn labels(ui: &mut egui::Ui, rect: egui::Rect, vp: Mat4, pilot: &Pilo
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn confirmed_device_outputs_control_light_emission_and_door_geometry() {
+        let mut s = arkline_protocol::PioneerRoomState::uncommissioned("owned".into());
+        let d = arkline_protocol::PIONEER_CONNECTED_ROOM;
+        let lamp = Vec3::from_array(d.light_position.map(|v| v as f32));
+        let emission = |parts: Vec<ModelPart>| {
+            parts
+                .into_iter()
+                .find(|(_, m, _, _)| m.w_axis.truncate().distance(lamp) < 0.001)
+                .unwrap()
+                .3
+        };
+        assert_eq!(emission(parts_with_room(1, Some(&s))), 0.);
+        s.light_on = true;
+        assert!(emission(parts_with_room(1, Some(&s))) > 0.7);
+        let open = parts_with_room(1, Some(&s));
+        s.door_open = false;
+        assert_eq!(parts_with_room(1, Some(&s)).len(), open.len() + 1);
+        let target = Vec3::new(8.66, 1.5, 4.5);
+        let eye = Vec3::new(8.66, 1.5, 7.);
+        assert!(camera_with_room(target, eye, 1, Some(&s)).z < 5.65);
+        assert_eq!(parts_with_room(2, Some(&s)), parts(2));
+        s.light_on = false;
+        s.emergency_light_on = true;
+        let emergency = Vec3::from_array(d.emergency_position.map(|v| v as f32));
+        assert!(parts_with_room(1, Some(&s)).iter().any(|(_, m, c, e)| m
+            .w_axis
+            .truncate()
+            .distance(emergency)
+            < 0.001
+            && c.x > c.y
+            && *e > 0.7));
+    }
     #[test]
     fn cached_decks_preserve_geometry_and_materials() {
         for deck in [1, 2] {

@@ -12,6 +12,7 @@ mod motion;
 mod pilot_input;
 mod remote_control_ui;
 mod resource_jobs_ui;
+mod room_controls;
 mod sandbox;
 mod services;
 #[cfg(not(target_arch = "wasm32"))]
@@ -3773,6 +3774,7 @@ impl eframe::App for Cockpit {
                             now,
                             live,
                             self.assets.as_ref().and_then(|a| a.hangar.as_ref()),
+                            self.assets.as_ref().and_then(|a| a.pioneer_room.as_ref()),
                         ) {
                             self.activate_quarters_terminal(action);
                         }
@@ -5713,6 +5715,7 @@ mod tests {
     }
     fn asset_test_fixture() -> AssetsView {
         AssetsView {
+            pioneer_room: None,
             hangar: None,
             pioneer_interior_available: true,
             pioneer_interior_decks: 2,
@@ -5936,6 +5939,7 @@ mod tests {
             }],
         });
         cockpit.assets = Some(AssetsView {
+            pioneer_room: None,
             hangar: None,
             pioneer_interior_available: true,
             pioneer_interior_decks: 2,
