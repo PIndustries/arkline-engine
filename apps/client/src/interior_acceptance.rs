@@ -24,6 +24,7 @@ impl Journey {
             &mut session,
             Request::Connect {
                 supports_pioneer_interior: true,
+                supports_fleet_hangar: true,
                 protocol_version: PROTOCOL_VERSION,
                 pilot: "pilot".into(),
                 resume_token: None,

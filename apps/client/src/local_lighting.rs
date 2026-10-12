@@ -213,6 +213,19 @@ impl Uniforms {
             colors: gl.get_uniform_location(program, "ark_local_color_power[0]"),
         }
     }
+    pub(super) unsafe fn upload_station(&self, gl: &glow::Context, lights: &[(Vec3, Vec3)]) {
+        let mut positions = [0.0; MAX_LIGHTS * 4];
+        let mut colors = [0.0; MAX_LIGHTS * 4];
+        for (i, (position, color)) in lights.iter().take(MAX_LIGHTS).enumerate() {
+            positions[i * 4..i * 4 + 4]
+                .copy_from_slice(&[position.x, position.y, position.z, 30.0]);
+            colors[i * 4..i * 4 + 4].copy_from_slice(&[color.x, color.y, color.z, 2.5]);
+        }
+        gl.uniform_1_i32(self.count.as_ref(), lights.len().min(MAX_LIGHTS) as i32);
+        gl.uniform_4_f32_slice(self.positions.as_ref(), &positions);
+        gl.uniform_4_f32_slice(self.colors.as_ref(), &colors);
+    }
+    #[cfg(test)]
     pub(super) unsafe fn clear(&self, gl: &glow::Context) {
         gl.uniform_1_i32(self.count.as_ref(), 0);
     }

@@ -10,6 +10,8 @@ mod pioneer_interior;
 #[path = "quarters.rs"]
 mod quarters;
 pub use quarters::HangarAction;
+#[path = "fleet_hangar.rs"]
+pub(super) mod fleet_hangar;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OnFootView {
@@ -94,6 +96,7 @@ impl HangarView {
         pilot: &PilotView,
         now: u64,
         live: bool,
+        fleet: Option<&arkline_protocol::HangarView>,
     ) -> Option<HangarAction> {
         let (rect, response) =
             ui.allocate_exact_size(ui.available_size(), egui::Sense::click_and_drag());
@@ -157,7 +160,12 @@ impl HangarView {
             self.follow = Some(smooth);
             smooth + Vec3::Y * 1.25
         } else {
-            Vec3::from_array(layout.ship_center.map(|v| v as f32))
+            Vec3::from_array(
+                fleet
+                    .and_then(|f| f.berths.iter().find(|b| b.active))
+                    .map_or(layout.ship_center, |b| b.position)
+                    .map(|v| v as f32),
+            )
         };
         let distance = if walking {
             5.5
@@ -174,6 +182,8 @@ impl HangarView {
         if walking {
             eye = if interior {
                 pioneer_interior::camera(target, eye)
+            } else if let Some(fleet) = fleet {
+                fleet_hangar::camera(fleet, target, eye)
             } else {
                 quarters::camera_eye(pilot.ship_class, target, eye)
             };
@@ -193,6 +203,15 @@ impl HangarView {
         ) * Mat4::look_at_rh(eye, look_target, Vec3::Y);
         let mut parts = if interior {
             pioneer_interior::parts(interior_deck)
+        } else if let Some(fleet) = fleet {
+            let mut p = fleet_hangar::parts(fleet, eye);
+            let t = Mat4::from_translation(fleet_hangar::quarters_offset());
+            p.extend(
+                quarters::room_parts(ShipClass::Pioneer, now)
+                    .into_iter()
+                    .map(|(mesh, m, c, e)| (mesh, t * m, c, e)),
+            );
+            p
         } else {
             let mut p = bay_parts(pilot.ship_class);
             p.extend(quarters::room_parts(pilot.ship_class, now));
@@ -250,6 +269,8 @@ impl HangarView {
                     } else {
                         "ONBOARD · DECK ONE"
                     }
+                } else if fleet.is_some() {
+                    "PERSONAL FLEET DOCK"
                 } else {
                     "PRIVATE BAY"
                 },
@@ -266,6 +287,11 @@ impl HangarView {
         if interior {
             pioneer_interior::labels(ui, rect, vp, pilot, live);
             None
+        } else if let Some(fleet) = fleet {
+            let terminal = quarters::fleet_terminals(ui, rect, vp, eye, pilot, unobstructed, live);
+            terminal.or_else(|| {
+                fleet_hangar::labels(ui, rect, vp, eye, pilot, fleet, unobstructed, live)
+            })
         } else {
             quarters::terminals(ui, rect, vp, eye, pilot, unobstructed, live)
         }
@@ -611,7 +637,24 @@ unsafe fn paint(renderer: &Renderer, vp: Mat4, eye: Vec3, parts: &[ModelPart]) {
     gl.clear_color(0.008, 0.014, 0.019, 1.0);
     gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
     gl.use_program(Some(renderer.program));
-    renderer.local_lights.clear(gl);
+    gl.uniform_1_f32(
+        gl.get_uniform_location(renderer.program, "station_lighting")
+            .as_ref(),
+        1.0,
+    );
+    let mut lights: Vec<_> = parts
+        .iter()
+        .filter(|(mesh, _, color, emission)| {
+            *mesh == 0 && *emission >= 0.7 && color.min_element() > 0.25
+        })
+        .map(|(_, m, c, _)| (m.w_axis.truncate(), *c))
+        .collect();
+    lights.sort_by(|a, b| {
+        a.0.distance_squared(eye)
+            .total_cmp(&b.0.distance_squared(eye))
+    });
+    lights.truncate(8);
+    renderer.local_lights.upload_station(gl, &lights);
     let shadow_texture = renderer.disable_sun_shadow();
     gl.uniform_1_f32(renderer.uniforms.environment_atmosphere.as_ref(), 0.0);
     gl.uniform_3_f32(renderer.uniforms.environment_up.as_ref(), 0.0, 1.0, 0.0);
@@ -715,7 +758,7 @@ mod tests {
                     },
                     |ctx| {
                         egui::CentralPanel::default()
-                            .show(ctx, |ui| hangar.ui(ui, &pilot, 1000, true));
+                            .show(ctx, |ui| hangar.ui(ui, &pilot, 1000, true, None));
                     },
                 );
             }
@@ -896,6 +939,82 @@ mod tests {
                         } else {
                             format!("{path}.deck-two.ppm")
                         },
+                        ppm,
+                    )
+                    .unwrap();
+                }
+                capture.destroy(&gl);
+            }
+            if let Ok(directory) = std::env::var("ARKLINE_FLEET_HANGAR_CAPTURE") {
+                std::fs::create_dir_all(&directory).unwrap();
+                let capture = CachedFeed::create(&gl, 1005, 1280, 720).unwrap();
+                gl.bind_framebuffer(glow::FRAMEBUFFER, Some(capture.framebuffer));
+                gl.viewport(0, 0, 1280, 720);
+                let fleet = arkline_protocol::HangarView {
+                    layout: arkline_protocol::fleet_hangar_layout(),
+                    berths: arkline_protocol::ALL_SHIP_CLASSES
+                        .iter()
+                        .enumerate()
+                        .map(|(i, c)| {
+                            let (position, boarding_point) = arkline_protocol::fleet_berth(*c);
+                            arkline_protocol::HangarBerth {
+                                id: format!("fixture-{i}"),
+                                ship_class: *c,
+                                position,
+                                yaw: 0.,
+                                boarding_point,
+                                active: i == 0,
+                                can_board: true,
+                            }
+                        })
+                        .collect(),
+                };
+                for (name, eye, aim) in [
+                    (
+                        "pioneer-access",
+                        Vec3::new(0., 1.65, -7.),
+                        Vec3::new(0., 8., 25.),
+                    ),
+                    (
+                        "concourse",
+                        Vec3::new(-45., 4., -10.),
+                        Vec3::new(260., 6., 10.),
+                    ),
+                    (
+                        "overview",
+                        Vec3::new(450., 500., -700.),
+                        Vec3::new(700., 80., 130.),
+                    ),
+                ] {
+                    let vp = Mat4::perspective_rh_gl(1.1, 1280. / 720., 0.08, 30000.)
+                        * Mat4::look_at_rh(eye, aim, Vec3::Y);
+                    let mut parts = fleet_hangar::parts(&fleet, eye);
+                    let t = Mat4::from_translation(fleet_hangar::quarters_offset());
+                    parts.extend(
+                        quarters::room_parts(ShipClass::Pioneer, 1000)
+                            .into_iter()
+                            .map(|(mesh, m, c, e)| (mesh, t * m, c, e)),
+                    );
+                    paint(&renderer, vp, eye, &parts);
+                    let mut rgba = vec![0; 1280 * 720 * 4];
+                    gl.read_pixels(
+                        0,
+                        0,
+                        1280,
+                        720,
+                        glow::RGBA,
+                        glow::UNSIGNED_BYTE,
+                        glow::PixelPackData::Slice(Some(&mut rgba)),
+                    );
+                    assert_eq!(gl.get_error(), glow::NO_ERROR);
+                    let mut ppm = b"P6\n1280 720\n255\n".to_vec();
+                    for row in rgba.chunks_exact(1280 * 4).rev() {
+                        for pixel in row.chunks_exact(4) {
+                            ppm.extend_from_slice(&pixel[..3]);
+                        }
+                    }
+                    std::fs::write(
+                        std::path::Path::new(&directory).join(format!("{name}.ppm")),
                         ppm,
                     )
                     .unwrap();
