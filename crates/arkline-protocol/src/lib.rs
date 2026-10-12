@@ -539,6 +539,22 @@ pub enum Request {
     BoardShip {
         id: String,
     },
+    AuthCapabilities,
+    AccountConnect {
+        access_token: String,
+        pilot: String,
+        #[serde(default)]
+        legacy_resume_token: Option<String>,
+        #[serde(default)]
+        link_existing: bool,
+        protocol_version: u32,
+        #[serde(default)]
+        supports_room_controls: bool,
+        #[serde(default)]
+        supports_fleet_hangar: bool,
+        #[serde(default)]
+        supports_pioneer_interior: bool,
+    },
     Connect {
         #[serde(default)]
         supports_room_controls: bool,
@@ -1180,7 +1196,18 @@ pub struct LedgerExport {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthCapabilities {
+    pub issuer: String,
+    pub audience: String,
+    pub profile: String,
+    pub required_scope: String,
+    pub auth_required: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Response {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auth: Option<AuthCapabilities>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub assets: Option<AssetsView>,
     pub ok: bool,
@@ -1196,6 +1223,7 @@ pub struct Response {
 impl Response {
     pub fn error(message: impl Into<String>) -> Self {
         Self {
+            auth: None,
             assets: None,
             ok: false,
             message: message.into(),
