@@ -1,0 +1,9 @@
+[package]
+name = "arkline-editor"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+eframe = "0.31"
