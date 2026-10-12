@@ -16,12 +16,13 @@ pub(super) fn stop(p: &mut Pilot) {
     }
 }
 pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result<()> {
+    let fleet = w.accounts.get(name).is_some_and(|a| a.fleet_hangar);
     let p = w.pilots.get_mut(name).context("pilot missing")?;
     ensure!(
         p.view.location == Location::Docked,
         "station walking requires docking"
     );
-    let layout = hangar_layout(p.view.ship_class);
+    let layout = layout_for(p.view.ship_class, fleet);
     match r {
         Request::EnterInterior => {
             ensure!(
@@ -142,7 +143,12 @@ pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result
             ensure!(!a.onboard_interior, "interior seats are not operational");
             ensure!(a.jump_started_ms.is_none(), "land before using seating");
             if seated {
-                let seat = quarters_layout(p.view.ship_class).seat_point;
+                let seat = if fleet {
+                    fleet_quarters_layout()
+                } else {
+                    quarters_layout(p.view.ship_class)
+                }
+                .seat_point;
                 ensure!(
                     flight::distance(a.position, seat) <= 2.0,
                     "walk closer to the quarters sofa first"
@@ -207,16 +213,17 @@ fn in_obstacle(position: [f64; 3], obstacle: &StationObstacle) -> bool {
 }
 /// Existing saves may place an avatar where new walls or furnishings now stand.
 pub(super) fn migrate(w: &mut World) {
-    for p in w.pilots.values_mut() {
+    for (name, p) in &mut w.pilots {
+        let fleet = w.accounts.get(name).is_some_and(|a| a.fleet_hangar);
         if let Some(a) = &mut p.view.station_avatar {
-            if obstacles_for(p.view.ship_class, a.onboard_interior)
+            if obstacles_for(p.view.ship_class, a.onboard_interior, fleet)
                 .iter()
                 .any(|o| in_obstacle(a.position, o))
             {
                 a.position = if a.onboard_interior {
                     PIONEER_INTERIOR_ENTRY
                 } else {
-                    hangar_layout(p.view.ship_class).boarding_point
+                    layout_for(p.view.ship_class, fleet).boarding_point
                 };
                 a.seated = false;
                 a.moving = false;
@@ -228,7 +235,8 @@ pub(super) fn migrate(w: &mut World) {
     }
 }
 pub(super) fn advance(w: &mut World, now: u64) {
-    for p in w.pilots.values_mut() {
+    for (name, p) in &mut w.pilots {
+        let fleet = w.accounts.get(name).is_some_and(|a| a.fleet_hangar);
         let Some(a) = &mut p.view.station_avatar else {
             continue;
         };
@@ -258,9 +266,9 @@ pub(super) fn advance(w: &mut World, now: u64) {
             .saturating_sub(a.updated_at_ms)
             .min(STATION_WALK_LEASE_MS) as f64
             / 1000.0;
-        let layout = hangar_layout(p.view.ship_class);
+        let layout = layout_for(p.view.ship_class, fleet);
         let hull = p.view.ship_class.spec();
-        let obstacles = obstacles_for(p.view.ship_class, a.onboard_interior);
+        let obstacles = obstacles_for(p.view.ship_class, a.onboard_interior, fleet);
         let (min_x, max_x, min_z, max_z) = if a.onboard_interior {
             (0.3, 31.7, 0.3, 13.7)
         } else {
@@ -268,7 +276,7 @@ pub(super) fn advance(w: &mut World, now: u64) {
                 -layout.half_length + 0.3,
                 layout.half_length - 0.3,
                 -layout.half_width + 0.3,
-                layout.half_width - 0.3,
+                if fleet { 3.0 } else { layout.half_width - 0.3 },
             )
         };
         let norm = input.forward.hypot(input.strafe).max(1.0);
@@ -285,6 +293,7 @@ pub(super) fn advance(w: &mut World, now: u64) {
                 .clamp(min_z, max_z);
             let clear = |position: [f64; 3]| {
                 (a.onboard_interior
+                    || fleet
                     || position[0].abs() >= hull.length_m / 2.0 + STATION_AVATAR_RADIUS_M
                     || position[2].abs() >= hull.width_m / 2.0 + STATION_AVATAR_RADIUS_M)
                     && !obstacles.iter().any(|o| in_obstacle(position, o))
@@ -306,9 +315,10 @@ pub(super) fn advance(w: &mut World, now: u64) {
     }
 }
 pub(super) fn validate(w: &World) -> Result<()> {
-    for p in w.pilots.values() {
+    for (name, p) in &w.pilots {
+        let fleet = w.accounts.get(name).is_some_and(|a| a.fleet_hangar);
         if let Some(a) = &p.view.station_avatar {
-            let l = hangar_layout(p.view.ship_class);
+            let l = layout_for(p.view.ship_class, fleet);
             ensure!(
                 p.view.location == Location::Docked
                     && a.heading.is_finite()
@@ -320,6 +330,7 @@ pub(super) fn validate(w: &World) -> Result<()> {
                     && !(a.seated && a.jump_started_ms.is_some())
                     && a.position[0].abs() <= l.half_length
                     && a.position[2].abs() <= l.half_width
+                    && (!fleet || a.onboard_interior || a.position[2] <= 3.0)
                     && (!a.onboard_interior
                         || (p.view.ship_class == ShipClass::Pioneer
                             && (1..=2).contains(&a.interior_deck)
@@ -327,7 +338,7 @@ pub(super) fn validate(w: &World) -> Result<()> {
                             && a.position[0] <= 31.7
                             && a.position[2] >= 0.3
                             && a.position[2] <= 13.7))
-                    && !obstacles_for(p.view.ship_class, a.onboard_interior)
+                    && !obstacles_for(p.view.ship_class, a.onboard_interior, fleet)
                         .iter()
                         .any(|o| in_obstacle(a.position, o)),
                 "invalid station avatar"
@@ -337,10 +348,24 @@ pub(super) fn validate(w: &World) -> Result<()> {
     Ok(())
 }
 
-fn obstacles_for(class: ShipClass, interior: bool) -> Vec<StationObstacle> {
+fn obstacles_for(class: ShipClass, interior: bool, fleet: bool) -> Vec<StationObstacle> {
     if interior {
         pioneer_interior_obstacles()
+    } else if fleet {
+        fleet_station_obstacles()
     } else {
         station_obstacles(class)
+    }
+}
+
+fn layout_for(class: ShipClass, fleet: bool) -> HangarLayout {
+    if fleet {
+        let mut layout = fleet_hangar_layout();
+        let (center, boarding) = fleet_berth(class);
+        layout.ship_center = center;
+        layout.boarding_point = boarding;
+        layout
+    } else {
+        hangar_layout(class)
     }
 }

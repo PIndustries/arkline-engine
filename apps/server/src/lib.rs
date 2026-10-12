@@ -106,6 +106,7 @@ pub struct Server {
     online_sessions: BTreeMap<String, usize>,
     // Conservative latch: clear only after ALL sessions for this pilot leave.
     interior_incompatible: std::collections::BTreeSet<String>,
+    fleet_incompatible: std::collections::BTreeSet<String>,
     // Kept after db so SQLite closes before authority is released. Never unlink
     // the sidecar: replacing its inode would allow competing locks.
     _ownership_lock: Option<std::fs::File>,
@@ -193,6 +194,7 @@ impl Server {
             db,
             online_sessions: BTreeMap::new(),
             interior_incompatible: Default::default(),
+            fleet_incompatible: Default::default(),
             _ownership_lock: ownership_lock,
         })
     }
@@ -255,10 +257,28 @@ impl Server {
     pub fn handle_at(
         &mut self,
         session: &mut Option<String>,
-        request: Request,
+        mut request: Request,
         now: u64,
     ) -> Response {
         let previous = session.clone();
+        let legacy_fleet = matches!(
+            &request,
+            Request::Connect {
+                supports_fleet_hangar: false,
+                ..
+            }
+        );
+        if let Request::Connect {
+            pilot,
+            supports_fleet_hangar,
+            ..
+        } = &mut request
+        {
+            if self.fleet_incompatible.contains(pilot) {
+                *supports_fleet_hangar = false;
+            }
+        }
+
         let legacy_connect = matches!(
             &request,
             Request::Connect {
@@ -283,6 +303,11 @@ impl Server {
                     }
                     if let Some(current) = session.as_ref() {
                         *self.online_sessions.entry(current.clone()).or_default() += 1;
+                    }
+                }
+                if legacy_fleet {
+                    if let Some(name) = session.as_ref() {
+                        self.fleet_incompatible.insert(name.clone());
                     }
                 }
                 if legacy_connect {
@@ -315,6 +340,7 @@ impl Server {
             if *count == 0 {
                 self.online_sessions.remove(pilot);
                 self.interior_incompatible.remove(pilot);
+                self.fleet_incompatible.remove(pilot);
                 if let Err(error) = self.stop_disconnected(pilot) {
                     eprintln!("Could not persist disconnected flight stop: {error}");
                 }
@@ -632,6 +658,11 @@ impl Server {
                 mining::stop(&mut world, name, module_id)?;
                 message = "Mining module stopped";
             }
+            Request::BoardShip { id } => {
+                let name = session.as_ref().context("connect before boarding")?;
+                event = assets::board(&mut world, name, &id, now)?;
+                message = "Vessel boarded";
+            }
             request if assets::handles(&request) => {
                 let name = session
                     .as_ref()
@@ -641,6 +672,7 @@ impl Server {
                 message = "Station assets updated";
             }
             Request::Connect {
+                supports_fleet_hangar,
                 supports_pioneer_interior,
                 protocol_version,
                 pilot,
@@ -673,7 +705,11 @@ impl Server {
                             .as_ref()
                             .is_some_and(|a| a.onboard_interior)
                         {
-                            let point = hangar_layout(existing.view.ship_class).boarding_point;
+                            let point = if supports_fleet_hangar {
+                                fleet_berth(existing.view.ship_class).1
+                            } else {
+                                hangar_layout(existing.view.ship_class).boarding_point
+                            };
                             let avatar = existing.view.station_avatar.as_mut().unwrap();
                             avatar.onboard_interior = false;
                             avatar.interior_deck = 1;
@@ -727,6 +763,23 @@ impl Server {
                     event = Some(EconomicEvent::PilotCreated {
                         pilot: pilot.clone(),
                     });
+                }
+                assets::ensure_accounts(&mut world);
+                let old_fleet = world.accounts[&pilot].fleet_hangar;
+                world.accounts.get_mut(&pilot).unwrap().fleet_hangar = supports_fleet_hangar;
+                if old_fleet != supports_fleet_hangar {
+                    let p = world.pilots.get_mut(&pilot).unwrap();
+                    if let Some(a) = &mut p.view.station_avatar {
+                        if !a.onboard_interior {
+                            a.position = if supports_fleet_hangar {
+                                fleet_berth(p.view.ship_class).1
+                            } else {
+                                hangar_layout(p.view.ship_class).boarding_point
+                            };
+                            a.seated = false;
+                            a.jump_started_ms = None;
+                        }
+                    }
                 }
                 remote_control::release_worker(&mut world, &pilot);
                 station::stop(world.pilots.get_mut(&pilot).unwrap());
@@ -1237,6 +1290,7 @@ mod tests {
         let connected = server.handle_at(
             &mut session,
             Request::Connect {
+                supports_fleet_hangar: false,
                 supports_pioneer_interior: true,
                 protocol_version: PROTOCOL_VERSION,
                 pilot: "Traveler".into(),

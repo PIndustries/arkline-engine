@@ -38,6 +38,7 @@ fn login(s: &mut Server, p: &mut Option<String>, name: &str) -> String {
         s,
         p,
         Request::Connect {
+            supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
             pilot: name.into(),
@@ -146,6 +147,7 @@ fn continuous_descent_ground_contact_and_owned_props_persist_without_economy_cha
         &mut s,
         &mut a,
         Request::Connect {
+            supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
             pilot: "Builder".into(),
@@ -186,6 +188,7 @@ fn old_hangar_gains_new_hulls_once_and_larger_cargo_replays() {
             &mut s,
             &mut p,
             Request::Connect {
+                supports_fleet_hangar: false,
                 supports_pioneer_interior: true,
                 protocol_version: PROTOCOL_VERSION,
                 pilot: "Miner".into(),
@@ -205,6 +208,7 @@ fn old_hangar_gains_new_hulls_once_and_larger_cargo_replays() {
         &mut s,
         &mut p,
         Request::Connect {
+            supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
             pilot: "Miner".into(),

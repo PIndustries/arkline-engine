@@ -531,7 +531,12 @@ pub enum Request {
     WithdrawCorporationOre {
         units: u64,
     },
+    BoardShip {
+        id: String,
+    },
     Connect {
+        #[serde(default)]
+        supports_fleet_hangar: bool,
         /// Missing on older clients; only visual clients with interior support opt in.
         #[serde(default)]
         supports_pioneer_interior: bool,
@@ -914,7 +919,7 @@ pub struct StationAvatar {
 fn default_interior_deck() -> u8 {
     1
 }
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct HangarLayout {
     pub half_length: f64,
     pub half_width: f64,
@@ -1022,6 +1027,8 @@ pub struct CorporationView {
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AssetsView {
+    #[serde(default)]
+    pub hangar: Option<HangarView>,
     #[serde(default)]
     pub pioneer_interior_available: bool,
     #[serde(default)]
@@ -1535,4 +1542,71 @@ pub fn ship_acceleration(class: ShipClass, ore: u64) -> f64 {
 }
 pub fn ship_braking_acceleration(class: ShipClass, ore: u64) -> f64 {
     ship_acceleration(class, ore) * 0.4
+}
+
+/// Private, authoritative station inventory. Corporation vessels are not yet supported.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HangarView {
+    pub layout: HangarLayout,
+    pub berths: Vec<HangarBerth>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HangarBerth {
+    pub id: String,
+    pub ship_class: ShipClass,
+    pub position: [f64; 3],
+    pub yaw: f64,
+    pub boarding_point: [f64; 3],
+    pub active: bool,
+    pub can_board: bool,
+}
+/// Fixed catalog berths preserve coordinates when boarding or moving a hull elsewhere.
+pub fn fleet_berth(class: ShipClass) -> ([f64; 3], [f64; 3]) {
+    let mut x = 0.0;
+    for current in ALL_SHIP_CLASSES {
+        let spec = current.spec();
+        if current == class {
+            return (
+                [x, spec.height_m / 2.0, spec.width_m / 2.0 + 6.0],
+                [x, 0.0, 0.0],
+            );
+        }
+        x += spec.length_m / 2.0 + 20.0;
+        let next = ALL_SHIP_CLASSES.iter().position(|c| *c == current).unwrap() + 1;
+        if let Some(next) = ALL_SHIP_CLASSES.get(next) {
+            x += next.spec().length_m / 2.0;
+        }
+    }
+    unreachable!()
+}
+pub fn fleet_hangar_layout() -> HangarLayout {
+    let last = ALL_SHIP_CLASSES.last().unwrap();
+    HangarLayout {
+        half_length: fleet_berth(*last).0[0] + last.spec().length_m / 2.0 + 20.0,
+        half_width: 50.0,
+        height: 1500.0,
+        ship_center: fleet_berth(ShipClass::Pioneer).0,
+        boarding_point: fleet_berth(ShipClass::Pioneer).1,
+    }
+}
+/// Quarters use the same human-scale furnishing arrangement translated behind the concourse.
+pub fn fleet_quarters_layout() -> QuartersLayout {
+    let mut q = quarters_layout(ShipClass::Pioneer);
+    let dz = -24.0 - q.max[2];
+    q.min[2] += dz;
+    q.max[2] += dz;
+    q.doorway_center[2] += dz;
+    q.seat_point[2] += dz;
+    q
+}
+pub fn fleet_station_obstacles() -> Vec<StationObstacle> {
+    let dz = -24.0 - quarters_layout(ShipClass::Pioneer).max[2];
+    station_obstacles(ShipClass::Pioneer)
+        .into_iter()
+        .map(|mut o| {
+            o.min[2] += dz;
+            o.max[2] += dz;
+            o
+        })
+        .collect()
 }
