@@ -12,7 +12,7 @@ pub(super) fn load_w(room: Option<&PioneerRoomState>) -> u64 {
             0
         }
         + if r.emergency_remaining_ms < ROOM_EMERGENCY_MS {
-            10
+            ROOM_EMERGENCY_W
         } else {
             0
         }
@@ -272,6 +272,17 @@ mod integration_tests {
             regen_remainder_mj: 137,
         });
         (r, p)
+    }
+    #[test]
+    fn catalog_operating_loads_match_controller_budget() {
+        let (mut r, _) = fixture();
+        r.emergency_remaining_ms = ROOM_EMERGENCY_MS - 1;
+        let catalog_w = pioneer_room_catalog()
+            .equipment
+            .iter()
+            .filter_map(|e| e.active_load_w)
+            .sum::<u64>();
+        assert_eq!(load_w(Some(&r)), catalog_w);
     }
     #[test]
     fn reserve_and_pressure_load_boundaries_are_polling_independent() {

@@ -1,0 +1,294 @@
+{
+  "schema_version": 1,
+  "room_id": "pioneer.deck1.airlock",
+  "equipment": [
+    {
+      "id": "pioneer.deck1.airlock.supply",
+      "label": "Ship reactor / capacitor endpoint",
+      "kind": "Supply",
+      "position": null,
+      "active_load_w": null,
+      "reserve_j": null,
+      "ports": [
+        {
+          "id": "power",
+          "kind": "Power",
+          "direction": "Output"
+        }
+      ]
+    },
+    {
+      "id": "pioneer.deck1.airlock.breaker",
+      "label": "Room mains breaker",
+      "kind": "Breaker",
+      "position": [
+        4.25,
+        1.4,
+        3.0
+      ],
+      "active_load_w": null,
+      "reserve_j": null,
+      "ports": [
+        {
+          "id": "supply",
+          "kind": "Power",
+          "direction": "Input"
+        },
+        {
+          "id": "switched",
+          "kind": "Power",
+          "direction": "Output"
+        },
+        {
+          "id": "status",
+          "kind": "Telemetry",
+          "direction": "Output"
+        }
+      ]
+    },
+    {
+      "id": "pioneer.deck1.airlock.controller",
+      "label": "Bounded room controller",
+      "kind": "Controller",
+      "position": null,
+      "active_load_w": 4,
+      "reserve_j": null,
+      "ports": [
+        {
+          "id": "power",
+          "kind": "Power",
+          "direction": "Input"
+        },
+        {
+          "id": "breaker",
+          "kind": "Telemetry",
+          "direction": "Input"
+        },
+        {
+          "id": "pressure",
+          "kind": "Telemetry",
+          "direction": "Input"
+        },
+        {
+          "id": "command",
+          "kind": "Command",
+          "direction": "Output"
+        },
+        {
+          "id": "safe_open",
+          "kind": "Interlock",
+          "direction": "Output"
+        }
+      ]
+    },
+    {
+      "id": "pioneer.deck1.airlock.light",
+      "label": "Main room light",
+      "kind": "Light",
+      "position": [
+        8.6666666667,
+        3.05,
+        3.0
+      ],
+      "active_load_w": 24,
+      "reserve_j": null,
+      "ports": [
+        {
+          "id": "power",
+          "kind": "Power",
+          "direction": "Input"
+        },
+        {
+          "id": "command",
+          "kind": "Command",
+          "direction": "Input"
+        }
+      ]
+    },
+    {
+      "id": "pioneer.deck1.airlock.emergency",
+      "label": "Emergency light and reserve",
+      "kind": "EmergencyLight",
+      "position": [
+        8.6666666667,
+        2.7,
+        5.55
+      ],
+      "active_load_w": 10,
+      "reserve_j": 6000,
+      "ports": [
+        {
+          "id": "charge",
+          "kind": "Power",
+          "direction": "Input"
+        },
+        {
+          "id": "mains_status",
+          "kind": "Telemetry",
+          "direction": "Input"
+        }
+      ]
+    },
+    {
+      "id": "pioneer.deck1.airlock.vent",
+      "label": "Scalar equalize / exhaust control",
+      "kind": "Vent",
+      "position": [
+        10.8,
+        2.7,
+        0.3
+      ],
+      "active_load_w": 96,
+      "reserve_j": null,
+      "ports": [
+        {
+          "id": "power",
+          "kind": "Power",
+          "direction": "Input"
+        },
+        {
+          "id": "command",
+          "kind": "Command",
+          "direction": "Input"
+        }
+      ]
+    },
+    {
+      "id": "pioneer.deck1.airlock.pressure",
+      "label": "Scalar room pressure measurement",
+      "kind": "PressureSensor",
+      "position": null,
+      "active_load_w": null,
+      "reserve_j": null,
+      "ports": [
+        {
+          "id": "pressure",
+          "kind": "Telemetry",
+          "direction": "Output"
+        }
+      ]
+    },
+    {
+      "id": "pioneer.deck1.airlock.door",
+      "label": "Interlocked corridor door",
+      "kind": "Door",
+      "position": [
+        8.6666666667,
+        1.6,
+        5.725
+      ],
+      "active_load_w": null,
+      "reserve_j": null,
+      "ports": [
+        {
+          "id": "power",
+          "kind": "Power",
+          "direction": "Input"
+        },
+        {
+          "id": "command",
+          "kind": "Command",
+          "direction": "Input"
+        },
+        {
+          "id": "safe_open",
+          "kind": "Interlock",
+          "direction": "Input"
+        }
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "from_equipment": "pioneer.deck1.airlock.supply",
+      "from_port": "power",
+      "to_equipment": "pioneer.deck1.airlock.breaker",
+      "to_port": "supply",
+      "kind": "Power"
+    },
+    {
+      "from_equipment": "pioneer.deck1.airlock.breaker",
+      "from_port": "switched",
+      "to_equipment": "pioneer.deck1.airlock.controller",
+      "to_port": "power",
+      "kind": "Power"
+    },
+    {
+      "from_equipment": "pioneer.deck1.airlock.breaker",
+      "from_port": "switched",
+      "to_equipment": "pioneer.deck1.airlock.light",
+      "to_port": "power",
+      "kind": "Power"
+    },
+    {
+      "from_equipment": "pioneer.deck1.airlock.breaker",
+      "from_port": "switched",
+      "to_equipment": "pioneer.deck1.airlock.vent",
+      "to_port": "power",
+      "kind": "Power"
+    },
+    {
+      "from_equipment": "pioneer.deck1.airlock.breaker",
+      "from_port": "switched",
+      "to_equipment": "pioneer.deck1.airlock.door",
+      "to_port": "power",
+      "kind": "Power"
+    },
+    {
+      "from_equipment": "pioneer.deck1.airlock.breaker",
+      "from_port": "switched",
+      "to_equipment": "pioneer.deck1.airlock.emergency",
+      "to_port": "charge",
+      "kind": "Power"
+    },
+    {
+      "from_equipment": "pioneer.deck1.airlock.breaker",
+      "from_port": "status",
+      "to_equipment": "pioneer.deck1.airlock.controller",
+      "to_port": "breaker",
+      "kind": "Telemetry"
+    },
+    {
+      "from_equipment": "pioneer.deck1.airlock.breaker",
+      "from_port": "status",
+      "to_equipment": "pioneer.deck1.airlock.emergency",
+      "to_port": "mains_status",
+      "kind": "Telemetry"
+    },
+    {
+      "from_equipment": "pioneer.deck1.airlock.pressure",
+      "from_port": "pressure",
+      "to_equipment": "pioneer.deck1.airlock.controller",
+      "to_port": "pressure",
+      "kind": "Telemetry"
+    },
+    {
+      "from_equipment": "pioneer.deck1.airlock.controller",
+      "from_port": "command",
+      "to_equipment": "pioneer.deck1.airlock.light",
+      "to_port": "command",
+      "kind": "Command"
+    },
+    {
+      "from_equipment": "pioneer.deck1.airlock.controller",
+      "from_port": "command",
+      "to_equipment": "pioneer.deck1.airlock.vent",
+      "to_port": "command",
+      "kind": "Command"
+    },
+    {
+      "from_equipment": "pioneer.deck1.airlock.controller",
+      "from_port": "command",
+      "to_equipment": "pioneer.deck1.airlock.door",
+      "to_port": "command",
+      "kind": "Command"
+    },
+    {
+      "from_equipment": "pioneer.deck1.airlock.controller",
+      "from_port": "safe_open",
+      "to_equipment": "pioneer.deck1.airlock.door",
+      "to_port": "safe_open",
+      "kind": "Interlock"
+    }
+  ]
+}
