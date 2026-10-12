@@ -1,5 +1,5 @@
 //! Two implemented decks, local meters (X=plan U, Z=plan V, floor Y=0).
-//! Derived from the approved Pioneer room/door bounds. Utilities remain proposed.
+//! Derived from the approved Pioneer room/door bounds. The first airlock controller is defined separately in room_equipment; other utilities remain proposed.
 use crate::{StationObstacle, StationObstacleKind};
 pub const PIONEER_INTERIOR_SIZE: [f64; 2] = [32.0, 14.0];
 pub const PIONEER_INTERIOR_ENTRY: [f64; 3] = [8.6666666667, 0.0, 3.0];

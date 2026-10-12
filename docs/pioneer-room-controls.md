@@ -28,7 +28,7 @@ The actual closed door adds its shared 1.4 m doorway obstacle to authoritative w
 
 `apps/server/tests/room_controls.rs` covers breaker loss, emergency depletion/recharge, manual actuation, pressure interlocks, real walking collision, occupied-door rejection, unauthenticated/wrong-context rejection, isolation between pilots, per-vessel persistence across class changes and restart, and the exact reduced capacitor recharge rate. Native/browser fixture rendering and usability are separate acceptance gates.
 
-Future work includes explicit generators/buses/breakers, motor and thermal loads, gas reservoirs, many-room topology, fault propagation, crew safety, per-device maintenance, and constrained programmable logic. None is implied by this first controller. Legacy interior clients do not render the moving leaf; while they still receive authoritative collision, updated clients are required to operate and see these room devices.
+Future work includes explicit generators/buses/breakers, motor and thermal loads, gas reservoirs, many-room topology, fault propagation, crew safety, per-device maintenance, and constrained programmable logic. None is implied by this first controller. Legacy interior clients do not render the moving leaf; authenticated mixed-version recovery below holds it open and disables room operations until compatible sessions reconnect.
 
 ## Mixed-version safety
 
