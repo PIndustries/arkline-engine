@@ -253,6 +253,7 @@ dependencies = [
  "eframe",
  "glam",
  "gloo-timers",
+ "gltf",
  "hex",
  "image",
  "js-sys",

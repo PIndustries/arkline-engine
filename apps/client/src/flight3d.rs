@@ -11,6 +11,9 @@ use glam::{Mat4, Quat, Vec3};
 use glow::HasContext;
 use std::sync::{Arc, Mutex};
 
+#[path = "ship_asset.rs"]
+mod ship_asset;
+
 #[path = "local_lighting.rs"]
 mod local_lighting;
 
@@ -1771,6 +1774,7 @@ struct Uniforms {
     model: Option<glow::UniformLocation>,
     color: Option<glow::UniformLocation>,
     emission: Option<glow::UniformLocation>,
+    emissive_color: Option<glow::UniformLocation>,
     vp: Option<glow::UniformLocation>,
     eye: Option<glow::UniformLocation>,
     material: Option<glow::UniformLocation>,
@@ -1919,6 +1923,7 @@ impl Renderer {
             model: gl.get_uniform_location(program, "model"),
             color: gl.get_uniform_location(program, "base_color"),
             emission: gl.get_uniform_location(program, "emission"),
+            emissive_color: gl.get_uniform_location(program, "emissive_color"),
             vp: gl.get_uniform_location(program, "view_projection"),
             eye: gl.get_uniform_location(program, "eye"),
             material: gl.get_uniform_location(program, "material_kind"),
@@ -1940,6 +1945,7 @@ impl Renderer {
             armor_block(),
             industrial_shell(),
         ];
+        upload.extend(pioneer_asset()?.iter().map(|p| p.vertices.clone()));
         let mut station_batches = Vec::new();
         for (vertices, color, emission) in station_batches_geometry() {
             station_batches.push((upload.len(), color, emission));
@@ -1998,7 +2004,10 @@ impl Renderer {
         emission: f32,
         material: Material,
     ) {
-        let params = material.parameters();
+        let params = embedded_primitive(mesh).map_or_else(
+            || material.parameters(),
+            |p| [p.roughness, p.metallic, 0.0, 0.0],
+        );
         self.gl.uniform_4_f32(
             self.uniforms.material_params.as_ref(),
             params[0],
@@ -2010,6 +2019,13 @@ impl Renderer {
         gl.uniform_matrix_4_f32_slice(self.uniforms.model.as_ref(), false, &model.to_cols_array());
         gl.uniform_3_f32(self.uniforms.color.as_ref(), color.x, color.y, color.z);
         gl.uniform_1_f32(self.uniforms.emission.as_ref(), emission);
+        let light_color = embedded_primitive(mesh).map_or(color, |p| p.emissive_color);
+        gl.uniform_3_f32(
+            self.uniforms.emissive_color.as_ref(),
+            light_color.x,
+            light_color.y,
+            light_color.z,
+        );
         gl.bind_vertex_array(Some(self.meshes[mesh].vao));
         gl.draw_arrays(glow::TRIANGLES, 0, self.meshes[mesh].count);
     }
@@ -2709,11 +2725,11 @@ impl Renderer {
                     spec.height_m as f32 / 200.0,
                     spec.width_m as f32 / 500.0,
                 );
-                for (_, model, _, _) in ship_parts(pilot.ship_class)
+                for mount in engine_mounts(pilot.ship_class)
                     .into_iter()
-                    .filter(|p| p.3 > 0.0 && intensity > 0.001)
+                    .filter(|_| intensity > 0.001)
                 {
-                    let mount = model.transform_point3(Vec3::ZERO) / effect_scale;
+                    let mount = mount / effect_scale;
                     for (width, brightness) in [(0.58, 0.10), (0.31, 0.62), (0.16, 1.0)] {
                         self.draw(
                             2,
@@ -3618,12 +3634,62 @@ fn turret_parts(class: ShipClass, rotation: Quat, module_id: u8) -> Vec<ModelPar
         ),
     ]
 }
+fn engine_mounts(class: ShipClass) -> Vec<Vec3> {
+    if class == ShipClass::Pioneer {
+        // Authored nozzle centers, in scene units. Material-batched lamps do not
+        // imply thrust and must never become emitters at the model origin.
+        return vec![
+            Vec3::new(-0.359, 0.0, -0.125),
+            Vec3::new(-0.359, 0.0, 0.125),
+        ];
+    }
+    cached_ship_parts(class)
+        .iter()
+        .filter(|p| p.3 > 0.0)
+        .map(|p| p.1.transform_point3(Vec3::ZERO))
+        .collect()
+}
+
 fn ship_geometry(class: ShipClass, ship: Mat4) -> Vec<(Vec<Vertex>, Mat4)> {
     ship_parts(class)
         .into_iter()
         .map(|(mesh, model, _, _)| (mesh_vertices(mesh), ship * model))
         .collect()
 }
+// Mesh slots 0..10 remain stable for procedural world geometry. Embedded
+// primitive slots precede station batching, and are shared by every render pass.
+fn pioneer_asset() -> Result<&'static Vec<ship_asset::Primitive>, String> {
+    static ASSET: std::sync::OnceLock<Result<Vec<ship_asset::Primitive>, String>> =
+        std::sync::OnceLock::new();
+    ASSET
+        .get_or_init(|| {
+            let parts =
+                ship_asset::decode(include_bytes!("../../../assets/ships/pioneer/pioneer.glb"))?;
+            let mut lo = Vec3::splat(f32::INFINITY);
+            let mut hi = Vec3::splat(f32::NEG_INFINITY);
+            for p in &parts {
+                for v in &p.vertices {
+                    lo = lo.min(v.p);
+                    hi = hi.max(v.p);
+                }
+            }
+            let half = Vec3::new(0.36, 0.09, 0.19);
+            if (lo + half).abs().max_element() > 0.0003 || (hi - half).abs().max_element() > 0.0003
+            {
+                return Err(format!(
+                    "Pioneer asset must retain 72×38×18 m hull envelope; got {lo:?}..{hi:?}"
+                ));
+            }
+            Ok(parts)
+        })
+        .as_ref()
+        .map_err(Clone::clone)
+}
+fn embedded_primitive(mesh: usize) -> Option<&'static ship_asset::Primitive> {
+    mesh.checked_sub(10)
+        .and_then(|i| pioneer_asset().ok()?.get(i))
+}
+
 type ModelPart = (usize, Mat4, Vec3, f32);
 fn ship_parts(class: ShipClass) -> Vec<ModelPart> {
     cached_ship_parts(class).to_vec()
@@ -3644,7 +3710,14 @@ fn cached_ship_parts(class: ShipClass) -> &'static [ModelPart] {
 }
 fn build_ship_parts(class: ShipClass) -> Vec<ModelPart> {
     if class == ShipClass::Pioneer {
-        return pioneer_construction_model();
+        return match pioneer_asset() {
+            Ok(parts) => parts
+                .iter()
+                .enumerate()
+                .map(|(i, p)| (10 + i, Mat4::IDENTITY, p.color, p.emission))
+                .collect(),
+            Err(_) => pioneer_construction_model(),
+        };
     }
 
     // Original procedural interpretation of the construction-fleet dossiers.
@@ -4213,6 +4286,9 @@ impl Parts {
     }
 }
 fn mesh_vertices(mesh: usize) -> Vec<Vertex> {
+    if let Some(primitive) = embedded_primitive(mesh) {
+        return primitive.vertices.clone();
+    }
     match mesh {
         0 => cube(),
         1 => torus(1.0, 0.12),
@@ -4431,7 +4507,7 @@ const FRAGMENT: &str = concat!(
     r#"
 in vec3 world;in vec3 surface_normal;in vec3 local_position;
 uniform vec4 material_params;uniform float environment_atmosphere;uniform vec3 environment_up;
-uniform vec3 planet_center;uniform vec3 base_color;uniform vec3 eye;uniform float emission;uniform int material_kind;out vec4 color;
+uniform vec3 planet_center;uniform vec3 base_color;uniform vec3 eye;uniform float emission;uniform vec3 emissive_color;uniform int material_kind;out vec4 color;
 float ark_hash3(vec3 p){return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5453);}
 float ark_noise3(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
 return mix(mix(mix(ark_hash3(i),ark_hash3(i+vec3(1,0,0)),f.x),mix(ark_hash3(i+vec3(0,1,0)),ark_hash3(i+vec3(1,1,0)),f.x),f.y),
@@ -4470,7 +4546,7 @@ if(material_kind==1 || material_kind==2){
     lit=ark_brdf(n,v,l,albedo,roughness,metallic)*vec3(3.8,3.45,2.95)*ark_sun_visibility(world,n,l);
     lit+=ark_environment(n,v,albedo,roughness,metallic,environment_atmosphere,environment_up);
     lit+=ark_local_lighting(world,n,v,albedo,roughness,metallic);
-    lit+=albedo*max(emission,0.0);
+    lit+=max(emissive_color,vec3(0.0))*max(emission,0.0);
 }
 color=vec4(ark_display(lit),1.0);}
 "#
@@ -5382,6 +5458,41 @@ mod tests {
         }
     }
     #[test]
+    fn pioneer_asset_and_parts_are_cached_with_bounded_draw_calls() {
+        let asset = pioneer_asset().unwrap();
+        assert!(std::ptr::eq(asset, pioneer_asset().unwrap()));
+        let parts = cached_ship_parts(ShipClass::Pioneer);
+        assert!(std::ptr::eq(parts, cached_ship_parts(ShipClass::Pioneer)));
+        assert_eq!(parts.len(), asset.len());
+        assert!(parts.len() <= 16);
+        assert!(asset.iter().map(|p| p.vertices.len()).sum::<usize>() <= 600_000);
+    }
+    #[test]
+    #[ignore = "Explicit CPU decode/cache timing, no GPU or UI"]
+    fn pioneer_asset_decode_timing() {
+        let bytes = include_bytes!("../../../assets/ships/pioneer/pioneer.glb");
+        let start = std::time::Instant::now();
+        let parsed = ship_asset::decode(bytes).unwrap();
+        let decode = start.elapsed();
+        let cached = pioneer_asset().unwrap();
+        let start = std::time::Instant::now();
+        for _ in 0..100_000 {
+            std::hint::black_box(pioneer_asset().unwrap());
+        }
+        eprintln!("Pioneer asset: bytes={}, triangles={}, draw_calls={}, decode_once_us={}, cached_100000_accesses_us={}, debug_assertions={}", bytes.len(), parsed.iter().map(|p|p.vertices.len()/3).sum::<usize>(), cached.len(), decode.as_micros(), start.elapsed().as_micros(), cfg!(debug_assertions));
+    }
+
+    #[test]
+    fn pioneer_engine_effects_use_two_authored_nozzles_not_material_lamps() {
+        let mounts = engine_mounts(ShipClass::Pioneer);
+        assert_eq!(mounts.len(), 2);
+        assert!(mounts
+            .iter()
+            .all(|m| (m.x + 0.359).abs() < 1e-6 && m.y == 0.0));
+        assert_eq!(mounts[0].z, -mounts[1].z);
+    }
+
+    #[test]
     fn construction_fleet_geometry_has_bounded_parts_and_restrained_lamps() {
         for class in arkline_protocol::ALL_SHIP_CLASSES {
             let parts = ship_parts(class);
@@ -5389,6 +5500,30 @@ mod tests {
                 parts.len() <= 96,
                 "{class:?} exceeds procedural detail budget"
             );
+            if class == ShipClass::Pioneer {
+                // Material batches can span the whole hull: measure luminous
+                // triangle area rather than the enclosing batch bounding box.
+                let primitives = pioneer_asset().expect("embedded Pioneer asset validates");
+                assert!(primitives.len() <= 16, "Pioneer draw-call budget");
+                let area = |p: &ship_asset::Primitive| {
+                    p.vertices
+                        .chunks_exact(3)
+                        .map(|v| (v[1].p - v[0].p).cross(v[2].p - v[0].p).length() * 0.5)
+                        .sum::<f32>()
+                };
+                let total: f32 = primitives.iter().map(area).sum();
+                let luminous: f32 = primitives
+                    .iter()
+                    .filter(|p| p.emission > 0.0)
+                    .map(area)
+                    .sum();
+                assert!(luminous < total * 0.12, "Pioneer luminous surface budget");
+                assert!(primitives.iter().all(|p| p
+                    .vertices
+                    .iter()
+                    .all(|v| v.p.is_finite() && v.n.is_finite())));
+                continue;
+            }
             assert!(
                 parts
                     .iter()
