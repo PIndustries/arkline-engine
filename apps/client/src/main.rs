@@ -4017,6 +4017,7 @@ fn main() -> eframe::Result<()> {
         None
     };
     let options = eframe::NativeOptions {
+        multisampling: 4,
         depth_buffer: 24,
         renderer: eframe::Renderer::Glow,
         viewport: egui::ViewportBuilder::default()

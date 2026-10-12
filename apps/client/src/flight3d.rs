@@ -3598,15 +3598,19 @@ fn turret_parts(class: ShipClass, rotation: Quat, module_id: u8) -> Vec<ModelPar
     let base = Mat4::from_rotation_translation(rotation, mount);
     let bottom = turret_deck(class, module_id) - radius * 0.3;
     let top = mount.y;
-    vec![
+    let mut parts = vec![
         (
-            2,
-            transform(mount, Vec3::splat(radius), Quat::IDENTITY),
+            8,
+            base * transform(
+                Vec3::ZERO,
+                Vec3::new(radius, radius * 0.7, radius * 0.8),
+                Quat::IDENTITY,
+            ),
             Vec3::new(0.24, 0.29, 0.31),
             0.0,
         ),
         (
-            0,
+            8,
             base * transform(
                 Vec3::X * (radius + barrel * 0.5),
                 Vec3::new(barrel * 0.5, radius * 0.22, radius * 0.22),
@@ -3635,7 +3639,44 @@ fn turret_parts(class: ShipClass, rotation: Quat, module_id: u8) -> Vec<ModelPar
             Vec3::new(0.20, 0.25, 0.27),
             0.0,
         ),
-    ]
+    ];
+    let pedestal = parts.pop().expect("turret pedestal");
+    // Armor, paired coolant jackets and rear power pack follow the same aim
+    // transform as the emitter; the muzzle and gameplay hardpoint stay unchanged.
+    for side in [-1.0, 1.0] {
+        parts.push((
+            8,
+            base * transform(
+                Vec3::new(radius * 0.1, 0.0, side * radius * 0.77),
+                Vec3::new(radius * 0.7, radius * 0.5, radius * 0.16),
+                Quat::IDENTITY,
+            ),
+            Vec3::new(0.035, 0.24, 0.10),
+            0.0,
+        ));
+        parts.push((
+            8,
+            base * transform(
+                Vec3::new(radius + barrel * 0.45, 0.0, side * radius * 0.31),
+                Vec3::new(barrel * 0.35, radius * 0.12, radius * 0.10),
+                Quat::IDENTITY,
+            ),
+            Vec3::new(0.28, 0.32, 0.31),
+            0.0,
+        ));
+    }
+    parts.push((
+        8,
+        base * transform(
+            Vec3::new(-radius * 0.8, radius * 0.15, 0.0),
+            Vec3::new(radius * 0.4, radius * 0.6, radius * 0.6),
+            Quat::IDENTITY,
+        ),
+        Vec3::new(0.065, 0.075, 0.072),
+        0.0,
+    ));
+    parts.push(pedestal);
+    parts
 }
 fn engine_mounts(class: ShipClass) -> Vec<Vec3> {
     if class == ShipClass::Pioneer {
