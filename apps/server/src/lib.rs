@@ -1,6 +1,8 @@
+pub mod access_tokens;
 mod assets;
 mod drones;
 mod flight;
+mod identity;
 mod mining;
 mod power;
 mod remote_control;
@@ -27,6 +29,8 @@ use std::{
 struct Pilot {
     view: PilotView,
     token_hash: String,
+    #[serde(default)]
+    identity: Option<identity::Binding>,
     last_mine_ms: Option<u64>,
     #[serde(default)]
     warp: Option<flight::WarpPath>,
@@ -104,6 +108,7 @@ fn token_hash(token: &str) -> String {
 /// The durable state and its economic event commit in one SQLite transaction.
 pub struct Server {
     db: Connection,
+    auth: Option<identity::Authenticator>,
     online_sessions: BTreeMap<String, usize>,
     // Conservative latch: clear only after ALL sessions for this pilot leave.
     interior_incompatible: std::collections::BTreeSet<String>,
@@ -152,6 +157,7 @@ impl Server {
         db.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;
             CREATE TABLE IF NOT EXISTS world (id INTEGER PRIMARY KEY CHECK(id=1), json TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS ledger (sequence INTEGER PRIMARY KEY, json TEXT NOT NULL);")?;
+        db.execute_batch("CREATE TABLE IF NOT EXISTS identity_audit (pilot TEXT PRIMARY KEY, issuer TEXT NOT NULL, subject TEXT NOT NULL, linked_at_ms INTEGER NOT NULL);")?;
         db.execute(
             "INSERT OR IGNORE INTO world(id,json) VALUES(1,?1)",
             [serde_json::to_string(&World::default())?],
@@ -195,6 +201,7 @@ impl Server {
         }
         Ok(Self {
             db,
+            auth: None,
             online_sessions: BTreeMap::new(),
             interior_incompatible: Default::default(),
             fleet_incompatible: Default::default(),
@@ -224,7 +231,8 @@ impl Server {
             Request::Connect {
                 resume_token: None,
                 ..
-            } | Request::PlaceSell { .. }
+            } | Request::AccountConnect { .. }
+                | Request::PlaceSell { .. }
         ) {
             return Ok(false);
         }
@@ -233,7 +241,9 @@ impl Server {
             .query_row("SELECT json FROM world WHERE id=1", [], |r| r.get(0))?;
         let w: World = serde_json::from_str(&raw)?;
         match request {
-            Request::Connect { pilot, .. } if !w.pilots.contains_key(pilot) => {
+            Request::Connect { pilot, .. } | Request::AccountConnect { pilot, .. }
+                if !w.pilots.contains_key(pilot) =>
+            {
                 ensure!(
                     w.pilots.len() < max_pilots,
                     "public world registration capacity reached"
@@ -261,9 +271,24 @@ impl Server {
     pub fn handle_at(
         &mut self,
         session: &mut Option<String>,
-        mut request: Request,
+        request: Request,
         now: u64,
     ) -> Response {
+        self.handle_identity_at(session, request, now, None)
+    }
+    fn handle_identity_at(
+        &mut self,
+        session: &mut Option<String>,
+        mut request: Request,
+        now: u64,
+        account: Option<identity::Admission>,
+    ) -> Response {
+        if matches!(request, Request::Connect { .. })
+            && account.is_none()
+            && self.auth.as_ref().is_some_and(|a| a.required)
+        {
+            return Response::error("account authentication required");
+        }
         let previous = session.clone();
         let legacy_room = matches!(
             &request,
@@ -315,7 +340,7 @@ impl Server {
         {
             return Response::error("Close older or terminal clients, then disconnect and reconnect all sessions for this pilot before entering the interior");
         }
-        match self.execute(session, request, now, false) {
+        match self.execute(session, request, now, false, account) {
             Ok(mut response) => {
                 // execute changes the session only after a successful durable
                 // commit. Repeated Connect on one socket must not double-count.
@@ -483,6 +508,7 @@ impl Server {
         request: Request,
         now: u64,
         automated: bool,
+        account: Option<identity::Admission>,
     ) -> Result<Response> {
         let transport_session = session;
         let mut effective_session = transport_session.clone();
@@ -713,6 +739,9 @@ impl Server {
                 event = outcome;
                 message = "Station assets updated";
             }
+            Request::AccountConnect { .. } | Request::AuthCapabilities => {
+                bail!("use authenticated transport admission")
+            }
             Request::Connect {
                 supports_room_controls,
                 supports_fleet_hangar,
@@ -733,13 +762,18 @@ impl Server {
                             .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-'),
                     "pilot name must be 1-24 ASCII letters, digits, underscore or hyphen"
                 );
+                if let Some(a) = &account {
+                    identity::authorize(&world, &pilot, a, resume_token.as_deref())?;
+                }
                 if let Some(existing) = world.pilots.get(&pilot) {
-                    let supplied =
-                        resume_token.context("resume token required for existing pilot")?;
-                    ensure!(
-                        token_hash(&supplied) == existing.token_hash,
-                        "invalid resume token"
-                    );
+                    if account.is_none() {
+                        let supplied =
+                            resume_token.context("resume token required for existing pilot")?;
+                        ensure!(
+                            token_hash(&supplied) == existing.token_hash,
+                            "invalid resume token"
+                        );
+                    }
                     if !supports_pioneer_interior {
                         let existing = world.pilots.get_mut(&pilot).unwrap();
                         if existing
@@ -796,16 +830,26 @@ impl Server {
                                 locked_asteroid: None,
                             },
                             token_hash: token_hash(&issued),
+                            identity: None,
                             last_mine_ms: None,
                             warp: None,
                             controls: None,
                             walk_input: None,
                         },
                     );
-                    token = Some(issued);
+                    if account.is_none() {
+                        token = Some(issued);
+                    }
                     event = Some(EconomicEvent::PilotCreated {
                         pilot: pilot.clone(),
                     });
+                }
+                if let Some(a) = &account {
+                    let p = world.pilots.get_mut(&pilot).unwrap();
+                    if p.identity.is_none() {
+                        p.identity = Some(a.binding.clone());
+                        tx.execute("INSERT INTO identity_audit(pilot, issuer, subject, linked_at_ms) VALUES(?1,?2,?3,?4)", params![pilot, a.binding.issuer, a.binding.subject, now])?;
+                    }
                 }
                 assets::ensure_accounts(&mut world);
                 world.accounts.get_mut(&pilot).unwrap().room_compatible = supports_room_controls;
@@ -1228,6 +1272,7 @@ impl Server {
             *transport_session = Some(pilot);
         }
         Ok(Response {
+            auth: None,
             assets: private_assets,
             ok: true,
             message: message.into(),
