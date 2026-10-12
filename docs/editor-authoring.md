@@ -55,3 +55,31 @@ REST should be disabled by default, explicitly enabled per editor project and bo
 Expose capabilities and bounded read-only inspection before mutation. Proposed operations include inspecting the selected object/catalog, staging typed edits, validating a revision, requesting a preview, applying a revision, undoing and exporting. Use bounded request sizes, timeouts, rate limits, audit records without secrets, canonical project-relative paths and symlink/path-traversal checks. No arbitrary code execution, filesystem access outside the project, remote network binding, production credentials or hidden game-administrator commands.
 
 Claude, Codex, Grok and other clients can integrate through these documented adapters if they support the selected transport. None is currently verified as an editor automation integration. A protocol name or successful connection is not acceptance: each client needs a real inspect → stage → validate → preview → apply → undo test against an isolated project.
+
+## Local contribution and detailed design priority
+
+This milestone stays local: contributor workspace, candidate engineering, asset editing and reproducible preview. In-editor GitHub browsing and the candidate engineering panel are implemented in 26.10.12.3; see editor.md for the precise native checks and remaining workflow boundaries. Read-only issue/PR/wiki status should cite its repository and freshness. Subsequent contribution actions should expose the exact branch/diff/target before publishing and leave account tokens outside project documents.
+
+The detailed vessel source should resemble a reviewable construction assembly; the runtime should use reduced render, collision, mass-region and system representations, not one draw call/entity per bolt. The [design-to-runtime contract](ships/design-runtime-contract.md) defines mass provenance, coordinate transforms, full inertia, conservation through reduction and reproducible bake evidence. Unknown densities/strengths stay unresolved, and candidate engineering values do not silently replace server balance parameters.
+
+Tracking remains in [#45](https://github.com/PIndustries/arkline-engine/issues/45) for the local workspace, [#10](https://github.com/PIndustries/arkline-engine/issues/10) for asset import/bake, and [#32](https://github.com/PIndustries/arkline-engine/issues/32) for authoritative engineering. These are complementary gates, not a new promise of a complete CAD or physics package.
+
+## Local experimental physics and provenance
+
+A bounded Physics Lab is being developed separately from authoritative gameplay: one-dimensional thrust under uniform gravity (`a = F/m - g`) and a seeded kinematic point-cloud visualization. The source labels the limits explicitly: constant mass, no drag/fuel/ground collision/orbital gravity, and no cosmology, particle-force/collision or gravity coupling in the point cloud. Native acceptance remains pending. These local experiments must not modify a ship's live flight model or mint runtime resources.
+
+Future deterministic natural-phenomena jobs need seeded/versioned inputs, finite material provenance, bounded work and replay-safe saved results. They must preserve existing ore conservation; visual particles and depleted deposits do not authorize material creation or respawn. The [design-to-runtime contract](ships/design-runtime-contract.md) describes this boundary and separates render, collision and simulation budgets.
+
+Asset history should map stable IDs to saved project fields, source revisions and Git history, with typed semantic design diffs and local export reports. Read-only GitHub issue/PR/wiki inspection is the first integration step. Creating commits or submitting PRs from the editor is not currently implemented or implied by connecting a repository; those future actions require explicit reviewable targets and changes.
+
+## Runtime transition and visibility debugger — pending
+
+The editor needs an actual runtime inspection workflow, not mock panels or authored screenshots. Track it in [#45](https://github.com/PIndustries/arkline-engine/issues/45). None of the following is claimed implemented by this roadmap:
+
+- Trigger and observe exterior ↔ interior ↔ cockpit, remote/drone camera-feed and surface transitions through real supported gameplay/camera actions. Identify the active scene, camera, pilot/entity, source system and transition state. Do not teleport or bypass ownership to make a demonstration succeed.
+- Toggle wireframe, actual collision shapes, equipment/port anchors, selection bounds and interest/visibility diagnostics. Distinguish authored geometry, loaded resources, submitted draws, culled objects and authoritative entities. A debug box is not proof of a collider unless it comes from the collision source.
+- Inspect real loaded objects/assets with stable IDs, source/hash, instance counts, transforms, material/program bindings and lifecycle state. Show why an object was loaded, retained, culled or unloaded and which view/feed references it.
+- Report simulation/update, CPU frame and GPU timing separately, plus draw calls, triangles, resource memory where measurable, network update rate/latency/bytes and snapshot age. Embedded play must say **in-process** rather than fabricate network metrics. Unsupported GPU timers must show unavailable; frame interval/FPS is not GPU execution time.
+- Capture a bounded diagnostic record around a transition, including before/after state, resource counts and timing samples. Avoid credentials/player-private data, unbounded per-frame logging and synchronous GPU readback stalls.
+
+Acceptance: execute the real transition matrix on a stated local fixture; verify the overlay uses the same transforms, visibility and collision/asset sources as the runtime; inspect main and camera-feed views; confirm stopping/reopening returns resource counts to a documented baseline; compare timing with debugging off/on. Pending state, failed transitions and unavailable metrics must remain visible. Do not claim correctness from a drawn overlay or a single FPS sample.

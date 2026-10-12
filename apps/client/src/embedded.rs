@@ -72,11 +72,27 @@ impl EmbeddedClient {
             destroyed: false,
         }
     }
-    pub fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+    /// Drain authority updates while another editor workspace owns the viewport.
+    /// This never renders, consumes egui input, or starts a new connection.
+    pub fn poll(&mut self) {
         for state in self.states.try_iter() {
             self.state = state;
         }
         self.cockpit.embedded_paused = self.state != EmbeddedStatus::Running;
+        self.cockpit.embedded_input = false;
+        self.cockpit.poll();
+        if self.cockpit.embedded_paused {
+            self.cockpit.frozen_time = self.cockpit.snapshot.as_ref().map(|s| s.server_time_ms);
+        }
+    }
+    /// Poll a hidden viewport without treating workspace absence as a rendered frame.
+    pub fn poll_hidden(&mut self) {
+        self.poll();
+        self.cockpit.frame_intervals.clear();
+        self.cockpit.frame_observed = Instant::now();
+    }
+    pub fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        self.poll();
         self.cockpit.embedded_input = ctx
             .pointer_latest_pos()
             .is_some_and(|p| ctx.available_rect().contains(p));
@@ -126,6 +142,19 @@ impl EmbeddedClient {
     }
     pub fn pilot(&self) -> &str {
         &self.cockpit.pilot
+    }
+    pub fn set_debug_wireframe(&mut self, enabled: bool) {
+        self.cockpit.hangar_view.set_debug_wireframe(enabled);
+        self.cockpit.flight_view.set_debug_wireframe(enabled);
+    }
+    pub fn debug_render_metrics(&self) -> crate::DebugRenderMetrics {
+        if self.cockpit.in_station_hangar() {
+            self.cockpit.hangar_view.debug_render_metrics()
+        } else if self.cockpit.view_mode == ViewMode::Tactical {
+            Default::default()
+        } else {
+            self.cockpit.flight_view.debug_render_metrics()
+        }
     }
     pub fn set_material_preview(&mut self, preview: Option<EmbeddedMaterialPreview>) {
         self.cockpit
@@ -260,6 +289,46 @@ fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn hidden_poll_drains_state_without_paint_or_input() {
+        let ctx = egui::Context::default();
+        let mut cockpit = crate::tests::view_test_cockpit(&ctx);
+        let snapshot = cockpit.snapshot.take().unwrap();
+        let expected_time = snapshot.server_time_ms;
+        cockpit.embedded = true;
+        let (updates, receiver) = mpsc::channel();
+        cockpit.updates = Some(receiver);
+        let mut response = Response::error("");
+        response.ok = true;
+        response.snapshot = Some(snapshot);
+        updates
+            .send(Update::Response(Box::new(response), false))
+            .unwrap();
+        let (clock, _commands) = mpsc::channel();
+        let (states, receiver) = mpsc::channel();
+        states.send(EmbeddedStatus::Paused).unwrap();
+        let mut client = EmbeddedClient {
+            cockpit,
+            clock,
+            states: receiver,
+            state: EmbeddedStatus::Loading,
+            destroyed: false,
+        };
+        client.cockpit.frame_intervals.push_back(1.245);
+        client.cockpit.frame_observed = Instant::now() - Duration::from_secs(30);
+        let output = ctx.run(Default::default(), |_| client.poll_hidden());
+        assert!(client.cockpit.frame_intervals.is_empty());
+        assert!(client.cockpit.frame_observed.elapsed() < Duration::from_secs(1));
+        assert_eq!(client.status(), &EmbeddedStatus::Paused);
+        assert_eq!(client.snapshot().unwrap().server_time_ms, expected_time);
+        assert_eq!(client.cockpit.frozen_time, Some(expected_time));
+        assert!(!client.cockpit.embedded_input);
+        assert!(output.shapes.is_empty());
+        assert!(output
+            .viewport_output
+            .values()
+            .all(|v| v.commands.is_empty()));
+    }
     #[test]
     fn embedded_frame_leaves_editor_panels_and_window_ownership_intact() {
         let ctx = egui::Context::default();

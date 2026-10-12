@@ -320,6 +320,22 @@ impl FlightView {
     pub fn cockpit_console_rect(&self) -> Option<egui::Rect> {
         self.console_rect
     }
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn set_debug_wireframe(&mut self, enabled: bool) {
+        if let Ok(renderer) = &self.renderer {
+            if let Ok(mut renderer) = renderer.lock() {
+                renderer.debug_wireframe = enabled;
+            }
+        }
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn debug_render_metrics(&self) -> DebugRenderMetrics {
+        self.renderer
+            .as_ref()
+            .ok()
+            .and_then(|r| r.lock().ok().map(|r| r.debug_metrics.get()))
+            .unwrap_or_default()
+    }
     pub fn input_surface(&self) -> Option<(egui::Rect, egui::LayerId)> {
         self.input_surface
     }
@@ -1880,7 +1896,19 @@ impl CachedFeed {
         gl.delete_renderbuffer(self.depth);
     }
 }
+/// Submitted mesh work for the most recent GPU scene pass; excludes sky and shadow passes.
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct DebugRenderMetrics {
+    pub draw_calls: u64,
+    pub triangles: u64,
+    pub wireframe_draw_calls: u64,
+}
 struct Renderer {
+    #[cfg(not(target_arch = "wasm32"))]
+    debug_wireframe: bool,
+    #[cfg(not(target_arch = "wasm32"))]
+    debug_metrics: std::cell::Cell<DebugRenderMetrics>,
     gl: Arc<glow::Context>,
     program: glow::Program,
     background: glow::Program,
@@ -1991,6 +2019,10 @@ impl Renderer {
             station_batches,
             feed_cache: Vec::new(),
             destroyed: false,
+            #[cfg(not(target_arch = "wasm32"))]
+            debug_wireframe: false,
+            #[cfg(not(target_arch = "wasm32"))]
+            debug_metrics: Default::default(),
             sun_shadows: Vec::new(),
             shadow_fallback,
             shadow_failed: false,
@@ -2040,6 +2072,42 @@ impl Renderer {
         );
         gl.bind_vertex_array(Some(self.meshes[mesh].vao));
         gl.draw_arrays(glow::TRIANGLES, 0, self.meshes[mesh].count);
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let mut metrics = self.debug_metrics.get();
+            metrics.draw_calls += 1;
+            metrics.triangles += self.meshes[mesh].count as u64 / 3;
+            if self.debug_wireframe {
+                let mut modes = [0; 2];
+                gl.get_parameter_i32_slice(glow::POLYGON_MODE, &mut modes);
+                let offset_enabled = gl.is_enabled(glow::POLYGON_OFFSET_LINE);
+                let factor = gl.get_parameter_f32(glow::POLYGON_OFFSET_FACTOR);
+                let units = gl.get_parameter_f32(glow::POLYGON_OFFSET_UNITS);
+                gl.enable(glow::POLYGON_OFFSET_LINE);
+                gl.polygon_offset(-1., -1.);
+                gl.polygon_mode(glow::FRONT_AND_BACK, glow::LINE);
+                gl.uniform_3_f32(self.uniforms.color.as_ref(), 0.02, 0.9, 0.25);
+                gl.uniform_3_f32(self.uniforms.emissive_color.as_ref(), 0.02, 0.9, 0.25);
+                gl.uniform_1_f32(self.uniforms.emission.as_ref(), 1.5);
+                gl.draw_arrays(glow::TRIANGLES, 0, self.meshes[mesh].count);
+                // Core GL uses a shared front/back polygon mode.
+                gl.polygon_mode(glow::FRONT_AND_BACK, modes[0] as u32);
+                gl.polygon_offset(factor, units);
+                if !offset_enabled {
+                    gl.disable(glow::POLYGON_OFFSET_LINE);
+                }
+                gl.uniform_3_f32(self.uniforms.color.as_ref(), color.x, color.y, color.z);
+                gl.uniform_3_f32(
+                    self.uniforms.emissive_color.as_ref(),
+                    light_color.x,
+                    light_color.y,
+                    light_color.z,
+                );
+                gl.uniform_1_f32(self.uniforms.emission.as_ref(), emission);
+                metrics.wireframe_draw_calls += 1;
+            }
+            self.debug_metrics.set(metrics);
+        }
     }
     unsafe fn paint_cached_feed(
         &mut self,
@@ -2222,6 +2290,8 @@ impl Renderer {
         }
     }
     unsafe fn paint(&mut self, frame: &Frame, callback_target: Option<glow::Framebuffer>) {
+        #[cfg(not(target_arch = "wasm32"))]
+        self.debug_metrics.set(Default::default());
         let space = frame.space;
         // Main and remote passes may show different systems. Keep recently drawn
         // turret state between passes so neither camera resets the other's slew.
@@ -4959,6 +5029,55 @@ mod tests {
                 material_pixels[0], material_pixels[4],
                 "rock and screen glass cannot share roughness response"
             );
+            // Actual cached triangle-edge overlay and native GL-state restoration.
+            let mut wire_pixels = Vec::new();
+            for enabled in [false, true] {
+                renderer.debug_wireframe = enabled;
+                renderer.debug_metrics.set(Default::default());
+                gl.polygon_mode(glow::FRONT_AND_BACK, glow::FILL);
+                gl.disable(glow::POLYGON_OFFSET_LINE);
+                gl.polygon_offset(2., 3.);
+                gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
+                renderer.draw(0, Mat4::IDENTITY, Vec3::splat(0.15), 0.);
+                let mut pixels = vec![0u8; 128 * 128 * 4];
+                gl.read_pixels(
+                    0,
+                    0,
+                    128,
+                    128,
+                    glow::RGBA,
+                    glow::UNSIGNED_BYTE,
+                    glow::PixelPackData::Slice(Some(&mut pixels)),
+                );
+                wire_pixels.push(pixels);
+                let mut modes = [0; 2];
+                gl.get_parameter_i32_slice(glow::POLYGON_MODE, &mut modes);
+                assert_eq!(modes, [glow::FILL as i32; 2]);
+                assert!(!gl.is_enabled(glow::POLYGON_OFFSET_LINE));
+                assert_eq!(gl.get_parameter_f32(glow::POLYGON_OFFSET_FACTOR), 2.);
+                assert_eq!(gl.get_parameter_f32(glow::POLYGON_OFFSET_UNITS), 3.);
+                assert_eq!(renderer.debug_metrics.get().draw_calls, 1);
+                assert_eq!(
+                    renderer.debug_metrics.get().triangles,
+                    renderer.meshes[0].count as u64 / 3
+                );
+                assert_eq!(
+                    renderer.debug_metrics.get().wireframe_draw_calls,
+                    u64::from(enabled)
+                );
+                assert_eq!(gl.get_error(), glow::NO_ERROR);
+            }
+            assert!(
+                wire_pixels[0]
+                    .iter()
+                    .zip(&wire_pixels[1])
+                    .filter(|(a, b)| a != b)
+                    .count()
+                    > 40,
+                "wireframe must change actual GPU pixels"
+            );
+            renderer.debug_wireframe = false;
+            gl.polygon_offset(0., 0.);
             // Exercise the integrated local-light hook through the actual mesh BRDF,
             // not only the isolated attenuation shader test.
             gl.uniform_1_i32(

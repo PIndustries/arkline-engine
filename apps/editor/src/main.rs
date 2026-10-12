@@ -1,7 +1,13 @@
 //! One-window local development workspace using the real game client and authority.
 mod asset_document;
+mod community;
+mod engineering;
+mod engineering_document;
+mod github;
 mod inspector;
 mod materials;
+mod physics_lab;
+mod provenance;
 use arkline_client::{EmbeddedClient, EmbeddedStatus};
 use eframe::egui::{self, Color32, RichText};
 use std::{collections::VecDeque, path::PathBuf, time::Duration};
@@ -17,12 +23,24 @@ struct Editor {
     bottom_tab: usize,
     inspector_tab: usize,
     materials: materials::Materials,
+    engineering: engineering::Engineering,
+    community: community::Community,
+    workspace: usize,
+    wireframe: bool,
+    physics_lab: physics_lab::PhysicsLab,
+    provenance: provenance::Provenance,
 }
 impl Editor {
     fn new(cc: &eframe::CreationContext<'_>, project: PathBuf, pilot: String) -> Self {
         let client = EmbeddedClient::new(cc, project.join(".arkline-studio"), pilot.clone());
         Self {
             materials: materials::Materials::open(&project),
+            engineering: engineering::Engineering::open(&project),
+            community: community::Community::open(&project),
+            workspace: 0,
+            wireframe: false,
+            physics_lab: physics_lab::PhysicsLab::default(),
+            provenance: provenance::Provenance::default(),
             client,
             project,
             selected_pilot: pilot,
@@ -38,6 +56,8 @@ impl Editor {
 }
 impl eframe::App for Editor {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        self.client.poll();
+        self.community.poll();
         let status = match self.client.status() {
             EmbeddedStatus::Loading => "LOADING".into(),
             EmbeddedStatus::Paused => "PAUSED".into(),
@@ -75,7 +95,7 @@ impl eframe::App for Editor {
                     ui.separator();
                     if ui
                         .add_enabled(
-                            ready && !active,
+                            ready && !active && self.workspace == 0,
                             egui::Button::new("▶  Play").min_size(egui::vec2(82., 32.)),
                         )
                         .clicked()
@@ -93,7 +113,7 @@ impl eframe::App for Editor {
                     }
                     if ui
                         .add_enabled(
-                            paused,
+                            paused && self.workspace == 0,
                             egui::Button::new("Step 50 ms").min_size(egui::vec2(95., 32.)),
                         )
                         .clicked()
@@ -121,6 +141,27 @@ impl eframe::App for Editor {
                     });
                 });
             });
+        egui::TopBottomPanel::top("workspace_tabs")
+            .exact_height(30.)
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.selectable_value(&mut self.workspace, 0, "Ship workspace");
+                    if ui
+                        .selectable_value(&mut self.workspace, 1, "Community · GitHub")
+                        .clicked()
+                    {
+                        self.client.pause();
+                        self.community.ensure_loaded();
+                    }
+                    if ui
+                        .selectable_value(&mut self.workspace, 2, "Physics lab")
+                        .clicked()
+                    {
+                        self.client.pause();
+                    }
+                    ui.label(RichText::new("Local sandbox").color(MUTED));
+                });
+            });
         egui::TopBottomPanel::bottom("editor_console").resizable(true).default_height(120.).height_range(65. ..=280.).show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut self.bottom_tab,0,"Console");
@@ -135,10 +176,22 @@ impl eframe::App for Editor {
                 } else {
                     ui.label("Project folder"); ui.monospace(self.project.display().to_string());
                     ui.label("World and pilot credentials live in .arkline-studio. Stop preserves the world; it does not reset it.");
-                    ui.colored_label(MUTED,"This build embeds gameplay and live inspection. Ship, room and material authoring are not available yet.");
+                    ui.colored_label(MUTED,"Pioneer materials and candidate engineering data are saved under Assets. Community connects to GitHub; simulation remains local.");
                 }
             });
         });
+        if self.workspace == 2 {
+            self.client.poll_hidden();
+            self.physics_lab.show(ctx);
+            ctx.request_repaint_after(Duration::from_millis(16));
+            return;
+        }
+        if self.workspace == 1 {
+            self.client.poll_hidden();
+            self.community.show(ctx, &self.project);
+            ctx.request_repaint_after(Duration::from_millis(100));
+            return;
+        }
         egui::SidePanel::left("editor_outliner").resizable(true).default_width(205.).width_range(165. ..=330.).show(ctx, |ui| {
             ui.add_space(10.); ui.heading("World outliner");
             ui.colored_label(MUTED,"Live simulation objects"); ui.separator();
@@ -171,9 +224,11 @@ impl eframe::App for Editor {
             .width_range(245. ..=430.)
             .show(ctx, |ui| {
                 ui.add_space(10.);
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     ui.selectable_value(&mut self.inspector_tab, 0, "Inspector");
                     ui.selectable_value(&mut self.inspector_tab, 1, "Materials");
+                    ui.selectable_value(&mut self.inspector_tab, 2, "Engineering");
+                    ui.selectable_value(&mut self.inspector_tab, 3, "Render debug");
                 });
                 if !active {
                     ui.colored_label(MUTED, "Captured state · simulation is not running");
@@ -184,6 +239,31 @@ impl eframe::App for Editor {
                     .show(ui, |ui| {
                         if self.inspector_tab == 1 {
                             self.materials.show(ui, &self.project);
+                            self.provenance.show(
+                                ui,
+                                &self.project,
+                                provenance::AssetFile::Material,
+                                None,
+                            );
+                        } else if self.inspector_tab == 2 {
+                            self.engineering.show(ui, &self.project);
+                            self.provenance.show(
+                                ui,
+                                &self.project,
+                                provenance::AssetFile::Engineering,
+                                self.engineering.selected_component(),
+                            );
+                        } else if self.inspector_tab == 3 {
+                            ui.heading("Render inspection");
+                            ui.checkbox(&mut self.wireframe, "Mesh wireframe");
+                            let metrics = self.client.debug_render_metrics();
+                            ui.label(format!("Submitted mesh triangles: {}",metrics.triangles));
+                            ui.label(format!("Mesh draw calls: {}",metrics.draw_calls));
+                            ui.label(format!("Wireframe draw calls: {}",metrics.wireframe_draw_calls));
+                            ui.small("Actual cached mesh edges in native hangar and flight scenes. Counts describe the last GPU scene pass, which may be a camera feed; they exclude sky and shadow passes. Wireframe adds rendering work.");
+                            ui.separator();
+                            ui.label("Use the game viewport to change camera modes, board or leave the ship.");
+                            ui.small("Automatic transition traces, collision/interest overlays and GPU timing are not available yet.");
                         } else {
                             inspector::show(
                                 ui,
@@ -199,6 +279,7 @@ impl eframe::App for Editor {
                     });
             });
         // The real client owns the remaining central viewport and its normal controls.
+        self.client.set_debug_wireframe(self.wireframe);
         self.client.set_material_preview(self.materials.preview());
         self.client.update(ctx, frame);
         ctx.request_repaint_after(Duration::from_millis(if active { 16 } else { 50 }));

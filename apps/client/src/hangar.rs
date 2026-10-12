@@ -70,6 +70,21 @@ impl HangarView {
     pub fn set_material_preview(&mut self, preview: Option<crate::EmbeddedMaterialPreview>) {
         self.material_preview = preview;
     }
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn set_debug_wireframe(&mut self, enabled: bool) {
+        if let Some(renderer) = &self.renderer {
+            if let Ok(mut renderer) = renderer.lock() {
+                renderer.debug_wireframe = enabled;
+            }
+        }
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn debug_render_metrics(&self) -> DebugRenderMetrics {
+        self.renderer
+            .as_ref()
+            .and_then(|r| r.lock().ok().map(|r| r.debug_metrics.get()))
+            .unwrap_or_default()
+    }
     pub fn input_surface(&self) -> Option<(egui::Rect, egui::LayerId)> {
         self.surface
     }
@@ -652,6 +667,8 @@ fn apply_material_preview(parts: &mut [ModelPart], preview: crate::EmbeddedMater
     }
 }
 unsafe fn paint(renderer: &Renderer, vp: Mat4, eye: Vec3, parts: &[ModelPart]) {
+    #[cfg(not(target_arch = "wasm32"))]
+    renderer.debug_metrics.set(Default::default());
     if renderer.destroyed {
         return;
     }

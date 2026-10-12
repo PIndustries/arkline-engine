@@ -1,3 +1,5 @@
+#[cfg(not(target_arch = "wasm32"))]
+pub use flight3d::DebugRenderMetrics;
 mod material_preview;
 pub use material_preview::EmbeddedMaterialPreview;
 #[cfg(not(target_arch = "wasm32"))]
