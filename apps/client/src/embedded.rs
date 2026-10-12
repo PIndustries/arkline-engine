@@ -127,6 +127,11 @@ impl EmbeddedClient {
     pub fn pilot(&self) -> &str {
         &self.cockpit.pilot
     }
+    pub fn set_material_preview(&mut self, preview: Option<EmbeddedMaterialPreview>) {
+        self.cockpit
+            .hangar_view
+            .set_material_preview(preview.map(EmbeddedMaterialPreview::validated));
+    }
     pub fn send_command(&mut self, request: Request) {
         self.cockpit.send(request);
     }
@@ -302,6 +307,65 @@ mod tests {
             .all(|v| v.commands.is_empty()));
         assert!(rx.try_recv().is_err());
         assert!(!output.shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::Text(t) if t.galley.text().contains("Fullscreen") || t.galley.text() == "Open second cockpit")));
+    }
+    #[test]
+    fn hangar_access_anchor_and_paint_stay_above_editor_console() {
+        let ctx = egui::Context::default();
+        let mut cockpit = crate::tests::view_test_cockpit(&ctx);
+        cockpit.embedded = true;
+        let pilot = &mut cockpit.snapshot.as_mut().unwrap().pilots[0];
+        pilot.location = Location::Docked;
+        pilot.station_avatar = None;
+        for frame in 0..3 {
+            let mut viewport = egui::Rect::NOTHING;
+            let output = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        Pos2::ZERO,
+                        egui::vec2(1224., 768.),
+                    )),
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::TopBottomPanel::top("toolbar")
+                        .exact_height(54.)
+                        .show(ctx, |_| {});
+                    egui::TopBottomPanel::bottom("console")
+                        .exact_height(67.)
+                        .show(ctx, |_| {});
+                    egui::SidePanel::left("outliner")
+                        .exact_width(205.)
+                        .show(ctx, |_| {});
+                    egui::SidePanel::right("inspector")
+                        .exact_width(290.)
+                        .show(ctx, |_| {});
+                    viewport = ctx.available_rect().shrink(8.);
+                    cockpit.station_overlay(ctx);
+                },
+            );
+            let mut found = false;
+            for clipped in output.shapes {
+                if let egui::Shape::Text(t) = clipped.shape {
+                    if t.galley.text() == "Leave ship" {
+                        found = true;
+                        assert!(
+                            viewport.contains_rect(clipped.clip_rect),
+                            "{:?} outside {:?}",
+                            clipped.clip_rect,
+                            viewport
+                        );
+                        assert!(
+                            viewport.contains(t.pos),
+                            "button outside viewport: {:?}",
+                            t.pos
+                        );
+                    }
+                }
+            }
+            if frame > 0 {
+                assert!(found);
+            }
+        }
     }
     #[test]
     fn worker_pauses_steps_restarts_and_preserves_authenticated_pilot() {

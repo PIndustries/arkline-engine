@@ -275,7 +275,11 @@ dependencies = [
 name = "arkline-editor"
 version = "0.1.0"
 dependencies = [
+ "arkline-client",
+ "arkline-protocol",
  "eframe",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -3,6 +3,7 @@ use super::{Mat4, Vec3, Vertex};
 
 pub(super) struct Primitive {
     pub vertices: Vec<Vertex>,
+    pub material_name: String,
     pub color: Vec3,
     pub emission: f32,
     pub emissive_color: Vec3,
@@ -190,6 +191,7 @@ fn visit(
                 Vec3::ZERO
             };
             out.push(Primitive {
+                material_name: material.name().unwrap_or("").to_owned(),
                 vertices,
                 color,
                 emission,

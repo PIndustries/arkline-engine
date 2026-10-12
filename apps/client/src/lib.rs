@@ -1,3 +1,5 @@
+mod material_preview;
+pub use material_preview::EmbeddedMaterialPreview;
 #[cfg(not(target_arch = "wasm32"))]
 mod embedded;
 #[cfg(not(target_arch = "wasm32"))]

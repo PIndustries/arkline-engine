@@ -371,6 +371,12 @@ impl Cockpit {
         }
     }
     pub(super) fn station_overlay(&mut self, ctx: &egui::Context) {
+        // Window anchors otherwise use the entire screen, including editor panels.
+        let bounds = if self.embedded {
+            ctx.available_rect().shrink(8.)
+        } else {
+            ctx.screen_rect()
+        };
         egui::Window::new(if self.own().is_some_and(|p| p.station_avatar.is_some()) {
             "On-foot navigation"
         } else {
@@ -378,6 +384,13 @@ impl Cockpit {
         })
         .id(egui::Id::new("station_embodiment_controls"))
         .anchor(egui::Align2::CENTER_BOTTOM, [0.0, -14.0])
+        .constrain_to(bounds)
+        .max_height(if self.embedded {
+            (bounds.height() - 48.).max(24.)
+        } else {
+            f32::INFINITY
+        })
+        .vscroll(self.embedded)
         .resizable(false)
         .collapsible(false)
         .movable(false)

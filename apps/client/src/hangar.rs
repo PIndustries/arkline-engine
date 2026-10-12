@@ -21,6 +21,7 @@ pub enum OnFootView {
 
 pub struct HangarView {
     pub on_foot_view: OnFootView,
+    material_preview: Option<crate::EmbeddedMaterialPreview>,
     renderer: Option<Arc<Mutex<Renderer>>>,
     error: Option<String>,
     surface: Option<(egui::Rect, egui::LayerId)>,
@@ -48,6 +49,7 @@ impl HangarView {
         };
         Self {
             on_foot_view: OnFootView::ThirdPerson,
+            material_preview: None,
             renderer,
             error,
             surface: None,
@@ -63,6 +65,10 @@ impl HangarView {
             follow_heading: None,
             gait: Default::default(),
         }
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn set_material_preview(&mut self, preview: Option<crate::EmbeddedMaterialPreview>) {
+        self.material_preview = preview;
     }
     pub fn input_surface(&self) -> Option<(egui::Rect, egui::LayerId)> {
         self.surface
@@ -222,6 +228,9 @@ impl HangarView {
             p.extend(quarters::room_parts(pilot.ship_class, now));
             p
         };
+        if let Some(preview) = self.material_preview {
+            apply_material_preview(&mut parts, preview);
+        }
         if let Some(avatar) = &pilot.station_avatar {
             let position = self
                 .follow
@@ -628,6 +637,20 @@ fn avatar_parts(
     }
     p.0
 }
+fn apply_material_preview(parts: &mut [ModelPart], preview: crate::EmbeddedMaterialPreview) {
+    let preview = preview.validated();
+    for (mesh, _, color, emission) in parts {
+        let Some(material) = embedded_primitive(*mesh) else {
+            continue;
+        };
+        match material.material_name.as_str() {
+            "Graphite ceramic armor" => *color = Vec3::from_array(preview.hull_rgb),
+            "Emerald structural frames" => *color = Vec3::from_array(preview.trim_rgb),
+            _ => {}
+        }
+        *emission *= preview.emissive_strength;
+    }
+}
 unsafe fn paint(renderer: &Renderer, vp: Mat4, eye: Vec3, parts: &[ModelPart]) {
     if renderer.destroyed {
         return;
@@ -674,6 +697,49 @@ unsafe fn paint(renderer: &Renderer, vp: Mat4, eye: Vec3, parts: &[ModelPart]) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn live_material_preview_changes_only_authored_pioneer_materials() {
+        let original = bay_parts(ShipClass::Pioneer);
+        let mut preview_parts = original.clone();
+        let preview = crate::EmbeddedMaterialPreview {
+            hull_rgb: [0.7, 0.03, 0.1],
+            trim_rgb: [0.1, 0.2, 0.9],
+            emissive_strength: 0.,
+        };
+        apply_material_preview(&mut preview_parts, preview);
+        let mut hull_changed = false;
+        let mut trim_changed = false;
+        let mut emission_changed = false;
+        for (before, after) in original.iter().zip(&preview_parts) {
+            assert_eq!(before.0, after.0);
+            assert_eq!(before.1, after.1);
+            match embedded_primitive(before.0) {
+                None => assert_eq!(
+                    before, after,
+                    "station and dynamic geometry must not change"
+                ),
+                Some(p) => {
+                    if p.material_name == "Graphite ceramic armor" {
+                        assert_eq!(after.2, Vec3::from_array(preview.hull_rgb));
+                        hull_changed |= before.2 != after.2;
+                    } else if p.material_name == "Emerald structural frames" {
+                        assert_eq!(after.2, Vec3::from_array(preview.trim_rgb));
+                        trim_changed |= before.2 != after.2;
+                    } else {
+                        assert_eq!(before.2, after.2);
+                    }
+                    assert_eq!(after.3, 0.);
+                    emission_changed |= before.3 > 0.;
+                }
+            }
+        }
+        assert!(hull_changed && trim_changed && emission_changed);
+        assert_eq!(
+            original,
+            bay_parts(ShipClass::Pioneer),
+            "preview must not mutate cached authored scene"
+        );
+    }
     #[test]
     fn cached_bays_preserve_every_transform_and_material() {
         for class in arkline_protocol::ALL_SHIP_CLASSES {
