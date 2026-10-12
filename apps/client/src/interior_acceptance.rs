@@ -25,6 +25,7 @@ impl Journey {
             Request::Connect {
                 supports_pioneer_interior: true,
                 supports_fleet_hangar: true,
+                supports_room_controls: true,
                 protocol_version: PROTOCOL_VERSION,
                 pilot: "pilot".into(),
                 resume_token: None,

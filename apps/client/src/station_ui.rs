@@ -2,6 +2,9 @@
 use super::*;
 impl Cockpit {
     fn pioneer_room_controls(&mut self, ui: &mut egui::Ui, access: bool) {
+        if self.manual_remote.is_some() {
+            return;
+        }
         let state = self.assets.as_ref().and_then(|a| a.pioneer_room.as_ref());
         if let Some(command) = crate::room_controls::show(ui, state, self.can_operate() && access) {
             self.send(Request::SetPioneerRoom { action: command });

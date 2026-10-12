@@ -265,6 +265,7 @@ fn worker(
         let mut response = reader.exchange(&Request::Connect {
             supports_pioneer_interior: true,
             supports_fleet_hangar: true,
+            supports_room_controls: true,
             protocol_version: PROTOCOL_VERSION,
             pilot: pilot.clone(),
             resume_token: token.clone(),
@@ -344,6 +345,7 @@ fn worker(
                             let mut resumed = next.exchange(&Request::Connect {
                                 supports_pioneer_interior: true,
                                 supports_fleet_hangar: true,
+                                supports_room_controls: true,
                                 protocol_version: PROTOCOL_VERSION,
                                 pilot: pilot.clone(),
                                 resume_token: token.clone(),
@@ -6231,6 +6233,7 @@ mod tests {
                     Request::Connect {
                         supports_pioneer_interior: _,
                         supports_fleet_hangar: _,
+                        supports_room_controls: _,
                         protocol_version,
                         pilot,
                         resume_token,

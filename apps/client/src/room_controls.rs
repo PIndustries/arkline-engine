@@ -31,6 +31,13 @@ pub(crate) fn show(
         if s.vent_running { "RUNNING" } else { "STOPPED" },
         if s.door_open { "OPEN" } else { "CLOSED" }
     ));
+    ui.small(format!(
+        "Commanded: breaker {} · light {} · vent {:?}",
+        if s.breaker_closed { "closed" } else { "open" },
+        if s.light_commanded { "on" } else { "off" },
+        s.vent_commanded
+    ));
+    ui.small(format!("Gameplay loads: controller {} W · light {} W · vent {} W. Outputs above show what is running.", arkline_protocol::ROOM_CONTROLLER_W, arkline_protocol::ROOM_LIGHT_W, arkline_protocol::ROOM_VENT_W));
     if s.emergency_light_on {
         ui.colored_label(
             egui::Color32::from_rgb(245, 174, 70),
