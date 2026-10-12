@@ -118,3 +118,32 @@ fn development_directory_and_db_cannot_alias_another_world() {
     assert!(Server::open_local_development(&other).is_err());
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn official_auth_configuration_is_rejected_before_keys_are_read_in_local_realm() {
+    let dir = directory();
+    let mut server = Server::open_local_development(&dir).unwrap();
+    for required in [false, true] {
+        let config = serde_json::from_value(serde_json::json!({
+            "issuer": "https://issuer.example.test/",
+            "audience": "arkline:test-world",
+            "required_scopes": ["arkline.play"],
+            "allowed_client_ids": ["public-client"],
+            "allowed_algorithms": ["RS256"],
+            "max_lifetime_seconds": 300,
+            "clock_skew_seconds": 5
+        }))
+        .unwrap();
+        let error = server.configure_auth(config, b"", required).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "local development cannot enable official account authentication"
+        );
+        let response = server.handle_authenticated(&mut None, &mut None, Request::AuthCapabilities);
+        assert!(response.ok);
+        assert!(response.auth.is_none());
+    }
+    assert!(server.handle_at(&mut None, connect(None), 0).ok);
+    drop(server);
+    std::fs::remove_dir_all(dir).unwrap();
+}
