@@ -1780,6 +1780,7 @@ struct Uniforms {
     material: Option<glow::UniformLocation>,
     material_params: Option<glow::UniformLocation>,
     environment_atmosphere: Option<glow::UniformLocation>,
+    station_lighting: Option<glow::UniformLocation>,
     environment_up: Option<glow::UniformLocation>,
     sky_inverse: Option<glow::UniformLocation>,
     sky_eye: Option<glow::UniformLocation>,
@@ -1929,6 +1930,7 @@ impl Renderer {
             material: gl.get_uniform_location(program, "material_kind"),
             material_params: gl.get_uniform_location(program, "material_params"),
             environment_atmosphere: gl.get_uniform_location(program, "environment_atmosphere"),
+            station_lighting: gl.get_uniform_location(program, "station_lighting"),
             environment_up: gl.get_uniform_location(program, "environment_up"),
             sky_inverse: gl.get_uniform_location(background, "inverse_view_projection"),
             sky_eye: gl.get_uniform_location(background, "camera_eye"),
@@ -2329,6 +2331,7 @@ impl Renderer {
             frame.eye.y,
             frame.eye.z,
         );
+        gl.uniform_1_f32(self.uniforms.station_lighting.as_ref(), 0.0);
         gl.uniform_1_f32(self.uniforms.environment_atmosphere.as_ref(), density);
         gl.uniform_3_f32(self.uniforms.environment_up.as_ref(), up.x, up.y, up.z);
         self.paint_environment(frame);
@@ -4506,7 +4509,7 @@ const FRAGMENT: &str = concat!(
     include_str!("shaders/local_lighting.glsl"),
     r#"
 in vec3 world;in vec3 surface_normal;in vec3 local_position;
-uniform vec4 material_params;uniform float environment_atmosphere;uniform vec3 environment_up;
+uniform vec4 material_params;uniform float station_lighting;uniform float environment_atmosphere;uniform vec3 environment_up;
 uniform vec3 planet_center;uniform vec3 base_color;uniform vec3 eye;uniform float emission;uniform vec3 emissive_color;uniform int material_kind;out vec4 color;
 float ark_hash3(vec3 p){return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5453);}
 float ark_noise3(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
@@ -4543,8 +4546,12 @@ if(material_kind==1 || material_kind==2){
     }
     // Existing screen panels use a dark dielectric backing; no canopy transmission is invented.
     if(material_params.w>0.5) albedo*=0.70;
-    lit=ark_brdf(n,v,l,albedo,roughness,metallic)*vec3(3.8,3.45,2.95)*ark_sun_visibility(world,n,l);
-    lit+=ark_environment(n,v,albedo,roughness,metallic,environment_atmosphere,environment_up);
+    if(station_lighting>0.5){
+        lit=ark_station_environment(n,v,albedo,roughness,metallic);
+    }else{
+        lit=ark_brdf(n,v,l,albedo,roughness,metallic)*vec3(3.8,3.45,2.95)*ark_sun_visibility(world,n,l);
+        lit+=ark_environment(n,v,albedo,roughness,metallic,environment_atmosphere,environment_up);
+    }
     lit+=ark_local_lighting(world,n,v,albedo,roughness,metallic);
     lit+=max(emissive_color,vec3(0.0))*max(emission,0.0);
 }
