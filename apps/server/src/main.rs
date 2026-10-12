@@ -32,6 +32,9 @@ fn main() -> Result<()> {
         "https://test.arkline.network".into(),
     ];
     let mut max_pilots = 256usize;
+    let mut local_development = None;
+    let mut explicit_db = false;
+    let mut local_origins = Vec::new();
     let mut db = "data/arkline.sqlite".to_string();
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -60,10 +63,13 @@ fn main() -> Result<()> {
             }
             "--tls-cert" => tls_cert = Some(args.next().context("--tls-cert requires a PEM path")?),
             "--tls-key" => tls_key = Some(args.next().context("--tls-key requires a PEM path")?),
-            "--ws-origin" => origins.push(
-                args.next()
-                    .context("--ws-origin requires an exact HTTPS origin")?,
-            ),
+            "--ws-origin" => {
+                let origin = args
+                    .next()
+                    .context("--ws-origin requires an exact origin")?;
+                local_origins.push(origin.clone());
+                origins.push(origin);
+            }
             "--ws-max-pilots" => {
                 max_pilots = args
                     .next()
@@ -73,9 +79,19 @@ fn main() -> Result<()> {
                     bail!("public pilot cap must be1..1024");
                 }
             }
-            "--db" => db = args.next().context("--db requires a path")?,
+            "--local-development" => {
+                local_development = Some(
+                    args.next()
+                        .context("--local-development requires an isolated directory")?,
+                )
+            }
+            "--db" => {
+                explicit_db = true;
+                db = args.next().context("--db requires a path")?;
+            }
             "--help" | "-h" => {
-                println!("arkline-server [--bind 127.0.0.1:7777] [--db data/arkline.sqlite]\nRaw TCP is plaintext and must stay private. Optional --ws-bind ADDRESS enables /ws. Add both --tls-cert PEM and --tls-key PEM for native TLS; without them the listener is plaintext and must stay private. --ws-origin ORIGIN adds an allowed browser origin; --ws-max-pilots COUNT (default256).\nVerified readiness: --tls-health ADDRESS --tls-ca PEM --tls-server-name DNS.\nOptional account admission: --auth-config JSON --auth-jwks PUBLIC_JWKS [--auth-required].");
+                println!("arkline-server [--bind 127.0.0.1:7777] [--db data/arkline.sqlite]\nExplicit isolated local world: --local-development DIR (loopback only, incompatible with --db and account auth).\nRaw TCP is plaintext and must stay private. Optional --ws-bind ADDRESS enables /ws. Add both --tls-cert PEM and --tls-key PEM for native TLS; without them the listener is plaintext and must stay private. --ws-origin ORIGIN adds an allowed browser origin; --ws-max-pilots COUNT (default256).\nVerified readiness: --tls-health ADDRESS --tls-ca PEM --tls-server-name DNS.\nOptional account admission: --auth-config JSON --auth-jwks PUBLIC_JWKS [--auth-required].");
+
                 return Ok(());
             }
             _ => bail!("unknown argument: {arg}"),
@@ -91,6 +107,20 @@ fn main() -> Result<()> {
     if tls_ca.is_some() || tls_server_name.is_some() {
         bail!("--tls-ca and --tls-server-name require --tls-health");
     }
+    if local_development.is_some() {
+        anyhow::ensure!(!auth_required && auth_config.is_none() && auth_jwks.is_none(),
+            "local development and official account authentication are mutually exclusive");
+        anyhow::ensure!(
+            !explicit_db,
+            "--local-development and --db are mutually exclusive"
+        );
+        arkline_server::local_development::validate_listeners(
+            &bind,
+            ws_bind.as_deref(),
+            &local_origins,
+        )?;
+        origins = local_origins;
+    }
     if auth_config.is_some() || auth_jwks.is_some() || auth_required {
         validate_identity_listeners(
             &bind,
@@ -99,7 +129,10 @@ fn main() -> Result<()> {
         )?;
     }
     let tls = tls::load(tls_cert.as_deref(), tls_key.as_deref(), ws_bind.is_some())?;
-    let mut authority = Server::open(db)?;
+    let mut authority = if let Some(directory) = local_development {
+        eprintln!("Local development realm: loopback only; pilot permissions remain enforced");
+        Server::open_local_development(directory)?
+    } else { Server::open(db)? };
     match (auth_config, auth_jwks) {
         (Some(config), Some(keys)) => {
             let config = read_bounded(&config, 16384)?;
@@ -111,6 +144,7 @@ fn main() -> Result<()> {
         _ => bail!("auth requires both --auth-config and --auth-jwks"),
     }
     let server = Arc::new(Mutex::new(authority));
+
     let tick_server = server.clone();
     let health = Arc::new(Health {
         started: Instant::now(),

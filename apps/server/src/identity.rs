@@ -54,6 +54,7 @@ impl Server {
         jwks: &[u8],
         required: bool,
     ) -> Result<()> {
+        ensure!(!self.is_local_development(), "local development cannot enable official account authentication");
         ensure!(
             config.required_scopes.iter().any(|s| s == "arkline.play"),
             "arkline.play scope is required"

@@ -3,6 +3,7 @@ mod assets;
 mod drones;
 mod flight;
 mod identity;
+pub mod local_development;
 mod mining;
 mod power;
 mod remote_control;
@@ -107,6 +108,7 @@ fn token_hash(token: &str) -> String {
 /// One connection, protected by the transport's mutex, serializes all writes.
 /// The durable state and its economic event commit in one SQLite transaction.
 pub struct Server {
+    local_development: bool,
     db: Connection,
     auth: Option<identity::Authenticator>,
     online_sessions: BTreeMap<String, usize>,
@@ -119,7 +121,16 @@ pub struct Server {
     _ownership_lock: Option<std::fs::File>,
 }
 impl Server {
+    pub fn is_local_development(&self) -> bool {
+        self.local_development
+    }
+    pub fn open_local_development(directory: impl AsRef<Path>) -> Result<Self> {
+        Self::open_realm(local_development::database_path(directory.as_ref())?, true)
+    }
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
+        Self::open_realm(path, false)
+    }
+    fn open_realm(path: impl AsRef<Path>, local_development: bool) -> Result<Self> {
         let path = path.as_ref();
         if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
             std::fs::create_dir_all(parent)?;
@@ -153,7 +164,17 @@ impl Server {
             file.try_lock_exclusive().context("world database is already owned by another server (or ownership lock is unavailable)")?;
             Some(file)
         };
-        let db = Connection::open(path)?;
+        let existed = path.exists();
+        let mut db = Connection::open(path)?;
+        local_development::establish_realm(&mut db, local_development, existed)?;
+        #[cfg(unix)]
+        if local_development {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(
+                path.parent().unwrap(),
+                std::fs::Permissions::from_mode(0o700),
+            )?;
+        }
         db.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;
             CREATE TABLE IF NOT EXISTS world (id INTEGER PRIMARY KEY CHECK(id=1), json TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS ledger (sequence INTEGER PRIMARY KEY, json TEXT NOT NULL);")?;
@@ -200,6 +221,7 @@ impl Server {
             db.execute("UPDATE world SET json=?1 WHERE id=1", [stopped])?;
         }
         Ok(Self {
+            local_development,
             db,
             auth: None,
             online_sessions: BTreeMap::new(),
