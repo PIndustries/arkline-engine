@@ -347,6 +347,19 @@ impl eframe::App for Editor {
         }
     }
 }
+fn project_path(
+    default: PathBuf,
+    environment: Option<std::ffi::OsString>,
+    explicit: Option<PathBuf>,
+) -> PathBuf {
+    explicit
+        .or_else(|| {
+            environment
+                .filter(|value| !value.to_string_lossy().trim().is_empty())
+                .map(PathBuf::from)
+        })
+        .unwrap_or(default)
+}
 fn main() -> eframe::Result<()> {
     let mut project = std::env::current_dir()
         .unwrap_or_else(|_| PathBuf::from("."))
@@ -361,19 +374,24 @@ fn main() -> eframe::Result<()> {
                 PathBuf::from(home).join("Library/Application Support/Arkline/Editor/FirstProject");
         }
     }
+    project = project_path(project, std::env::var_os("ARKLINE_EDITOR_PROJECT"), None);
     let mut pilot = "EditorPilot".to_string();
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--help" | "-h" => {
-                println!("Arkline Editor {}\nUsage: arkline-editor [--project PATH] [--pilot NAME]\nEmbedded game viewport with local Play, Pause, Step and Stop. No separate client windows or public connections.",BUILD.trim());
+                println!(
+                    "Arkline Editor {}\nUsage: arkline-editor [--project PATH] [--pilot NAME]\nARKLINE_EDITOR_PROJECT sets the default project; --project overrides it. Blank environment values are ignored.\nEmbedded game viewport with local Play, Pause, Step and Stop. No separate client windows or public connections.",
+                    BUILD.trim()
+                );
                 return Ok(());
             }
             "--project" => {
-                project = args.next().map(PathBuf::from).unwrap_or_else(|| {
+                let explicit = args.next().map(PathBuf::from).unwrap_or_else(|| {
                     eprintln!("--project requires PATH");
                     std::process::exit(2)
-                })
+                });
+                project = project_path(project, None, Some(explicit));
             }
             "--pilot" => {
                 pilot = args.next().unwrap_or_else(|| {
@@ -416,6 +434,25 @@ fn main() -> eframe::Result<()> {
 mod tests {
     use super::*;
     use eframe::App;
+    #[test]
+    fn project_environment_is_optional_and_explicit_path_wins() {
+        let default = PathBuf::from("default-project");
+        for env in [None, Some("".into()), Some("  ".into())] {
+            assert_eq!(project_path(default.clone(), env, None), default);
+        }
+        assert_eq!(
+            project_path(default.clone(), Some("QA project".into()), None),
+            PathBuf::from("QA project")
+        );
+        assert_eq!(
+            project_path(
+                default,
+                Some("QA project".into()),
+                Some(PathBuf::from("explicit-project"))
+            ),
+            PathBuf::from("explicit-project")
+        );
+    }
     #[test]
     fn toolbar_controls_are_visible_above_the_game_viewport() {
         let ctx = egui::Context::default();

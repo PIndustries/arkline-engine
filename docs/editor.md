@@ -31,6 +31,8 @@ The central viewport runs normal gameplay. Editor toolbar and side panels reserv
 
 The inspector reports actual simulation values: ship class and dimensions, cargo, position or deck-local avatar coordinates, velocity, power, drones, mining modules and the connected Pioneer room catalog. It does not invent sensor values or imply that every catalog connection is independently simulated.
 
+`ARKLINE_EDITOR_PROJECT` can select the default project for a native launcher or test environment; blank values are ignored and an explicit `--project` takes precedence. This lets isolated editor runs use separate local worlds without changing the normal project.
+
 ## Shared ship finish and Fleet materials — 26.10.12.4
 
 **Materials** edits a shared local preview finish: hull and trim colors, authored-emission multiplier and optional roughness/metallic overrides. Matching paint/trim surfaces across all seven ship classes use the same policy in the embedded hangar, undocked 3D views and rendered camera feeds. The 2D tactical map is schematic rather than a shaded material preview. Cockpit interiors, station geometry and unrelated surfaces are not repainted. Changing a preview invalidates cached feeds so their next render can reflect the edit; this does not guarantee an instantaneous frame while a feed is hidden.
