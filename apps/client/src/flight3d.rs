@@ -2370,7 +2370,7 @@ impl Renderer {
                 ship_orientation_at(pilot, frame.now),
             );
             if !frame.cockpit || !own {
-                for (mesh, model, color, emission) in ship_parts(pilot.ship_class) {
+                for &(mesh, model, color, emission) in cached_ship_parts(pilot.ship_class) {
                     self.draw_material(mesh, ship * model, color, emission, Material::BareMetal);
                 }
             }
@@ -3626,9 +3626,12 @@ fn ship_geometry(class: ShipClass, ship: Mat4) -> Vec<(Vec<Vertex>, Mat4)> {
 }
 type ModelPart = (usize, Mat4, Vec3, f32);
 fn ship_parts(class: ShipClass) -> Vec<ModelPart> {
-    static MODELS: std::sync::OnceLock<[Vec<ModelPart>; 7]> = std::sync::OnceLock::new();
-    let models = MODELS.get_or_init(|| arkline_protocol::ALL_SHIP_CLASSES.map(build_ship_parts));
-    models[match class {
+    cached_ship_parts(class).to_vec()
+}
+fn cached_ship_parts(class: ShipClass) -> &'static [ModelPart] {
+    static MODELS: [std::sync::OnceLock<Vec<ModelPart>>; 7] =
+        [const { std::sync::OnceLock::new() }; 7];
+    MODELS[match class {
         ShipClass::Pioneer => 0,
         ShipClass::Prospector => 1,
         ShipClass::Hauler => 2,
@@ -3637,7 +3640,7 @@ fn ship_parts(class: ShipClass) -> Vec<ModelPart> {
         ShipClass::Stratum => 5,
         ShipClass::Monolith => 6,
     }]
-    .clone()
+    .get_or_init(|| build_ship_parts(class))
 }
 fn build_ship_parts(class: ShipClass) -> Vec<ModelPart> {
     if class == ShipClass::Pioneer {

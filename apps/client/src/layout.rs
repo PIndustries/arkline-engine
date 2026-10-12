@@ -26,6 +26,8 @@ pub struct Layout {
     changed: bool,
     dragging: bool,
     retry_after: Option<web_time::Instant>,
+    #[cfg(not(target_arch = "wasm32"))]
+    pending_save: Option<std::sync::mpsc::Receiver<Result<(), String>>>,
 }
 impl Layout {
     pub fn load(dir: &Path) -> Self {
@@ -40,6 +42,8 @@ impl Layout {
             changed: false,
             dragging: false,
             retry_after: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            pending_save: None,
         };
         if let Ok(bytes) = read_preferences(&result.path) {
             if let Ok(v) = serde_json::from_slice::<serde_json::Value>(&bytes) {
@@ -188,6 +192,28 @@ impl Layout {
         p.actual = rect.size();
     }
     pub fn finish_frame(&mut self, pointer_down: bool) -> Result<(), String> {
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(receiver) = &self.pending_save {
+            match receiver.try_recv() {
+                Ok(result) => {
+                    self.pending_save = None;
+                    if let Err(error) = result {
+                        self.changed = true;
+                        self.retry_after =
+                            Some(web_time::Instant::now() + std::time::Duration::from_secs(2));
+                        return Err(error);
+                    }
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => return Ok(()),
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    self.pending_save = None;
+                    self.changed = true;
+                    self.retry_after =
+                        Some(web_time::Instant::now() + std::time::Duration::from_secs(2));
+                    return Err("Layout save worker stopped; retrying shortly".into());
+                }
+            }
+        }
         if !pointer_down
             && self.changed
             && self
@@ -212,6 +238,40 @@ impl Layout {
         }
         Ok(())
     }
+    /// Shutdown-only bounded drain. Normal frames never wait for disk writes.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn flush_on_exit(&mut self, budget: std::time::Duration) -> Result<(), String> {
+        let deadline = std::time::Instant::now() + budget;
+        loop {
+            if let Some(receiver) = self.pending_save.take() {
+                match receiver
+                    .recv_timeout(deadline.saturating_duration_since(std::time::Instant::now()))
+                {
+                    Ok(Ok(())) => {}
+                    Ok(Err(error)) => {
+                        self.changed = true;
+                        return Err(error);
+                    }
+                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                        self.pending_save = Some(receiver);
+                        return Err("Layout save is still pending at shutdown".into());
+                    }
+                    Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                        self.changed = true;
+                        return Err("Layout save worker stopped at shutdown".into());
+                    }
+                }
+            }
+            if !self.changed {
+                return Ok(());
+            }
+            if std::time::Instant::now() >= deadline {
+                return Err("Latest layout could not be saved within shutdown deadline".into());
+            }
+            self.retry_after = None;
+            self.finish_frame(false)?;
+        }
+    }
     pub fn reset(&mut self) {
         self.generation += 1;
         self.entries.clear();
@@ -222,7 +282,7 @@ impl Layout {
     pub fn settings_changed(&mut self) {
         self.changed = true;
     }
-    fn save(&self) -> Result<(), String> {
+    fn save(&mut self) -> Result<(), String> {
         let entries:serde_json::Map<String,serde_json::Value>=self.entries.iter().map(|(key,p)|(key.clone(),serde_json::json!({"anchor":p.anchor,"offset":[p.offset.x,p.offset.y],"size":[p.size.x,p.size.y]}))).collect();
         let value = serde_json::json!({"pinned":self.pinned,"snap":self.snap,"panels":entries});
         #[cfg(target_arch = "wasm32")]
@@ -231,28 +291,63 @@ impl Layout {
         }
         #[cfg(not(target_arch = "wasm32"))]
         {
-            fs::create_dir_all(self.path.parent().unwrap()).map_err(|e| e.to_string())?;
-            let temporary = self
-                .path
-                .with_extension(format!("{}.tmp", std::process::id()));
-            let mut opts = fs::OpenOptions::new();
-            opts.write(true).create(true).truncate(true);
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::OpenOptionsExt;
-                opts.mode(0o600);
-            }
-            use std::io::Write;
-            let result = (|| -> std::io::Result<()> {
-                let mut file = opts.open(&temporary)?;
-                file.write_all(value.to_string().as_bytes())?;
-                file.sync_all()?;
-                fs::rename(&temporary, &self.path)
-            })();
-            if result.is_err() {
-                let _ = fs::remove_file(temporary);
-            }
-            result.map_err(|e| format!("Layout could not be saved: {e}"))
+            let path = self.path.clone();
+            let bytes = value.to_string().into_bytes();
+            let (sender, receiver) = std::sync::mpsc::channel();
+            std::thread::Builder::new()
+                .name("arkline-layout-save".into())
+                .spawn(move || {
+                    let _ = sender.send(write_preferences(&path, &bytes));
+                })
+                .map_err(|error| format!("Cannot start layout save: {error}"))?;
+            self.pending_save = Some(receiver);
+            Ok(())
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn write_preferences(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    use std::io::Write;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT_SAVE: AtomicU64 = AtomicU64::new(0);
+    fs::create_dir_all(path.parent().ok_or("Layout path has no parent")?)
+        .map_err(|e| e.to_string())?;
+    let temporary = path.with_extension(format!(
+        "{}.{}.tmp",
+        std::process::id(),
+        NEXT_SAVE.fetch_add(1, Ordering::Relaxed)
+    ));
+    let mut opts = fs::OpenOptions::new();
+    opts.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o600);
+    }
+    let result = (|| -> std::io::Result<()> {
+        let mut file = opts.open(&temporary)?;
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        fs::rename(&temporary, path)
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(temporary);
+    }
+    result.map_err(|e| format!("Layout could not be saved: {e}"))
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+impl Layout {
+    pub(crate) fn wait_for_save(&mut self) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while self.changed || self.pending_save.is_some() {
+            self.finish_frame(false).unwrap();
+            assert!(
+                std::time::Instant::now() < deadline,
+                "layout save timed out"
+            );
+            std::thread::yield_now();
         }
     }
 }
@@ -271,6 +366,64 @@ fn read_preferences(path: &Path) -> Result<Vec<u8>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn delayed_save_does_not_block_frames_or_discard_newer_preferences() {
+        let dir = std::env::temp_dir().join(format!("arkline-layout-async-{}", std::process::id()));
+        let mut layout = Layout::load(&dir);
+        let (done, pending) = std::sync::mpsc::channel();
+        layout.pending_save = Some(pending);
+        layout.pinned = true;
+        layout.settings_changed();
+        // No completion is sent yet: frame processing must remain nonblocking,
+        // retain the newest edit, and never enqueue another concurrent writer.
+        for _ in 0..100 {
+            layout.finish_frame(false).unwrap();
+            assert!(layout.changed && layout.pending_save.is_some());
+        }
+        done.send(Ok(())).unwrap();
+        layout.wait_for_save();
+        assert!(Layout::load(&dir).pinned);
+        fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn failed_background_save_retains_changes_and_backs_off() {
+        let mut layout = Layout::load(&std::env::temp_dir().join("arkline-save-error-unused"));
+        let (done, pending) = std::sync::mpsc::channel();
+        layout.pending_save = Some(pending);
+        done.send(Err("disk unavailable".into())).unwrap();
+        assert_eq!(layout.finish_frame(false).unwrap_err(), "disk unavailable");
+        assert!(layout.changed && layout.retry_after.is_some());
+        layout.finish_frame(false).unwrap();
+        assert!(layout.pending_save.is_none());
+    }
+    #[test]
+    fn shutdown_flush_saves_latest_after_older_writer_and_bounds_stalls() {
+        let dir =
+            std::env::temp_dir().join(format!("arkline-layout-shutdown-{}", std::process::id()));
+        let mut layout = Layout::load(&dir);
+        let (done, receiver) = std::sync::mpsc::channel();
+        layout.pending_save = Some(receiver);
+        layout.pinned = true;
+        layout.settings_changed();
+        assert!(layout.flush_on_exit(std::time::Duration::ZERO).is_err());
+        assert!(layout.pending_save.is_some() && layout.changed);
+        assert!(
+            !dir.join("layout.json").exists(),
+            "must not start second writer"
+        );
+        done.send(Ok(())).unwrap();
+        layout
+            .flush_on_exit(std::time::Duration::from_secs(2))
+            .unwrap();
+        assert!(Layout::load(&dir).pinned);
+        layout.pinned = false;
+        layout.settings_changed();
+        layout
+            .flush_on_exit(std::time::Duration::from_secs(2))
+            .unwrap();
+        assert!(!Layout::load(&dir).pinned);
+        fs::remove_dir_all(dir).unwrap();
+    }
     #[test]
     fn reflow_ignores_pointer_capture_and_reset_restores_default_anchors() {
         let dir = std::env::temp_dir().join("arkline-layout-reflow-unused");
@@ -343,6 +496,7 @@ mod tests {
         );
         layout.record("overview", small, moved, None, false);
         layout.finish_frame(false).unwrap();
+        layout.wait_for_save();
         let mut loaded = Layout::load(&dir);
         let (position, _) = loaded.position("overview", small, [0.0, 0.0], Vec2::ZERO, Vec2::ZERO);
         assert!(position.distance(moved.min) < 1.0);

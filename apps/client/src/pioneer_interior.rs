@@ -10,6 +10,13 @@ fn block(p: &mut Parts, min: Vec3, max: Vec3, color: Vec3, emission: f32) {
     );
 }
 pub(super) fn parts(deck: u8) -> Vec<ModelPart> {
+    cached_parts(deck).to_vec()
+}
+fn cached_parts(deck: u8) -> &'static [ModelPart] {
+    static DECKS: std::sync::OnceLock<[Vec<ModelPart>; 2]> = std::sync::OnceLock::new();
+    &DECKS.get_or_init(|| [build_parts(1), build_parts(2)])[usize::from(deck == 2)]
+}
+fn build_parts(deck: u8) -> Vec<ModelPart> {
     let mut p = Parts(Vec::new());
     let steel = Vec3::new(0.045, 0.065, 0.072);
     block(
@@ -222,6 +229,36 @@ pub(super) fn labels(ui: &mut egui::Ui, rect: egui::Rect, vp: Mat4, pilot: &Pilo
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn cached_decks_preserve_geometry_and_materials() {
+        for deck in [1, 2] {
+            assert_eq!(super::parts(deck), super::build_parts(deck));
+            assert!(std::ptr::eq(
+                super::cached_parts(deck),
+                super::cached_parts(deck)
+            ));
+        }
+    }
+    #[test]
+    #[ignore = "Explicit CPU preparation measurement, not a GPU frame-rate benchmark"]
+    fn static_deck_preparation_profile() {
+        use std::hint::black_box;
+        black_box(super::parts(1));
+        let start = std::time::Instant::now();
+        for _ in 0..2000 {
+            black_box(super::build_parts(1));
+        }
+        let rebuilt = start.elapsed();
+        let start = std::time::Instant::now();
+        for _ in 0..2000 {
+            black_box(super::parts(1));
+        }
+        eprintln!(
+            "2000 actual deck preparation calls: rebuild={rebuilt:?}, cached_copy={:?}, parts={}",
+            start.elapsed(),
+            super::parts(1).len()
+        );
+    }
     use super::*;
     #[test]
     fn camera_stays_below_ceiling_and_on_same_side_of_bulkhead() {

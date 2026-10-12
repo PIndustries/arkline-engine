@@ -3249,6 +3249,10 @@ fn location_label(location: &Location) -> &'static str {
 }
 impl eframe::App for Cockpit {
     fn on_exit(&mut self, _: Option<&eframe::glow::Context>) {
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Err(error) = self.layout.flush_on_exit(Duration::from_secs(1)) {
+            eprintln!("{error}");
+        }
         // macOS application termination may bypass unwinding main's stack.
         // Shut down only this cockpit's owned host inside the lifecycle callback.
         #[cfg(not(target_arch = "wasm32"))]
@@ -5192,6 +5196,7 @@ mod tests {
             (moved.min - before.min - Vec2::new(-180.0, 55.0)).length() < 3.0,
             "before={before:?}, moved={moved:?}"
         );
+        cockpit.layout.wait_for_save();
         assert!(dir.join("layout.json").exists());
         cockpit.layout = layout::Layout::load(&dir);
         for _ in 0..3 {
@@ -5252,6 +5257,7 @@ mod tests {
         let reset = frame(&ctx, &mut cockpit, larger, vec![]);
         assert!((larger.x - reset.right() - 16.0).abs() < 3.0);
         assert!((reset.top() - 16.0).abs() < 3.0);
+        cockpit.layout.wait_for_save();
         std::fs::remove_dir_all(dir).unwrap();
     }
     #[test]

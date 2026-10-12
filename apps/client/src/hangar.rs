@@ -3,6 +3,8 @@ use super::*;
 use arkline_protocol::{hangar_layout, StationAvatar};
 #[path = "avatar_animation.rs"]
 mod avatar_animation;
+#[path = "avatar_follow.rs"]
+mod avatar_follow;
 #[path = "pioneer_interior.rs"]
 mod pioneer_interior;
 #[path = "quarters.rs"]
@@ -28,6 +30,7 @@ pub struct HangarView {
     interior_deck: u8,
     class: Option<ShipClass>,
     follow: Option<Vec3>,
+    follow_heading: Option<f64>,
     gait: avatar_animation::Gait,
 }
 impl HangarView {
@@ -53,6 +56,7 @@ impl HangarView {
             interior_deck: 1,
             class: None,
             follow: None,
+            follow_heading: None,
             gait: Default::default(),
         }
     }
@@ -108,6 +112,7 @@ impl HangarView {
             self.interior_deck = interior_deck;
             self.zoom = 1.0;
             self.follow = None;
+            self.follow_heading = None;
             self.gait = Default::default();
             self.pitch = if walking { 0.23 } else { 0.32 };
             // A lift changes the floor, not the direction the user is looking.
@@ -140,6 +145,11 @@ impl HangarView {
         let target = if let Some(avatar) = &pilot.station_avatar {
             let next = Vec3::from_array(avatar.position.map(|v| v as f32));
             let dt = ui.input(|i| i.stable_dt).min(0.1);
+            self.follow_heading = Some(avatar_follow::heading(
+                self.follow_heading,
+                avatar.heading,
+                dt,
+            ));
             let smooth = self
                 .follow
                 .unwrap_or(next)
@@ -155,10 +165,9 @@ impl HangarView {
             pilot.ship_class.spec().length_m as f32 * 0.88
         } * self.zoom;
         // Follow the authoritative body heading, including stationary turns.
-        let view_yaw = pilot
-            .station_avatar
-            .as_ref()
-            .map_or(self.yaw, |a| a.heading as f32);
+        let view_yaw = self
+            .follow_heading
+            .map_or(self.yaw, |heading| heading as f32);
         let forward = Vec3::new(view_yaw.cos(), 0.0, view_yaw.sin());
         let mut eye = third_person_eye(target, view_yaw, self.pitch, distance);
         eye.y = eye.y.max(0.6);
@@ -193,15 +202,18 @@ impl HangarView {
             let position = self
                 .follow
                 .unwrap_or_else(|| Vec3::from_array(avatar.position.map(|v| v as f32)));
+            // Body and camera use exactly the same interpolated confirmed pose.
+            let mut visual_avatar = avatar.clone();
+            visual_avatar.heading = self.follow_heading.unwrap_or(avatar.heading);
             let pose = self.gait.update(
                 now,
                 position,
-                avatar.heading,
+                visual_avatar.heading,
                 avatar.moving && live,
                 avatar.seated,
             );
             if !first_person {
-                parts.extend(avatar_parts(avatar, pose, self.follow));
+                parts.extend(avatar_parts(&visual_avatar, pose, self.follow));
             }
         }
         if let Some(renderer) = &self.renderer {
@@ -266,6 +278,18 @@ fn third_person_eye(target: Vec3, heading: f32, pitch: f32, distance: f32) -> Ve
 }
 
 fn bay_parts(class: ShipClass) -> Vec<ModelPart> {
+    cached_bay_parts(class).to_vec()
+}
+fn cached_bay_parts(class: ShipClass) -> &'static [ModelPart] {
+    static BAYS: [std::sync::OnceLock<Vec<ModelPart>>; 7] =
+        [const { std::sync::OnceLock::new() }; 7];
+    let index = arkline_protocol::ALL_SHIP_CLASSES
+        .iter()
+        .position(|c| *c == class)
+        .unwrap();
+    BAYS[index].get_or_init(|| build_bay_parts(class))
+}
+fn build_bay_parts(class: ShipClass) -> Vec<ModelPart> {
     let bay = hangar_layout(class);
     let l = bay.half_length as f32;
     let w = bay.half_width as f32;
@@ -602,6 +626,37 @@ unsafe fn paint(renderer: &Renderer, vp: Mat4, eye: Vec3, parts: &[ModelPart]) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn cached_bays_preserve_every_transform_and_material() {
+        for class in arkline_protocol::ALL_SHIP_CLASSES {
+            assert_eq!(super::bay_parts(class), super::build_bay_parts(class));
+            assert!(std::ptr::eq(
+                super::cached_bay_parts(class),
+                super::cached_bay_parts(class)
+            ));
+        }
+    }
+    #[test]
+    #[ignore = "Explicit CPU preparation measurement, not a GPU frame-rate benchmark"]
+    fn static_bay_preparation_profile() {
+        use std::hint::black_box;
+        let class = arkline_protocol::ShipClass::Pioneer;
+        black_box(super::bay_parts(class));
+        let start = std::time::Instant::now();
+        for _ in 0..2000 {
+            black_box(super::build_bay_parts(class));
+        }
+        let rebuilt = start.elapsed();
+        let start = std::time::Instant::now();
+        for _ in 0..2000 {
+            black_box(super::bay_parts(class));
+        }
+        eprintln!(
+            "2000 actual bay preparation calls: rebuild={rebuilt:?}, cached_copy={:?}, parts={}",
+            start.elapsed(),
+            super::bay_parts(class).len()
+        );
+    }
     use super::*;
     #[test]
     fn third_person_remains_behind_avatar_at_every_heading() {
