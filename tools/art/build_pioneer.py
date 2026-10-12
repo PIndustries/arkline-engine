@@ -5,6 +5,7 @@ import bpy, bmesh, math, pathlib, json, sys
 from mathutils import Vector
 ROOT=pathlib.Path(__file__).resolve().parents[2]
 OUT=ROOT/'assets/ships/pioneer'; OUT.mkdir(parents=True,exist_ok=True)
+bpy.context.preferences.filepaths.save_version=0
 bpy.ops.object.select_all(action='SELECT'); bpy.ops.object.delete(use_global=False)
 def v(p): return (p[0],-p[2],p[1])
 def mat(name,color,metal=.0,rough=.5,emission=0):
