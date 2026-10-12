@@ -2,7 +2,7 @@
 use super::*;
 use arkline_protocol::{quarters_layout, station_obstacles, StationObstacleKind};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum HangarAction {
     Overview,
     Ship,
@@ -10,6 +10,7 @@ pub enum HangarAction {
     Corporation,
     Ai,
     Sit,
+    BoardShip(String),
 }
 
 fn box_part(parts: &mut Parts, min: Vec3, max: Vec3, color: Vec3, emission: f32) {
@@ -262,14 +263,60 @@ pub(super) fn terminals(
     unobstructed: bool,
     live: bool,
 ) -> Option<HangarAction> {
+    terminals_impl(
+        ui,
+        rect,
+        vp,
+        eye,
+        pilot,
+        pilot.ship_class,
+        unobstructed,
+        live,
+    )
+}
+#[allow(clippy::too_many_arguments)]
+pub(super) fn fleet_terminals(
+    ui: &mut egui::Ui,
+    rect: egui::Rect,
+    vp: Mat4,
+    eye: Vec3,
+    pilot: &PilotView,
+    unobstructed: bool,
+    live: bool,
+) -> Option<HangarAction> {
+    let offset = fleet_hangar::quarters_offset();
+    let mut local = pilot.clone();
+    if let Some(a) = &mut local.station_avatar {
+        for (axis, value) in offset.to_array().iter().enumerate() {
+            a.position[axis] -= *value as f64;
+        }
+    }
+    terminals_impl(
+        ui,
+        rect,
+        vp * Mat4::from_translation(offset),
+        eye - offset,
+        &local,
+        ShipClass::Pioneer,
+        unobstructed,
+        live,
+    )
+}
+#[allow(clippy::too_many_arguments)]
+fn terminals_impl(
+    ui: &mut egui::Ui,
+    rect: egui::Rect,
+    vp: Mat4,
+    eye: Vec3,
+    pilot: &PilotView,
+    room_class: ShipClass,
+    unobstructed: bool,
+    live: bool,
+) -> Option<HangarAction> {
     let avatar = pilot.station_avatar.as_ref()?;
     let feet = Vec3::from_array(avatar.position.map(|v| v as f32));
     let mut result = None;
-    let seat = Vec3::from_array(
-        quarters_layout(pilot.ship_class)
-            .seat_point
-            .map(|v| v as f32),
-    );
+    let seat = Vec3::from_array(quarters_layout(room_class).seat_point.map(|v| v as f32));
     if !avatar.seated && feet.distance(seat) < 2.0 {
         if let Some(at) = project_point(vp, rect, seat + Vec3::Y * 0.9) {
             let button = egui::Rect::from_center_size(at, egui::vec2(100.0, 28.0));
@@ -281,12 +328,12 @@ pub(super) fn terminals(
     }
 
     for (i, (action, label)) in actions().into_iter().enumerate() {
-        let world = terminal_position(pilot.ship_class, i);
+        let world = terminal_position(room_class, i);
         let near = feet.distance(world) < 3.0;
         if eye.z > world.z {
             continue;
         }
-        let blocked = station_obstacles(pilot.ship_class).into_iter().any(|o| {
+        let blocked = station_obstacles(room_class).into_iter().any(|o| {
             segment_box(
                 eye,
                 world,
@@ -347,7 +394,7 @@ pub(super) fn terminals(
             HangarAction::Overview => format!("System {}", pilot.system_id),
             HangarAction::Ai => "Ask your ship computer".into(),
             HangarAction::Corporation => "Open corporation services".into(),
-            HangarAction::Sit => unreachable!(),
+            HangarAction::Sit | HangarAction::BoardShip(_) => unreachable!(),
         };
         painter.rect_filled(screen, 2.0, egui::Color32::from_rgb(5, 23, 18));
         painter.text(
@@ -375,7 +422,7 @@ pub(super) fn terminals(
             result = Some(action);
         }
     }
-    let room = quarters_layout(pilot.ship_class);
+    let room = quarters_layout(room_class);
     let (text, z) = if eye.z < room.min[2] as f32 {
         ("CAPTAIN'S QUARTERS", room.min[2] as f32 - 0.05)
     } else {

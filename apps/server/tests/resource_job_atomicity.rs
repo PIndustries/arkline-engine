@@ -39,6 +39,7 @@ fn connect(s: &mut Server, name: &str) -> Option<String> {
         s,
         &mut p,
         Request::Connect {
+            supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
             pilot: name.into(),

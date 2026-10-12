@@ -23,6 +23,7 @@ fn multi_trip_delivery_survives_takeover_disconnect_and_crash_without_economic_r
         &mut s,
         &mut session,
         Request::Connect {
+            supports_fleet_hangar: false,
             supports_pioneer_interior: false,
             protocol_version: PROTOCOL_VERSION,
             pilot: "LoopMiner".into(),
@@ -129,6 +130,7 @@ fn multi_trip_delivery_survives_takeover_disconnect_and_crash_without_economic_r
         &mut s,
         &mut session,
         Request::Connect {
+            supports_fleet_hangar: false,
             supports_pioneer_interior: false,
             protocol_version: PROTOCOL_VERSION,
             pilot: "LoopMiner".into(),
@@ -157,6 +159,7 @@ fn multi_trip_delivery_survives_takeover_disconnect_and_crash_without_economic_r
         &mut s,
         &mut session,
         Request::Connect {
+            supports_fleet_hangar: false,
             supports_pioneer_interior: false,
             protocol_version: PROTOCOL_VERSION,
             pilot: "LoopMiner".into(),
@@ -187,6 +190,7 @@ fn disconnect_during_active_extraction_stops_all_awards_and_resumes_owned_cargo(
         &mut s,
         &mut session,
         Request::Connect {
+            supports_fleet_hangar: false,
             supports_pioneer_interior: false,
             protocol_version: PROTOCOL_VERSION,
             pilot: "Interrupted".into(),
@@ -234,6 +238,7 @@ fn disconnect_during_active_extraction_stops_all_awards_and_resumes_owned_cargo(
     let denied = s.handle_at(
         &mut None,
         Request::Connect {
+            supports_fleet_hangar: false,
             supports_pioneer_interior: false,
             protocol_version: PROTOCOL_VERSION,
             pilot: "Interrupted".into(),
@@ -246,6 +251,7 @@ fn disconnect_during_active_extraction_stops_all_awards_and_resumes_owned_cargo(
         &mut s,
         &mut session,
         Request::Connect {
+            supports_fleet_hangar: false,
             supports_pioneer_interior: false,
             protocol_version: PROTOCOL_VERSION,
             pilot: "Interrupted".into(),

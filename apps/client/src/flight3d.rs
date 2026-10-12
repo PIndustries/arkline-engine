@@ -1780,6 +1780,7 @@ struct Uniforms {
     material: Option<glow::UniformLocation>,
     material_params: Option<glow::UniformLocation>,
     environment_atmosphere: Option<glow::UniformLocation>,
+    station_lighting: Option<glow::UniformLocation>,
     environment_up: Option<glow::UniformLocation>,
     sky_inverse: Option<glow::UniformLocation>,
     sky_eye: Option<glow::UniformLocation>,
@@ -1929,6 +1930,7 @@ impl Renderer {
             material: gl.get_uniform_location(program, "material_kind"),
             material_params: gl.get_uniform_location(program, "material_params"),
             environment_atmosphere: gl.get_uniform_location(program, "environment_atmosphere"),
+            station_lighting: gl.get_uniform_location(program, "station_lighting"),
             environment_up: gl.get_uniform_location(program, "environment_up"),
             sky_inverse: gl.get_uniform_location(background, "inverse_view_projection"),
             sky_eye: gl.get_uniform_location(background, "camera_eye"),
@@ -2329,6 +2331,7 @@ impl Renderer {
             frame.eye.y,
             frame.eye.z,
         );
+        gl.uniform_1_f32(self.uniforms.station_lighting.as_ref(), 0.0);
         gl.uniform_1_f32(self.uniforms.environment_atmosphere.as_ref(), density);
         gl.uniform_3_f32(self.uniforms.environment_up.as_ref(), up.x, up.y, up.z);
         self.paint_environment(frame);
@@ -4506,7 +4509,7 @@ const FRAGMENT: &str = concat!(
     include_str!("shaders/local_lighting.glsl"),
     r#"
 in vec3 world;in vec3 surface_normal;in vec3 local_position;
-uniform vec4 material_params;uniform float environment_atmosphere;uniform vec3 environment_up;
+uniform vec4 material_params;uniform float station_lighting;uniform float environment_atmosphere;uniform vec3 environment_up;
 uniform vec3 planet_center;uniform vec3 base_color;uniform vec3 eye;uniform float emission;uniform vec3 emissive_color;uniform int material_kind;out vec4 color;
 float ark_hash3(vec3 p){return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5453);}
 float ark_noise3(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
@@ -4543,8 +4546,12 @@ if(material_kind==1 || material_kind==2){
     }
     // Existing screen panels use a dark dielectric backing; no canopy transmission is invented.
     if(material_params.w>0.5) albedo*=0.70;
-    lit=ark_brdf(n,v,l,albedo,roughness,metallic)*vec3(3.8,3.45,2.95)*ark_sun_visibility(world,n,l);
-    lit+=ark_environment(n,v,albedo,roughness,metallic,environment_atmosphere,environment_up);
+    if(station_lighting>0.5){
+        lit=ark_station_environment(n,v,albedo,roughness,metallic);
+    }else{
+        lit=ark_brdf(n,v,l,albedo,roughness,metallic)*vec3(3.8,3.45,2.95)*ark_sun_visibility(world,n,l);
+        lit+=ark_environment(n,v,albedo,roughness,metallic,environment_atmosphere,environment_up);
+    }
     lit+=ark_local_lighting(world,n,v,albedo,roughness,metallic);
     lit+=max(emissive_color,vec3(0.0))*max(emission,0.0);
 }
@@ -4997,6 +5004,53 @@ mod tests {
             assert_eq!(gl.get_error(), glow::NO_ERROR);
             gl.use_program(None);
             gl.delete_program(environment_program);
+            // A dark metal hull must receive the dock ceiling environment, with
+            // direction-dependent reflections that broaden with roughness.
+            let dock_fragment = concat!(
+                "#version 150\n",
+                include_str!("shaders/sky.glsl"),
+                include_str!("shaders/materials.glsl"),
+                r#"uniform float rough; uniform float dock; out vec4 color;
+                void main(){vec3 n=vec3(0,1,0),v=normalize(vec3(0,1,-0.55)),a=vec3(0.07);
+                vec3 c=dock>0.5?ark_station_environment(n,v,a,rough,0.85):ark_environment(n,v,a,rough,0.85,0.0,n);
+                color=vec4(ark_display(c),1.0);}"#
+            );
+            let dock_program = compile(&gl, BACK_VERTEX, dock_fragment).unwrap();
+            gl.use_program(Some(dock_program));
+            let dock_uniform = gl.get_uniform_location(dock_program, "dock");
+            let rough_uniform = gl.get_uniform_location(dock_program, "rough");
+            let mut dock_pixels = Vec::new();
+            for (dock, rough) in [(0.0, 0.18), (1.0, 0.18), (1.0, 0.9)] {
+                gl.uniform_1_f32(dock_uniform.as_ref(), dock);
+                gl.uniform_1_f32(rough_uniform.as_ref(), rough);
+                gl.draw_arrays(glow::TRIANGLES, 0, 3);
+                let mut pixel = [0u8; 4];
+                gl.read_pixels(
+                    64,
+                    64,
+                    1,
+                    1,
+                    glow::RGBA,
+                    glow::UNSIGNED_BYTE,
+                    glow::PixelPackData::Slice(Some(&mut pixel)),
+                );
+                dock_pixels.push(pixel);
+            }
+            assert!(
+                dock_pixels[1][1] > dock_pixels[0][1].saturating_add(15),
+                "dock illumination must reveal dark metal: {dock_pixels:?}"
+            );
+            assert!(
+                dock_pixels[1][1] > dock_pixels[2][1],
+                "roughness must reduce the ceiling strip peak: {dock_pixels:?}"
+            );
+            assert!(
+                dock_pixels[1][1] < 245,
+                "dock reflection must retain highlight headroom: {dock_pixels:?}"
+            );
+            assert_eq!(gl.get_error(), glow::NO_ERROR);
+            gl.use_program(None);
+            gl.delete_program(dock_program);
             if let Ok(directory) = std::env::var("ARKLINE_SHIP_CAPTURE_DIR") {
                 std::fs::create_dir_all(&directory).unwrap();
                 let capture = CachedFeed::create(&gl, 1100, 1280, 800).unwrap();

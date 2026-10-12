@@ -11,6 +11,7 @@ fn login(s: &mut Server, name: &str) -> (Option<String>, String) {
         s,
         &mut p,
         Request::Connect {
+            supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
             pilot: name.into(),
@@ -96,6 +97,7 @@ fn remote_gameplay_preserves_identity_private_assets_and_rejects_unsafe_wrappers
         Request::SetFleetController { controller: None },
         wrap("Worker", Request::Undock),
         Request::Connect {
+            supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
             pilot: "Intruder".into(),
@@ -272,6 +274,7 @@ fn switching_rejects_stale_target_input_and_revocation_and_reconnect_release() {
         &mut s,
         &mut reconnected,
         Request::Connect {
+            supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
             pilot: "Alpha".into(),
@@ -310,6 +313,7 @@ fn worker_logout_retains_remote_lease_until_last_controller_socket_closes() {
         &mut s,
         &mut second,
         Request::Connect {
+            supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
             pilot: "Boss".into(),

@@ -103,6 +103,14 @@ enum Update {
     Failure(String),
 }
 
+fn resume_guidance(message: String) -> String {
+    if message.contains("resume token required for existing pilot") {
+        format!("{message}. This pilot needs its saved credential from the original browser or device. Browser and native credentials are stored separately. Retrying alone cannot recover it; use the original client or an authorized recovery process.")
+    } else {
+        message
+    }
+}
+
 fn credentials_path(dir: &std::path::Path, server: &str, pilot: &str) -> PathBuf {
     let identity = serde_json::to_vec(&(server, pilot)).unwrap();
     dir.join(format!(
@@ -255,6 +263,7 @@ fn worker(
         let mut reader = transport::Connection::connect(&server)?;
         let mut response = reader.exchange(&Request::Connect {
             supports_pioneer_interior: true,
+            supports_fleet_hangar: true,
             protocol_version: PROTOCOL_VERSION,
             pilot: pilot.clone(),
             resume_token: token.clone(),
@@ -333,6 +342,7 @@ fn worker(
                             let mut next = transport::Connection::connect(&server)?;
                             let mut resumed = next.exchange(&Request::Connect {
                                 supports_pioneer_interior: true,
+                                supports_fleet_hangar: true,
                                 protocol_version: PROTOCOL_VERSION,
                                 pilot: pilot.clone(),
                                 resume_token: token.clone(),
@@ -881,6 +891,7 @@ impl Cockpit {
                 | Request::ExitInterior
                 | Request::InteriorLift { .. }
                 | Request::StationSit { .. }
+                | Request::BoardShip { .. }
                 | Request::EnterShip
                 | Request::Jump { .. }
                 | Request::StartResourceJob { .. }
@@ -965,6 +976,7 @@ impl Cockpit {
                     self.log(message, true);
                 }
                 Update::Failure(error) => {
+                    let error = resume_guidance(error);
                     self.invalidate_ai_session();
                     if self.boot.visible {
                         self.boot.fail();
@@ -3755,7 +3767,13 @@ impl eframe::App for Cockpit {
                                 .snapshot
                                 .as_ref()
                                 .is_some_and(|s| now.saturating_sub(s.server_time_ms) <= 1500);
-                        if let Some(action) = self.hangar_view.ui(ui, &pilot, now, live) {
+                        if let Some(action) = self.hangar_view.ui(
+                            ui,
+                            &pilot,
+                            now,
+                            live,
+                            self.assets.as_ref().and_then(|a| a.hangar.as_ref()),
+                        ) {
                             self.activate_quarters_terminal(action);
                         }
                     }
@@ -5695,6 +5713,7 @@ mod tests {
     }
     fn asset_test_fixture() -> AssetsView {
         AssetsView {
+            hangar: None,
             pioneer_interior_available: true,
             pioneer_interior_decks: 2,
             ships: vec![
@@ -5917,6 +5936,7 @@ mod tests {
             }],
         });
         cockpit.assets = Some(AssetsView {
+            hangar: None,
             pioneer_interior_available: true,
             pioneer_interior_decks: 2,
             ships: ALL_SHIP_CLASSES
@@ -6206,6 +6226,7 @@ mod tests {
                 match serde_json::from_str::<Request>(&line).unwrap() {
                     Request::Connect {
                         supports_pioneer_interior: _,
+                        supports_fleet_hangar: _,
                         protocol_version,
                         pilot,
                         resume_token,

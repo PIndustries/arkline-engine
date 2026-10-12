@@ -812,6 +812,7 @@ mod tests {
                 &mut s,
                 Request::Connect {
                     supports_pioneer_interior: true,
+                    supports_fleet_hangar: true,
                     protocol_version: PROTOCOL_VERSION,
                     pilot: name.into(),
                     resume_token: None,
@@ -902,6 +903,7 @@ mod tests {
             &mut worker,
             Request::Connect {
                 supports_pioneer_interior: true,
+                supports_fleet_hangar: true,
                 protocol_version: PROTOCOL_VERSION,
                 pilot: "WorkerQA".into(),
                 resume_token: initial.resume_token,

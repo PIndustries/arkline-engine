@@ -100,6 +100,7 @@ fn login(ws: &mut WebSocket<TcpStream>, name: &str, token: Option<String>) -> Re
     ask(
         ws,
         Request::Connect {
+            supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: arkline_protocol::PROTOCOL_VERSION,
             pilot: name.into(),

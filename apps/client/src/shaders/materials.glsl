@@ -23,3 +23,24 @@ vec3 ark_environment(vec3 n,vec3 v,vec3 albedo,float roughness,float metallic,fl
     vec3 diffuse_environment=mix(average*0.72,average*1.28,clamp(dot(n,up)*0.5+0.5,0.0,1.0));
     return specular_environment*fresnel+(1.0-fresnel)*(1.0-metallic)*albedo*diffuse_environment;
 }
+
+// Analytic approximation of the enclosed dock's illuminated ceiling and walls.
+// This is a reflection environment, not a ray trace of nearby ships. Direct
+// fixture lights are supplied separately by ark_local_lighting.
+vec3 ark_station_radiance(vec3 direction,float roughness){
+    float ceiling=smoothstep(-0.10,0.75,direction.y);
+    vec3 wall=mix(vec3(0.075,0.095,0.105),vec3(0.24,0.29,0.32),ceiling);
+    float width=mix(0.055,0.40,roughness*roughness);
+    float strip=exp(-pow((abs(direction.z)-0.48)/width,2.0));
+    float ceiling_panel=strip*smoothstep(0.05,0.60,direction.y);
+    // Broader rough reflections have a lower peak instead of adding energy.
+    return wall+vec3(0.82,0.94,1.0)*ceiling_panel*mix(1.8,0.32,roughness);
+}
+vec3 ark_station_environment(vec3 n,vec3 v,vec3 albedo,float roughness,float metallic){
+    roughness=clamp(roughness,0.08,1.0);metallic=clamp(metallic,0.0,1.0);
+    vec3 reflected=ark_station_radiance(reflect(-v,n),roughness);
+    vec3 f0=mix(vec3(0.04),albedo,metallic);
+    vec3 f=ark_fresnel(max(dot(n,v),0.0),f0);
+    vec3 irradiance=mix(vec3(0.18,0.21,0.23),vec3(0.65,0.74,0.79),clamp(n.y*0.5+0.5,0.0,1.0));
+    return reflected*f+(1.0-f)*(1.0-metallic)*albedo*irradiance;
+}

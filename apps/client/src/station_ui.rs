@@ -1,6 +1,32 @@
 //! Station embodiment is confirmed by the server; camera motion never boards a ship.
 use super::*;
 impl Cockpit {
+    fn berth_ready(&self, id: &str) -> bool {
+        self.can_operate()
+            && self
+                .assets
+                .as_ref()
+                .and_then(|a| a.hangar.as_ref())
+                .and_then(|f| f.berths.iter().find(|b| b.id == id))
+                .is_some_and(|b| {
+                    b.can_board
+                        && self.own().is_some_and(|p| {
+                            p.station_avatar.as_ref().is_some_and(|a| {
+                                !a.onboard_interior
+                                    && !a.seated
+                                    && a.jump_started_ms.is_none()
+                                    && a.position
+                                        .iter()
+                                        .zip(b.boarding_point)
+                                        .map(|(a, b)| (a - b).powi(2))
+                                        .sum::<f64>()
+                                        .sqrt()
+                                        <= STATION_BOARD_RANGE_M
+                            })
+                        })
+                })
+    }
+
     pub(super) fn on_foot_view_selector(&mut self, ui: &mut egui::Ui) {
         use flight3d::hangar::OnFootView;
         ui.selectable_value(
@@ -26,6 +52,12 @@ impl Cockpit {
             HangarAction::Inventory => ServiceTab::Cargo,
             HangarAction::Corporation => ServiceTab::Corporation,
             HangarAction::Ai => ServiceTab::ShipComputer,
+            HangarAction::BoardShip(id) => {
+                if self.berth_ready(&id) {
+                    self.send(Request::BoardShip { id });
+                }
+                return;
+            }
             HangarAction::Sit => {
                 if self.can_operate() {
                     self.send(Request::StationSit { seated: true });
@@ -39,7 +71,11 @@ impl Cockpit {
     pub(super) fn in_captains_quarters(&self) -> bool {
         self.in_station_hangar()
             && self.own().is_some_and(|p| {
-                let q = quarters_layout(p.ship_class);
+                let q = if self.assets.as_ref().is_some_and(|a| a.hangar.is_some()) {
+                    arkline_protocol::fleet_quarters_layout()
+                } else {
+                    quarters_layout(p.ship_class)
+                };
                 p.station_avatar.is_some_and(|a| {
                     !a.onboard_interior
                         && a.position[0] >= q.min[0]
@@ -133,7 +169,13 @@ impl Cockpit {
                 return;
             }
 
-            let point = hangar_layout(pilot.ship_class).boarding_point;
+            let fleet = self.assets.as_ref().and_then(|a| a.hangar.clone());
+            let point = fleet
+                .as_ref()
+                .and_then(|f| f.berths.iter().find(|b| b.active))
+                .map_or(hangar_layout(pilot.ship_class).boarding_point, |b| {
+                    b.boarding_point
+                });
             let distance = avatar
                 .position
                 .iter()
@@ -183,6 +225,40 @@ impl Cockpit {
                     .clicked()
             {
                 self.send(Request::EnterInterior);
+            }
+            if let Some(fleet) = &fleet {
+                ui.separator();
+                ui.strong("Owned vessels · physical boarding access");
+                for berth in &fleet.berths {
+                    let distance = avatar
+                        .position
+                        .iter()
+                        .zip(berth.boarding_point)
+                        .map(|(a, b)| (a - b).powi(2))
+                        .sum::<f64>()
+                        .sqrt();
+                    if ui
+                        .add_enabled(
+                            self.can_operate()
+                                && berth.can_board
+                                && distance <= STATION_BOARD_RANGE_M
+                                && avatar.jump_started_ms.is_none()
+                                && !avatar.seated,
+                            egui::Button::new(format!(
+                                "Board {} · {:.1} m{}",
+                                berth.ship_class.spec().name,
+                                distance,
+                                if berth.active { " · active" } else { "" }
+                            )),
+                        )
+                        .clicked()
+                    {
+                        self.send(Request::BoardShip {
+                            id: berth.id.clone(),
+                        });
+                    }
+                }
+                ui.small("Only your vessels at this station are shown. Corporate berths are not available yet.");
             }
             ui.small("WASD / arrows walk · Space jump · hold RMB to look");
             ui.small(
@@ -320,6 +396,72 @@ impl Cockpit {
 mod tests {
     use super::*;
     #[test]
+    fn physical_berth_action_routes_exact_owned_id_and_rejects_unknown_or_distant() {
+        let ctx = egui::Context::default();
+        let mut c = crate::tests::view_test_cockpit(&ctx);
+        let p = &mut c.snapshot.as_mut().unwrap().pilots[0];
+        p.location = Location::Docked;
+        p.station_avatar=Some(serde_json::from_value(serde_json::json!({"position":[0,0,0],"heading":0,"moving":false,"updated_at_ms":1000})).unwrap());
+        let (position, boarding_point) = arkline_protocol::fleet_berth(ShipClass::Pioneer);
+        c.assets = Some(AssetsView {
+            hangar: Some(arkline_protocol::HangarView {
+                layout: arkline_protocol::fleet_hangar_layout(),
+                berths: vec![arkline_protocol::HangarBerth {
+                    id: "owned-hull".into(),
+                    ship_class: ShipClass::Pioneer,
+                    position,
+                    yaw: 0.,
+                    boarding_point,
+                    active: true,
+                    can_board: true,
+                }],
+            }),
+            pioneer_interior_available: true,
+            pioneer_interior_decks: 2,
+            ships: vec![],
+            storage: vec![],
+            corporation: None,
+            invitations: vec![],
+        });
+        let (tx, rx) = mpsc::channel();
+        c.commands = Some(tx);
+        c.activate_quarters_terminal(flight3d::hangar::HangarAction::BoardShip(
+            "foreign-hull".into(),
+        ));
+        assert!(rx.try_recv().is_err());
+        c.snapshot.as_mut().unwrap().pilots[0]
+            .station_avatar
+            .as_mut()
+            .unwrap()
+            .position[0] = 100.;
+        c.activate_quarters_terminal(flight3d::hangar::HangarAction::BoardShip(
+            "owned-hull".into(),
+        ));
+        assert!(rx.try_recv().is_err());
+        c.snapshot.as_mut().unwrap().pilots[0]
+            .station_avatar
+            .as_mut()
+            .unwrap()
+            .position[0] = 0.;
+        c.activate_quarters_terminal(flight3d::hangar::HangarAction::BoardShip(
+            "owned-hull".into(),
+        ));
+        assert!(matches!(rx.try_recv().unwrap(),Request::BoardShip{id} if id=="owned-hull"));
+    }
+    #[test]
+    fn missing_resume_guidance_does_not_imply_retry_recovers_identity() {
+        let message = resume_guidance("resume token required for existing pilot".into());
+        assert!(
+            message.contains("stored separately")
+                && message.contains("Retrying alone cannot recover")
+        );
+        assert_eq!(
+            resume_guidance("Connection refused".into()),
+            "Connection refused"
+        );
+    }
+
+    #[test]
     fn interior_button_requires_server_capability_and_sends_real_request() {
         fn frame(
             ctx: &egui::Context,
@@ -358,6 +500,7 @@ mod tests {
             let mut c = crate::tests::view_test_cockpit(&ctx);
             c.snapshot.as_mut().unwrap().pilots[0].location = Location::Docked;
             c.assets = Some(AssetsView {
+                hangar: None,
                 pioneer_interior_available: supported,
                 pioneer_interior_decks: if supported { 2 } else { 0 },
                 ships: vec![],

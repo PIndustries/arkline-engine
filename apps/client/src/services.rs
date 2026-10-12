@@ -68,7 +68,12 @@ impl Cockpit {
             active.cargo_capacity
         ));
         self.power_gauge(ui);
-        ui.small("Each ship retains its cargo and capacitor charge. Enter your current ship before switching to a stored hull at its station.");
+        ui.small("Each ship retains its cargo and capacitor charge.");
+        if self.assets.as_ref().is_some_and(|a| a.hangar.is_some()) {
+            ui.small("Leave your ship, then walk to the named vessel's boarding access in the physical dock. Boarding requires proximity.");
+        } else {
+            ui.small("Enter your current ship before switching to a stored hull at its station.");
+        }
         let Some(mut assets) = self.assets.clone() else {
             ui.colored_label(AMBER, "Waiting for authenticated hangar inventory…");
             return;
@@ -93,7 +98,9 @@ impl Cockpit {
                     && pilot.location == Location::Docked
                     && pilot.system_id == ship.system_id
                     && pilot.station_avatar.is_none();
-                if ui
+                if assets.hangar.is_some() {
+                    ui.small("Board at physical berth");
+                } else if ui
                     .add_enabled(enabled, egui::Button::new("Board ship"))
                     .on_hover_text("Requires docking at the ship's station")
                     .clicked()

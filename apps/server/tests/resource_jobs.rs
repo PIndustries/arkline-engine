@@ -39,6 +39,7 @@ fn connect(s: &mut Server, name: &str) -> Option<String> {
         s,
         &mut p,
         Request::Connect {
+            supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
             pilot: name.into(),
@@ -256,6 +257,7 @@ fn revocation_reconnect_explicit_cancel_and_admission_are_authoritative() {
         &mut s,
         &mut worker,
         Request::Connect {
+            supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
             pilot: "Worker".into(),
@@ -316,6 +318,7 @@ fn revocation_reconnect_explicit_cancel_and_admission_are_authoritative() {
         &mut s,
         &mut second_session,
         Request::Connect {
+            supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
             pilot: "Worker".into(),
