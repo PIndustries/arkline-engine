@@ -29,6 +29,7 @@ pub struct HangarView {
     zoom: f32,
     walking: bool,
     interior: bool,
+    fleet_mode: bool,
     interior_deck: u8,
     class: Option<ShipClass>,
     follow: Option<Vec3>,
@@ -55,6 +56,7 @@ impl HangarView {
             zoom: 1.0,
             walking: false,
             interior: false,
+            fleet_mode: false,
             interior_deck: 1,
             class: None,
             follow: None,
@@ -107,10 +109,12 @@ impl HangarView {
             .as_ref()
             .is_some_and(|a| a.onboard_interior);
         let interior_deck = pilot.station_avatar.as_ref().map_or(1, |a| a.interior_deck);
-        let reset_heading = self.walking != walking
+        let reset_heading = self.fleet_mode != fleet.is_some()
+            || self.walking != walking
             || self.interior != interior
             || self.class != Some(pilot.ship_class);
         if self.interior_deck != interior_deck || reset_heading {
+            self.fleet_mode = fleet.is_some();
             self.interior = interior;
             self.interior_deck = interior_deck;
             self.zoom = 1.0;
@@ -767,6 +771,32 @@ mod tests {
         assert!(rx
             .recv_timeout(std::time::Duration::from_secs(3))
             .expect("Hangar pointer frame deadlocked"));
+    }
+    #[test]
+    fn fleet_coordinate_switch_discards_camera_history() {
+        let ctx = egui::Context::default();
+        let pilot: PilotView = serde_json::from_value(serde_json::json!({
+            "name":"SwitchQA","credits":0,"ore":0,"location":Location::Docked
+        }))
+        .unwrap();
+        let fleet = arkline_protocol::HangarView {
+            layout: arkline_protocol::fleet_hangar_layout(),
+            berths: vec![],
+        };
+        let mut view = HangarView::new(None);
+        view.class = Some(pilot.ship_class);
+        for fleet_mode in [true, false] {
+            view.follow = Some(Vec3::splat(10000.));
+            view.follow_heading = Some(2.);
+            let _ = ctx.run(Default::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    view.ui(ui, &pilot, 1000, true, fleet_mode.then_some(&fleet));
+                });
+            });
+            assert_eq!(view.fleet_mode, fleet_mode);
+            assert!(view.follow.is_none());
+            assert!(view.follow_heading.is_none());
+        }
     }
     #[test]
     fn avatar_has_human_scale_and_walk_articulation() {

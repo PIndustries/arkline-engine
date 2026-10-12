@@ -77,8 +77,8 @@ pub(super) fn parts(fleet: &FleetView, eye: Vec3) -> Vec<ModelPart> {
         Vec3::new(0.015, 0.32, 0.12),
         0.6,
     );
-    // Human-scale concourse canopy and work lights make the walking lane legible.
-    block(Vec3::new(0., 8., -8.), Vec3::new(l, 0.15, 11.), steel, 0.);
+    // Slim suspended fixtures preserve the sightline to full-height vessels.
+    // No solid posts are placed in the authoritative walking lane.
     for i in 0..24 {
         let x = -36.0 + (2.0 * l / 24.0) * i as f32;
         block(
@@ -87,7 +87,25 @@ pub(super) fn parts(fleet: &FleetView, eye: Vec3) -> Vec<ModelPart> {
             Vec3::new(0.38, 0.55, 0.45),
             0.8,
         );
-        block(Vec3::new(x, 4., -18.), Vec3::new(0.16, 4., 0.16), steel, 0.);
+        // Suspension cables and ceiling ribs remain above walking clearance.
+        block(
+            Vec3::new(x, (h + 8.) * 0.5, -8.),
+            Vec3::new(0.025, (h - 8.) * 0.5, 0.025),
+            steel,
+            0.,
+        );
+        block(
+            Vec3::new(x, h - 0.3, 0.),
+            Vec3::new(0.2, 0.3, w),
+            steel * 1.4,
+            0.,
+        );
+        block(
+            Vec3::new(x, 0.008, 0.),
+            Vec3::new(0.035, 0.008, w),
+            steel * 0.45,
+            0.,
+        );
     }
     // The doorway faces the rear aisle; the route skirts the room's side wall.
     block(
@@ -102,6 +120,17 @@ pub(super) fn parts(fleet: &FleetView, eye: Vec3) -> Vec<ModelPart> {
         Vec3::new(0.02, 0.32, 0.12),
         0.5,
     );
+    for b in &fleet.berths {
+        let x = b.boarding_point[0] as f32;
+        for side in [-1., 1.] {
+            block(
+                Vec3::new(x + side * 3., 0.02, 1.),
+                Vec3::new(0.10, 0.02, 2.),
+                Vec3::new(0.32, 0.30, 0.12),
+                0.,
+            );
+        }
+    }
     for b in visible(fleet, eye) {
         let boarding = Vec3::from_array(b.boarding_point.map(|v| v as f32));
         p.draw(
