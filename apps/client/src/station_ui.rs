@@ -99,6 +99,9 @@ impl Cockpit {
         self.manual_remote.is_none() && self.own().is_some_and(|p| p.location == Location::Docked)
     }
     pub(super) fn station_actions(&mut self, ui: &mut egui::Ui) {
+        self.station_actions_with_engineering(ui, true);
+    }
+    fn station_actions_with_engineering(&mut self, ui: &mut egui::Ui, engineering: bool) {
         let Some(pilot) = self.own().filter(|p| p.location == Location::Docked) else {
             return;
         };
@@ -176,7 +179,9 @@ impl Cockpit {
                 } else {
                     ui.small("Airlock exit is on deck 1. Return via the access-core lift.");
                 }
-                self.pioneer_room_controls(ui, avatar.interior_deck == 1);
+                if engineering {
+                    self.pioneer_room_controls(ui, avatar.interior_deck == 1);
+                }
                 return;
             }
 
@@ -307,7 +312,7 @@ impl Cockpit {
                 }
             });
             ui.small("Drag with RMB to inspect your ship · wheel to zoom");
-            if pilot.ship_class == ShipClass::Pioneer {
+            if engineering && pilot.ship_class == ShipClass::Pioneer {
                 self.pioneer_room_controls(ui, true);
             }
         }
@@ -325,7 +330,15 @@ impl Cockpit {
         .movable(false)
         .frame(self.overlay_frame(ctx))
         .show(ctx, |ui| {
-            self.station_actions(ui);
+            self.station_actions_with_engineering(ui, false);
+            if self
+                .own()
+                .is_some_and(|p| p.ship_class == ShipClass::Pioneer)
+                && ui.button("Room engineering").clicked()
+            {
+                self.services_open = true;
+                self.service_tab = ServiceTab::Station;
+            }
             self.power_gauge(ui);
         });
     }
