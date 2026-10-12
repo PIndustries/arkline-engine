@@ -1,4 +1,4 @@
-//! Read-only GitHub workspace. Authentication stays with `gh`; no tokens enter editor state.
+//! Read-only direct GitHub API workspace; credentials never enter display state or logs.
 use serde_json::Value;
 use std::{
     io::Read,
@@ -59,6 +59,7 @@ pub struct GitHubWorkspace {
     state: WorkspaceState,
     pending: Option<mpsc::Receiver<WorkspaceState>>,
     cancel: Arc<AtomicBool>,
+    token: Option<String>,
 }
 impl Default for GitHubWorkspace {
     fn default() -> Self {
@@ -68,11 +69,27 @@ impl Default for GitHubWorkspace {
                 ..Default::default()
             },
             pending: None,
+            token: None,
             cancel: Arc::new(AtomicBool::new(false)),
         }
     }
 }
 impl GitHubWorkspace {
+    /// Changing identity invalidates every pending result and all account-scoped data.
+    pub fn set_token(&mut self, token: Option<String>) -> bool {
+        let token = token.filter(|t| !t.is_empty());
+        if self.token == token {
+            return false;
+        }
+        self.cancel.store(true, Ordering::Relaxed);
+        self.pending = None;
+        self.token = token;
+        self.state = WorkspaceState {
+            repository: self.state.repository.clone(),
+            ..Default::default()
+        };
+        true
+    }
     pub fn state(&self) -> &WorkspaceState {
         &self.state
     }
@@ -81,6 +98,7 @@ impl GitHubWorkspace {
         self.cancel.store(true, Ordering::Relaxed);
         self.cancel = Arc::new(AtomicBool::new(false));
         let cancel = self.cancel.clone();
+        let token = self.token.clone();
         let (tx, rx) = mpsc::channel();
         let previous = if self.state.repository == repository {
             Some(self.state.clone())
@@ -95,7 +113,7 @@ impl GitHubWorkspace {
         self.state.stale = true;
         self.pending = Some(rx);
         std::thread::spawn(move || {
-            let mut state = load(&repository, &cancel);
+            let mut state = load(&repository, token.as_deref(), &cancel);
             retain_failed_sections(&mut state, previous.as_ref());
             if !cancel.load(Ordering::Relaxed) {
                 let _ = tx.send(state);
@@ -186,69 +204,99 @@ fn entries(value: Value, issues: bool) -> Vec<Entry> {
         })
         .collect()
 }
-fn executable(path: &std::path::Path) -> bool {
-    let Ok(metadata) = path.metadata() else {
-        return false;
+fn api_client() -> Result<reqwest::blocking::Client, String> {
+    reqwest::blocking::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .connect_timeout(Duration::from_secs(5))
+        .timeout(Duration::from_secs(15))
+        .user_agent("Arkline-Editor")
+        .build()
+        .map_err(|_| "GitHub HTTP client unavailable.".into())
+}
+fn decode_response(status: u16, reader: impl Read, cancel: &AtomicBool) -> Result<Value, String> {
+    if cancel.load(Ordering::Relaxed) {
+        return Err("Request cancelled.".into());
+    }
+    if !(200..300).contains(&status) {
+        return Err(match status {
+            401 => "GitHub sign-in was rejected; sign in again.",
+            403 | 429 => "GitHub access or rate limit prevents this request.",
+            404 => "GitHub repository or resource is unavailable to this account.",
+            300..=399 => "GitHub redirect refused.",
+            _ => "GitHub request failed; retry later.",
+        }
+        .into());
+    }
+    let mut bytes = Vec::new();
+    reader
+        .take(OUTPUT_LIMIT as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| "GitHub response could not be read before the deadline.".to_string())?;
+    if cancel.load(Ordering::Relaxed) {
+        return Err("Request cancelled.".into());
+    }
+    if bytes.len() > OUTPUT_LIMIT {
+        return Err("GitHub response exceeded its safe limit.".into());
+    }
+    serde_json::from_slice(&bytes).map_err(|_| "GitHub returned an invalid response.".into())
+}
+fn api(
+    client: &reqwest::blocking::Client,
+    path: &str,
+    query: Option<Value>,
+    token: Option<&str>,
+    cancel: &AtomicBool,
+) -> Result<Value, String> {
+    if cancel.load(Ordering::Relaxed) {
+        return Err("Request cancelled.".into());
+    }
+    // Callers supply internal paths only; never accept a URL or redirect credentials.
+    if path.starts_with('/') || path.contains("://") || path.contains('#') {
+        return Err("Invalid GitHub API path.".into());
+    }
+    let url = format!("https://api.github.com/{path}");
+    let mut request = match query {
+        Some(body) => client.post(url).json(&body),
+        None => client.get(url),
     };
-    if !metadata.is_file() {
-        return false;
+    request = request
+        .header("Accept", "application/vnd.github+json")
+        .header("X-GitHub-Api-Version", "2022-11-28");
+    if let Some(token) = token {
+        let mut header = reqwest::header::HeaderValue::from_str(&format!("Bearer {token}"))
+            .map_err(|_| "Invalid GitHub credential format.".to_string())?;
+        header.set_sensitive(true);
+        request = request.header(reqwest::header::AUTHORIZATION, header);
     }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        metadata.permissions().mode() & 0o111 != 0
-    }
-    #[cfg(not(unix))]
-    {
-        true
-    }
+    let response = request
+        .send()
+        .map_err(|_| "GitHub connection failed or timed out.".to_string())?;
+    decode_response(response.status().as_u16(), response, cancel)
 }
-fn discover_program(paths: impl IntoIterator<Item = PathBuf>, fallbacks: &[PathBuf]) -> PathBuf {
-    let name = if cfg!(windows) { "gh.exe" } else { "gh" };
-    paths
-        .into_iter()
-        .map(|p| p.join(name))
-        .chain(fallbacks.iter().cloned())
-        .find(|p| executable(p))
-        .unwrap_or_else(|| name.into())
-}
-fn github_program() -> PathBuf {
-    let path = std::env::var_os("PATH").unwrap_or_default();
-    #[cfg(target_os = "macos")]
-    let fallback = [
-        PathBuf::from("/opt/homebrew/bin/gh"),
-        PathBuf::from("/usr/local/bin/gh"),
-    ];
-    #[cfg(not(target_os = "macos"))]
-    let fallback: [PathBuf; 0] = [];
-    discover_program(std::env::split_paths(&path), &fallback)
-}
-fn api(args: &[String], cancel: &AtomicBool) -> Result<Value, String> {
-    let mut command = Command::new(github_program());
-    command
-        .arg("api")
-        .args(args)
-        .env("GH_PROMPT_DISABLED", "1")
-        .env("GH_PAGER", "cat");
-    let bytes = bounded(&mut command, cancel, COMMAND_TIMEOUT, OUTPUT_LIMIT)?;
-    serde_json::from_slice(&bytes)
-        .map_err(|_| "GitHub returned an invalid or unsupported response.".into())
-}
-fn load(repository: &str, cancel: &AtomicBool) -> WorkspaceState {
+fn load(repository: &str, token: Option<&str>, cancel: &AtomicBool) -> WorkspaceState {
     let mut state = WorkspaceState {
         repository: repository.into(),
         ..Default::default()
     };
-    match api(&["user".into()], cancel) {
-        Ok(user) => {
-            state.authenticated = true;
-            state.login = user["login"].as_str().map(str::to_owned);
+    let client = match api_client() {
+        Ok(client) => client,
+        Err(error) => {
+            state.error = Some(error);
+            return state;
         }
-        Err(_) => {
-            state.error = Some("GitHub CLI authentication unavailable. Install GitHub CLI from https://cli.github.com and run gh auth login outside the editor, then refresh.".into());
+    };
+    let mut verified_token = None;
+    if let Some(token) = token {
+        match api(&client, "user", None, Some(token), cancel) {
+            Ok(user) if user["login"].as_str().is_some_and(|s| !s.is_empty()) => {
+                state.authenticated = true;
+                state.login = user["login"].as_str().map(str::to_owned);
+                verified_token = Some(token);
+            }
+            _ => state.error = Some("GitHub sign-in could not be verified. Public data is shown anonymously; sign in again or retry.".into()),
         }
     }
-    if state.authenticated {
+    {
         for (section, endpoint) in [
             ("Issues", "issues?state=all&sort=updated&per_page=60"),
             ("Pull requests", "pulls?state=all&sort=updated&per_page=40"),
@@ -257,8 +305,14 @@ fn load(repository: &str, cancel: &AtomicBool) -> WorkspaceState {
             if cancel.load(Ordering::Relaxed) {
                 return state;
             }
-            match api(&[format!("repos/{repository}/{endpoint}")], cancel) {
-                Ok(v) => {
+            match api(
+                &client,
+                &format!("repos/{repository}/{endpoint}"),
+                None,
+                verified_token,
+                cancel,
+            ) {
+                Ok(v) if v.is_array() => {
                     let result = entries(v, section == "Issues");
                     match section {
                         "Issues" => state.issues = result,
@@ -266,13 +320,27 @@ fn load(repository: &str, cancel: &AtomicBool) -> WorkspaceState {
                         _ => state.milestones = result,
                     }
                 }
+                Ok(_) => state
+                    .warnings
+                    .push(format!("{section}: unsupported response format.")),
                 Err(error) => state.warnings.push(format!("{section}: {error}")),
             }
         }
         let (owner, name) = repository.split_once('/').unwrap();
         let query = "query($owner:String!,$name:String!){repository(owner:$owner,name:$name){projectsV2(first:10){nodes{title url shortDescription items(first:50){nodes{content{... on Issue{title number url body} ... on PullRequest{title number url body}} fieldValues(first:10){nodes{... on ProjectV2ItemFieldSingleSelectValue{name field{... on ProjectV2SingleSelectField{name}}}}}}}}}}}";
-        match api(&["graphql".into(), "-f".into(),format!("query={query}"),"-f".into(),format!("owner={owner}"),"-f".into(),format!("name={name}")], cancel) {
-        Ok(v) if v.get("errors").is_none() => {
+        let projects = if verified_token.is_some() {
+            api(
+                &client,
+                "graphql",
+                Some(serde_json::json!({"query":query,"variables":{"owner":owner,"name":name}})),
+                verified_token,
+                cancel,
+            )
+        } else {
+            Err("Sign-in required".into())
+        };
+        match projects {
+        Ok(v) if v.get("errors").is_none() && v["data"]["repository"]["projectsV2"]["nodes"].is_array() => {
             for project in v["data"]["repository"]["projectsV2"]["nodes"].as_array().into_iter().flatten() {
                 state.projects.push(Project { title:text(project,"title"),description:text(project,"shortDescription"),url:text(project,"url"),items:project["items"]["nodes"].as_array().into_iter().flatten().filter(|i| i["content"].is_object()).map(|i| {
                     let content=&i["content"];
@@ -281,7 +349,7 @@ fn load(repository: &str, cancel: &AtomicBool) -> WorkspaceState {
                 }).collect() });
             }
         }
-        _ => state.warnings.push("Projects unavailable. The gh account may need read:project permission; no permission changes were made.".into()),
+        _ => state.warnings.push("Projects unavailable. Sign-in with project access may be required; no permission changes were made.".into()),
     }
     }
     if !cancel.load(Ordering::Relaxed) {
@@ -301,8 +369,17 @@ fn retain_failed_sections(state: &mut WorkspaceState, previous: Option<&Workspac
     let Some(previous) = previous else {
         return;
     };
-    let failed =
-        |name: &str| state.error.is_some() || state.warnings.iter().any(|w| w.starts_with(name));
+    // Cached authenticated content must never be presented as anonymous/public,
+    // nor carried across a different verified identity or repository.
+    let same_identity = match (state.authenticated, previous.authenticated) {
+        (false, false) => true,
+        (true, true) => state.login.is_some() && state.login == previous.login,
+        _ => false,
+    };
+    if !same_identity || state.repository != previous.repository {
+        return;
+    }
+    let failed = |name: &str| state.warnings.iter().any(|w| w.starts_with(name));
     if failed("Issues:") {
         state.issues = previous.issues.clone();
     }
@@ -336,7 +413,7 @@ fn bounded(
         .stderr(Stdio::null());
     let mut child = command
         .spawn()
-        .map_err(|_| "Required GitHub CLI or Git executable could not start.".to_string())?;
+        .map_err(|_| "Git executable could not start for the public wiki.".to_string())?;
     let stdout = child.stdout.take().unwrap();
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
@@ -376,8 +453,7 @@ fn bounded(
         match child.try_wait() {
             Ok(Some(status)) if !status.success() => {
                 return Err(
-                    "GitHub request failed. Check CLI sign-in, repository access, or connectivity."
-                        .into(),
+                    "Public wiki request failed. Check repository access or connectivity.".into(),
                 )
             }
             Ok(Some(_)) if output.is_some() => return Ok(output.unwrap()),
@@ -483,19 +559,70 @@ fn wiki(cancel: &AtomicBool) -> Result<Vec<WikiPage>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(unix)]
     #[test]
-    fn native_app_discovery_uses_explicit_fallback_without_changing_path() {
-        let before = std::env::var_os("PATH");
+    fn response_bounds_errors_and_cancellation_never_echo_body() {
+        let cancel = AtomicBool::new(false);
         assert_eq!(
-            discover_program(Vec::new(), &[PathBuf::from("/bin/sh")]),
-            PathBuf::from("/bin/sh")
+            decode_response(200, br#"{"login":"sample"}"#.as_slice(), &cancel).unwrap()["login"],
+            "sample"
         );
-        assert_eq!(
-            discover_program(Vec::new(), &[PathBuf::from("/not-installed/gh")]),
-            PathBuf::from("gh")
-        );
-        assert_eq!(std::env::var_os("PATH"), before);
+        assert!(decode_response(200, vec![b' '; OUTPUT_LIMIT + 1].as_slice(), &cancel).is_err());
+        assert!(decode_response(200, b"not json".as_slice(), &cancel).is_err());
+        for status in [301, 401, 403, 404, 429, 500] {
+            let error =
+                decode_response(status, b"sensitive diagnostic".as_slice(), &cancel).unwrap_err();
+            assert!(!error.contains("sensitive"));
+        }
+        cancel.store(true, Ordering::Relaxed);
+        assert!(decode_response(200, b"{}".as_slice(), &cancel).is_err());
+    }
+    #[test]
+    fn http_redirect_is_not_followed_and_error_body_is_not_displayed() {
+        use std::{io::Write, net::TcpListener};
+        let target = TcpListener::bind("127.0.0.1:0").unwrap();
+        target.set_nonblocking(true).unwrap();
+        let source = TcpListener::bind("127.0.0.1:0").unwrap();
+        let source_addr = source.local_addr().unwrap();
+        let target_addr = target.local_addr().unwrap();
+        let worker = std::thread::spawn(move || {
+            let (mut socket, _) = source.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            let mut request = [0u8; 4096];
+            assert!(socket.read(&mut request).unwrap() > 0);
+            write!(socket,"HTTP/1.1 302 Found\r\nLocation: http://{target_addr}/secret\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").unwrap();
+        });
+        let response = api_client()
+            .unwrap()
+            .get(format!("http://{source_addr}/"))
+            .send()
+            .unwrap();
+        assert_eq!(response.status().as_u16(), 302);
+        assert!(decode_response(302, response, &AtomicBool::new(false))
+            .unwrap_err()
+            .contains("redirect"));
+        worker.join().unwrap();
+        assert!(matches!(target.accept(),Err(e) if e.kind()==std::io::ErrorKind::WouldBlock));
+    }
+    #[test]
+    fn identity_change_discards_previous_cache_and_pending_response() {
+        let mut workspace = GitHubWorkspace::default();
+        workspace.set_token(Some("first-test-credential".into()));
+        workspace.state.authenticated = true;
+        workspace.state.login = Some("old-account".into());
+        workspace.state.issues.push(Entry::default());
+        let (tx, rx) = mpsc::channel();
+        workspace.pending = Some(rx);
+        let old_cancel = workspace.cancel.clone();
+        workspace.set_token(Some("second-test-credential".into()));
+        assert!(old_cancel.load(Ordering::Relaxed));
+        assert!(tx.send(WorkspaceState::default()).is_err());
+        workspace.poll();
+        assert!(!workspace.state.authenticated);
+        assert!(workspace.state.login.is_none() && workspace.state.issues.is_empty());
+        workspace.set_token(None);
+        assert!(workspace.token.is_none());
     }
     #[test]
     fn repository_input_cannot_become_options_or_extra_paths() {
@@ -552,6 +679,47 @@ mod tests {
         assert_eq!(current.issues[0].title, "Saved issue");
         assert_eq!(current.pulls[0].title, "Fresh PR");
     }
+    #[test]
+    fn revoked_or_different_identity_never_retains_authenticated_sections() {
+        let previous = WorkspaceState {
+            authenticated: true,
+            login: Some("original-owner".into()),
+            repository: OFFICIAL_REPOSITORY.into(),
+            issues: vec![Entry {
+                title: "Private issue".into(),
+                ..Default::default()
+            }],
+            projects: vec![Project {
+                title: "Private project".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        for (authenticated, login) in [
+            (false, None),
+            (true, Some("other-owner".into())),
+            (true, None),
+        ] {
+            let mut current = WorkspaceState {
+                authenticated,
+                login,
+                repository: OFFICIAL_REPOSITORY.into(),
+                warnings: vec!["Issues: unavailable".into(), "Projects unavailable".into()],
+                ..Default::default()
+            };
+            retain_failed_sections(&mut current, Some(&previous));
+            assert!(current.issues.is_empty() && current.projects.is_empty());
+        }
+        let mut same = WorkspaceState {
+            authenticated: true,
+            login: previous.login.clone(),
+            repository: OFFICIAL_REPOSITORY.into(),
+            warnings: vec!["Projects unavailable".into()],
+            ..Default::default()
+        };
+        retain_failed_sections(&mut same, Some(&previous));
+        assert_eq!(same.projects[0].title, "Private project");
+    }
     #[cfg(unix)]
     #[test]
     fn process_timeout_output_limit_and_cancellation_are_bounded() {
@@ -582,12 +750,12 @@ mod tests {
         .is_err());
     }
     #[test]
-    #[ignore = "explicit live read-only GitHub CLI acceptance"]
+    #[ignore = "explicit live anonymous read-only GitHub API acceptance"]
     fn live_official_read_only_workspace() {
-        let state = load(OFFICIAL_REPOSITORY, &AtomicBool::new(false));
-        assert!(state.authenticated, "{:?}", state.error);
+        let state = load(OFFICIAL_REPOSITORY, None, &AtomicBool::new(false));
+        assert!(!state.authenticated);
         assert!(!state.issues.is_empty());
-        assert!(!state.projects.is_empty(), "{:?}", state.warnings);
+        assert!(state.warnings.iter().any(|w| w.starts_with("Projects")));
         assert!(
             state
                 .wiki

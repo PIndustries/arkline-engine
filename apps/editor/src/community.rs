@@ -1,9 +1,12 @@
 use crate::github::{self, Entry, GitHubWorkspace};
+use crate::github_auth::{AuthPhase, GithubAuth};
 use eframe::egui::{self, RichText};
 use std::{io::Read, path::Path};
 
 pub struct Community {
     workspace: GitHubWorkspace,
+    auth: GithubAuth,
+    client_id: String,
     repository: String,
     started: bool,
     tab: usize,
@@ -17,7 +20,18 @@ impl Community {
             .and_then(|bytes| String::from_utf8(bytes).ok())
             .and_then(|repo| github::validate_repository(&repo).ok())
             .unwrap_or_else(|| github::OFFICIAL_REPOSITORY.into());
+        let client_id = std::env::var("ARKLINE_GITHUB_CLIENT_ID")
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+            .or_else(|| option_env!("ARKLINE_GITHUB_CLIENT_ID").map(str::to_string))
+            .or_else(|| {
+                read_public_preference(project, "editor-github-client-id.txt")
+                    .and_then(|bytes| String::from_utf8(bytes).ok())
+            })
+            .unwrap_or_default();
         Self {
+            auth: GithubAuth::new(client_id.trim().into()),
+            client_id,
             workspace: GitHubWorkspace::default(),
             repository,
             started: false,
@@ -28,6 +42,14 @@ impl Community {
         }
     }
     pub fn poll(&mut self) {
+        self.auth.poll();
+        if self
+            .workspace
+            .set_token(self.auth.access_token().map(str::to_owned))
+            && self.started
+        {
+            self.refresh();
+        }
         self.workspace.poll();
     }
     pub fn ensure_loaded(&mut self) {
@@ -45,10 +67,84 @@ impl Community {
             Err(error) => self.message = error,
         }
     }
+    fn account_panel(&mut self, ui: &mut egui::Ui, project: &Path) {
+        let state = self.auth.state().clone();
+        egui::Frame::group(ui.style()).show(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.label(RichText::new("GitHub account").strong().color(crate::GREEN));
+                if let Some(login) = &state.login {
+                    ui.label(RichText::new(format!("@{login}")).strong());
+                }
+                match state.phase {
+                    AuthPhase::SignedOut | AuthPhase::Error => {
+                        if ui.button("Sign in with GitHub").clicked() { self.auth.start(); }
+                        if ui.small_button("Forget saved sign-in").clicked() { self.auth.sign_out(); }
+                    }
+                    AuthPhase::SignedIn => {
+                        if ui.button("Sign out").clicked() { self.auth.sign_out(); }
+                    }
+                    AuthPhase::Restoring | AuthPhase::Requesting | AuthPhase::AwaitingAuthorization => {
+                        ui.spinner();
+                        if ui.button("Cancel sign-in").clicked() { self.auth.cancel(); }
+                    }
+                    AuthPhase::Unconfigured => { ui.label("App setup required"); }
+                }
+            });
+            ui.label(&state.status);
+            if state.phase == AuthPhase::AwaitingAuthorization {
+                ui.horizontal_wrapped(|ui| {
+                    if let Some(code) = &state.user_code {
+                        ui.label(RichText::new(code).monospace().strong().size(22.));
+                        if ui.button("Copy code").clicked() { ui.ctx().copy_text(code.clone()); }
+                    }
+                    if let Some(url) = &state.verification_url {
+                        ui.hyperlink_to("Open GitHub to approve", url);
+                    }
+                    if let Some(expires) = state.expires_at_ms {
+                        let seconds = expires.saturating_sub(now_ms()).div_ceil(1000);
+                        ui.label(format!("Code expires in {}:{:02}", seconds / 60, seconds % 60));
+                    }
+                });
+            }
+            if state.phase == AuthPhase::SignedIn {
+                ui.small(if state.persistent { "Credential stored in the OS credential store." }
+                    else { "Session only · sign in again after closing the editor." });
+            }
+            ui.small("GitHub is optional for local development. This connects contributor tools; game-account linking is handled separately by Arkline identity.");
+            ui.add_enabled_ui(!matches!(state.phase, AuthPhase::Restoring | AuthPhase::Requesting | AuthPhase::AwaitingAuthorization | AuthPhase::SignedIn), |ui| {
+                egui::CollapsingHeader::new("GitHub app setup")
+                    .default_open(state.phase == AuthPhase::Unconfigured)
+                    .show(ui, |ui| {
+                        ui.label("Use the public Client ID of a registered OAuth app with Device Flow enabled. No client secret is needed.");
+                        ui.horizontal_wrapped(|ui| {
+                            ui.label("Public Client ID");
+                            ui.add(egui::TextEdit::singleline(&mut self.client_id).desired_width(250.).char_limit(128));
+                            if ui.button("Apply app settings").clicked() {
+                                let id = self.client_id.trim();
+                                if !valid_client_id(id) {
+                                    self.message = "Enter a valid public Client ID (letters, numbers, dash, underscore or dot).".into();
+                                } else if let Err(error) = save_public_preference(project, "editor-github-client-id.txt", id) {
+                                    self.message = error;
+                                } else {
+                                    self.client_id = id.into();
+                                    self.auth = GithubAuth::new(self.client_id.clone());
+                                    self.message = "GitHub app settings saved. Sign in when credential restoration finishes.".into();
+                                }
+                            }
+                        });
+                        ui.hyperlink_to("OAuth app setup documentation", "https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#device-flow");
+                        ui.small("Requested access: profile and read-only Projects. Repository write access is not requested. App settings contain only the public Client ID; credentials stay outside the project.");
+                    });
+            });
+        });
+    }
     pub fn show(&mut self, ctx: &egui::Context, project: &Path) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Arkline community workspace");
-            ui.label("Issues, contributions, roadmap and official wiki · the game simulation is local and paused");
+            ui.heading("Community workspace");
+            ui.label("Follow the roadmap, review contributions and read the official wiki.");
+            ui.add_space(8.);
+            self.account_panel(ui, project);
+            ui.add_space(8.);
             ui.horizontal_wrapped(|ui| {
                 ui.label("Repository");
                 ui.add(egui::TextEdit::singleline(&mut self.repository).desired_width(270.));
@@ -75,7 +171,7 @@ impl Community {
             ui.horizontal_wrapped(|ui| {
                 if state.loading { ui.spinner(); ui.label("Fetching GitHub data in background…"); }
                 if let Some(login) = &state.login { ui.label(format!("GitHub: {login}")); }
-                else if !state.loading { ui.label("GitHub CLI sign-in unavailable"); }
+                else if !state.loading { ui.label("Public repository access"); }
                 if let Some(time) = state.refreshed_at_ms {
                     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
                     ui.label(format!("Last refresh {} s ago", now.saturating_sub(time)/1000));
@@ -85,7 +181,7 @@ impl Community {
             if let Some(error) = &state.error { ui.colored_label(egui::Color32::LIGHT_RED,error); }
             if !self.message.is_empty() { ui.label(&self.message); }
             for warning in &state.warnings { ui.colored_label(egui::Color32::YELLOW, warning); }
-            ui.small("Uses your existing GitHub CLI sign-in. Read-only integration: connecting does not clone code, create a fork, commit or publish. Refresh is explicit; this is not a live event stream.");
+            ui.small("Read-only workspace · refresh for updates. Connecting a repository does not create a local checkout or publish changes.");
             ui.horizontal_wrapped(|ui| {
                 ui.hyperlink_to("Repository on GitHub",format!("https://github.com/{}",state.repository));
                 ui.hyperlink_to("Official project board",github::OFFICIAL_PROJECT_URL);
@@ -153,8 +249,25 @@ fn document(ui: &mut egui::Ui, text: &str) {
     }
 }
 
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+        .min(u64::MAX as u128) as u64
+}
+fn valid_client_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"_-.".contains(&b))
+}
 fn read_preference(project: &Path) -> Option<Vec<u8>> {
-    let path = project.join("editor-repository.txt");
+    read_public_preference(project, "editor-repository.txt")
+}
+fn read_public_preference(project: &Path, name: &str) -> Option<Vec<u8>> {
+    let path = project.join(name);
     let metadata = std::fs::symlink_metadata(&path).ok()?;
     if !metadata.is_file() || metadata.file_type().is_symlink() {
         return None;
@@ -169,11 +282,14 @@ fn read_preference(project: &Path) -> Option<Vec<u8>> {
 }
 fn save_preference(project: &Path, repository: &str) -> Result<(), String> {
     github::validate_repository(repository)?;
-    let path = project.join("editor-repository.txt");
+    save_public_preference(project, "editor-repository.txt", repository)
+}
+fn save_public_preference(project: &Path, name: &str, value: &str) -> Result<(), String> {
+    let path = project.join(name);
     if let Ok(meta) = std::fs::symlink_metadata(&path) {
         if !meta.is_file() || meta.file_type().is_symlink() {
-            return Err("Repository preference must be an ordinary file".into());
+            return Err("Preference must be an ordinary file".into());
         }
     }
-    std::fs::write(path, repository).map_err(|_| "Repository preference could not be saved".into())
+    std::fs::write(path, value).map_err(|_| "Public preference could not be saved".into())
 }

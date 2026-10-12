@@ -4,6 +4,7 @@ mod community;
 mod engineering;
 mod engineering_document;
 mod github;
+mod github_auth;
 mod inspector;
 mod materials;
 mod physics_lab;
