@@ -12,7 +12,7 @@ The fixed catalog berth layout does not move when a ship leaves or the active cl
 
 `BoardShip { id }` requires an authenticated pilot, enabled fleet hangar, a docked owned vessel at that station, an avatar on foot outside the interior, grounded and standing, within the server's boarding range of the requested berth. It uses the existing transactional `ShipBoarded` cargo/power exchange, then clears the avatar/walking input. Another pilot's ID, a forged ID, a distant marker, or a repeated stale boarding request fails. Membership and remote-control delegation confer no boarding permission. The remote gameplay whitelist excludes this command.
 
-Legacy `SelectShip` still works while aboard and docked. It remains forbidden while walking. `EnterShip` boards the already-active ship at its own berth, while the new command selects a different vessel by identity.
+Legacy `SelectShip` works only in legacy private-hangar mode while aboard and docked. It remains forbidden while walking. `EnterShip` boards the already-active ship at its own berth, while the new command selects a different vessel by identity.
 
 ## Compatibility and persistence
 
