@@ -1,6 +1,7 @@
 pub mod access_tokens;
 mod assets;
 mod drones;
+pub mod editor;
 mod flight;
 mod identity;
 pub mod local_development;
@@ -109,6 +110,7 @@ fn token_hash(token: &str) -> String {
 /// The durable state and its economic event commit in one SQLite transaction.
 pub struct Server {
     local_development: bool,
+    editor_time: Option<u64>,
     db: Connection,
     auth: Option<identity::Authenticator>,
     online_sessions: BTreeMap<String, usize>,
@@ -125,12 +127,20 @@ impl Server {
         self.local_development
     }
     pub fn open_local_development(directory: impl AsRef<Path>) -> Result<Self> {
-        Self::open_realm(local_development::database_path(directory.as_ref())?, true)
+        Self::open_realm(
+            local_development::database_path(directory.as_ref())?,
+            true,
+            false,
+        )
     }
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
-        Self::open_realm(path, false)
+        Self::open_realm(path, false, false)
     }
-    fn open_realm(path: impl AsRef<Path>, local_development: bool) -> Result<Self> {
+    fn open_realm(
+        path: impl AsRef<Path>,
+        local_development: bool,
+        editor_mode: bool,
+    ) -> Result<Self> {
         let path = path.as_ref();
         if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
             std::fs::create_dir_all(parent)?;
@@ -185,7 +195,8 @@ impl Server {
         )?;
         let json: String = db.query_row("SELECT json FROM world WHERE id=1", [], |r| r.get(0))?;
         let mut world: World = serde_json::from_str(&json)?;
-        let now = now_ms();
+        let editor_time = editor::open_clock(&mut db, editor_mode)?;
+        let now = editor_time.unwrap_or_else(now_ms);
         flight::migrate_spatial(&mut world);
         universe::ensure_asteroids(&mut world);
         assets::ensure_accounts(&mut world);
@@ -222,6 +233,7 @@ impl Server {
         }
         Ok(Self {
             local_development,
+            editor_time,
             db,
             auth: None,
             online_sessions: BTreeMap::new(),
@@ -426,6 +438,9 @@ impl Server {
         self.tick_at(now_ms())
     }
     pub fn tick_at(&mut self, now: u64) -> Result<()> {
+        if let Some(previous) = self.editor_time {
+            ensure!(now >= previous, "editor time cannot move backwards");
+        }
         let tx = self.db.transaction()?;
         let json: String = tx.query_row("SELECT json FROM world WHERE id=1", [], |r| r.get(0))?;
         let mut world: World = serde_json::from_str(&json)?;
@@ -453,7 +468,16 @@ impl Server {
         if next != json {
             tx.execute("UPDATE world SET json=?1 WHERE id=1", [next])?;
         }
+        if self.editor_time.is_some() {
+            tx.execute(
+                "UPDATE editor_clock SET time_ms=?1 WHERE id=1",
+                [now.to_string()],
+            )?;
+        }
         tx.commit()?;
+        if self.editor_time.is_some() {
+            self.editor_time = Some(now);
+        }
         resource_jobs::advance(self, now)?;
         Ok(())
     }
@@ -467,7 +491,7 @@ impl Server {
         mining::ensure_modules(&mut world);
         drones::ensure_fleets(&mut world)?;
 
-        let now = now_ms();
+        let now = self.editor_time.unwrap_or_else(now_ms);
         remote_control::release_controller(&mut world, name);
         let controlled: Vec<String> = world
             .resource_jobs
