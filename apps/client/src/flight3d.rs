@@ -5004,6 +5004,53 @@ mod tests {
             assert_eq!(gl.get_error(), glow::NO_ERROR);
             gl.use_program(None);
             gl.delete_program(environment_program);
+            // A dark metal hull must receive the dock ceiling environment, with
+            // direction-dependent reflections that broaden with roughness.
+            let dock_fragment = concat!(
+                "#version 150\n",
+                include_str!("shaders/sky.glsl"),
+                include_str!("shaders/materials.glsl"),
+                r#"uniform float rough; uniform float dock; out vec4 color;
+                void main(){vec3 n=vec3(0,1,0),v=normalize(vec3(0,1,-0.55)),a=vec3(0.07);
+                vec3 c=dock>0.5?ark_station_environment(n,v,a,rough,0.85):ark_environment(n,v,a,rough,0.85,0.0,n);
+                color=vec4(ark_display(c),1.0);}"#
+            );
+            let dock_program = compile(&gl, BACK_VERTEX, dock_fragment).unwrap();
+            gl.use_program(Some(dock_program));
+            let dock_uniform = gl.get_uniform_location(dock_program, "dock");
+            let rough_uniform = gl.get_uniform_location(dock_program, "rough");
+            let mut dock_pixels = Vec::new();
+            for (dock, rough) in [(0.0, 0.18), (1.0, 0.18), (1.0, 0.9)] {
+                gl.uniform_1_f32(dock_uniform.as_ref(), dock);
+                gl.uniform_1_f32(rough_uniform.as_ref(), rough);
+                gl.draw_arrays(glow::TRIANGLES, 0, 3);
+                let mut pixel = [0u8; 4];
+                gl.read_pixels(
+                    64,
+                    64,
+                    1,
+                    1,
+                    glow::RGBA,
+                    glow::UNSIGNED_BYTE,
+                    glow::PixelPackData::Slice(Some(&mut pixel)),
+                );
+                dock_pixels.push(pixel);
+            }
+            assert!(
+                dock_pixels[1][1] > dock_pixels[0][1].saturating_add(15),
+                "dock illumination must reveal dark metal: {dock_pixels:?}"
+            );
+            assert!(
+                dock_pixels[1][1] > dock_pixels[2][1],
+                "roughness must reduce the ceiling strip peak: {dock_pixels:?}"
+            );
+            assert!(
+                dock_pixels[1][1] < 245,
+                "dock reflection must retain highlight headroom: {dock_pixels:?}"
+            );
+            assert_eq!(gl.get_error(), glow::NO_ERROR);
+            gl.use_program(None);
+            gl.delete_program(dock_program);
             if let Ok(directory) = std::env::var("ARKLINE_SHIP_CAPTURE_DIR") {
                 std::fs::create_dir_all(&directory).unwrap();
                 let capture = CachedFeed::create(&gl, 1100, 1280, 800).unwrap();
