@@ -661,3 +661,163 @@ fn failed_signed_claim_and_public_caps_do_not_create_or_link() {
         .check_public_request(None, &account("Another", "x", false, None), 1)
         .is_err());
 }
+
+#[test]
+fn real_tcp_and_websocket_share_account_admission() {
+    use std::{
+        io::{BufRead, Write},
+        net::{TcpListener, TcpStream},
+        process::{Command, Stdio},
+        time::Duration,
+    };
+    struct Fixture {
+        child: std::process::Child,
+        dir: std::path::PathBuf,
+    }
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+            let _ = std::fs::remove_dir_all(&self.dir);
+        }
+    }
+    let tcp = TcpListener::bind("127.0.0.1:0").unwrap();
+    let tcp_addr = tcp.local_addr().unwrap();
+    let ws = TcpListener::bind("127.0.0.1:0").unwrap();
+    let ws_addr = ws.local_addr().unwrap();
+    let dir = std::env::temp_dir().join(format!("arkline-admission-{}", rand::random::<u64>()));
+    std::fs::create_dir(&dir).unwrap();
+    let mut config = config_json()["access_tokens"].clone();
+    config["required_scopes"] = json!(["arkline.play"]);
+    std::fs::write(
+        dir.join("config.json"),
+        serde_json::to_vec(&config).unwrap(),
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("jwks.json"),
+        serde_json::to_vec(&json!({"keys":[public_key()]})).unwrap(),
+    )
+    .unwrap();
+    drop(tcp);
+    drop(ws);
+    let child = Command::new(env!("CARGO_BIN_EXE_arkline-server"))
+        .args([
+            "--bind",
+            &tcp_addr.to_string(),
+            "--ws-bind",
+            &ws_addr.to_string(),
+            "--auth-required",
+            "--auth-config",
+        ])
+        .arg(dir.join("config.json"))
+        .arg("--auth-jwks")
+        .arg(dir.join("jwks.json"))
+        .arg("--db")
+        .arg(dir.join("world.sqlite"))
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    let _fixture = Fixture { child, dir };
+    let stream = (0..100)
+        .find_map(|_| match TcpStream::connect(tcp_addr) {
+            Ok(s) => Some(s),
+            Err(_) => {
+                std::thread::sleep(Duration::from_millis(20));
+                None
+            }
+        })
+        .expect("local fixture started");
+    stream
+        .set_read_timeout(Some(Duration::from_secs(3)))
+        .unwrap();
+    let mut tcp = std::io::BufReader::new(stream);
+    let send = |tcp: &mut std::io::BufReader<TcpStream>, r: arkline_protocol::Request| {
+        serde_json::to_writer(tcp.get_mut(), &r).unwrap();
+        tcp.get_mut().write_all(b"\n").unwrap();
+        let mut line = String::new();
+        tcp.read_line(&mut line).unwrap();
+        serde_json::from_str::<arkline_protocol::Response>(&line).unwrap()
+    };
+    assert!(!send(&mut tcp, legacy("Transport", None)).ok);
+    assert!(
+        send(
+            &mut tcp,
+            account("Transport", "transport-subject", false, None)
+        )
+        .ok
+    );
+    let socket = TcpStream::connect(ws_addr).unwrap();
+    socket
+        .set_read_timeout(Some(Duration::from_secs(3)))
+        .unwrap();
+    let (mut websocket, _) = tungstenite::client(format!("ws://{ws_addr}/ws"), socket).unwrap();
+    websocket
+        .send(tungstenite::Message::Text(
+            serde_json::to_string(&account("Transport", "wrong", false, None))
+                .unwrap()
+                .into(),
+        ))
+        .unwrap();
+    let rejected: arkline_protocol::Response =
+        serde_json::from_str(websocket.read().unwrap().to_text().unwrap()).unwrap();
+    assert!(!rejected.ok);
+    websocket
+        .send(tungstenite::Message::Text(
+            serde_json::to_string(&account("Transport", "transport-subject", false, None))
+                .unwrap()
+                .into(),
+        ))
+        .unwrap();
+    let admitted: arkline_protocol::Response =
+        serde_json::from_str(websocket.read().unwrap().to_text().unwrap()).unwrap();
+    assert!(admitted.ok);
+    assert!(admitted.resume_token.is_none());
+    assert!(send(&mut tcp, arkline_protocol::Request::Undock).ok);
+    websocket
+        .send(tungstenite::Message::Text(
+            serde_json::to_string(&arkline_protocol::Request::Snapshot)
+                .unwrap()
+                .into(),
+        ))
+        .unwrap();
+    let snapshot: arkline_protocol::Response =
+        serde_json::from_str(websocket.read().unwrap().to_text().unwrap()).unwrap();
+    assert!(snapshot.ok);
+    assert_ne!(
+        snapshot.snapshot.unwrap().pilots[0].location,
+        arkline_protocol::Location::Docked
+    );
+}
+#[test]
+fn conflicting_links_serialize_to_one_owner() {
+    let mut s = admitted_server();
+    let mut p = None;
+    let old = s.handle(&mut p, legacy("Race", None)).resume_token.unwrap();
+    s.disconnect(&mut p);
+    let server = std::sync::Arc::new(std::sync::Mutex::new(s));
+    let attempts = [
+        account("Race", "one", true, Some(old.clone())),
+        account("Race", "two", true, Some(old)),
+    ];
+    let threads: Vec<_> = attempts
+        .into_iter()
+        .map(|request| {
+            let s = server.clone();
+            std::thread::spawn(move || {
+                s.lock()
+                    .unwrap()
+                    .handle_authenticated(&mut None, &mut None, request)
+                    .ok
+            })
+        })
+        .collect();
+    assert_eq!(
+        threads
+            .into_iter()
+            .map(|t| t.join().unwrap() as usize)
+            .sum::<usize>(),
+        1
+    );
+}

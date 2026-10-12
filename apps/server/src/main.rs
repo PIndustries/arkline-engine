@@ -91,6 +91,13 @@ fn main() -> Result<()> {
     if tls_ca.is_some() || tls_server_name.is_some() {
         bail!("--tls-ca and --tls-server-name require --tls-health");
     }
+    if auth_config.is_some() || auth_jwks.is_some() || auth_required {
+        validate_identity_listeners(
+            &bind,
+            ws_bind.as_deref(),
+            tls_cert.is_some() && tls_key.is_some(),
+        )?;
+    }
     let tls = tls::load(tls_cert.as_deref(), tls_key.as_deref(), ws_bind.is_some())?;
     let mut authority = Server::open(db)?;
     match (auth_config, auth_jwks) {
@@ -302,4 +309,38 @@ fn read_bounded(path: &str, limit: usize) -> Result<Vec<u8>> {
         "identity configuration exceeds size limit"
     );
     Ok(bytes)
+}
+
+fn validate_identity_listeners(tcp: &str, ws: Option<&str>, tls: bool) -> Result<()> {
+    let loopback = |address: &str| {
+        address
+            .parse::<std::net::SocketAddr>()
+            .is_ok_and(|a| a.ip().is_loopback())
+    };
+    anyhow::ensure!(
+        loopback(tcp),
+        "account authentication requires loopback raw TCP; expose verified WSS instead"
+    );
+    anyhow::ensure!(
+        ws.is_none_or(|address| tls || loopback(address)),
+        "account authentication requires TLS for non-loopback WebSocket listeners"
+    );
+    Ok(())
+}
+#[cfg(test)]
+mod identity_listener_tests {
+    use super::*;
+    #[test]
+    fn account_tokens_require_encrypted_remote_transport() {
+        assert!(validate_identity_listeners("127.0.0.1:7777", Some("0.0.0.0:8443"), true).is_ok());
+        assert!(
+            validate_identity_listeners("127.0.0.1:7777", Some("127.0.0.1:7778"), false).is_ok()
+        );
+        assert!(validate_identity_listeners("[::1]:7777", None, false).is_ok());
+        assert!(validate_identity_listeners("0.0.0.0:7777", None, true).is_err());
+        assert!(
+            validate_identity_listeners("127.0.0.1:7777", Some("0.0.0.0:7778"), false).is_err()
+        );
+        assert!(validate_identity_listeners("localhost:7777", None, false).is_err());
+    }
 }
