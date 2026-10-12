@@ -133,6 +133,41 @@ pub(crate) fn show(
         });
     });
     ui.small("Single-room pressure and electrical loads are simulated. Whole-ship atmosphere, plumbing and life support remain proposed. Door safety interlocks are enforced by the server.");
+    ui.collapsing("Equipment and connections", |ui| {
+        let catalog = arkline_protocol::pioneer_room_catalog();
+        ui.small(format!("Vessel: {}", s.vessel_id));
+        ui.small(
+            "Connection records describe this fixed controller; they are not editable wiring.",
+        );
+        for device in catalog.equipment {
+            ui.collapsing(device.label, |ui| {
+                ui.monospace(device.id);
+                if let Some([x, y, z]) = device.position {
+                    ui.small(format!("Deck 1 · {x:.2}, {y:.2}, {z:.2} m"));
+                } else {
+                    ui.small("Logical endpoint · no separate physical fixture");
+                }
+                match device.active_load_w {
+                    Some(w) => {
+                        ui.small(format!("Conditional load: {w} W"));
+                    }
+                    None => {
+                        ui.small("Load not independently metered");
+                    }
+                }
+                for link in catalog
+                    .connections
+                    .iter()
+                    .filter(|link| link.from_equipment == device.id)
+                {
+                    ui.small(format!(
+                        "{:?}: {} → {} / {}",
+                        link.kind, link.from_port, link.to_equipment, link.to_port
+                    ));
+                }
+            });
+        }
+    });
     action
 }
 
