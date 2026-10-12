@@ -8,7 +8,7 @@ pub(super) fn advance_state(
 ) -> Result<()> {
     advance_state_with_load(power, class, now, 0)
 }
-fn advance_state_with_load(
+pub(super) fn advance_state_with_load(
     power: &mut Option<PowerState>,
     class: ShipClass,
     now: u64,
@@ -55,26 +55,22 @@ fn advance_state_with_load(
 }
 pub(super) fn advance(world: &mut World, now: u64) -> Result<()> {
     for (name, p) in &mut world.pilots {
-        let load = if p.view.ship_class == ShipClass::Pioneer {
-            room_controls::load_w(
-                world
-                    .accounts
-                    .get(name)
-                    .and_then(|a| a.pioneer_room.as_ref()),
-            )
-        } else {
-            0
-        };
-        advance_state_with_load(&mut p.view.power, p.view.ship_class, now, load)?;
+        if p.view.ship_class == ShipClass::Pioneer
+            && world
+                .accounts
+                .get(name)
+                .is_some_and(|a| a.pioneer_room.is_some())
+        {
+            continue;
+        }
+        advance_state(&mut p.view.power, p.view.ship_class, now)?;
     }
     for account in world.accounts.values_mut() {
         for ship in &mut account.ships {
-            let load = if ship.ship_class == ShipClass::Pioneer {
-                room_controls::load_w(account.pioneer_room.as_ref())
-            } else {
-                0
-            };
-            advance_state_with_load(&mut ship.power, ship.ship_class, now, load)?;
+            if ship.ship_class == ShipClass::Pioneer && account.pioneer_room.is_some() {
+                continue;
+            }
+            advance_state(&mut ship.power, ship.ship_class, now)?;
         }
     }
     Ok(())

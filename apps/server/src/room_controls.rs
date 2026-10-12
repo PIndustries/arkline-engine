@@ -54,24 +54,50 @@ fn outputs(r: &mut PioneerRoomState, powered: bool, occupied: bool) {
     }
     r.emergency_light_on = !main && r.emergency_remaining_ms > 0;
 }
-pub(super) fn advance(w: &mut World, now: u64) {
-    for (name, a) in &mut w.accounts {
-        let Some(r) = &mut a.pioneer_room else {
-            continue;
-        };
-        let p = &w.pilots[name];
-        let power = if p.view.ship_class == ShipClass::Pioneer {
-            p.view.power.as_ref()
-        } else {
-            a.ships
-                .iter()
-                .find(|s| s.ship_class == ShipClass::Pioneer)
-                .and_then(|s| s.power.as_ref())
-        };
-        let powered = power.is_some_and(|p| p.charge_j > 0);
-        let elapsed = now.saturating_sub(r.updated_at_ms);
+/// Integrate the finite controller transitions, never an unbounded per-ms loop.
+/// Pressure-opening, reserve full/empty and first available capacitor joule are
+/// the only load/output discontinuities under the fixed sub-reactor room budget.
+fn advance_pair(
+    r: &mut PioneerRoomState,
+    power: &mut Option<PowerState>,
+    occupied: bool,
+    now: u64,
+) -> Result<()> {
+    let mut cursor = r.updated_at_ms;
+    power::advance_state_with_load(power, ShipClass::Pioneer, cursor, 0)?;
+    for _ in 0..8 {
+        let powered = power.as_ref().is_some_and(|p| p.charge_j > 0);
+        outputs(r, powered, occupied);
+        if r.door_open {
+            r.pressure_pa = ROOM_PRESSURE_PA;
+        }
+        if cursor >= now {
+            return Ok(());
+        }
+        let mut dt = now - cursor;
+        if !powered {
+            let state = power.as_ref().unwrap();
+            dt = dt.min(
+                (1000 - state.regen_remainder_mj)
+                    .div_ceil(state.regen_w)
+                    .max(1),
+            );
+        }
+        if powered && r.breaker_closed && r.emergency_remaining_ms < ROOM_EMERGENCY_MS {
+            dt = dt.min(ROOM_EMERGENCY_MS - r.emergency_remaining_ms);
+        } else if r.emergency_light_on {
+            dt = dt.min(r.emergency_remaining_ms);
+        }
+        if r.vent_running && r.vent_commanded == VentMode::Equalize && r.door_commanded_open {
+            let needed = (ROOM_PRESSURE_PA - ROOM_DOOR_DELTA_PA).saturating_sub(r.pressure_pa);
+            if needed > 0 {
+                dt = dt.min((needed as u64).div_ceil(2));
+            }
+        }
+        let load = if powered { load_w(Some(r)) } else { 0 };
+        power::advance_state_with_load(power, ShipClass::Pioneer, cursor + dt, load)?;
         if r.vent_running {
-            let delta = (elapsed as u128 * 2).min(ROOM_PRESSURE_PA as u128) as u32;
+            let delta = (dt as u128 * 2).min(ROOM_PRESSURE_PA as u128) as u32;
             match r.vent_commanded {
                 VentMode::Equalize => {
                     r.pressure_pa = r.pressure_pa.saturating_add(delta).min(ROOM_PRESSURE_PA)
@@ -80,23 +106,41 @@ pub(super) fn advance(w: &mut World, now: u64) {
                 VentMode::Hold => {}
             }
         }
-        if r.door_open {
-            r.pressure_pa = ROOM_PRESSURE_PA;
-        }
         if r.emergency_light_on {
-            r.emergency_remaining_ms = r.emergency_remaining_ms.saturating_sub(elapsed);
+            r.emergency_remaining_ms = r.emergency_remaining_ms.saturating_sub(dt);
         } else if powered && r.breaker_closed {
             r.emergency_remaining_ms = r
                 .emergency_remaining_ms
-                .saturating_add(elapsed)
+                .saturating_add(dt)
                 .min(ROOM_EMERGENCY_MS);
         }
-        r.updated_at_ms = r.updated_at_ms.max(now);
-        outputs(
-            r,
-            powered,
-            p.view.ship_class == ShipClass::Pioneer && doorway_occupied(p),
-        );
+        cursor += dt;
+        r.updated_at_ms = cursor;
+        if let Some(p) = power.as_mut().filter(|p| p.charge_j == p.capacity_j) {
+            p.updated_at_ms = cursor;
+        }
+    }
+    bail!("room integration exceeded finite transition budget")
+}
+pub(super) fn advance(w: &mut World, now: u64) -> Result<()> {
+    for (name, a) in &mut w.accounts {
+        let Some(r) = &mut a.pioneer_room else {
+            continue;
+        };
+        let p = w.pilots.get_mut(name).unwrap();
+        let active = p.view.ship_class == ShipClass::Pioneer;
+        let occupied = active && doorway_occupied(p);
+        let power = if active {
+            &mut p.view.power
+        } else {
+            &mut a
+                .ships
+                .iter_mut()
+                .find(|s| s.ship_class == ShipClass::Pioneer)
+                .context("owned Pioneer missing")?
+                .power
+        };
+        advance_pair(r, power, occupied, now)?;
         if !a.room_compatible {
             r.interlock = Some(
                 "Older session: door held open; reconnect all clients to enable room controls"
@@ -104,6 +148,7 @@ pub(super) fn advance(w: &mut World, now: u64) {
             );
         }
     }
+    Ok(())
 }
 pub(super) fn execute(
     w: &mut World,
@@ -203,5 +248,84 @@ pub(super) fn legacy_recovery(w: &mut World, name: &str, now: u64) {
         r.interlock = Some(
             "Older session: door held open; reconnect all clients to enable room controls".into(),
         );
+    }
+}
+
+#[cfg(test)]
+mod integration_tests {
+    use super::*;
+    fn fixture() -> (PioneerRoomState, Option<PowerState>) {
+        let mut r = PioneerRoomState::uncommissioned("v1:Test:Pioneer".into());
+        r.commissioned = true;
+        r.breaker_closed = true;
+        r.door_open = false;
+        r.door_commanded_open = true;
+        r.vent_commanded = VentMode::Equalize;
+        r.pressure_pa = 81_000;
+        r.emergency_remaining_ms = ROOM_EMERGENCY_MS - 1000;
+        let spec = power_spec(ShipClass::Pioneer);
+        let p = Some(PowerState {
+            charge_j: 100_000,
+            capacity_j: spec.capacity_j,
+            regen_w: spec.regen_w,
+            updated_at_ms: 0,
+            regen_remainder_mj: 137,
+        });
+        (r, p)
+    }
+    #[test]
+    fn reserve_and_pressure_load_boundaries_are_polling_independent() {
+        let (mut coarse, mut cp) = fixture();
+        let (mut fine, mut fp) = (coarse.clone(), cp.clone());
+        advance_pair(&mut coarse, &mut cp, false, 20_000).unwrap();
+        for t in 1..=20_000 {
+            advance_pair(&mut fine, &mut fp, false, t).unwrap();
+        }
+        assert_eq!(coarse, fine);
+        assert_eq!(cp, fp);
+        // 20 s reactor production - 28 W baseline - 96 W for 7.5 s - 10 W for 1 s.
+        assert_eq!(cp.as_ref().unwrap().charge_j, 122_710);
+        assert_eq!(cp.as_ref().unwrap().regen_remainder_mj, 137);
+        assert!(coarse.door_open && !coarse.vent_running);
+        advance_pair(&mut coarse, &mut cp, false, 1_000_000).unwrap();
+        for t in (21_000..=1_000_000).step_by(1000) {
+            advance_pair(&mut fine, &mut fp, false, t).unwrap();
+        }
+        assert_eq!(coarse, fine);
+        assert_eq!(cp, fp);
+    }
+    #[test]
+    fn persisted_elapsed_interval_matches_continuous_ticks_and_is_bounded() {
+        let (mut r, mut p) = fixture();
+        advance_pair(&mut r, &mut p, false, 500).unwrap();
+        let json = serde_json::to_string(&(r.clone(), p.clone())).unwrap();
+        let (mut restored, mut rp): (PioneerRoomState, Option<PowerState>) =
+            serde_json::from_str(&json).unwrap();
+        advance_pair(&mut restored, &mut rp, false, 20_000).unwrap();
+        for t in (600..=20_000).step_by(100) {
+            advance_pair(&mut r, &mut p, false, t).unwrap();
+        }
+        assert_eq!((restored, rp), (r, p));
+        let (mut r, mut p) = fixture();
+        advance_pair(&mut r, &mut p, false, u64::MAX).unwrap();
+        assert_eq!(r.updated_at_ms, u64::MAX);
+        assert_eq!(p.as_ref().unwrap().charge_j, p.as_ref().unwrap().capacity_j);
+    }
+    #[test]
+    fn power_recovery_and_emergency_expiry_are_cadence_independent() {
+        for blackout in [false, true] {
+            let (mut coarse, mut cp) = fixture();
+            coarse.breaker_closed = !blackout;
+            coarse.emergency_remaining_ms = 5;
+            cp.as_mut().unwrap().charge_j = 0;
+            cp.as_mut().unwrap().regen_remainder_mj = 0;
+            let (mut fine, mut fp) = (coarse.clone(), cp.clone());
+            advance_pair(&mut coarse, &mut cp, false, 50).unwrap();
+            for t in 1..=50 {
+                advance_pair(&mut fine, &mut fp, false, t).unwrap();
+            }
+            assert_eq!(coarse, fine);
+            assert_eq!(cp, fp);
+        }
     }
 }

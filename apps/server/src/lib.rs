@@ -165,7 +165,7 @@ impl Server {
         mining::ensure_modules(&mut world);
         drones::ensure_fleets(&mut world)?;
         power::advance(&mut world, now)?;
-        room_controls::advance(&mut world, now);
+        room_controls::advance(&mut world, now)?;
         world.remote_controls.clear();
         resource_jobs::cancel_all(&mut world, now, "Server restarted");
         station::migrate(&mut world);
@@ -388,7 +388,7 @@ impl Server {
         mining::ensure_modules(&mut world);
         drones::ensure_fleets(&mut world)?;
         power::advance(&mut world, now)?;
-        room_controls::advance(&mut world, now);
+        room_controls::advance(&mut world, now)?;
         flight::advance(&mut world, now);
         station::advance(&mut world, now);
         surface::update(&mut world);
@@ -520,7 +520,7 @@ impl Server {
         mining::ensure_modules(&mut world);
         drones::ensure_fleets(&mut world)?;
         power::advance(&mut world, now)?;
-        room_controls::advance(&mut world, now);
+        room_controls::advance(&mut world, now)?;
         flight::advance(&mut world, now);
         station::advance(&mut world, now);
         surface::update(&mut world);
@@ -1164,7 +1164,7 @@ impl Server {
         mining::ensure_modules(&mut world);
         drones::ensure_fleets(&mut world)?;
         power::advance(&mut world, now)?;
-        room_controls::advance(&mut world, now);
+        room_controls::advance(&mut world, now)?;
         validate(&world)?;
         let mut entries = load_entries(&tx, export)?;
         for event in cycle_events.into_iter().chain(event) {
