@@ -8,7 +8,7 @@ The first Pioneer asset has seven material batches and 32,284 triangles. Its bod
 
 - [Embedded model runtime](pioneer-model-runtime.md): supported GLB subset, loading limits, caching and rendering behavior.
 - [Pioneer editable model](../assets/ships/pioneer/README.md): source files, generation instructions, dimensions, hardpoints and known gaps.
-- [Ship art contribution checklist](ship-art-contribution-checklist.md): rights, previews, intended scale and offline inspection.
+- [Ship art contribution checklist](art-contribution-checklist.md): rights, previews, intended scale and offline inspection.
 
 This is not a general model browser or arbitrary import command. A user cannot drop any GLB into the running client. The current embedded loader supports static indexed triangle geometry and opaque, untextured metallic/roughness materials with emissive color. It rejects unsupported textures, skins, animations and extensions instead of silently substituting them. It uses no runtime network or external resource loading.
 
