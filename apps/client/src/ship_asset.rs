@@ -67,8 +67,17 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Vec<Primitive>, String> {
         .ok_or_else(|| fail("Missing default scene"))?;
     let mut result = Vec::new();
     let mut budget = 600_000usize;
+    let mut node_visits = 4096usize;
     for node in scene.nodes() {
-        visit(node, Mat4::IDENTITY, blob, &mut result, &mut budget, 0)?;
+        visit(
+            node,
+            Mat4::IDENTITY,
+            blob,
+            &mut result,
+            &mut budget,
+            &mut node_visits,
+            0,
+        )?;
     }
     if result.is_empty() {
         return Err(fail("Empty ship"));
@@ -81,8 +90,12 @@ fn visit(
     blob: &[u8],
     out: &mut Vec<Primitive>,
     budget: &mut usize,
+    node_visits: &mut usize,
     depth: usize,
 ) -> Result<(), String> {
+    *node_visits = node_visits
+        .checked_sub(1)
+        .ok_or("Ship node visit budget exceeded")?;
     if depth > 32 || out.len() > 128 {
         return Err("Ship hierarchy/primitive budget exceeded".into());
     }
@@ -181,7 +194,7 @@ fn visit(
         }
     }
     for child in node.children() {
-        visit(child, transform, blob, out, budget, depth + 1)?;
+        visit(child, transform, blob, out, budget, node_visits, depth + 1)?;
     }
     Ok(())
 }
@@ -250,6 +263,48 @@ mod tests {
         let v = &parts[0].vertices;
         assert!((v[1].p - v[0].p).cross(v[2].p - v[0].p).dot(v[0].n) > 0.);
     }
+    #[test]
+    fn repeated_meshless_children_cannot_expand_traversal_exponentially() {
+        let original = fixture(2, [1.0; 3]);
+        let json_len = u32::from_le_bytes(original[12..16].try_into().unwrap()) as usize;
+        let mut document: serde_json::Value =
+            serde_json::from_slice(&original[20..20 + json_len]).unwrap();
+        // Only 22 distinct nodes, but repeated children otherwise expand into
+        // millions of visits. No primitives exist to consume the triangle cap.
+        document["nodes"] = serde_json::Value::Array(
+            (0..22)
+                .map(|i| {
+                    if i == 21 {
+                        serde_json::json!({})
+                    } else {
+                        serde_json::json!({"children": [i + 1, i + 1]})
+                    }
+                })
+                .collect(),
+        );
+        let mut json = serde_json::to_vec(&document).unwrap();
+        while json.len() % 4 != 0 {
+            json.push(b' ');
+        }
+        let binary_chunk = &original[20 + json_len..];
+        let mut bytes = Vec::new();
+        for n in [
+            0x46546c67u32,
+            2,
+            (20 + json.len() + binary_chunk.len()) as u32,
+            json.len() as u32,
+            0x4e4f534a,
+        ] {
+            bytes.extend_from_slice(&n.to_le_bytes());
+        }
+        bytes.extend(json);
+        bytes.extend(binary_chunk);
+        assert_eq!(
+            decode(&bytes).err().as_deref(),
+            Some("Ship node visit budget exceeded")
+        );
+    }
+
     #[test]
     fn bad_indices_and_singular_transforms_fail_closed() {
         assert!(decode(&fixture(6, [1., 1., 1.])).is_err());
