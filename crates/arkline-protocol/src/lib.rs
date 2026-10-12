@@ -1,5 +1,7 @@
 //! Arkline v0.1 wire format and canonical economic event encoding.
 //! One JSON request/response per line over a local TCP connection.
+mod editor_graph;
+pub use editor_graph::*;
 mod room_equipment;
 pub use room_equipment::*;
 mod pioneer_interior;

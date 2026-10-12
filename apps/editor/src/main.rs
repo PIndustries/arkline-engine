@@ -3,6 +3,7 @@ mod asset_document;
 mod community;
 mod engineering;
 mod engineering_document;
+mod event_graph;
 mod github;
 mod github_auth;
 mod inspector;
@@ -27,6 +28,8 @@ struct Editor {
     materials: materials::Materials,
     engineering: engineering::Engineering,
     community: community::Community,
+    event_graph: event_graph::EventGraphPanel,
+    events_open: bool,
     workspace: usize,
     wireframe: bool,
     asset_gallery: Option<EmbeddedAssetGallery>,
@@ -42,6 +45,8 @@ impl Editor {
             materials: materials::Materials::open(&project),
             engineering: engineering::Engineering::open(&project),
             community: community::Community::open(&project),
+            event_graph: event_graph::EventGraphPanel::open(&project),
+            events_open: false,
             workspace: 0,
             wireframe: false,
             asset_gallery: None,
@@ -173,10 +178,26 @@ impl eframe::App for Editor {
                     {
                         self.client.pause();
                     }
+                    if ui
+                        .toggle_value(&mut self.events_open, "Event flow")
+                        .clicked()
+                        && self.events_open
+                    {
+                        self.workspace = 0;
+                    }
                     ui.label(RichText::new("Local sandbox").color(MUTED));
                 });
             });
-        egui::TopBottomPanel::bottom("editor_console").resizable(true).default_height(120.).height_range(65. ..=280.).show(ctx, |ui| {
+        if self.events_open && self.workspace == 0 {
+            egui::TopBottomPanel::bottom("editor_event_flow")
+                .resizable(true)
+                .default_height(350.)
+                .height_range(250. ..=600.)
+                .show(ctx, |ui| {
+                    self.event_graph.show(ui, &self.project, &mut self.client);
+                });
+        } else {
+            egui::TopBottomPanel::bottom("editor_console").resizable(true).default_height(120.).height_range(65. ..=280.).show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut self.bottom_tab,0,"Console");
                 ui.selectable_value(&mut self.bottom_tab,1,"Project");
@@ -194,6 +215,7 @@ impl eframe::App for Editor {
                 }
             });
         });
+        }
         if self.workspace == 3 {
             self.client.poll_hidden();
             egui::SidePanel::right("fleet_materials_inspector")

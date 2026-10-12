@@ -8,7 +8,8 @@ pub use material_preview::EmbeddedMaterialPreview;
 mod embedded;
 #[cfg(not(target_arch = "wasm32"))]
 pub use embedded::{
-    EmbeddedClient, EmbeddedStatus, EmbeddedView, EmbeddedViewState, ViewTransition,
+    EmbeddedClient, EmbeddedEventAck, EmbeddedEventDebugState, EmbeddedStatus, EmbeddedView,
+    EmbeddedViewState, ViewTransition,
 };
 // Native Arkline cockpit. Live world data is server-authoritative; ship layouts are labeled design references.
 #[cfg(not(target_arch = "wasm32"))]

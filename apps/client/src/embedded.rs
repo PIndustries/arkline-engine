@@ -1,5 +1,6 @@
 //! The editor owns the window; a dedicated worker owns the local authority and SQLite.
 use super::*;
+use arkline_protocol::{EditorEventGraph, EditorGraphDebug};
 use arkline_server::editor::EditorWorld;
 use eframe::App;
 
@@ -62,7 +63,28 @@ struct ViewDiagnostics {
     events: VecDeque<ViewTransition>,
     wireframe: bool,
 }
+#[derive(Clone, Debug)]
+pub struct EmbeddedEventAck {
+    pub id: u64,
+    pub result: Result<(), String>,
+}
+#[derive(Clone, Debug)]
+pub struct EmbeddedEventDebugState {
+    pub debug: EditorGraphDebug,
+    pub ack: Option<EmbeddedEventAck>,
+}
+enum GraphCommand {
+    Replace {
+        revision: u64,
+        graph: EditorEventGraph,
+        clear_pending: bool,
+    },
+    Trigger(u64),
+    Step,
+    Clear,
+}
 enum ClockCommand {
+    Graph(u64, GraphCommand),
     Play,
     Pause,
     Step,
@@ -72,7 +94,11 @@ enum ClockCommand {
 
 pub struct EmbeddedClient {
     cockpit: Cockpit,
-    clock: Sender<ClockCommand>,
+    clock: mpsc::SyncSender<ClockCommand>,
+    graph_states: Receiver<EmbeddedEventDebugState>,
+    graph_state: Option<EmbeddedEventDebugState>,
+    graph_pending: Option<u64>,
+    graph_sequence: u64,
     states: Receiver<EmbeddedStatus>,
     state: EmbeddedStatus,
     destroyed: bool,
@@ -94,7 +120,8 @@ impl EmbeddedClient {
         cockpit.connecting = true;
         cockpit.notice = "Opening local world…".into();
         cockpit.pilot_input.disable_capture();
-        let (clock, clock_rx) = mpsc::channel();
+        let (clock, clock_rx) = mpsc::sync_channel(16);
+        let (graph_tx, graph_states) = mpsc::sync_channel(1);
         let (status_tx, states) = mpsc::channel();
         let (commands, requests) = mpsc::channel();
         let (updates, receiver) = mpsc::sync_channel(64);
@@ -110,7 +137,7 @@ impl EmbeddedClient {
                 requests,
                 updates.clone(),
                 controls,
-                status_tx.clone(),
+                (status_tx.clone(), graph_tx),
             ) {
                 let _ = updates.send(Update::Failure(error.clone()));
                 let _ = status_tx.send(EmbeddedStatus::Error(error));
@@ -119,6 +146,10 @@ impl EmbeddedClient {
         Self {
             cockpit,
             clock,
+            graph_states,
+            graph_state: None,
+            graph_pending: None,
+            graph_sequence: 0,
             states,
             state: EmbeddedStatus::Loading,
             destroyed: false,
@@ -130,9 +161,63 @@ impl EmbeddedClient {
     }
     /// Drain authority updates while another editor workspace owns the viewport.
     /// This never renders, consumes egui input, or starts a new connection.
+    pub fn graph_debug(&self) -> Option<&EmbeddedEventDebugState> {
+        self.graph_state.as_ref()
+    }
+    pub fn graph_replace(
+        &mut self,
+        revision: u64,
+        graph: EditorEventGraph,
+        clear_pending: bool,
+    ) -> Result<u64, String> {
+        graph.validate()?;
+        self.queue_graph(GraphCommand::Replace {
+            revision,
+            graph,
+            clear_pending,
+        })
+    }
+    pub fn graph_trigger(&mut self, node_id: u64) -> Result<u64, String> {
+        self.queue_graph(GraphCommand::Trigger(node_id))
+    }
+    /// Executes one ready graph node, without advancing simulation time.
+    pub fn graph_step(&mut self) -> Result<u64, String> {
+        self.queue_graph(GraphCommand::Step)
+    }
+    pub fn graph_clear(&mut self) -> Result<u64, String> {
+        self.queue_graph(GraphCommand::Clear)
+    }
+    fn queue_graph(&mut self, command: GraphCommand) -> Result<u64, String> {
+        if !self.ready() {
+            return Err("Local authority is not ready".into());
+        }
+        if self.graph_pending.is_some() {
+            return Err("Waiting for the previous graph command acknowledgement".into());
+        }
+        let id = self
+            .graph_sequence
+            .checked_add(1)
+            .ok_or("Graph command sequence exhausted")?;
+        self.clock
+            .try_send(ClockCommand::Graph(id, command))
+            .map_err(|_| "Local command queue is full or closed".to_string())?;
+        self.graph_sequence = id;
+        self.graph_pending = Some(id);
+        Ok(id)
+    }
     pub fn poll(&mut self) {
         for state in self.states.try_iter() {
             self.state = state;
+        }
+        for graph in self.graph_states.try_iter() {
+            if graph
+                .ack
+                .as_ref()
+                .is_some_and(|a| Some(a.id) == self.graph_pending)
+            {
+                self.graph_pending = None;
+            }
+            self.graph_state = Some(graph);
         }
         self.cockpit.embedded_paused = self.state != EmbeddedStatus::Running;
         self.cockpit.embedded_input = false;
@@ -160,26 +245,36 @@ impl EmbeddedClient {
             self.cockpit.frozen_time = self.cockpit.snapshot.as_ref().map(|s| s.server_time_ms);
         }
     }
+    fn queue_clock(&mut self, command: ClockCommand) -> bool {
+        if self.clock.try_send(command).is_err() {
+            self.cockpit.notice =
+                "Local command queue is full or closed; retry the control.".into();
+            false
+        } else {
+            true
+        }
+    }
     pub fn play(&mut self) {
-        let _ = self.clock.send(ClockCommand::Play);
+        self.queue_clock(ClockCommand::Play);
     }
     pub fn pause(&mut self) {
-        let _ = self.clock.send(ClockCommand::Pause);
+        self.queue_clock(ClockCommand::Pause);
     }
+    /// Advances one 50 ms simulation tick, separately from graph node stepping.
     pub fn step(&mut self) {
-        let _ = self.clock.send(ClockCommand::Step);
+        self.queue_clock(ClockCommand::Step);
     }
     pub fn stop(&mut self) {
-        let _ = self.clock.send(ClockCommand::Stop);
-        self.state = EmbeddedStatus::Stopped;
-        self.cockpit.notice = "Local world stopped".into();
+        if self.queue_clock(ClockCommand::Stop) {
+            self.cockpit.notice = "Stop requested; waiting for local authority".into();
+        }
     }
     pub fn on_exit(&mut self) {
         if self.destroyed {
             return;
         }
         self.destroyed = true;
-        let _ = self.clock.send(ClockCommand::Shutdown);
+        let _ = self.clock.try_send(ClockCommand::Shutdown);
         self.cockpit.flight_view.destroy();
         self.cockpit.hangar_view.destroy();
     }
@@ -331,7 +426,7 @@ impl EmbeddedClient {
 }
 impl Drop for EmbeddedClient {
     fn drop(&mut self) {
-        let _ = self.clock.send(ClockCommand::Shutdown);
+        let _ = self.clock.try_send(ClockCommand::Shutdown);
         // Never wait for database writes on the render thread.
         self.on_exit();
     }
@@ -346,8 +441,12 @@ fn run(
     requests: Receiver<Request>,
     updates: mpsc::SyncSender<Update>,
     controls: pilot_input::Mailbox,
-    states: Sender<EmbeddedStatus>,
+    outputs: (
+        Sender<EmbeddedStatus>,
+        mpsc::SyncSender<EmbeddedEventDebugState>,
+    ),
 ) -> Result<(), String> {
+    let (states, graph_states) = outputs;
     let mut world = EditorWorld::open(&dir).map_err(|e| e.to_string())?;
     let credentials = dir.join("client");
     fs::create_dir_all(&credentials).map_err(|e| e.to_string())?;
@@ -374,14 +473,40 @@ fn run(
         .map_err(|e| e.to_string())?;
     let _ = states.send(EmbeddedStatus::Paused);
     let mut previous = Instant::now();
+    let mut graph_ack = None;
+    let mut pending_graph_state = Some(EmbeddedEventDebugState {
+        debug: world.graph_debug(),
+        ack: None,
+    });
+    let mut last_status = EmbeddedStatus::Paused;
+    let mut snapshot_dirty = false;
     loop {
         match clock.recv_timeout(Duration::from_millis(50)) {
             Ok(ClockCommand::Shutdown) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            Ok(ClockCommand::Graph(id, command)) => {
+                let result = if session.is_none() {
+                    Err("Local world is stopped".into())
+                } else {
+                    match command {
+                        GraphCommand::Replace {
+                            revision,
+                            graph,
+                            clear_pending,
+                        } => world.graph_replace(revision, graph, clear_pending),
+                        GraphCommand::Trigger(node) => world.graph_trigger(node),
+                        GraphCommand::Step => world.graph_step(),
+                        GraphCommand::Clear => world.graph_clear(),
+                    }
+                    .map_err(|e| e.to_string())
+                };
+                graph_ack = Some(EmbeddedEventAck { id, result });
+                snapshot_dirty = true;
+            }
             Ok(ClockCommand::Stop) => {
                 world.pause();
                 controls.clear();
                 world.disconnect(&mut session);
-                let _ = states.send(EmbeddedStatus::Stopped);
+                snapshot_dirty = true;
             }
             Ok(ClockCommand::Play) => {
                 if session.is_none() {
@@ -400,24 +525,39 @@ fn run(
                 }
                 world.play();
                 previous = Instant::now();
-                let _ = states.send(EmbeddedStatus::Running);
+                snapshot_dirty = true;
             }
             Ok(ClockCommand::Pause) => {
                 world.pause();
                 controls.clear();
-                let _ = states.send(EmbeddedStatus::Paused);
+                snapshot_dirty = true;
             }
             Ok(ClockCommand::Step) => {
-                world.step(50).map_err(|e| e.to_string())?;
+                let result = if session.is_none() {
+                    Err("Local world is stopped; press Play before stepping".to_string())
+                } else {
+                    world.step(50).map_err(|e| e.to_string())
+                };
+                if let Err(error) = result {
+                    // A stale UI may queue Play then Step before receiving Running.
+                    // Invalid controls are visible rejections, not transport failures.
+                    updates
+                        .send(Update::Response(Box::new(Response::error(error)), false))
+                        .map_err(|e| e.to_string())?;
+                }
+                snapshot_dirty = true;
             }
             Err(mpsc::RecvTimeoutError::Timeout) => {}
         }
+        let before_time = world.time();
         let now = Instant::now();
         world
             .advance(now.duration_since(previous).as_millis().min(250) as u64)
             .map_err(|e| e.to_string())?;
         previous = now;
+        snapshot_dirty |= before_time != world.time();
         for request in requests.try_iter().take(32) {
+            snapshot_dirty = true;
             let response = if world.is_paused() && !permitted_while_paused(&request) {
                 Response::error("Simulation paused. Press Play to operate the ship.")
             } else {
@@ -434,14 +574,46 @@ fn run(
         if let Some(request) = controls.take() {
             if !world.is_paused() {
                 let _ = world.handle(&mut session, request);
+                snapshot_dirty = true;
+            }
+        }
+        let status = if session.is_none() {
+            EmbeddedStatus::Stopped
+        } else if world.is_paused() {
+            EmbeddedStatus::Paused
+        } else {
+            EmbeddedStatus::Running
+        };
+        if status != last_status {
+            snapshot_dirty = true;
+            let _ = states.send(status.clone());
+            last_status = status;
+        }
+        if snapshot_dirty {
+            pending_graph_state = Some(EmbeddedEventDebugState {
+                debug: world.graph_debug(),
+                ack: graph_ack.clone(),
+            });
+        }
+        if let Some(debug) = pending_graph_state.take() {
+            match graph_states.try_send(debug) {
+                Ok(()) => {}
+                Err(mpsc::TrySendError::Full(debug)) => pending_graph_state = Some(debug),
+                Err(mpsc::TrySendError::Disconnected(_)) => break,
             }
         }
         if session.is_none() {
+            snapshot_dirty = false;
             continue;
         }
+        if !snapshot_dirty {
+            continue;
+        }
+
         let response = world.handle(&mut session, Request::Snapshot);
         match updates.try_send(Update::Response(Box::new(response), false)) {
-            Ok(()) | Err(mpsc::TrySendError::Full(_)) => {}
+            Ok(()) => snapshot_dirty = false,
+            Err(mpsc::TrySendError::Full(_)) => {}
             Err(mpsc::TrySendError::Disconnected(_)) => break,
         }
     }
@@ -462,12 +634,16 @@ mod tests {
         cockpit.snapshot.as_mut().unwrap().pilots[0].station_avatar = None;
         let (commands, requests) = mpsc::channel();
         cockpit.commands = Some(commands);
-        let (clock, _) = mpsc::channel();
+        let (clock, _) = mpsc::sync_channel(16);
         let (_, states) = mpsc::channel();
         (
             EmbeddedClient {
                 cockpit,
                 clock,
+                graph_states: mpsc::sync_channel(1).1,
+                graph_state: None,
+                graph_pending: None,
+                graph_sequence: 0,
                 states,
                 state: EmbeddedStatus::Paused,
                 destroyed: false,
@@ -478,6 +654,55 @@ mod tests {
             },
             requests,
         )
+    }
+    #[test]
+    fn graph_commands_are_bounded_acknowledged_and_do_not_optimistically_pause() {
+        let (mut client, _) = debug_fixture();
+        let (clock, commands) = mpsc::sync_channel(1);
+        client.clock = clock;
+        let (debug_tx, debug_rx) = mpsc::sync_channel(1);
+        client.graph_states = debug_rx;
+        client.state = EmbeddedStatus::Running;
+        let id = client.graph_step().unwrap();
+        assert_eq!(client.status(), &EmbeddedStatus::Running);
+        assert!(client.graph_clear().is_err());
+        assert!(matches!(
+            commands.try_recv().unwrap(),
+            ClockCommand::Graph(_, GraphCommand::Step)
+        ));
+        debug_tx
+            .send(EmbeddedEventDebugState {
+                debug: EditorGraphDebug {
+                    revision: 0,
+                    graph: EditorEventGraph::default(),
+                    pending: 0,
+                    pending_nodes: vec![],
+                    breakpoint_node: None,
+                    trace: vec![],
+                    paused: false,
+                },
+                ack: Some(EmbeddedEventAck {
+                    id,
+                    result: Err("Pause before stepping".into()),
+                }),
+            })
+            .unwrap();
+        client.poll();
+        assert!(client
+            .graph_debug()
+            .unwrap()
+            .ack
+            .as_ref()
+            .unwrap()
+            .result
+            .is_err());
+        assert_eq!(client.status(), &EmbeddedStatus::Running);
+        assert!(client.graph_clear().is_ok());
+        // A queued clock command fills the bounded mailbox; graph commands fail explicitly.
+        client.graph_pending = None;
+        assert!(client.graph_trigger(1).is_err());
+        client.state = EmbeddedStatus::Stopped;
+        assert!(client.graph_clear().is_err());
     }
     #[test]
     fn debug_view_changes_only_camera_and_logs_bounded_ordered_transitions() {
@@ -551,12 +776,16 @@ mod tests {
         updates
             .send(Update::Response(Box::new(response), false))
             .unwrap();
-        let (clock, _commands) = mpsc::channel();
+        let (clock, _commands) = mpsc::sync_channel(16);
         let (states, receiver) = mpsc::channel();
         states.send(EmbeddedStatus::Paused).unwrap();
         let mut client = EmbeddedClient {
             cockpit,
             clock,
+            graph_states: mpsc::sync_channel(1).1,
+            graph_state: None,
+            graph_pending: None,
+            graph_sequence: 0,
             states: receiver,
             state: EmbeddedStatus::Loading,
             destroyed: false,
@@ -701,6 +930,7 @@ mod tests {
         let (requests, req_rx) = mpsc::channel();
         let (updates, out) = mpsc::sync_channel(64);
         let (states, status) = mpsc::channel();
+        let (graph_tx, graph_rx) = mpsc::sync_channel(1);
         let worker_dir = dir.clone();
         let worker = std::thread::spawn(move || {
             run(
@@ -710,7 +940,7 @@ mod tests {
                 req_rx,
                 updates,
                 Default::default(),
-                states,
+                (states, graph_tx),
             )
         });
         assert_eq!(
@@ -726,6 +956,107 @@ mod tests {
             }
         };
         let first = snapshot(&out);
+        assert!(
+            matches!(
+                out.recv_timeout(Duration::from_millis(180)),
+                Err(mpsc::RecvTimeoutError::Timeout)
+            ),
+            "paused idle world must not rebuild snapshots at 20Hz"
+        );
+        let graph_ack = |id| loop {
+            let state = graph_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+            if state.ack.as_ref().is_some_and(|a| a.id == id) {
+                break state;
+            }
+        };
+        let graph = EditorEventGraph {
+            nodes: vec![arkline_protocol::EditorGraphNode {
+                id: 1,
+                label: "Manual test".into(),
+                position: [0., 0.],
+                operation: arkline_protocol::EditorNodeOp::Manual,
+                breakpoint: false,
+            }],
+            ..Default::default()
+        };
+        clock
+            .send(ClockCommand::Graph(
+                1,
+                GraphCommand::Replace {
+                    revision: 0,
+                    graph,
+                    clear_pending: false,
+                },
+            ))
+            .unwrap();
+        assert!(graph_ack(1).ack.unwrap().result.is_ok());
+        clock
+            .send(ClockCommand::Graph(2, GraphCommand::Trigger(1)))
+            .unwrap();
+        let queued = graph_ack(2);
+        assert_eq!(queued.debug.pending, 1);
+        assert!(queued.debug.paused);
+        clock
+            .send(ClockCommand::Graph(3, GraphCommand::Step))
+            .unwrap();
+        let stepped = graph_ack(3);
+        assert!(stepped.ack.unwrap().result.is_ok());
+        assert_eq!(stepped.debug.pending, 0);
+        assert!(stepped
+            .debug
+            .trace
+            .iter()
+            .all(|e| e.simulation_time_ms == first.server_time_ms));
+        clock
+            .send(ClockCommand::Graph(
+                4,
+                GraphCommand::Replace {
+                    revision: 0,
+                    graph: Default::default(),
+                    clear_pending: false,
+                },
+            ))
+            .unwrap();
+        assert!(graph_ack(4).ack.unwrap().result.is_err());
+        let graph = EditorEventGraph {
+            nodes: vec![arkline_protocol::EditorGraphNode {
+                id: 1,
+                label: "Breakpoint test".into(),
+                position: [0., 0.],
+                operation: arkline_protocol::EditorNodeOp::Manual,
+                breakpoint: true,
+            }],
+            ..Default::default()
+        };
+        clock
+            .send(ClockCommand::Graph(
+                5,
+                GraphCommand::Replace {
+                    revision: 1,
+                    graph,
+                    clear_pending: false,
+                },
+            ))
+            .unwrap();
+        assert!(graph_ack(5).ack.unwrap().result.is_ok());
+        clock
+            .send(ClockCommand::Graph(6, GraphCommand::Trigger(1)))
+            .unwrap();
+        assert!(graph_ack(6).ack.unwrap().result.is_ok());
+        clock.send(ClockCommand::Play).unwrap();
+        loop {
+            let debug = graph_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+            if debug.debug.breakpoint_node == Some(1) {
+                assert!(debug.debug.paused);
+                break;
+            }
+        }
+        clock
+            .send(ClockCommand::Graph(7, GraphCommand::Clear))
+            .unwrap();
+        assert!(graph_ack(7).ack.unwrap().result.is_ok());
+        // Consume graph-related snapshots before the existing ship/clock journey.
+        out.try_iter().for_each(drop);
         requests.send(Request::Undock).unwrap();
         loop {
             if let Update::Response(response, true) =
@@ -743,6 +1074,28 @@ mod tests {
             if current.server_time_ms > first.server_time_ms {
                 assert_eq!(current.server_time_ms, first.server_time_ms + 50);
                 break;
+            }
+        }
+        clock.send(ClockCommand::Play).unwrap();
+        // Queue before polling any new state: invalid Step must not kill authority.
+        clock.send(ClockCommand::Step).unwrap();
+        clock.send(ClockCommand::Pause).unwrap();
+        assert_eq!(
+            status.recv_timeout(Duration::from_secs(5)).unwrap(),
+            EmbeddedStatus::Running
+        );
+        assert_eq!(
+            status.recv_timeout(Duration::from_secs(5)).unwrap(),
+            EmbeddedStatus::Paused
+        );
+        loop {
+            if let Update::Response(response, false) =
+                out.recv_timeout(Duration::from_secs(5)).unwrap()
+            {
+                if !response.ok {
+                    assert!(response.message.contains("pause"));
+                    break;
+                }
             }
         }
         clock.send(ClockCommand::Play).unwrap();
