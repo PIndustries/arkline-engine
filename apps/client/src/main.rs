@@ -1555,7 +1555,7 @@ impl Cockpit {
                     .desired_height(18.0)
                     .fill(self.accent())
                     .text(format!(
-                        "Capacitor {:.1}/{:.1} kJ · +{} W{}",
+                        "Capacitor {:.1}/{:.1} kJ · reactor {} W{}",
                         power.charge_j as f64 / 1000.0,
                         power.capacity_j as f64 / 1000.0,
                         power.regen_w,
@@ -4960,7 +4960,7 @@ mod tests {
             let labels = frame(&ctx, &mut cockpit, vec![]);
             assert!(labels
                 .iter()
-                .any(|(text, _)| text.contains("Capacitor 2.5/10.0 kJ · +300 W")));
+                .any(|(text, _)| text.contains("Capacitor 2.5/10.0 kJ · reactor 300 W")));
             let rect = ctx
                 .memory(|m| m.area_rect(egui::Id::new("station_embodiment_controls")))
                 .unwrap();
