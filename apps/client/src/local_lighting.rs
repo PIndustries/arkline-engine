@@ -225,7 +225,7 @@ impl Uniforms {
         gl.uniform_4_f32_slice(self.positions.as_ref(), &positions);
         gl.uniform_4_f32_slice(self.colors.as_ref(), &colors);
     }
-    #[cfg(test)]
+    #[cfg(all(test, target_os = "macos"))]
     pub(super) unsafe fn clear(&self, gl: &glow::Context) {
         gl.uniform_1_i32(self.count.as_ref(), 0);
     }
