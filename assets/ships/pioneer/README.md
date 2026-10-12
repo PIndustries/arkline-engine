@@ -26,3 +26,9 @@ The following remain explicit work, not implemented features of this asset:
 - Other ship classes still use their existing models. They must be authored and reviewed individually.
 
 `pioneer-hull.png` is a Blender render of the source hull, without the engine's articulated mining turrets. In-game screenshots are the evidence for runtime appearance; the Blender lighting is not the game's lighting.
+
+## Industrial detail pass
+
+The hull now separates the inhabited core from the stepped outboard pods. Fore and aft collars, recessed side service equipment, pressure couplings, harnesses, radiator banks, handrails, access ladders and permanent identification markings add scale without changing the published envelope or moving gameplay hardpoints. Text is exported as geometry, not a texture. Export triangulates evaluated surfaces and removes zero-area faces before material batching.
+
+These exterior utility details remain visual assemblies. The connected room implementation is separately defined and validated; an external pipe or radiator must not be described as operational merely because its model is visible. The runtime still uses scalar materials, with no normal, roughness or occlusion textures.

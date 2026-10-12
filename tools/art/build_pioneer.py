@@ -14,6 +14,7 @@ def mat(name,color,metal=.0,rough=.5,emission=0):
  p.inputs['Emission Color'].default_value=(*color,1);p.inputs['Emission Strength'].default_value=emission
  return m
 mats=[mat('Graphite ceramic armor',(.055,.075,.072),.08,.38),mat('Emerald structural frames',(.015,.30,.115),.06,.32),mat('Titanium machinery',(.26,.32,.33),.85,.28),mat('Recessed carbon',(.008,.012,.014),.3,.62),mat('Navigation glass',(.025,.22,.25),.7,.17,.25),mat('Safety amber',(.8,.36,.025),.5,.4),mat('Working lights',(.65,.9,.8),.1,.25,3),mat('Drive emission',(.01,.8,.25),.2,.3,4)]
+mats.append(mat('Hull identification ivory',(.52,.62,.57),.0,.55))
 def mesh(name,verts,faces,mi):
  me=bpy.data.meshes.new(name);me.from_pydata([v(p) for p in verts],[],faces);me.update();o=bpy.data.objects.new(name,me);bpy.context.collection.objects.link(o);o.data.materials.append(mats[mi]);return o
 def bevel(o,width=.12):
@@ -35,25 +36,25 @@ def loft(name,sections,mi):
   for k in range(8):faces.append((j*8+k,j*8+(k+1)%8,(j+1)*8+(k+1)%8,(j+1)*8+k))
  faces.append(tuple(range((len(sections)-1)*8,len(sections)*8)))
  o=mesh(name,verts,[tuple(reversed(f)) for f in faces],mi);mod=o.modifiers.new('Hull edge radius','BEVEL');mod.width=.12;mod.segments=2;return o
-loft('Pressure hull', [(-35,9,-6,5),(-28,13,-8,7),(-12,15,-8.7,8),(8,14,-8.7,8),(25,12,-8.2,6.5),(36,10,-7.8,3.5)],0)
+loft('Pressure hull', [(-35,8,-6,5),(-28,8.6,-8,7),(-12,8.8,-8.7,8),(8,8.8,-8.7,8),(25,8.6,-8.2,6.5),(36,8,-7.8,3.5)],0)
 # Keel establishes the documented lower body limit.
 box('Load bearing keel',(-2,-8.5,0),(52,1,8),2,.18)
 for side in [-1,1]:
- z=side*13
- loft('Outboard drive nacelle', [(-36,3,-3,3),(-30,5,-5,5),(-16,5,-5,5),(2,4.8,-4.5,4.5),(18,3,-3.5,3.5),(27,1.5,-2,2)],0).location.y=-z
+ z=side*14
+ loft('Outboard drive nacelle', [(-36,3.1,-3.6,3.6),(-31,4.6,-5.8,6.1),(-23,4.6,-5.8,6.1),(-20,3.7,-4.8,5.0),(8,3.7,-4.8,5.0),(12,4.6,-5.8,6.1),(21,4.6,-5.8,6.1),(26,3.1,-3.8,4.0)],0).location.y=-z
  # Side armor plates, exposed ribs, and inset machinery.
  for x in [-26,-18,-10,-2,6,14]:
-  box('Emerald nacelle rib',(x,0,side*17.4),(1.1,8,1.2),1,.22)
-  box('Recessed side service bay',(x+3,0,side*17.25),(5.8,5.4,.55),3,.18)
-  box('Service bay armor',(x+3,.4,side*17.6),(4.9,4,.3),0,.18)
+  box('Titanium nacelle rib',(x,0,side*18.0),(.35,8.8,.5),2,.10)
+  box('Recessed side service bay',(x+3,0,side*17.7),(5.8,5.4,.55),3,.18)
+  box('Service bay armor',(x+3,.4,side*18.0),(4.9,4,.3),0,.18)
   for yy in [-1.4,1.4]:
-   tube('Service conduit',(x+.6,yy,side*17.95),(x+5.1,yy,side*17.95),.09,2)
+   tube('Service conduit',(x+.6,yy,side*18.25),(x+5.1,yy,side*18.25),.09,2)
   for yy in [-1.6,1.6]:
-   for xx in [x+1,x+5]:box('Panel fastener',(xx,yy,side*17.82),(.18,.18,.12),2,.03)
+   for xx in [x+1,x+5]:box('Panel fastener',(xx,yy,side*18.22),(.18,.18,.12),2,.03)
  box('Outer impact rail',(-8,-2.8,side*18.6),(40,.65,.8),1,.15)
  for x in [-23,-15,-7,1,9]:
-  box('Top machinery recess',(x,6.95,side*12),(5.5,.22,4),3,.08)
-  for dx in [-1.8,-1.2,-.6,0,.6,1.2,1.8]:box('Radiator blade',(x+dx,7.18,side*12),(.18,.35,3.5),2,.03)
+  box('Top machinery recess',(x,6.2 if x==-23 else 5.25,side*14),(5.5,.22,4),3,.08)
+  for dx in [-1.8,-1.2,-.6,0,.6,1.2,1.8]:box('Radiator blade',(x+dx,6.43 if x==-23 else 5.48,side*14),(.18,.35,3.5),2,.03)
  tube('Longitudinal fluid trunk',(-25,8.35,side*8.7),(19,8.35,side*8.7),.26,2)
  tube('Green protective conduit',(-24,8.1,side*9.4),(13,8.1,side*9.4),.17,1)
  # Engine bells: ring surface with inset luminous core, not a solid cube.
@@ -96,13 +97,79 @@ for s in [-1,1]:
 for z in [-6,6]:
  tube('Service handrail',(-23,8.8,z),(-5,8.8,z),.065,2)
  for x in [-23,-17,-11,-5]:tube('Rail stanchion',(x,7.6,z),(x,8.8,z),.065,2)
+# Distinct pod collars, diagonal bracing and utility bundles establish industrial scale.
+for side in [-1,1]:
+ for x in [-27,16]:
+  for dx in [-2.0,2.0]:
+   box('Collar outer armor',(x+dx,0,side*18.45),(1.3,10.0,.65),1,.20)
+   box('Collar crown',(x+dx,6.3,side*14),(1.3,.65,8.0),1,.18)
+   box('Collar lower rail',(x+dx,-5.8,side*14),(1.3,.5,7.8),2,.12)
+  # Recessed end-cap service equipment with visible hazard edging.
+  box('Pod utility recess',(x,0,side*18.5),(2.5,5.8,.18),3,.08)
+  for yy in [-2,0,2]:
+   tube('Pressure coupling',(x,yy,side*18.4),(x,yy,side*18.8),.38,2,12)
+   tube('Coupling inset',(x,yy,side*18.81),(x,yy,side*18.84),.24,3,12)
+ for x in [-16,-5,6]:
+  # Visible external truss spans the negative space; no cabin penetration.
+  tube('Pod structural diagonal',(x-2,3.2,side*8.8),(x+2,3.2,side*10.6),.23,2)
+  tube('Pod structural tie',(x+2,-3,side*8.8),(x-2,-3,side*10.6),.23,2)
+  tube('Insulated service feed',(x,4.2,side*8.8),(x,4.2,side*10.6),.18,1)
+ for x in [-18,-10,-2,6]:
+  tube('External coolant vessel',(x-2,-.3,side*18.0),(x+2,-.3,side*18.0),.5,2,12)
+  for dx in [-1.5,1.5]:tube('Coolant vessel clamp',(x+dx-.08,-.3,side*18.0),(x+dx+.08,-.3,side*18.0),.58,0,12)
+  tube('Protected signal harness',(x-2,1.3,side*18.3),(x+2,1.3,side*18.3),.075,5,8)
+ # Maintainer-sized top safety rails and an access ladder, rather than oversized trim.
+ for x in [-19,-13,-7,-1,5]:
+  tube('Pod walkway stanchion',(x,5.2,side*16.5),(x,6.3,side*16.5),.055,5,8)
+ tube('Pod safety rail',(-19,6.3,side*16.5),(5,6.3,side*16.5),.055,5,8)
+ for x in [11.1,12.0]:tube('Service ladder upright',(x,-4.6,side*18.8),(x,4.7,side*18.8),.055,2,8)
+ for yy in [-4,-3.6,-3.2,-2.8,-2.4,-2,-1.6,-1.2,-.8,-.4,0,.4,.8,1.2,1.6,2,2.4,2.8,3.2,3.6,4]:
+  tube('Service ladder rung',(11.1,yy,side*18.8),(12.0,yy,side*18.8),.04,2,8)
+ # Short lift eyes, access locks and identification plates are geometry, not textures.
+ for x in [-24,14]:
+  box('Service identity backing',(x,2.8,side*18.83),(2.7,.65,.08),3,.03)
+  for i in range(5):box('Asset identity mark',(x-1+i*.4,2.8,side*18.9),(.15,.32,.025),6 if i==0 else 2,0)
+ for x in [-30,23]:
+  tube('Directional jet housing',(x,0,side*17.4),(x,0,side*18.8),.52,2,16)
+  tube('Directional jet throat',(x,0,side*18.81),(x,0,side*18.86),.33,3,16)
+# Permanent hull markings use a small geometry budget and survive the scalar GLB pipeline.
+def label(text,body_pos,size,side):
+ bpy.ops.object.text_add(location=v(body_pos));o=bpy.context.object;o.name='Hull marking '+text
+ o.data.body=text;o.data.align_x='CENTER';o.data.align_y='CENTER';o.data.size=size;o.data.extrude=0;o.data.resolution_u=2
+ o.rotation_euler=(math.pi/2,0,0 if side>0 else math.pi)
+ o.data.materials.append(mats[8]);bpy.ops.object.convert(target='MESH')
+for side in [-1,1]:
+ label('P.INDUSTRIES',(-7,2.8,side*18.45),.65,side)
+ label('PIONEER  /  01',(17,4.3,side*18.81),.42,side)
+ for x in [-18,-10,-2,6]:
+  for dx in [-1.5,0,1.5]:
+   box('Service panel inset seam',(x+dx,-2.5,side*18.2),(.04,1.0,.025),3,0)
+ # Fore collar chevrons, backed by armor instead of floating in space.
+ for yy in [-3,-2.4,-1.8]:
+  tube('Access warning chevron',(18,yy,side*18.81),(18.4,yy+.25,side*18.81),.055,5,6)
+
+# Layered front fascia, small worklight guards and underbody service panels.
+for side in [-1,1]:
+ for x,y in [(29,5.7),(32,4.8),(35,3.9)]:
+  tube('Forebody glazing frame',(x,y,side*.7),(x,y,side*6.5),.08,2,8)
+ for z in [2.0,4.0,6.0]:
+  box('Bow impact rib',(35.65,-2.0,side*z),(.55,5.4,.18),2,.08)
+ box('Bow lamp surround',(35.6,1.0,side*6.5),(.65,.8,1.25),3,.12)
+ box('Bow worklight lens',(35.94,1.0,side*6.5),(.08,.38,.85),6,.04)
+ for x in [-20,-8,4]:box('Ventral maintenance plate',(x,-8.8,side*4),(8,.25,3.3),0,.12)
+
 # Save editable named components; export evaluated, material-batched geometry separately.
 bpy.ops.wm.save_as_mainfile(filepath=str(OUT/'pioneer.blend'))
 for o in list(bpy.context.scene.objects):
  if o.type=='MESH':
   bpy.context.view_layer.objects.active=o;o.select_set(True)
   for mod in list(o.modifiers):bpy.ops.object.modifier_apply(modifier=mod.name)
-  bm=bmesh.new();bm.from_mesh(o.data);bmesh.ops.dissolve_degenerate(bm,dist=0.000001,edges=list(bm.edges));bm.to_mesh(o.data);bm.free();o.data.update()
+  bm=bmesh.new();bm.from_mesh(o.data)
+  bmesh.ops.dissolve_degenerate(bm,dist=0.000001,edges=list(bm.edges))
+  bmesh.ops.triangulate(bm,faces=list(bm.faces))
+  # Text outlines and bevel corners can create zero-area export triangles.
+  bmesh.ops.delete(bm,geom=[f for f in bm.faces if f.calc_area()<0.000001],context='FACES')
+  bm.to_mesh(o.data);bm.free();o.data.update()
   o.select_set(False)
 for material in mats:
  objects=[o for o in bpy.context.scene.objects if o.type=='MESH' and o.data.materials and o.data.materials[0]==material]
