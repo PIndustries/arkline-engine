@@ -380,7 +380,7 @@ impl FlightView {
             self.focus_selection = false;
         }
 
-        let bounds = ui.ctx().screen_rect();
+        let bounds = ui.max_rect();
         let (camera_position, camera_size) = layout.position(
             "flight-camera",
             bounds,
@@ -401,7 +401,7 @@ impl FlightView {
                     resize
                 }
             })
-            .constrain_to(ui.ctx().screen_rect().shrink(8.0))
+            .constrain_to(ui.max_rect().shrink(8.0))
             .frame(
                 egui::Frame::window(&ui.ctx().style())
                     .fill(egui::Color32::from_rgba_unmultiplied(3, 9, 6, 212))

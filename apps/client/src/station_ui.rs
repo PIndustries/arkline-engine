@@ -25,7 +25,7 @@ impl Cockpit {
             .open(&mut open)
             .default_width(360.)
             .max_width(480.)
-            .constrain_to(ctx.screen_rect().shrink(8.))
+            .constrain_to(ctx.available_rect().shrink(8.))
             .vscroll(true)
             .frame(self.overlay_frame(ctx))
             .show(ctx, |ui| {
