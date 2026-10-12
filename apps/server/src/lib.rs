@@ -5,6 +5,7 @@ mod mining;
 mod power;
 mod remote_control;
 mod resource_jobs;
+mod room_controls;
 mod station;
 mod surface;
 mod traffic;
@@ -107,6 +108,7 @@ pub struct Server {
     // Conservative latch: clear only after ALL sessions for this pilot leave.
     interior_incompatible: std::collections::BTreeSet<String>,
     fleet_incompatible: std::collections::BTreeSet<String>,
+    room_incompatible: std::collections::BTreeSet<String>,
     // Kept after db so SQLite closes before authority is released. Never unlink
     // the sidecar: replacing its inode would allow competing locks.
     _ownership_lock: Option<std::fs::File>,
@@ -163,6 +165,7 @@ impl Server {
         mining::ensure_modules(&mut world);
         drones::ensure_fleets(&mut world)?;
         power::advance(&mut world, now)?;
+        room_controls::advance(&mut world, now);
         world.remote_controls.clear();
         resource_jobs::cancel_all(&mut world, now, "Server restarted");
         station::migrate(&mut world);
@@ -195,6 +198,7 @@ impl Server {
             online_sessions: BTreeMap::new(),
             interior_incompatible: Default::default(),
             fleet_incompatible: Default::default(),
+            room_incompatible: Default::default(),
             _ownership_lock: ownership_lock,
         })
     }
@@ -261,6 +265,24 @@ impl Server {
         now: u64,
     ) -> Response {
         let previous = session.clone();
+        let legacy_room = matches!(
+            &request,
+            Request::Connect {
+                supports_room_controls: false,
+                ..
+            }
+        );
+        if let Request::Connect {
+            pilot,
+            supports_room_controls,
+            ..
+        } = &mut request
+        {
+            if self.room_incompatible.contains(pilot) {
+                *supports_room_controls = false;
+            }
+        }
+
         let legacy_fleet = matches!(
             &request,
             Request::Connect {
@@ -305,6 +327,11 @@ impl Server {
                         *self.online_sessions.entry(current.clone()).or_default() += 1;
                     }
                 }
+                if legacy_room {
+                    if let Some(name) = session.as_ref() {
+                        self.room_incompatible.insert(name.clone());
+                    }
+                }
                 if legacy_fleet {
                     if let Some(name) = session.as_ref() {
                         self.fleet_incompatible.insert(name.clone());
@@ -341,6 +368,7 @@ impl Server {
                 self.online_sessions.remove(pilot);
                 self.interior_incompatible.remove(pilot);
                 self.fleet_incompatible.remove(pilot);
+                self.room_incompatible.remove(pilot);
                 if let Err(error) = self.stop_disconnected(pilot) {
                     eprintln!("Could not persist disconnected flight stop: {error}");
                 }
@@ -360,6 +388,7 @@ impl Server {
         mining::ensure_modules(&mut world);
         drones::ensure_fleets(&mut world)?;
         power::advance(&mut world, now)?;
+        room_controls::advance(&mut world, now);
         flight::advance(&mut world, now);
         station::advance(&mut world, now);
         surface::update(&mut world);
@@ -491,6 +520,7 @@ impl Server {
         mining::ensure_modules(&mut world);
         drones::ensure_fleets(&mut world)?;
         power::advance(&mut world, now)?;
+        room_controls::advance(&mut world, now);
         flight::advance(&mut world, now);
         station::advance(&mut world, now);
         surface::update(&mut world);
@@ -658,6 +688,13 @@ impl Server {
                 mining::stop(&mut world, name, module_id)?;
                 message = "Mining module stopped";
             }
+            Request::SetPioneerRoom { action } => {
+                let name = session
+                    .as_ref()
+                    .context("connect before engineering commands")?;
+                room_controls::execute(&mut world, name, action, now)?;
+                message = "Pioneer room command accepted";
+            }
             Request::BoardShip { id } => {
                 let name = session.as_ref().context("connect before boarding")?;
                 event = assets::board(&mut world, name, &id, now)?;
@@ -677,6 +714,7 @@ impl Server {
                 message = "Station assets updated";
             }
             Request::Connect {
+                supports_room_controls,
                 supports_fleet_hangar,
                 supports_pioneer_interior,
                 protocol_version,
@@ -770,6 +808,10 @@ impl Server {
                     });
                 }
                 assets::ensure_accounts(&mut world);
+                world.accounts.get_mut(&pilot).unwrap().room_compatible = supports_room_controls;
+                if !supports_room_controls {
+                    room_controls::legacy_recovery(&mut world, &pilot, now);
+                }
                 let old_fleet = world.accounts[&pilot].fleet_hangar;
                 world.accounts.get_mut(&pilot).unwrap().fleet_hangar = supports_fleet_hangar;
                 if old_fleet != supports_fleet_hangar {
@@ -1122,6 +1164,7 @@ impl Server {
         mining::ensure_modules(&mut world);
         drones::ensure_fleets(&mut world)?;
         power::advance(&mut world, now)?;
+        room_controls::advance(&mut world, now);
         validate(&world)?;
         let mut entries = load_entries(&tx, export)?;
         for event in cycle_events.into_iter().chain(event) {
@@ -1260,6 +1303,7 @@ fn validate(world: &World) -> Result<()> {
         "active cargo exceeds hull capacity"
     );
     assets::validate(world)?;
+    room_controls::validate(world)?;
     mining::validate(world)?;
     universe::validate_locks(world)?;
     drones::validate(world)?;
@@ -1295,6 +1339,7 @@ mod tests {
         let connected = server.handle_at(
             &mut session,
             Request::Connect {
+                supports_room_controls: false,
                 supports_fleet_hangar: false,
                 supports_pioneer_interior: true,
                 protocol_version: PROTOCOL_VERSION,

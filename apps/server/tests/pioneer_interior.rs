@@ -41,6 +41,7 @@ fn interior_rooms_doors_restart_and_boarding_lifecycle() {
     let c = s.handle_at(
         &mut session,
         Request::Connect {
+            supports_room_controls: false,
             supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
@@ -170,6 +171,7 @@ fn interior_rooms_doors_restart_and_boarding_lifecycle() {
         s.handle_at(
             &mut session,
             Request::Connect {
+                supports_room_controls: false,
                 supports_fleet_hangar: false,
                 supports_pioneer_interior: true,
                 protocol_version: PROTOCOL_VERSION,

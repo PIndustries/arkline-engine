@@ -23,6 +23,7 @@ fn walking_is_authoritative_bounded_and_stops_on_expiry_logout_and_restart() {
         &mut s,
         &mut p,
         Request::Connect {
+            supports_room_controls: false,
             supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
@@ -159,6 +160,7 @@ fn walking_is_authoritative_bounded_and_stops_on_expiry_logout_and_restart() {
         &mut s,
         &mut p,
         Request::Connect {
+            supports_room_controls: false,
             supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
@@ -187,6 +189,7 @@ fn walking_cannot_impersonate_worker_and_disembarking_releases_remote_control() 
             &mut s,
             session,
             Request::Connect {
+                supports_room_controls: false,
                 supports_fleet_hangar: false,
                 supports_pioneer_interior: true,
                 protocol_version: PROTOCOL_VERSION,

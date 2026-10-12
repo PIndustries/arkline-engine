@@ -12,6 +12,7 @@ fn setup(s: &mut Server) -> (Option<String>, u64, Vec<Asteroid>) {
         s,
         &mut p,
         Request::Connect {
+            supports_room_controls: false,
             supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,

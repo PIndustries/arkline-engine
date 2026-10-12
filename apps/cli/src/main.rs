@@ -266,6 +266,7 @@ fn run() -> Result<()> {
         let response = exchange(
             &mut stream,
             &Request::Connect {
+                supports_room_controls: false,
                 supports_fleet_hangar: false,
                 supports_pioneer_interior: false,
                 protocol_version: PROTOCOL_VERSION,

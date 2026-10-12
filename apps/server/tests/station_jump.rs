@@ -21,6 +21,7 @@ fn jump_is_authoritative_bounded_and_cleared_on_disconnect_and_restart() {
     let connected = server.handle_at(
         &mut pilot,
         Request::Connect {
+            supports_room_controls: false,
             supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
@@ -54,6 +55,7 @@ fn jump_is_authoritative_bounded_and_cleared_on_disconnect_and_restart() {
             .handle_at(
                 &mut pilot,
                 Request::Connect {
+                    supports_room_controls: false,
                     supports_fleet_hangar: false,
                     supports_pioneer_interior: true,
                     protocol_version: PROTOCOL_VERSION,

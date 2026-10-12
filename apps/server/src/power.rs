@@ -6,7 +6,19 @@ pub(super) fn advance_state(
     class: ShipClass,
     now: u64,
 ) -> Result<()> {
+    advance_state_with_load(power, class, now, 0)
+}
+fn advance_state_with_load(
+    power: &mut Option<PowerState>,
+    class: ShipClass,
+    now: u64,
+    load: u64,
+) -> Result<()> {
     let spec = power_spec(class);
+    ensure!(
+        load <= spec.regen_w,
+        "room load exceeds supported reactor budget"
+    );
     let state = power.get_or_insert(PowerState {
         charge_j: spec.capacity_j,
         capacity_j: spec.capacity_j,
@@ -29,7 +41,8 @@ pub(super) fn advance_state(
         return Ok(());
     }
     let elapsed = now - state.updated_at_ms;
-    let energy_mj = elapsed as u128 * state.regen_w as u128 + state.regen_remainder_mj as u128;
+    let energy_mj = elapsed as u128 * state.regen_w.saturating_sub(load) as u128
+        + state.regen_remainder_mj as u128;
     let charge = state.charge_j as u128 + energy_mj / 1000;
     state.charge_j = charge.min(state.capacity_j as u128) as u64;
     state.regen_remainder_mj = if state.charge_j == state.capacity_j {
@@ -41,12 +54,27 @@ pub(super) fn advance_state(
     Ok(())
 }
 pub(super) fn advance(world: &mut World, now: u64) -> Result<()> {
-    for p in world.pilots.values_mut() {
-        advance_state(&mut p.view.power, p.view.ship_class, now)?;
+    for (name, p) in &mut world.pilots {
+        let load = if p.view.ship_class == ShipClass::Pioneer {
+            room_controls::load_w(
+                world
+                    .accounts
+                    .get(name)
+                    .and_then(|a| a.pioneer_room.as_ref()),
+            )
+        } else {
+            0
+        };
+        advance_state_with_load(&mut p.view.power, p.view.ship_class, now, load)?;
     }
     for account in world.accounts.values_mut() {
         for ship in &mut account.ships {
-            advance_state(&mut ship.power, ship.ship_class, now)?;
+            let load = if ship.ship_class == ShipClass::Pioneer {
+                room_controls::load_w(account.pioneer_room.as_ref())
+            } else {
+                0
+            };
+            advance_state_with_load(&mut ship.power, ship.ship_class, now, load)?;
         }
     }
     Ok(())
@@ -125,6 +153,7 @@ mod tests {
                 .handle_at(
                     &mut session,
                     Request::Connect {
+                        supports_room_controls: false,
                         supports_fleet_hangar: false,
                         supports_pioneer_interior: true,
                         protocol_version: PROTOCOL_VERSION,

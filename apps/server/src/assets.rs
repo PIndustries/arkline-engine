@@ -7,6 +7,10 @@ pub(super) struct Account {
     pub(super) fleet_hangar: bool,
     #[serde(default)]
     vessel_ids: Vec<(ShipClass, String)>,
+    #[serde(default)]
+    pub(super) pioneer_room: Option<PioneerRoomState>,
+    #[serde(default)]
+    pub(super) room_compatible: bool,
     pub(super) ships: Vec<HangarShip>,
     storage: BTreeMap<u32, u64>,
     corporation: Option<String>,
@@ -27,6 +31,8 @@ pub(super) fn ensure_accounts(world: &mut World) {
                 hull_catalog_version: 1,
                 fleet_hangar: false,
                 vessel_ids: Vec::new(),
+                pioneer_room: None,
+                room_compatible: false,
                 ships: ALL_SHIP_CLASSES
                     .into_iter()
                     .filter(|class| *class != p.view.ship_class)
@@ -73,6 +79,11 @@ fn storage_view(storage: &BTreeMap<u32, u64>) -> Vec<StationStorage> {
 pub(super) fn view(world: &World, name: &str) -> Option<AssetsView> {
     let a = world.accounts.get(name)?;
     Some(AssetsView {
+        pioneer_room: (world.pilots[name].view.ship_class == ShipClass::Pioneer).then(|| {
+            a.pioneer_room
+                .clone()
+                .unwrap_or_else(|| PioneerRoomState::uncommissioned(format!("v1:{name}:Pioneer")))
+        }),
         hangar: a.fleet_hangar.then(|| hangar_view(world, name)),
         pioneer_interior_available: true,
         pioneer_interior_decks: 2,
