@@ -1779,6 +1779,7 @@ struct Uniforms {
     eye: Option<glow::UniformLocation>,
     material: Option<glow::UniformLocation>,
     material_params: Option<glow::UniformLocation>,
+    hull_surface: Option<glow::UniformLocation>,
     environment_atmosphere: Option<glow::UniformLocation>,
     station_lighting: Option<glow::UniformLocation>,
     environment_up: Option<glow::UniformLocation>,
@@ -1929,6 +1930,7 @@ impl Renderer {
             eye: gl.get_uniform_location(program, "eye"),
             material: gl.get_uniform_location(program, "material_kind"),
             material_params: gl.get_uniform_location(program, "material_params"),
+            hull_surface: gl.get_uniform_location(program, "hull_surface"),
             environment_atmosphere: gl.get_uniform_location(program, "environment_atmosphere"),
             station_lighting: gl.get_uniform_location(program, "station_lighting"),
             environment_up: gl.get_uniform_location(program, "environment_up"),
@@ -2018,6 +2020,14 @@ impl Renderer {
             params[3],
         );
         let gl = &self.gl;
+        gl.uniform_1_f32(
+            self.uniforms.hull_surface.as_ref(),
+            if embedded_primitive(mesh).is_some_and(|p| p.emission == 0.0 && p.roughness >= 0.25) {
+                1.0
+            } else {
+                0.0
+            },
+        );
         gl.uniform_matrix_4_f32_slice(self.uniforms.model.as_ref(), false, &model.to_cols_array());
         gl.uniform_3_f32(self.uniforms.color.as_ref(), color.x, color.y, color.z);
         gl.uniform_1_f32(self.uniforms.emission.as_ref(), emission);
@@ -4550,12 +4560,8 @@ const FRAGMENT: &str = concat!(
     include_str!("shaders/local_lighting.glsl"),
     r#"
 in vec3 world;in vec3 surface_normal;in vec3 local_position;
-uniform vec4 material_params;uniform float station_lighting;uniform float environment_atmosphere;uniform vec3 environment_up;
+uniform vec4 material_params;uniform float hull_surface;uniform float station_lighting;uniform float environment_atmosphere;uniform vec3 environment_up;
 uniform vec3 planet_center;uniform vec3 base_color;uniform vec3 eye;uniform float emission;uniform vec3 emissive_color;uniform int material_kind;out vec4 color;
-float ark_hash3(vec3 p){return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5453);}
-float ark_noise3(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
-return mix(mix(mix(ark_hash3(i),ark_hash3(i+vec3(1,0,0)),f.x),mix(ark_hash3(i+vec3(0,1,0)),ark_hash3(i+vec3(1,1,0)),f.x),f.y),
-mix(mix(ark_hash3(i+vec3(0,0,1)),ark_hash3(i+vec3(1,0,1)),f.x),mix(ark_hash3(i+vec3(0,1,1)),ark_hash3(i+vec3(1,1,1)),f.x),f.y),f.z);}
 float ark_terrain(vec3 p){return ark_noise3(p)*0.53+ark_noise3(p*2.07+13.8)*0.27+ark_noise3(p*4.13-7.1)*0.13+ark_noise3(p*8.41+29.4)*0.07;}
 void main(){vec3 n=normalize(surface_normal);if(!gl_FrontFacing)n=-n;vec3 l=normalize(vec3(-0.5,0.8,0.65));vec3 v=normalize(eye-world);
 float diffuse=max(dot(n,l),0.0);float facing=max(dot(n,v),0.0);float rim=pow(1.0-facing,3.0);
@@ -4585,6 +4591,7 @@ if(material_kind==1 || material_kind==2){
         metallic=mix(0.0,0.82,vein);roughness=mix(0.90,0.34,vein);
         albedo=mix(albedo,vec3(0.48,0.38,0.22),vein*0.72);
     }
+    if(hull_surface>0.5){ark_hull_surface(local_position*100.0,albedo,roughness,metallic);}
     // Existing screen panels use a dark dielectric backing; no canopy transmission is invented.
     if(material_params.w>0.5) albedo*=0.70;
     if(station_lighting>0.5){

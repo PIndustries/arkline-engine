@@ -1,3 +1,8 @@
+float ark_hash3(vec3 p){return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5453);}
+float ark_noise3(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
+return mix(mix(mix(ark_hash3(i),ark_hash3(i+vec3(1,0,0)),f.x),mix(ark_hash3(i+vec3(0,1,0)),ark_hash3(i+vec3(1,1,0)),f.x),f.y),
+mix(mix(ark_hash3(i+vec3(0,0,1)),ark_hash3(i+vec3(1,0,1)),f.x),mix(ark_hash3(i+vec3(0,1,1)),ark_hash3(i+vec3(1,1,1)),f.x),f.y),f.z);}
+
 // Single-scatter GGX dielectric/conductor response. Metallic surfaces have no
 // diffuse lobe; Fresnel removes reflected energy from the dielectric diffuse term.
 vec3 ark_fresnel(float cosine,vec3 f0){return f0+(1.0-f0)*pow(1.0-clamp(cosine,0.0,1.0),5.0);}
@@ -43,4 +48,16 @@ vec3 ark_station_environment(vec3 n,vec3 v,vec3 albedo,float roughness,float met
     vec3 f=ark_fresnel(max(dot(n,v),0.0),f0);
     vec3 irradiance=mix(vec3(0.18,0.21,0.23),vec3(0.65,0.74,0.79),clamp(n.y*0.5+0.5,0.0,1.0));
     return reflected*f+(1.0-f)*(1.0-metallic)*albedo*irradiance;
+}
+
+// Object-space procedural finish for opaque authored hulls. This modulates
+// material response only: it adds no geometry, damage, normal map or fake light.
+// Fade subpixel grain rather than letting fine detail shimmer in distant views.
+void ark_hull_surface(vec3 meters,inout vec3 albedo,inout float roughness,float metallic){
+    float broad=ark_noise3(meters*0.63)-0.5;
+    float footprint=max(length(fwidth(meters)),0.0001);
+    float resolved=1.0-smoothstep(0.025,0.15,footprint);
+    float grain=(ark_noise3(meters*vec3(3.0,18.0,18.0))-0.5)*resolved;
+    albedo*=clamp(1.0+broad*0.12+grain*0.04,0.90,1.10);
+    roughness=clamp(roughness+broad*0.07+grain*mix(0.035,0.08,metallic),0.08,1.0);
 }
