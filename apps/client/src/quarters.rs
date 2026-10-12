@@ -11,6 +11,7 @@ pub enum HangarAction {
     Ai,
     Sit,
     BoardShip(String),
+    Engineering(String),
 }
 
 fn box_part(parts: &mut Parts, min: Vec3, max: Vec3, color: Vec3, emission: f32) {
@@ -394,7 +395,9 @@ fn terminals_impl(
             HangarAction::Overview => format!("System {}", pilot.system_id),
             HangarAction::Ai => "Ask your ship computer".into(),
             HangarAction::Corporation => "Open corporation services".into(),
-            HangarAction::Sit | HangarAction::BoardShip(_) => unreachable!(),
+            HangarAction::Sit | HangarAction::BoardShip(_) | HangarAction::Engineering(_) => {
+                unreachable!()
+            }
         };
         painter.rect_filled(screen, 2.0, egui::Color32::from_rgb(5, 23, 18));
         painter.text(

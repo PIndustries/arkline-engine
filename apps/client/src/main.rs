@@ -517,6 +517,7 @@ struct Cockpit {
     context_fly_to: Option<[f64; 3]>,
     overview_filter: OverviewFilter,
     services_open: bool,
+    engineering_panel: Option<String>,
     overview_nearest_first: bool,
     overview_open: bool,
 }
@@ -630,6 +631,7 @@ impl Cockpit {
             context_fly_to: None,
             overview_filter: OverviewFilter::All,
             services_open: false,
+            engineering_panel: None,
             overview_nearest_first: true,
             overview_open: true,
         }
@@ -3288,6 +3290,9 @@ impl eframe::App for Cockpit {
             self.frame_intervals.pop_front();
         }
         self.poll();
+        if !self.connected {
+            self.engineering_panel = None;
+        }
         self.sync_remote_control();
         self.poll_voice();
         self.poll_ship_ai();
@@ -3759,6 +3764,7 @@ impl eframe::App for Cockpit {
                     });
             }
         }
+        self.physical_engineering_window(ctx);
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
             .show(ctx, |ui| {

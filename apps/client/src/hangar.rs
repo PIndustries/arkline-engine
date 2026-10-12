@@ -291,8 +291,7 @@ impl HangarView {
         );
         if interior {
             pioneer_interior::labels(ui, rect, vp, pilot, live);
-            pioneer_interior::device_labels(ui, rect, vp, pilot, room, live);
-            None
+            pioneer_interior::device_panel(ui, rect, vp, eye, pilot, room, live, unobstructed)
         } else if let Some(fleet) = fleet {
             let terminal = quarters::fleet_terminals(ui, rect, vp, eye, pilot, unobstructed, live);
             terminal.or_else(|| {

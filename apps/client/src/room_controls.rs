@@ -3,6 +3,22 @@ use eframe::egui;
 
 use arkline_protocol::{PioneerRoomCommand as Command, PioneerRoomState, VentMode};
 
+pub(crate) fn panel_access(pilot: &arkline_protocol::PilotView) -> bool {
+    let d = arkline_protocol::PIONEER_CONNECTED_ROOM;
+    pilot.ship_class == arkline_protocol::ShipClass::Pioneer
+        && pilot.location == arkline_protocol::Location::Docked
+        && pilot.station_avatar.as_ref().is_some_and(|a| {
+            a.onboard_interior
+                && a.interior_deck == d.deck
+                && a.position
+                    .iter()
+                    .zip(d.breaker_position)
+                    .map(|(a, b)| (a - b).powi(2))
+                    .sum::<f64>()
+                    <= 9.
+        })
+}
+
 pub(crate) fn show(
     ui: &mut egui::Ui,
     state: Option<&PioneerRoomState>,

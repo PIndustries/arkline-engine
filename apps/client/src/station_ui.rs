@@ -1,6 +1,42 @@
 //! Station embodiment is confirmed by the server; camera motion never boards a ship.
 use super::*;
 impl Cockpit {
+    pub(super) fn physical_engineering_window(&mut self, ctx: &egui::Context) {
+        let Some(id) = self.engineering_panel.clone() else {
+            return;
+        };
+        if !self.connected
+            || self.manual_remote.is_some()
+            || self
+                .own()
+                .as_ref()
+                .is_none_or(|p| !crate::room_controls::panel_access(p))
+            || self
+                .assets
+                .as_ref()
+                .is_none_or(|a| a.pioneer_room.is_none())
+        {
+            self.engineering_panel = None;
+            return;
+        }
+        let mut open = true;
+        egui::Window::new("Airlock engineering")
+            .id(egui::Id::new("physical_engineering"))
+            .open(&mut open)
+            .default_width(360.)
+            .max_width(480.)
+            .constrain_to(ctx.screen_rect().shrink(8.))
+            .vscroll(true)
+            .frame(self.overlay_frame(ctx))
+            .show(ctx, |ui| {
+                ui.small(format!("Device: {id}.breaker"));
+                self.pioneer_room_controls(ui, true);
+            });
+        if !open {
+            self.engineering_panel = None;
+        }
+    }
+
     fn pioneer_room_controls(&mut self, ui: &mut egui::Ui, access: bool) {
         if self.manual_remote.is_some() {
             return;
@@ -57,6 +93,23 @@ impl Cockpit {
             return;
         }
         self.service_tab = match action {
+            HangarAction::Engineering(id) => {
+                if id == arkline_protocol::PIONEER_CONNECTED_ROOM.room_id
+                    && self.can_operate()
+                    && self.manual_remote.is_none()
+                    && self
+                        .assets
+                        .as_ref()
+                        .is_some_and(|a| a.pioneer_room.is_some())
+                    && self
+                        .own()
+                        .as_ref()
+                        .is_some_and(crate::room_controls::panel_access)
+                {
+                    self.engineering_panel = Some(id);
+                }
+                return;
+            }
             HangarAction::Overview => ServiceTab::Navigation,
             HangarAction::Ship => ServiceTab::Hangar,
             HangarAction::Inventory => ServiceTab::Cargo,
@@ -489,6 +542,51 @@ mod tests {
         );
     }
 
+    #[test]
+    fn physical_engineering_opens_only_owned_accessible_room_and_closes_for_remote() {
+        let ctx = egui::Context::default();
+        let mut c = crate::tests::view_test_cockpit(&ctx);
+        let pilot = &mut c.snapshot.as_mut().unwrap().pilots[0];
+        pilot.location = Location::Docked;
+        pilot.ship_class = ShipClass::Pioneer;
+        pilot.station_avatar=Some(serde_json::from_value(serde_json::json!({"position":[6.,0.,3.],"heading":0.,"moving":false,"updated_at_ms":0,"onboard_interior":true,"interior_deck":1})).unwrap());
+        c.assets = Some(AssetsView {
+            pioneer_room: Some(arkline_protocol::PioneerRoomState::uncommissioned(
+                "own".into(),
+            )),
+            hangar: None,
+            pioneer_interior_available: true,
+            pioneer_interior_decks: 2,
+            ships: vec![],
+            storage: vec![],
+            corporation: None,
+            invitations: vec![],
+        });
+        let action = || {
+            flight3d::hangar::HangarAction::Engineering(
+                arkline_protocol::PIONEER_CONNECTED_ROOM.room_id.into(),
+            )
+        };
+        c.activate_quarters_terminal(flight3d::hangar::HangarAction::Engineering(
+            "foreign".into(),
+        ));
+        assert!(c.engineering_panel.is_none());
+        c.activate_quarters_terminal(action());
+        assert!(c.engineering_panel.is_some());
+        c.manual_remote = Some("worker".into());
+        let _ = ctx.run(Default::default(), |ctx| c.physical_engineering_window(ctx));
+        assert!(c.engineering_panel.is_none());
+        c.activate_quarters_terminal(action());
+        assert!(c.engineering_panel.is_none());
+        c.manual_remote = None;
+        c.snapshot.as_mut().unwrap().pilots[0]
+            .station_avatar
+            .as_mut()
+            .unwrap()
+            .position = [20., 0., 3.];
+        c.activate_quarters_terminal(action());
+        assert!(c.engineering_panel.is_none());
+    }
     #[test]
     fn interior_button_requires_server_capability_and_sends_real_request() {
         fn frame(
