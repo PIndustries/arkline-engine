@@ -5458,6 +5458,31 @@ mod tests {
         }
     }
     #[test]
+    fn pioneer_asset_and_parts_are_cached_with_bounded_draw_calls() {
+        let asset = pioneer_asset().unwrap();
+        assert!(std::ptr::eq(asset, pioneer_asset().unwrap()));
+        let parts = cached_ship_parts(ShipClass::Pioneer);
+        assert!(std::ptr::eq(parts, cached_ship_parts(ShipClass::Pioneer)));
+        assert_eq!(parts.len(), asset.len());
+        assert!(parts.len() <= 16);
+        assert!(asset.iter().map(|p| p.vertices.len()).sum::<usize>() <= 600_000);
+    }
+    #[test]
+    #[ignore = "Explicit CPU decode/cache timing, no GPU or UI"]
+    fn pioneer_asset_decode_timing() {
+        let bytes = include_bytes!("../../../assets/ships/pioneer/pioneer.glb");
+        let start = std::time::Instant::now();
+        let parsed = ship_asset::decode(bytes).unwrap();
+        let decode = start.elapsed();
+        let cached = pioneer_asset().unwrap();
+        let start = std::time::Instant::now();
+        for _ in 0..100_000 {
+            std::hint::black_box(pioneer_asset().unwrap());
+        }
+        eprintln!("Pioneer asset: bytes={}, triangles={}, draw_calls={}, decode_once_us={}, cached_100000_accesses_us={}, debug_assertions={}", bytes.len(), parsed.iter().map(|p|p.vertices.len()/3).sum::<usize>(), cached.len(), decode.as_micros(), start.elapsed().as_micros(), cfg!(debug_assertions));
+    }
+
+    #[test]
     fn pioneer_engine_effects_use_two_authored_nozzles_not_material_lamps() {
         let mounts = engine_mounts(ShipClass::Pioneer);
         assert_eq!(mounts.len(), 2);
