@@ -1,5 +1,7 @@
 //! Native Arkline cockpit. Live world data is server-authoritative; ship layouts are labeled design references.
 #[cfg(not(target_arch = "wasm32"))]
+mod account_login;
+#[cfg(not(target_arch = "wasm32"))]
 mod audit;
 mod boot;
 #[cfg(target_arch = "wasm32")]
@@ -243,35 +245,77 @@ fn save_token(path: &std::path::Path, token: &str) -> Result<(), String> {
     file.sync_all().map_err(|e| e.to_string())
 }
 #[cfg(not(target_arch = "wasm32"))]
+#[derive(Default)]
+struct WorkerIdentity {
+    scope: Option<String>,
+    account: Option<account_login::Credential>,
+    link_existing: bool,
+}
+#[cfg(not(target_arch = "wasm32"))]
+impl WorkerIdentity {
+    fn request(&self, server: &str, pilot: &str, token: Option<String>) -> Result<Request, String> {
+        if let Some(account) = &self.account {
+            if !account.matches(server, pilot) {
+                return Err("Account session expired or changed. Sign in again.".into());
+            }
+            Ok(Request::AccountConnect {
+                access_token: account.token.clone(),
+                pilot: pilot.into(),
+                legacy_resume_token: if self.link_existing { token } else { None },
+                link_existing: self.link_existing,
+                protocol_version: PROTOCOL_VERSION,
+                supports_pioneer_interior: true,
+                supports_fleet_hangar: true,
+                supports_room_controls: true,
+            })
+        } else {
+            Ok(Request::Connect {
+                pilot: pilot.into(),
+                resume_token: token,
+                protocol_version: PROTOCOL_VERSION,
+                supports_pioneer_interior: true,
+                supports_fleet_hangar: true,
+                supports_room_controls: true,
+            })
+        }
+    }
+}
+#[cfg(not(target_arch = "wasm32"))]
 fn worker(
     server: String,
     pilot: String,
     dir: PathBuf,
-    credential_scope: Option<String>,
+    identity: WorkerIdentity,
     commands: Receiver<Request>,
     updates: Sender<Update>,
     controls: pilot_input::Mailbox,
 ) {
     let run = || -> Result<(), String> {
-        let path = credentials_path(&dir, credential_scope.as_deref().unwrap_or(&server), &pilot);
-        let mut token = match fs::read_to_string(&path) {
-            Ok(v) => Some(v),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
-            Err(e) => return Err(format!("Cannot read saved credential: {e}")),
+        let path = credentials_path(&dir, identity.scope.as_deref().unwrap_or(&server), &pilot);
+        let mut token = if identity.account.is_some() && !identity.link_existing {
+            None
+        } else {
+            match fs::read_to_string(&path) {
+                Ok(v) => Some(v),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+                Err(e) => return Err(format!("Cannot read saved credential: {e}")),
+            }
         };
+        if identity.account.is_some() && identity.link_existing && token.is_none() {
+            return Err("Cannot link: this device has no saved credential for that pilot. Use the original device or operator recovery.".into());
+        }
         // Check storage before creating a server-side identity.
-        fs::create_dir_all(&dir).map_err(|e| format!("Credential directory unavailable: {e}"))?;
+        if identity.account.is_none() {
+            fs::create_dir_all(&dir)
+                .map_err(|e| format!("Credential directory unavailable: {e}"))?;
+        }
         let mut reader = transport::Connection::connect(&server)?;
-        let mut response = reader.exchange(&Request::Connect {
-            supports_pioneer_interior: true,
-            supports_fleet_hangar: true,
-            supports_room_controls: true,
-            protocol_version: PROTOCOL_VERSION,
-            pilot: pilot.clone(),
-            resume_token: token.clone(),
-        })?;
+        let mut response = reader.exchange(&identity.request(&server, &pilot, token.clone())?)?;
         if !response.ok {
             return Err(response.message);
+        }
+        if identity.account.is_some() && response.resume_token.is_some() {
+            return Err("Account admission returned an unexpected legacy credential".into());
         }
         if let Some(issued) = response.resume_token.take() {
             save_token(&path, &issued)?;
@@ -284,6 +328,14 @@ fn worker(
         let mut last_snapshot = Instant::now();
         let mut retries_left = 3u32;
         loop {
+            if identity
+                .account
+                .as_ref()
+                .is_some_and(|a| !a.matches(&server, &pilot))
+            {
+                reader.close();
+                return Err("Account session expired. Sign in again.".into());
+            }
             let (request, visible) = match commands.recv_timeout(Duration::from_millis(50)) {
                 Ok(request) => (request, true),
                 Err(mpsc::RecvTimeoutError::Timeout) => {
@@ -318,7 +370,7 @@ fn worker(
                         .send(Update::Reconnecting(explanation.clone()))
                         .map_err(|e| e.to_string())?;
                     reader.close();
-                    if token.is_none() {
+                    if token.is_none() && identity.account.is_none() {
                         return Err(format!("{explanation} No saved identity is available for safe automatic recovery."));
                     }
                     let mut recovered = None;
@@ -342,16 +394,19 @@ fn worker(
                         }
                         let attempt = (|| {
                             let mut next = transport::Connection::connect(&server)?;
-                            let mut resumed = next.exchange(&Request::Connect {
-                                supports_pioneer_interior: true,
-                                supports_fleet_hangar: true,
-                                supports_room_controls: true,
-                                protocol_version: PROTOCOL_VERSION,
-                                pilot: pilot.clone(),
-                                resume_token: token.clone(),
-                            })?;
+                            let mut resumed = next.exchange(&identity.request(
+                                &server,
+                                &pilot,
+                                token.clone(),
+                            )?)?;
                             if !resumed.ok {
                                 return Err(format!("Resume rejected: {}", resumed.message));
+                            }
+                            if identity.account.is_some() && resumed.resume_token.is_some() {
+                                return Err(
+                                    "Account admission returned an unexpected legacy credential"
+                                        .into(),
+                                );
                             }
                             if let Some(issued) = resumed.resume_token.take() {
                                 save_token(&path, &issued)?;
@@ -444,6 +499,10 @@ struct Cockpit {
     pilot: String,
     data_dir: PathBuf,
     credential_scope: Option<String>,
+    #[cfg(not(target_arch = "wasm32"))]
+    account_login: account_login::Login,
+    #[cfg(not(target_arch = "wasm32"))]
+    link_existing_account: bool,
     commands: Option<Sender<Request>>,
     controls: pilot_input::Mailbox,
     pilot_input: pilot_input::PilotInput,
@@ -550,6 +609,10 @@ impl Cockpit {
 
         Self {
             logo,
+            #[cfg(not(target_arch = "wasm32"))]
+            account_login: account_login::Login::default(),
+            #[cfg(not(target_arch = "wasm32"))]
+            link_existing_account: false,
             boot: boot::Boot::default(),
             server,
             pilot: String::new(),
@@ -759,6 +822,21 @@ impl Cockpit {
         })
     }
     fn connect(&mut self) {
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.account_login.configured(&self.server)
+            && !self
+                .account_login
+                .credential
+                .as_ref()
+                .is_some_and(|a| a.matches(&self.server, self.pilot.trim()))
+        {
+            self.notice = match self.account_login.begin(&self.server, self.pilot.trim()) {
+                Ok(()) => "Waiting for browser sign-in...".into(),
+                Err(error) => error,
+            };
+            self.boot.visible = false;
+            return;
+        }
         #[cfg(target_arch = "wasm32")]
         self.sound.start();
         self.sound_scene.reset();
@@ -795,7 +873,18 @@ impl Cockpit {
         let scope = self.credential_scope.clone();
         let controls = self.controls.clone();
         #[cfg(not(target_arch = "wasm32"))]
-        std::thread::spawn(move || worker(server, pilot, dir, scope, rx, out_tx, controls));
+        {
+            let identity = WorkerIdentity {
+                scope,
+                account: self
+                    .account_login
+                    .credential
+                    .clone()
+                    .filter(|a| a.matches(&server, &pilot)),
+                link_existing: self.link_existing_account,
+            };
+            std::thread::spawn(move || worker(server, pilot, dir, identity, rx, out_tx, controls));
+        }
         #[cfg(target_arch = "wasm32")]
         browser::worker(server, pilot, dir, scope, rx, out_tx, controls);
         self.commands = Some(tx);
@@ -3289,6 +3378,25 @@ impl eframe::App for Cockpit {
         while self.frame_intervals.len() > 120 {
             self.frame_intervals.pop_front();
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(result) = self.account_login.poll(ctx) {
+            match result {
+                Ok(())
+                    if self
+                        .account_login
+                        .credential
+                        .as_ref()
+                        .is_some_and(|a| a.matches(&self.server, self.pilot.trim())) =>
+                {
+                    self.connect()
+                }
+                Ok(()) => {
+                    self.account_login.credential = None;
+                    self.notice = "Sign-in target changed. Sign in again.".into();
+                }
+                Err(error) => self.notice = error,
+            }
+        }
         self.poll();
         if !self.connected {
             self.engineering_panel = None;
@@ -3350,7 +3458,10 @@ impl eframe::App for Cockpit {
                     ui.add_space(28.0);
                     ui.scope(|ui| {
                         ui.set_max_width(400.0);
-                        ui.add_enabled_ui(!self.connecting, |ui| {
+                        let mut login_pending = self.connecting;
+                        #[cfg(not(target_arch = "wasm32"))]
+                        { login_pending |= self.account_login.pending(); }
+                        ui.add_enabled_ui(!login_pending, |ui| {
                             ui.horizontal(|ui| {
                                 for (label, endpoint) in [("Production", transport::OFFICIAL_SERVER), ("Test", transport::TEST_SERVER)] {
                                     if ui.add_enabled(self.credential_scope.is_none(), egui::Button::new(label).selected(self.server == endpoint)).clicked() { self.server = endpoint.into(); }
@@ -3359,10 +3470,26 @@ impl eframe::App for Cockpit {
                             });
                             ui.label("Server address"); ui.add_enabled(self.credential_scope.is_none(), egui::TextEdit::singleline(&mut self.server).desired_width(380.0));
                             ui.label("Pilot name"); ui.add(egui::TextEdit::singleline(&mut self.pilot).hint_text("Choose a pilot name").desired_width(380.0));
+                            #[cfg(not(target_arch = "wasm32"))]
+                            if self.account_login.configured(&self.server) {
+                                ui.label("Account sign-in opens your browser. Your password stays with the identity provider.");
+                                ui.checkbox(&mut self.link_existing_account, "Link this pilot using its saved legacy credential");
+                                ui.small("Linking requires both account sign-in and this pilot's original credential. Missing credentials require operator recovery.");
+                            } else {
+                                ui.small("Legacy pilot credentials: creates a pilot on first connection, then resumes it on this device. Account sign-in is not configured here.");
+                            }
+                            #[cfg(target_arch = "wasm32")]
                             ui.small("Creates a pilot on first connection. Saved credentials resume it automatically on this device.");
                             ui.add_space(10.0);
-                            if ui.add_enabled(!self.pilot.trim().is_empty() && !self.server.trim().is_empty(), egui::Button::new("Enter the universe").min_size(Vec2::new(380.0, 44.0))).clicked() { self.connect(); }
+                            let enter_label = "Enter the universe";
+                            #[cfg(not(target_arch = "wasm32"))]
+                            let enter_label = if self.account_login.configured(&self.server) { "Sign in and enter the universe" } else { enter_label };
+                            if ui.add_enabled(!self.pilot.trim().is_empty() && !self.server.trim().is_empty(), egui::Button::new(enter_label).min_size(Vec2::new(380.0, 44.0))).clicked() { self.connect(); }
                         });
+                        #[cfg(not(target_arch = "wasm32"))]
+                        if self.account_login.pending() && ui.button("Cancel browser sign-in").clicked() {
+                            self.account_login.cancel(); self.notice = "Sign-in cancelled".into();
+                        }
                         if !self.notice.is_empty() { ui.add_space(12.0); ui.colored_label(AMBER, &self.notice); }
                         ui.add_space(22.0); ui.separator();
                         if self.credential_scope.is_some() {
@@ -3960,6 +4087,7 @@ fn main() -> eframe::Result<()> {
     };
     let mut credential_scope = None;
     let mut startup_pilot = None;
+    let mut oauth_config = None;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -3968,8 +4096,20 @@ fn main() -> eframe::Result<()> {
                 return Ok(());
             }
             "--help" | "-h" => {
-                println!("Arkline native client\n\nUsage: arkline-client [--local | --remote-only] [--server WSS_URL_OR_HOST:PORT] [--data-dir PATH] [--pilot NAME]\n\n--pilot creates or resumes the named pilot immediately.\n--local starts a sibling arkline-server on a private loopback port.\nThe macOS bundle saves in ~/Library/Application Support/Arkline/Preview.\n--server selects an existing server; --remote-only disables an explicit --local option.\nDefault server: wss://relay.arkline.network/ws (Production). CLI storage: data/client.\n--credential-scope NAME selects a stable credential namespace (used by local preview cockpits).\nResume credentials are private local files. WSS verifies TLS certificates. Plain TCP is retained for local development.");
+                println!("Arkline native client\n\nUsage: arkline-client [--local | --remote-only] [--server WSS_URL_OR_HOST:PORT] [--data-dir PATH] [--pilot NAME]\n\n--pilot creates or resumes the named pilot immediately.\n--local starts a sibling arkline-server on a private loopback port.\nThe macOS bundle saves in ~/Library/Application Support/Arkline/Preview.\n--server selects an existing server; --remote-only disables an explicit --local option.\nDefault server: wss://relay.arkline.network/ws (Production). CLI storage: data/client.\n--credential-scope NAME selects a stable credential namespace (used by local preview cockpits).\n--oauth-config PATH enables operator-configured browser sign-in for one exact WSS endpoint.\nResume credentials are private local files. WSS verifies TLS certificates. Plain TCP is retained for local development.");
                 return Ok(());
+            }
+            "--oauth-config" => {
+                let path = args.next().unwrap_or_else(|| {
+                    eprintln!("--oauth-config requires PATH");
+                    std::process::exit(2)
+                });
+                oauth_config = Some(
+                    account_login::Config::load(std::path::Path::new(&path)).unwrap_or_else(|e| {
+                        eprintln!("{e}");
+                        std::process::exit(2)
+                    }),
+                );
             }
             "--local" => local = true,
             "--remote-only" => remote_only = true,
@@ -4003,6 +4143,17 @@ fn main() -> eframe::Result<()> {
                 std::process::exit(2);
             }
         }
+    }
+    if oauth_config.is_some() && (local || credential_scope.is_some()) {
+        eprintln!("Account sign-in cannot be combined with a local credential scope");
+        std::process::exit(2);
+    }
+    if let Some(config) = &oauth_config {
+        if explicit_server && server != config.server {
+            eprintln!("Server must match OAuth configuration");
+            std::process::exit(2);
+        }
+        server = config.server.clone();
     }
     local = local && !remote_only && !explicit_server;
     let mut startup_error = None;
@@ -4043,6 +4194,7 @@ fn main() -> eframe::Result<()> {
         options,
         Box::new(move |cc| {
             let mut cockpit = Cockpit::new(cc, server, data_dir, credential_scope);
+            cockpit.account_login.config = oauth_config;
             cockpit.sound.start();
             cockpit.local_server = local_server;
             if let Some(error) = startup_error {
@@ -5871,6 +6023,7 @@ mod tests {
         docked.pilots[0].location = Location::Docked;
         tx.send(Update::Response(
             Box::new(Response {
+                auth: None,
                 ok: true,
                 message: "Docked".into(),
                 snapshot: Some(docked.clone()),
@@ -5887,6 +6040,7 @@ mod tests {
         cockpit.services_open = false;
         tx.send(Update::Response(
             Box::new(Response {
+                auth: None,
                 ok: true,
                 message: String::new(),
                 snapshot: Some(docked),
@@ -6255,6 +6409,7 @@ mod tests {
                     _ => panic!("first request must authenticate"),
                 }
                 let response = Response {
+                    auth: None,
                     assets: None,
                     ok: true,
                     message: "Connected".into(),
@@ -6276,7 +6431,7 @@ mod tests {
                     address,
                     "test-pilot".into(),
                     directory,
-                    None,
+                    WorkerIdentity::default(),
                     commands_rx,
                     updates_tx,
                     pilot_input::Mailbox::default(),

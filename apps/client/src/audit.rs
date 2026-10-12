@@ -194,6 +194,7 @@ mod tests {
                 Request::ExportLedger
             ));
             let response = Response {
+                auth: None,
                 assets: None,
                 ok: true,
                 message: "Export".into(),
