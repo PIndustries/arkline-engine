@@ -68,6 +68,8 @@ Graph queue saturation and automatic scheduler faults pause the world with a rec
 
 The worker bridge uses bounded command/debug queues and acknowledges graph commands off the rendering thread. Unchanged paused worlds no longer emit duplicate 20 Hz snapshots. A stale tick-step request received after Play is rejected without terminating the local authority.
 
+Native 26.10.12.6 testing verified applying the default graph: the runtime acknowledged revision 1, showed a graph-replaced trace and kept the paused simulation clock unchanged. The remaining trigger/node-step/breakpoint/clock-step/device/save-reopen walkthrough is not yet verified. Graph controls were missing from the native accessibility tree during this check; keyboard/accessibility coverage remains an explicit acceptance gap.
+
 Source tests cover typed validation, cycle/revision rejection, causal order, breakpoints and node/clock separation, simulation-only delays, bounded history, queue saturation/recovery, normal Pioneer power/pressure interlocks, restart semantics, actual embedded worker acknowledgements, stale clock controls, draft persistence and native egui node dragging. Native packaged walkthrough and performance acceptance are recorded separately after testing. Follow [#49](https://github.com/PIndustries/arkline-engine/issues/49) for richer subsystem hooks, typed data pins, general entity bindings, event graph debugging and validated runtime patches.
 
 ## Current scope
