@@ -3589,6 +3589,17 @@ impl eframe::App for Cockpit {
                 .show(ctx, |ui| {
                     self.overlay_frame(ctx).show(ui, |ui| {
                         ui.set_max_width(490.0);
+                        if self.embedded {
+                            ui.horizontal_wrapped(|ui| {
+                                ui.strong(system_name(self.current_system()));
+                                ui.colored_label(if self.connected { self.accent() } else { AMBER },
+                                    if self.connected { "Connected" } else { "Offline" });
+                                if in_hangar { ui.label("Station / interior"); }
+                                else { self.view_selector(ui); }
+                            });
+                            if !self.notice.is_empty() { ui.small(&self.notice); }
+                            return;
+                        }
                         ui.horizontal(|ui| {
                             ui.label(
                                 egui::RichText::new("A R K L I N E")

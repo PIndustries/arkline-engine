@@ -888,8 +888,11 @@ mod tests {
                     egui::SidePanel::right("inspector")
                         .exact_width(290.)
                         .show(ctx, |_| {});
-                    viewport = ctx.available_rect().shrink(8.);
+                    viewport = ctx.available_rect();
                     cockpit.station_overlay(ctx);
+                    let game = ctx.available_rect();
+                    assert!(viewport.bottom() - game.bottom() <= 148.);
+                    assert!(game.height() >= viewport.height() - 148.);
                 },
             );
             let mut found = false;

@@ -479,6 +479,11 @@ mod tests {
 mod graph_tests {
     use super::*;
     fn setup() -> (std::path::PathBuf, EditorWorld, Option<String>) {
+        setup_with_room_support(true)
+    }
+    fn setup_with_room_support(
+        supports_room_controls: bool,
+    ) -> (std::path::PathBuf, EditorWorld, Option<String>) {
         let path =
             std::env::temp_dir().join(format!("arkline-editor-graph-{}", rand::random::<u64>()));
         let mut world = EditorWorld::open(&path).unwrap();
@@ -489,7 +494,7 @@ mod graph_tests {
                 protocol_version: PROTOCOL_VERSION,
                 pilot: "GraphPilot".into(),
                 resume_token: None,
-                supports_room_controls: true,
+                supports_room_controls,
                 supports_fleet_hangar: true,
                 supports_pioneer_interior: true,
             },
@@ -802,6 +807,56 @@ mod graph_tests {
         assert!(!room.breaker_closed && !room.light_on);
         w.disconnect(&mut session);
         assert!(w.graph_trigger(1).is_err());
+        drop(w);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[test]
+    fn rejected_graph_room_command_is_traced_and_does_not_follow_edge() {
+        let (path, mut w, mut session) = setup_with_room_support(false);
+        let before = w
+            .handle(&mut session, Request::Snapshot)
+            .assets
+            .unwrap()
+            .pioneer_room;
+        w.graph_replace(
+            0,
+            chain(vec![
+                EditorNodeOp::Manual,
+                EditorNodeOp::RoomLight { on: true },
+                EditorNodeOp::Trace {
+                    message: "must not run after rejected command".into(),
+                },
+            ]),
+            false,
+        )
+        .unwrap();
+        w.graph_trigger(1).unwrap();
+        w.graph_step().unwrap();
+        assert!(w.is_paused());
+        w.graph_step().unwrap();
+
+        let debug = w.graph_debug();
+        assert!(debug.paused);
+        assert_eq!(debug.pending, 0);
+        let rejected = debug
+            .trace
+            .iter()
+            .rev()
+            .find(|t| t.node_id == Some(2) && t.kind == "node")
+            .unwrap();
+        assert!(!rejected.ok);
+        assert!(rejected.message.contains("room state unavailable"));
+        assert!(!debug
+            .trace
+            .iter()
+            .any(|t| t.message == "must not run after rejected command"));
+        let after = w
+            .handle(&mut session, Request::Snapshot)
+            .assets
+            .unwrap()
+            .pioneer_room;
+        assert_eq!(after, before);
         drop(w);
         std::fs::remove_dir_all(path).unwrap();
     }

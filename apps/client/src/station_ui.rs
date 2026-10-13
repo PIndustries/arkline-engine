@@ -371,12 +371,83 @@ impl Cockpit {
         }
     }
     pub(super) fn station_overlay(&mut self, ctx: &egui::Context) {
+        if self.embedded {
+            egui::TopBottomPanel::bottom("embedded_station_actions")
+                .height_range(34.0..=148.0)
+                .resizable(false)
+                .frame(self.overlay_frame(ctx))
+                .show(ctx, |ui| {
+                    if let Some(pilot) = self.own().filter(|p| p.location == Location::Docked) {
+                        if pilot.station_avatar.is_none() {
+                            let interior_available = self
+                                .assets
+                                .as_ref()
+                                .is_some_and(|assets| assets.pioneer_interior_available);
+                            ui.horizontal_wrapped(|ui| {
+                                ui.strong("ABOARD · DOCKED");
+                                if pilot.ship_class == ShipClass::Pioneer
+                                    && ui
+                                        .add_enabled(
+                                            self.can_operate() && interior_available,
+                                            egui::Button::new("Explore interior").small(),
+                                        )
+                                        .clicked()
+                                {
+                                    self.send(Request::EnterInterior);
+                                }
+                                if ui
+                                    .add_enabled(
+                                        self.can_operate(),
+                                        egui::Button::new("Leave ship").small(),
+                                    )
+                                    .clicked()
+                                {
+                                    self.send(Request::DisembarkShip);
+                                }
+                                if ui
+                                    .add_enabled(
+                                        self.can_operate(),
+                                        egui::Button::new("Undock").small(),
+                                    )
+                                    .clicked()
+                                {
+                                    self.send(Request::Undock);
+                                }
+                                if pilot.ship_class == ShipClass::Pioneer
+                                    && ui.small_button("Room engineering").clicked()
+                                {
+                                    self.services_open = true;
+                                    self.service_tab = ServiceTab::Station;
+                                }
+                            });
+                            self.power_gauge(ui);
+                            return;
+                        }
+                    }
+
+                    egui::ScrollArea::vertical()
+                        .id_salt("embedded_station_action_scroll")
+                        .auto_shrink([false, true])
+                        .min_scrolled_height(0.0)
+                        .max_height(112.0)
+                        .show(ui, |ui| {
+                            self.station_actions_with_engineering(ui, false);
+                            if self
+                                .own()
+                                .is_some_and(|p| p.ship_class == ShipClass::Pioneer)
+                                && ui.small_button("Room engineering").clicked()
+                            {
+                                self.services_open = true;
+                                self.service_tab = ServiceTab::Station;
+                            }
+                            self.power_gauge(ui);
+                        });
+                });
+            return;
+        }
+
         // Window anchors otherwise use the entire screen, including editor panels.
-        let bounds = if self.embedded {
-            ctx.available_rect().shrink(8.)
-        } else {
-            ctx.screen_rect()
-        };
+        let bounds = ctx.screen_rect();
         egui::Window::new(if self.own().is_some_and(|p| p.station_avatar.is_some()) {
             "On-foot navigation"
         } else {
@@ -385,12 +456,6 @@ impl Cockpit {
         .id(egui::Id::new("station_embodiment_controls"))
         .anchor(egui::Align2::CENTER_BOTTOM, [0.0, -14.0])
         .constrain_to(bounds)
-        .max_height(if self.embedded {
-            (bounds.height() - 48.).max(24.)
-        } else {
-            f32::INFINITY
-        })
-        .vscroll(self.embedded)
         .resizable(false)
         .collapsible(false)
         .movable(false)
@@ -488,6 +553,85 @@ impl Cockpit {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn embedded_docked_strip_reserves_little_viewport_and_keeps_actions_live() {
+        let ctx = egui::Context::default();
+        let mut cockpit = crate::tests::view_test_cockpit(&ctx);
+        cockpit.embedded = true;
+        cockpit.embedded_paused = false;
+        let pilot = &mut cockpit.snapshot.as_mut().unwrap().pilots[0];
+        pilot.location = Location::Docked;
+        pilot.station_avatar = None;
+        cockpit.assets = Some(AssetsView {
+            pioneer_room: Some(arkline_protocol::PioneerRoomState::uncommissioned(
+                "owned-pioneer".into(),
+            )),
+            hangar: None,
+            pioneer_interior_available: true,
+            pioneer_interior_decks: 1,
+            ships: vec![],
+            storage: vec![],
+            corporation: None,
+            invitations: vec![],
+        });
+        let (tx, rx) = mpsc::channel();
+        cockpit.commands = Some(tx);
+
+        let frame = |cockpit: &mut Cockpit, events| {
+            let mut viewport = egui::Rect::NOTHING;
+            let output = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        Pos2::ZERO,
+                        Vec2::new(900.0, 650.0),
+                    )),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| {
+                    cockpit.station_overlay(ctx);
+                    viewport = ctx.available_rect();
+                    egui::CentralPanel::default().show(ctx, |_| {});
+                },
+            );
+            (output, viewport)
+        };
+        frame(&mut cockpit, vec![]);
+        let (output, reserved) = frame(&mut cockpit, vec![]);
+        let mut labels = Vec::new();
+        for clipped in output.shapes {
+            if let egui::Shape::Text(text) = clipped.shape {
+                labels.push((
+                    text.galley.job.text.clone(),
+                    text.pos + text.galley.rect.center().to_vec2(),
+                ));
+            }
+        }
+        for label in ["Explore interior", "Leave ship", "Undock", "Room engineering"] {
+            assert!(labels.iter().any(|(text, _)| text == label), "missing {label}");
+        }
+        assert!(reserved.bottom() < 650.0);
+        assert!(650.0 - reserved.bottom() < 170.0, "bottom strip grew too tall: {reserved:?}");
+
+        let point = labels.iter().find(|(text, _)| text == "Undock").unwrap().1;
+        for pressed in [true, false] {
+            frame(
+                &mut cockpit,
+                vec![
+                    egui::Event::PointerMoved(point),
+                    egui::Event::PointerButton {
+                        pos: point,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ],
+            );
+        }
+        assert!(matches!(rx.try_recv().unwrap(), Request::Undock));
+    }
+
     #[test]
     fn physical_berth_action_routes_exact_owned_id_and_rejects_unknown_or_distant() {
         let ctx = egui::Context::default();

@@ -4,6 +4,7 @@ mod community;
 mod component_view;
 mod engineering;
 mod engineering_document;
+mod equipment;
 mod event_graph;
 mod github;
 mod github_auth;
@@ -22,6 +23,7 @@ struct Editor {
     client: EmbeddedClient,
     project: PathBuf,
     selected_pilot: String,
+    selected_equipment: String,
     console: VecDeque<String>,
     last_status: String,
     bottom_tab: usize,
@@ -40,6 +42,11 @@ struct Editor {
     provenance: provenance::Provenance,
 }
 impl Editor {
+    fn play_game(&mut self) {
+        self.workspace = 0;
+        self.inspector_tab = 0;
+        self.client.play();
+    }
     fn new(cc: &eframe::CreationContext<'_>, project: PathBuf, pilot: String) -> Self {
         let client = EmbeddedClient::new(cc, project.join(".arkline-studio"), pilot.clone());
         Self {
@@ -58,6 +65,7 @@ impl Editor {
             client,
             project,
             selected_pilot: pilot,
+            selected_equipment: String::new(),
             console: VecDeque::from([
                 "Opening isolated editor world. No public relay connection.".into(),
                 "Play runs the simulation. Pause freezes it. Step advances 50 ms.".into(),
@@ -94,6 +102,9 @@ impl eframe::App for Editor {
             self.client.status(),
             EmbeddedStatus::Paused | EmbeddedStatus::Running | EmbeddedStatus::Stopped
         );
+        if !ctx.wants_keyboard_input() && ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::F5)) && ready {
+            if active && self.workspace == 0 && self.inspector_tab != 2 { self.client.pause(); } else { self.play_game(); }
+        }
         egui::TopBottomPanel::top("editor_toolbar")
             .exact_height(58.0)
             .show(ctx, |ui| {
@@ -109,12 +120,12 @@ impl eframe::App for Editor {
                     ui.separator();
                     if ui
                         .add_enabled(
-                            ready && !active && self.workspace == 0,
+                            ready && (!active || self.workspace != 0 || self.inspector_tab == 2),
                             egui::Button::new("▶  Play").min_size(egui::vec2(82., 32.)),
                         )
                         .clicked()
                     {
-                        self.client.play();
+                        self.play_game();
                     }
                     if ui
                         .add_enabled(
@@ -259,6 +270,13 @@ impl eframe::App for Editor {
         }
         egui::SidePanel::left("editor_outliner").resizable(true).default_width(205.).width_range(165. ..=330.).show(ctx, |ui| {
             ui.add_space(10.); ui.heading("World outliner");
+            if !active {
+                ui.colored_label(Color32::from_rgb(239, 191, 102), format!("Simulation {status}"));
+                ui.small("Gameplay controls are disabled while paused or stopped.");
+                if ui.add_enabled(ready, egui::Button::new("Resume game · F5")).clicked() { self.play_game(); }
+            } else if self.inspector_tab == 2 && ui.button("Return to game · F5").clicked() {
+                self.play_game();
+            }
             ui.colored_label(MUTED,"Live simulation objects"); ui.separator();
             egui::ScrollArea::vertical().id_salt("editor_world_scroll").show(ui, |ui| {
                 if let Some(world)=&snapshot {
@@ -278,6 +296,15 @@ impl eframe::App for Editor {
                         if world.asteroids.len()>24 { ui.small("First 24 shown. The in-game overview lists local targets."); }
                     });
                 } else { ui.label("Waiting for the local authority…"); }
+                if self.selected_pilot == self.client.pilot() && assets.as_ref().and_then(|a| a.pioneer_room.as_ref()).is_some() {
+                    ui.collapsing("Live Pioneer room equipment", |ui| {
+                        for device in arkline_protocol::pioneer_room_catalog().equipment {
+                            if ui.selectable_value(&mut self.selected_equipment, device.id.to_owned(), device.label).clicked() {
+                                self.inspector_tab = 4;
+                            }
+                        }
+                    });
+                }
                 if self.engineering.outliner(ui) { self.inspector_tab = 2; }
                 ui.add_space(16.); ui.separator(); ui.label(RichText::new("WORKSPACE").color(GREEN).small());
                 ui.label("Game viewport"); ui.label("Live systems inspector");
@@ -295,6 +322,7 @@ impl eframe::App for Editor {
                     ui.selectable_value(&mut self.inspector_tab, 1, "Materials");
                     ui.selectable_value(&mut self.inspector_tab, 2, "Engineering");
                     ui.selectable_value(&mut self.inspector_tab, 3, "Render debug");
+                    ui.selectable_value(&mut self.inspector_tab, 4, "Equipment");
                 });
                 if !active {
                     ui.colored_label(MUTED, "Captured state · simulation is not running");
@@ -322,6 +350,23 @@ impl eframe::App for Editor {
                         } else if self.inspector_tab == 3 {
                             self.render_debug
                                 .show(ui, &mut self.client, &mut self.wireframe);
+                        } else if self.inspector_tab == 4 {
+                            let own_pilot = self.selected_pilot == self.client.pilot();
+                            if let Some(action) = equipment::show(
+                                ui, snapshot.as_ref(), if own_pilot { assets.as_ref() } else { None },
+                                &self.selected_equipment, active && own_pilot,
+                            ) {
+                                match action {
+                                    equipment::Action::Send(request) => self.client.send_command(request),
+                                    equipment::Action::AddToGraph(action) => {
+                                        match self.event_graph.add_room_action(action) {
+                                            Ok(()) => self.events_open = true,
+                                            Err(error) => self.console.push_back(format!("Event draft: {error}")),
+                                        }
+                                    }
+                                }
+                            }
+                            if !active { ui.small("Play to operate equipment. Use event graph stepping for paused experiments."); }
                         } else {
                             inspector::show(
                                 ui,
@@ -584,5 +629,105 @@ mod tests {
             assert_eq!(found, 4);
         }
         editor.client.on_exit();
+    }
+    #[test]
+    fn toolbar_play_from_engineering_workspace_returns_to_game_and_runs() {
+        let ctx = egui::Context::default();
+        let cc = eframe::CreationContext::_new_kittest(ctx.clone());
+        let project = std::env::temp_dir().join(format!(
+            "arkline-editor-play-from-engineering-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let mut editor = Editor::new(&cc, project.clone(), "EngineeringPlayPilot".into());
+        let ready_deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while !editor.client.ready() && std::time::Instant::now() < ready_deadline {
+            editor.client.poll();
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            editor.client.paused(),
+            "test requires a ready, paused local world; status={:?}",
+            editor.client.status()
+        );
+        editor.workspace = 3;
+        editor.inspector_tab = 2;
+
+        let output = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1500., 960.),
+                )),
+                ..Default::default()
+            },
+            |ctx| editor.update(ctx, &mut eframe::Frame::_new_kittest()),
+        );
+        let play_position = output
+            .shapes
+            .iter()
+            .find_map(|clipped| match &clipped.shape {
+                egui::Shape::Text(text) if text.galley.text() == "▶  Play" => {
+                    Some(text.pos + text.galley.rect.center().to_vec2())
+                }
+                _ => None,
+            })
+            .expect("toolbar Play button is visible from the Engineering workspace");
+
+        let frame = |editor: &mut Editor, events| {
+            ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(1500., 960.),
+                    )),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| editor.update(ctx, &mut eframe::Frame::_new_kittest()),
+            )
+        };
+        frame(
+            &mut editor,
+            vec![
+                egui::Event::PointerMoved(play_position),
+                egui::Event::PointerButton {
+                    pos: play_position,
+                    button: egui::PointerButton::Primary,
+                    pressed: true,
+                    modifiers: Default::default(),
+                },
+            ],
+        );
+        frame(
+            &mut editor,
+            vec![egui::Event::PointerButton {
+                pos: play_position,
+                button: egui::PointerButton::Primary,
+                pressed: false,
+                modifiers: Default::default(),
+            }],
+        );
+        assert_eq!(editor.workspace, 0);
+        assert_eq!(editor.inspector_tab, 0);
+
+        let running_deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while editor.client.status() != &EmbeddedStatus::Running
+            && std::time::Instant::now() < running_deadline
+        {
+            editor.client.poll();
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(
+            editor.client.status(),
+            &EmbeddedStatus::Running,
+            "Play click did not start the authoritative simulation"
+        );
+        editor.client.on_exit();
+        drop(editor);
+        let _ = std::fs::remove_dir_all(project);
     }
 }

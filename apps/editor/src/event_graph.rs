@@ -75,6 +75,62 @@ impl EventGraphPanel {
             pan: egui::Vec2::ZERO,
         }
     }
+    /// Add a supported room command to the draft only; callers decide when to save or apply it.
+    pub fn add_room_action(
+        &mut self,
+        action: arkline_protocol::PioneerRoomCommand,
+    ) -> Result<(), String> {
+        let (label, operation) = match action {
+            arkline_protocol::PioneerRoomCommand::Breaker { closed } => {
+                ("Room breaker", EditorNodeOp::RoomBreaker { closed })
+            }
+            arkline_protocol::PioneerRoomCommand::Light { on } => {
+                ("Room light", EditorNodeOp::RoomLight { on })
+            }
+            arkline_protocol::PioneerRoomCommand::Door { open, .. } => {
+                ("Room door", EditorNodeOp::RoomDoor { open })
+            }
+            arkline_protocol::PioneerRoomCommand::Vent { .. } => {
+                return Err("Event graph does not support vent commands yet.".into());
+            }
+        };
+        self.draft.validate()?;
+        let after_existing = self
+            .draft
+            .nodes
+            .iter()
+            .map(|node| node.id)
+            .max()
+            .unwrap_or(0)
+            .checked_add(1)
+            .ok_or("Event graph exhausted node IDs.")?;
+        let id = self.next_id.max(after_existing);
+        if id == 0 || self.draft.nodes.iter().any(|node| node.id == id) {
+            return Err("Could not allocate a unique event node ID.".into());
+        }
+        let slot = self.draft.nodes.len() as u64;
+        let mut next = self.draft.clone();
+        next.nodes.push(EditorGraphNode {
+            id,
+            label: label.into(),
+            position: [
+                30.0 + (slot % 4) as f32 * 165.0,
+                40.0 + (slot / 4) as f32 * 80.0,
+            ],
+            operation,
+            breakpoint: false,
+        });
+        next.validate()?;
+
+        push_history(&mut self.undo, self.draft.clone());
+        self.redo.clear();
+        self.draft = next;
+        self.next_id = id.saturating_add(1);
+        self.selected = Some(id);
+        self.gesture = None;
+        self.status = "Room command added to draft; runtime is unchanged.".into();
+        Ok(())
+    }
     pub fn show(&mut self, ui: &mut egui::Ui, project: &Path, client: &mut EmbeddedClient) {
         let before = self.draft.clone();
         self.suppress_history = false;
@@ -855,6 +911,87 @@ mod tests {
         assert!(panel.undo.is_empty());
         assert!(panel.redo.is_empty());
         assert!(panel.gesture.is_none());
+    }
+    #[test]
+    fn room_action_append_selects_valid_undoable_nodes_and_rejects_unsupported_action() {
+        use arkline_protocol::{PioneerRoomCommand, VentMode};
+
+        let mut panel = EventGraphPanel::open(Path::new("/nonexistent-event-test"));
+        let original = panel.draft.clone();
+        let actions = [
+            (
+                PioneerRoomCommand::Breaker { closed: false },
+                EditorNodeOp::RoomBreaker { closed: false },
+            ),
+            (
+                PioneerRoomCommand::Light { on: false },
+                EditorNodeOp::RoomLight { on: false },
+            ),
+            (
+                PioneerRoomCommand::Door {
+                    open: false,
+                    manual: true,
+                },
+                EditorNodeOp::RoomDoor { open: false },
+            ),
+        ];
+        for (action, expected) in actions {
+            panel.add_room_action(action).unwrap();
+            let node = panel
+                .draft
+                .nodes
+                .iter()
+                .find(|node| Some(node.id) == panel.selected)
+                .unwrap();
+            assert_eq!(node.operation, expected);
+            assert_eq!(panel.draft.validate(), Ok(()));
+            assert_eq!(panel.undo.last(), Some(&original));
+            assert!(panel.redo.is_empty());
+
+            // The stored history entry is the exact pre-insert draft used by Undo.
+            panel.draft = panel.undo.pop().unwrap();
+            panel.selected = None;
+        }
+        assert_eq!(panel.draft, original);
+
+        let before = panel.draft.clone();
+        let undo_len = panel.undo.len();
+        let error = panel
+            .add_room_action(PioneerRoomCommand::Vent {
+                mode: VentMode::Equalize,
+            })
+            .unwrap_err();
+        assert!(error.contains("does not support vent"));
+        assert_eq!(panel.draft, before);
+        assert_eq!(panel.undo.len(), undo_len);
+        assert_eq!(panel.selected, None);
+    }
+    #[test]
+    fn room_action_append_respects_graph_node_limit_without_partial_edit() {
+        use arkline_protocol::{EditorGraphNode, PioneerRoomCommand, EDITOR_GRAPH_MAX_NODES};
+
+        let mut panel = EventGraphPanel::open(Path::new("/nonexistent-event-test"));
+        panel.draft.nodes = (1..=EDITOR_GRAPH_MAX_NODES as u64)
+            .map(|id| EditorGraphNode {
+                id,
+                label: format!("Node {id}"),
+                position: [0., 0.],
+                operation: EditorNodeOp::Trace {
+                    message: "valid".into(),
+                },
+                breakpoint: false,
+            })
+            .collect();
+        panel.next_id = EDITOR_GRAPH_MAX_NODES as u64 + 1;
+        panel.selected = Some(1);
+        let before = panel.draft.clone();
+
+        assert!(panel
+            .add_room_action(PioneerRoomCommand::Light { on: true })
+            .is_err());
+        assert_eq!(panel.draft, before);
+        assert!(panel.undo.is_empty());
+        assert_eq!(panel.selected, Some(1));
     }
     #[cfg(unix)]
     #[test]

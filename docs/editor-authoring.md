@@ -96,3 +96,11 @@ The 26.10.12.4 source extends the common finish to matching hull/trim surfaces i
 The Engineering tab uses a dedicated 3D candidate-design view. Select a component in the Pioneer design outliner or the view to inspect the same stable component ID in the Engineering panel. Position and extent edits update the design preview; undo/redo and saved engineering documents retain their existing behavior. The local simulation can continue independently while this authoring view is open.
 
 These boxes visualize the supplied engineering document. They are not imported hull triangles, commissioned room devices, collision geometry or authoritative physics. An empty document remains empty until a contributor adds components. Live-equipment selection and event-node bindings still require explicit integration with the equipment catalog.
+
+### Playing and inspecting live equipment
+
+Play returns to the Ship workspace and game viewport from any authoring workspace. F5 plays/resumes from an authoring view and pauses an active game viewport when a text field is not focused. A paused or stopped world shows a Resume game action in the outliner; gameplay commands remain disabled until the authority runs.
+
+In the embedded editor, station actions occupy a compact bottom strip outside the 3D viewport. On-foot actions use a bounded scrolling strip. The embedded HUD omits the standalone client branding and duplicated pilot block.
+
+The Live Pioneer room equipment outliner opens the Equipment inspector. It shows server-confirmed output separately from commanded state, declared connections, and supported breaker/light/vent/door actions. Play is required for direct operation; ownership and server interlocks still apply. Breaker, light, and door commands can also be added to an event draft while paused. This only creates an unconnected node: wiring, validation, Apply, and Trigger remain explicit. Vent graph operations and general entity bindings are not implemented.
