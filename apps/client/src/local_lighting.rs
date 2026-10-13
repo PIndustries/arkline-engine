@@ -81,7 +81,7 @@ fn collect(
         return lights;
     }
     let budget = budget.min(if frame.drone_camera { 2 } else { MAX_LIGHTS });
-    for pilot in &frame.pilots {
+    for pilot in &frame.scene.pilots {
         if pilot.system_id != frame.system_id
             || !matches!(pilot.location, Location::Station | Location::Belt)
         {
@@ -122,6 +122,7 @@ fn collect(
                 continue;
             };
             let Some(asteroid) = frame
+                .scene
                 .asteroids
                 .iter()
                 .find(|a| a.id == cycle.target_id && eligible_mining(pilot, a))
@@ -172,6 +173,7 @@ fn collect(
                 continue;
             }
             let Some(asteroid) = frame
+                .scene
                 .asteroids
                 .iter()
                 .find(|a| a.id == target_id && a.system_id == pilot.system_id && a.ore > 0)
@@ -270,23 +272,28 @@ mod tests {
             planet_vp: Mat4::IDENTITY,
             system_id: 1,
             ship_class: ShipClass::Pioneer,
-            traffic: vec![],
-            surface_props: vec![],
             drone_camera: false,
             camera_drone: None,
+            scene: std::sync::Arc::new(FrameScene {
+                traffic: vec![],
+                surface_props: vec![],
+                asteroids: vec![],
+                gates: vec![],
+                pilots: vec![],
+            }),
             space: Space::default(),
             cockpit: false,
             rotation: Quat::IDENTITY,
-            asteroids: vec![],
-            gates: vec![],
             connected: true,
             vp: Mat4::IDENTITY,
             eye: Vec3::ZERO,
             now: 1000,
-            pilots: vec![],
             own: "fixture".into(),
             docking: None,
         }
+    }
+    fn scene_mut(frame: &mut Frame) -> &mut FrameScene {
+        std::sync::Arc::make_mut(&mut frame.scene)
     }
     fn pilot() -> PilotView {
         serde_json::from_value(serde_json::json!({"name":"fixture","credits":100,"ore":0,
@@ -330,10 +337,14 @@ mod tests {
     #[test]
     fn coasting_stale_disconnected_and_docked_cannot_emit_thruster_light() {
         let mut f = frame();
-        f.pilots.push(pilot());
+        scene_mut(&mut f).pilots.push(pilot());
         let turrets = std::collections::HashMap::new();
         assert_eq!(collect(&f, &turrets, 8).len, 0);
-        f.pilots[0].flight.as_mut().unwrap().acceleration = [150.0, 0.0, 0.0];
+        scene_mut(&mut f).pilots[0]
+            .flight
+            .as_mut()
+            .unwrap()
+            .acceleration = [150.0, 0.0, 0.0];
         assert!(collect(&f, &turrets, 8).len > 0);
         f.connected = false;
         assert_eq!(collect(&f, &turrets, 8).len, 0);
@@ -341,14 +352,14 @@ mod tests {
         f.now = 2600;
         assert_eq!(collect(&f, &turrets, 8).len, 0);
         f.now = 1000;
-        f.pilots[0].location = Location::Docked;
+        scene_mut(&mut f).pilots[0].location = Location::Docked;
         assert_eq!(collect(&f, &turrets, 8).len, 0);
     }
     #[test]
     fn mining_needs_confirmed_assignment_lock_range_and_aligned_barrel() {
         let mut f = frame();
-        f.pilots.push(pilot());
-        f.asteroids.push(Asteroid {
+        scene_mut(&mut f).pilots.push(pilot());
+        scene_mut(&mut f).asteroids.push(Asteroid {
             id: 1,
             system_id: 1,
             name: "fixture rock".into(),
@@ -366,17 +377,17 @@ mod tests {
             },
         );
         assert_eq!(collect(&f, &turrets, 8).len, 0);
-        f.pilots[0].mining_modules=serde_json::from_value(serde_json::json!([{
+        scene_mut(&mut f).pilots[0].mining_modules=serde_json::from_value(serde_json::json!([{
             "module_id":0,"target_id":1,"cycle_started_at_ms":900,"cycle_completes_at_ms":3000,"stop_reason":null}])).unwrap();
         let lights = collect(&f, &turrets, 8);
         assert_eq!(lights.len, 1);
         assert!(lights.entries[0].position.x > 1.0);
-        f.pilots[0].locked_asteroids.clear();
+        scene_mut(&mut f).pilots[0].locked_asteroids.clear();
         assert_eq!(collect(&f, &turrets, 8).len, 0);
-        f.pilots[0].locked_asteroids.push(1);
+        scene_mut(&mut f).pilots[0].locked_asteroids.push(1);
         turrets.get_mut(&("fixture".into(), 0)).unwrap().rotation = Quat::from_rotation_y(2.0);
         assert_eq!(collect(&f, &turrets, 8).len, 0);
-        f.asteroids[0].ore = 0;
+        scene_mut(&mut f).asteroids[0].ore = 0;
         assert_eq!(collect(&f, &turrets, 8).len, 0);
     }
     #[test]
@@ -388,8 +399,8 @@ mod tests {
             "position":[200.0,0.0,0.0],"velocity":[0.0,0.0,0.0],"heading":[1.0,0.0,0.0],
             "mode":arkline_protocol::DroneMode::Mining{target_id:1},"updated_at_ms":1000,
             "mining_cycle":{"started_at_ms":900,"completes_at_ms":5000}}])).unwrap();
-        f.pilots.push(p);
-        f.asteroids.push(Asteroid {
+        scene_mut(&mut f).pilots.push(p);
+        scene_mut(&mut f).asteroids.push(Asteroid {
             id: 1,
             system_id: 1,
             name: "rock".into(),
@@ -399,13 +410,13 @@ mod tests {
         });
         let turrets = std::collections::HashMap::new();
         assert_eq!(collect(&f, &turrets, 8).len, 1);
-        f.pilots[0].drones[0].signal_strength = 0.0;
+        scene_mut(&mut f).pilots[0].drones[0].signal_strength = 0.0;
         assert_eq!(collect(&f, &turrets, 8).len, 0);
-        f.pilots[0].drones[0].signal_strength = 1.0;
-        f.pilots[0].drones[0].position = [-5000.0, 0.0, 0.0];
+        scene_mut(&mut f).pilots[0].drones[0].signal_strength = 1.0;
+        scene_mut(&mut f).pilots[0].drones[0].position = [-5000.0, 0.0, 0.0];
         assert_eq!(collect(&f, &turrets, 8).len, 0);
-        f.pilots[0].drones[0].position = [200.0, 0.0, 0.0];
-        f.pilots[0].drones[0].mining_cycle = None;
+        scene_mut(&mut f).pilots[0].drones[0].position = [200.0, 0.0, 0.0];
+        scene_mut(&mut f).pilots[0].drones[0].mining_cycle = None;
         assert_eq!(collect(&f, &turrets, 8).len, 0);
     }
     #[test]
@@ -413,7 +424,7 @@ mod tests {
         let mut f = frame();
         let mut p = pilot();
         p.flight.as_mut().unwrap().acceleration = [150.0, 150.0, 150.0];
-        f.pilots.push(p);
+        scene_mut(&mut f).pilots.push(p);
         let turrets = std::collections::HashMap::new();
         assert!(collect(&f, &turrets, 8).len >= 3);
         f.drone_camera = true;

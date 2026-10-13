@@ -369,7 +369,9 @@ The header and window title show the `year.month.day.build` identity stored in
 `python3 tools/build.py -- <cargo command>`. The wrapper uses the America/Chicago
 calendar date, increments the build number for each invocation that can produce
 binaries, and holds a local file lock until Cargo exits. The local macOS package
-scripts also stage the exact binaries and version while that lock is held.
+scripts also stage the exact binaries and version while that lock is held. An
+ignored checkout-local high-watermark prevents reuse after `BUILD_VERSION` is
+reset; malformed identities or a clock earlier than the ledger stop allocation.
 Release archives use the committed version to keep their tag, source commit and
 package metadata aligned. Direct `cargo` commands bypass allocation; separate
 checkouts and hosts do not coordinate. The package includes the original Arkline

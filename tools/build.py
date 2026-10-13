@@ -21,11 +21,11 @@ ROOT = Path(__file__).resolve().parent.parent
 VERSION_RE = re.compile(r"(\d{2})\.(\d{1,2})\.(\d{1,2})\.(\d+)$")
 
 
-def allocate(version_file: Path, lock_file: Path, today: date) -> str:
+def allocate(version_file: Path, lock_file: Path, today: date, ledger_file: Path | None = None) -> str:
     lock_file.parent.mkdir(parents=True, exist_ok=True)
     with lock_file.open("a+") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        return _allocate_locked(version_file, today)
+        return _allocate_locked(version_file, today, ledger_file or version_file.with_name(".build-version.state"))
 
 
 def main() -> int:
@@ -47,12 +47,13 @@ def main() -> int:
     repo_root = args.repo_root.resolve()
     version_file = repo_root / "BUILD_VERSION"
     lock_file = repo_root / ".build-version.lock"
+    ledger_file = repo_root / ".build-version.state"
     lock_file.touch(exist_ok=True)
     with lock_file.open("r+") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         today = datetime.now(ZoneInfo("America/Chicago")).date()
         # Allocate while holding the process-wide lock; keep it through Cargo.
-        version = _allocate_locked(version_file, today)
+        version = _allocate_locked(version_file, today, ledger_file)
         print(f"Arkline build {version}", file=sys.stderr, flush=True)
         result = subprocess.run(["cargo", *command], cwd=repo_root, text=True,
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -90,18 +91,51 @@ def main() -> int:
         return result.returncode
 
 
-def _allocate_locked(version_file: Path, today: date) -> str:
-    previous = version_file.read_text().strip() if version_file.exists() else ""
-    match = VERSION_RE.fullmatch(previous)
-    sequence = 1
-    if match:
-        old_year, old_month, old_day, old_sequence = map(int, match.groups())
-        if (2000 + old_year, old_month, old_day) == (today.year, today.month, today.day):
-            sequence = old_sequence + 1
+def _parse_version(value: str, source: str) -> tuple[date, int]:
+    match = VERSION_RE.fullmatch(value.strip())
+    if not match:
+        raise ValueError(f"Invalid {source} build identity: {value!r}")
+    year, month, day, sequence = map(int, match.groups())
+    try:
+        build_date = date(2000 + year, month, day)
+    except ValueError as error:
+        raise ValueError(f"Invalid {source} build date: {error}") from error
+    if sequence < 1:
+        raise ValueError(f"Invalid {source} build sequence: {sequence}")
+    return build_date, sequence
+
+
+def _write_atomic(path: Path, value: str) -> None:
+    temporary = path.with_name(path.name + f".{os.getpid()}.tmp")
+    temporary.write_text(value + "\n")
+    with temporary.open("rb") as handle:
+        os.fsync(handle.fileno())
+    os.replace(temporary, path)
+    directory_fd = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
+
+
+def _allocate_locked(version_file: Path, today: date, ledger_file: Path) -> str:
+    if not version_file.is_file():
+        raise ValueError(f"Missing BUILD_VERSION file: {version_file}")
+    source_date, source_sequence = _parse_version(version_file.read_text(), "BUILD_VERSION")
+    ledger_date = None
+    ledger_sequence = 0
+    if ledger_file.exists():
+        ledger_date, ledger_sequence = _parse_version(ledger_file.read_text(), "build high-watermark")
+    if source_date > today or (ledger_date is not None and ledger_date > today):
+        raise ValueError("Build date is earlier than the recorded build identity; refusing clock rollback")
+    if ledger_date == today or source_date == today:
+        sequence = max(ledger_sequence if ledger_date == today else 0,
+                       source_sequence if source_date == today else 0) + 1
+    else:
+        sequence = 1
     version = f"{today.year % 100:02}.{today.month}.{today.day}.{sequence}"
-    temporary = version_file.with_name(version_file.name + f".{os.getpid()}.tmp")
-    temporary.write_text(version + "\n")
-    os.replace(temporary, version_file)
+    _write_atomic(ledger_file, version)
+    _write_atomic(version_file, version)
     return version
 
 

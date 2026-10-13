@@ -23,21 +23,56 @@ class BuildVersionTests(unittest.TestCase):
             self.assertEqual(build.allocate(version_file, lock_file, date(2026, 10, 13)), "26.10.13.8")
             self.assertEqual(build.allocate(version_file, lock_file, date(2026, 10, 14)), "26.10.14.1")
 
-    def test_allocates_first_build_of_day_from_invalid_value(self):
+    def test_invalid_source_identity_fails_closed(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             version_file, lock_file = root / "BUILD_VERSION", root / "version.lock"
             version_file.write_text("not-a-version\n")
-            self.assertEqual(build.allocate(version_file, lock_file, date(2026, 10, 13)), "26.10.13.1")
+            with self.assertRaisesRegex(ValueError, "Invalid BUILD_VERSION"):
+                build.allocate(version_file, lock_file, date(2026, 10, 13))
+            self.assertEqual(version_file.read_text(), "not-a-version\n")
+            self.assertFalse((root / ".build-version.state").exists())
 
     def test_parallel_allocations_are_unique(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             version_file, lock_file = root / "BUILD_VERSION", root / "version.lock"
-            version_file.write_text("26.10.13.0\n")
+            version_file.write_text("26.10.13.1\n")
             with ThreadPoolExecutor(max_workers=8) as pool:
                 versions = list(pool.map(lambda _: build.allocate(version_file, lock_file, date(2026, 10, 13)), range(8)))
-            self.assertEqual(sorted(int(v.rsplit(".", 1)[1]) for v in versions), list(range(1, 9)))
+            self.assertEqual(sorted(int(v.rsplit(".", 1)[1]) for v in versions), list(range(2, 10)))
+
+    def test_source_reset_cannot_reuse_high_watermark(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            version_file, lock_file = root / "BUILD_VERSION", root / "version.lock"
+            today = date(2026, 10, 13)
+            version_file.write_text("26.10.13.4\n")
+            self.assertEqual(build.allocate(version_file, lock_file, today), "26.10.13.5")
+            version_file.write_text("26.10.13.2\n")
+            self.assertEqual(build.allocate(version_file, lock_file, today), "26.10.13.6")
+
+    def test_clock_rollback_before_ledger_fails_closed(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            version_file, lock_file = root / "BUILD_VERSION", root / "version.lock"
+            version_file.write_text("26.10.12.4\n")
+            self.assertEqual(build.allocate(version_file, lock_file, date(2026, 10, 13)), "26.10.13.1")
+            version_file.write_text("26.10.12.4\n")
+            with self.assertRaisesRegex(ValueError, "clock rollback"):
+                build.allocate(version_file, lock_file, date(2026, 10, 12))
+            self.assertEqual(version_file.read_text(), "26.10.12.4\n")
+
+    def test_corrupt_ledger_fails_closed(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            version_file, lock_file, ledger_file = root / "BUILD_VERSION", root / "version.lock", root / ".build-version.state"
+            version_file.write_text("26.10.13.4\n")
+            ledger_file.write_text("broken\n")
+            with self.assertRaisesRegex(ValueError, "Invalid build high-watermark"):
+                build.allocate(version_file, lock_file, date(2026, 10, 13))
+            self.assertEqual(version_file.read_text(), "26.10.13.4\n")
+            self.assertEqual(ledger_file.read_text(), "broken\n")
 
     def make_fake_cargo(self, root):
         fake_bin = root / "fake-bin"
@@ -70,7 +105,7 @@ raise SystemExit(int(os.environ.get("FAKE_CARGO_EXIT", "0")))
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             today = datetime.now(ZoneInfo("America/Chicago")).date()
-            root.joinpath("BUILD_VERSION").write_text(f"{today.year % 100:02}.{today.month}.{today.day}.0\n")
+            root.joinpath("BUILD_VERSION").write_text(f"{today.year % 100:02}.{today.month}.{today.day}.1\n")
             fake_bin, executable = self.make_fake_cargo(root)
             receipt, staged = root / "stage" / "BUILD_VERSION", root / "stage" / "editor"
             result = self.run_fake_build(root, fake_bin, executable, receipt, staged)
@@ -78,20 +113,20 @@ raise SystemExit(int(os.environ.get("FAKE_CARGO_EXIT", "0")))
             version = root.joinpath("BUILD_VERSION").read_text().strip()
             self.assertEqual(receipt.read_text().strip(), version)
             self.assertEqual(staged.read_bytes(), executable.read_bytes())
-            self.assertEqual(version, f"{today.year % 100:02}.{today.month}.{today.day}.1")
+            self.assertEqual(version, f"{today.year % 100:02}.{today.month}.{today.day}.2")
 
     def test_failed_wrapper_consumes_version_without_success_receipt(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             today = datetime.now(ZoneInfo("America/Chicago")).date()
-            root.joinpath("BUILD_VERSION").write_text(f"{today.year % 100:02}.{today.month}.{today.day}.0\n")
+            root.joinpath("BUILD_VERSION").write_text(f"{today.year % 100:02}.{today.month}.{today.day}.1\n")
             fake_bin, executable = self.make_fake_cargo(root)
             receipt, staged = root / "stage" / "BUILD_VERSION", root / "stage" / "editor"
             result = self.run_fake_build(root, fake_bin, executable, receipt, staged, exit_code="7")
             self.assertEqual(result.returncode, 7)
             today = datetime.now(ZoneInfo("America/Chicago")).date()
             self.assertEqual(root.joinpath("BUILD_VERSION").read_text().strip(),
-                             f"{today.year % 100:02}.{today.month}.{today.day}.1")
+                             f"{today.year % 100:02}.{today.month}.{today.day}.2")
             self.assertFalse(receipt.exists())
             self.assertFalse(staged.exists())
 

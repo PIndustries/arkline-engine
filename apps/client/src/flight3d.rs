@@ -693,35 +693,37 @@ impl FlightView {
                     ) * view,
                     system_id,
                     ship_class: own_pilot.map_or(ShipClass::Pioneer, |p| p.ship_class),
-                    traffic: snapshot
-                        .traffic
-                        .iter()
-                        .filter(|a| a.system_id == system_id)
-                        .cloned()
-                        .collect(),
-                    surface_props: snapshot
-                        .surface_props
-                        .iter()
-                        .filter(|p| p.system_id == system_id)
-                        .cloned()
-                        .collect(),
                     drone_camera: false,
                     camera_drone: None,
+                    scene: Arc::new(FrameScene {
+                        traffic: snapshot
+                            .traffic
+                            .iter()
+                            .filter(|a| a.system_id == system_id)
+                            .cloned()
+                            .collect(),
+                        surface_props: snapshot
+                            .surface_props
+                            .iter()
+                            .filter(|p| p.system_id == system_id)
+                            .cloned()
+                            .collect(),
+                        asteroids: asteroids.clone(),
+                        gates: local_gates.clone(),
+                        pilots: snapshot
+                            .pilots
+                            .iter()
+                            .filter(|p| p.system_id == system_id && p.location != Location::Docked)
+                            .cloned()
+                            .collect(),
+                    }),
                     space,
                     cockpit,
                     rotation,
-                    asteroids: asteroids.clone(),
-                    gates: local_gates.clone(),
                     connected,
                     vp,
                     eye,
                     now,
-                    pilots: snapshot
-                        .pilots
-                        .iter()
-                        .filter(|p| p.system_id == system_id && p.location != Location::Docked)
-                        .cloned()
-                        .collect(),
                     own: pilot_name.to_string(),
 
                     docking: effects.events.iter().rev().find_map(|event| {
@@ -1558,23 +1560,27 @@ struct Frame {
     planet_vp: Mat4,
     system_id: u32,
     ship_class: ShipClass,
-    traffic: Vec<arkline_protocol::TrafficActor>,
-    surface_props: Vec<arkline_protocol::SurfaceProp>,
     drone_camera: bool,
     camera_drone: Option<u64>,
+    scene: Arc<FrameScene>,
     space: Space,
     cockpit: bool,
     rotation: Quat,
-    asteroids: Vec<Asteroid>,
-    gates: Vec<Stargate>,
     connected: bool,
     vp: Mat4,
     eye: Vec3,
     now: u64,
-    pilots: Vec<PilotView>,
     own: String,
 
     docking: Option<(f32, bool)>,
+}
+#[derive(Clone)]
+struct FrameScene {
+    traffic: Vec<arkline_protocol::TrafficActor>,
+    surface_props: Vec<arkline_protocol::SurfaceProp>,
+    asteroids: Vec<Asteroid>,
+    gates: Vec<Stargate>,
+    pilots: Vec<PilotView>,
 }
 #[derive(Clone, Copy)]
 struct Vertex {
@@ -2329,10 +2335,10 @@ impl Renderer {
         // Main and remote passes may show different systems. Keep recently drawn
         // turret state between passes so neither camera resets the other's slew.
         self.turrets.retain(|(name, _), state| {
-            frame.pilots.iter().any(|p| &p.name == name)
+            frame.scene.pilots.iter().any(|p| &p.name == name)
                 || frame.now.saturating_sub(state.last_ms) < 5000
         });
-        for pilot in &frame.pilots {
+        for pilot in &frame.scene.pilots {
             for module_id in 0..2 {
                 let state = self
                     .turrets
@@ -2361,6 +2367,7 @@ impl Renderer {
                 let desired = target
                     .and_then(|id| {
                         frame
+                            .scene
                             .asteroids
                             .iter()
                             .find(|a| a.id == id && a.system_id == pilot.system_id)
@@ -2455,6 +2462,7 @@ impl Renderer {
             }
         }
         for asteroid in frame
+            .scene
             .asteroids
             .iter()
             .filter(|a| space.scene(a.position).distance(frame.eye) < 1100.0)
@@ -2477,6 +2485,7 @@ impl Renderer {
             );
         }
         for gate in frame
+            .scene
             .gates
             .iter()
             .filter(|g| space.scene(g.position).distance(frame.eye) < 1100.0)
@@ -2491,7 +2500,7 @@ impl Renderer {
                 );
             }
         }
-        for pilot in &frame.pilots {
+        for pilot in &frame.scene.pilots {
             if space.position(pilot, frame.now).distance(frame.eye) > 1100.0 {
                 continue;
             }
@@ -2516,7 +2525,7 @@ impl Renderer {
                 }
             }
         }
-        for pilot in &frame.pilots {
+        for pilot in &frame.scene.pilots {
             for drone in fleet(pilot) {
                 if frame.camera_drone == Some(drone.id) && pilot.name == frame.own {
                     continue;
@@ -2551,7 +2560,7 @@ impl Renderer {
             }
         }
         if frame.connected {
-            for pilot in &frame.pilots {
+            for pilot in &frame.scene.pilots {
                 for drone in fleet(pilot) {
                     if drone.signal_strength <= 0.0
                         || (frame.camera_drone == Some(drone.id) && pilot.name == frame.own)
@@ -2564,6 +2573,7 @@ impl Renderer {
                             if drone.mining_cycle.is_some() =>
                         {
                             frame
+                                .scene
                                 .asteroids
                                 .iter()
                                 .find(|a| a.id == *target_id && a.ore > 0)
@@ -2580,6 +2590,7 @@ impl Renderer {
                             target_pilot,
                             target_drone_id,
                         } if frame.now % 1000 < 250 => frame
+                            .scene
                             .pilots
                             .iter()
                             .find(|p| p.name == *target_pilot)
@@ -2615,7 +2626,7 @@ impl Renderer {
     }
     /// Additive, depth-tested effects do not write depth or obscure UI meshes.
     unsafe fn paint_warp_tunnel(&self, frame: &Frame) {
-        let Some(pilot) = frame.pilots.iter().find(|p| p.name == frame.own) else {
+        let Some(pilot) = frame.scene.pilots.iter().find(|p| p.name == frame.own) else {
             return;
         };
         let Some((phase, progress)) = super::motion::warp_phase(pilot, frame.now) else {
@@ -2772,7 +2783,7 @@ impl Renderer {
         gl.enable(glow::BLEND);
         gl.blend_func_separate(glow::ONE, glow::ONE, glow::ZERO, glow::ONE);
         gl.depth_mask(false);
-        for pilot in &frame.pilots {
+        for pilot in &frame.scene.pilots {
             let ship_position = space.position(pilot, frame.now);
             if ship_position.distance(frame.eye) > 1100.0 {
                 continue;
@@ -2940,7 +2951,7 @@ impl Renderer {
                     else {
                         continue;
                     };
-                    let Some(asteroid) = frame.asteroids.iter().find(|a| {
+                    let Some(asteroid) = frame.scene.asteroids.iter().find(|a| {
                         a.id == cycle.target_id && super::effects::can_extract_target(pilot, a)
                     }) else {
                         continue;
@@ -4800,6 +4811,56 @@ c=mix(c,sky,atmosphere);color=vec4(ark_display(c),1.0);}
 
 #[cfg(test)]
 mod tests {
+    fn frame_for_scene_clone_test() -> Frame {
+        let vp = Mat4::IDENTITY;
+        Frame {
+            lighting_quality: Default::default(),
+            cockpit_vp: vp,
+            snapshot_time: 1000,
+            planet_vp: vp,
+            system_id: 3,
+            ship_class: ShipClass::Pioneer,
+            drone_camera: false,
+            camera_drone: None,
+            scene: Arc::new(FrameScene {
+                traffic: vec![],
+                surface_props: vec![],
+                asteroids: vec![],
+                gates: vec![],
+                pilots: vec![],
+            }),
+            space: Space { origin: [0.; 3] },
+            cockpit: true,
+            rotation: Quat::IDENTITY,
+            connected: true,
+            vp,
+            eye: Vec3::ZERO,
+            now: 1000,
+            own: "fixture".into(),
+            docking: None,
+        }
+    }
+
+    #[test]
+    fn camera_frame_clones_share_scene_and_keep_camera_overrides_local() {
+        let original = frame_for_scene_clone_test();
+        let mut feed = original.clone();
+        assert!(Arc::ptr_eq(&original.scene, &feed.scene));
+
+        feed.drone_camera = true;
+        feed.camera_drone = Some(42);
+        feed.eye = Vec3::X;
+        feed.vp = Mat4::from_translation(Vec3::ONE);
+
+        assert!(!original.drone_camera);
+        assert_eq!(original.camera_drone, None);
+        assert_eq!(original.eye, Vec3::ZERO);
+        assert_eq!(original.vp, Mat4::IDENTITY);
+        assert_eq!(feed.camera_drone, Some(42));
+        assert_eq!(feed.eye, Vec3::X);
+        assert_eq!(feed.vp, Mat4::from_translation(Vec3::ONE));
+    }
+
     #[test]
     fn procedural_pioneer_fallback_keeps_editor_finish_roles() {
         let preview = crate::EmbeddedMaterialPreview {
@@ -5048,20 +5109,22 @@ mod tests {
                 planet_vp: vp,
                 system_id: 3,
                 ship_class: ShipClass::Pioneer,
-                traffic: vec![],
-                surface_props: vec![],
                 drone_camera: true,
                 camera_drone: None,
+                scene: Arc::new(FrameScene {
+                    traffic: vec![],
+                    surface_props: vec![],
+                    asteroids: vec![],
+                    gates: vec![],
+                    pilots: vec![],
+                }),
                 space: Space { origin: [0.; 3] },
                 cockpit: false,
                 rotation: Quat::IDENTITY,
-                asteroids: vec![],
-                gates: vec![],
                 connected: true,
                 vp,
                 eye: Vec3::ZERO,
                 now: 1000,
-                pilots: vec![],
                 own: "fixture".into(),
                 docking: None,
             };
