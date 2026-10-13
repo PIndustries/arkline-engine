@@ -608,11 +608,22 @@ mod tests {
                 ));
             }
         }
-        for label in ["Explore interior", "Leave ship", "Undock", "Room engineering"] {
-            assert!(labels.iter().any(|(text, _)| text == label), "missing {label}");
+        for label in [
+            "Explore interior",
+            "Leave ship",
+            "Undock",
+            "Room engineering",
+        ] {
+            assert!(
+                labels.iter().any(|(text, _)| text == label),
+                "missing {label}"
+            );
         }
         assert!(reserved.bottom() < 650.0);
-        assert!(650.0 - reserved.bottom() < 170.0, "bottom strip grew too tall: {reserved:?}");
+        assert!(
+            650.0 - reserved.bottom() < 170.0,
+            "bottom strip grew too tall: {reserved:?}"
+        );
 
         let point = labels.iter().find(|(text, _)| text == "Undock").unwrap().1;
         for pressed in [true, false] {

@@ -102,8 +102,15 @@ impl eframe::App for Editor {
             self.client.status(),
             EmbeddedStatus::Paused | EmbeddedStatus::Running | EmbeddedStatus::Stopped
         );
-        if !ctx.wants_keyboard_input() && ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::F5)) && ready {
-            if active && self.workspace == 0 && self.inspector_tab != 2 { self.client.pause(); } else { self.play_game(); }
+        if !ctx.wants_keyboard_input()
+            && ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::F5))
+            && ready
+        {
+            if active && self.workspace == 0 && self.inspector_tab != 2 {
+                self.client.pause();
+            } else {
+                self.play_game();
+            }
         }
         egui::TopBottomPanel::top("editor_toolbar")
             .exact_height(58.0)
