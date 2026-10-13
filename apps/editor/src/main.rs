@@ -454,6 +454,94 @@ mod tests {
         );
     }
     #[test]
+    fn editor_controls_remain_reachable_in_final_accessibility_tree() {
+        use std::collections::{HashMap, HashSet};
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let cc = eframe::CreationContext::_new_kittest(ctx.clone());
+        let project = std::env::temp_dir().join(format!(
+            "arkline-editor-accessibility-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&project).unwrap();
+        let mut editor = Editor::new(&cc, project.clone(), "AccessibilityPilot".into());
+        editor.events_open = true;
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while !editor.client.ready() && std::time::Instant::now() < deadline {
+            editor.client.poll();
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            editor.client.ready(),
+            "isolated test authority did not become ready"
+        );
+        for workspace in [0, 2, 0] {
+            editor.workspace = workspace;
+            for _ in 0..3 {
+                let output = ctx.run(
+                    egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(
+                            egui::Pos2::ZERO,
+                            egui::vec2(1500., 960.),
+                        )),
+                        ..Default::default()
+                    },
+                    |ctx| editor.update(ctx, &mut eframe::Frame::_new_kittest()),
+                );
+                let update = output
+                    .platform_output
+                    .accesskit_update
+                    .expect("AccessKit output enabled");
+                let root = update.tree.as_ref().unwrap().root;
+                let nodes: HashMap<_, _> =
+                    update.nodes.iter().map(|(id, node)| (*id, node)).collect();
+                let mut reachable = HashSet::new();
+                let mut stack = vec![root];
+                while let Some(id) = stack.pop() {
+                    if reachable.insert(id) {
+                        if let Some(node) = nodes.get(&id) {
+                            stack.extend(node.children().iter().copied());
+                        }
+                    }
+                }
+                let labels: Vec<_> = update
+                    .nodes
+                    .iter()
+                    .filter_map(|(id, node)| node.label().map(|label| (*id, label.to_owned())))
+                    .collect();
+                let expected: &[&str] = if workspace == 0 {
+                    &[
+                        "▶  Play",
+                        "Ⅱ  Pause",
+                        "Step 50 ms",
+                        "■  Stop",
+                        "Validate draft",
+                        "Save draft",
+                        "Apply to runtime",
+                        "Step one node",
+                    ]
+                } else {
+                    &["▶  Play", "Ⅱ  Pause", "Step 50 ms", "■  Stop"]
+                };
+                for label in expected {
+                    assert!(
+                        labels
+                            .iter()
+                            .any(|(id, text)| text == label && reachable.contains(id)),
+                        "workspace {workspace}: missing reachable {label:?}; labels={labels:?}"
+                    );
+                }
+            }
+        }
+        editor.client.on_exit();
+        drop(editor);
+        let _ = std::fs::remove_dir_all(project);
+    }
+    #[test]
     fn toolbar_controls_are_visible_above_the_game_viewport() {
         let ctx = egui::Context::default();
         let cc = eframe::CreationContext::_new_kittest(ctx.clone());

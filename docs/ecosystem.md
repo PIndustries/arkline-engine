@@ -62,6 +62,8 @@ new engine primitives still need reviewed Rust changes. The server remains the
 authority for permissions, conservation and device interlocks. A graph trace is
 not yet a recording of every internal subsystem or a replayable universe history.
 
+The project's **Focus** field separates Now, Next, Later and Delivered. **Status** tracks active work: Todo includes implementation or acceptance waiting for its next pass; In Progress identifies active work. A merged PR can be Done while its broader issue stays open. Delivered records historical scoped completion, not a fresh service availability check. Issue bodies retain published results, integration-only work and unresolved acceptance separately.
+
 The larger ecosystem journeys below remain future work. Local authoring and
 stability take priority over expanding hosting, governance or reward systems.
 
