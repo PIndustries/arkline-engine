@@ -10,6 +10,7 @@ pub struct Engineering {
     saved: EngineeringDocument,
     selected: Option<u64>,
     message: String,
+    viewport: crate::component_view::ComponentView,
 }
 impl Engineering {
     pub fn open(project: &Path) -> Self {
@@ -26,12 +27,45 @@ impl Engineering {
             draft: document.clone(),
             saved: document,
             selected: None,
+            viewport: Default::default(),
             message,
         }
     }
     pub fn selected_component(&self) -> Option<u64> {
         self.selected
             .filter(|id| self.draft.components.iter().any(|c| c.id == *id))
+    }
+    pub fn outliner(&mut self, ui: &mut egui::Ui) -> bool {
+        let mut picked = false;
+        ui.collapsing("Pioneer design components", |ui| {
+            ui.small("Candidate design · separate from live equipment");
+            if self.draft.components.is_empty() {
+                ui.label("Add a component in Engineering to begin.");
+            }
+            for component in &self.draft.components {
+                if ui
+                    .selectable_label(
+                        self.selected_component() == Some(component.id),
+                        format!("#{} {}", component.id, component.name),
+                    )
+                    .clicked()
+                {
+                    self.selected = Some(component.id);
+                    picked = true;
+                }
+            }
+        });
+        picked
+    }
+    pub fn viewport(&mut self, ui: &mut egui::Ui) {
+        self.selected = self.selected_component();
+        if let Err(error) = self.draft.validate() {
+            ui.colored_label(egui::Color32::LIGHT_RED, error);
+            ui.label("Correct the candidate properties before previewing geometry.");
+            return;
+        }
+        self.viewport
+            .show(ui, &self.draft.components, &mut self.selected);
     }
     pub fn show(&mut self, ui: &mut egui::Ui, project: &Path) {
         ui.heading("Pioneer engineering");

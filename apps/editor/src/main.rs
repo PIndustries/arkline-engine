@@ -1,6 +1,7 @@
 //! One-window local development workspace using the real game client and authority.
 mod asset_document;
 mod community;
+mod component_view;
 mod engineering;
 mod engineering_document;
 mod event_graph;
@@ -277,6 +278,7 @@ impl eframe::App for Editor {
                         if world.asteroids.len()>24 { ui.small("First 24 shown. The in-game overview lists local targets."); }
                     });
                 } else { ui.label("Waiting for the local authority…"); }
+                if self.engineering.outliner(ui) { self.inspector_tab = 2; }
                 ui.add_space(16.); ui.separator(); ui.label(RichText::new("WORKSPACE").color(GREEN).small());
                 ui.label("Game viewport"); ui.label("Live systems inspector");
                 ui.add_space(8.); ui.small("The game runs inside this window. Editor controls remain outside the viewport.");
@@ -337,7 +339,14 @@ impl eframe::App for Editor {
         // The real client owns the remaining central viewport and its normal controls.
         self.client.set_debug_wireframe(self.wireframe);
         self.client.set_material_preview(self.materials.preview());
-        self.client.update(ctx, frame);
+        if self.inspector_tab == 2 {
+            self.client.poll_hidden();
+            egui::CentralPanel::default().show(ctx, |ui| {
+                self.engineering.viewport(ui);
+            });
+        } else {
+            self.client.update(ctx, frame);
+        }
         ctx.request_repaint_after(Duration::from_millis(if active { 16 } else { 50 }));
     }
     fn on_exit(&mut self, _: Option<&eframe::glow::Context>) {

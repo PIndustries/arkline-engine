@@ -89,3 +89,10 @@ Acceptance: execute the real transition matrix on a stated local fixture; verify
 ### Shared material slice acceptance boundary
 
 The 26.10.12.4 source extends the common finish to matching hull/trim surfaces in the hangar, undocked 3D rendering and camera-feed rendering. The schematic 2D view is not a PBR surface preview. Roughness/metallic alter the existing shader response; no new meshes, textures or physical vessel simulation are implied. Native GPU readback verifies two gallery Pioneer instances change/reset, while all-class geometry parity is unit-tested. Native checks confirmed the saved finish on both gallery Pioneers and an undocked exterior, immediate Inspection finish while Play advanced time, and undo back to the saved document. Native 26.10.12.5 checks verified the repaired gallery controls and all seven classes, plus Industrial satin on both Prospector instances and undo to the saved state. Native camera-feed propagation remains pending. General editable material graphs, mesh generation and physically validated engineering are still separate roadmap work.
+
+
+### Connected candidate component selection
+
+The Engineering tab uses a dedicated 3D candidate-design view. Select a component in the Pioneer design outliner or the view to inspect the same stable component ID in the Engineering panel. Position and extent edits update the design preview; undo/redo and saved engineering documents retain their existing behavior. The local simulation can continue independently while this authoring view is open.
+
+These boxes visualize the supplied engineering document. They are not imported hull triangles, commissioned room devices, collision geometry or authoritative physics. An empty document remains empty until a contributor adds components. Live-equipment selection and event-node bindings still require explicit integration with the equipment catalog.
