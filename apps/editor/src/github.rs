@@ -2,8 +2,6 @@
 use serde_json::Value;
 use std::{
     io::Read,
-    path::PathBuf,
-    process::{Command, Stdio},
     sync::{
         atomic::{AtomicBool, Ordering},
         mpsc, Arc,
@@ -400,154 +398,129 @@ fn retain_failed_sections(state: &mut WorkspaceState, previous: Option<&Workspac
         state.wiki = previous.wiki.clone();
     }
 }
-/// Both output size and total process lifetime are bounded, including a stalled pipe.
-fn bounded(
-    command: &mut Command,
-    cancel: &AtomicBool,
-    timeout: Duration,
-    limit: usize,
-) -> Result<Vec<u8>, String> {
-    command
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null());
-    let mut child = command
-        .spawn()
-        .map_err(|_| "Git executable could not start for the public wiki.".to_string())?;
-    let stdout = child.stdout.take().unwrap();
-    let (tx, rx) = mpsc::channel();
-    std::thread::spawn(move || {
-        let mut bytes = Vec::new();
-        let result = stdout
-            .take(limit as u64 + 1)
-            .read_to_end(&mut bytes)
-            .map(|_| bytes);
-        let _ = tx.send(result);
-    });
-    let deadline = Instant::now() + timeout;
-    let mut output = None;
-    loop {
-        if cancel.load(Ordering::Relaxed) || Instant::now() >= deadline {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(if cancel.load(Ordering::Relaxed) {
-                "Request cancelled."
-            } else {
-                "GitHub operation timed out; refresh to retry."
-            }
-            .into());
-        }
-        if output.is_none() {
-            match rx.try_recv() {
-                Ok(Ok(bytes)) if bytes.len() <= limit => output = Some(bytes),
-                Ok(_) | Err(mpsc::TryRecvError::Disconnected) => {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    return Err(
-                        "GitHub response exceeded its safe limit or could not be read.".into(),
-                    );
-                }
-                Err(mpsc::TryRecvError::Empty) => {}
-            }
-        }
-        match child.try_wait() {
-            Ok(Some(status)) if !status.success() => {
-                return Err(
-                    "Public wiki request failed. Check repository access or connectivity.".into(),
-                )
-            }
-            Ok(Some(_)) if output.is_some() => return Ok(output.unwrap()),
-            Err(_) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err("GitHub process could not be monitored.".into());
-            }
-            _ => {}
-        }
-        std::thread::sleep(Duration::from_millis(10));
-    }
-}
-struct TemporaryWiki(PathBuf);
-impl Drop for TemporaryWiki {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
-fn wiki(cancel: &AtomicBool) -> Result<Vec<WikiPage>, String> {
-    let deadline = Instant::now() + COMMAND_TIMEOUT;
-    let stamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_err(|_| "System clock unavailable")?
-        .as_nanos();
-    let temporary = TemporaryWiki(std::env::temp_dir().join(format!(
-        "arkline-editor-wiki-{}-{stamp}",
-        std::process::id()
-    )));
-    std::fs::create_dir(&temporary.0).map_err(|_| "Cannot create temporary wiki directory")?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&temporary.0, std::fs::Permissions::from_mode(0o700))
-            .map_err(|_| "Cannot protect temporary wiki directory")?;
-    }
-    let git = || {
-        let mut c = Command::new("git");
-        c.env("GIT_TERMINAL_PROMPT", "0")
-            .arg("-c")
-            .arg("credential.helper=")
-            .arg("-c")
-            .arg("core.hooksPath=/dev/null");
-        c
+// Bounds apply before public wiki content is retained in memory.
+const WIKI_PAGE_LIMIT: usize = 256 * 1024;
+const WIKI_PAGE_COUNT: usize = 80;
+const WIKI_RAW_ROOT: &str = "https://raw.githubusercontent.com/wiki/PIndustries/arkline-engine/";
+/// Only flat official-wiki page names, never arbitrary URLs, query strings or paths.
+fn wiki_slug(link: &str) -> Option<String> {
+    let path = link.trim().split('#').next()?;
+    let path = if path.starts_with("https://") {
+        path.strip_prefix("https://github.com/PIndustries/arkline-engine/wiki/")?
+    } else {
+        path.strip_prefix("./").unwrap_or(path)
     };
-    bounded(
-        git()
-            .args([
-                "clone",
-                "--depth=1",
-                "--no-checkout",
-                "--quiet",
-                "https://github.com/PIndustries/arkline-engine.wiki.git",
-            ])
-            .arg(&temporary.0),
-        cancel,
-        deadline.saturating_duration_since(Instant::now()),
-        OUTPUT_LIMIT,
-    )?;
-    let paths = bounded(
-        git()
-            .arg("-C")
-            .arg(&temporary.0)
-            .args(["ls-tree", "-r", "--name-only", "HEAD"]),
-        cancel,
-        deadline.saturating_duration_since(Instant::now()),
-        OUTPUT_LIMIT,
-    )?;
-    let paths = String::from_utf8(paths).map_err(|_| "Wiki contains unsupported paths")?;
-    let mut pages = Vec::new();
-    let mut total = 0;
-    for path in paths.lines().filter(|p| p.ends_with(".md")).take(80) {
-        let body = bounded(
-            git()
-                .arg("-C")
-                .arg(&temporary.0)
-                .args(["show", &format!("HEAD:{path}")]),
-            cancel,
-            deadline.saturating_duration_since(Instant::now()),
-            256 * 1024,
-        )?;
-        total += body.len();
-        if total > OUTPUT_LIMIT {
+    let mut decoded = Vec::new();
+    let mut bytes = path.bytes();
+    while let Some(byte) = bytes.next() {
+        if byte == b'%' {
+            let hi = (bytes.next()? as char).to_digit(16)?;
+            let lo = (bytes.next()? as char).to_digit(16)?;
+            decoded.push((hi * 16 + lo) as u8);
+        } else {
+            decoded.push(byte);
+        }
+    }
+    let decoded = String::from_utf8(decoded).ok()?;
+    let path = decoded.strip_suffix(".md").unwrap_or(&decoded);
+    if path.is_empty()
+        || path.len() > 160
+        || path == "."
+        || path == ".."
+        || !path
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"-_ .".contains(&b))
+    {
+        return None;
+    }
+    Some(path.replace(' ', "-"))
+}
+fn wiki_links(body: &str) -> Vec<String> {
+    let mut links = std::collections::BTreeSet::new();
+    for tail in body.split("](").skip(1) {
+        if let Some((link, _)) = tail.split_once(')') {
+            if let Some(slug) = wiki_slug(link) {
+                links.insert(slug);
+            }
+        }
+        if links.len() >= WIKI_PAGE_COUNT {
             break;
         }
-        let title = path.trim_end_matches(".md").to_owned();
+    }
+    // GitHub's alternative [[Page]] and [[Label|Page]] wiki links.
+    for tail in body.split("[[").skip(1) {
+        if let Some((link, _)) = tail.split_once("]]") {
+            if let Some(slug) = wiki_slug(link.rsplit('|').next().unwrap_or(link)) {
+                links.insert(slug);
+            }
+        }
+        if links.len() >= WIKI_PAGE_COUNT {
+            break;
+        }
+    }
+    links.into_iter().take(WIKI_PAGE_COUNT).collect()
+}
+fn wiki_body(reader: impl Read, remaining: usize, cancel: &AtomicBool) -> Result<String, String> {
+    let limit = remaining.min(WIKI_PAGE_LIMIT);
+    let mut bytes = Vec::new();
+    let mut reader = reader.take(limit as u64 + 1);
+    let mut chunk = [0; 8192];
+    loop {
+        if cancel.load(Ordering::Relaxed) {
+            return Err("Request cancelled.".into());
+        }
+        let count = reader
+            .read(&mut chunk)
+            .map_err(|_| "Wiki response could not be read before its deadline")?;
+        if count == 0 {
+            break;
+        }
+        bytes.extend_from_slice(&chunk[..count]);
+        if bytes.len() > limit {
+            return Err("Wiki page or total content exceeded its safe limit.".into());
+        }
+    }
+    String::from_utf8(bytes).map_err(|_| "Wiki page is not UTF-8".into())
+}
+/// Bounded linked-page traversal. No repository clone, files, credentials or images.
+/// Pages absent from Home/sidebar/footer and their links are intentionally not indexed.
+fn collect_wiki(
+    cancel: &AtomicBool,
+    mut fetch: impl FnMut(&str, usize) -> Result<Option<String>, String>,
+) -> Result<Vec<WikiPage>, String> {
+    let mut queue =
+        std::collections::VecDeque::from(["Home".to_owned(), "_Sidebar".into(), "_Footer".into()]);
+    let mut seen =
+        std::collections::BTreeSet::from(["Home".to_owned(), "_Sidebar".into(), "_Footer".into()]);
+    let mut pages = Vec::new();
+    let mut total = 0;
+    while let Some(title) = queue.pop_front() {
+        if cancel.load(Ordering::Relaxed) {
+            return Err("Request cancelled.".into());
+        }
+        let Some(body) = fetch(&title, OUTPUT_LIMIT - total)? else {
+            continue;
+        };
+        if body.len() > WIKI_PAGE_LIMIT || body.len() > OUTPUT_LIMIT - total {
+            return Err("Wiki content exceeded its safe limit.".into());
+        }
+        total += body.len();
+        for link in wiki_links(&body) {
+            if seen.len() >= WIKI_PAGE_COUNT {
+                break;
+            }
+            if seen.insert(link.clone()) {
+                queue.push_back(link);
+            }
+        }
         pages.push(WikiPage {
-            url: format!(
-                "https://github.com/{OFFICIAL_REPOSITORY}/wiki/{}",
-                title.replace(' ', "%20")
-            ),
+            url: format!("https://github.com/{OFFICIAL_REPOSITORY}/wiki/{title}"),
             title,
-            body: String::from_utf8(body).map_err(|_| "Wiki page is not UTF-8")?,
+            body,
         });
+    }
+    if !pages.iter().any(|p| p.title == "Home") {
+        return Err("Official wiki Home page unavailable.".into());
     }
     pages.sort_by(|a, b| {
         (a.title != "Home")
@@ -556,9 +529,104 @@ fn wiki(cancel: &AtomicBool) -> Result<Vec<WikiPage>, String> {
     });
     Ok(pages)
 }
+fn wiki(cancel: &AtomicBool) -> Result<Vec<WikiPage>, String> {
+    let deadline = Instant::now() + COMMAND_TIMEOUT;
+    let client = api_client()?;
+    collect_wiki(cancel, |slug, remaining| {
+        let timeout = deadline.saturating_duration_since(Instant::now());
+        if timeout.is_zero() {
+            return Err("Wiki retrieval timed out; refresh to retry.".into());
+        }
+        // A separate anonymous client: access tokens are never passed to raw content.
+        let response = client
+            .get(format!("{WIKI_RAW_ROOT}{slug}.md"))
+            .timeout(timeout)
+            .send()
+            .map_err(|_| "Public wiki connection failed or timed out".to_string())?;
+        if response.status().as_u16() == 404 {
+            return Ok(None);
+        }
+        if !response.status().is_success() {
+            return Err(format!(
+                "Public wiki returned HTTP {}",
+                response.status().as_u16()
+            ));
+        }
+        wiki_body(response, remaining, cancel).map(Some)
+    })
+}
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn wiki_links_are_same_repository_flat_decoded_and_bounded() {
+        for valid in [
+            "Ship Design",
+            "Ship%20Design.md#rooms",
+            "./Ship-Design",
+            "https://github.com/PIndustries/arkline-engine/wiki/Ship-Design#rooms",
+        ] {
+            assert_eq!(wiki_slug(valid).as_deref(), Some("Ship-Design"));
+        }
+        for bad in [
+            "../secret",
+            "%2e%2e",
+            "%2e%2e%2fsecret",
+            "Page%2fOther",
+            "https://evil.test/Home",
+            "https://github.com/Other/repo/wiki/Home",
+            "//evil/Home",
+            "Page?token=anything",
+            "%ZZ",
+            "Page%00",
+            "#only",
+        ] {
+            assert!(wiki_slug(bad).is_none(), "{bad}");
+        }
+        assert_eq!(
+            wiki_links("[A](./Home.md#x) [[Label|Ship Design]] [bad](https://evil.test/)"),
+            vec!["Home", "Ship-Design"]
+        );
+        let many = (0..500)
+            .map(|n| format!("[Page](Page-{n})"))
+            .collect::<String>();
+        assert_eq!(wiki_links(&many).len(), WIKI_PAGE_COUNT);
+    }
+    #[test]
+    fn wiki_content_limits_cancellation_and_discovery_never_require_disk() {
+        let cancel = AtomicBool::new(false);
+        assert_eq!(wiki_body(&b"body"[..], 4, &cancel).unwrap(), "body");
+        assert!(wiki_body(&b"large"[..], 4, &cancel).is_err());
+        assert!(wiki_body(
+            vec![b'a'; WIKI_PAGE_LIMIT + 1].as_slice(),
+            OUTPUT_LIMIT,
+            &cancel
+        )
+        .is_err());
+        let mut requests = 0;
+        let pages = collect_wiki(&cancel, |title, _| {
+            requests += 1;
+            Ok(Some(if title == "Home" {
+                (0..200).map(|n| format!("[Page](Page-{n})")).collect()
+            } else {
+                "[Home](Home)".into()
+            }))
+        })
+        .unwrap();
+        assert_eq!(requests, WIKI_PAGE_COUNT);
+        assert_eq!(pages.len(), WIKI_PAGE_COUNT);
+        assert_eq!(pages[0].title, "Home");
+        let oversized = collect_wiki(&cancel, |title, _| {
+            Ok(Some(format!(
+                "[next]({title}x){}",
+                "a".repeat(WIKI_PAGE_LIMIT - 180)
+            )))
+        });
+        assert!(oversized.is_err());
+        cancel.store(true, Ordering::Relaxed);
+        assert!(wiki_body(&b"body"[..], OUTPUT_LIMIT, &cancel).is_err());
+        assert!(collect_wiki(&cancel, |_, _| panic!("cancelled request must not fetch")).is_err());
+    }
     #[test]
     fn response_bounds_errors_and_cancellation_never_echo_body() {
         let cancel = AtomicBool::new(false);
@@ -719,35 +787,6 @@ mod tests {
         };
         retain_failed_sections(&mut same, Some(&previous));
         assert_eq!(same.projects[0].title, "Private project");
-    }
-    #[cfg(unix)]
-    #[test]
-    fn process_timeout_output_limit_and_cancellation_are_bounded() {
-        let cancel = AtomicBool::new(false);
-        let start = Instant::now();
-        assert!(bounded(
-            Command::new("/bin/sleep").arg("2"),
-            &cancel,
-            Duration::from_millis(40),
-            64
-        )
-        .is_err());
-        assert!(start.elapsed() < Duration::from_secs(1));
-        assert!(bounded(
-            &mut Command::new("/usr/bin/yes"),
-            &cancel,
-            Duration::from_secs(2),
-            64
-        )
-        .is_err());
-        cancel.store(true, Ordering::Relaxed);
-        assert!(bounded(
-            Command::new("/bin/sleep").arg("2"),
-            &cancel,
-            Duration::from_secs(2),
-            64
-        )
-        .is_err());
     }
     #[test]
     #[ignore = "explicit live anonymous read-only GitHub API acceptance"]
