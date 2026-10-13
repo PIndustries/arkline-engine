@@ -1,4 +1,5 @@
 /target/
+/.build-version.lock
 /data/
 *.sqlite
 *.sqlite-shm

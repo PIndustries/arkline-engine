@@ -4372,6 +4372,18 @@ fn pioneer_construction_model() -> Vec<ModelPart> {
     for (_, m, _, _) in &mut p.0 {
         *m = fit * *m;
     }
+    // Keep the emergency procedural model on the same editor finish path as
+    // the authored GLB. The normal model receives these tags while importing
+    // its named material roles; this fallback has no named materials.
+    for (mesh, _, color, emission) in &mut p.0 {
+        if *emission > 0.0 {
+            *mesh |= EMISSION_ROLE;
+        } else if *color == dark || *color == steel {
+            *mesh |= HULL_ROLE;
+        } else if *color == trim || *color == green {
+            *mesh |= TRIM_ROLE;
+        }
+    }
     p.0
 }
 fn parts_bounds(parts: &[(usize, Mat4, Vec3, f32)]) -> (Vec3, Vec3) {
@@ -4788,6 +4800,32 @@ c=mix(c,sky,atmosphere);color=vec4(ark_display(c),1.0);}
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn procedural_pioneer_fallback_keeps_editor_finish_roles() {
+        let preview = crate::EmbeddedMaterialPreview {
+            hull_rgb: [0.8, 0.1, 0.2],
+            trim_rgb: [0.2, 0.1, 0.8],
+            emissive_strength: 2.0,
+            ..Default::default()
+        };
+        let parts = pioneer_construction_model();
+        assert!(parts.iter().any(|p| paint_role(p.0) == HULL_ROLE));
+        assert!(parts.iter().any(|p| paint_role(p.0) == TRIM_ROLE));
+        assert!(parts.iter().any(|p| p.0 & !0x00ff_ffff == EMISSION_ROLE));
+        for &(mesh, _, color, emission) in &parts {
+            let (edited_color, edited_emission) =
+                preview_material(mesh, color, emission, Some(preview));
+            match paint_role(mesh) {
+                HULL_ROLE => assert_eq!(edited_color, Vec3::from_array(preview.hull_rgb)),
+                TRIM_ROLE => assert_eq!(edited_color, Vec3::from_array(preview.trim_rgb)),
+                _ => assert_eq!(edited_color, color),
+            }
+            if emission > 0.0 {
+                assert_eq!(edited_emission, emission * preview.emissive_strength);
+            }
+        }
+    }
+
     #[test]
     fn fleet_preview_roles_change_finish_not_geometry_or_station() {
         let preview = crate::EmbeddedMaterialPreview {

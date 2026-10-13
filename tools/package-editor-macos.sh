@@ -25,7 +25,16 @@ fi
 for FILE in BUILD_VERSION LICENSE assets/Arkline.icns; do
   [ -f "$ROOT/$FILE" ] || { echo "Missing package input: $FILE" >&2; exit 2; }
 done
-BUILD_VERSION="$(cat "$ROOT/BUILD_VERSION")"
+STAGING="$(mktemp -d "$OUTPUT/.arkline-editor-package.XXXXXX")"
+trap 'rm -rf "$STAGING"' EXIT
+cd "$ROOT"
+BUILD_ARGS=(build -p arkline-editor --locked --message-format=json-render-diagnostics)
+if [ "$PROFILE" = release ]; then BUILD_ARGS+=(--release); fi
+CARGO_INCREMENTAL="${CARGO_INCREMENTAL:-0}" python3 "$ROOT/tools/build.py" \
+  --artifact-copy "$STAGING/arkline-editor" \
+  --version-output "$STAGING/BUILD_VERSION" \
+  -- "${BUILD_ARGS[@]}" > "$STAGING/cargo-artifacts.jsonl"
+BUILD_VERSION="$(cat "$STAGING/BUILD_VERSION")"
 BUILD_NUMBER="$(python3 - "$BUILD_VERSION" <<'PY'
 import datetime, re, sys
 value = sys.argv[1]
@@ -41,38 +50,12 @@ except ValueError as error:
 print(f'{date:%Y%m%d}.{sequence}')
 PY
 )"
-STAGING="$(mktemp -d "$OUTPUT/.arkline-editor-package.XXXXXX")"
-trap 'rm -rf "$STAGING"' EXIT
-cd "$ROOT"
-# Metadata resolves absolute, relative and configured target directories.
-TARGET_DIRECTORY="$(cargo metadata --format-version 1 --no-deps --locked | python3 -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])')"
-BUILD_ARGS=(build -p arkline-editor --locked --message-format=json-render-diagnostics)
-if [ "$PROFILE" = release ]; then BUILD_ARGS+=(--release); fi
-CARGO_INCREMENTAL="${CARGO_INCREMENTAL:-0}" cargo "${BUILD_ARGS[@]}" > "$STAGING/cargo-artifacts.jsonl"
-# Use Cargo's exact executable path, including any configured target triple.
-BINARY="$(python3 - "$STAGING/cargo-artifacts.jsonl" "$TARGET_DIRECTORY" <<'PY'
-import json, pathlib, sys
-artifacts = []
-for line in pathlib.Path(sys.argv[1]).read_text().splitlines():
-    event = json.loads(line)
-    if event.get('reason') == 'compiler-artifact' and event.get('target', {}).get('name') == 'arkline-editor' and 'bin' in event.get('target', {}).get('kind', []) and event.get('executable'):
-        artifacts.append(pathlib.Path(event['executable']).resolve())
-if len(artifacts) != 1:
-    sys.exit('Expected exactly one editor executable from Cargo')
-try:
-    artifacts[0].relative_to(pathlib.Path(sys.argv[2]).resolve())
-except ValueError:
-    sys.exit('Editor executable is outside Cargo target_directory')
-if not artifacts[0].is_file():
-    sys.exit('Cargo editor executable is missing')
-print(artifacts[0])
-PY
-)"
+BINARY="$STAGING/arkline-editor"
 BUNDLE="$STAGING/Arkline Editor.app"
 mkdir -p "$BUNDLE/Contents/MacOS" "$BUNDLE/Contents/Resources"
 cp "$BINARY" "$BUNDLE/Contents/MacOS/arkline-editor"
 chmod 755 "$BUNDLE/Contents/MacOS/arkline-editor"
-cp "$ROOT/assets/Arkline.icns" "$ROOT/LICENSE" "$ROOT/BUILD_VERSION" "$BUNDLE/Contents/Resources/"
+cp "$ROOT/assets/Arkline.icns" "$ROOT/LICENSE" "$STAGING/BUILD_VERSION" "$BUNDLE/Contents/Resources/"
 if [ -f "$ROOT/TRADEMARKS.md" ]; then cp "$ROOT/TRADEMARKS.md" "$BUNDLE/Contents/Resources/"; fi
 if [ -d "$ROOT/ThirdParty" ]; then cp -R "$ROOT/ThirdParty" "$BUNDLE/Contents/Resources/ThirdParty"; fi
 python3 - "$BUNDLE/Contents/Info.plist" "$BUILD_VERSION" "$BUILD_NUMBER" <<'PY'

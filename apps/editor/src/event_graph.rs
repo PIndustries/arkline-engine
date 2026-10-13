@@ -168,6 +168,7 @@ impl EventGraphPanel {
                         );
                         self.saved = Some(graph.clone());
                         self.draft = graph;
+                        self.reset_history();
                         self.status = "Saved draft reloaded; runtime unchanged.".into();
                     }
                     Err(e) => self.status = e,
@@ -233,6 +234,7 @@ impl EventGraphPanel {
                 );
                 self.revision = Some(state.debug.revision);
                 self.selected = None;
+                self.reset_history();
                 self.status = "Runtime graph copied into draft. Saved file is unchanged.".into();
             }
             ui.label(format!(
@@ -416,6 +418,11 @@ impl EventGraphPanel {
                 }
             }
         }
+    }
+    fn reset_history(&mut self) {
+        self.undo.clear();
+        self.redo.clear();
+        self.gesture = None;
     }
     fn queued(&mut self, result: Result<u64, String>) {
         match result {
@@ -832,6 +839,22 @@ mod tests {
             panel.record_edit(before, false);
         }
         assert_eq!(panel.undo.len(), 64);
+    }
+    #[test]
+    fn replacing_draft_source_clears_stale_undo_redo_and_drag_state() {
+        let mut panel = EventGraphPanel::open(Path::new("/nonexistent-event-test"));
+        let prior = panel.draft.clone();
+        panel.draft.nodes[0].label = "Local edit".into();
+        push_history(&mut panel.undo, prior);
+        panel.redo.push(example());
+        panel.gesture = Some(example());
+
+        panel.draft = example();
+        panel.reset_history();
+
+        assert!(panel.undo.is_empty());
+        assert!(panel.redo.is_empty());
+        assert!(panel.gesture.is_none());
     }
     #[cfg(unix)]
     #[test]
