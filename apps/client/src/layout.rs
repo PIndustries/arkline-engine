@@ -6,6 +6,33 @@ use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
 };
+/// Edge-relative HUD placement shared with local authored panels.
+/// Inputs are validated by the owning document before use.
+pub fn panel_geometry(
+    bounds: Rect,
+    anchor: [f32; 2],
+    offset: Vec2,
+    size: Vec2,
+    actual: Vec2,
+) -> (Pos2, Vec2) {
+    let size = size
+        .min(bounds.size() - Vec2::splat(30.0))
+        .max(Vec2::splat(1.0));
+    let actual = actual.min(bounds.size());
+    let origin = bounds.min + Vec2::new(bounds.width() * anchor[0], bounds.height() * anchor[1]);
+    let pos = origin + offset - Vec2::new(actual.x * anchor[0], actual.y * anchor[1]);
+    (
+        Pos2::new(
+            pos.x.clamp(
+                bounds.left(),
+                (bounds.right() - actual.x).max(bounds.left()),
+            ),
+            pos.y
+                .clamp(bounds.top(), (bounds.bottom() - actual.y).max(bounds.top())),
+        ),
+        size,
+    )
+}
 #[derive(Clone, Debug)]
 struct Placement {
     anchor: [f32; 2],
@@ -105,25 +132,7 @@ impl Layout {
             touched: false,
             expected: None,
         });
-        let size = p
-            .size
-            .min(bounds.size() - Vec2::splat(30.0))
-            .max(Vec2::splat(1.0));
-        let actual = p.actual.min(bounds.size());
-        let origin =
-            bounds.min + Vec2::new(bounds.width() * p.anchor[0], bounds.height() * p.anchor[1]);
-        let pos = origin + p.offset - Vec2::new(actual.x * p.anchor[0], actual.y * p.anchor[1]);
-        let result = (
-            Pos2::new(
-                pos.x.clamp(
-                    bounds.left(),
-                    (bounds.right() - actual.x).max(bounds.left()),
-                ),
-                pos.y
-                    .clamp(bounds.top(), (bounds.bottom() - actual.y).max(bounds.top())),
-            ),
-            size,
-        );
+        let result = panel_geometry(bounds, p.anchor, p.offset, p.size, p.actual);
         p.expected = Some(result.0);
         result
     }

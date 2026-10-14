@@ -22,6 +22,7 @@ mod browser;
 mod effects;
 mod flight3d;
 mod layout;
+pub use layout::panel_geometry as cockpit_panel_geometry;
 mod lighting_settings;
 mod motion;
 mod pilot_input;
