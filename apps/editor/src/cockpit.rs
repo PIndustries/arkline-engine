@@ -97,6 +97,15 @@ impl Live {
         Ok(room)
     }
     fn current_vessel(&self) -> Option<&str> {
+        let pilot = self
+            .snapshot
+            .as_ref()?
+            .pilots
+            .iter()
+            .find(|p| p.name == self.pilot)?;
+        if pilot.ship_class != ShipClass::Pioneer {
+            return None;
+        }
         self.assets
             .as_ref()?
             .pioneer_room
@@ -345,8 +354,22 @@ impl CockpitPanel {
             self.fresh_at = Instant::now();
         }
         if self.selected_vessel.is_empty() {
-            if let Some((id, _)) = live.ships().first() {
-                self.select_ship(id);
+            let initial = live
+                .current_vessel()
+                .map(str::to_owned)
+                .or_else(|| {
+                    live.assets
+                        .as_ref()?
+                        .hangar
+                        .as_ref()?
+                        .berths
+                        .iter()
+                        .find(|berth| berth.active)
+                        .map(|berth| berth.id.clone())
+                })
+                .or_else(|| live.ships().first().map(|(id, _)| id.clone()));
+            if let Some(id) = initial {
+                self.select_ship(&id);
             }
         }
         if let Some(pending) = &mut self.pending_command {
@@ -748,7 +771,7 @@ impl CockpitPanel {
                 ui.colored_label(Color32::YELLOW, e);
             }
             Ok(room) => {
-                ui.label(format!("Measurement: {} ms", room.updated_at_ms));
+                ui.label(format!("Measurement: {} simulation ms", room.updated_at_ms));
                 if !live.running {
                     ui.small(
                         "Captured while simulation is paused/stopped; no elapsed-time prediction.",
@@ -773,7 +796,7 @@ impl CockpitPanel {
                     }
                 }
                 ui.label(format!(
-                    "Interlock: {}",
+                    "Room interlock: {}",
                     room.interlock.as_deref().unwrap_or("None reported")
                 ));
             }

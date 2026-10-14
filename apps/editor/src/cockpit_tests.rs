@@ -706,3 +706,125 @@ fn closing_an_old_project_cannot_deliver_its_save_into_a_new_project() {
     assert_eq!(document::load(&new.0).unwrap(), Some(different));
     assert_eq!(document::load(&old.0).unwrap(), Some(assigned()));
 }
+
+#[test]
+fn preview_drag_and_flight_keys_do_not_operate_the_live_ship() {
+    use eframe::App;
+    let project = Project::new();
+    let ctx = egui::Context::default();
+    let cc = eframe::CreationContext::_new_kittest(ctx.clone());
+    let mut editor = crate::Editor::new(&cc, project.0.clone(), "CockpitInputIsolation".into());
+    editor.workspace = 4;
+    wait_client(&mut editor.client, |c| {
+        c.ready() && c.assets().and_then(|a| a.pioneer_room).is_some()
+    });
+    settle(&mut editor.cockpit);
+    editor.client.play();
+    wait_client(&mut editor.client, |c| c.equipment_controls_ready());
+    editor.client.send_command(Request::Undock);
+    wait_client(&mut editor.client, |c| {
+        c.snapshot().is_some_and(|s| {
+            s.pilots
+                .iter()
+                .any(|p| p.name == c.pilot() && p.location == arkline_protocol::Location::Station)
+        })
+    });
+    let before_world = editor.client.snapshot().unwrap();
+    let before = before_world
+        .pilots
+        .iter()
+        .find(|p| p.name == editor.client.pilot())
+        .unwrap()
+        .flight
+        .clone()
+        .unwrap();
+    assert_eq!(before.velocity, [0.; 3]);
+    let mut run = |events| {
+        ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1500., 960.),
+                )),
+                events,
+                ..Default::default()
+            },
+            |ctx| editor.update(ctx, &mut eframe::Frame::_new_kittest()),
+        )
+    };
+    run(vec![]);
+    let output = run(vec![]);
+    let point = text_point(&output, "Room pressure\n101.00 kPa");
+    run(pointer(point, true));
+    ctx.memory_mut(|memory| {
+        if let Some(id) = memory.focused() {
+            memory.surrender_focus(id);
+        }
+    });
+    run(vec![
+        egui::Event::Key {
+            key: egui::Key::W,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Default::default(),
+        },
+        egui::Event::PointerButton {
+            pos: point,
+            button: egui::PointerButton::Secondary,
+            pressed: true,
+            modifiers: Default::default(),
+        },
+    ]);
+    for step in 1..=20 {
+        run(vec![egui::Event::PointerMoved(
+            point + egui::vec2(step as f32, step as f32 * 0.2),
+        )]);
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let mut release = pointer(point + egui::vec2(20., 4.), false);
+    release.push(egui::Event::PointerButton {
+        pos: point,
+        button: egui::PointerButton::Secondary,
+        pressed: false,
+        modifiers: Default::default(),
+    });
+    release.push(egui::Event::Key {
+        key: egui::Key::W,
+        physical_key: None,
+        pressed: false,
+        repeat: false,
+        modifiers: Default::default(),
+    });
+    run(release);
+    assert_eq!(
+        editor.cockpit.selected_vessel,
+        Live::from_client(&editor.client).current_vessel().unwrap()
+    );
+    assert_ne!(
+        editor.cockpit.history.current.templates["airlock"].controls[0].position,
+        Document::default().templates["airlock"].controls[0].position,
+        "preview drag must actually have moved a control"
+    );
+    wait_client(&mut editor.client, |c| {
+        c.snapshot()
+            .is_some_and(|s| s.server_time_ms >= before_world.server_time_ms + 100)
+    });
+    let after_world = editor.client.snapshot().unwrap();
+    let after = after_world
+        .pilots
+        .iter()
+        .find(|p| p.name == editor.client.pilot())
+        .unwrap()
+        .flight
+        .as_ref()
+        .unwrap();
+    assert_eq!(after.position, before.position);
+    assert_eq!(after.velocity, before.velocity);
+    assert_eq!(after.orientation, before.orientation);
+    assert_eq!(after.angular_velocity, before.angular_velocity);
+    assert!(editor.cockpit.pending_command.is_none());
+    editor.client.pause();
+    wait_client(&mut editor.client, |c| c.paused());
+    editor.client.on_exit();
+}

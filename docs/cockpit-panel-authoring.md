@@ -22,8 +22,10 @@ slice supports a room-pressure gauge and a room-light switch. It does not create
    Ordinary labels, placement and supported bindings need no engine rebuild.
 
 Pressure comes from `pioneer.deck1.airlock.pressure`, in kPa converted from reported
-Pa. The switch targets `pioneer.deck1.airlock.light`; commanded and actual output
-are displayed separately. Its reported interlock is not a fabricated fault model.
+Pa. Measurement timestamps are simulation milliseconds, not wall-clock freshness.
+The switch targets `pioneer.deck1.airlock.light`; commanded and actual output
+are displayed separately. The reported room interlock is shared room state, not
+a light-specific fault or a fabricated fault model.
 Other hulls currently have no compatible room telemetry. Unsupported or missing
 bindings cannot be applied as working controls.
 
