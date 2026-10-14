@@ -576,6 +576,17 @@ fn project_path(
         })
         .unwrap_or(default)
 }
+fn editor_msaa(value: Option<std::ffi::OsString>) -> Result<u16, &'static str> {
+    match value.as_deref().map(std::ffi::OsStr::to_str) {
+        None => Ok(4),
+        Some(Some("0")) => Ok(0),
+        Some(Some("2")) => Ok(2),
+        Some(Some("4")) => Ok(4),
+        Some(Some("8")) => Ok(8),
+        _ => Err("ARKLINE_EDITOR_MSAA must be 0, 2, 4 or 8 (unset defaults to 4)"),
+    }
+}
+
 fn main() -> eframe::Result<()> {
     let mut project = std::env::current_dir()
         .unwrap_or_else(|_| PathBuf::from("."))
@@ -621,9 +632,14 @@ fn main() -> eframe::Result<()> {
             }
         }
     }
+    let multisampling =
+        editor_msaa(std::env::var_os("ARKLINE_EDITOR_MSAA")).unwrap_or_else(|error| {
+            eprintln!("{error}");
+            std::process::exit(2)
+        });
     let options = eframe::NativeOptions {
         renderer: eframe::Renderer::Glow,
-        multisampling: 4,
+        multisampling,
         depth_buffer: 24,
         viewport: egui::ViewportBuilder::default()
             .with_title(format!("Arkline Editor — {}", BUILD.trim()))
@@ -650,6 +666,30 @@ fn main() -> eframe::Result<()> {
 mod tests {
     use super::*;
     use eframe::App;
+    #[test]
+    fn editor_msaa_preserves_default_and_accepts_supported_values() {
+        assert_eq!(editor_msaa(None), Ok(4));
+        for samples in [0, 2, 4, 8] {
+            assert_eq!(editor_msaa(Some(samples.to_string().into())), Ok(samples));
+        }
+    }
+
+    #[test]
+    fn editor_msaa_rejects_invalid_values() {
+        for value in [
+            "", " ", " 4", "4 ", "1", "3", "16", "-1", "+4", "4.0", "four", "65536",
+        ] {
+            assert!(editor_msaa(Some(value.into())).is_err(), "{value:?}");
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn editor_msaa_rejects_non_unicode_values() {
+        use std::os::unix::ffi::OsStringExt;
+        assert!(editor_msaa(Some(std::ffi::OsString::from_vec(vec![0xff]))).is_err());
+    }
+
     #[test]
     fn project_environment_is_optional_and_explicit_path_wins() {
         let default = PathBuf::from("default-project");

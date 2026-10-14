@@ -8,6 +8,23 @@ Arkline Editor embeds the real game client and a local authoritative world in on
 cargo run --locked -p arkline-editor -- --project work/my-world --pilot EditorPilot
 ```
 
+The native window requests 4× multisample anti-aliasing (MSAA) by default.
+Set `ARKLINE_EDITOR_MSAA` to `0`, `2`, `4`, or `8` to request a different sample
+count; `0` disables MSAA. Other values, including blank or whitespace-padded
+values, exit with a configuration error before opening a window. Unset the
+variable to restore the default. A supported setting does not guarantee that
+every graphics driver can provide that framebuffer configuration.
+
+Some Linux virtual desktops expose OpenGL through GLX but offer no multisampled
+window configurations. If startup reports `NoGlutinConfigs` / `BadConfig`, try:
+
+```sh
+ARKLINE_EDITOR_MSAA=0 cargo run --locked -p arkline-editor -- --project work/my-world --pilot EditorPilot
+```
+
+This changes window anti-aliasing only. It does not select a different renderer
+or establish graphics performance or broader editor acceptance.
+
 The window contains a Play/Pause/Step/Stop toolbar, live world outliner, central game viewport, read-only systems inspector and project/console panels. The world opens paused. Press **Play** to operate the ship using normal game controls inside the viewport.
 
 ## Simulation controls
