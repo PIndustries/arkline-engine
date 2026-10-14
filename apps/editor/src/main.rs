@@ -13,7 +13,9 @@ mod materials;
 mod physics_lab;
 mod provenance;
 mod render_debug;
+mod rooms;
 mod service_paths;
+mod session_panel;
 use arkline_client::{EmbeddedAssetGallery, EmbeddedClient, EmbeddedStatus};
 use eframe::egui::{self, Color32, RichText};
 use std::{collections::VecDeque, path::PathBuf, time::Duration};
@@ -32,6 +34,8 @@ struct Editor {
     materials: materials::Materials,
     engineering: engineering::Engineering,
     service_paths: service_paths::ServicePaths,
+    rooms: rooms::Rooms,
+    session_panel: session_panel::SessionPanel,
     community: community::Community,
     event_graph: event_graph::EventGraphPanel,
     events_open: bool,
@@ -48,7 +52,9 @@ impl Editor {
         self.workspace = 0;
         self.inspector_tab = 0;
         self.client.set_free_camera(false);
-        self.client.play();
+        if self.client.can_control_clock() || self.client.status() == &EmbeddedStatus::Stopped {
+            self.client.play();
+        }
     }
     fn new(cc: &eframe::CreationContext<'_>, project: PathBuf, pilot: String) -> Self {
         let client = EmbeddedClient::new(cc, project.join(".arkline-studio"), pilot.clone());
@@ -56,6 +62,8 @@ impl Editor {
             materials: materials::Materials::open(&project),
             engineering: engineering::Engineering::open(&project),
             service_paths: service_paths::ServicePaths::open(&project),
+            rooms: rooms::Rooms::open(&project),
+            session_panel: session_panel::SessionPanel::default(),
             community: community::Community::open(&project),
             event_graph: event_graph::EventGraphPanel::open(&project),
             events_open: false,
@@ -84,11 +92,27 @@ impl eframe::App for Editor {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         self.client.poll();
         self.community.poll();
+        let prior_pilot = self.client.pilot().to_owned();
+        self.session_panel.show(ctx, &mut self.client);
+        if self.client.pilot() != prior_pilot {
+            self.selected_pilot = self.client.pilot().to_owned();
+        }
+        let clock_control = self.client.can_control_clock();
         let status = match self.client.status() {
             EmbeddedStatus::Loading => "LOADING".into(),
-            EmbeddedStatus::Paused => "PAUSED".into(),
+            EmbeddedStatus::Paused => if clock_control {
+                "PAUSED"
+            } else {
+                "HOST PAUSED"
+            }
+            .into(),
             EmbeddedStatus::Running => "PLAYING".into(),
-            EmbeddedStatus::Stopped => "STOPPED".into(),
+            EmbeddedStatus::Stopped => if clock_control {
+                "STOPPED"
+            } else {
+                "LOCAL CONTROLS SUSPENDED"
+            }
+            .into(),
             EmbeddedStatus::Error(error) => format!("ERROR · {error}"),
         };
         if status != self.last_status {
@@ -110,7 +134,7 @@ impl eframe::App for Editor {
             && ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::F5))
             && ready
         {
-            if active && self.workspace == 0 && self.inspector_tab != 2 {
+            if active && self.workspace == 0 && self.inspector_tab != 2 && clock_control {
                 self.client.pause();
             } else {
                 self.play_game();
@@ -131,8 +155,19 @@ impl eframe::App for Editor {
                     ui.separator();
                     if ui
                         .add_enabled(
-                            ready && (!active || self.workspace != 0 || self.inspector_tab == 2),
-                            egui::Button::new("▶  Play").min_size(egui::vec2(82., 32.)),
+                            ready
+                                && (if clock_control {
+                                    !active
+                                } else {
+                                    self.client.status() == &EmbeddedStatus::Stopped
+                                } || self.workspace != 0
+                                    || self.inspector_tab == 2),
+                            egui::Button::new(if clock_control {
+                                "▶  Play"
+                            } else {
+                                "Game / resume"
+                            })
+                            .min_size(egui::vec2(82., 32.)),
                         )
                         .clicked()
                     {
@@ -140,16 +175,17 @@ impl eframe::App for Editor {
                     }
                     if ui
                         .add_enabled(
-                            active,
+                            active && clock_control,
                             egui::Button::new("Ⅱ  Pause").min_size(egui::vec2(82., 32.)),
                         )
                         .clicked()
+                        && clock_control
                     {
                         self.client.pause();
                     }
                     if ui
                         .add_enabled(
-                            paused && self.workspace == 0,
+                            paused && self.workspace == 0 && clock_control,
                             egui::Button::new("Step 50 ms").min_size(egui::vec2(95., 32.)),
                         )
                         .clicked()
@@ -159,7 +195,12 @@ impl eframe::App for Editor {
                     if ui
                         .add_enabled(
                             active || paused,
-                            egui::Button::new("■  Stop").min_size(egui::vec2(82., 32.)),
+                            egui::Button::new(if clock_control {
+                                "■  Stop"
+                            } else {
+                                "Suspend controls"
+                            })
+                            .min_size(egui::vec2(82., 32.)),
                         )
                         .clicked()
                     {
@@ -186,18 +227,22 @@ impl eframe::App for Editor {
                         .selectable_value(&mut self.workspace, 1, "Community · GitHub")
                         .clicked()
                     {
-                        self.client.pause();
+                        if clock_control {
+                            self.client.pause();
+                        }
                         self.community.ensure_loaded();
                     }
                     if ui
                         .selectable_value(&mut self.workspace, 2, "Physics lab")
                         .clicked()
+                        && clock_control
                     {
                         self.client.pause();
                     }
                     if ui
                         .selectable_value(&mut self.workspace, 3, "Fleet materials")
                         .clicked()
+                        && clock_control
                     {
                         self.client.pause();
                     }
@@ -217,7 +262,17 @@ impl eframe::App for Editor {
                     if free_camera && ui.button("Player camera").clicked() {
                         self.client.set_free_camera(false);
                     }
-                    ui.label(RichText::new("Local sandbox").color(MUTED));
+                    if ui.button("Multiplayer session").clicked() {
+                        self.session_panel.open = true;
+                    }
+                    ui.label(
+                        RichText::new(if clock_control {
+                            "Local authority"
+                        } else {
+                            "Shared universe"
+                        })
+                        .color(MUTED),
+                    );
                 });
             });
         if self.events_open && self.workspace == 0 {
@@ -292,7 +347,7 @@ impl eframe::App for Editor {
             ui.add_space(10.); ui.heading("World outliner");
             if !active {
                 ui.colored_label(Color32::from_rgb(239, 191, 102), format!("Simulation {status}"));
-                ui.small("Gameplay controls are disabled while paused or stopped.");
+                ui.small(if clock_control { "Gameplay controls are disabled while paused or stopped." } else { "The host controls simulation time. Your controls follow the shared state." });
                 if ui.add_enabled(ready, egui::Button::new("Resume game · F5")).clicked() { self.play_game(); }
             } else if self.inspector_tab == 2 && ui.button("Return to game · F5").clicked() {
                 self.play_game();
@@ -349,6 +404,7 @@ impl eframe::App for Editor {
                     ui.selectable_value(&mut self.inspector_tab, 3, "Render debug");
                     ui.selectable_value(&mut self.inspector_tab, 4, "Equipment");
                     ui.selectable_value(&mut self.inspector_tab, 5, "Service paths");
+                    ui.selectable_value(&mut self.inspector_tab, 6, "Room layout");
                 });
                 if !active {
                     ui.colored_label(MUTED, "Captured state · simulation is not running");
@@ -376,6 +432,8 @@ impl eframe::App for Editor {
                         } else if self.inspector_tab == 3 {
                             self.render_debug
                                 .show(ui, &mut self.client, &mut self.wireframe);
+                        } else if self.inspector_tab == 6 {
+                            self.rooms.show(ui, &self.project);
                         } else if self.inspector_tab == 5 {
                             self.service_paths.show(ui, &self.project, self.engineering.components());
                         } else if self.inspector_tab == 4 {

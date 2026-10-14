@@ -2,7 +2,10 @@
 //! callers still need identity authentication and project admission remotely.
 use crate::editor::EditorWorld;
 use anyhow::{ensure, Result};
-use arkline_protocol::{EditorEventGraph, EditorGraphDebug, Request, Response, Snapshot};
+use arkline_protocol::{
+    AssetsView, EditorEventGraph, EditorGraphDebug, Request, Response, Snapshot,
+};
+use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
     path::Path,
@@ -31,7 +34,8 @@ fn next_session_id() -> Result<EditorSessionId> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct EditorSessionId(u64);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum CollaborationRole {
     Host,
     Editor,
@@ -54,8 +58,10 @@ pub struct CollaborativeEditorHost {
 }
 
 /// A bounded polling view of the shared authoritative state.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CollaborativeEditorSnapshot {
     pub snapshot: Snapshot,
+    pub assets: Option<AssetsView>,
     pub simulation_time_ms: u64,
     pub paused: bool,
     pub graph: EditorGraphDebug,
@@ -138,6 +144,10 @@ impl CollaborativeEditorHost {
         Ok(self.world.handle(&mut session.server_session, request))
     }
 
+    pub fn is_paused(&self) -> bool {
+        self.world.is_paused()
+    }
+
     pub fn snapshot(&mut self, id: EditorSessionId) -> Result<CollaborativeEditorSnapshot> {
         let response = self.request(id, Request::Snapshot)?;
         ensure!(response.ok, "{}", response.message);
@@ -145,6 +155,7 @@ impl CollaborativeEditorHost {
             snapshot: response
                 .snapshot
                 .ok_or_else(|| anyhow::anyhow!("snapshot response omitted state"))?,
+            assets: response.assets,
             simulation_time_ms: self.world.time(),
             paused: self.world.is_paused(),
             graph: self.world.graph_debug(),
@@ -179,6 +190,19 @@ impl CollaborativeEditorHost {
         self.require_editor(id)?;
         self.world
             .graph_replace(expected_revision, graph, clear_pending)
+    }
+
+    pub fn trigger_graph(&mut self, id: EditorSessionId, node_id: u64) -> Result<()> {
+        self.require_editor(id)?;
+        self.world.graph_trigger(node_id)
+    }
+    pub fn step_graph(&mut self, id: EditorSessionId) -> Result<()> {
+        self.require_editor(id)?;
+        self.world.graph_step()
+    }
+    pub fn clear_graph(&mut self, id: EditorSessionId) -> Result<()> {
+        self.require_editor(id)?;
+        self.world.graph_clear()
     }
 
     pub fn leave(&mut self, id: EditorSessionId) -> Result<()> {

@@ -1,6 +1,7 @@
 pub mod access_tokens;
 mod assets;
 pub mod collaborative_editor;
+pub mod collaborative_transport;
 mod drones;
 pub mod editor;
 mod flight;

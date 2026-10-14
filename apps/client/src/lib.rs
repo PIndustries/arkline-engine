@@ -8,8 +8,8 @@ pub use material_preview::EmbeddedMaterialPreview;
 mod embedded;
 #[cfg(not(target_arch = "wasm32"))]
 pub use embedded::{
-    EmbeddedClient, EmbeddedEventAck, EmbeddedEventDebugState, EmbeddedStatus, EmbeddedView,
-    EmbeddedViewState, ViewTransition,
+    EmbeddedClient, EmbeddedEventAck, EmbeddedEventDebugState, EmbeddedSessionInfo,
+    EmbeddedSessionMode, EmbeddedStatus, EmbeddedView, EmbeddedViewState, ViewTransition,
 };
 // Native Arkline cockpit. Live world data is server-authoritative; ship layouts are labeled design references.
 #[cfg(not(target_arch = "wasm32"))]
@@ -3973,7 +3973,6 @@ impl eframe::App for Cockpit {
                     if let Some(pilot) = self.own() {
                         let now = self.presentation_time();
                         let live = self.connected
-                            && (!self.embedded || self.embedded_input)
                             && self
                                 .snapshot
                                 .as_ref()
@@ -4012,7 +4011,7 @@ impl eframe::App for Cockpit {
                             snapshot,
                             &controlled_name,
                             now,
-                            self.connected && (!self.embedded || self.embedded_input),
+                            self.connected,
                             &self.effects,
                             &self.selected_object,
                             self.view_mode,

@@ -186,7 +186,7 @@ impl Cockpit {
                     })
                     .map_or("CORRIDOR / ACCESS CORE", |(name, _, _)| *name);
                 ui.label(room);
-                ui.small("W/S or ↑/↓ move · A/D or ←/→ turn · Q/E strafe · RMB look · Space jump");
+                ui.small("W/S or Up/Down move · A/D or Left/Right turn · Q/E strafe · RMB look · Space jump");
                 ui.small(
                     "Airlock engineering uses server-confirmed devices. Other room fixtures remain prototypes.",
                 );
@@ -330,7 +330,7 @@ impl Cockpit {
                 ui.small("Only your vessels at this station are shown. Corporate berths are not available yet.");
             }
             ui.small(
-                "W/S or ↑/↓ move · A/D or ←/→ turn · Q/E strafe · hold RMB to look · Space jump",
+                "W/S or Up/Down move · A/D or Left/Right turn · Q/E strafe · hold RMB to look · Space jump",
             );
             ui.small(
                 "Follow the green path to your quarters. Approach a terminal and click to use it.",

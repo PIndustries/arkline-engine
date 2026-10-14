@@ -315,6 +315,7 @@ impl FlightView {
             last_camera_pose: None,
         }
     }
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     pub fn set_editor_free_camera(&mut self, active: bool, pose: Option<(Vec3, f32, f32)>) {
         let reseed = active
             && (!self.editor_free_camera_active || (pose.is_none() && self.free_camera.is_some()));
@@ -329,6 +330,7 @@ impl FlightView {
         self.editor_free_camera_active = active;
         self.free_camera = pose;
     }
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     pub fn editor_camera_pose(&self) -> Option<(Vec3, f32, f32)> {
         self.last_camera_pose
     }

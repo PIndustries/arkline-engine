@@ -4,6 +4,38 @@ use arkline_protocol::{EditorEventGraph, EditorGraphDebug};
 use arkline_server::editor::EditorWorld;
 use eframe::App;
 use glam::Vec3;
+#[path = "embedded_shared.rs"]
+mod shared;
+
+#[derive(Clone)]
+pub enum EmbeddedSessionMode {
+    Local,
+    Host {
+        bind_addr: std::net::SocketAddr,
+    },
+    Join {
+        address: std::net::SocketAddr,
+        secret: String,
+    },
+}
+impl EmbeddedSessionMode {
+    fn validate(&self) -> Result<(), String> {
+        match self {
+            Self::Local => Ok(()),
+            Self::Host { bind_addr } if bind_addr.ip().is_loopback() => Ok(()),
+            Self::Join { address, secret } if address.ip().is_loopback()
+                && !secret.is_empty() && secret.len() <= 128 => Ok(()),
+            _ => Err("Use a loopback address and a valid editor secret. Remote development requires an SSH tunnel.".into()),
+        }
+    }
+}
+/// Runtime-only connection details. Credentials must never be logged or saved in project files.
+pub struct EmbeddedSessionInfo {
+    pub label: String,
+    pub address: Option<std::net::SocketAddr>,
+    pub editor_secret: Option<String>,
+    pub is_host: bool,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum EmbeddedStatus {
@@ -94,6 +126,11 @@ enum ClockCommand {
 }
 
 pub struct EmbeddedClient {
+    data_dir: PathBuf,
+    mode: EmbeddedSessionMode,
+    session_info: Option<EmbeddedSessionInfo>,
+    session_updates: Receiver<EmbeddedSessionInfo>,
+    worker: Option<std::thread::JoinHandle<()>>,
     cockpit: Cockpit,
     clock: mpsc::SyncSender<ClockCommand>,
     graph_states: Receiver<EmbeddedEventDebugState>,
@@ -126,37 +163,28 @@ impl EmbeddedClient {
         cockpit.connecting = true;
         cockpit.notice = "Opening local world…".into();
         cockpit.pilot_input.disable_capture();
-        let (clock, clock_rx) = mpsc::sync_channel(16);
-        let (graph_tx, graph_states) = mpsc::sync_channel(1);
-        let (status_tx, states) = mpsc::channel();
-        let (commands, requests) = mpsc::channel();
-        let (updates, receiver) = mpsc::sync_channel(64);
-        cockpit.commands = Some(commands);
-        cockpit.updates = Some(receiver);
-        let pilot = cockpit.pilot.clone();
-        let controls = cockpit.controls.clone();
-        std::thread::spawn(move || {
-            if let Err(error) = run(
-                data_dir,
-                pilot,
-                clock_rx,
-                requests,
-                updates.clone(),
-                controls,
-                (status_tx.clone(), graph_tx),
-            ) {
-                let _ = updates.send(Update::Failure(error.clone()));
-                let _ = status_tx.send(EmbeddedStatus::Error(error));
-            }
-        });
+        let connection = spawn_worker(
+            data_dir.clone(),
+            cockpit.pilot.clone(),
+            EmbeddedSessionMode::Local,
+            cockpit.controls.clone(),
+            None,
+        );
+        cockpit.commands = Some(connection.commands);
+        cockpit.updates = Some(connection.updates);
         Self {
+            data_dir,
+            mode: EmbeddedSessionMode::Local,
+            session_info: None,
+            session_updates: connection.info,
+            worker: Some(connection.worker),
             cockpit,
-            clock,
-            graph_states,
+            clock: connection.clock,
+            graph_states: connection.graph_states,
             graph_state: None,
             graph_pending: None,
             graph_sequence: 0,
-            states,
+            states: connection.states,
             state: EmbeddedStatus::Loading,
             destroyed: false,
             views: ViewDiagnostics {
@@ -217,6 +245,9 @@ impl EmbeddedClient {
         Ok(id)
     }
     pub fn poll(&mut self) {
+        for info in self.session_updates.try_iter() {
+            self.session_info = Some(info);
+        }
         for state in self.states.try_iter() {
             self.state = state;
         }
@@ -375,6 +406,89 @@ impl EmbeddedClient {
         } else {
             true
         }
+    }
+    pub fn session_mode(&self) -> &EmbeddedSessionMode {
+        &self.mode
+    }
+    pub fn session_info(&self) -> Option<&EmbeddedSessionInfo> {
+        self.session_info.as_ref()
+    }
+    pub fn can_control_clock(&self) -> bool {
+        !matches!(self.mode, EmbeddedSessionMode::Join { .. })
+    }
+    /// Replace the authority worker without blocking the UI or reusing old input/response queues.
+    pub fn switch_session(
+        &mut self,
+        mode: EmbeddedSessionMode,
+        pilot: String,
+    ) -> Result<(), String> {
+        mode.validate()?;
+        let pilot = pilot.trim().to_owned();
+        if pilot.is_empty()
+            || pilot.len() > 24
+            || !pilot
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        {
+            return Err("Pilot must use 1 to 24 letters, numbers, underscores or hyphens".into());
+        }
+        if self.state == EmbeddedStatus::Loading {
+            return Err("Wait for the current connection attempt to finish".into());
+        }
+        // An exited worker has a disconnected queue; it is still safe to replace.
+        if matches!(
+            self.clock.try_send(ClockCommand::Shutdown),
+            Err(mpsc::TrySendError::Full(_))
+        ) {
+            return Err("Previous worker is busy; retry the session change".into());
+        }
+        self.set_free_camera(false);
+        self.cockpit.controls.clear();
+        self.cockpit.controls = pilot_input::Mailbox::default();
+        self.cockpit.pilot_input.disable_capture();
+        self.cockpit.invalidate_ai_session();
+        self.cockpit.remote_ship = None;
+        self.cockpit.manual_remote = None;
+        self.cockpit.resource_pilot = None;
+        self.cockpit.motion.clear();
+        self.cockpit.effects.clear();
+        self.cockpit.feed.clear();
+        self.cockpit.sound_scene.reset();
+        self.cockpit.timeline_origin = None;
+        self.cockpit.snapshot = None;
+        self.cockpit.assets = None;
+        self.cockpit.audit_updates = None;
+        self.cockpit.audit_result = None;
+        self.cockpit.request_pending = false;
+        self.cockpit.frozen_time = None;
+        self.cockpit.connected = false;
+        self.cockpit.connecting = true;
+        self.cockpit.notice = "Switching editor session…".into();
+        self.cockpit.pilot = pilot.clone();
+        self.cockpit.selected_object = SelectedObject::Station;
+        self.cockpit.mining_target = None;
+        self.cockpit.selected_drone = None;
+        self.cockpit.drone_attack_target = None;
+        let connection = spawn_worker(
+            self.data_dir.clone(),
+            pilot,
+            mode.clone(),
+            self.cockpit.controls.clone(),
+            self.worker.take(),
+        );
+        self.cockpit.commands = Some(connection.commands);
+        self.cockpit.updates = Some(connection.updates);
+        self.clock = connection.clock;
+        self.states = connection.states;
+        self.graph_states = connection.graph_states;
+        self.graph_state = None;
+        self.graph_pending = None;
+        self.session_info = None;
+        self.session_updates = connection.info;
+        self.worker = Some(connection.worker);
+        self.mode = mode;
+        self.state = EmbeddedStatus::Loading;
+        Ok(())
     }
     pub fn play(&mut self) {
         self.queue_clock(ClockCommand::Play);
@@ -554,6 +668,79 @@ impl Drop for EmbeddedClient {
         let _ = self.clock.try_send(ClockCommand::Shutdown);
         // Never wait for database writes on the render thread.
         self.on_exit();
+    }
+}
+struct WorkerConnection {
+    commands: Sender<Request>,
+    updates: Receiver<Update>,
+    clock: mpsc::SyncSender<ClockCommand>,
+    states: Receiver<EmbeddedStatus>,
+    graph_states: Receiver<EmbeddedEventDebugState>,
+    info: Receiver<EmbeddedSessionInfo>,
+    worker: std::thread::JoinHandle<()>,
+}
+fn spawn_worker(
+    dir: PathBuf,
+    pilot: String,
+    mode: EmbeddedSessionMode,
+    controls: pilot_input::Mailbox,
+    previous: Option<std::thread::JoinHandle<()>>,
+) -> WorkerConnection {
+    let (clock, clock_rx) = mpsc::sync_channel(16);
+    let (graph_tx, graph_states) = mpsc::sync_channel(1);
+    let (status_tx, states) = mpsc::channel();
+    let (commands, requests) = mpsc::channel();
+    let (updates, receiver) = mpsc::sync_channel(64);
+    let (info_tx, info) = mpsc::channel();
+    let worker = std::thread::spawn(move || {
+        // Database ownership is transferred only after the old worker exits.
+        // This wait is on a background thread, never the renderer.
+        if let Some(previous) = previous {
+            let _ = previous.join();
+        }
+        let result = match mode {
+            EmbeddedSessionMode::Local => {
+                let _ = info_tx.send(EmbeddedSessionInfo {
+                    label: "Local world".into(),
+                    address: None,
+                    editor_secret: None,
+                    is_host: true,
+                });
+                run(
+                    dir,
+                    pilot,
+                    clock_rx,
+                    requests,
+                    updates.clone(),
+                    controls,
+                    (status_tx.clone(), graph_tx),
+                )
+            }
+            mode => shared::run(
+                dir,
+                pilot,
+                mode,
+                clock_rx,
+                requests,
+                updates.clone(),
+                controls,
+                (status_tx.clone(), graph_tx),
+                info_tx,
+            ),
+        };
+        if let Err(error) = result {
+            let _ = updates.send(Update::Failure(error.clone()));
+            let _ = status_tx.send(EmbeddedStatus::Error(error));
+        }
+    });
+    WorkerConnection {
+        commands,
+        updates: receiver,
+        clock,
+        states,
+        graph_states,
+        info,
+        worker,
     }
 }
 fn permitted_while_paused(request: &Request) -> bool {
@@ -750,6 +937,99 @@ fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn session_switch_rejects_nonlocal_transport_without_losing_the_current_world() {
+        let (mut client, _) = debug_fixture();
+        let original = client.snapshot().unwrap().server_time_ms;
+        assert!(client
+            .switch_session(
+                EmbeddedSessionMode::Host {
+                    bind_addr: "0.0.0.0:7779".parse().unwrap()
+                },
+                "LocalPilot".into()
+            )
+            .is_err());
+        assert_eq!(client.snapshot().unwrap().server_time_ms, original);
+        assert!(client.can_control_clock());
+    }
+
+    #[test]
+    fn embedded_host_join_switches_share_world_and_return_to_preserved_local_world() {
+        let directory = std::env::temp_dir().join(format!(
+            "arkline-session-switch-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fn wait(client: &mut EmbeddedClient, predicate: impl Fn(&EmbeddedClient) -> bool) {
+            let deadline = Instant::now() + Duration::from_secs(8);
+            while Instant::now() < deadline {
+                client.poll();
+                if predicate(client) {
+                    return;
+                }
+                if let EmbeddedStatus::Error(error) = client.status() {
+                    panic!("session error: {error}");
+                }
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            panic!("editor session did not reach expected state");
+        }
+        fn finish(client: &mut EmbeddedClient) {
+            let _ = client.clock.try_send(ClockCommand::Shutdown);
+            client.cockpit.updates = None;
+            if let Some(worker) = client.worker.take() {
+                worker.join().unwrap();
+            }
+        }
+        let (mut host, _) = debug_fixture();
+        host.data_dir = directory.join("host");
+        host.switch_session(
+            EmbeddedSessionMode::Host {
+                bind_addr: "127.0.0.1:0".parse().unwrap(),
+            },
+            "EditorHostQA".into(),
+        )
+        .unwrap();
+        wait(&mut host, |c| c.ready() && c.session_info().is_some());
+        let info = host.session_info().unwrap();
+        let address = info.address.unwrap();
+        let secret = info.editor_secret.clone().unwrap();
+        let (mut guest, _) = debug_fixture();
+        guest.data_dir = directory.join("guest");
+        guest
+            .switch_session(
+                EmbeddedSessionMode::Join { address, secret },
+                "EditorGuestQA".into(),
+            )
+            .unwrap();
+        wait(&mut guest, |c| {
+            c.ready() && c.snapshot().is_some_and(|s| s.pilots.len() == 2)
+        });
+        assert!(!guest.can_control_clock());
+        host.play();
+        wait(&mut guest, |c| c.status() == &EmbeddedStatus::Running);
+        guest.stop();
+        wait(&mut guest, |c| c.status() == &EmbeddedStatus::Stopped);
+        wait(&mut host, |c| c.status() == &EmbeddedStatus::Running);
+        guest.play();
+        wait(&mut guest, |c| c.status() == &EmbeddedStatus::Running);
+        finish(&mut guest);
+        host.switch_session(EmbeddedSessionMode::Local, "EditorHostQA".into())
+            .unwrap();
+        wait(&mut host, |c| {
+            c.ready()
+                && c.snapshot()
+                    .is_some_and(|s| s.pilots.iter().any(|p| p.name == "EditorHostQA"))
+        });
+        assert!(host.can_control_clock());
+        assert_eq!(host.status(), &EmbeddedStatus::Paused);
+        finish(&mut host);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
 
     #[test]
     fn free_camera_suppresses_gameplay_input_even_over_viewport() {
@@ -1029,6 +1309,11 @@ mod tests {
         let (_, states) = mpsc::channel();
         (
             EmbeddedClient {
+                data_dir: PathBuf::new(),
+                mode: EmbeddedSessionMode::Local,
+                session_info: None,
+                session_updates: mpsc::channel().1,
+                worker: None,
                 cockpit,
                 clock,
                 graph_states: mpsc::sync_channel(1).1,
@@ -1176,6 +1461,11 @@ mod tests {
         let (states, receiver) = mpsc::channel();
         states.send(EmbeddedStatus::Paused).unwrap();
         let mut client = EmbeddedClient {
+            data_dir: PathBuf::new(),
+            mode: EmbeddedSessionMode::Local,
+            session_info: None,
+            session_updates: mpsc::channel().1,
+            worker: None,
             cockpit,
             clock,
             graph_states: mpsc::sync_channel(1).1,

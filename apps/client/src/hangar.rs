@@ -99,10 +99,12 @@ impl HangarView {
     pub fn camera_yaw(&self) -> f64 {
         self.yaw as f64
     }
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     pub fn set_editor_free_camera(&mut self, active: bool, pose: Option<(Vec3, f32, f32)>) {
         self.editor_free_camera_active = active;
         self.editor_free_camera = pose;
     }
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     pub fn editor_camera_pose(&self) -> Option<(Vec3, f32, f32)> {
         self.last_camera_pose
     }
@@ -173,10 +175,10 @@ impl HangarView {
             self.walking = walking;
             self.class = Some(pilot.ship_class);
         }
-        let unobstructed = ui
-            .ctx()
-            .pointer_hover_pos()
-            .is_some_and(|p| rect.contains(p) && ui.ctx().layer_id_at(p) == Some(ui.layer_id()));
+        let unobstructed = !self.editor_free_camera_active
+            && ui.ctx().pointer_hover_pos().is_some_and(|p| {
+                rect.contains(p) && ui.ctx().layer_id_at(p) == Some(ui.layer_id())
+            });
         // Response helpers also access Context: never invoke them inside an input lock.
         let dragging = !self.editor_free_camera_active
             && (response.dragged_by(egui::PointerButton::Secondary)
@@ -295,7 +297,7 @@ impl HangarView {
                 avatar.moving && live,
                 avatar.seated,
             );
-            if !first_person {
+            if should_render_avatar(first_person, self.editor_free_camera_active, eye, position) {
                 parts.extend(avatar_parts(&visual_avatar, pose, self.follow));
             }
         }
@@ -339,8 +341,10 @@ impl HangarView {
                     "PRIVATE BAY"
                 },
                 pilot.ship_class.spec().name,
-                if walking {
-                    "ON FOOT · W/S or ↑/↓ move · A/D or ←/→ turn · Q/E strafe · RMB look · Space jump"
+                if self.editor_free_camera_active {
+                    "EDITOR FREE CAMERA · WASD move · E/Q or Space/C vertical · Shift fast · RMB look"
+                } else if walking {
+                    "ON FOOT · W/S or Up/Down move · A/D or Left/Right turn · Q/E strafe · RMB look · Space jump"
                 } else {
                     "SHIP INSPECTION · Drag orbit · Wheel zoom · Disembark to explore"
                 }
@@ -373,6 +377,29 @@ pub(super) fn editor_camera_direction(yaw: f32, pitch: f32) -> Vec3 {
         pitch.sin(),
         yaw.sin() * pitch.cos(),
     )
+}
+
+fn should_render_avatar(
+    first_person: bool,
+    free_camera_active: bool,
+    camera: Vec3,
+    avatar_position: Vec3,
+) -> bool {
+    if first_person {
+        return false;
+    }
+    if !free_camera_active {
+        return true;
+    }
+
+    // The torso and head occupy a narrow vertical column above the avatar
+    // root. Hide the model while the editor camera intersects that envelope.
+    let offset = camera - avatar_position;
+    let horizontal_radius = 0.38;
+    let inside_body_height = (-0.15..=1.95).contains(&offset.y);
+    let inside_body_radius =
+        offset.x * offset.x + offset.z * offset.z <= horizontal_radius * horizontal_radius;
+    !(inside_body_height && inside_body_radius)
 }
 
 fn bay_parts(class: ShipClass) -> Vec<ModelPart> {
@@ -850,6 +877,49 @@ mod tests {
         assert!(camera.0.distance(pose.0) > 1.0);
         assert_eq!(view.editor_free_camera, Some(pose));
     }
+
+    #[test]
+    fn free_camera_hides_avatar_only_while_camera_overlaps_body_or_head() {
+        let avatar = Vec3::new(4.0, 0.0, -2.0);
+        let seeded_first_person_eye = avatar + Vec3::Y * 1.65;
+
+        // Regular first person continues hiding the body and regular third
+        // person continues showing it, independent of the proximity helper.
+        assert!(!should_render_avatar(
+            true,
+            false,
+            seeded_first_person_eye,
+            avatar
+        ));
+        assert!(should_render_avatar(
+            false,
+            false,
+            seeded_first_person_eye,
+            avatar
+        ));
+
+        // The editor camera begins at the player's eye, then restores the
+        // avatar as soon as it clears the body/head envelope.
+        assert!(!should_render_avatar(
+            false,
+            true,
+            seeded_first_person_eye,
+            avatar
+        ));
+        assert!(should_render_avatar(
+            false,
+            true,
+            seeded_first_person_eye + Vec3::Z * 0.5,
+            avatar
+        ));
+        assert!(should_render_avatar(
+            false,
+            true,
+            avatar + Vec3::Y * 2.1,
+            avatar
+        ));
+    }
+
     #[test]
     fn third_person_remains_behind_avatar_at_every_heading() {
         for heading in [0.0, 1.2, -2.7, std::f32::consts::PI] {

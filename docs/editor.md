@@ -29,9 +29,13 @@ The editor uses isolated local identities and normal pilot ownership checks. Cre
 
 The central viewport runs normal gameplay. Editor toolbar and side panels reserve their own space and input. Native full-screen/session/new-window actions are disabled in embedded mode. Select a pilot in the outliner to inspect its public snapshot. Private inventory/room data appears only for the active test pilot.
 
-The embedded client and local authoritative world run in process in this editor window. Play/Pause/Step/Stop operate that isolated local world; there is no game-server address field or network-connection UI, and this editor flow does not connect to an official or remote multiplayer world. GitHub contributor access is a separate, optional community feature.
+The editor starts with an isolated local authority. **Multiplayer session** can host this same saved development world or join another development host through a loopback connection. The host controls simulation time; participants share authoritative state and revisioned event graphs. See [shared development sessions](editor-shared-sessions.md) for the loopback/SSH workflow and current limits. This does not connect to an official network. GitHub contributor access remains a separate, optional community feature.
 
 The inspector reports actual simulation values: ship class and dimensions, cargo, position or deck-local avatar coordinates, velocity, power, drones, mining modules and the connected Pioneer room catalog. It does not invent sensor values or imply that every catalog connection is independently simulated.
+
+## Room layout authoring
+
+The **Room layout** inspector starts with the existing two-deck Pioneer room plan. Select or add rooms, edit dimensions and door openings in meters, and save the result to `Assets/Pioneer.rooms.json`. Top-down and side projections expose dimensions and overlaps. These are candidate design documents; saving them does not rebuild live walls, collision or equipment. See the [room layout contract](editor-room-layout-authoring.md).
 
 ## Player and editor camera controls
 
