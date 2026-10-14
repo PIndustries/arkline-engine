@@ -1,6 +1,6 @@
 //! The editor owns the window; a dedicated worker owns the local authority and SQLite.
 use super::*;
-use arkline_protocol::{EditorEventGraph, EditorGraphDebug};
+use arkline_protocol::{EditorEventGraph, EditorGraphDebug, EditorSceneState, RoomLayoutDocument};
 use arkline_server::editor::EditorWorld;
 use eframe::App;
 use glam::Vec3;
@@ -105,6 +105,8 @@ pub struct EmbeddedEventAck {
 pub struct EmbeddedEventDebugState {
     pub debug: EditorGraphDebug,
     pub ack: Option<EmbeddedEventAck>,
+    pub room_ack: Option<EmbeddedEventAck>,
+    pub scene_ack: Option<EmbeddedEventAck>,
 }
 enum GraphCommand {
     Replace {
@@ -118,6 +120,8 @@ enum GraphCommand {
 }
 enum ClockCommand {
     Graph(u64, GraphCommand),
+    RoomLayout(u64, u64, RoomLayoutDocument),
+    SceneState(u64, EditorSceneState),
     Play,
     Pause,
     Step,
@@ -137,6 +141,13 @@ pub struct EmbeddedClient {
     graph_state: Option<EmbeddedEventDebugState>,
     graph_pending: Option<u64>,
     graph_sequence: u64,
+    room_pending: Option<u64>,
+    room_ack: Option<EmbeddedEventAck>,
+    room_sequence: u64,
+    scene_pending: Option<(u64, EditorSceneState)>,
+    scene_ack: Option<EmbeddedEventAck>,
+    scene_sequence: u64,
+    session_generation: u64,
     states: Receiver<EmbeddedStatus>,
     state: EmbeddedStatus,
     destroyed: bool,
@@ -184,6 +195,13 @@ impl EmbeddedClient {
             graph_state: None,
             graph_pending: None,
             graph_sequence: 0,
+            room_pending: None,
+            room_ack: None,
+            room_sequence: 0,
+            scene_pending: None,
+            scene_ack: None,
+            scene_sequence: 0,
+            session_generation: 0,
             states: connection.states,
             state: EmbeddedStatus::Loading,
             destroyed: false,
@@ -202,6 +220,88 @@ impl EmbeddedClient {
     /// This never renders, consumes egui input, or starts a new connection.
     pub fn graph_debug(&self) -> Option<&EmbeddedEventDebugState> {
         self.graph_state.as_ref()
+    }
+    pub fn session_generation(&self) -> u64 {
+        self.session_generation
+    }
+    pub fn room_layout_ack(&self) -> Option<&EmbeddedEventAck> {
+        self.room_ack.as_ref()
+    }
+    /// Confirmed own-pilot embodiment, read from the authority snapshot.
+    pub fn scene_state(&self) -> Option<EditorSceneState> {
+        let pilot = self
+            .cockpit
+            .snapshot
+            .as_ref()?
+            .pilots
+            .iter()
+            .find(|pilot| pilot.name == self.cockpit.pilot)?;
+        if pilot.location != Location::Docked {
+            return None;
+        }
+        Some(match pilot.station_avatar.as_ref() {
+            None => EditorSceneState::Cockpit,
+            Some(avatar) if !avatar.onboard_interior => EditorSceneState::StationHangar,
+            Some(avatar) if avatar.interior_deck == 2 => EditorSceneState::InteriorDeck2,
+            Some(_) => EditorSceneState::InteriorDeck1,
+        })
+    }
+    pub fn scene_state_ack(&self) -> Option<&EmbeddedEventAck> {
+        self.scene_ack.as_ref()
+    }
+    pub fn scene_state_pending(&self) -> bool {
+        self.scene_pending.is_some()
+    }
+    /// Explicit sandbox mutation of this authenticated editor pilot only.
+    /// The worker acknowledges authoritative placement before the UI reports it.
+    pub fn set_scene_state(&mut self, state: EditorSceneState) -> Result<u64, String> {
+        if !self.ready() {
+            return Err("Editor authority is not ready".into());
+        }
+        if self.scene_pending.is_some() {
+            return Err("Waiting for the previous scene state acknowledgement".into());
+        }
+        let id = self
+            .scene_sequence
+            .checked_add(1)
+            .ok_or("Scene command sequence exhausted")?;
+        self.clock
+            .try_send(ClockCommand::SceneState(id, state))
+            .map_err(|_| "Editor command queue is full or closed".to_string())?;
+        self.scene_sequence = id;
+        self.scene_pending = Some((id, state));
+        self.scene_ack = None;
+        // Stop captured input before placement so held controls cannot move the
+        // avatar immediately after its authoritative walk/jump reset.
+        self.cockpit.controls.clear();
+        self.cockpit.pilot_input.disable_capture();
+        Ok(id)
+    }
+    /// Queue an explicit, revision-checked edit of the live development interior.
+    /// Rejections never install a local render-only layout or replay a mutation.
+    pub fn room_layout_replace(
+        &mut self,
+        revision: u64,
+        document: RoomLayoutDocument,
+    ) -> Result<u64, String> {
+        document.validate_live()?;
+        if !self.ready() {
+            return Err("Editor authority is not ready".into());
+        }
+        if self.room_pending.is_some() {
+            return Err("Waiting for the previous room layout acknowledgement".into());
+        }
+        let id = self
+            .room_sequence
+            .checked_add(1)
+            .ok_or("Room command sequence exhausted")?;
+        self.clock
+            .try_send(ClockCommand::RoomLayout(id, revision, document))
+            .map_err(|_| "Editor command queue is full or closed".to_string())?;
+        self.room_sequence = id;
+        self.room_pending = Some(id);
+        self.room_ack = None;
+        Ok(id)
     }
     pub fn graph_replace(
         &mut self,
@@ -251,7 +351,27 @@ impl EmbeddedClient {
         for state in self.states.try_iter() {
             self.state = state;
         }
+        let mut applied_scene = None;
         for graph in self.graph_states.try_iter() {
+            if let Some(ack) = graph
+                .scene_ack
+                .as_ref()
+                .filter(|ack| Some(ack.id) == self.scene_pending.map(|(id, _)| id))
+            {
+                let requested = self.scene_pending.take().map(|(_, state)| state);
+                if ack.result.is_ok() {
+                    applied_scene = requested;
+                }
+                self.scene_ack = Some(ack.clone());
+            }
+            if let Some(ack) = graph
+                .room_ack
+                .as_ref()
+                .filter(|ack| Some(ack.id) == self.room_pending)
+            {
+                self.room_pending = None;
+                self.room_ack = Some(ack.clone());
+            }
             if graph
                 .ack
                 .as_ref()
@@ -264,6 +384,29 @@ impl EmbeddedClient {
         self.cockpit.embedded_paused = self.state != EmbeddedStatus::Running;
         self.cockpit.embedded_input = false;
         self.cockpit.poll();
+        if self.scene_pending.is_some()
+            && (matches!(
+                self.state,
+                EmbeddedStatus::Error(_) | EmbeddedStatus::Stopped
+            ) || !self.cockpit.connected
+                || self
+                    .worker
+                    .as_ref()
+                    .is_some_and(|worker| worker.is_finished()))
+        {
+            let (id, _) = self.scene_pending.take().expect("pending scene checked");
+            self.scene_ack = Some(EmbeddedEventAck {
+                id,
+                result: Err("Scene state outcome unknown; reconnect and inspect the confirmed state. The command was not replayed.".into()),
+            });
+        }
+        if let Some(scene) = applied_scene {
+            self.set_free_camera(false);
+            self.cockpit.view_mode = ViewMode::Cockpit;
+            if scene != EditorSceneState::Cockpit {
+                self.cockpit.hangar_view.on_foot_view = flight3d::hangar::OnFootView::FirstPerson;
+            }
+        }
         self.observe_view("Authoritative state or observed client view changed");
         if self.cockpit.embedded_paused {
             self.cockpit.frozen_time = self.cockpit.snapshot.as_ref().map(|s| s.server_time_ms);
@@ -483,6 +626,11 @@ impl EmbeddedClient {
         self.graph_states = connection.graph_states;
         self.graph_state = None;
         self.graph_pending = None;
+        self.room_pending = None;
+        self.room_ack = None;
+        self.scene_pending = None;
+        self.scene_ack = None;
+        self.session_generation = self.session_generation.saturating_add(1);
         self.session_info = None;
         self.session_updates = connection.info;
         self.worker = Some(connection.worker);
@@ -786,15 +934,39 @@ fn run(
     let _ = states.send(EmbeddedStatus::Paused);
     let mut previous = Instant::now();
     let mut graph_ack = None;
+    let mut room_ack = None;
+    let mut scene_ack = None;
     let mut pending_graph_state = Some(EmbeddedEventDebugState {
         debug: world.graph_debug(),
         ack: None,
+        room_ack: None,
+        scene_ack: None,
     });
     let mut last_status = EmbeddedStatus::Paused;
     let mut snapshot_dirty = false;
     loop {
         match clock.recv_timeout(Duration::from_millis(50)) {
             Ok(ClockCommand::Shutdown) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            Ok(ClockCommand::SceneState(id, state)) => {
+                controls.clear();
+                let result = world
+                    .set_scene_state(&session, state)
+                    .map_err(|error| error.to_string());
+                scene_ack = Some(EmbeddedEventAck { id, result });
+                snapshot_dirty = true;
+            }
+            Ok(ClockCommand::RoomLayout(id, revision, document)) => {
+                let result = if session.is_none() {
+                    Err("Local world is stopped".into())
+                } else {
+                    world
+                        .room_layout_replace(revision, document)
+                        .map(|_| ())
+                        .map_err(|e| e.to_string())
+                };
+                room_ack = Some(EmbeddedEventAck { id, result });
+                snapshot_dirty = true;
+            }
             Ok(ClockCommand::Graph(id, command)) => {
                 let result = if session.is_none() {
                     Err("Local world is stopped".into())
@@ -905,6 +1077,8 @@ fn run(
             pending_graph_state = Some(EmbeddedEventDebugState {
                 debug: world.graph_debug(),
                 ack: graph_ack.clone(),
+                room_ack: room_ack.clone(),
+                scene_ack: scene_ack.clone(),
             });
         }
         if let Some(debug) = pending_graph_state.take() {
@@ -937,6 +1111,9 @@ fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+    mod room_acceptance {
+        include!("embedded_room_acceptance.rs");
+    }
 
     #[test]
     fn session_switch_rejects_nonlocal_transport_without_losing_the_current_world() {
@@ -1027,6 +1204,154 @@ mod tests {
         });
         assert!(host.can_control_clock());
         assert_eq!(host.status(), &EmbeddedStatus::Paused);
+        finish(&mut host);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn embedded_scene_state_local_and_shared_workers_ack_confirmed_placement() {
+        fn wait(client: &mut EmbeddedClient, predicate: impl Fn(&EmbeddedClient) -> bool) {
+            let deadline = Instant::now() + Duration::from_secs(8);
+            while Instant::now() < deadline {
+                client.poll();
+                if predicate(client) {
+                    return;
+                }
+                assert!(
+                    !matches!(client.status(), EmbeddedStatus::Error(_)),
+                    "worker failed"
+                );
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            panic!(
+                "editor scene state did not become confirmed: {:?}",
+                client.scene_state_ack()
+            );
+        }
+        fn finish(client: &mut EmbeddedClient) {
+            let _ = client.clock.try_send(ClockCommand::Shutdown);
+            client.cockpit.updates = None;
+            if let Some(worker) = client.worker.take() {
+                worker.join().unwrap();
+            }
+        }
+        let directory = std::env::temp_dir().join(format!(
+            "arkline-scene-bridge-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let (mut local, _) = debug_fixture();
+        local.data_dir = directory.join("local");
+        local
+            .switch_session(EmbeddedSessionMode::Local, "SceneLocal".into())
+            .unwrap();
+        wait(&mut local, |client| client.ready());
+        let time = local.snapshot().unwrap().server_time_ms;
+        let id = local
+            .set_scene_state(EditorSceneState::InteriorDeck2)
+            .unwrap();
+        assert!(local.scene_state_pending());
+        assert!(local.set_scene_state(EditorSceneState::Cockpit).is_err());
+        wait(&mut local, |client| {
+            client.scene_state_ack().is_some_and(|ack| ack.id == id)
+                && client.scene_state() == Some(EditorSceneState::InteriorDeck2)
+        });
+        assert!(local.scene_state_ack().unwrap().result.is_ok());
+        assert_eq!(local.snapshot().unwrap().server_time_ms, time);
+        assert_eq!(
+            local.debug_view_state().current,
+            Some(EmbeddedView::FirstPerson)
+        );
+        let id = local.set_scene_state(EditorSceneState::Cockpit).unwrap();
+        wait(&mut local, |client| {
+            client.scene_state_ack().is_some_and(|ack| ack.id == id)
+                && client.scene_state() == Some(EditorSceneState::Cockpit)
+        });
+        assert_eq!(
+            local.debug_view_state().current,
+            Some(EmbeddedView::Cockpit)
+        );
+        local.set_debug_view(EmbeddedView::External).unwrap();
+        assert_eq!(
+            local.debug_view_state().current,
+            Some(EmbeddedView::External)
+        );
+        assert_eq!(local.snapshot().unwrap().server_time_ms, time);
+        local.play();
+        wait(&mut local, |client| {
+            client.status() == &EmbeddedStatus::Running
+        });
+        let id = local
+            .set_scene_state(EditorSceneState::StationHangar)
+            .unwrap();
+        wait(&mut local, |client| {
+            client.scene_state_ack().is_some_and(|ack| ack.id == id)
+                && client.scene_state() == Some(EditorSceneState::StationHangar)
+        });
+        assert_eq!(local.status(), &EmbeddedStatus::Running);
+        finish(&mut local);
+
+        let (mut host, _) = debug_fixture();
+        host.data_dir = directory.join("host");
+        host.switch_session(
+            EmbeddedSessionMode::Host {
+                bind_addr: "127.0.0.1:0".parse().unwrap(),
+            },
+            "SceneBridgeHost".into(),
+        )
+        .unwrap();
+        wait(&mut host, |client| {
+            client.ready() && client.session_info().is_some()
+        });
+        let info = host.session_info().unwrap();
+        let (address, secret) = (info.address.unwrap(), info.editor_secret.clone().unwrap());
+        let (mut guest, _) = debug_fixture();
+        guest.data_dir = directory.join("guest");
+        guest
+            .switch_session(
+                EmbeddedSessionMode::Join { address, secret },
+                "SceneBridgeGuest".into(),
+            )
+            .unwrap();
+        wait(&mut guest, |client| client.ready());
+        let id = guest
+            .set_scene_state(EditorSceneState::InteriorDeck1)
+            .unwrap();
+        wait(&mut guest, |client| {
+            client.scene_state_ack().is_some_and(|ack| ack.id == id)
+                && client.scene_state() == Some(EditorSceneState::InteriorDeck1)
+        });
+        assert!(guest.scene_state_ack().unwrap().result.is_ok());
+        wait(&mut host, |client| {
+            client.snapshot().is_some_and(|snapshot| {
+                snapshot
+                    .pilots
+                    .iter()
+                    .find(|pilot| pilot.name == "SceneBridgeGuest")
+                    .is_some_and(|pilot| {
+                        pilot.station_avatar.as_ref().is_some_and(|avatar| {
+                            avatar.onboard_interior && avatar.interior_deck == 1
+                        })
+                    })
+            })
+        });
+        assert_eq!(host.scene_state(), Some(EditorSceneState::Cockpit));
+        host.play();
+        wait(&mut guest, |client| {
+            client.status() == &EmbeddedStatus::Running
+        });
+        let id = guest
+            .set_scene_state(EditorSceneState::InteriorDeck2)
+            .unwrap();
+        wait(&mut guest, |client| {
+            client.scene_state_ack().is_some_and(|ack| ack.id == id)
+                && client.scene_state() == Some(EditorSceneState::InteriorDeck2)
+        });
+        assert_eq!(guest.status(), &EmbeddedStatus::Running);
+        finish(&mut guest);
         finish(&mut host);
         std::fs::remove_dir_all(directory).unwrap();
     }
@@ -1320,6 +1645,13 @@ mod tests {
                 graph_state: None,
                 graph_pending: None,
                 graph_sequence: 0,
+                room_pending: None,
+                room_ack: None,
+                room_sequence: 0,
+                scene_pending: None,
+                scene_ack: None,
+                scene_sequence: 0,
+                session_generation: 0,
                 states,
                 state: EmbeddedStatus::Paused,
                 destroyed: false,
@@ -1336,6 +1668,134 @@ mod tests {
             requests,
         )
     }
+    #[test]
+    fn scene_state_lost_ack_cancels_pending_without_replay_or_late_camera_reset() {
+        fn accepted(id: u64) -> EmbeddedEventDebugState {
+            EmbeddedEventDebugState {
+                debug: EditorGraphDebug {
+                    revision: 0,
+                    graph: EditorEventGraph::default(),
+                    pending: 0,
+                    pending_nodes: vec![],
+                    breakpoint_node: None,
+                    trace: vec![],
+                    paused: true,
+                },
+                ack: None,
+                room_ack: None,
+                scene_ack: Some(EmbeddedEventAck { id, result: Ok(()) }),
+            }
+        }
+        for status in [
+            Some(EmbeddedStatus::Error("worker failed".into())),
+            Some(EmbeddedStatus::Stopped),
+            None,
+        ] {
+            let (mut client, gameplay_requests) = debug_fixture();
+            let (clock, commands) = mpsc::sync_channel(4);
+            client.clock = clock;
+            let (debug_tx, debug_rx) = mpsc::sync_channel(4);
+            client.graph_states = debug_rx;
+            let (states, receiver) = mpsc::channel();
+            client.states = receiver;
+            let (updates, receiver) = mpsc::channel();
+            client.cockpit.updates = Some(receiver);
+            client.cockpit.view_mode = ViewMode::Tactical;
+            client.set_free_camera(true);
+            let before = serde_json::to_value(client.snapshot()).unwrap();
+            let id = client
+                .set_scene_state(EditorSceneState::InteriorDeck2)
+                .unwrap();
+            assert!(
+                matches!(commands.try_recv().unwrap(), ClockCommand::SceneState(sent, EditorSceneState::InteriorDeck2) if sent == id)
+            );
+            if let Some(status) = status {
+                states.send(status).unwrap();
+            } else {
+                updates
+                    .send(Update::Reconnecting("transport disconnected".into()))
+                    .unwrap();
+            }
+            client.poll();
+            assert!(!client.scene_state_pending());
+            let failure = client
+                .scene_state_ack()
+                .unwrap()
+                .result
+                .as_ref()
+                .unwrap_err()
+                .clone();
+            assert!(failure.contains("outcome unknown") && failure.contains("not replayed"));
+            assert_eq!(serde_json::to_value(client.snapshot()).unwrap(), before);
+            debug_tx.send(accepted(id)).unwrap();
+            client.poll();
+            assert_eq!(client.scene_state_ack().unwrap().result, Err(failure));
+            assert!(
+                client.free_camera_active(),
+                "late ack must not reset the camera"
+            );
+            assert_eq!(client.cockpit.view_mode, ViewMode::External);
+            assert!(
+                commands.try_recv().is_err(),
+                "failed command must not be replayed"
+            );
+            assert!(gameplay_requests.try_recv().is_err());
+        }
+
+        // Switching authority generations drops the old acknowledgement queue
+        // and preserves command IDs, so stale success cannot affect the new pilot.
+        let (mut client, gameplay_requests) = debug_fixture();
+        let directory = std::env::temp_dir().join(format!(
+            "arkline-scene-generation-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        client.data_dir = directory.clone();
+        let (clock, commands) = mpsc::sync_channel(4);
+        client.clock = clock;
+        let (old_debug, receiver) = mpsc::sync_channel(4);
+        client.graph_states = receiver;
+        let id = client
+            .set_scene_state(EditorSceneState::InteriorDeck2)
+            .unwrap();
+        assert!(
+            matches!(commands.try_recv().unwrap(), ClockCommand::SceneState(sent, _) if sent == id)
+        );
+        let generation = client.session_generation();
+        client
+            .switch_session(EmbeddedSessionMode::Local, "SceneFreshGeneration".into())
+            .unwrap();
+        assert_eq!(client.session_generation(), generation + 1);
+        assert!(!client.scene_state_pending());
+        assert!(client.scene_state_ack().is_none());
+        assert_eq!(client.scene_sequence, id);
+        assert!(old_debug.send(accepted(id)).is_err());
+        assert!(matches!(
+            commands.try_recv().unwrap(),
+            ClockCommand::Shutdown
+        ));
+        assert!(commands.try_recv().is_err());
+        assert!(gameplay_requests.try_recv().is_err());
+        let deadline = Instant::now() + Duration::from_secs(8);
+        while !client.ready() && Instant::now() < deadline {
+            client.poll();
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert!(client.ready());
+        assert_eq!(
+            client.scene_state(),
+            Some(EditorSceneState::Cockpit),
+            "previous placement was not replayed in the new generation"
+        );
+        let _ = client.clock.try_send(ClockCommand::Shutdown);
+        client.cockpit.updates = None;
+        client.worker.take().unwrap().join().unwrap();
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
     #[test]
     fn graph_commands_are_bounded_acknowledged_and_do_not_optimistically_pause() {
         let (mut client, _) = debug_fixture();
@@ -1366,6 +1826,8 @@ mod tests {
                     id,
                     result: Err("Pause before stepping".into()),
                 }),
+                room_ack: None,
+                scene_ack: None,
             })
             .unwrap();
         client.poll();
@@ -1423,12 +1885,46 @@ mod tests {
     fn debug_view_rejects_embodiment_changes_and_disconnected_controls() {
         let (mut client, requests) = debug_fixture();
         client.cockpit.snapshot.as_mut().unwrap().pilots[0].location = Location::Docked;
+        assert_eq!(client.scene_state(), Some(EditorSceneState::Cockpit));
+        assert_eq!(
+            client.debug_view_state().available,
+            vec![
+                EmbeddedView::Cockpit,
+                EmbeddedView::External,
+                EmbeddedView::Tactical,
+                EmbeddedView::Tactical3d
+            ]
+        );
+        client.set_debug_view(EmbeddedView::Cockpit).unwrap();
+        assert!(client.set_debug_view(EmbeddedView::Hangar).is_err());
+        assert!(client.set_debug_view(EmbeddedView::FirstPerson).is_err());
+        assert!(client.snapshot().unwrap().pilots[0]
+            .station_avatar
+            .is_none());
+        // The standalone game keeps its docked hangar presentation; the editor
+        // camera exception grants no avatar or gameplay mutation.
+        client.cockpit.embedded = false;
         assert_eq!(
             client.debug_view_state().available,
             vec![EmbeddedView::Hangar]
         );
         assert!(client.set_debug_view(EmbeddedView::Cockpit).is_err());
-        client.cockpit.snapshot.as_mut().unwrap().pilots[0].station_avatar=Some(serde_json::from_value(serde_json::json!({"position":[0,0,0],"heading":0,"moving":false,"updated_at_ms":1000,"onboard_interior":true,"interior_deck":2})).unwrap());
+        client.cockpit.embedded = true;
+        client.cockpit.snapshot.as_mut().unwrap().pilots[0].station_avatar = Some(StationAvatar {
+            position: arkline_protocol::PIONEER_LIFT_POINT,
+            heading: 0.0,
+            moving: false,
+            updated_at_ms: 1000,
+            onboard_interior: true,
+            interior_deck: 2,
+            seated: false,
+            jump_started_ms: None,
+        });
+        assert_eq!(client.scene_state(), Some(EditorSceneState::InteriorDeck2));
+        assert_eq!(
+            client.debug_view_state().available,
+            vec![EmbeddedView::FirstPerson, EmbeddedView::ThirdPerson]
+        );
         client.set_debug_view(EmbeddedView::FirstPerson).unwrap();
         assert_eq!(
             client.cockpit.hangar_view.on_foot_view,
@@ -1472,6 +1968,13 @@ mod tests {
             graph_state: None,
             graph_pending: None,
             graph_sequence: 0,
+            room_pending: None,
+            room_ack: None,
+            room_sequence: 0,
+            scene_pending: None,
+            scene_ack: None,
+            scene_sequence: 0,
+            session_generation: 0,
             states: receiver,
             state: EmbeddedStatus::Loading,
             destroyed: false,

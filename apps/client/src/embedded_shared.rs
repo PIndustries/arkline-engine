@@ -28,6 +28,32 @@ struct OpenedPeer {
 }
 
 impl Peer {
+    fn set_scene_state(&mut self, state: EditorSceneState) -> Result<(), String> {
+        match self {
+            Self::Host(host) => host
+                .set_scene_state(state)
+                .map_err(|error| error.to_string()),
+            Self::Join(client) => client
+                .set_scene_state(state)
+                .map_err(|error| error.to_string()),
+        }
+    }
+    fn replace_room_layout(
+        &mut self,
+        revision: u64,
+        document: RoomLayoutDocument,
+    ) -> Result<(), String> {
+        match self {
+            Self::Host(host) => host
+                .replace_room_layout(revision, document)
+                .map(|_| ())
+                .map_err(|e| e.to_string()),
+            Self::Join(client) => client
+                .replace_room_layout(revision, document)
+                .map(|_| ())
+                .map_err(|e| e.to_string()),
+        }
+    }
     fn is_host(&self) -> bool {
         matches!(self, Self::Host(_))
     }
@@ -272,12 +298,40 @@ fn run_loop(
     let mut shared_paused = true;
     let mut last_status = EmbeddedStatus::Loading;
     let mut graph_ack: Option<EmbeddedEventAck> = None;
+    let mut room_ack: Option<EmbeddedEventAck> = None;
+    let mut scene_ack: Option<EmbeddedEventAck> = None;
     let mut consecutive_busy_snapshots = 0_u8;
     let mut busy_notice_sent = false;
 
     loop {
         match clock.recv_timeout(Duration::from_millis(50)) {
             Ok(ClockCommand::Shutdown) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            Ok(ClockCommand::SceneState(id, state)) => {
+                controls.clear();
+                let result = if stopped {
+                    Err(
+                        "This editor's controls are suspended; resume before changing scene state"
+                            .into(),
+                    )
+                } else {
+                    peer.set_scene_state(state)
+                };
+                scene_ack = Some(EmbeddedEventAck {
+                    id,
+                    result: result.map_err(|error| redact(error, secret)),
+                });
+            }
+            Ok(ClockCommand::RoomLayout(id, revision, document)) => {
+                let result = if stopped {
+                    Err("This editor's controls are suspended; resume before applying a room layout".into())
+                } else {
+                    peer.replace_room_layout(revision, document)
+                };
+                room_ack = Some(EmbeddedEventAck {
+                    id,
+                    result: result.map_err(|e| redact(e, secret)),
+                });
+            }
             Ok(ClockCommand::Play) => {
                 let result = if peer.is_host() {
                     peer.clock(ClockAction::Play)
@@ -448,6 +502,8 @@ fn run_loop(
         let graph_state = EmbeddedEventDebugState {
             debug: shared.graph,
             ack: graph_ack.clone(),
+            room_ack: room_ack.clone(),
+            scene_ack: scene_ack.clone(),
         };
         match graph_states.try_send(graph_state) {
             Ok(()) | Err(TrySendError::Full(_)) => {}

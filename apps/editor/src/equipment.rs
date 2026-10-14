@@ -349,6 +349,7 @@ mod tests {
 
     fn assets(state: PioneerRoomState) -> AssetsView {
         AssetsView {
+            pioneer_room_layout: None,
             pioneer_room: Some(state),
             hangar: None,
             pioneer_interior_available: true,

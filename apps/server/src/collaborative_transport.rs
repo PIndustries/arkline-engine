@@ -5,7 +5,9 @@ use crate::collaborative_editor::{
     MAX_COLLABORATIVE_EDITOR_SESSIONS,
 };
 use anyhow::{ensure, Context, Result};
-use arkline_protocol::{EditorEventGraph, Request, Response};
+use arkline_protocol::{
+    EditorEventGraph, EditorSceneState, Request, Response, RoomLayoutDocument, RoomLayoutState,
+};
 use rand::{rngs::OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -271,6 +273,30 @@ impl DevelopmentEditorHost {
     pub fn clear_graph(&self) -> Result<()> {
         self.graph(GraphAction::Clear)
     }
+    pub fn set_scene_state(&self, state: EditorSceneState) -> Result<()> {
+        expect_accepted(actor_call(
+            &self.actor,
+            Some(self.host_session),
+            ActorAction::SceneState(state),
+        )?)
+    }
+    pub fn replace_room_layout(
+        &self,
+        expected_revision: u64,
+        document: RoomLayoutDocument,
+    ) -> Result<RoomLayoutState> {
+        match actor_call(
+            &self.actor,
+            Some(self.host_session),
+            ActorAction::RoomLayoutReplace {
+                expected_revision,
+                document,
+            },
+        )? {
+            ActorOutput::RoomLayout(state) => Ok(state),
+            _ => Err(anyhow::anyhow!("unexpected editor authority response")),
+        }
+    }
     fn graph(&self, action: GraphAction) -> Result<()> {
         expect_accepted(actor_call(
             &self.actor,
@@ -379,6 +405,22 @@ impl DevelopmentEditorClient {
     pub fn clear_graph(&mut self) -> Result<()> {
         self.graph(WireRequest::GraphClear)
     }
+    pub fn set_scene_state(&mut self, state: EditorSceneState) -> Result<()> {
+        self.graph(WireRequest::SceneState { state })
+    }
+    pub fn replace_room_layout(
+        &mut self,
+        expected_revision: u64,
+        document: RoomLayoutDocument,
+    ) -> Result<RoomLayoutState> {
+        match self.exchange(WireRequest::RoomLayoutReplace {
+            expected_revision,
+            document,
+        })? {
+            WireReply::RoomLayout { state } => Ok(state),
+            reply => Err(self.unexpected_reply(reply)),
+        }
+    }
     pub fn leave(&mut self) -> Result<()> {
         if self.closed {
             return Ok(());
@@ -448,6 +490,13 @@ enum WireRequest {
     },
     GraphStep,
     GraphClear,
+    SceneState {
+        state: EditorSceneState,
+    },
+    RoomLayoutReplace {
+        expected_revision: u64,
+        document: RoomLayoutDocument,
+    },
     Leave,
 }
 
@@ -465,6 +514,9 @@ enum WireReply {
         response: Response,
     },
     Accepted,
+    RoomLayout {
+        state: RoomLayoutState,
+    },
     Error {
         message: String,
     },
@@ -493,6 +545,11 @@ enum ActorAction {
     Game(Request),
     Clock(ClockAction),
     Graph(GraphAction),
+    SceneState(EditorSceneState),
+    RoomLayoutReplace {
+        expected_revision: u64,
+        document: RoomLayoutDocument,
+    },
     Leave,
 }
 enum ActorOutput {
@@ -500,6 +557,7 @@ enum ActorOutput {
     Snapshot(CollaborativeEditorSnapshot),
     Game(Response),
     Accepted,
+    RoomLayout(RoomLayoutState),
 }
 enum ActorCommand {
     Call {
@@ -691,6 +749,21 @@ fn dispatch(
                     GraphAction::Clear => authority.clear_graph(id)?,
                 }
                 Ok(ActorOutput::Accepted)
+            }
+            ActorAction::SceneState(state) => {
+                authority.set_scene_state(session.context("session required")?, state)?;
+                Ok(ActorOutput::Accepted)
+            }
+            ActorAction::RoomLayoutReplace {
+                expected_revision,
+                document,
+            } => {
+                let id = session.context("session required")?;
+                Ok(ActorOutput::RoomLayout(authority.room_layout_replace(
+                    id,
+                    expected_revision,
+                    document,
+                )?))
             }
             ActorAction::Leave => {
                 let id = session.context("session required")?;
@@ -909,6 +982,17 @@ fn serve_joined_peer(
             }
             WireRequest::GraphStep => (ActorAction::Graph(GraphAction::Step), false),
             WireRequest::GraphClear => (ActorAction::Graph(GraphAction::Clear), false),
+            WireRequest::SceneState { state } => (ActorAction::SceneState(state), false),
+            WireRequest::RoomLayoutReplace {
+                expected_revision,
+                document,
+            } => (
+                ActorAction::RoomLayoutReplace {
+                    expected_revision,
+                    document,
+                },
+                false,
+            ),
             WireRequest::Leave => (ActorAction::Leave, true),
         };
         let output = match actor_call(actor, Some(id), action) {
@@ -931,6 +1015,7 @@ fn serve_joined_peer(
             ActorOutput::Snapshot(snapshot) => WireReply::State { snapshot },
             ActorOutput::Game(response) => WireReply::Game { response },
             ActorOutput::Accepted => WireReply::Accepted,
+            ActorOutput::RoomLayout(state) => WireReply::RoomLayout { state },
             ActorOutput::Joined(..) => WireReply::Error {
                 message: "unexpected join response".into(),
             },
@@ -1072,7 +1157,7 @@ fn constant_time_equal(left: &[u8], right: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use arkline_protocol::PROTOCOL_VERSION;
+    use arkline_protocol::{default_pioneer_room_layout, PROTOCOL_VERSION};
 
     fn root() -> PathBuf {
         std::env::temp_dir().join(format!(
@@ -1120,6 +1205,45 @@ mod tests {
         assert_eq!(viewer.role(), CollaborationRole::Viewer);
         assert_eq!(viewer.snapshot().unwrap().snapshot.pilots.len(), 2);
 
+        let scene_time = host.snapshot().unwrap().simulation_time_ms;
+        editor
+            .set_scene_state(EditorSceneState::InteriorDeck2)
+            .unwrap();
+        host.set_scene_state(EditorSceneState::StationHangar)
+            .unwrap();
+        let observed = viewer.snapshot().unwrap();
+        assert_eq!(observed.simulation_time_ms, scene_time);
+        let editor_avatar = observed
+            .snapshot
+            .pilots
+            .iter()
+            .find(|pilot| pilot.name == "TransportEditor")
+            .unwrap()
+            .station_avatar
+            .as_ref()
+            .unwrap();
+        assert!(editor_avatar.onboard_interior);
+        assert_eq!(editor_avatar.interior_deck, 2);
+        assert!(
+            !observed
+                .snapshot
+                .pilots
+                .iter()
+                .find(|pilot| pilot.name == "TransportHost")
+                .unwrap()
+                .station_avatar
+                .as_ref()
+                .unwrap()
+                .onboard_interior
+        );
+        assert!(viewer.set_scene_state(EditorSceneState::Cockpit).is_err());
+        assert_eq!(
+            serde_json::to_value(viewer.snapshot().unwrap().snapshot).unwrap(),
+            serde_json::to_value(observed.snapshot).unwrap()
+        );
+        host.set_scene_state(EditorSceneState::Cockpit).unwrap();
+        editor.set_scene_state(EditorSceneState::Cockpit).unwrap();
+
         assert!(host.game(Request::Undock).is_err());
         assert!(host.game(Request::Snapshot).unwrap().snapshot.is_some());
         host.clock(ClockAction::Step { delta_ms: 50 }).unwrap();
@@ -1135,6 +1259,44 @@ mod tests {
             .replace_graph(0, EditorEventGraph::default(), true)
             .is_err());
         assert!(viewer.game(Request::Undock).is_err());
+
+        let mut first_layout = default_pioneer_room_layout();
+        first_layout.rooms[0].name.push_str(" shared");
+        let first_state = editor.replace_room_layout(0, first_layout).unwrap();
+        assert_eq!(first_state.revision, 1);
+        assert_eq!(
+            editor
+                .snapshot()
+                .unwrap()
+                .assets
+                .unwrap()
+                .pioneer_room_layout,
+            Some(first_state.clone())
+        );
+        assert!(editor
+            .replace_room_layout(0, first_state.document.clone())
+            .is_err());
+        assert!(viewer
+            .replace_room_layout(1, first_state.document.clone())
+            .is_err());
+
+        // Host-authorized geometry edits remain available while the shared
+        // simulation is running; a second peer observes the same revision.
+        host.clock(ClockAction::Play).unwrap();
+        let mut second_layout = first_state.document.clone();
+        second_layout.rooms[1].name.push_str(" running");
+        let second_state = host.replace_room_layout(1, second_layout).unwrap();
+        assert_eq!(second_state.revision, 2);
+        assert_eq!(
+            editor
+                .snapshot()
+                .unwrap()
+                .assets
+                .unwrap()
+                .pioneer_room_layout,
+            Some(second_state)
+        );
+        host.clock(ClockAction::Pause).unwrap();
         assert!(DevelopmentEditorClient::connect(
             host.local_addr(),
             "wrong-secret",

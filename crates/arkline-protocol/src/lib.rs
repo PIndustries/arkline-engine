@@ -1,11 +1,15 @@
 //! Arkline v0.1 wire format and canonical economic event encoding.
 //! One JSON request/response per line over a local TCP connection.
+mod editor_scene;
+pub use editor_scene::*;
 mod editor_graph;
 pub use editor_graph::*;
 mod room_equipment;
 pub use room_equipment::*;
 mod pioneer_interior;
 pub use pioneer_interior::*;
+mod room_layout;
+pub use room_layout::*;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -1054,6 +1058,9 @@ pub struct CorporationView {
 pub struct AssetsView {
     #[serde(default)]
     pub pioneer_room: Option<PioneerRoomState>,
+    /// Host-authoritative, validated room geometry when a project layout is active.
+    #[serde(default)]
+    pub pioneer_room_layout: Option<RoomLayoutState>,
     #[serde(default)]
     pub hangar: Option<HangarView>,
     #[serde(default)]

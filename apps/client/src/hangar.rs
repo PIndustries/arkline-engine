@@ -38,6 +38,8 @@ pub struct HangarView {
     editor_free_camera: Option<(Vec3, f32, f32)>,
     editor_free_camera_active: bool,
     last_camera_pose: Option<(Vec3, f32, f32)>,
+    room_layout: Option<arkline_protocol::RoomLayoutState>,
+    room_parts: Option<pioneer_interior::LayoutPartsCache>,
 }
 impl HangarView {
     // egui callbacks share ownership on one browser thread; SendWrapper guards access.
@@ -68,6 +70,8 @@ impl HangarView {
             editor_free_camera: None,
             editor_free_camera_active: false,
             last_camera_pose: None,
+            room_layout: None,
+            room_parts: None,
         }
     }
     #[cfg(not(target_arch = "wasm32"))]
@@ -107,6 +111,23 @@ impl HangarView {
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     pub fn editor_camera_pose(&self) -> Option<(Vec3, f32, f32)> {
         self.last_camera_pose
+    }
+    pub(crate) fn set_room_layout(&mut self, layout: Option<arkline_protocol::RoomLayoutState>) {
+        if let Some(next) = layout.as_ref() {
+            if self
+                .room_parts
+                .as_ref()
+                .is_some_and(|cached| cached.matches(next))
+            {
+                self.room_layout = layout;
+                return;
+            }
+        }
+        let layout = layout.filter(|state| state.document.validate_live().is_ok());
+        self.room_parts = layout
+            .as_ref()
+            .and_then(pioneer_interior::LayoutPartsCache::new);
+        self.room_layout = layout;
     }
     pub fn walk_turn(&self, heading: f64) -> f64 {
         if !self.walking {
@@ -153,6 +174,7 @@ impl HangarView {
             .as_ref()
             .is_some_and(|a| a.onboard_interior);
         let interior_deck = pilot.station_avatar.as_ref().map_or(1, |a| a.interior_deck);
+        let room_document = self.room_layout.as_ref().map(|layout| &layout.document);
         let reset_heading = self.fleet_mode != fleet.is_some()
             || self.walking != walking
             || self.interior != interior
@@ -234,7 +256,13 @@ impl HangarView {
         eye.y = eye.y.max(0.6);
         if walking {
             eye = if interior {
-                pioneer_interior::camera_with_room(target, eye, interior_deck, room)
+                pioneer_interior::camera_with_layout(
+                    target,
+                    eye,
+                    interior_deck,
+                    room_document,
+                    room,
+                )
             } else if let Some(fleet) = fleet {
                 fleet_hangar::camera(fleet, target, eye)
             } else {
@@ -267,8 +295,18 @@ impl HangarView {
             0.08,
             30000.0,
         ) * Mat4::look_at_rh(eye, look_target, Vec3::Y);
+        let interior_base = if interior {
+            Some(
+                self.room_parts
+                    .as_ref()
+                    .map(|cache| cache.parts(interior_deck))
+                    .unwrap_or_else(|| pioneer_interior::cached_parts(interior_deck)),
+            )
+        } else {
+            None
+        };
         let mut parts = if interior {
-            pioneer_interior::parts_with_room(interior_deck, room)
+            pioneer_interior::state_parts(interior_deck, room)
         } else if let Some(fleet) = fleet {
             let mut p = fleet_hangar::parts(fleet, eye);
             let t = Mat4::from_translation(fleet_hangar::quarters_offset());
@@ -310,7 +348,13 @@ impl HangarView {
                 callback: Arc::new(egui_glow::CallbackFn::new(move |_, _| {
                     if let Ok(renderer) = renderer.lock() {
                         unsafe {
-                            paint(&renderer, vp, eye, &parts);
+                            paint_with_base(
+                                &renderer,
+                                vp,
+                                eye,
+                                interior_base.as_ref().map(|parts| parts.as_slice()),
+                                &parts,
+                            );
                         }
                     }
                 })),
@@ -353,8 +397,18 @@ impl HangarView {
             egui::Color32::from_rgb(150, 220, 185),
         );
         if interior {
-            pioneer_interior::labels(ui, rect, vp, pilot, live);
-            pioneer_interior::device_panel(ui, rect, vp, eye, pilot, room, live, unobstructed)
+            pioneer_interior::labels(ui, rect, vp, pilot, live, room_document);
+            pioneer_interior::device_panel(
+                ui,
+                rect,
+                vp,
+                eye,
+                pilot,
+                room,
+                room_document,
+                live,
+                unobstructed,
+            )
         } else if let Some(fleet) = fleet {
             let terminal = quarters::fleet_terminals(ui, rect, vp, eye, pilot, unobstructed, live);
             terminal.or_else(|| {
@@ -728,7 +782,18 @@ fn apply_material_preview(parts: &mut [ModelPart], preview: crate::EmbeddedMater
         (*color, *emission) = preview_material(*mesh, *color, *emission, Some(preview.validated()));
     }
 }
+#[cfg(not(target_arch = "wasm32"))]
 pub(super) unsafe fn paint(renderer: &Renderer, vp: Mat4, eye: Vec3, parts: &[ModelPart]) {
+    paint_with_base(renderer, vp, eye, None, parts);
+}
+
+unsafe fn paint_with_base(
+    renderer: &Renderer,
+    vp: Mat4,
+    eye: Vec3,
+    base: Option<&[ModelPart]>,
+    dynamic: &[ModelPart],
+) {
     #[cfg(not(target_arch = "wasm32"))]
     renderer.debug_metrics.set(Default::default());
     if renderer.destroyed {
@@ -749,8 +814,10 @@ pub(super) unsafe fn paint(renderer: &Renderer, vp: Mat4, eye: Vec3, parts: &[Mo
             .as_ref(),
         1.0,
     );
-    let mut lights: Vec<_> = parts
-        .iter()
+    let mut lights: Vec<_> = base
+        .into_iter()
+        .flatten()
+        .chain(dynamic.iter())
         .filter(|(mesh, _, color, emission)| {
             *mesh == 0 && *emission >= 0.7 && color.min_element() > 0.25
         })
@@ -768,7 +835,7 @@ pub(super) unsafe fn paint(renderer: &Renderer, vp: Mat4, eye: Vec3, parts: &[Mo
     gl.uniform_matrix_4_f32_slice(renderer.uniforms.vp.as_ref(), false, &vp.to_cols_array());
     gl.uniform_3_f32(renderer.uniforms.eye.as_ref(), eye.x, eye.y, eye.z);
     gl.uniform_1_i32(renderer.uniforms.material.as_ref(), 0);
-    for &(mesh, model, color, emission) in parts {
+    for &(mesh, model, color, emission) in base.into_iter().flatten().chain(dynamic.iter()) {
         renderer.draw(mesh, model, color, emission);
     }
     renderer.restore_shadow_texture(shadow_texture);

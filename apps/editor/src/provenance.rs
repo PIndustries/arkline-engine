@@ -251,7 +251,7 @@ fn inspect(project: &Path, file: AssetFile, id: Option<u64>) -> Result<Report, S
     ] {
         match std::fs::symlink_metadata(&path) {
             Ok(m) if m.file_type().is_symlink() => {
-                return Err("Linked asset paths are not inspected".into())
+                return Err("Linked asset paths are not inspected".into());
             }
             Ok(_) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}

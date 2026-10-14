@@ -16,6 +16,22 @@ pub(super) fn stop(p: &mut Pilot) {
     }
 }
 pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result<()> {
+    if matches!(&r, Request::ExitInterior)
+        && w.pilots.get(name).is_some_and(|pilot| {
+            pilot.view.ship_class == ShipClass::Pioneer
+                && pilot
+                    .view
+                    .station_avatar
+                    .as_ref()
+                    .is_some_and(|avatar| avatar.onboard_interior && avatar.interior_deck == 1)
+                && w.accounts
+                    .get(name)
+                    .and_then(|account| account.pioneer_room.as_ref())
+                    .is_some_and(|room| !room.door_open)
+        })
+    {
+        bail!("open the Pioneer airlock before exiting the interior");
+    }
     let fleet = w.accounts.get(name).is_some_and(|a| a.fleet_hangar);
     let p = w.pilots.get_mut(name).context("pilot missing")?;
     ensure!(
@@ -212,7 +228,7 @@ fn in_obstacle(position: [f64; 3], obstacle: &StationObstacle) -> bool {
         && position[2] < obstacle.max[2] + r
 }
 /// Existing saves may place an avatar where new walls or furnishings now stand.
-pub(super) fn migrate(w: &mut World) {
+pub(super) fn migrate(w: &mut World, room_layout: Option<&RoomLayoutDocument>) {
     let doors: std::collections::BTreeMap<_, _> = w
         .pilots
         .keys()
@@ -221,10 +237,16 @@ pub(super) fn migrate(w: &mut World) {
     for (name, p) in &mut w.pilots {
         let fleet = w.accounts.get(name).is_some_and(|a| a.fleet_hangar);
         if let Some(a) = &mut p.view.station_avatar {
-            if obstacles_for(p.view.ship_class, a.onboard_interior, fleet)
-                .iter()
-                .chain(doors.get(name))
-                .any(|o| in_obstacle(a.position, o))
+            if obstacles_for(
+                p.view.ship_class,
+                a.onboard_interior,
+                fleet,
+                room_layout,
+                a.interior_deck,
+            )
+            .iter()
+            .chain(doors.get(name))
+            .any(|o| in_obstacle(a.position, o))
             {
                 a.position = if a.onboard_interior {
                     PIONEER_INTERIOR_ENTRY
@@ -240,7 +262,7 @@ pub(super) fn migrate(w: &mut World) {
         }
     }
 }
-pub(super) fn advance(w: &mut World, now: u64) {
+pub(super) fn advance(w: &mut World, now: u64, room_layout: Option<&RoomLayoutDocument>) {
     let doors: std::collections::BTreeMap<_, _> = w
         .pilots
         .keys()
@@ -279,7 +301,13 @@ pub(super) fn advance(w: &mut World, now: u64) {
             / 1000.0;
         let layout = layout_for(p.view.ship_class, fleet);
         let hull = p.view.ship_class.spec();
-        let mut obstacles = obstacles_for(p.view.ship_class, a.onboard_interior, fleet);
+        let mut obstacles = obstacles_for(
+            p.view.ship_class,
+            a.onboard_interior,
+            fleet,
+            room_layout,
+            a.interior_deck,
+        );
         if let Some(door) = doors.get(name) {
             obstacles.push(*door);
         }
@@ -328,7 +356,35 @@ pub(super) fn advance(w: &mut World, now: u64) {
         }
     }
 }
-pub(super) fn validate(w: &World) -> Result<()> {
+pub(super) fn validate_room_layout(w: &World, document: &RoomLayoutDocument) -> Result<()> {
+    document.validate_live().map_err(anyhow::Error::msg)?;
+    for (name, pilot) in &w.pilots {
+        if pilot.view.ship_class != ShipClass::Pioneer {
+            continue;
+        }
+        let Some(avatar) = pilot
+            .view
+            .station_avatar
+            .as_ref()
+            .filter(|avatar| avatar.onboard_interior)
+        else {
+            continue;
+        };
+        let mut obstacles = document.obstacles(avatar.interior_deck);
+        if let Some(door) = room_controls::door_obstacle(w, name) {
+            obstacles.push(door);
+        }
+        ensure!(
+            !obstacles
+                .iter()
+                .any(|obstacle| in_obstacle(avatar.position, obstacle)),
+            "room layout would trap station avatar for {name}"
+        );
+    }
+    Ok(())
+}
+
+pub(super) fn validate(w: &World, room_layout: Option<&RoomLayoutDocument>) -> Result<()> {
     for (name, p) in &w.pilots {
         let fleet = w.accounts.get(name).is_some_and(|a| a.fleet_hangar);
         if let Some(a) = &p.view.station_avatar {
@@ -352,10 +408,16 @@ pub(super) fn validate(w: &World) -> Result<()> {
                             && a.position[0] <= 31.7
                             && a.position[2] >= 0.3
                             && a.position[2] <= 13.7))
-                    && !obstacles_for(p.view.ship_class, a.onboard_interior, fleet)
-                        .iter()
-                        .chain(room_controls::door_obstacle(w, name).as_ref())
-                        .any(|o| in_obstacle(a.position, o)),
+                    && !obstacles_for(
+                        p.view.ship_class,
+                        a.onboard_interior,
+                        fleet,
+                        room_layout,
+                        a.interior_deck,
+                    )
+                    .iter()
+                    .chain(room_controls::door_obstacle(w, name).as_ref())
+                    .any(|o| in_obstacle(a.position, o)),
                 "invalid station avatar"
             );
         }
@@ -363,9 +425,17 @@ pub(super) fn validate(w: &World) -> Result<()> {
     Ok(())
 }
 
-fn obstacles_for(class: ShipClass, interior: bool, fleet: bool) -> Vec<StationObstacle> {
+fn obstacles_for(
+    class: ShipClass,
+    interior: bool,
+    fleet: bool,
+    room_layout: Option<&RoomLayoutDocument>,
+    deck: u8,
+) -> Vec<StationObstacle> {
     if interior {
-        pioneer_interior_obstacles()
+        room_layout.map_or_else(pioneer_interior_obstacles, |document| {
+            document.obstacles(deck)
+        })
     } else if fleet {
         fleet_station_obstacles()
     } else {

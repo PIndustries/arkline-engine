@@ -236,7 +236,7 @@ fn document_path(project: &Path, create: bool) -> Result<PathBuf, String> {
         Ok(m) if !m.is_file() || m.file_type().is_symlink() => {
             return Err(
                 "Engineering destination must be an ordinary file, not a symbolic link".into(),
-            )
+            );
         }
         Ok(_) => {}
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}

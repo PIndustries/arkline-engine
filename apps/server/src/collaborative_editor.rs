@@ -3,7 +3,8 @@
 use crate::editor::EditorWorld;
 use anyhow::{ensure, Result};
 use arkline_protocol::{
-    AssetsView, EditorEventGraph, EditorGraphDebug, Request, Response, Snapshot,
+    AssetsView, EditorEventGraph, EditorGraphDebug, EditorSceneState, Request, Response,
+    RoomLayoutDocument, RoomLayoutState, Snapshot,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -162,6 +163,28 @@ impl CollaborativeEditorHost {
         })
     }
 
+    /// Place only the authenticated actor's avatar in this development world.
+    pub fn set_scene_state(&mut self, id: EditorSessionId, state: EditorSceneState) -> Result<()> {
+        self.require_editor(id)?;
+        let session = &self.sessions.get(&id).expect("role checked").server_session;
+        self.world.set_scene_state(session, state)
+    }
+
+    pub fn room_layout_state(&self, id: EditorSessionId) -> Result<RoomLayoutState> {
+        ensure!(self.sessions.contains_key(&id), "unknown editor session");
+        Ok(self.world.room_layout_state())
+    }
+
+    pub fn room_layout_replace(
+        &mut self,
+        id: EditorSessionId,
+        expected_revision: u64,
+        document: RoomLayoutDocument,
+    ) -> Result<RoomLayoutState> {
+        self.require_editor(id)?;
+        self.world.room_layout_replace(expected_revision, document)
+    }
+
     pub fn play(&mut self, id: EditorSessionId) -> Result<()> {
         self.require_role(id, CollaborationRole::Host)?;
         self.world.play();
@@ -265,6 +288,91 @@ mod tests {
             supports_fleet_hangar: true,
             supports_pioneer_interior: true,
         }
+    }
+
+    #[test]
+    fn scene_state_changes_only_the_actor_and_viewers_observe_without_mutation_rights() {
+        let path = path();
+        let mut authority = CollaborativeEditorHost::open(&path).unwrap();
+        let (host, _) = authority
+            .join(CollaborationRole::Host, connect("SceneHost"))
+            .unwrap();
+        let (editor, _) = authority
+            .join(CollaborationRole::Editor, connect("SceneEditor"))
+            .unwrap();
+        let (viewer, _) = authority
+            .join(CollaborationRole::Viewer, Request::Snapshot)
+            .unwrap();
+        let before = authority.snapshot(viewer).unwrap();
+        authority
+            .set_scene_state(editor, EditorSceneState::InteriorDeck2)
+            .unwrap();
+        let after = authority.snapshot(viewer).unwrap();
+        assert_eq!(after.simulation_time_ms, before.simulation_time_ms);
+        assert!(after.paused);
+        assert_eq!(
+            serde_json::to_value(
+                after
+                    .snapshot
+                    .pilots
+                    .iter()
+                    .find(|p| p.name == "SceneHost")
+                    .unwrap()
+            )
+            .unwrap(),
+            serde_json::to_value(
+                before
+                    .snapshot
+                    .pilots
+                    .iter()
+                    .find(|p| p.name == "SceneHost")
+                    .unwrap()
+            )
+            .unwrap(),
+        );
+        assert_eq!(
+            after
+                .snapshot
+                .pilots
+                .iter()
+                .find(|p| p.name == "SceneEditor")
+                .unwrap()
+                .station_avatar
+                .as_ref()
+                .unwrap()
+                .interior_deck,
+            2
+        );
+        assert!(authority
+            .set_scene_state(viewer, EditorSceneState::Cockpit)
+            .is_err());
+        assert_eq!(
+            serde_json::to_value(authority.snapshot(viewer).unwrap().snapshot).unwrap(),
+            serde_json::to_value(after.snapshot).unwrap(),
+        );
+        authority.play(host).unwrap();
+        authority
+            .set_scene_state(host, EditorSceneState::StationHangar)
+            .unwrap();
+        assert!(!authority.is_paused());
+        assert!(authority
+            .snapshot(editor)
+            .unwrap()
+            .snapshot
+            .pilots
+            .iter()
+            .find(|p| p.name == "SceneHost")
+            .unwrap()
+            .station_avatar
+            .is_some());
+        authority.leave(editor).unwrap();
+        assert!(authority
+            .set_scene_state(editor, EditorSceneState::Cockpit)
+            .is_err());
+        authority.leave(viewer).unwrap();
+        authority.leave(host).unwrap();
+        drop(authority);
+        std::fs::remove_dir_all(path).unwrap();
     }
 
     #[test]

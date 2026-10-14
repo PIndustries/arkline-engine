@@ -439,7 +439,12 @@ fn worker(id: String, rx: Receiver<Command>, tx: mpsc::Sender<Event>, current: A
             match stored.filter(|c| !expired(c)) {
                 Some(c) => {
                     if finish(&id, &client, c, 0, &current, &tx, false).is_err() {
-                        send_state(&tx,0,AuthPhase::SignedOut,"Stored GitHub session could not be verified. Sign in again or retry after reconnecting.");
+                        send_state(
+                            &tx,
+                            0,
+                            AuthPhase::SignedOut,
+                            "Stored GitHub session could not be verified. Sign in again or retry after reconnecting.",
+                        );
                     }
                 }
                 None => {

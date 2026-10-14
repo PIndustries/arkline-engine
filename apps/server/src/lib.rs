@@ -122,6 +122,7 @@ impl Drop for OwnershipLock {
 /// The durable state and its economic event commit in one SQLite transaction.
 pub struct Server {
     local_development: bool,
+    editor_room_layout: Option<RoomLayoutDocument>,
     editor_time: Option<u64>,
     db: Connection,
     auth: Option<identity::Authenticator>,
@@ -135,6 +136,19 @@ pub struct Server {
     _ownership_lock: Option<OwnershipLock>,
 }
 impl Server {
+    pub(crate) fn set_editor_room_layout(&mut self, document: RoomLayoutDocument) {
+        self.editor_room_layout = Some(document);
+    }
+
+    pub(crate) fn validate_editor_room_layout(&self, document: &RoomLayoutDocument) -> Result<()> {
+        document.validate_live().map_err(anyhow::Error::msg)?;
+        let json: String = self
+            .db
+            .query_row("SELECT json FROM world WHERE id=1", [], |row| row.get(0))?;
+        let world: World = serde_json::from_str(&json)?;
+        station::validate_room_layout(&world, document)
+    }
+
     pub fn is_local_development(&self) -> bool {
         self.local_development
     }
@@ -152,6 +166,23 @@ impl Server {
         path: impl AsRef<Path>,
         local_development: bool,
         editor_mode: bool,
+    ) -> Result<Self> {
+        Self::open_realm_with_layout(path, local_development, editor_mode, None)
+    }
+
+    pub(crate) fn open_editor_realm(
+        path: impl AsRef<Path>,
+        document: RoomLayoutDocument,
+    ) -> Result<Self> {
+        document.validate_live().map_err(anyhow::Error::msg)?;
+        Self::open_realm_with_layout(path, true, true, Some(document))
+    }
+
+    fn open_realm_with_layout(
+        path: impl AsRef<Path>,
+        local_development: bool,
+        editor_mode: bool,
+        editor_room_layout: Option<RoomLayoutDocument>,
     ) -> Result<Self> {
         let path = path.as_ref();
         if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
@@ -218,7 +249,13 @@ impl Server {
         room_controls::advance(&mut world, now)?;
         world.remote_controls.clear();
         resource_jobs::cancel_all(&mut world, now, "Server restarted");
-        station::migrate(&mut world);
+        if let Some(room_layout) = editor_room_layout.as_ref() {
+            // An editor layout must be compatible with persisted pilot
+            // positions before migration. Do not silently relocate avatars
+            // when an externally changed layout file would trap them.
+            station::validate_room_layout(&world, room_layout)?;
+        }
+        station::migrate(&mut world, editor_room_layout.as_ref());
         for pilot in world.pilots.values_mut() {
             mining::stop_all(pilot, "Server restarted");
             pilot.controls = None;
@@ -238,13 +275,14 @@ impl Server {
                 }
             }
         }
-        validate(&world)?;
+        validate(&world, editor_room_layout.as_ref())?;
         let stopped = serde_json::to_string(&world)?;
         if stopped != json {
             db.execute("UPDATE world SET json=?1 WHERE id=1", [stopped])?;
         }
         Ok(Self {
             local_development,
+            editor_room_layout,
             editor_time,
             db,
             auth: None,
@@ -464,7 +502,7 @@ impl Server {
         power::advance(&mut world, now)?;
         room_controls::advance(&mut world, now)?;
         flight::advance(&mut world, now);
-        station::advance(&mut world, now);
+        station::advance(&mut world, now, self.editor_room_layout.as_ref());
         surface::update(&mut world);
         universe::advance_locks(&mut world, now);
         let mut events = mining::advance(&mut world, now);
@@ -475,7 +513,7 @@ impl Server {
         for event in events {
             append_event(&tx, &mut entries, event, now)?;
         }
-        validate(&world)?;
+        validate(&world, self.editor_room_layout.as_ref())?;
         let next = serde_json::to_string(&world)?;
         if next != json {
             tx.execute("UPDATE world SET json=?1 WHERE id=1", [next])?;
@@ -524,7 +562,7 @@ impl Server {
                 worker == name && self.online_sessions.contains_key(controller)
             });
         if delegated {
-            validate(&world)?;
+            validate(&world, self.editor_room_layout.as_ref())?;
             tx.execute(
                 "UPDATE world SET json=?1 WHERE id=1",
                 [serde_json::to_string(&world)?],
@@ -552,7 +590,7 @@ impl Server {
                 }
             }
         }
-        validate(&world)?;
+        validate(&world, self.editor_room_layout.as_ref())?;
         let next = serde_json::to_string(&world)?;
         if next != json {
             tx.execute("UPDATE world SET json=?1 WHERE id=1", [next])?;
@@ -606,7 +644,7 @@ impl Server {
         power::advance(&mut world, now)?;
         room_controls::advance(&mut world, now)?;
         flight::advance(&mut world, now);
-        station::advance(&mut world, now);
+        station::advance(&mut world, now, self.editor_room_layout.as_ref());
         surface::update(&mut world);
         universe::advance_locks(&mut world, now);
         let mut token = None;
@@ -1267,7 +1305,7 @@ impl Server {
         drones::ensure_fleets(&mut world)?;
         power::advance(&mut world, now)?;
         room_controls::advance(&mut world, now)?;
-        validate(&world)?;
+        validate(&world, self.editor_room_layout.as_ref())?;
         let mut entries = load_entries(&tx, export)?;
         for event in cycle_events.into_iter().chain(event) {
             append_event(&tx, &mut entries, event, now)?;
@@ -1393,8 +1431,8 @@ fn add_cargo(current: u64, units: u64, capacity: u64) -> Result<u64> {
     ensure!(next <= capacity, "cargo capacity exceeded");
     Ok(next)
 }
-fn validate(world: &World) -> Result<()> {
-    station::validate(world)?;
+fn validate(world: &World, room_layout: Option<&RoomLayoutDocument>) -> Result<()> {
+    station::validate(world, room_layout)?;
     remote_control::validate(world)?;
     resource_jobs::validate(world)?;
     surface::validate(world)?;

@@ -753,7 +753,7 @@ fn path(project: &Path, create: bool) -> Result<PathBuf, String> {
     let path = project.join("Events/Pioneer.events.json");
     match fs::symlink_metadata(&path) {
         Ok(m) if !m.is_file() || m.file_type().is_symlink() => {
-            return Err("Event graph must be an ordinary file.".into())
+            return Err("Event graph must be an ordinary file.".into());
         }
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.to_string()),
         _ => {}

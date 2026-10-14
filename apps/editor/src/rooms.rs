@@ -1,10 +1,10 @@
-//! Local candidate room-layout authoring. This document is not consumed by the
-//! running interior renderer, collision model, equipment controls, or server.
-use arkline_protocol::{pioneer_rooms, PIONEER_CONNECTED_ROOM, PIONEER_INTERIOR_SIZE};
+//! Local room authoring and explicit revision-checked application to the live ship.
+use arkline_client::EmbeddedClient;
+use arkline_protocol::{
+    current_source_document, RoomLayout, RoomLayoutDocument, RoomLayoutState, PIONEER_INTERIOR_SIZE,
+};
 use eframe::egui;
-use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashSet,
     fs::{self, OpenOptions},
     io::{Read, Write},
     path::{Path, PathBuf},
@@ -15,12 +15,6 @@ use std::{
 
 const MAX_BYTES: u64 = 64 * 1024;
 const MAX_ROOMS: usize = 24;
-const ROOM_LENGTH_M: f64 = 8.9333333333;
-const ROOM_DEPTH_M: f64 = 5.4;
-const ROOM_CLEAR_HEIGHT_M: f64 = 3.2;
-const DOOR_WIDTH_M: f64 = 1.4;
-const DOOR_HEIGHT_M: f64 = 2.4;
-const DOOR_WALL_TOLERANCE_M: f64 = 0.25;
 const RUNTIME_SOURCE: &str = "arkline-protocol::pioneer_interior";
 static TEMP_ID: AtomicU64 = AtomicU64::new(0);
 
@@ -46,201 +40,40 @@ struct PendingOperation {
     draft_revision: u64,
 }
 
-/// `source_room_id` uses the existing proposed room-plan IDs (D1-P1, etc.).
-/// `id` is this document's stable local object ID; added rooms have no source ID.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct RoomLayout {
-    pub id: u64,
-    pub source_room_id: Option<String>,
-    /// Current protocol room identifier, when the runtime defines one.
-    pub runtime_room_id: Option<String>,
-    pub source_role: Option<String>,
-    pub name: String,
-    pub deck: u8,
-    /// Deck-plan origin, meters from the current interior instance origin.
-    pub origin_xz_m: [f64; 2],
-    /// Candidate clear length, depth, and height in meters.
-    pub clear_lwh_m: [f64; 3],
-    /// Door center in deck-plan X/Z meters, matching the current runtime frame.
-    pub door_center_xz_m: [f64; 2],
-    pub door_clear_wh_m: [f64; 2],
+trait RoomLayoutAuthoring {
+    fn add_room(&mut self) -> Result<u64, String>;
 }
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct RoomLayoutDocument {
-    pub schema_version: u32,
-    pub next_id: u64,
-    pub rooms: Vec<RoomLayout>,
-}
-
-impl RoomLayoutDocument {
-    pub fn validate(&self) -> Result<(), String> {
-        if self.schema_version != 1 || self.next_id == 0 || self.rooms.len() > MAX_ROOMS {
-            return Err(
-                "Room layout schema must be 1, next_id positive, and contain at most 24 rooms"
-                    .into(),
-            );
-        }
-        let mut ids = HashSet::new();
-        let mut source_ids = HashSet::new();
-        for room in &self.rooms {
-            if room.id == 0 || room.id >= self.next_id || !ids.insert(room.id) {
-                return Err("Room IDs must be unique, positive, and below next_id".into());
-            }
-            if let Some(source_id) = &room.source_room_id {
-                if source_id.trim().is_empty()
-                    || source_id.len() > 32
-                    || !source_ids.insert(source_id)
-                {
-                    return Err(format!(
-                        "Room #{} has an invalid or duplicate source room ID",
-                        room.id
-                    ));
-                }
-            }
-            if room
-                .runtime_room_id
-                .as_ref()
-                .is_some_and(|id| id.trim().is_empty() || id.len() > 80)
-            {
-                return Err(format!(
-                    "Room #{} has an invalid runtime room ID reference",
-                    room.id
-                ));
-            }
-            if room.name.trim().is_empty() || room.name.len() > 80 {
-                return Err(format!(
-                    "Room #{} needs a name of at most 80 bytes",
-                    room.id
-                ));
-            }
-            if room
-                .source_role
-                .as_ref()
-                .is_some_and(|role| role.len() > 80)
-            {
-                return Err(format!("Room #{} source role exceeds 80 bytes", room.id));
-            }
-            if !(1..=2).contains(&room.deck) {
-                return Err(format!("Room #{} deck must be 1 or 2", room.id));
-            }
-            let finite = room
-                .origin_xz_m
-                .iter()
-                .chain(room.clear_lwh_m.iter())
-                .chain(room.door_center_xz_m.iter())
-                .chain(room.door_clear_wh_m.iter())
-                .all(|v| v.is_finite());
-            if !finite
-                || room.clear_lwh_m.iter().any(|v| *v <= 0.0)
-                || room.door_clear_wh_m.iter().any(|v| *v <= 0.0)
-            {
-                return Err(format!(
-                    "Room #{} dimensions and positions must be finite; dimensions must be positive",
-                    room.id
-                ));
-            }
-            let [origin_x, origin_z] = room.origin_xz_m;
-            let [length, depth, height] = room.clear_lwh_m;
-            if origin_x < 0.0
-                || origin_z < 0.0
-                || origin_x + length > PIONEER_INTERIOR_SIZE[0]
-                || origin_z + depth > PIONEER_INTERIOR_SIZE[1]
-                || height > 12.0
-            {
-                return Err(format!(
-                    "Room #{} clear box must fit the 32 × 14 m deck plan and remain at most 12 m high",
-                    room.id
-                ));
-            }
-            let [door_x, door_z] = room.door_center_xz_m;
-            let [door_width, door_height] = room.door_clear_wh_m;
-            let at_deck_boundary = (door_z - origin_z).abs() <= DOOR_WALL_TOLERANCE_M
-                || (door_z - (origin_z + depth)).abs() <= DOOR_WALL_TOLERANCE_M;
-            if door_x - door_width / 2.0 < origin_x
-                || door_x + door_width / 2.0 > origin_x + length
-                || !at_deck_boundary
-                || door_height > height
-            {
-                return Err(format!(
-                    "Room #{} door opening must fit the room width/height and lie on a front or rear room edge",
-                    room.id
-                ));
-            }
-            if self.rooms.iter().any(|other| {
-                other.id != room.id
-                    && other.deck == room.deck
-                    && origin_x < other.origin_xz_m[0] + other.clear_lwh_m[0]
-                    && other.origin_xz_m[0] < origin_x + length
-                    && origin_z < other.origin_xz_m[1] + other.clear_lwh_m[1]
-                    && other.origin_xz_m[1] < origin_z + depth
-            }) {
-                return Err(format!(
-                    "Room #{} clear box overlaps another room on deck {}",
-                    room.id, room.deck
-                ));
-            }
-        }
-        Ok(())
-    }
-
+impl RoomLayoutAuthoring for RoomLayoutDocument {
     fn add_room(&mut self) -> Result<u64, String> {
         if self.rooms.len() >= MAX_ROOMS {
-            return Err("Maximum 24 candidate rooms".into());
+            return Err("Maximum 24 rooms".into());
         }
         let id = self.next_id;
-        let next_id = id.checked_add(1).ok_or("Room ID space exhausted")?;
+        self.next_id = id.checked_add(1).ok_or("Room ID space exhausted")?;
         self.rooms.push(RoomLayout {
             id,
             source_room_id: None,
             runtime_room_id: None,
             source_role: None,
-            name: format!("Candidate room {id}"),
+            name: format!("Room {id}"),
             deck: 1,
             origin_xz_m: [0.2, 0.2],
             clear_lwh_m: [4.0, 4.0, 3.2],
             door_center_xz_m: [2.2, 0.2],
-            door_clear_wh_m: [1.0, 2.0],
+            door_clear_wh_m: [1.4, 2.4],
         });
-        self.next_id = next_id;
         Ok(id)
     }
 }
 
-/// Mirrors the current twelve-room source as an editable baseline. Source IDs
-/// match `docs/ships/pioneer/rooms/rooms.json`; role names and coordinates come
-/// from `pioneer_rooms(deck)`. No runtime file is changed by this conversion.
-pub fn current_source_document() -> RoomLayoutDocument {
-    let source_ids = [
-        ["D1-P1", "D1-S1", "D1-P2", "D1-S2", "D1-P3", "D1-S3"],
-        ["D2-P1", "D2-S1", "D2-P2", "D2-S2", "D2-P3", "D2-S3"],
-    ];
-    let mut rooms = Vec::with_capacity(12);
-    for deck in 1..=2u8 {
-        for (index, (role, x, z)) in pioneer_rooms(deck).iter().enumerate() {
-            let door_z = if *z < 7.0 { 5.65 } else { 8.2 };
-            rooms.push(RoomLayout {
-                id: rooms.len() as u64 + 1,
-                source_room_id: Some(source_ids[usize::from(deck - 1)][index].into()),
-                runtime_room_id: (deck == 1 && index == 0)
-                    .then(|| PIONEER_CONNECTED_ROOM.room_id.into()),
-                source_role: Some((*role).into()),
-                name: (*role).into(),
-                deck,
-                origin_xz_m: [*x, *z],
-                clear_lwh_m: [ROOM_LENGTH_M, ROOM_DEPTH_M, ROOM_CLEAR_HEIGHT_M],
-                door_center_xz_m: [*x + ROOM_LENGTH_M / 2.0, door_z],
-                door_clear_wh_m: [DOOR_WIDTH_M, DOOR_HEIGHT_M],
-            });
-        }
-    }
-    RoomLayoutDocument {
-        schema_version: 1,
-        next_id: 13,
-        rooms,
-    }
+struct SaveApply {
+    generation: u64,
+    revision: u64,
+    document: RoomLayoutDocument,
+}
+struct PendingLive {
+    id: u64,
+    revision: u64,
 }
 
 pub struct Rooms {
@@ -254,6 +87,13 @@ pub struct Rooms {
     draft_revision: u64,
     load_blocked: bool,
     explicit_reset: bool,
+    live: Option<RoomLayoutState>,
+    based_on_revision: Option<u64>,
+    live_generation: u64,
+    save_apply: Option<SaveApply>,
+    ready_apply: Option<SaveApply>,
+    pending_live: Option<PendingLive>,
+    save_apply_canceled: bool,
 }
 
 impl Rooms {
@@ -288,6 +128,13 @@ impl Rooms {
             draft_revision: 0,
             load_blocked: true,
             explicit_reset: false,
+            live: None,
+            based_on_revision: None,
+            live_generation: 0,
+            save_apply: None,
+            ready_apply: None,
+            pending_live: None,
+            save_apply_canceled: false,
         };
         if panel.io_requests.is_some() {
             panel.queue(
@@ -298,6 +145,15 @@ impl Rooms {
             panel.message = "Could not start room layout I/O worker. Reset explicitly before replacing any saved file.".into();
         }
         panel
+    }
+
+    #[cfg(test)]
+    pub(crate) fn draft_room_name_by_source_id(&self, source_room_id: &str) -> Option<&str> {
+        self.draft
+            .rooms
+            .iter()
+            .find(|room| room.source_room_id.as_deref() == Some(source_room_id))
+            .map(|room| room.name.as_str())
     }
 
     fn queue(&mut self, operation: IoOperation, request: IoRequest) {
@@ -342,6 +198,7 @@ impl Rooms {
                 }
                 match (operation, result) {
                     (IoOperation::Save, Ok(document)) => {
+                        self.ready_apply = self.save_apply.take();
                         self.saved = document;
                         self.explicit_reset = false;
                         self.load_blocked = false;
@@ -350,6 +207,10 @@ impl Rooms {
                         } else {
                             "Saved the submitted snapshot; newer draft edits remain unsaved.".into()
                         };
+                        if self.save_apply_canceled {
+                            self.message.push_str(" The original session ended; its requested live apply was canceled.");
+                            self.save_apply_canceled = false;
+                        }
                     }
                     (IoOperation::Reload, Ok(document)) => {
                         if self.draft_revision == pending.draft_revision {
@@ -364,6 +225,8 @@ impl Rooms {
                         self.load_blocked = false;
                     }
                     (IoOperation::Save, Err(error)) => {
+                        self.save_apply = None;
+                        self.save_apply_canceled = false;
                         self.message = format!("Save failed: {error}")
                     }
                     (IoOperation::Reload, Err(error)) => {
@@ -403,15 +266,136 @@ impl Rooms {
         }
     }
 
-    pub fn show(&mut self, ui: &mut egui::Ui, project: &Path) {
+    fn observe_live(&mut self, state: RoomLayoutState) {
+        let unchanged_draft = self
+            .live
+            .as_ref()
+            .is_some_and(|old| self.draft == old.document);
+        let fresh_source = self.draft == current_source_document() && self.draft == self.saved;
+        if !self.load_blocked && self.pending.is_none() {
+            if unchanged_draft || fresh_source {
+                if self.draft != state.document {
+                    self.draft = state.document.clone();
+                    self.draft_revision = self.draft_revision.saturating_add(1);
+                }
+                self.based_on_revision = Some(state.revision);
+            } else if self.draft == state.document
+                || (self.based_on_revision.is_none() && state.revision == 0)
+            {
+                self.based_on_revision = Some(state.revision);
+            }
+        }
+        self.live = Some(state);
+    }
+
+    fn load_live_draft(&mut self) {
+        if let Some(state) = &self.live {
+            self.draft = state.document.clone();
+            self.based_on_revision = Some(state.revision);
+            self.draft_revision = self.draft_revision.saturating_add(1);
+            self.selected = self
+                .selected
+                .filter(|id| self.draft.rooms.iter().any(|r| r.id == *id));
+            self.explicit_reset = false;
+            self.message = format!(
+                "Loaded live revision {} into the draft; the project file changes only after Save.",
+                state.revision
+            );
+        }
+    }
+
+    fn reset_live_session(&mut self, generation: u64) {
+        if self.live_generation != generation {
+            if self.pending_live.is_some() {
+                self.message = "The previous session ended before a live acknowledgement was observed. Its edit outcome is unknown; rejoin and inspect that universe before retrying.".into();
+            } else if self.save_apply.is_some() || self.ready_apply.is_some() {
+                self.message = "The original session ended; its requested live apply was canceled. The project draft can still finish saving.".into();
+            }
+            self.save_apply_canceled |= self.save_apply.is_some();
+            self.live_generation = generation;
+            self.live = None;
+            self.based_on_revision = None;
+            self.save_apply = None;
+            self.ready_apply = None;
+            self.pending_live = None;
+        }
+    }
+
+    /// Runs even when this inspector is hidden, so completed saves apply once.
+    pub fn poll_live(&mut self, client: &mut EmbeddedClient) {
+        self.reset_live_session(client.session_generation());
         self.poll_io();
+        if let Some(pending) = &self.pending_live {
+            if let Some(ack) = client.room_layout_ack().filter(|ack| ack.id == pending.id) {
+                match &ack.result {
+                    Ok(()) => {
+                        self.based_on_revision = pending.revision.checked_add(1);
+                        self.message = "Room layout accepted by the authority. Live geometry follows the confirmed asset revision.".into();
+                    }
+                    Err(error) => {
+                        self.message = format!(
+                            "Project draft saved; live apply did not confirm success: {error}. Refresh and load live state before retrying."
+                        )
+                    }
+                }
+                self.pending_live = None;
+            }
+        }
+        if self.pending_live.is_some() && !client.ready() {
+            self.pending_live = None;
+            self.message = "The editor session stopped before a live acknowledgement was observed. The edit outcome is unknown; reconnect and load confirmed live state before retrying.".into();
+        }
+        if let Some(state) = client
+            .assets()
+            .and_then(|assets| assets.pioneer_room_layout)
+        {
+            self.observe_live(state);
+        }
+        if let Some(apply) = self.ready_apply.take() {
+            if apply.generation != client.session_generation() {
+                self.message = "Draft saved, but its original editor session ended. It was not applied to the new universe.".into();
+            } else {
+                match client.room_layout_replace(apply.revision, apply.document) {
+                    Ok(id) => {
+                        self.pending_live = Some(PendingLive {
+                            id,
+                            revision: apply.revision,
+                        });
+                        self.message =
+                            "Project draft saved; awaiting live room-layout acknowledgement…"
+                                .into();
+                    }
+                    Err(error) => {
+                        self.message =
+                            format!("Project draft saved; live apply could not be queued: {error}")
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn show(&mut self, ui: &mut egui::Ui, project: &Path, client: &mut EmbeddedClient) {
+        self.poll_live(client);
         let frame_draft = self.draft.clone();
         ui.heading("Room layout");
         ui.colored_label(
             egui::Color32::from_rgb(255, 191, 104),
-            "CANDIDATE DESIGN · local authoring only",
+            "PIONEER · LIVE INTERIOR AUTHORING",
         );
-        ui.small("Edits are saved as project data; they do not change the playable interior, walls, doors, equipment, or server behavior.");
+        ui.small("Save + apply live updates the shared Pioneer blueprint, its walls and walking collision after authority approval. Equipment and utilities keep their existing contracts.");
+        if let Some(live) = &self.live {
+            ui.label(format!(
+                "Live revision {} · draft base {}",
+                live.revision,
+                self.based_on_revision
+                    .map_or_else(|| "unlinked".into(), |r| r.to_string())
+            ));
+            if self.based_on_revision != Some(live.revision) {
+                ui.colored_label(egui::Color32::from_rgb(255, 191, 104), "This draft is not based on the latest live layout. Load live before editing/applying it.");
+            }
+        } else {
+            ui.small("Waiting for the authority's room-layout state…");
+        }
         ui.small(format!(
             "Source reference: {RUNTIME_SOURCE} · 2 decks · {:.0} × {:.0} m plan each",
             PIONEER_INTERIOR_SIZE[0], PIONEER_INTERIOR_SIZE[1]
@@ -424,8 +408,19 @@ impl Rooms {
                     Err(error) => self.message = error,
                 }
             }
-            if ui.add_enabled(self.can_save(), egui::Button::new("Save layout")).clicked() {
+            if ui.add_enabled(self.can_save(), egui::Button::new("Save draft")).clicked() {
                 self.queue(IoOperation::Save, IoRequest::Save(project.to_path_buf(), self.draft.clone()));
+            }
+            let live_ready = client.ready() && self.pending_live.is_none() && self.can_save()
+                && self.live.as_ref().is_some_and(|live| self.based_on_revision == Some(live.revision))
+                && self.draft.validate_live().is_ok();
+            if ui.add_enabled(live_ready, egui::Button::new("Save + apply live")).clicked() {
+                let apply = SaveApply { generation: client.session_generation(), revision: self.based_on_revision.unwrap(), document: self.draft.clone() };
+                self.queue(IoOperation::Save, IoRequest::Save(project.to_path_buf(), apply.document.clone()));
+                if self.pending.is_some() { self.save_apply = Some(apply); }
+            }
+            if ui.add_enabled(self.live.is_some() && self.pending.is_none() && self.pending_live.is_none(), egui::Button::new("Load live layout (replace draft)")).clicked() {
+                self.load_live_draft();
             }
             if ui.add_enabled(self.pending.is_none(), egui::Button::new("Reload saved")).clicked() {
                 self.queue(IoOperation::Reload, IoRequest::Reload(project.to_path_buf()));
@@ -445,6 +440,9 @@ impl Rooms {
         }
         if let Err(error) = self.draft.validate() {
             ui.colored_label(egui::Color32::LIGHT_RED, error);
+        }
+        if let Err(error) = self.draft.validate_live() {
+            ui.small(format!("Draft can be saved; live apply requires: {error}"));
         }
         ui.label(if !self.explicit_reset && self.draft == self.saved {
             "No unsaved room layout changes"
@@ -545,7 +543,7 @@ impl Rooms {
                     ui.add(egui::DragValue::new(value).speed(0.1).range(0.01..=12.0));
                 }
             });
-            ui.small("Door location is a candidate opening on a front/rear room edge. Runtime door geometry remains fixed until a later integration.");
+            ui.small("Live doorways face the access corridor. The connected airlock geometry stays fixed; other room walls and openings follow the accepted layout.");
             if ui
                 .add_enabled(
                     self.pending.is_none(),
@@ -642,7 +640,7 @@ impl Rooms {
                 egui::Stroke::new(2.0, egui::Color32::WHITE),
             );
         }
-        ui.small("Current source role names and room IDs are references; this project document is not a runtime layout override.");
+        ui.small("This plan previews your draft. Save + apply live asks the authority to install it; clients and collision then follow the accepted revision.");
 
         if let Some(room) =
             selected.and_then(|id| self.draft.rooms.iter().find(|room| room.id == id))
@@ -839,6 +837,13 @@ mod tests {
                 draft_revision: 0,
                 load_blocked: false,
                 explicit_reset: false,
+                live: None,
+                based_on_revision: None,
+                live_generation: 0,
+                save_apply: None,
+                ready_apply: None,
+                pending_live: None,
+                save_apply_canceled: false,
             },
             result_tx,
         )
@@ -859,6 +864,232 @@ mod tests {
         );
         assert_eq!(document.rooms[6].source_room_id.as_deref(), Some("D2-P1"));
         document.validate().unwrap();
+    }
+
+    #[test]
+    fn peer_revision_follows_clean_live_draft_but_preserves_local_edits() {
+        let (mut panel, _) = panel_with_result_sender();
+        let initial = RoomLayoutState {
+            revision: 0,
+            document: current_source_document(),
+        };
+        panel.observe_live(initial);
+        let mut changed = current_source_document();
+        changed.rooms[2].clear_lwh_m[0] = 7.0;
+        changed.validate_live().unwrap();
+        panel.observe_live(RoomLayoutState {
+            revision: 1,
+            document: changed.clone(),
+        });
+        assert_eq!(panel.draft, changed);
+        assert_eq!(panel.based_on_revision, Some(1));
+        // Receiving peer state does not pretend to have saved the local file.
+        assert_ne!(panel.saved, panel.draft);
+        panel.draft.rooms[2].name = "Unsaved local design".into();
+        let local = panel.draft.clone();
+        changed.rooms[3].name = "Peer edit".into();
+        panel.observe_live(RoomLayoutState {
+            revision: 2,
+            document: changed.clone(),
+        });
+        assert_eq!(panel.draft, local);
+        assert_eq!(panel.based_on_revision, Some(1));
+        panel.load_live_draft();
+        assert_eq!(panel.draft, changed);
+        assert_eq!(panel.based_on_revision, Some(2));
+    }
+
+    #[test]
+    fn save_completion_applies_submitted_revision_and_keeps_newer_draft() {
+        let (mut panel, result) = panel_with_result_sender();
+        let submitted = panel.draft.clone();
+        panel.pending = Some(PendingOperation {
+            kind: IoOperation::Save,
+            draft_revision: 0,
+        });
+        panel.save_apply = Some(SaveApply {
+            generation: 3,
+            revision: 8,
+            document: submitted.clone(),
+        });
+        panel.draft.rooms[2].name = "Edit made during disk write".into();
+        panel.draft_revision = 1;
+        result
+            .send(IoResult {
+                operation: IoOperation::Save,
+                result: Ok(submitted.clone()),
+            })
+            .unwrap();
+        panel.poll_io();
+        let ready = panel.ready_apply.take().unwrap();
+        assert_eq!(ready.document, submitted);
+        assert_eq!(ready.revision, 8);
+        assert_eq!(ready.generation, 3);
+        assert_eq!(panel.draft.rooms[2].name, "Edit made during disk write");
+        assert!(panel.ready_apply.is_none());
+    }
+
+    #[test]
+    fn failed_project_save_never_prepares_a_live_mutation() {
+        let (mut panel, result) = panel_with_result_sender();
+        panel.pending = Some(PendingOperation {
+            kind: IoOperation::Save,
+            draft_revision: 0,
+        });
+        panel.save_apply = Some(SaveApply {
+            generation: 0,
+            revision: 0,
+            document: panel.draft.clone(),
+        });
+        result
+            .send(IoResult {
+                operation: IoOperation::Save,
+                result: Err("disk write rejected".into()),
+            })
+            .unwrap();
+        panel.poll_io();
+        assert!(panel.save_apply.is_none());
+        assert!(panel.ready_apply.is_none());
+    }
+
+    #[test]
+    fn session_change_cancels_disk_pending_apply_and_reports_unconfirmed_issued_edit() {
+        let (mut panel, result) = panel_with_result_sender();
+        let document = panel.draft.clone();
+        panel.pending = Some(PendingOperation {
+            kind: IoOperation::Save,
+            draft_revision: 0,
+        });
+        panel.save_apply = Some(SaveApply {
+            generation: 0,
+            revision: 0,
+            document: document.clone(),
+        });
+        panel.reset_live_session(1);
+        result
+            .send(IoResult {
+                operation: IoOperation::Save,
+                result: Ok(document),
+            })
+            .unwrap();
+        panel.poll_io();
+        assert!(panel.ready_apply.is_none());
+        assert!(panel.message.contains("live apply was canceled"));
+        panel.pending_live = Some(PendingLive {
+            id: 42,
+            revision: 0,
+        });
+        panel.reset_live_session(2);
+        assert!(panel.pending_live.is_none());
+        assert!(panel.message.contains("outcome is unknown"));
+        assert_eq!(panel.live_generation, 2);
+    }
+
+    #[test]
+    fn save_apply_button_saves_project_and_updates_real_authority_while_paused() {
+        use std::time::{Duration, Instant};
+        let project = Project::new();
+        let ctx = egui::Context::default();
+        let cc = eframe::CreationContext::_new_kittest(ctx.clone());
+        let mut client = EmbeddedClient::new(
+            &cc,
+            project.0.join(".arkline-studio"),
+            "RoomButtonPilot".into(),
+        );
+        let mut panel = Rooms::open(&project.0);
+        let deadline = Instant::now() + Duration::from_secs(8);
+        while Instant::now() < deadline {
+            client.poll();
+            panel.poll_live(&mut client);
+            if client.ready()
+                && panel.live.is_some()
+                && !panel.load_blocked
+                && panel.pending.is_none()
+            {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(client.ready() && panel.based_on_revision == Some(0));
+        panel.draft.rooms[2].clear_lwh_m[0] = 7.0;
+        panel.draft_revision += 1;
+        let frame = |panel: &mut Rooms, client: &mut EmbeddedClient, events| {
+            ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(1400.0, 950.0),
+                    )),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default()
+                        .show(ctx, |ui| panel.show(ui, &project.0, client));
+                },
+            )
+        };
+        let output = frame(&mut panel, &mut client, vec![]);
+        let point = output
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.text() == "Save + apply live" => {
+                    Some(text.pos + text.galley.size() * 0.5)
+                }
+                _ => None,
+            })
+            .expect("live apply control is visible");
+        for pressed in [true, false] {
+            frame(
+                &mut panel,
+                &mut client,
+                vec![
+                    egui::Event::PointerMoved(point),
+                    egui::Event::PointerButton {
+                        pos: point,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ],
+            );
+        }
+        let deadline = Instant::now() + Duration::from_secs(8);
+        while Instant::now() < deadline {
+            client.poll();
+            panel.poll_live(&mut client);
+            if panel.live.as_ref().is_some_and(|live| live.revision == 1)
+                && panel.pending_live.is_none()
+            {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(
+            panel.live.as_ref().unwrap().revision,
+            1,
+            "{}",
+            panel.message
+        );
+        assert_eq!(
+            panel.live.as_ref().unwrap().document.rooms[2].clear_lwh_m[0],
+            7.0
+        );
+        assert_eq!(load(&project.0).unwrap().rooms[2].clear_lwh_m[0], 7.0);
+        assert!(
+            client.paused(),
+            "applying room edits must not secretly start time"
+        );
+        assert!(project.0.join(".arkline-studio/room_layout.json").is_file());
+        client.on_exit();
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while Instant::now() < deadline
+            && client.status() != &arkline_client::EmbeddedStatus::Stopped
+        {
+            client.poll();
+            std::thread::sleep(Duration::from_millis(10));
+        }
     }
 
     #[test]

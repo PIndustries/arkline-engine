@@ -23,6 +23,8 @@ pub struct MaterialDocument {
     pub roughness: Option<f32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metallic: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub graph: Option<crate::material_graph::MaterialGraph>,
 }
 impl Default for MaterialDocument {
     fn default() -> Self {
@@ -33,6 +35,7 @@ impl Default for MaterialDocument {
             emissive_strength: 1.0,
             roughness: None,
             metallic: None,
+            graph: None,
         }
     }
 }
@@ -59,7 +62,25 @@ impl MaterialDocument {
                 );
             }
         }
+        if let Some(graph) = &self.graph {
+            graph.evaluate(&self.values())?;
+        }
         Ok(())
+    }
+    pub fn values(&self) -> crate::material_graph::MaterialValues {
+        crate::material_graph::MaterialValues {
+            hull: self.hull_color,
+            trim: self.trim_color,
+            emission: self.emissive_strength,
+            roughness: self.roughness,
+            metallic: self.metallic,
+        }
+    }
+    pub fn evaluated(&self) -> Result<crate::material_graph::MaterialValues, String> {
+        match &self.graph {
+            Some(graph) => graph.evaluate(&self.values()),
+            None => Ok(self.values()),
+        }
     }
 }
 
@@ -145,7 +166,9 @@ fn document_path(project: &Path, create: bool) -> Result<PathBuf, String> {
     let path = assets.join("Pioneer.material.json");
     match fs::symlink_metadata(&path) {
         Ok(m) if !m.is_file() || m.file_type().is_symlink() => {
-            return Err("Material destination must be an ordinary file, not a symbolic link".into())
+            return Err(
+                "Material destination must be an ordinary file, not a symbolic link".into(),
+            );
         }
         Ok(_) => {}
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
@@ -176,6 +199,9 @@ pub fn save(project: &Path, document: &MaterialDocument) -> Result<(), String> {
     document.validate()?;
     let bytes =
         serde_json::to_vec_pretty(document).map_err(|e| format!("Cannot encode material: {e}"))?;
+    if bytes.len() as u64 > MAX_BYTES {
+        return Err("Pioneer material exceeds 64 KiB".into());
+    }
     let path = document_path(project, true)?;
     let parent = path.parent().ok_or("Material parent unavailable")?;
     for _ in 0..32 {
@@ -237,6 +263,32 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
         }
+    }
+    #[test]
+    fn graph_save_load_history_and_rejected_save_keep_previous_file() {
+        let project = Project::new();
+        let mut document = MaterialDocument::default();
+        document.graph = Some(crate::material_graph::MaterialGraph::from_values(
+            &document.values(),
+        ));
+        let mut history = MaterialHistory::new(document.clone()).unwrap();
+        let mut changed = document.clone();
+        if let crate::material_graph::NodeKind::Color { value } =
+            &mut changed.graph.as_mut().unwrap().nodes[0].kind
+        {
+            *value = [0.8, 0.1, 0.2];
+        }
+        history.apply(changed.clone()).unwrap();
+        assert_eq!(history.current().evaluated().unwrap().hull, [0.8, 0.1, 0.2]);
+        assert!(history.undo());
+        assert_eq!(history.current(), &document);
+        assert!(history.redo());
+        save(&project.0, history.current()).unwrap();
+        assert_eq!(load(&project.0).unwrap(), changed);
+        let mut invalid = changed.clone();
+        invalid.graph.as_mut().unwrap().nodes[0].id = 2;
+        assert!(save(&project.0, &invalid).is_err());
+        assert_eq!(load(&project.0).unwrap(), changed);
     }
     #[test]
     fn legacy_materials_keep_authored_pbr_and_override_history_roundtrips() {

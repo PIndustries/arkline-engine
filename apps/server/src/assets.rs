@@ -79,6 +79,7 @@ fn storage_view(storage: &BTreeMap<u32, u64>) -> Vec<StationStorage> {
 pub(super) fn view(world: &World, name: &str) -> Option<AssetsView> {
     let a = world.accounts.get(name)?;
     Some(AssetsView {
+        pioneer_room_layout: None,
         pioneer_room: (world.pilots[name].view.ship_class == ShipClass::Pioneer).then(|| {
             a.pioneer_room
                 .clone()

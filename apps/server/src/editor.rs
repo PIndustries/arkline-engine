@@ -1,10 +1,102 @@
 //! In-process editor authority. No transport request can control this clock.
 use crate::*;
+use std::{
+    fs::{self, File, OpenOptions},
+    io::{Read, Write},
+    path::{Path, PathBuf},
+};
 #[path = "editor_events.rs"]
 mod events;
 
 pub const EDITOR_TICK_MS: u64 = 50;
 pub const MAX_EDITOR_ADVANCE_MS: u64 = 250;
+const MAX_ROOM_LAYOUT_FILE_BYTES: usize = 64 * 1024;
+
+fn load_room_layout(path: &Path) -> Result<RoomLayoutState> {
+    let path_metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(RoomLayoutState {
+                revision: 0,
+                document: default_pioneer_room_layout(),
+            });
+        }
+        Err(error) => return Err(error.into()),
+    };
+    ensure!(
+        path_metadata.is_file() && !path_metadata.file_type().is_symlink(),
+        "room layout state must be a regular file"
+    );
+
+    let mut options = OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC);
+    }
+    let file = options.open(path)?;
+    let metadata = file.metadata()?;
+    ensure!(
+        metadata.is_file(),
+        "room layout state must be a regular file"
+    );
+    ensure!(
+        metadata.len() <= MAX_ROOM_LAYOUT_FILE_BYTES as u64,
+        "room layout state exceeds the file size limit"
+    );
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        ensure!(
+            metadata.nlink() == 1,
+            "room layout state must not be hardlinked"
+        );
+    }
+    let mut bounded = file.take(MAX_ROOM_LAYOUT_FILE_BYTES as u64 + 1);
+    let mut bytes = Vec::with_capacity(metadata.len() as usize);
+    bounded.read_to_end(&mut bytes)?;
+    ensure!(
+        bytes.len() <= MAX_ROOM_LAYOUT_FILE_BYTES,
+        "room layout state exceeds the file size limit"
+    );
+    let state = serde_json::from_slice::<RoomLayoutState>(&bytes)?;
+    state.document.validate_live().map_err(anyhow::Error::msg)?;
+    Ok(state)
+}
+
+fn persist_room_layout(path: &Path, bytes: &[u8]) -> Result<()> {
+    let parent = path.parent().context("room layout path has no parent")?;
+    let temp_path = parent.join(format!(
+        ".room_layout-{}-{}.tmp",
+        std::process::id(),
+        rand::random::<u64>()
+    ));
+    let result = (|| -> Result<()> {
+        let mut options = OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let mut file = options.open(&temp_path)?;
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        drop(file);
+        fs::rename(&temp_path, path).context("atomically replace room layout state")?;
+        // The rename has committed. Directory sync is best effort so a sync
+        // error cannot leave disk advanced while memory/revision stays old.
+        if let Ok(directory) = File::open(parent) {
+            let _ = directory.sync_all();
+        }
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temp_path);
+    }
+    result
+}
 
 /// Owns a local-development world and always reopens paused. Play time comes only
 /// from explicit bounded deltas, never elapsed wall time. Server is deliberately
@@ -15,17 +107,27 @@ pub struct EditorWorld {
     remainder_ms: u64,
     graph: events::GraphRuntime,
     graph_session: Option<String>,
+    room_layout_path: PathBuf,
+    room_layout: RoomLayoutState,
 }
 impl EditorWorld {
     pub fn open(directory: impl AsRef<Path>) -> Result<Self> {
         let path = local_development::database_path(directory.as_ref())?;
-        let server = Server::open_realm(path, true, true)?;
+        let room_layout_path = path
+            .parent()
+            .context("editor authority database has no directory")?
+            .join("room_layout.json");
+        let room_layout = load_room_layout(&room_layout_path)?;
+        let server = Server::open_editor_realm(&path, room_layout.document.clone())?;
+        server.validate_editor_room_layout(&room_layout.document)?;
         Ok(Self {
             server,
             paused: true,
             remainder_ms: 0,
             graph: events::GraphRuntime::default(),
             graph_session: None,
+            room_layout_path,
+            room_layout,
         })
     }
     pub fn play(&mut self) {
@@ -99,7 +201,10 @@ impl EditorWorld {
         let snapshot = matches!(&request, Request::Snapshot);
         let kind = request_kind(&request);
         let started = std::time::Instant::now();
-        let response = self.server.handle_at(session, request, self.time());
+        let mut response = self.server.handle_at(session, request, self.time());
+        if let Some(assets) = response.assets.as_mut() {
+            assets.pioneer_room_layout = Some(self.room_layout.clone());
+        }
         if connect && response.ok {
             // A second pilot joins the same editor authority. Keep the existing
             // graph executor and its trace; disconnect clears work bound to that
@@ -124,6 +229,142 @@ impl EditorWorld {
             );
         }
         response
+    }
+    /// Explicit sandbox placement of the caller's own avatar. This bypasses
+    /// walking routes only in the editor; it never moves or docks a ship and
+    /// never advances simulation systems, including the paused clock.
+    pub fn set_scene_state(
+        &mut self,
+        session: &Option<String>,
+        state: EditorSceneState,
+    ) -> Result<()> {
+        let name = session
+            .as_ref()
+            .context("connect an editor pilot before changing scene state")?;
+        ensure!(
+            self.server.online_sessions.contains_key(name),
+            "editor pilot is not connected"
+        );
+        if matches!(
+            state,
+            EditorSceneState::InteriorDeck1 | EditorSceneState::InteriorDeck2
+        ) {
+            ensure!(
+                !self.server.interior_incompatible.contains(name),
+                "close incompatible clients before entering the interior"
+            );
+        }
+        let now = self.time();
+        let tx = self.server.db.transaction()?;
+        let json: String =
+            tx.query_row("SELECT json FROM world WHERE id=1", [], |row| row.get(0))?;
+        let mut world: World = serde_json::from_str(&json)?;
+        ensure!(
+            !world.remote_controls.contains_key(name)
+                && !world.remote_controls.values().any(|pilot| pilot == name),
+            "end remote control before changing editor scene state"
+        );
+        let fleet = world
+            .accounts
+            .get(name)
+            .is_some_and(|account| account.fleet_hangar);
+        let pilot = world.pilots.get_mut(name).context("editor pilot missing")?;
+        ensure!(
+            pilot.view.location == Location::Docked,
+            "dock your ship before changing editor scene state"
+        );
+        let avatar = match state {
+            EditorSceneState::Cockpit => None,
+            EditorSceneState::StationHangar => {
+                let position = if fleet {
+                    fleet_berth(pilot.view.ship_class).1
+                } else {
+                    hangar_layout(pilot.view.ship_class).boarding_point
+                };
+                Some(StationAvatar {
+                    onboard_interior: false,
+                    interior_deck: 1,
+                    position,
+                    heading: 0.0,
+                    seated: false,
+                    moving: false,
+                    jump_started_ms: None,
+                    updated_at_ms: now,
+                })
+            }
+            EditorSceneState::InteriorDeck1 | EditorSceneState::InteriorDeck2 => {
+                ensure!(
+                    pilot.view.ship_class == ShipClass::Pioneer,
+                    "only Pioneer interiors are walkable"
+                );
+                let deck = if state == EditorSceneState::InteriorDeck1 {
+                    1
+                } else {
+                    2
+                };
+                Some(StationAvatar {
+                    onboard_interior: true,
+                    interior_deck: deck,
+                    position: if deck == 1 {
+                        PIONEER_INTERIOR_ENTRY
+                    } else {
+                        PIONEER_LIFT_POINT
+                    },
+                    heading: std::f64::consts::FRAC_PI_2,
+                    seated: false,
+                    moving: false,
+                    jump_started_ms: None,
+                    updated_at_ms: now,
+                })
+            }
+        };
+        pilot.view.station_avatar = avatar;
+        pilot.walk_input = None;
+        pilot.controls = None;
+        validate(&world, self.server.editor_room_layout.as_ref())?;
+        tx.execute(
+            "UPDATE world SET json=?1 WHERE id=1",
+            [serde_json::to_string(&world)?],
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn room_layout_state(&self) -> RoomLayoutState {
+        self.room_layout.clone()
+    }
+    pub fn room_layout_replace(
+        &mut self,
+        expected_revision: u64,
+        document: RoomLayoutDocument,
+    ) -> Result<RoomLayoutState> {
+        ensure!(
+            expected_revision == self.room_layout.revision,
+            "room layout revision conflict: expected {}, current {}",
+            expected_revision,
+            self.room_layout.revision
+        );
+        document.validate_live().map_err(anyhow::Error::msg)?;
+        let next = RoomLayoutState {
+            revision: self
+                .room_layout
+                .revision
+                .checked_add(1)
+                .context("room layout revision exhausted")?,
+            document,
+        };
+        let bytes = serde_json::to_vec(&next)?;
+        ensure!(
+            bytes.len() <= MAX_ROOM_LAYOUT_FILE_BYTES,
+            "room layout state exceeds the file size limit"
+        );
+        // Validate all persisted avatars before writing. No pilot is relocated
+        // to accommodate an authored geometry change.
+        self.server.validate_editor_room_layout(&next.document)?;
+        persist_room_layout(&self.room_layout_path, &bytes)?;
+        self.server.set_editor_room_layout(next.document.clone());
+        self.room_layout = next.clone();
+        Ok(next)
     }
     pub fn disconnect(&mut self, session: &mut Option<String>) {
         if self.graph_session == *session {
@@ -315,6 +556,16 @@ mod tests {
     fn connect(token: Option<String>) -> Request {
         serde_json::from_value(serde_json::json!({"command":"connect","protocol_version":PROTOCOL_VERSION,"pilot":"EditorPilot","resume_token":token})).unwrap()
     }
+    fn connect_interior() -> Request {
+        Request::Connect {
+            protocol_version: PROTOCOL_VERSION,
+            pilot: "EditorPilot".into(),
+            resume_token: None,
+            supports_room_controls: true,
+            supports_fleet_hangar: true,
+            supports_pioneer_interior: true,
+        }
+    }
     fn call(w: &mut EditorWorld, s: &mut Option<String>, r: Request) -> Response {
         let response = w.handle(s, r);
         assert!(response.ok, "{}", response.message);
@@ -322,6 +573,182 @@ mod tests {
     }
     fn snapshot(w: &mut EditorWorld) -> Snapshot {
         call(w, &mut None, Request::Snapshot).snapshot.unwrap()
+    }
+    fn walk_for(
+        world: &mut EditorWorld,
+        session: &mut Option<String>,
+        forward: f64,
+        strafe: f64,
+        duration_ms: u64,
+    ) {
+        call(
+            world,
+            session,
+            Request::StationWalk {
+                forward,
+                strafe,
+                turn: 0.0,
+            },
+        );
+        let mut remaining = duration_ms;
+        while remaining > 0 {
+            let step = remaining.min(50);
+            world.step(step).unwrap();
+            remaining -= step;
+        }
+    }
+    fn assert_airlock_exit(path: &std::path::Path, layout: Option<RoomLayoutDocument>) {
+        let mut world = EditorWorld::open(path).unwrap();
+        if let Some(document) = layout {
+            world.room_layout_replace(0, document).unwrap();
+        }
+        let mut session = None;
+        call(&mut world, &mut session, connect_interior());
+        call(&mut world, &mut session, Request::EnterInterior);
+
+        call(
+            &mut world,
+            &mut session,
+            Request::SetPioneerRoom {
+                action: PioneerRoomCommand::Door {
+                    open: false,
+                    manual: true,
+                },
+            },
+        );
+        walk_for(&mut world, &mut session, 1.0, 0.0, 500);
+        walk_for(&mut world, &mut session, 1.0, 0.0, 500);
+        let held_at_closed_door = snapshot(&mut world).pilots[0]
+            .station_avatar
+            .as_ref()
+            .unwrap()
+            .position;
+        assert!(held_at_closed_door[2] <= 5.3, "{held_at_closed_door:?}");
+        assert!(!world.handle(&mut session, Request::ExitInterior).ok);
+
+        call(
+            &mut world,
+            &mut session,
+            Request::SetPioneerRoom {
+                action: PioneerRoomCommand::Door {
+                    open: true,
+                    manual: true,
+                },
+            },
+        );
+        walk_for(&mut world, &mut session, 1.0, 0.0, 500);
+        let corridor = snapshot(&mut world).pilots[0]
+            .station_avatar
+            .as_ref()
+            .unwrap()
+            .position;
+        assert!(corridor[2] > 6.5, "{corridor:?}");
+        assert!(!world.handle(&mut session, Request::ExitInterior).ok);
+
+        walk_for(&mut world, &mut session, -1.0, 0.0, 500);
+        walk_for(&mut world, &mut session, -1.0, 0.0, 500);
+        let at_airlock = snapshot(&mut world).pilots[0]
+            .station_avatar
+            .as_ref()
+            .unwrap()
+            .position;
+        assert!(
+            (at_airlock[2] - PIONEER_INTERIOR_ENTRY[2]).abs() <= 0.3 + 1e-9,
+            "{at_airlock:?}"
+        );
+        call(&mut world, &mut session, Request::ExitInterior);
+        let exited_snapshot = snapshot(&mut world);
+        let exited = exited_snapshot.pilots[0].station_avatar.as_ref().unwrap();
+        assert!(!exited.onboard_interior);
+        drop(world);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+    fn short_p2_layout() -> RoomLayoutDocument {
+        let mut document = default_pioneer_room_layout();
+        document
+            .rooms
+            .iter_mut()
+            .find(|room| room.source_room_id.as_deref() == Some("D1-P2"))
+            .unwrap()
+            .clear_lwh_m[0] = 8.0;
+        document.validate_live().unwrap();
+        document
+    }
+    #[test]
+    fn room_layout_loader_rejects_oversized_and_symlink_files() {
+        let path = dir();
+        std::fs::create_dir_all(&path).unwrap();
+        let layout_path = path.join("room_layout.json");
+        std::fs::write(&layout_path, vec![b' '; MAX_ROOM_LAYOUT_FILE_BYTES + 1]).unwrap();
+        let oversized = load_room_layout(&layout_path).unwrap_err();
+        assert!(oversized.to_string().contains("file size limit"));
+
+        #[cfg(unix)]
+        {
+            let target = path.join("layout-target.json");
+            let valid = RoomLayoutState {
+                revision: 0,
+                document: default_pioneer_room_layout(),
+            };
+            std::fs::write(&target, serde_json::to_vec(&valid).unwrap()).unwrap();
+            std::fs::remove_file(&layout_path).unwrap();
+            std::os::unix::fs::symlink(&target, &layout_path).unwrap();
+            assert!(load_room_layout(&layout_path)
+                .unwrap_err()
+                .to_string()
+                .contains("regular file"));
+        }
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[test]
+    fn externally_replaced_layout_cannot_relocate_persisted_avatar_on_reopen() {
+        let path = dir();
+        let mut world = EditorWorld::open(&path).unwrap();
+        let mut session = None;
+        call(&mut world, &mut session, connect_interior());
+        call(&mut world, &mut session, Request::EnterInterior);
+        walk_for(&mut world, &mut session, 1.0, 0.0, 500);
+        walk_for(&mut world, &mut session, 1.0, 0.0, 500);
+        for _ in 0..4 {
+            walk_for(&mut world, &mut session, 0.0, -1.0, 500);
+        }
+        walk_for(&mut world, &mut session, 0.0, -1.0, 400);
+        walk_for(&mut world, &mut session, -1.0, 0.0, 500);
+        walk_for(&mut world, &mut session, 0.0, -1.0, 500);
+        walk_for(&mut world, &mut session, 0.0, -1.0, 250);
+        let avatar = snapshot(&mut world).pilots[0]
+            .station_avatar
+            .as_ref()
+            .unwrap()
+            .position;
+        assert!(avatar[0] > 21.0, "{avatar:?}");
+        drop(world);
+
+        let db_path = path.join("world.sqlite");
+        let db = rusqlite::Connection::open(&db_path).unwrap();
+        let before: String = db
+            .query_row("SELECT json FROM world WHERE id=1", [], |row| row.get(0))
+            .unwrap();
+        drop(db);
+        let replacement = RoomLayoutState {
+            revision: 1,
+            document: short_p2_layout(),
+        };
+        std::fs::write(
+            path.join("room_layout.json"),
+            serde_json::to_vec(&replacement).unwrap(),
+        )
+        .unwrap();
+        assert!(EditorWorld::open(&path).is_err());
+
+        let db = rusqlite::Connection::open(&db_path).unwrap();
+        let after: String = db
+            .query_row("SELECT json FROM world WHERE id=1", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(after, before);
+        drop(db);
+        std::fs::remove_dir_all(path).unwrap();
     }
     #[test]
     fn paused_movement_and_mining_freeze_and_resume_only_explicit_ticks() {
@@ -474,6 +901,354 @@ mod tests {
         assert_eq!(w.time(), time + 50);
         drop(w);
         std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[test]
+    fn live_layout_changes_drive_real_walk_collision_and_reject_trapping_or_stale_edits() {
+        let path = dir();
+        let mut world = EditorWorld::open(&path).unwrap();
+        let mut session = None;
+        call(&mut world, &mut session, connect_interior());
+        call(&mut world, &mut session, Request::EnterInterior);
+
+        // Walk from the airlock, through the corridor and D1-P2 doorway, then
+        // toward its east wall. The original wall at x=22.466 m permits this.
+        walk_for(&mut world, &mut session, 1.0, 0.0, 500);
+        walk_for(&mut world, &mut session, 1.0, 0.0, 500);
+        for _ in 0..4 {
+            walk_for(&mut world, &mut session, 0.0, -1.0, 500);
+        }
+        walk_for(&mut world, &mut session, 0.0, -1.0, 400);
+        walk_for(&mut world, &mut session, -1.0, 0.0, 500);
+        walk_for(&mut world, &mut session, 0.0, -1.0, 500);
+        walk_for(&mut world, &mut session, 0.0, -1.0, 250);
+        let baseline = snapshot(&mut world).pilots[0]
+            .station_avatar
+            .as_ref()
+            .unwrap()
+            .position;
+        assert!(baseline[0] > 21.0 && baseline[2] < 5.8, "{baseline:?}");
+
+        // Return through the same doorway so the edit is safe to apply.
+        walk_for(&mut world, &mut session, 0.0, 1.0, 500);
+        walk_for(&mut world, &mut session, 0.0, 1.0, 250);
+        walk_for(&mut world, &mut session, 1.0, 0.0, 500);
+        for _ in 0..5 {
+            walk_for(&mut world, &mut session, 0.0, 1.0, 500);
+        }
+        walk_for(&mut world, &mut session, 0.0, -1.0, 100);
+        walk_for(&mut world, &mut session, -1.0, 0.0, 500);
+        walk_for(&mut world, &mut session, -1.0, 0.0, 500);
+        let entry = snapshot(&mut world).pilots[0]
+            .station_avatar
+            .as_ref()
+            .unwrap()
+            .position;
+        assert!(
+            (entry[0] - PIONEER_INTERIOR_ENTRY[0]).abs() < 0.01,
+            "{entry:?}"
+        );
+        assert!(
+            (entry[2] - PIONEER_INTERIOR_ENTRY[2]).abs() < 0.01,
+            "{entry:?}"
+        );
+
+        let state = world.room_layout_replace(0, short_p2_layout()).unwrap();
+        assert_eq!(state.revision, 1);
+        assert!(world
+            .room_layout_replace(0, state.document.clone())
+            .is_err());
+        let persisted_path = path.join("room_layout.json");
+        assert!(persisted_path.is_file());
+
+        // The shortened authored wall now blocks authoritative StationWalk at
+        // x≈21.18 m; the request never moves the pilot through it.
+        walk_for(&mut world, &mut session, 1.0, 0.0, 500);
+        walk_for(&mut world, &mut session, 1.0, 0.0, 500);
+        for _ in 0..4 {
+            walk_for(&mut world, &mut session, 0.0, -1.0, 500);
+        }
+        walk_for(&mut world, &mut session, 0.0, -1.0, 400);
+        walk_for(&mut world, &mut session, -1.0, 0.0, 500);
+        walk_for(&mut world, &mut session, 0.0, -1.0, 500);
+        walk_for(&mut world, &mut session, 0.0, -1.0, 500);
+        let stopped = snapshot(&mut world).pilots[0]
+            .station_avatar
+            .as_ref()
+            .unwrap()
+            .position;
+        assert!(stopped[0] > 20.9 && stopped[0] <= 21.2, "{stopped:?}");
+
+        // Moving the same wall farther west would overlap the active avatar.
+        // Reject before disk/revision/world state changes; never teleport it.
+        let mut trapping = state.document.clone();
+        trapping
+            .rooms
+            .iter_mut()
+            .find(|room| room.source_room_id.as_deref() == Some("D1-P2"))
+            .unwrap()
+            .clear_lwh_m[0] = 7.5;
+        trapping.validate_live().unwrap();
+        assert!(world.room_layout_replace(1, trapping).is_err());
+        assert_eq!(world.room_layout_state(), state);
+        let still_stopped = snapshot(&mut world).pilots[0]
+            .station_avatar
+            .as_ref()
+            .unwrap()
+            .position;
+        assert_eq!(still_stopped, stopped);
+        let disk: RoomLayoutState =
+            serde_json::from_slice(&std::fs::read(&persisted_path).unwrap()).unwrap();
+        assert_eq!(disk, state);
+
+        // A disk failure must leave both the live layout and its revision at
+        // the last durable value.
+        let backup_path = path.join("room_layout.backup");
+        std::fs::rename(&persisted_path, &backup_path).unwrap();
+        std::fs::create_dir(&persisted_path).unwrap();
+        let mut safe_again = state.document.clone();
+        safe_again.rooms[0].name.push_str(" save failure");
+        assert!(world.room_layout_replace(1, safe_again).is_err());
+        assert_eq!(world.room_layout_state(), state);
+        std::fs::remove_dir(&persisted_path).unwrap();
+        std::fs::rename(&backup_path, &persisted_path).unwrap();
+        drop(world);
+        let reopened = EditorWorld::open(&path).unwrap();
+        assert_eq!(reopened.room_layout_state(), state);
+        drop(reopened);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[test]
+    fn safe_layout_replace_is_allowed_while_playing_and_is_in_snapshot_assets() {
+        let path = dir();
+        let mut world = EditorWorld::open(&path).unwrap();
+        let mut session = None;
+        call(&mut world, &mut session, connect(None));
+        world.play();
+        world.advance(50).unwrap();
+        let before = world.room_layout_state();
+        let mut document = before.document.clone();
+        document.rooms[0].name.push_str(" live");
+        let next = world
+            .room_layout_replace(before.revision, document)
+            .unwrap();
+        assert_eq!(next.revision, before.revision + 1);
+        let response = call(&mut world, &mut session, Request::Snapshot);
+        assert_eq!(
+            response.assets.unwrap().pioneer_room_layout,
+            Some(next.clone())
+        );
+        drop(world);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    fn persisted_world(world: &EditorWorld) -> String {
+        world
+            .server
+            .db
+            .query_row("SELECT json FROM world WHERE id=1", [], |row| row.get(0))
+            .unwrap()
+    }
+
+    #[test]
+    fn scene_state_jumps_preserve_clock_systems_and_use_valid_landings() {
+        let path = dir();
+        let mut world = EditorWorld::open(&path).unwrap();
+        let mut session = None;
+        call(&mut world, &mut session, connect_interior());
+        world
+            .set_scene_state(&session, EditorSceneState::InteriorDeck1)
+            .unwrap();
+        call(
+            &mut world,
+            &mut session,
+            Request::SetPioneerRoom {
+                action: PioneerRoomCommand::Door {
+                    open: false,
+                    manual: true,
+                },
+            },
+        );
+        call(
+            &mut world,
+            &mut session,
+            Request::StationWalk {
+                forward: 1.0,
+                strafe: 0.0,
+                turn: 0.0,
+            },
+        );
+        call(&mut world, &mut session, Request::StationJump);
+        let before: World = serde_json::from_str(&persisted_world(&world)).unwrap();
+        let time = world.time();
+        for (state, deck, position) in [
+            (EditorSceneState::InteriorDeck2, 2, PIONEER_LIFT_POINT),
+            (EditorSceneState::InteriorDeck1, 1, PIONEER_INTERIOR_ENTRY),
+        ] {
+            world.set_scene_state(&session, state).unwrap();
+            let after: World = serde_json::from_str(&persisted_world(&world)).unwrap();
+            let avatar = after.pilots["EditorPilot"]
+                .view
+                .station_avatar
+                .as_ref()
+                .unwrap();
+            assert!(avatar.onboard_interior);
+            assert_eq!(avatar.interior_deck, deck);
+            assert_eq!(avatar.position, position);
+            assert!(!avatar.moving);
+            assert!(avatar.jump_started_ms.is_none());
+            assert!(after.pilots["EditorPilot"].walk_input.is_none());
+            assert_eq!(
+                serde_json::to_value(&before.accounts).unwrap(),
+                serde_json::to_value(&after.accounts).unwrap()
+            );
+            assert_eq!(world.time(), time);
+            assert!(world.is_paused());
+            // The same validator and authored geometry drive real collision.
+            validate(&after, Some(&world.room_layout.document)).unwrap();
+        }
+        world.play();
+        world
+            .set_scene_state(&session, EditorSceneState::StationHangar)
+            .unwrap();
+        assert!(!world.is_paused());
+        assert_eq!(world.time(), time);
+        let after: World = serde_json::from_str(&persisted_world(&world)).unwrap();
+        let avatar = after.pilots["EditorPilot"]
+            .view
+            .station_avatar
+            .as_ref()
+            .unwrap();
+        assert!(!avatar.onboard_interior);
+        assert_eq!(avatar.position, fleet_berth(ShipClass::Pioneer).1);
+        world
+            .set_scene_state(&session, EditorSceneState::Cockpit)
+            .unwrap();
+        assert!(snapshot(&mut world).pilots[0].station_avatar.is_none());
+        world.pause();
+        world
+            .set_scene_state(&session, EditorSceneState::InteriorDeck2)
+            .unwrap();
+        drop(world);
+        let reopened = EditorWorld::open(&path).unwrap();
+        assert_eq!(reopened.time(), time);
+        let after: World = serde_json::from_str(&persisted_world(&reopened)).unwrap();
+        assert_eq!(
+            after.pilots["EditorPilot"]
+                .view
+                .station_avatar
+                .as_ref()
+                .unwrap()
+                .interior_deck,
+            2
+        );
+        drop(reopened);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[test]
+    fn scene_state_jump_keeps_authored_collision_and_airlock_door_enforced() {
+        let path = dir();
+        let mut world = EditorWorld::open(&path).unwrap();
+        world.room_layout_replace(0, short_p2_layout()).unwrap();
+        let mut session = None;
+        call(&mut world, &mut session, connect_interior());
+        world
+            .set_scene_state(&session, EditorSceneState::InteriorDeck1)
+            .unwrap();
+        call(
+            &mut world,
+            &mut session,
+            Request::SetPioneerRoom {
+                action: PioneerRoomCommand::Door {
+                    open: false,
+                    manual: true,
+                },
+            },
+        );
+        // Development placement does not grant subsequent gameplay actions a
+        // doorway bypass; the persisted room controller still blocks movement.
+        walk_for(&mut world, &mut session, 1.0, 0.0, 500);
+        walk_for(&mut world, &mut session, 1.0, 0.0, 500);
+        let position = snapshot(&mut world).pilots[0]
+            .station_avatar
+            .as_ref()
+            .unwrap()
+            .position;
+        assert!(position[2] <= 5.3, "closed door was crossed: {position:?}");
+        assert!(!world.handle(&mut session, Request::ExitInterior).ok);
+        world
+            .set_scene_state(&session, EditorSceneState::InteriorDeck2)
+            .unwrap();
+        let persisted: World = serde_json::from_str(&persisted_world(&world)).unwrap();
+        station::validate(&persisted, Some(&world.room_layout.document)).unwrap();
+        drop(world);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[test]
+    fn rejected_scene_state_jumps_do_not_mutate_or_dock_the_ship() {
+        let path = dir();
+        let mut world = EditorWorld::open(&path).unwrap();
+        let mut session = None;
+        let mut request = connect_interior();
+        if let Request::Connect {
+            supports_fleet_hangar,
+            ..
+        } = &mut request
+        {
+            *supports_fleet_hangar = false;
+        }
+        call(&mut world, &mut session, request);
+        let before = persisted_world(&world);
+        assert!(world
+            .set_scene_state(&None, EditorSceneState::InteriorDeck1)
+            .is_err());
+        assert_eq!(persisted_world(&world), before);
+        call(
+            &mut world,
+            &mut session,
+            Request::SelectShip {
+                ship_class: ShipClass::Prospector,
+            },
+        );
+        let before = persisted_world(&world);
+        assert!(world
+            .set_scene_state(&session, EditorSceneState::InteriorDeck1)
+            .is_err());
+        assert_eq!(persisted_world(&world), before);
+        world
+            .set_scene_state(&session, EditorSceneState::Cockpit)
+            .unwrap();
+        call(&mut world, &mut session, Request::Undock);
+        let before = persisted_world(&world);
+        let time = world.time();
+        for state in [
+            EditorSceneState::Cockpit,
+            EditorSceneState::StationHangar,
+            EditorSceneState::InteriorDeck2,
+        ] {
+            assert!(world.set_scene_state(&session, state).is_err());
+            assert_eq!(persisted_world(&world), before);
+            assert_eq!(world.time(), time);
+        }
+        // Persistence failure also leaves the previous avatar untouched.
+        call(&mut world, &mut session, Request::Dock);
+        let before = persisted_world(&world);
+        world.server.db.execute_batch("CREATE TRIGGER reject_scene BEFORE UPDATE ON world BEGIN SELECT RAISE(ABORT, 'test scene write failure'); END;").unwrap();
+        assert!(world
+            .set_scene_state(&session, EditorSceneState::StationHangar)
+            .is_err());
+        assert_eq!(persisted_world(&world), before);
+        drop(world);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[test]
+    fn pioneer_airlock_exit_works_with_default_and_edited_layouts_and_respects_door() {
+        assert_airlock_exit(&dir(), None);
+        assert_airlock_exit(&dir(), Some(short_p2_layout()));
     }
 }
 

@@ -122,12 +122,13 @@ impl SessionPanel {
         });
 
         ui.horizontal(|ui| {
-            ui.label("Pilot");
+            let pilot_label = ui.label("Pilot");
             ui.add(
                 egui::TextEdit::singleline(&mut self.pilot)
                     .desired_width(220.0)
                     .char_limit(24),
-            );
+            )
+            .labelled_by(pilot_label.id);
         });
 
         match self.choice {

@@ -6,6 +6,7 @@ pub struct EmbeddedAssetGallery {
     error: Option<String>,
     selected: ShipClass,
     parts: Arc<Vec<ModelPart>>,
+    compact_parts: Arc<Vec<ModelPart>>,
     yaw: f32,
     pitch: f32,
     zoom: f32,
@@ -23,6 +24,7 @@ impl EmbeddedAssetGallery {
             error,
             selected: ShipClass::Pioneer,
             parts: Arc::new(comparison_parts(ShipClass::Pioneer)),
+            compact_parts: Arc::new(single_preview_parts(ShipClass::Pioneer)),
             yaw: 1.15,
             pitch: 0.4,
             zoom: 1.0,
@@ -39,6 +41,7 @@ impl EmbeddedAssetGallery {
                 {
                     self.selected = class;
                     self.parts = Arc::new(comparison_parts(class));
+                    self.compact_parts = Arc::new(single_preview_parts(class));
                 }
             }
         });
@@ -67,6 +70,37 @@ impl EmbeddedAssetGallery {
                 "Authored materials on both instances"
             });
         });
+        self.paint_canvas(ui, preview, false);
+    }
+    /// A single-ship preview for the material studio's docked side panel.
+    pub fn show_compact(
+        &mut self,
+        ui: &mut egui::Ui,
+        preview: Option<crate::EmbeddedMaterialPreview>,
+    ) {
+        egui::ComboBox::from_id_salt("material_preview_ship")
+            .selected_text(self.selected.spec().name)
+            .show_ui(ui, |ui| {
+                for class in arkline_protocol::ALL_SHIP_CLASSES {
+                    if ui
+                        .selectable_label(self.selected == class, class.spec().name)
+                        .clicked()
+                    {
+                        self.selected = class;
+                        self.parts = Arc::new(comparison_parts(class));
+                        self.compact_parts = Arc::new(single_preview_parts(class));
+                    }
+                }
+            });
+        ui.small("Drag to orbit · wheel to zoom");
+        self.paint_canvas(ui, preview, true);
+    }
+    fn paint_canvas(
+        &mut self,
+        ui: &mut egui::Ui,
+        preview: Option<crate::EmbeddedMaterialPreview>,
+        compact: bool,
+    ) {
         let (rect, response) = ui.allocate_exact_size(
             ui.available_size().max(egui::vec2(1., 1.)),
             egui::Sense::drag(),
@@ -95,7 +129,7 @@ impl EmbeddedAssetGallery {
                 self.yaw.cos() * self.pitch.cos(),
                 self.pitch.sin(),
                 self.yaw.sin() * self.pitch.cos(),
-            ) * (3.2 * self.zoom);
+            ) * ((if compact { 1.65 } else { 3.2 }) * self.zoom);
             let vp = Mat4::perspective_rh_gl(
                 45f32.to_radians(),
                 (rect.width() / rect.height()).max(0.01),
@@ -103,7 +137,11 @@ impl EmbeddedAssetGallery {
                 100.,
             ) * Mat4::look_at_rh(eye, Vec3::ZERO, Vec3::Y);
             let renderer = renderer.clone();
-            let parts = self.parts.clone();
+            let parts = if compact {
+                self.compact_parts.clone()
+            } else {
+                self.parts.clone()
+            };
             canvas.add(egui::PaintCallback {
                 rect,
                 callback: Arc::new(egui_glow::CallbackFn::new(move |_, _| {
@@ -117,8 +155,10 @@ impl EmbeddedAssetGallery {
             canvas.text(
                 rect.left_bottom() + egui::vec2(12., -12.),
                 egui::Align2::LEFT_BOTTOM,
-                "Same asset and material policy · display-normalized geometry · no authority state",
-                egui::FontId::proportional(12.),
+                if compact { "Live material · normalized preview" } else {
+                    "Same asset and material policy · display-normalized geometry · no authority state"
+                },
+                egui::FontId::proportional(if compact { 10. } else { 12. }),
                 egui::Color32::LIGHT_GRAY,
             );
         } else {
@@ -142,6 +182,14 @@ impl EmbeddedAssetGallery {
             }
         }
     }
+}
+
+fn single_preview_parts(class: ShipClass) -> Vec<ModelPart> {
+    let root = Mat4::from_scale(Vec3::splat((100. / class.spec().length_m) as f32));
+    cached_ship_parts(class)
+        .iter()
+        .map(|&(mesh, model, color, emission)| (mesh, root * model, color, emission))
+        .collect()
 }
 
 fn comparison_parts(class: ShipClass) -> Vec<ModelPart> {

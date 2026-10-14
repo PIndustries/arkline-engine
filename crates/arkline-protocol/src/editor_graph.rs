@@ -106,14 +106,14 @@ impl EditorEventGraph {
             }
             match &n.operation {
                 EditorNodeOp::Delay { ms } if *ms > 60_000 => {
-                    return Err("Delay is limited to 60000 simulation milliseconds".into())
+                    return Err("Delay is limited to 60000 simulation milliseconds".into());
                 }
                 EditorNodeOp::Trace { message }
                     if message.len() > 256 || message.chars().any(char::is_control) =>
                 {
                     return Err(
                         "Trace text must be at most 256 bytes without control characters".into(),
-                    )
+                    );
                 }
                 _ => {}
             }

@@ -1136,7 +1136,8 @@ impl Cockpit {
                         }
                         let previously_docked =
                             self.own().is_some_and(|p| p.location == Location::Docked);
-                        if !previously_docked
+                        if !self.embedded
+                            && !previously_docked
                             && snapshot
                                 .pilots
                                 .iter()
@@ -3965,6 +3966,11 @@ impl eframe::App for Cockpit {
                     });
             }
         }
+        self.hangar_view.set_room_layout(
+            self.assets
+                .as_ref()
+                .and_then(|a| a.pioneer_room_layout.clone()),
+        );
         self.physical_engineering_window(ctx);
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
@@ -5960,6 +5966,7 @@ mod tests {
     fn asset_test_fixture() -> AssetsView {
         AssetsView {
             pioneer_room: None,
+            pioneer_room_layout: None,
             hangar: None,
             pioneer_interior_available: true,
             pioneer_interior_decks: 2,
@@ -6139,6 +6146,49 @@ mod tests {
     }
 
     #[test]
+    fn embedded_initial_docking_does_not_open_services_or_close_explicit_services() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        cockpit.embedded = true;
+        cockpit.services_open = false;
+        let mut docked = cockpit.snapshot.take().unwrap();
+        docked.pilots[0].location = Location::Docked;
+        let (updates, receiver) = mpsc::channel();
+        cockpit.updates = Some(receiver);
+        let response = || {
+            Update::Response(
+                Box::new(Response {
+                    auth: None,
+                    ok: true,
+                    message: String::new(),
+                    snapshot: Some(docked.clone()),
+                    assets: Some(asset_test_fixture()),
+                    resume_token: None,
+                    ledger: None,
+                }),
+                false,
+            )
+        };
+        updates.send(Update::Ready).unwrap();
+        updates.send(response()).unwrap();
+        cockpit.poll();
+        assert!(cockpit.connected);
+        assert!(
+            !cockpit.services_open,
+            "initial editor state must not open a floating Services window"
+        );
+        cockpit.services_open = true;
+        cockpit.service_tab = ServiceTab::Cargo;
+        updates.send(response()).unwrap();
+        cockpit.poll();
+        assert!(
+            cockpit.services_open,
+            "explicitly opened services remain available"
+        );
+        assert!(cockpit.service_tab == ServiceTab::Cargo);
+    }
+
+    #[test]
     fn hangar_boards_docked_hull_and_waits_for_confirmation_but_disables_in_space() {
         let ctx = egui::Context::default();
         let cc = eframe::CreationContext::_new_kittest(ctx.clone());
@@ -6186,6 +6236,7 @@ mod tests {
         });
         cockpit.assets = Some(AssetsView {
             pioneer_room: None,
+            pioneer_room_layout: None,
             hangar: None,
             pioneer_interior_available: true,
             pioneer_interior_decks: 2,

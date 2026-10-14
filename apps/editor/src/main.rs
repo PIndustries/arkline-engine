@@ -9,6 +9,7 @@ mod event_graph;
 mod github;
 mod github_auth;
 mod inspector;
+mod material_graph;
 mod materials;
 mod physics_lab;
 mod provenance;
@@ -46,6 +47,8 @@ struct Editor {
     render_debug: render_debug::RenderDebug,
     physics_lab: physics_lab::PhysicsLab,
     provenance: provenance::Provenance,
+    scene_message: String,
+    scene_generation: u64,
 }
 impl Editor {
     fn play_game(&mut self) {
@@ -85,18 +88,82 @@ impl Editor {
             last_status: String::new(),
             bottom_tab: 0,
             inspector_tab: 0,
+            scene_message: String::new(),
+            scene_generation: 0,
+        }
+    }
+
+    fn scene_controls(&mut self, ctx: &egui::Context) {
+        use arkline_protocol::EditorSceneState;
+        let confirmed = self.client.scene_state();
+        let ready = self.client.ready() && !self.client.scene_state_pending();
+        let pioneer = self.client.snapshot().is_some_and(|world| {
+            world.pilots.iter().any(|pilot| {
+                pilot.name == self.client.pilot()
+                    && pilot.ship_class == arkline_protocol::ShipClass::Pioneer
+            })
+        });
+        egui::TopBottomPanel::top("editor_scene_controls").show(ctx, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.strong(format!("SCENE · {}", self.client.pilot()));
+                for state in [EditorSceneState::Cockpit, EditorSceneState::StationHangar,
+                    EditorSceneState::InteriorDeck1, EditorSceneState::InteriorDeck2] {
+                    let supported = !matches!(state, EditorSceneState::InteriorDeck1 | EditorSceneState::InteriorDeck2) || pioneer;
+                    if ui.add_enabled(ready && confirmed.is_some() && supported,
+                        egui::Button::new(state.label()).selected(confirmed == Some(state)))
+                        .on_hover_text("Editor sandbox placement for your pilot. Works while paused; preserves simulation time and ship systems.")
+                        .clicked() {
+                        self.inspector_tab = 0;
+                        self.client.set_free_camera(false);
+                        self.scene_message = match self.client.set_scene_state(state) {
+                            Ok(_) => "Applying scene…".into(),
+                            Err(error) => error,
+                        };
+                    }
+                }
+                ui.separator();
+                let free = self.client.free_camera_active();
+                if ui.selectable_label(free, "Free camera").clicked() {
+                    self.inspector_tab = 0;
+                    self.client.set_free_camera(!free);
+                }
+                if ui.selectable_label(!free, "Player camera").clicked() {
+                    self.inspector_tab = 0;
+                    self.client.set_free_camera(false);
+                }
+            });
+            if let Some(ack) = self.client.scene_state_ack() {
+                self.scene_message = match &ack.result {
+                    Ok(()) => "Scene confirmed · simulation time and systems preserved".into(),
+                    Err(error) => format!("Scene change was not confirmed: {error}"),
+                };
+            }
+            let text = if confirmed.is_none() {
+                "Scene placement requires a docked ship. Dock through the game controls first."
+            } else if self.scene_message.is_empty() {
+                "Editor sandbox · choose where to inspect your docked ship. Gameplay uses doors, walking and boarding."
+            } else { &self.scene_message };
+            ui.small(text);
+        });
+    }
+
+    fn session_controls(&mut self, ctx: &egui::Context) {
+        let prior_pilot = self.client.pilot().to_owned();
+        self.session_panel.show(ctx, &mut self.client);
+        if self.client.pilot() != prior_pilot {
+            self.selected_pilot = self.client.pilot().to_owned();
+        }
+        if self.scene_generation != self.client.session_generation() {
+            self.scene_generation = self.client.session_generation();
+            self.scene_message.clear();
         }
     }
 }
 impl eframe::App for Editor {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         self.client.poll();
+        self.rooms.poll_live(&mut self.client);
         self.community.poll();
-        let prior_pilot = self.client.pilot().to_owned();
-        self.session_panel.show(ctx, &mut self.client);
-        if self.client.pilot() != prior_pilot {
-            self.selected_pilot = self.client.pilot().to_owned();
-        }
         let clock_control = self.client.can_control_clock();
         let status = match self.client.status() {
             EmbeddedStatus::Loading => "LOADING".into(),
@@ -185,7 +252,7 @@ impl eframe::App for Editor {
                     }
                     if ui
                         .add_enabled(
-                            paused && self.workspace == 0 && clock_control,
+                            paused && clock_control,
                             egui::Button::new("Step 50 ms").min_size(egui::vec2(95., 32.)),
                         )
                         .clicked()
@@ -218,63 +285,46 @@ impl eframe::App for Editor {
                     });
                 });
             });
-        egui::TopBottomPanel::top("workspace_tabs")
-            .exact_height(30.)
-            .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    ui.selectable_value(&mut self.workspace, 0, "Ship workspace");
-                    if ui
-                        .selectable_value(&mut self.workspace, 1, "Community · GitHub")
-                        .clicked()
-                    {
-                        if clock_control {
-                            self.client.pause();
-                        }
-                        self.community.ensure_loaded();
-                    }
-                    if ui
-                        .selectable_value(&mut self.workspace, 2, "Physics lab")
-                        .clicked()
-                        && clock_control
-                    {
-                        self.client.pause();
-                    }
-                    if ui
-                        .selectable_value(&mut self.workspace, 3, "Fleet materials")
-                        .clicked()
-                        && clock_control
-                    {
-                        self.client.pause();
-                    }
-                    if ui
-                        .toggle_value(&mut self.events_open, "Event flow")
-                        .clicked()
-                        && self.events_open
-                    {
-                        self.workspace = 0;
-                    }
-                    let free_camera = self.client.free_camera_active();
-                    if ui.selectable_label(free_camera, "Free camera").clicked() {
-                        self.workspace = 0;
-                        self.inspector_tab = 0;
-                        self.client.set_free_camera(!free_camera);
-                    }
-                    if free_camera && ui.button("Player camera").clicked() {
-                        self.client.set_free_camera(false);
-                    }
-                    if ui.button("Multiplayer session").clicked() {
-                        self.session_panel.open = true;
-                    }
-                    ui.label(
-                        RichText::new(if clock_control {
-                            "Local authority"
-                        } else {
-                            "Shared universe"
-                        })
-                        .color(MUTED),
-                    );
-                });
+        egui::TopBottomPanel::top("workspace_tabs").show(ctx, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                if ui
+                    .selectable_value(&mut self.workspace, 0, "Game")
+                    .clicked()
+                {
+                    self.inspector_tab = 0;
+                }
+                ui.selectable_value(&mut self.workspace, 3, "Materials");
+                ui.selectable_value(&mut self.workspace, 2, "Physics lab");
+                if ui
+                    .selectable_value(&mut self.workspace, 1, "Community · GitHub")
+                    .clicked()
+                {
+                    self.community.ensure_loaded();
+                }
+                ui.separator();
+                if ui
+                    .toggle_value(&mut self.events_open, "Event flow")
+                    .clicked()
+                    && self.events_open
+                {
+                    self.workspace = 0;
+                }
+                if ui.button("Multiplayer session").clicked() {
+                    self.session_panel.open = true;
+                }
+                ui.label(
+                    RichText::new(match self.client.session_mode() {
+                        arkline_client::EmbeddedSessionMode::Local => "Local authority",
+                        arkline_client::EmbeddedSessionMode::Host { .. } => "Shared host",
+                        arkline_client::EmbeddedSessionMode::Join { .. } => "Shared universe",
+                    })
+                    .color(MUTED),
+                );
             });
+        });
+        if self.workspace == 0 {
+            self.scene_controls(ctx);
+        }
         if self.events_open && self.workspace == 0 {
             egui::TopBottomPanel::bottom("editor_event_flow")
                 .resizable(true)
@@ -307,13 +357,13 @@ impl eframe::App for Editor {
             self.client.poll_hidden();
             egui::SidePanel::right("fleet_materials_inspector")
                 .resizable(true)
-                .default_width(310.)
-                .width_range(270. ..=430.)
+                .default_width(280.)
+                .width_range(245. ..=430.)
                 .show(ctx, |ui| {
                     egui::ScrollArea::vertical()
                         .id_salt("fleet_materials_scroll")
                         .show(ui, |ui| {
-                            self.materials.show(ui, &self.project);
+                            self.materials.show_node_inspector(ui, &self.project);
                             self.provenance.show(
                                 ui,
                                 &self.project,
@@ -322,24 +372,46 @@ impl eframe::App for Editor {
                             );
                         });
                 });
+            egui::SidePanel::left("material_node_library")
+                .resizable(true)
+                .default_width(265.)
+                .width_range(220. ..=380.)
+                .show(ctx, |ui| {
+                    self.materials.show_library(ui);
+                    ui.separator();
+                    ui.strong("SHIP PREVIEW");
+                    let height = ui.available_height().clamp(120., 390.);
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(ui.available_width(), height),
+                        egui::Layout::top_down(egui::Align::Min),
+                        |ui| {
+                            self.asset_gallery
+                                .get_or_insert_with(|| {
+                                    EmbeddedAssetGallery::new(self.graphics.as_ref())
+                                })
+                                .show_compact(ui, self.materials.preview());
+                        },
+                    );
+                });
             egui::CentralPanel::default().show(ctx, |ui| {
-                self.asset_gallery
-                    .get_or_insert_with(|| EmbeddedAssetGallery::new(self.graphics.as_ref()))
-                    .show(ui, self.materials.preview());
+                self.materials.show_graph(ui, &self.project);
             });
             self.client.set_material_preview(self.materials.preview());
+            self.session_controls(ctx);
             ctx.request_repaint_after(Duration::from_millis(33));
             return;
         }
         if self.workspace == 2 {
             self.client.poll_hidden();
             self.physics_lab.show(ctx);
+            self.session_controls(ctx);
             ctx.request_repaint_after(Duration::from_millis(16));
             return;
         }
         if self.workspace == 1 {
             self.client.poll_hidden();
             self.community.show(ctx, &self.project);
+            self.session_controls(ctx);
             ctx.request_repaint_after(Duration::from_millis(100));
             return;
         }
@@ -398,13 +470,14 @@ impl eframe::App for Editor {
             .show(ctx, |ui| {
                 ui.add_space(10.);
                 ui.horizontal_wrapped(|ui| {
-                    ui.selectable_value(&mut self.inspector_tab, 0, "Inspector");
-                    ui.selectable_value(&mut self.inspector_tab, 1, "Materials");
-                    ui.selectable_value(&mut self.inspector_tab, 2, "Engineering");
-                    ui.selectable_value(&mut self.inspector_tab, 3, "Render debug");
+                    ui.selectable_value(&mut self.inspector_tab, 0, "Live state");
                     ui.selectable_value(&mut self.inspector_tab, 4, "Equipment");
-                    ui.selectable_value(&mut self.inspector_tab, 5, "Service paths");
                     ui.selectable_value(&mut self.inspector_tab, 6, "Room layout");
+                });
+                ui.horizontal_wrapped(|ui| {
+                    ui.selectable_value(&mut self.inspector_tab, 2, "Ship design");
+                    ui.selectable_value(&mut self.inspector_tab, 5, "Service paths");
+                    ui.selectable_value(&mut self.inspector_tab, 3, "Render debug");
                 });
                 if !active {
                     ui.colored_label(MUTED, "Captured state · simulation is not running");
@@ -433,7 +506,7 @@ impl eframe::App for Editor {
                             self.render_debug
                                 .show(ui, &mut self.client, &mut self.wireframe);
                         } else if self.inspector_tab == 6 {
-                            self.rooms.show(ui, &self.project);
+                            self.rooms.show(ui, &self.project, &mut self.client);
                         } else if self.inspector_tab == 5 {
                             self.service_paths.show(ui, &self.project, self.engineering.components());
                         } else if self.inspector_tab == 4 {
@@ -478,6 +551,9 @@ impl eframe::App for Editor {
         } else {
             self.client.update(ctx, frame);
         }
+        // Editor dialogs are drawn after the embedded client's UI pass, which
+        // finalizes its accessibility tree and viewport layers.
+        self.session_controls(ctx);
         ctx.request_repaint_after(Duration::from_millis(if active { 16 } else { 50 }));
     }
     fn on_exit(&mut self, _: Option<&eframe::glow::Context>) {
@@ -617,7 +693,8 @@ mod tests {
         }
         assert!(
             editor.client.ready(),
-            "isolated test authority did not become ready"
+            "isolated test authority did not become ready; status={:?}",
+            editor.client.status()
         );
         for workspace in [0, 2, 0] {
             editor.workspace = workspace;
@@ -676,6 +753,327 @@ mod tests {
                     );
                 }
             }
+        }
+        editor.client.on_exit();
+        drop(editor);
+        let _ = std::fs::remove_dir_all(project);
+    }
+    #[test]
+    fn session_dialog_controls_remain_reachable_after_game_and_material_updates() {
+        use std::collections::{HashMap, HashSet};
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let cc = eframe::CreationContext::_new_kittest(ctx.clone());
+        let project = std::env::temp_dir().join(format!(
+            "arkline-editor-session-accessibility-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&project).unwrap();
+        let mut editor = Editor::new(&cc, project.clone(), "SessionAccessPilot".into());
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while !editor.client.ready() && std::time::Instant::now() < deadline {
+            editor.client.poll();
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            editor.client.ready(),
+            "isolated test authority did not become ready; status={:?}",
+            editor.client.status()
+        );
+
+        for workspace in [0, 3] {
+            editor.workspace = workspace;
+            editor.session_panel.open = true;
+            let output = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(1500., 960.),
+                    )),
+                    ..Default::default()
+                },
+                |ctx| editor.update(ctx, &mut eframe::Frame::_new_kittest()),
+            );
+            let update = output
+                .platform_output
+                .accesskit_update
+                .expect("AccessKit output enabled");
+            let root = update.tree.as_ref().unwrap().root;
+            let nodes: HashMap<_, _> = update.nodes.iter().map(|(id, node)| (*id, node)).collect();
+            let mut reachable = HashSet::new();
+            let mut stack = vec![root];
+            while let Some(id) = stack.pop() {
+                if reachable.insert(id) {
+                    if let Some(node) = nodes.get(&id) {
+                        stack.extend(node.children().iter().copied());
+                    }
+                }
+            }
+            let labels: Vec<_> = update
+                .nodes
+                .iter()
+                .filter_map(|(id, node)| node.label().map(|label| (*id, label.to_owned())))
+                .collect();
+            for expected in ["Multiplayer session", "Local", "Host", "Join"] {
+                assert!(
+                    labels
+                        .iter()
+                        .any(|(id, text)| text == expected && reachable.contains(id)),
+                    "workspace {workspace}: missing reachable session control {expected:?}; labels={labels:?}"
+                );
+            }
+            let pilot_field = update.nodes.iter().find(|(id, node)| {
+                reachable.contains(id)
+                    && node.value() == Some("SessionAccessPilot")
+                    && format!("{:?}", node.role()) == "TextInput"
+            });
+            assert!(
+                pilot_field.is_some(),
+                "workspace {workspace}: session pilot text field is not reachable; labels={labels:?}"
+            );
+            let pilot_field = pilot_field.unwrap();
+            assert!(
+                pilot_field
+                    .1
+                    .labelled_by()
+                    .iter()
+                    .any(|label_id| nodes.get(label_id).is_some_and(|label| {
+                        label.value() == Some("Pilot")
+                    })),
+                "workspace {workspace}: session pilot text field is not labelled by the Pilot control"
+            );
+        }
+
+        editor.client.on_exit();
+        drop(editor);
+        let _ = std::fs::remove_dir_all(project);
+    }
+    #[test]
+    fn room_name_accepts_pointer_and_text_events_in_paused_full_editor() {
+        let ctx = egui::Context::default();
+        let cc = eframe::CreationContext::_new_kittest(ctx.clone());
+        let project = std::env::temp_dir().join(format!(
+            "arkline-editor-room-text-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&project).unwrap();
+        let mut editor = Editor::new(&cc, project.clone(), "RoomTextPilot".into());
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while !editor.client.ready() && std::time::Instant::now() < deadline {
+            editor.client.poll();
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            editor.client.ready(),
+            "isolated test authority did not become ready"
+        );
+        assert!(
+            editor.client.paused(),
+            "room text test requires a paused world"
+        );
+        let starting_time = editor.client.snapshot().unwrap().server_time_ms;
+        editor.inspector_tab = 6;
+
+        let frame = |editor: &mut Editor, events| {
+            ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(1500., 960.),
+                    )),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| editor.update(ctx, &mut eframe::Frame::_new_kittest()),
+            )
+        };
+        let row = "D1 · D1-P1 · AIRLOCK / EVA";
+        let output = frame(&mut editor, vec![]);
+        let row_point = output
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.text() == row => {
+                    let bounds = text.galley.rect.translate(text.pos.to_vec2());
+                    shape
+                        .clip_rect
+                        .contains_rect(bounds)
+                        .then_some(bounds.center())
+                }
+                _ => None,
+            })
+            .expect("room selector is visible in the Game workspace inspector");
+        for pressed in [true, false] {
+            frame(
+                &mut editor,
+                vec![
+                    egui::Event::PointerMoved(row_point),
+                    egui::Event::PointerButton {
+                        pos: row_point,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ],
+            );
+        }
+
+        let output = frame(&mut editor, vec![]);
+        let name_point = output
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.text() == "AIRLOCK / EVA" => {
+                    let bounds = text.galley.rect.translate(text.pos.to_vec2());
+                    shape
+                        .clip_rect
+                        .contains_rect(bounds)
+                        .then_some(egui::pos2(bounds.right() - 1., bounds.center().y))
+                }
+                _ => None,
+            })
+            .expect("selected room name field is visible");
+        for pressed in [true, false] {
+            frame(
+                &mut editor,
+                vec![
+                    egui::Event::PointerMoved(name_point),
+                    egui::Event::PointerButton {
+                        pos: name_point,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ],
+            );
+        }
+        frame(&mut editor, vec![egui::Event::Text(" QA".into())]);
+
+        let room_name = editor
+            .rooms
+            .draft_room_name_by_source_id("D1-P1")
+            .expect("the selected source room remains in the draft");
+        assert!(
+            room_name.contains("QA"),
+            "room name did not receive the Text event: {room_name:?}"
+        );
+        assert!(
+            editor.client.paused(),
+            "editing a room name changed pause state"
+        );
+        assert_eq!(
+            editor.client.snapshot().unwrap().server_time_ms,
+            starting_time
+        );
+
+        editor.client.on_exit();
+        drop(editor);
+        let _ = std::fs::remove_dir_all(project);
+    }
+    #[test]
+    fn scene_toolbar_places_pilot_while_paused_and_material_workspace_has_graph_panels() {
+        let ctx = egui::Context::default();
+        let cc = eframe::CreationContext::_new_kittest(ctx.clone());
+        let project = std::env::temp_dir().join(format!(
+            "arkline-editor-scene-ui-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let mut editor = Editor::new(&cc, project.clone(), "SceneToolbarPilot".into());
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while !editor.client.ready() && std::time::Instant::now() < deadline {
+            editor.client.poll();
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(editor.client.paused());
+        let time = editor.client.snapshot().unwrap().server_time_ms;
+        let frame = |editor: &mut Editor, events| {
+            ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(1500., 960.),
+                    )),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| editor.update(ctx, &mut eframe::Frame::_new_kittest()),
+            )
+        };
+        frame(&mut editor, vec![]);
+        let output = frame(&mut editor, vec![]);
+        let destination = output
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.text() == "Station Hangar" => {
+                    let bounds = text.galley.rect.translate(text.pos.to_vec2());
+                    assert!(shape.clip_rect.contains_rect(bounds));
+                    Some(bounds.center())
+                }
+                _ => None,
+            })
+            .expect("scene destination is visible above viewport");
+        for pressed in [true, false] {
+            frame(
+                &mut editor,
+                vec![
+                    egui::Event::PointerMoved(destination),
+                    egui::Event::PointerButton {
+                        pos: destination,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: Default::default(),
+                    },
+                ],
+            );
+        }
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while editor.client.scene_state() != Some(arkline_protocol::EditorSceneState::StationHangar)
+            && std::time::Instant::now() < deadline
+        {
+            editor.client.poll();
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(
+            editor.client.scene_state(),
+            Some(arkline_protocol::EditorSceneState::StationHangar)
+        );
+        assert!(editor.client.scene_state_ack().unwrap().result.is_ok());
+        assert!(editor.client.paused());
+        assert_eq!(editor.client.snapshot().unwrap().server_time_ms, time);
+        editor.workspace = 3;
+        frame(&mut editor, vec![]);
+        let output = frame(&mut editor, vec![]);
+        for label in [
+            "Node library",
+            "+ Color",
+            "SHIP PREVIEW",
+            "Save",
+            "Fleet Material",
+        ] {
+            assert!(
+                output.shapes.iter().any(|shape| match &shape.shape {
+                    egui::Shape::Text(text) =>
+                        text.galley.text() == label
+                            && shape
+                                .clip_rect
+                                .contains_rect(text.galley.rect.translate(text.pos.to_vec2())),
+                    _ => false,
+                }),
+                "material workspace is missing visible {label}"
+            );
         }
         editor.client.on_exit();
         drop(editor);
