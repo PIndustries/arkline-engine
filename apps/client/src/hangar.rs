@@ -12,6 +12,9 @@ mod quarters;
 pub use quarters::HangarAction;
 #[path = "fleet_hangar.rs"]
 pub(super) mod fleet_hangar;
+#[cfg(test)]
+#[path = "hangar_scale_tests.rs"]
+mod hangar_scale_tests;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OnFootView {
@@ -289,12 +292,7 @@ impl HangarView {
             eye = position;
             look_target = eye + direction;
         }
-        let vp = Mat4::perspective_rh_gl(
-            55f32.to_radians(),
-            rect.aspect_ratio().max(0.1),
-            0.08,
-            30000.0,
-        ) * Mat4::look_at_rh(eye, look_target, Vec3::Y);
+        let vp = view_projection(eye, look_target, rect.aspect_ratio());
         let interior_base = if interior {
             Some(
                 self.room_parts
@@ -456,6 +454,11 @@ fn should_render_avatar(
     !(inside_body_height && inside_body_radius)
 }
 
+fn view_projection(eye: Vec3, target: Vec3, aspect: f32) -> Mat4 {
+    Mat4::perspective_rh_gl(55f32.to_radians(), aspect.max(0.1), 0.08, 30000.0)
+        * Mat4::look_at_rh(eye, target, Vec3::Y)
+}
+
 fn bay_parts(class: ShipClass) -> Vec<ModelPart> {
     cached_bay_parts(class).to_vec()
 }
@@ -467,6 +470,20 @@ fn cached_bay_parts(class: ShipClass) -> &'static [ModelPart] {
         .position(|c| *c == class)
         .unwrap();
     BAYS[index].get_or_init(|| build_bay_parts(class))
+}
+// Keep hull instance composition shared with calibration tests. These matrices
+// are the ones submitted to the meter-space hangar renderer.
+fn bay_hull_parts(class: ShipClass) -> Vec<ModelPart> {
+    let bay = hangar_layout(class);
+    let parent = Mat4::from_scale_rotation_translation(
+        Vec3::splat(100.0),
+        Quat::IDENTITY,
+        Vec3::from_array(bay.ship_center.map(|v| v as f32)),
+    );
+    ship_parts(class)
+        .into_iter()
+        .map(|(mesh, m, c, e)| (mesh, parent * m, c, e * 0.25))
+        .collect()
 }
 fn build_bay_parts(class: ShipClass) -> Vec<ModelPart> {
     let bay = hangar_layout(class);
@@ -576,16 +593,7 @@ fn build_bay_parts(class: ShipClass) -> Vec<ModelPart> {
             || c.z < room.min[2] as f32
             || c.z > room.max[2] as f32 + 1.5
     });
-    let parent = Mat4::from_scale_rotation_translation(
-        Vec3::splat(100.0),
-        Quat::IDENTITY,
-        Vec3::from_array(bay.ship_center.map(|v| v as f32)),
-    );
-    p.0.extend(
-        ship_parts(class)
-            .into_iter()
-            .map(|(mesh, m, c, e)| (mesh, parent * m, c, e * 0.25)),
-    );
+    p.0.extend(bay_hull_parts(class));
     p.0
 }
 fn avatar_parts(
