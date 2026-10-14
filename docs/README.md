@@ -2,11 +2,13 @@
 
 Read the [official Wiki](https://github.com/PIndustries/arkline-engine/wiki) for the published documentation. These Markdown files are the reviewable sources; submit changes through pull requests, then synchronize the reviewed pages to the Wiki.
 
+For contributor workflow, see the [development coordination guide](development-coordination.md) and [editor workspace map](editor-workspace.md).
+
 - [Player and developer guide](player-guide.md)
 
 Start with the [component and deployment map](component-map.md), then the [implemented API](api.md). The source protocol is the final field/type contract; these documents describe behavior and trust boundaries.
 
-- [Models and community artwork](models.md) — procedural meshes today; GLB import is planned
+- [Models and community artwork](models.md) — Pioneer uses a bounded embedded GLB; other ships remain procedural, and arbitrary community GLB import is planned
 - [Ship design archive](ships/README.md) — seven ships, all concept revisions, interior and systems proposals
 - [Architecture and economic verification](architecture.md)
 - [Shared-account investigation and implementation plan](identity-plan.md) — proposed, not a working login feature

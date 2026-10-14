@@ -118,6 +118,8 @@ enum GraphCommand {
     Step,
     Clear,
 }
+const STOP_REQUEST_NOTICE: &str = "Stop requested; waiting for local authority";
+
 enum ClockCommand {
     Graph(u64, GraphCommand),
     RoomLayout(u64, u64, RoomLayoutDocument),
@@ -348,7 +350,9 @@ impl EmbeddedClient {
         for info in self.session_updates.try_iter() {
             self.session_info = Some(info);
         }
+        let mut stop_feedback_confirmed = false;
         for state in self.states.try_iter() {
+            stop_feedback_confirmed |= matches!(state, EmbeddedStatus::Stopped);
             self.state = state;
         }
         let mut applied_scene = None;
@@ -384,6 +388,25 @@ impl EmbeddedClient {
         self.cockpit.embedded_paused = self.state != EmbeddedStatus::Running;
         self.cockpit.embedded_input = false;
         self.cockpit.poll();
+        // This exact notice belongs to the editor clock request. Never clear
+        // gameplay feedback or a worker error that arrived with confirmation.
+        if self.cockpit.notice == STOP_REQUEST_NOTICE {
+            if let EmbeddedStatus::Error(error) = &self.state {
+                self.cockpit.notice = format!(
+                    "Stop outcome unknown; inspect the confirmed state after reconnecting. {error}"
+                );
+            } else if stop_feedback_confirmed {
+                self.cockpit.notice.clear();
+            } else if (!self.cockpit.connected && !self.cockpit.connecting)
+                || self
+                    .worker
+                    .as_ref()
+                    .is_some_and(|worker| worker.is_finished())
+            {
+                self.cockpit.notice =
+                    "Stop outcome unknown; reconnect and inspect the confirmed state.".into();
+            }
+        }
         if self.scene_pending.is_some()
             && (matches!(
                 self.state,
@@ -650,7 +673,7 @@ impl EmbeddedClient {
     }
     pub fn stop(&mut self) {
         if self.queue_clock(ClockCommand::Stop) {
-            self.cockpit.notice = "Stop requested; waiting for local authority".into();
+            self.cockpit.notice = STOP_REQUEST_NOTICE.into();
         }
     }
     pub fn on_exit(&mut self) {
@@ -1668,6 +1691,175 @@ mod tests {
             requests,
         )
     }
+    #[test]
+    fn confirmed_stop_resume_feedback_clears_only_its_own_waiting_notice() {
+        let (mut client, gameplay_requests) = debug_fixture();
+        client.state = EmbeddedStatus::Running;
+        let (clock, commands) = mpsc::sync_channel(4);
+        client.clock = clock;
+        let (states, receiver) = mpsc::channel();
+        client.states = receiver;
+        client.stop();
+        assert!(matches!(commands.try_recv().unwrap(), ClockCommand::Stop));
+        client.poll();
+        assert_eq!(
+            client.cockpit.notice, STOP_REQUEST_NOTICE,
+            "queueing is not confirmation"
+        );
+        // A Running report can already be in flight when Stop is requested.
+        // It confirms neither receipt nor acceptance of the Stop command.
+        states.send(EmbeddedStatus::Running).unwrap();
+        client.poll();
+        assert_eq!(client.cockpit.notice, STOP_REQUEST_NOTICE);
+        states.send(EmbeddedStatus::Stopped).unwrap();
+        client.poll();
+        assert_eq!(client.status(), &EmbeddedStatus::Stopped);
+        assert!(client.cockpit.notice.is_empty());
+        client.play();
+        assert!(matches!(commands.try_recv().unwrap(), ClockCommand::Play));
+        states.send(EmbeddedStatus::Running).unwrap();
+        client.poll();
+        assert_eq!(client.status(), &EmbeddedStatus::Running);
+        assert!(client.cockpit.notice.is_empty());
+        client.stop();
+        assert!(matches!(commands.try_recv().unwrap(), ClockCommand::Stop));
+        client.play();
+        assert!(matches!(commands.try_recv().unwrap(), ClockCommand::Play));
+        states.send(EmbeddedStatus::Stopped).unwrap();
+        states.send(EmbeddedStatus::Running).unwrap();
+        client.poll();
+        assert_eq!(client.status(), &EmbeddedStatus::Running);
+        assert!(
+            client.cockpit.notice.is_empty(),
+            "Stop and Resume confirmations may arrive in the same poll"
+        );
+        client.cockpit.notice = "Airlock is pressure-interlocked".into();
+        states.send(EmbeddedStatus::Stopped).unwrap();
+        client.poll();
+        assert_eq!(client.cockpit.notice, "Airlock is pressure-interlocked");
+        client.cockpit.notice = "Real authority failure".into();
+        states
+            .send(EmbeddedStatus::Error("Real authority failure".into()))
+            .unwrap();
+        client.poll();
+        assert_eq!(client.cockpit.notice, "Real authority failure");
+        client.cockpit.notice = STOP_REQUEST_NOTICE.into();
+        client.poll();
+        assert!(client.cockpit.notice.contains("outcome unknown"));
+        assert!(!client.cockpit.notice.contains("waiting"));
+        assert!(gameplay_requests.try_recv().is_err());
+        assert!(
+            commands.try_recv().is_err(),
+            "feedback must not retry clock commands"
+        );
+    }
+
+    #[test]
+    fn embedded_stop_resume_clears_notice_and_preserves_world_and_authored_graph() {
+        fn wait(client: &mut EmbeddedClient, predicate: impl Fn(&EmbeddedClient) -> bool) {
+            let deadline = Instant::now() + Duration::from_secs(8);
+            while Instant::now() < deadline {
+                client.poll();
+                if predicate(client) {
+                    return;
+                }
+                assert!(
+                    !matches!(client.status(), EmbeddedStatus::Error(_)),
+                    "worker failed"
+                );
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            panic!("clock transition was not confirmed: {:?}", client.status());
+        }
+        let (mut client, _) = debug_fixture();
+        let directory = std::env::temp_dir().join(format!(
+            "arkline-stop-feedback-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        client.data_dir = directory.clone();
+        client
+            .switch_session(EmbeddedSessionMode::Local, "StopFeedbackPilot".into())
+            .unwrap();
+        wait(&mut client, |client| client.ready());
+        let scene_id = client
+            .set_scene_state(EditorSceneState::InteriorDeck2)
+            .unwrap();
+        wait(&mut client, |client| {
+            client
+                .scene_state_ack()
+                .is_some_and(|ack| ack.id == scene_id)
+                && client.scene_state() == Some(EditorSceneState::InteriorDeck2)
+        });
+        let authored = EditorEventGraph {
+            nodes: vec![arkline_protocol::EditorGraphNode {
+                id: 1,
+                label: "Retained development graph".into(),
+                position: [40.0, 80.0],
+                operation: arkline_protocol::EditorNodeOp::Manual,
+                breakpoint: false,
+            }],
+            ..Default::default()
+        };
+        let id = client.graph_replace(0, authored.clone(), false).unwrap();
+        wait(&mut client, |client| {
+            client.graph_debug().is_some_and(|debug| {
+                debug
+                    .ack
+                    .as_ref()
+                    .is_some_and(|ack| ack.id == id && ack.result.is_ok())
+            })
+        });
+        let before = client.snapshot().unwrap();
+        let pilot_before = before
+            .pilots
+            .iter()
+            .find(|pilot| pilot.name == "StopFeedbackPilot")
+            .unwrap()
+            .clone();
+        client.stop();
+        wait(&mut client, |client| {
+            client.status() == &EmbeddedStatus::Stopped
+        });
+        assert!(client.cockpit.notice.is_empty());
+        assert_eq!(
+            client.snapshot().unwrap().server_time_ms,
+            before.server_time_ms
+        );
+        client.play();
+        wait(&mut client, |client| {
+            client.status() == &EmbeddedStatus::Running
+        });
+        assert!(!client.cockpit.notice.contains("Stop requested"));
+        client.pause();
+        wait(&mut client, |client| client.paused());
+        let after = client.snapshot().unwrap();
+        let pilot_after = after
+            .pilots
+            .iter()
+            .find(|pilot| pilot.name == "StopFeedbackPilot")
+            .unwrap();
+        assert_eq!(pilot_after.ship_class, pilot_before.ship_class);
+        assert_eq!(pilot_after.ore, pilot_before.ore);
+        assert_eq!(pilot_after.credits, pilot_before.credits);
+        assert_eq!(
+            pilot_after.station_avatar.as_ref().unwrap().position,
+            pilot_before.station_avatar.as_ref().unwrap().position
+        );
+        assert_eq!(client.scene_state(), Some(EditorSceneState::InteriorDeck2));
+        assert_eq!(
+            serde_json::to_value(&client.graph_debug().unwrap().debug.graph).unwrap(),
+            serde_json::to_value(authored).unwrap()
+        );
+        let _ = client.clock.try_send(ClockCommand::Shutdown);
+        client.cockpit.updates = None;
+        client.worker.take().unwrap().join().unwrap();
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
     #[test]
     fn scene_state_lost_ack_cancels_pending_without_replay_or_late_camera_reset() {
         fn accepted(id: u64) -> EmbeddedEventDebugState {
