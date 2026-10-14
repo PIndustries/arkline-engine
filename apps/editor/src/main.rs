@@ -1064,7 +1064,11 @@ mod tests {
             );
         }
         let deadline = std::time::Instant::now() + Duration::from_secs(5);
-        while editor.client.scene_state() != Some(arkline_protocol::EditorSceneState::StationHangar)
+        // Snapshot and acknowledgement arrive on separate channels. Observing
+        // the new scene does not mean poll has drained its acknowledgement yet.
+        while (editor.client.scene_state()
+            != Some(arkline_protocol::EditorSceneState::StationHangar)
+            || editor.client.scene_state_ack().is_none())
             && std::time::Instant::now() < deadline
         {
             editor.client.poll();
@@ -1074,7 +1078,12 @@ mod tests {
             editor.client.scene_state(),
             Some(arkline_protocol::EditorSceneState::StationHangar)
         );
-        assert!(editor.client.scene_state_ack().unwrap().result.is_ok());
+        assert!(editor
+            .client
+            .scene_state_ack()
+            .expect("scene acknowledgement should arrive before the deadline")
+            .result
+            .is_ok());
         assert!(editor.client.paused());
         assert_eq!(editor.client.snapshot().unwrap().server_time_ms, time);
         editor.workspace = 3;

@@ -279,7 +279,7 @@ fn switch_requires_applied_content_matching_vessel_and_current_session_gates() {
     p.poll(&base);
     assert!(p.light_request(&base, "ship-A", 2).is_none());
     p.apply();
-    for case in 0..8 {
+    for case in 0..10 {
         let mut context = base.clone();
         match case {
             0 => context.running = false,
@@ -307,6 +307,8 @@ fn switch_requires_applied_content_matching_vessel_and_current_session_gates() {
             }
             5 => context.snapshot.as_mut().unwrap().pilots[0].ship_class = ShipClass::Prospector,
             6 => context.controls_ready = false,
+            7 => context.snapshot = None,
+            8 => context.snapshot.as_mut().unwrap().pilots[0].name = "Other pilot".into(),
             _ => p.fresh_at = Instant::now() - Duration::from_secs(4),
         }
         assert!(
