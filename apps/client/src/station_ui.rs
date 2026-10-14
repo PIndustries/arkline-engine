@@ -186,7 +186,7 @@ impl Cockpit {
                     })
                     .map_or("CORRIDOR / ACCESS CORE", |(name, _, _)| *name);
                 ui.label(room);
-                ui.small("WASD / arrows walk · Space jump · RMB turn / look");
+                ui.small("W/S or ↑/↓ move · A/D or ←/→ turn · Q/E strafe · RMB look · Space jump");
                 ui.small(
                     "Airlock engineering uses server-confirmed devices. Other room fixtures remain prototypes.",
                 );
@@ -329,7 +329,9 @@ impl Cockpit {
                 }
                 ui.small("Only your vessels at this station are shown. Corporate berths are not available yet.");
             }
-            ui.small("WASD / arrows walk · Space jump · hold RMB to look");
+            ui.small(
+                "W/S or ↑/↓ move · A/D or ←/→ turn · Q/E strafe · hold RMB to look · Space jump",
+            );
             ui.small(
                 "Follow the green path to your quarters. Approach a terminal and click to use it.",
             );
@@ -505,15 +507,19 @@ impl Cockpit {
                 let down = |a, b| i.key_down(a) || i.key_down(b);
                 let f = f64::from(down(egui::Key::W, egui::Key::ArrowUp))
                     - f64::from(down(egui::Key::S, egui::Key::ArrowDown));
-                let s = f64::from(down(egui::Key::D, egui::Key::ArrowRight))
+                let s = f64::from(i.key_down(egui::Key::E)) - f64::from(i.key_down(egui::Key::Q));
+                let key_turn = f64::from(down(egui::Key::D, egui::Key::ArrowRight))
                     - f64::from(down(egui::Key::A, egui::Key::ArrowLeft));
-                // Body-local walking avoids a camera-follow/auto-turn feedback loop:
-                // strafing stays sideways and backwards walking never spins the camera.
-                (
-                    f,
-                    s,
-                    self.hangar_view.walk_turn(avatar.as_ref().unwrap().heading),
-                )
+                if key_turn != 0.0 {
+                    self.hangar_view.follow_walk_turn(key_turn, i.stable_dt);
+                }
+                // Preserve RMB look-to-turn behavior while direct keys turn the body.
+                let turn = if key_turn != 0.0 {
+                    key_turn
+                } else {
+                    self.hangar_view.walk_turn(avatar.as_ref().unwrap().heading)
+                };
+                (f, s, turn)
             })
         } else {
             (0., 0., 0.)
@@ -934,6 +940,64 @@ mod tests {
             Some(Request::StationJump)
         ));
     }
+    #[test]
+    fn walk_keys_map_to_move_turn_and_strafe_axes() {
+        fn sample(key: egui::Key) -> Request {
+            let ctx = egui::Context::default();
+            let mut cockpit = crate::tests::view_test_cockpit(&ctx);
+            let pilot = &mut cockpit.snapshot.as_mut().unwrap().pilots[0];
+            pilot.location = Location::Docked;
+            pilot.station_avatar = Some(StationAvatar {
+                onboard_interior: false,
+                interior_deck: 1,
+                jump_started_ms: None,
+                seated: false,
+                position: hangar_layout(pilot.ship_class).boarding_point,
+                heading: 0.0,
+                moving: false,
+                updated_at_ms: 0,
+            });
+            let _ = ctx.run(
+                egui::RawInput {
+                    focused: true,
+                    events: vec![egui::Event::Key {
+                        key,
+                        physical_key: None,
+                        pressed: true,
+                        repeat: false,
+                        modifiers: egui::Modifiers::NONE,
+                    }],
+                    ..Default::default()
+                },
+                |ctx| cockpit.sample_station_walk(ctx, true),
+            );
+            cockpit.controls.take().unwrap()
+        }
+
+        for (key, expected) in [
+            (egui::Key::W, (1., 0., 0.)),
+            (egui::Key::ArrowUp, (1., 0., 0.)),
+            (egui::Key::S, (-1., 0., 0.)),
+            (egui::Key::ArrowDown, (-1., 0., 0.)),
+            (egui::Key::A, (0., 0., -1.)),
+            (egui::Key::ArrowLeft, (0., 0., -1.)),
+            (egui::Key::D, (0., 0., 1.)),
+            (egui::Key::ArrowRight, (0., 0., 1.)),
+            (egui::Key::Q, (0., -1., 0.)),
+            (egui::Key::E, (0., 1., 0.)),
+        ] {
+            let actual = match sample(key) {
+                Request::StationWalk {
+                    forward,
+                    strafe,
+                    turn,
+                } => (forward, strafe, turn),
+                other => panic!("unexpected request: {other:?}"),
+            };
+            assert_eq!(actual, expected, "incorrect walk mapping for {key:?}");
+        }
+    }
+
     #[test]
     fn walk_controls_are_own_only_and_release_on_focus_loss() {
         let ctx = egui::Context::default();

@@ -3,6 +3,7 @@ use super::*;
 use arkline_protocol::{EditorEventGraph, EditorGraphDebug};
 use arkline_server::editor::EditorWorld;
 use eframe::App;
+use glam::Vec3;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum EmbeddedStatus {
@@ -103,6 +104,11 @@ pub struct EmbeddedClient {
     state: EmbeddedStatus,
     destroyed: bool,
     views: ViewDiagnostics,
+    free_camera: Option<(Vec3, f32, f32)>,
+    free_camera_enabled: bool,
+    free_camera_scene_hangar: Option<bool>,
+    free_camera_saved_view: Option<ViewMode>,
+    free_camera_input_time: Option<f64>,
 }
 impl EmbeddedClient {
     pub fn new(cc: &eframe::CreationContext<'_>, data_dir: PathBuf, pilot: String) -> Self {
@@ -157,6 +163,11 @@ impl EmbeddedClient {
                 started: Some(Instant::now()),
                 ..Default::default()
             },
+            free_camera: None,
+            free_camera_enabled: false,
+            free_camera_scene_hangar: None,
+            free_camera_saved_view: None,
+            free_camera_input_time: None,
         }
     }
     /// Drain authority updates while another editor workspace owns the viewport.
@@ -235,15 +246,126 @@ impl EmbeddedClient {
     }
     pub fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         self.poll();
-        self.cockpit.embedded_input = ctx
-            .pointer_latest_pos()
-            .is_some_and(|p| ctx.available_rect().contains(p));
+        let in_hangar = self.cockpit.in_station_hangar();
+        if self.free_camera_enabled && self.free_camera_scene_hangar != Some(in_hangar) {
+            // Camera coordinates are scene-local; let the new scene render once before reseeding.
+            self.free_camera = None;
+            self.free_camera_scene_hangar = Some(in_hangar);
+        }
+        self.update_editor_free_camera(ctx);
+        self.cockpit
+            .flight_view
+            .set_editor_free_camera(self.free_camera_enabled, self.free_camera);
+        self.cockpit
+            .hangar_view
+            .set_editor_free_camera(self.free_camera_enabled, self.free_camera);
+        self.cockpit.embedded_input = gameplay_input_allowed(
+            ctx.pointer_latest_pos()
+                .is_some_and(|p| ctx.available_rect().contains(p)),
+            self.free_camera_enabled,
+        );
         self.cockpit.update(ctx, frame);
+        if self.free_camera_enabled && self.free_camera.is_none() {
+            self.free_camera = self.active_scene_camera_pose();
+        }
         self.observe_view("In-game view control changed");
         // Paused editor time never advances because of UI rendering.
         if self.cockpit.embedded_paused {
             self.cockpit.frozen_time = self.cockpit.snapshot.as_ref().map(|s| s.server_time_ms);
         }
+    }
+    /// Enable a renderer-only free camera. It never sends pilot or authority commands.
+    pub fn set_free_camera(&mut self, enabled: bool) {
+        if enabled && !self.free_camera_enabled {
+            self.free_camera_enabled = true;
+            self.free_camera_scene_hangar = Some(self.cockpit.in_station_hangar());
+            if self.cockpit.view_mode == ViewMode::Tactical {
+                self.free_camera_saved_view = Some(self.cockpit.view_mode);
+                self.cockpit.view_mode = ViewMode::External;
+            }
+            // Begin exactly at the rendered camera in whichever scene is active.
+            self.free_camera = self.active_scene_camera_pose();
+        } else if !enabled && self.free_camera_enabled {
+            self.free_camera_enabled = false;
+            self.free_camera = None;
+            self.free_camera_scene_hangar = None;
+            if let Some(view) = self.free_camera_saved_view.take() {
+                self.cockpit.view_mode = view;
+            }
+        }
+        self.cockpit
+            .flight_view
+            .set_editor_free_camera(self.free_camera_enabled, self.free_camera);
+        self.cockpit
+            .hangar_view
+            .set_editor_free_camera(self.free_camera_enabled, self.free_camera);
+    }
+    pub fn free_camera_active(&self) -> bool {
+        self.free_camera_enabled
+    }
+    fn active_scene_camera_pose(&self) -> Option<(Vec3, f32, f32)> {
+        if self.cockpit.in_station_hangar() {
+            self.cockpit.hangar_view.editor_camera_pose()
+        } else {
+            self.cockpit.flight_view.editor_camera_pose()
+        }
+    }
+    fn update_editor_free_camera(&mut self, ctx: &egui::Context) {
+        // egui may repeat a layout pass with the same input. Move once per
+        // input frame, including the frame that seeds a new scene camera.
+        let time = ctx.input(|i| i.time);
+        if self.free_camera_input_time == Some(time) {
+            return;
+        }
+        self.free_camera_input_time = Some(time);
+        let Some((mut position, mut yaw, mut pitch)) = self.free_camera else {
+            return;
+        };
+        // This is render time, never simulation time, so it continues while paused.
+        let dt = ctx.input(|i| i.stable_dt).clamp(0.0, 0.1);
+        let viewport = ctx.available_rect();
+        let wants_keyboard = ctx.wants_keyboard_input();
+        // Hangar geometry uses meters; the space renderer uses 100 m units.
+        let meters_per_scene_unit = if self.cockpit.in_station_hangar() {
+            1.0
+        } else {
+            100.0
+        };
+        let in_viewport = ctx.input(|i| {
+            i.focused
+                && !wants_keyboard
+                && i.pointer.hover_pos().is_some_and(|p| viewport.contains(p))
+        });
+        ctx.input(|i| {
+            if in_viewport && i.pointer.button_down(egui::PointerButton::Secondary) {
+                let delta = i.pointer.delta();
+                yaw += delta.x * 0.004;
+                pitch = (pitch - delta.y * 0.004).clamp(-1.52, 1.52);
+            }
+            let forward = Vec3::new(
+                yaw.cos() * pitch.cos(),
+                pitch.sin(),
+                yaw.sin() * pitch.cos(),
+            );
+            let right = Vec3::new(-yaw.sin(), 0.0, yaw.cos());
+            if !in_viewport {
+                return;
+            }
+            let mut movement = Vec3::ZERO;
+            movement += forward
+                * (i.key_down(egui::Key::W) as i32 - i.key_down(egui::Key::S) as i32) as f32;
+            movement +=
+                right * (i.key_down(egui::Key::D) as i32 - i.key_down(egui::Key::A) as i32) as f32;
+            movement.y +=
+                (i.key_down(egui::Key::E) as i32 - i.key_down(egui::Key::Q) as i32) as f32;
+            movement.y +=
+                (i.key_down(egui::Key::Space) as i32 - i.key_down(egui::Key::C) as i32) as f32;
+            let speed = if i.modifiers.shift { 100.0 } else { 15.0 } / meters_per_scene_unit;
+            if movement.length_squared() > 0.0 {
+                position += movement.normalize() * speed * dt;
+            }
+        });
+        self.free_camera = Some((position, yaw, pitch));
     }
     fn queue_clock(&mut self, command: ClockCommand) -> bool {
         if self.clock.try_send(command).is_err() {
@@ -423,6 +545,9 @@ impl EmbeddedClient {
     pub fn send_command(&mut self, request: Request) {
         self.cockpit.send(request);
     }
+}
+fn gameplay_input_allowed(pointer_in_viewport: bool, free_camera: bool) -> bool {
+    pointer_in_viewport && !free_camera
 }
 impl Drop for EmbeddedClient {
     fn drop(&mut self) {
@@ -625,6 +750,272 @@ fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn free_camera_suppresses_gameplay_input_even_over_viewport() {
+        assert!(!gameplay_input_allowed(true, true));
+        assert!(!gameplay_input_allowed(false, true));
+        assert!(gameplay_input_allowed(true, false));
+    }
+    #[test]
+    fn free_camera_temporarily_uses_3d_and_restores_tactical_view() {
+        let (mut client, _) = debug_fixture();
+        client.cockpit.view_mode = ViewMode::Tactical;
+        client.set_free_camera(true);
+        assert_eq!(client.cockpit.view_mode, ViewMode::External);
+        assert!(client.free_camera_active());
+        client.set_free_camera(false);
+        assert_eq!(client.cockpit.view_mode, ViewMode::Tactical);
+        assert!(!client.free_camera_active());
+    }
+    #[test]
+    fn embedded_free_camera_moves_without_issuing_station_gameplay_commands() {
+        let (mut client, requests) = debug_fixture();
+        client.state = EmbeddedStatus::Running;
+        let pilot = &mut client.cockpit.snapshot.as_mut().unwrap().pilots[0];
+        pilot.station_avatar = Some(StationAvatar {
+            onboard_interior: false,
+            interior_deck: 1,
+            jump_started_ms: None,
+            seated: false,
+            position: arkline_protocol::hangar_layout(pilot.ship_class).boarding_point,
+            heading: 0.0,
+            moving: false,
+            updated_at_ms: 0,
+        });
+        let ctx = egui::Context::default();
+        client.set_free_camera(true);
+        let _ = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(900.0, 650.0),
+                )),
+                time: Some(1.0),
+                focused: true,
+                ..Default::default()
+            },
+            |ctx| client.update(ctx, &mut eframe::Frame::_new_kittest()),
+        );
+        let before = client.free_camera.unwrap().0;
+        let _ = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(900.0, 650.0),
+                )),
+                time: Some(1.05),
+                focused: true,
+                events: vec![
+                    egui::Event::PointerMoved(egui::pos2(450.0, 325.0)),
+                    egui::Event::Key {
+                        key: egui::Key::W,
+                        physical_key: None,
+                        pressed: true,
+                        repeat: false,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                    egui::Event::Key {
+                        key: egui::Key::Space,
+                        physical_key: None,
+                        pressed: true,
+                        repeat: false,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ],
+                ..Default::default()
+            },
+            |ctx| client.update(ctx, &mut eframe::Frame::_new_kittest()),
+        );
+        assert!(client.free_camera.unwrap().0.distance(before) > 0.0);
+        assert!(!client.cockpit.embedded_input);
+        assert!(requests.try_recv().is_err());
+
+        let mut transition_poses = Vec::new();
+        let pilot = &mut client.cockpit.snapshot.as_mut().unwrap().pilots[0];
+        pilot.location = Location::Belt;
+        pilot.station_avatar = None;
+        let _ = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(900.0, 650.0),
+                )),
+                time: Some(1.1),
+                focused: true,
+                ..Default::default()
+            },
+            |ctx| {
+                client.update(ctx, &mut eframe::Frame::_new_kittest());
+                transition_poses.push(client.free_camera.unwrap());
+                // A repeated UI pass must not apply held movement again.
+                client.update_editor_free_camera(ctx);
+                assert_eq!(client.free_camera, transition_poses.last().copied());
+            },
+        );
+        assert_eq!(client.free_camera_scene_hangar, Some(false));
+        assert!(transition_poses
+            .iter()
+            .all(|pose| *pose == transition_poses[0]));
+        assert_ne!(client.free_camera.unwrap().0, before);
+        assert!(requests.try_recv().is_err());
+    }
+
+    #[test]
+    fn embedded_free_camera_input_has_expected_axes_and_ignores_outside_or_repeated_input() {
+        fn moved_position(key: egui::Key) -> Vec3 {
+            let (mut client, _) = debug_fixture();
+            client.free_camera = Some((Vec3::ZERO, 0.0, 0.0));
+            let ctx = egui::Context::default();
+            let _ = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(900.0, 650.0),
+                    )),
+                    time: Some(1.0),
+                    focused: true,
+                    events: vec![
+                        egui::Event::PointerMoved(egui::pos2(450.0, 325.0)),
+                        egui::Event::Key {
+                            key,
+                            physical_key: None,
+                            pressed: true,
+                            repeat: false,
+                            modifiers: egui::Modifiers::NONE,
+                        },
+                    ],
+                    ..Default::default()
+                },
+                |ctx| client.update_editor_free_camera(ctx),
+            );
+            client.free_camera.unwrap().0
+        }
+
+        // At yaw and pitch zero, forward is +X, right is +Z, and vertical
+        // movement follows the world Y axis.
+        for (key, axis, sign) in [
+            (egui::Key::W, 0, 1.0),
+            (egui::Key::S, 0, -1.0),
+            (egui::Key::D, 2, 1.0),
+            (egui::Key::A, 2, -1.0),
+            (egui::Key::E, 1, 1.0),
+            (egui::Key::Space, 1, 1.0),
+            (egui::Key::Q, 1, -1.0),
+            (egui::Key::C, 1, -1.0),
+        ] {
+            let position = moved_position(key);
+            let component = [position.x, position.y, position.z][axis];
+            assert!(
+                component * sign > 0.0,
+                "{key:?} should move along axis {axis} with sign {sign}, got {position:?}"
+            );
+            for (other_axis, value) in [position.x, position.y, position.z].into_iter().enumerate()
+            {
+                if other_axis != axis {
+                    assert_eq!(value, 0.0, "{key:?} changed an unintended axis");
+                }
+            }
+        }
+
+        let (mut client, _) = debug_fixture();
+        client.free_camera = Some((Vec3::ZERO, 0.0, 0.0));
+        let ctx = egui::Context::default();
+        let raw_input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(900.0, 650.0),
+            )),
+            time: Some(2.0),
+            focused: true,
+            events: vec![
+                egui::Event::PointerMoved(egui::pos2(950.0, 325.0)),
+                egui::Event::Key {
+                    key: egui::Key::W,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ],
+            ..Default::default()
+        };
+        let _ = ctx.run(raw_input, |ctx| client.update_editor_free_camera(ctx));
+        assert_eq!(client.free_camera.unwrap().0, Vec3::ZERO);
+
+        // Calling the updater twice with the same egui input time applies
+        // the held movement only once.
+        let repeated_input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(900.0, 650.0),
+            )),
+            time: Some(3.0),
+            focused: true,
+            events: vec![
+                egui::Event::PointerMoved(egui::pos2(450.0, 325.0)),
+                egui::Event::Key {
+                    key: egui::Key::W,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ],
+            ..Default::default()
+        };
+        let _ = ctx.run(repeated_input, |ctx| {
+            client.update_editor_free_camera(ctx);
+            let once = client.free_camera.unwrap().0;
+            client.update_editor_free_camera(ctx);
+            assert_eq!(client.free_camera.unwrap().0, once);
+        });
+
+        let (mut client, _) = debug_fixture();
+        client.free_camera = Some((Vec3::ZERO, 0.0, 0.0));
+        let ctx = egui::Context::default();
+        let _ = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(900.0, 650.0),
+                )),
+                time: Some(4.0),
+                focused: true,
+                events: vec![egui::Event::PointerMoved(egui::pos2(450.0, 325.0))],
+                ..Default::default()
+            },
+            |ctx| client.update_editor_free_camera(ctx),
+        );
+        let _ = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(900.0, 650.0),
+                )),
+                time: Some(4.1),
+                focused: true,
+                events: vec![
+                    egui::Event::PointerMoved(egui::pos2(460.0, 315.0)),
+                    egui::Event::PointerButton {
+                        pos: egui::pos2(460.0, 315.0),
+                        button: egui::PointerButton::Secondary,
+                        pressed: true,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ],
+                ..Default::default()
+            },
+            |ctx| client.update_editor_free_camera(ctx),
+        );
+        let (_, yaw, pitch) = client.free_camera.unwrap();
+        assert!(
+            yaw > 0.0,
+            "positive horizontal mouse delta should turn right"
+        );
+        assert!(pitch > 0.0, "upward mouse delta should pitch upward");
+    }
+
     fn debug_fixture() -> (EmbeddedClient, Receiver<Request>) {
         let ctx = egui::Context::default();
         let mut cockpit = crate::tests::view_test_cockpit(&ctx);
@@ -651,6 +1042,11 @@ mod tests {
                     started: Some(Instant::now()),
                     ..Default::default()
                 },
+                free_camera: None,
+                free_camera_enabled: false,
+                free_camera_scene_hangar: None,
+                free_camera_saved_view: None,
+                free_camera_input_time: None,
             },
             requests,
         )
@@ -793,6 +1189,11 @@ mod tests {
                 started: Some(Instant::now()),
                 ..Default::default()
             },
+            free_camera: None,
+            free_camera_enabled: false,
+            free_camera_scene_hangar: None,
+            free_camera_saved_view: None,
+            free_camera_input_time: None,
         };
         client.cockpit.frame_intervals.push_back(1.245);
         client.cockpit.frame_observed = Instant::now() - Duration::from_secs(30);

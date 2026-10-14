@@ -101,10 +101,12 @@ impl EditorWorld {
         let started = std::time::Instant::now();
         let response = self.server.handle_at(session, request, self.time());
         if connect && response.ok {
-            if self.graph_session != *session {
-                self.graph.clear(self.time());
+            // A second pilot joins the same editor authority. Keep the existing
+            // graph executor and its trace; disconnect clears work bound to that
+            // executor rather than silently transferring it to another pilot.
+            if self.graph_session.is_none() {
+                self.graph_session = session.clone();
             }
-            self.graph_session = session.clone();
         }
         if !snapshot {
             self.graph.record(

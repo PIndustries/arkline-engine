@@ -35,6 +35,9 @@ pub struct HangarView {
     follow: Option<Vec3>,
     follow_heading: Option<f64>,
     gait: avatar_animation::Gait,
+    editor_free_camera: Option<(Vec3, f32, f32)>,
+    editor_free_camera_active: bool,
+    last_camera_pose: Option<(Vec3, f32, f32)>,
 }
 impl HangarView {
     // egui callbacks share ownership on one browser thread; SendWrapper guards access.
@@ -62,6 +65,9 @@ impl HangarView {
             follow: None,
             follow_heading: None,
             gait: Default::default(),
+            editor_free_camera: None,
+            editor_free_camera_active: false,
+            last_camera_pose: None,
         }
     }
     #[cfg(not(target_arch = "wasm32"))]
@@ -93,6 +99,13 @@ impl HangarView {
     pub fn camera_yaw(&self) -> f64 {
         self.yaw as f64
     }
+    pub fn set_editor_free_camera(&mut self, active: bool, pose: Option<(Vec3, f32, f32)>) {
+        self.editor_free_camera_active = active;
+        self.editor_free_camera = pose;
+    }
+    pub fn editor_camera_pose(&self) -> Option<(Vec3, f32, f32)> {
+        self.last_camera_pose
+    }
     pub fn walk_turn(&self, heading: f64) -> f64 {
         if !self.walking {
             return 0.0;
@@ -105,6 +118,11 @@ impl HangarView {
         } else {
             (angle * 3.0).clamp(-1.0, 1.0)
         }
+    }
+    pub fn follow_walk_turn(&mut self, turn: f64, dt: f32) {
+        // Keep the RMB look target aligned when keyboard input turns the body.
+        // Otherwise the old camera yaw would immediately steer the avatar back.
+        self.yaw += (turn * 2.0 * dt as f64) as f32;
     }
     pub fn destroy(&mut self) {
         if let Some(renderer) = self.renderer.take() {
@@ -160,16 +178,21 @@ impl HangarView {
             .pointer_hover_pos()
             .is_some_and(|p| rect.contains(p) && ui.ctx().layer_id_at(p) == Some(ui.layer_id()));
         // Response helpers also access Context: never invoke them inside an input lock.
-        let dragging = response.dragged_by(egui::PointerButton::Secondary)
-            || (!walking && response.dragged_by(egui::PointerButton::Primary));
+        let dragging = !self.editor_free_camera_active
+            && (response.dragged_by(egui::PointerButton::Secondary)
+                || (!walking && response.dragged_by(egui::PointerButton::Primary)));
         if unobstructed {
             ui.input(|i| {
                 if dragging {
-                    self.yaw -= i.pointer.delta().x * 0.007;
+                    // Dragging right should look/turn right with the pointer.
+                    self.yaw += i.pointer.delta().x * 0.007;
                     self.pitch = (self.pitch + i.pointer.delta().y * 0.005)
                         .clamp(if walking { -0.8 } else { 0.06 }, 1.25);
                 }
-                self.zoom = (self.zoom * (-i.smooth_scroll_delta.y * 0.002).exp()).clamp(0.45, 2.5);
+                if !self.editor_free_camera_active {
+                    self.zoom =
+                        (self.zoom * (-i.smooth_scroll_delta.y * 0.002).exp()).clamp(0.45, 2.5);
+                }
             });
         }
         let layout = hangar_layout(pilot.ship_class);
@@ -216,13 +239,26 @@ impl HangarView {
                 quarters::camera_eye(pilot.ship_class, target, eye)
             };
         }
-        let first_person = walking && self.on_foot_view == OnFootView::FirstPerson;
-        let look_target = if first_person {
+        let player_first_person = walking && self.on_foot_view == OnFootView::FirstPerson;
+        let first_person = player_first_person && !self.editor_free_camera_active;
+        let look_target = if player_first_person {
             eye = self.follow.unwrap() + Vec3::Y * 1.65;
             eye + forward * self.pitch.cos() - Vec3::Y * self.pitch.sin()
         } else {
             target
         };
+        let player_direction = (look_target - eye).normalize_or_zero();
+        self.last_camera_pose = Some((
+            eye,
+            player_direction.z.atan2(player_direction.x),
+            player_direction.y.clamp(-1.0, 1.0).asin(),
+        ));
+        let mut look_target = look_target;
+        if let Some((position, yaw, pitch)) = self.editor_free_camera {
+            let direction = editor_camera_direction(yaw, pitch);
+            eye = position;
+            look_target = eye + direction;
+        }
         let vp = Mat4::perspective_rh_gl(
             55f32.to_radians(),
             rect.aspect_ratio().max(0.1),
@@ -304,7 +340,7 @@ impl HangarView {
                 },
                 pilot.ship_class.spec().name,
                 if walking {
-                    "ON FOOT · WASD / arrows walk · Right-drag turn / look · Space jump"
+                    "ON FOOT · W/S or ↑/↓ move · A/D or ←/→ turn · Q/E strafe · RMB look · Space jump"
                 } else {
                     "SHIP INSPECTION · Drag orbit · Wheel zoom · Disembark to explore"
                 }
@@ -329,6 +365,14 @@ impl HangarView {
 fn third_person_eye(target: Vec3, heading: f32, pitch: f32, distance: f32) -> Vec3 {
     let forward = Vec3::new(heading.cos(), 0.0, heading.sin());
     target - forward * distance * pitch.cos() + Vec3::Y * distance * pitch.sin()
+}
+
+pub(super) fn editor_camera_direction(yaw: f32, pitch: f32) -> Vec3 {
+    Vec3::new(
+        yaw.cos() * pitch.cos(),
+        pitch.sin(),
+        yaw.sin() * pitch.cos(),
+    )
 }
 
 fn bay_parts(class: ShipClass) -> Vec<ModelPart> {
@@ -782,6 +826,31 @@ mod tests {
     }
     use super::*;
     #[test]
+    fn editor_camera_pose_uses_fly_angles_and_preserves_player_camera_pose() {
+        let forward = editor_camera_direction(0.0, 0.0);
+        assert!(forward.distance(Vec3::X) < 1e-6);
+        let up = editor_camera_direction(0.0, std::f32::consts::FRAC_PI_2);
+        assert!(up.distance(Vec3::Y) < 1e-6);
+
+        let ctx = egui::Context::default();
+        let pilot: PilotView = serde_json::from_value(serde_json::json!({
+            "name":"FreecamQA","credits":0,"ore":0,"location":Location::Docked
+        }))
+        .unwrap();
+        let pose = (Vec3::new(12.0, 8.0, -4.0), 1.2, -0.25);
+        let mut view = HangarView::new(None);
+        view.set_editor_free_camera(true, Some(pose));
+        let _ = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                view.ui(ui, &pilot, 1000, true, None, None);
+            });
+        });
+        let camera = view.editor_camera_pose().unwrap();
+        assert!(camera.0.is_finite());
+        assert!(camera.0.distance(pose.0) > 1.0);
+        assert_eq!(view.editor_free_camera, Some(pose));
+    }
+    #[test]
     fn third_person_remains_behind_avatar_at_every_heading() {
         for heading in [0.0, 1.2, -2.7, std::f32::consts::PI] {
             let target = Vec3::new(8.0, 1.25, 7.0);
@@ -842,7 +911,7 @@ mod tests {
                     },
                 );
             }
-            tx.send(hangar.camera_yaw() != initial).unwrap();
+            tx.send(hangar.camera_yaw() > initial).unwrap();
         });
         assert!(rx
             .recv_timeout(std::time::Duration::from_secs(3))

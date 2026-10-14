@@ -10,6 +10,8 @@ The current material source provides a common seven-class hull/trim finish, auth
 
 The existing Pioneer equipment catalog provides stable device/port IDs, positions and typed connections. Only the documented first-room behaviors are simulated. Fleet design diagrams and proposed engineering systems are not all executable systems. See [equipment catalog](pioneer-equipment-catalog.md) and [engineering contract](ships/engineering-contract.md).
 
+The current **Service paths** panel adds project-local candidate Power, Data, and Water routes between engineering component IDs. Authors enter ordered XYZ waypoints and inspect top-down X/Z and side X/Y projections; the saved document is `Assets/Pioneer.service_paths.json`. These routes are design data only: they do not connect equipment-catalog ports or change installed systems, gameplay, or simulation. The integrated editor uses its in-process local authority and currently has no remote game-network connection UI. See [editor operation](editor.md#candidate-service-paths) for the panel controls and limits.
+
 ## One command model for UI and automation — proposed
 
 Use an editor project document separate from the runtime SQLite world. Each authoring command carries `project_id`, `expected_revision`, `command_id`, target stable IDs and a typed payload. UI buttons, REST and MCP call the same validator and dispatcher; adapters must not write files or game state directly.

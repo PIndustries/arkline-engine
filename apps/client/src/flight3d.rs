@@ -127,9 +127,21 @@ pub fn lane(name: &str) -> f32 {
 pub fn display_position(pilot: &PilotView, now: u64) -> [f64; 3] {
     super::motion::position(pilot, now)
 }
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Debug, PartialEq)]
 struct Space {
     origin: [f64; 3],
+}
+fn editor_camera_scene_space(
+    active: bool,
+    frozen: Option<Space>,
+    live: Space,
+) -> (Space, Option<Space>) {
+    if active {
+        let fixed = frozen.unwrap_or(live);
+        (fixed, Some(fixed))
+    } else {
+        (live, None)
+    }
 }
 impl Space {
     fn scene(self, meters: [f64; 3]) -> Vec3 {
@@ -255,6 +267,11 @@ pub struct FlightView {
     console_rect: Option<egui::Rect>,
     map_range: f64,
     space: Space,
+    /// Editor-only camera, expressed in the rendered scene's local coordinates.
+    free_camera: Option<(Vec3, f32, f32)>,
+    editor_free_camera_active: bool,
+    editor_free_camera_space: Option<Space>,
+    last_camera_pose: Option<(Vec3, f32, f32)>,
 }
 impl FlightView {
     // egui callbacks share ownership on one browser thread; SendWrapper guards access.
@@ -292,7 +309,28 @@ impl FlightView {
             console_rect: None,
             map_range: 1_000_000.0,
             space: Space::default(),
+            free_camera: None,
+            editor_free_camera_active: false,
+            editor_free_camera_space: None,
+            last_camera_pose: None,
         }
+    }
+    pub fn set_editor_free_camera(&mut self, active: bool, pose: Option<(Vec3, f32, f32)>) {
+        let reseed = active
+            && (!self.editor_free_camera_active || (pose.is_none() && self.free_camera.is_some()));
+        if !active {
+            self.editor_free_camera_space = None;
+        } else if reseed {
+            // An existing camera pose belongs to the last rendered origin,
+            // even when the pilot travels before the next rendered frame.
+            // A cleared pose lets a new scene establish its origin instead.
+            self.editor_free_camera_space = pose.map(|_| self.space);
+        }
+        self.editor_free_camera_active = active;
+        self.free_camera = pose;
+    }
+    pub fn editor_camera_pose(&self) -> Option<(Vec3, f32, f32)> {
+        self.last_camera_pose
     }
     pub fn set_remote_ship(&mut self, pilot: Option<String>) {
         self.remote_ship = pilot;
@@ -385,14 +423,22 @@ impl FlightView {
                 self.distance = ship_distance;
             }
         }
-        let space = Space {
+        let live_space = Space {
             origin: own_pilot.map_or(STATION_POSITION, |p| display_position(p, now)),
         };
+        let (space, editor_free_camera_space) = editor_camera_scene_space(
+            self.editor_free_camera_active,
+            self.editor_free_camera_space,
+            live_space,
+        );
+        self.editor_free_camera_space = editor_free_camera_space;
         let warp_tracking =
             own_pilot.is_some_and(|p| matches!(p.location, Location::InTransit { .. }));
         self.target = rebased_camera_target(self.target, self.space, space, warp_tracking);
         self.space = space;
-        let cockpit = matches!(mode, super::ViewMode::Cockpit);
+        let cockpit_mode = matches!(mode, super::ViewMode::Cockpit);
+        let cockpit = cockpit_mode && !self.editor_free_camera_active;
+        let editor_free_camera = self.editor_free_camera_active;
         let tactical = mode == super::ViewMode::Tactical3d;
         if tactical != self.tactical {
             let next = self.other_camera;
@@ -439,6 +485,11 @@ impl FlightView {
             .resizable(!layout.pinned)
             .collapsible(true)
             .show(ui.ctx(), |ui| {
+                if editor_free_camera {
+                    ui.label("Editor free camera · WASD move · E/Q or Space/C vertical · RMB look");
+                    camera_content = Some(ui.max_rect().size());
+                    return;
+                }
                 if cockpit {
                     ui.label("Pilot seat · full six-axis flight");
                     ui.small("W/S: thrust · A/D: strafe · Space/C: vertical");
@@ -516,20 +567,25 @@ impl FlightView {
         self.input_surface = (!pointer_on_instrument).then_some((rect, ui.layer_id()));
         // Foreground panels own their pointer input, including transparent
         // panel margins. Checking the layer also blocks a drag crossing a HUD.
-        let world_input = ui.input(|i| i.pointer.hover_pos()).is_some_and(|pointer| {
-            rect.contains(pointer)
-                && ui.ctx().layer_id_at(pointer) == Some(ui.layer_id())
-                && !(cockpit
-                    && cockpit_screens(own_pilot.map_or(ShipClass::Pioneer, |p| p.ship_class))
-                        .iter()
-                        .any(|(c, s)| instrument_rect(rect, *c, *s).contains(pointer)))
-        });
-        if !cockpit && world_input && response.dragged_by(egui::PointerButton::Primary) {
+        let world_input = !editor_free_camera
+            && ui.input(|i| i.pointer.hover_pos()).is_some_and(|pointer| {
+                rect.contains(pointer)
+                    && ui.ctx().layer_id_at(pointer) == Some(ui.layer_id())
+                    && !(cockpit
+                        && cockpit_screens(own_pilot.map_or(ShipClass::Pioneer, |p| p.ship_class))
+                            .iter()
+                            .any(|(c, s)| instrument_rect(rect, *c, *s).contains(pointer)))
+            });
+        if !cockpit
+            && !editor_free_camera
+            && world_input
+            && response.dragged_by(egui::PointerButton::Primary)
+        {
             let delta = ui.input(|i| i.pointer.delta());
             self.yaw -= delta.x * 0.007;
             self.pitch = (self.pitch + delta.y * 0.006).clamp(-1.25, 1.25);
         }
-        if !cockpit && world_input && response.hovered() {
+        if !cockpit && !editor_free_camera && world_input && response.hovered() {
             self.distance =
                 (self.distance * (-ui.input(|i| i.smooth_scroll_delta.y) * 0.002).exp()).clamp(
                     if tactical {
@@ -629,7 +685,7 @@ impl FlightView {
         let head_rotation = rotation
             * Quat::from_rotation_y(self.head_look[0])
             * Quat::from_rotation_z(self.head_look[1]);
-        let (eye, mut view) = if cockpit {
+        let (mut eye, mut view) = if cockpit {
             cockpit_camera(
                 own_pilot.map_or(Vec3::ZERO, |p| {
                     let spec = p.ship_class.spec();
@@ -651,6 +707,20 @@ impl FlightView {
         };
         if cockpit {
             view = Mat4::look_at_rh(eye, eye + head_rotation * Vec3::X, head_rotation * Vec3::Y);
+        }
+        let player_direction = view
+            .inverse()
+            .transform_vector3(Vec3::NEG_Z)
+            .normalize_or_zero();
+        self.last_camera_pose = Some((
+            eye,
+            player_direction.z.atan2(player_direction.x),
+            player_direction.y.clamp(-1.0, 1.0).asin(),
+        ));
+        if let Some((position, yaw, pitch)) = self.free_camera {
+            let direction = hangar::editor_camera_direction(yaw, pitch);
+            eye = position;
+            view = Mat4::look_at_rh(eye, eye + direction, Vec3::Y);
         }
 
         let projection = Mat4::perspective_rh_gl(
@@ -909,7 +979,8 @@ impl FlightView {
                     .pilots
                     .iter()
                     .find(|pilot| pilot.name == pilot_name);
-                let can_navigate = connected
+                let can_navigate = !editor_free_camera
+                    && connected
                     && own_pilot.is_some_and(|pilot| {
                         pilot.flight.is_some()
                             && !matches!(
@@ -1043,7 +1114,10 @@ impl FlightView {
                         }
                     }
                 }
-                if !cockpit && (world_input || response.context_menu_opened()) {
+                if !cockpit
+                    && !editor_free_camera
+                    && (world_input || response.context_menu_opened())
+                {
                     response.context_menu(|ui| {
                         ui.label("Navigation");
                         match &self.context_object {
@@ -6208,6 +6282,40 @@ mod tests {
         assert_eq!(warp_tunnel_intensity("WARP WARMUP", 0.0), 0.0);
         assert_eq!(warp_tunnel_intensity("WARP CRUISE", 0.5), 1.0);
         assert_eq!(warp_tunnel_intensity("WARP ARRIVAL", 1.0), 0.0);
+    }
+    #[test]
+    fn editor_free_camera_freezes_scene_origin_and_restores_live_player_origin() {
+        let initial = Space {
+            origin: [1_000_000.0, 20.0, -400.0],
+        };
+        let mut view = FlightView::new(None);
+        view.space = initial;
+        view.set_editor_free_camera(true, Some((Vec3::ZERO, 0.0, 0.0)));
+        assert_eq!(view.editor_free_camera_space, Some(initial));
+        view.set_editor_free_camera(false, None);
+        assert!(view.editor_free_camera_space.is_none());
+        let (first_frame, frozen) = editor_camera_scene_space(true, None, initial);
+        let camera = Vec3::new(7.0, 3.0, -2.0);
+        let camera_world = first_frame.world(camera);
+
+        // The ship's display origin moves by ten scene units, but the camera's
+        // scene transform remains anchored for the full free-camera session.
+        let ship_world = [1_001_000.0, 20.0, -400.0];
+        let moved_live = Space { origin: ship_world };
+        let (moving_frame, still_frozen) = editor_camera_scene_space(true, frozen, moved_live);
+        assert_eq!(moving_frame.origin, initial.origin);
+        assert_eq!(still_frozen.unwrap().origin, initial.origin);
+        assert_eq!(moving_frame.world(camera), camera_world);
+
+        // On disable, the normal scene origin follows the ship again, while the
+        // player target rebases to the same world point in that live frame.
+        let (restored, no_freeze) = editor_camera_scene_space(false, still_frozen, moved_live);
+        assert_eq!(restored.origin, ship_world);
+        assert!(no_freeze.is_none());
+        let player_target_during_freecam = moving_frame.scene(ship_world);
+        let restored_target =
+            rebased_camera_target(player_target_during_freecam, moving_frame, restored, false);
+        assert!(restored_target.length() < 1e-5);
     }
     #[test]
     fn cockpit_heading_and_au_relative_precision() {

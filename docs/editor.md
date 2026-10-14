@@ -29,7 +29,23 @@ The editor uses isolated local identities and normal pilot ownership checks. Cre
 
 The central viewport runs normal gameplay. Editor toolbar and side panels reserve their own space and input. Native full-screen/session/new-window actions are disabled in embedded mode. Select a pilot in the outliner to inspect its public snapshot. Private inventory/room data appears only for the active test pilot.
 
+The embedded client and local authoritative world run in process in this editor window. Play/Pause/Step/Stop operate that isolated local world; there is no game-server address field or network-connection UI, and this editor flow does not connect to an official or remote multiplayer world. GitHub contributor access is a separate, optional community feature.
+
 The inspector reports actual simulation values: ship class and dimensions, cargo, position or deck-local avatar coordinates, velocity, power, drones, mining modules and the connected Pioneer room catalog. It does not invent sensor values or imply that every catalog connection is independently simulated.
+
+## Player and editor camera controls
+
+The toolbar's **Free camera** switches the embedded viewport to a renderer-only camera. It suspends ship/avatar input and does not send gameplay or authority commands. Use **W/S** to move forward/back, **A/D** to strafe, **E/Q** or **Space/C** to move vertically, hold **Shift** to move faster, and hold the right mouse button while moving the mouse to look. Select **Player camera** to leave free-camera mode and return to the player view and its normal controls. Free-camera movement uses render time and remains available while the local simulation is paused.
+
+On foot, **W/S** or **Up/Down** move forward/back, **A/D** or **Left/Right** turn, **Q/E** strafe, **Space** jumps, and right-mouse look turns toward the viewed direction. These are player movement commands in the local simulation; free-camera movement is visual inspection only. The viewport hint identifies the active controls.
+
+## Candidate service paths
+
+The **Service paths** inspector tab authors local candidate routes for **Power**, **Data**, or **Water**. Each route has a name, source and target candidate engineering component IDs, and an ordered list of meter-based XYZ waypoints. The endpoint-center buttons add the selected components' current centers; numeric fields let you edit each coordinate, and the final waypoint can be removed. The route is shown in top-down X/Z and side X/Y projections. The projections are read-only views; there is no mouse-drawn route or 3D gizmo.
+
+Use **Save draft** and **Reload saved** to persist the project document at `Assets/Pioneer.service_paths.json`. Saves and loads run on a background worker. A failed or invalid initial load locks saving until reload succeeds or you explicitly reset before replacing the unreadable file. The document is limited to 128 paths, 128 waypoints per route, and the engineering envelope (X ±36 m, Y ±9 m, Z ±19 m).
+
+These are authored design proposals, not installed conduits or runtime system connections. IDs refer to candidate engineering components, not equipment-catalog ports. Routes do not affect power, data, water, gameplay or authoritative simulation; no network connection or server deployment is part of this panel.
 
 `ARKLINE_EDITOR_PROJECT` can select the default project for a native launcher or test environment; blank values are ignored and an explicit `--project` takes precedence. This lets isolated editor runs use separate local worlds without changing the normal project.
 

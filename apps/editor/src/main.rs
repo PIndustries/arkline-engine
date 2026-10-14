@@ -13,6 +13,7 @@ mod materials;
 mod physics_lab;
 mod provenance;
 mod render_debug;
+mod service_paths;
 use arkline_client::{EmbeddedAssetGallery, EmbeddedClient, EmbeddedStatus};
 use eframe::egui::{self, Color32, RichText};
 use std::{collections::VecDeque, path::PathBuf, time::Duration};
@@ -30,6 +31,7 @@ struct Editor {
     inspector_tab: usize,
     materials: materials::Materials,
     engineering: engineering::Engineering,
+    service_paths: service_paths::ServicePaths,
     community: community::Community,
     event_graph: event_graph::EventGraphPanel,
     events_open: bool,
@@ -45,6 +47,7 @@ impl Editor {
     fn play_game(&mut self) {
         self.workspace = 0;
         self.inspector_tab = 0;
+        self.client.set_free_camera(false);
         self.client.play();
     }
     fn new(cc: &eframe::CreationContext<'_>, project: PathBuf, pilot: String) -> Self {
@@ -52,6 +55,7 @@ impl Editor {
         Self {
             materials: materials::Materials::open(&project),
             engineering: engineering::Engineering::open(&project),
+            service_paths: service_paths::ServicePaths::open(&project),
             community: community::Community::open(&project),
             event_graph: event_graph::EventGraphPanel::open(&project),
             events_open: false,
@@ -204,6 +208,15 @@ impl eframe::App for Editor {
                     {
                         self.workspace = 0;
                     }
+                    let free_camera = self.client.free_camera_active();
+                    if ui.selectable_label(free_camera, "Free camera").clicked() {
+                        self.workspace = 0;
+                        self.inspector_tab = 0;
+                        self.client.set_free_camera(!free_camera);
+                    }
+                    if free_camera && ui.button("Player camera").clicked() {
+                        self.client.set_free_camera(false);
+                    }
                     ui.label(RichText::new("Local sandbox").color(MUTED));
                 });
             });
@@ -284,6 +297,11 @@ impl eframe::App for Editor {
             } else if self.inspector_tab == 2 && ui.button("Return to game · F5").clicked() {
                 self.play_game();
             }
+            if self.client.free_camera_active() {
+                ui.colored_label(GREEN, "FREE CAMERA · local view only");
+                ui.small("WASD move · E/Q or Space/C vertical · Shift faster · RMB look");
+                ui.small("Ship/avatar input is suspended. Player camera returns to your controls.");
+            }
             ui.colored_label(MUTED,"Live simulation objects"); ui.separator();
             egui::ScrollArea::vertical().id_salt("editor_world_scroll").show(ui, |ui| {
                 if let Some(world)=&snapshot {
@@ -330,6 +348,7 @@ impl eframe::App for Editor {
                     ui.selectable_value(&mut self.inspector_tab, 2, "Engineering");
                     ui.selectable_value(&mut self.inspector_tab, 3, "Render debug");
                     ui.selectable_value(&mut self.inspector_tab, 4, "Equipment");
+                    ui.selectable_value(&mut self.inspector_tab, 5, "Service paths");
                 });
                 if !active {
                     ui.colored_label(MUTED, "Captured state · simulation is not running");
@@ -357,6 +376,8 @@ impl eframe::App for Editor {
                         } else if self.inspector_tab == 3 {
                             self.render_debug
                                 .show(ui, &mut self.client, &mut self.wireframe);
+                        } else if self.inspector_tab == 5 {
+                            self.service_paths.show(ui, &self.project, self.engineering.components());
                         } else if self.inspector_tab == 4 {
                             let own_pilot = self.selected_pilot == self.client.pilot();
                             if let Some(action) = equipment::show(

@@ -3973,6 +3973,7 @@ impl eframe::App for Cockpit {
                     if let Some(pilot) = self.own() {
                         let now = self.presentation_time();
                         let live = self.connected
+                            && (!self.embedded || self.embedded_input)
                             && self
                                 .snapshot
                                 .as_ref()
@@ -4011,7 +4012,7 @@ impl eframe::App for Cockpit {
                             snapshot,
                             &controlled_name,
                             now,
-                            self.connected,
+                            self.connected && (!self.embedded || self.embedded_input),
                             &self.effects,
                             &self.selected_object,
                             self.view_mode,

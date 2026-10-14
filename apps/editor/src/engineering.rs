@@ -57,6 +57,9 @@ impl Engineering {
         });
         picked
     }
+    pub fn components(&self) -> &[crate::engineering_document::Component] {
+        &self.draft.components
+    }
     pub fn viewport(&mut self, ui: &mut egui::Ui) {
         self.selected = self.selected_component();
         if let Err(error) = self.draft.validate() {
