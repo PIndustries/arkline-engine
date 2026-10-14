@@ -193,6 +193,23 @@ pub fn load(project: &Path) -> Result<MaterialDocument, String> {
     Ok(document)
 }
 
+/// Startup may use the built-in material only when no saved file exists.
+/// Inspection failures and symbolic links must not be mistaken for absence.
+pub fn load_optional(project: &Path) -> Result<Option<MaterialDocument>, String> {
+    for path in [project.to_path_buf(), project.join("Assets")] {
+        match fs::symlink_metadata(&path) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => return Err(format!("Cannot inspect material directory: {e}")),
+            Ok(_) => ordinary_directory(&path)?,
+        }
+    }
+    match fs::symlink_metadata(project.join("Assets/Pioneer.material.json")) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("Cannot inspect material file: {e}")),
+        Ok(_) => load(project).map(Some),
+    }
+}
+
 /// Validate before touching the workspace. Flush a new sibling before atomic replacement.
 /// Intended for a trusted local project; this is not a sandbox against concurrent directory swaps.
 pub fn save(project: &Path, document: &MaterialDocument) -> Result<(), String> {

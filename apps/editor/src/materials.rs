@@ -2,11 +2,65 @@ use crate::asset_document::{self, MaterialDocument, MaterialHistory};
 use crate::material_graph::{MaterialGraph, Node, NodeId, NodeKind, ValueType};
 use arkline_client::EmbeddedMaterialPreview;
 use eframe::egui;
-use std::path::Path;
+use std::{
+    path::{Path, PathBuf},
+    sync::mpsc::{self, Receiver, SyncSender, TryRecvError},
+    thread,
+};
+
+#[cfg(test)]
+#[path = "material_persistence_tests.rs"]
+mod persistence_tests;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum IoKind {
+    Open,
+    Save,
+    Reload,
+}
+
+enum IoAction {
+    Open,
+    Save(MaterialDocument),
+    Reload,
+}
+impl IoAction {
+    fn kind(&self) -> IoKind {
+        match self {
+            Self::Open => IoKind::Open,
+            Self::Save(_) => IoKind::Save,
+            Self::Reload => IoKind::Reload,
+        }
+    }
+}
+struct IoRequest {
+    id: u64,
+    action: IoAction,
+}
+struct IoResult {
+    id: u64,
+    kind: IoKind,
+    result: Result<Option<MaterialDocument>, String>,
+}
+struct PendingIo {
+    id: u64,
+    kind: IoKind,
+    revision: u64,
+    preview_revision: u64,
+    submitted: Option<MaterialDocument>,
+}
 
 pub struct Materials {
     history: MaterialHistory,
-    saved: MaterialDocument,
+    saved: Option<MaterialDocument>,
+    project: PathBuf,
+    io_requests: Option<SyncSender<IoRequest>>,
+    io_results: Receiver<IoResult>,
+    pending: Option<PendingIo>,
+    next_operation: u64,
+    revision: u64,
+    preview_revision: u64,
+    load_blocked: bool,
     enabled: bool,
     message: String,
     selected: Option<NodeId>,
@@ -18,27 +72,224 @@ pub struct Materials {
 }
 impl Materials {
     pub fn open(project: &Path) -> Self {
-        let exists = project.join("Assets/Pioneer.material.json").exists();
-        let loaded = exists.then(|| asset_document::load(project));
-        let (document, enabled, message) = match loaded {
-            Some(Ok(document)) => (document, true, "Loaded project materials".into()),
-            Some(Err(error)) => (MaterialDocument::default(), false, error),
-            None => (MaterialDocument::default(), false, String::new()),
-        };
-        Self {
-            history: MaterialHistory::new(document.clone()).expect("validated material"),
-            saved: document,
-            enabled,
-            message,
+        let root = project.to_path_buf();
+        Self::with_worker(project, move |action| match action {
+            IoAction::Open => asset_document::load_optional(&root),
+            IoAction::Reload => asset_document::load(&root).map(Some),
+            IoAction::Save(document) => {
+                asset_document::save(&root, &document).map(|()| Some(document))
+            }
+        })
+    }
+    fn with_worker(
+        project: &Path,
+        mut handle: impl FnMut(IoAction) -> Result<Option<MaterialDocument>, String> + Send + 'static,
+    ) -> Self {
+        let (requests, receiver) = mpsc::sync_channel::<IoRequest>(1);
+        let (results, io_results) = mpsc::sync_channel(1);
+        let worker = thread::Builder::new()
+            .name("arkline-material-io".into())
+            .spawn(move || {
+                while let Ok(request) = receiver.recv() {
+                    let kind = request.action.kind();
+                    let result = handle(request.action);
+                    if results
+                        .send(IoResult {
+                            id: request.id,
+                            kind,
+                            result,
+                        })
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+            });
+        let mut panel = Self {
+            history: MaterialHistory::default(),
+            saved: None,
+            project: project.to_path_buf(),
+            io_requests: worker.ok().map(|_| requests),
+            io_results,
+            pending: None,
+            next_operation: 0,
+            revision: 0,
+            preview_revision: 0,
+            load_blocked: true,
+            enabled: false,
+            message: "Loading project materials…".into(),
             selected: Some(6),
             connecting: None,
             pan: egui::vec2(20., 20.),
             zoom: 0.85,
             drag_document: None,
             frame_requested: true,
+        };
+        panel.queue(IoAction::Open);
+        panel
+    }
+    fn queue(&mut self, action: IoAction) {
+        if self.pending.is_some() {
+            self.message = "A material file operation is already pending.".into();
+            return;
+        }
+        let Some(sender) = &self.io_requests else {
+            self.load_blocked = true;
+            self.message = "Material I/O worker is unavailable; saving is locked.".into();
+            return;
+        };
+        let Some(next) = self.next_operation.checked_add(1) else {
+            self.load_blocked = true;
+            self.message = "Material operation IDs are exhausted; reopen the editor.".into();
+            return;
+        };
+        let pending = PendingIo {
+            id: self.next_operation,
+            kind: action.kind(),
+            revision: self.revision,
+            preview_revision: self.preview_revision,
+            submitted: match &action {
+                IoAction::Save(doc) => Some(doc.clone()),
+                _ => None,
+            },
+        };
+        match sender.try_send(IoRequest {
+            id: pending.id,
+            action,
+        }) {
+            Ok(()) => {
+                self.next_operation = next;
+                self.pending = Some(pending);
+                self.message.clear();
+            }
+            Err(error) => {
+                self.load_blocked = true;
+                self.message =
+                    format!("Could not queue material operation: {error}. Saving is locked.");
+            }
         }
     }
-    pub fn preview(&self) -> Option<EmbeddedMaterialPreview> {
+    fn poll_io(&mut self) {
+        if self.pending.is_none() {
+            return;
+        }
+        let result = match self.io_results.try_recv() {
+            Ok(result) => result,
+            Err(TryRecvError::Empty) => return,
+            Err(TryRecvError::Disconnected) => {
+                self.pending = None;
+                self.io_requests = None;
+                self.load_blocked = true;
+                self.message = "Material I/O worker stopped. A pending save may have completed; reopen and reload before saving again.".into();
+                return;
+            }
+        };
+        let pending = self.pending.take().unwrap();
+        if result.id != pending.id || result.kind != pending.kind {
+            self.io_requests = None;
+            self.load_blocked = true;
+            self.message = "Material result does not match its pending operation. Reopen and reload before saving again.".into();
+            return;
+        }
+        match result.result {
+            Err(error) => {
+                if pending.kind != IoKind::Save {
+                    self.load_blocked = true;
+                }
+                self.message = format!("Material {:?} failed: {error}", pending.kind);
+            }
+            Ok(document) => {
+                if let Some(doc) = &document {
+                    if let Err(error) = doc.validate() {
+                        self.load_blocked = true;
+                        self.message = error;
+                        return;
+                    }
+                }
+                if pending.kind == IoKind::Save {
+                    if document != pending.submitted || document.is_none() {
+                        self.io_requests = None;
+                        self.load_blocked = true;
+                        self.message = "Material save receipt differs from its submitted snapshot; reopen and reload.".into();
+                        return;
+                    }
+                    self.saved = document;
+                    self.load_blocked = false;
+                    self.message = if self.is_dirty() {
+                        "Saved the submitted material; newer edits remain unsaved."
+                    } else {
+                        "Saved Assets/Pioneer.material.json"
+                    }
+                    .into();
+                    return;
+                }
+                if pending.kind == IoKind::Reload && document.is_none() {
+                    self.load_blocked = true;
+                    self.message = "Saved material is missing; saving remains locked.".into();
+                    return;
+                }
+                let unchanged = self.revision == pending.revision && self.drag_document.is_none();
+                if unchanged {
+                    if let Some(doc) = &document {
+                        if pending.kind == IoKind::Open {
+                            self.history =
+                                MaterialHistory::new(doc.clone()).expect("validated material");
+                        } else if self.history.apply(doc.clone()).expect("validated material") {
+                            self.revision = self.revision.saturating_add(1);
+                        }
+                        self.connecting = None;
+                        self.selected = Some(6);
+                        self.frame_requested = true;
+                        if self.preview_revision == pending.preview_revision {
+                            self.enabled = true;
+                        }
+                    }
+                }
+                self.saved = document;
+                self.load_blocked = false;
+                self.message = if !unchanged {
+                    "Material load finished; edits made while loading were kept."
+                } else if self.saved.is_none() {
+                    "No saved material; using the built-in finish."
+                } else if pending.kind == IoKind::Open {
+                    "Loaded project materials"
+                } else {
+                    "Reloaded saved material; Undo restores the previous edit."
+                }
+                .into();
+            }
+        }
+    }
+    fn is_dirty(&self) -> bool {
+        self.saved.as_ref()
+            != Some(
+                self.drag_document
+                    .as_ref()
+                    .unwrap_or(self.history.current()),
+            )
+    }
+    fn matches_project(&mut self, project: &Path) -> bool {
+        if project == self.project {
+            return true;
+        }
+        self.message = "This material panel belongs to a different project; reopen that project before file operations.".into();
+        false
+    }
+    fn can_save(&self) -> bool {
+        self.pending.is_none() && !self.load_blocked && self.io_requests.is_some()
+    }
+    fn allow_replacement(&mut self) {
+        if self.pending.is_none() && self.io_requests.is_some() && self.load_blocked {
+            self.load_blocked = false;
+            self.saved = None;
+            self.message =
+                "Replacement allowed. Save will replace the unreadable material with this draft."
+                    .into();
+        }
+    }
+    pub fn preview(&mut self) -> Option<EmbeddedMaterialPreview> {
+        // Also drain results when the material workspace is hidden.
+        self.poll_io();
         if !self.enabled {
             return None;
         }
@@ -65,6 +316,7 @@ impl Materials {
     fn apply(&mut self, draft: MaterialDocument) {
         match self.history.apply(draft) {
             Ok(true) => {
+                self.revision = self.revision.saturating_add(1);
                 self.enabled = true;
                 self.message = "Material updated · save to keep changes".into();
             }
@@ -73,29 +325,19 @@ impl Materials {
         }
     }
     fn save(&mut self, project: &Path) {
+        if !self.matches_project(project) || !self.can_save() {
+            return;
+        }
         // Persist the visible starter graph too, so the first Save is a real graph document.
         let draft = self.draft_graph();
         self.apply(draft);
-        match asset_document::save(project, self.history.current()) {
-            Ok(()) => {
-                self.saved = self.history.current().clone();
-                self.message = "Saved Assets/Pioneer.material.json".into();
-            }
-            Err(error) => self.message = error,
-        }
+        self.queue(IoAction::Save(self.history.current().clone()));
     }
     fn reload(&mut self, project: &Path) {
-        match asset_document::load(project) {
-            Ok(document) => {
-                self.saved = document.clone();
-                self.apply(document);
-                self.enabled = true;
-                self.drag_document = None;
-                self.connecting = None;
-                self.message = "Reloaded saved material · Undo restores the previous edit".into();
-            }
-            Err(error) => self.message = error,
+        if !self.matches_project(project) {
+            return;
         }
+        self.queue(IoAction::Reload);
     }
     fn move_history(&mut self, redo: bool) {
         let changed = if redo {
@@ -104,6 +346,7 @@ impl Materials {
             self.history.undo()
         };
         if changed {
+            self.revision = self.revision.saturating_add(1);
             // An imported graph may reuse IDs for different kinds. A pending source
             // belongs to its original revision and must not survive a history move.
             self.connecting = None;
@@ -112,8 +355,11 @@ impl Materials {
         }
     }
     fn toolbar(&mut self, ui: &mut egui::Ui, project: &Path) {
+        self.poll_io();
         ui.horizontal_wrapped(|ui| {
-            ui.checkbox(&mut self.enabled, "Apply to fleet");
+            if ui.checkbox(&mut self.enabled, "Apply to fleet").changed() {
+                self.preview_revision = self.preview_revision.saturating_add(1);
+            }
             if ui
                 .add_enabled(self.history.can_undo(), egui::Button::new("Undo"))
                 .clicked()
@@ -126,21 +372,57 @@ impl Materials {
             {
                 self.move_history(true);
             }
-            if ui.button("Save").clicked() {
+            if ui
+                .add_enabled(self.can_save(), egui::Button::new("Save"))
+                .clicked()
+            {
                 self.save(project);
             }
-            if ui.button("Reload").clicked() {
+            if ui
+                .add_enabled(
+                    self.pending.is_none() && self.io_requests.is_some(),
+                    egui::Button::new("Reload"),
+                )
+                .clicked()
+            {
                 self.reload(project);
             }
-            ui.label(if self.history.current() == &self.saved {
-                "Saved"
-            } else {
+            if let Some(pending) = &self.pending {
+                ui.spinner();
+                ui.label(match pending.kind {
+                    IoKind::Open => "Loading…",
+                    IoKind::Save => "Saving…",
+                    IoKind::Reload => "Reloading…",
+                });
+                ui.ctx()
+                    .request_repaint_after(std::time::Duration::from_millis(33));
+            }
+            ui.label(if self.saved.is_none() {
+                "Not saved"
+            } else if self.is_dirty() {
                 "Unsaved"
+            } else {
+                "Saved"
             });
             if ui.button("Frame graph").clicked() {
                 self.frame_requested = true;
             }
         });
+        if self.load_blocked && self.pending.is_none() {
+            ui.colored_label(
+                egui::Color32::YELLOW,
+                "Saving is locked until Reload succeeds or replacement is explicitly allowed.",
+            );
+            if ui
+                .add_enabled(
+                    self.io_requests.is_some(),
+                    egui::Button::new("Allow replacing unreadable material"),
+                )
+                .clicked()
+            {
+                self.allow_replacement();
+            }
+        }
     }
     /// Compatibility panel for hosts that have not installed the split graph workspace.
     pub fn show(&mut self, ui: &mut egui::Ui, project: &Path) {
@@ -759,7 +1041,9 @@ mod tests {
     }
     #[test]
     fn port_clicks_connect_typed_nodes_and_update_output() {
-        let mut materials = Materials::open(Path::new("unused-port-test-project"));
+        let project = persistence_tests::Project::new();
+        let mut materials = Materials::open(&project.0);
+        persistence_tests::settle(&mut materials);
         materials.pan = egui::Vec2::ZERO;
         materials.zoom = 1.;
         materials.frame_requested = false;
@@ -782,7 +1066,7 @@ mod tests {
         let ctx = egui::Context::default();
         let mut origin = egui::Pos2::ZERO;
         let run = |materials: &mut Materials, events: Vec<egui::Event>, origin: &mut egui::Pos2| {
-            let _=ctx.run(egui::RawInput{screen_rect:Some(egui::Rect::from_min_size(egui::Pos2::ZERO,egui::vec2(900.,800.))),events,..Default::default()},|ctx|{egui::CentralPanel::default().show(ctx,|ui|{materials.toolbar(ui,Path::new("unused-port-test-project"));ui.small("Click output, then input to connect · right-click input to disconnect · drag headers to move · drag empty space to pan · scroll to zoom");*origin=ui.cursor().min;});});
+            let _=ctx.run(egui::RawInput{screen_rect:Some(egui::Rect::from_min_size(egui::Pos2::ZERO,egui::vec2(900.,800.))),events,..Default::default()},|ctx|{egui::CentralPanel::default().show(ctx,|ui|{materials.toolbar(ui,&project.0);ui.small("Click output, then input to connect · right-click input to disconnect · drag headers to move · drag empty space to pan · scroll to zoom");*origin=ui.cursor().min;});});
         };
         // The graph canvas origin is derived from its actual layout, never assumed screen chrome.
         run(&mut materials, vec![], &mut origin);
@@ -800,7 +1084,7 @@ mod tests {
                 },
                 |ctx| {
                     egui::CentralPanel::default().show(ctx, |ui| {
-                        materials.show_graph(ui, Path::new("unused-port-test-project"));
+                        materials.show_graph(ui, &project.0);
                     });
                 },
             );
@@ -837,19 +1121,11 @@ mod tests {
             Some(1)
         );
         assert_eq!(materials.preview().unwrap().hull_rgb, [0.8, 0.2, 0.1]);
-        let project = std::env::temp_dir().join(format!(
-            "arkline-port-roundtrip-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        std::fs::create_dir(&project).unwrap();
-        materials.save(&project);
-        let reopened = Materials::open(&project);
+        materials.save(&project.0);
+        persistence_tests::settle(&mut materials);
+        let mut reopened = Materials::open(&project.0);
+        persistence_tests::settle(&mut reopened);
         assert_eq!(reopened.history.current(), materials.history.current());
         assert_eq!(reopened.preview().unwrap().hull_rgb, [0.8, 0.2, 0.1]);
-        std::fs::remove_dir_all(project).unwrap();
     }
 }
