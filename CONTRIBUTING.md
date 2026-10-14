@@ -65,7 +65,7 @@ before either side changes the overlapping code. Never force-push a branch other
 use or hard-reset a shared checkout. When a base branch advances, coordinate how
 to incorporate it before rebasing or merging, and preserve commits made by others.
 
-When delegating to a contributor or subagent, include the claim link, owner, branch,
+When delegating to a contributor, include the claim link, owner, branch,
 base SHA and exact paths or symbols they may change. Keep the delegation inside that
 scope; publish a separate claim before expanding it. The coordinator remains
 responsible for integration and reporting the resulting diff and checks.

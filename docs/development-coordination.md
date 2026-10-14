@@ -59,7 +59,7 @@ target branch advances, coordinate with the owner before rebasing or merging the
 base, and preserve commits already made by collaborators. Record a changed base SHA
 in the claim so reviewers can follow the branch history.
 
-A delegated contributor or subagent works under the existing claim. Include its
+A delegated contributor works under the existing claim. Include its
 link, owner, branch, base SHA, exact owned paths or symbols, dependencies, tests and
 non-goals in the dispatch. Do not send it into an unclaimed neighboring scope. If
 the task needs more files or behavior, agree on the expansion and update the claim
