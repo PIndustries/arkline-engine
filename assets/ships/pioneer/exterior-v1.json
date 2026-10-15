@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "hull_asset_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+  "hull_asset_sha256": "df8490f42379aca161df0aa26b24cb32ab8dbf73e83e0681ed2cfc29ef43a2c9",
   "fixtures": [
     {
       "id": "pioneer.exterior.nav.port",
@@ -109,18 +109,18 @@
       "id": "pioneer.exterior.window.port.forward",
       "kind": "window",
       "position_m": [
-        35.86,
-        1.275,
-        -3.555
+        35.26,
+        1.04,
+        -3.325
       ],
       "color": [
-        1.0,
-        0.78,
-        0.43
+        0.1,
+        0.42,
+        0.5
       ],
-      "emission": 2.0,
-      "light_range_m": 6.0,
-      "light_intensity": 0.65,
+      "emission": 0.06,
+      "light_range_m": 2.0,
+      "light_intensity": 0.08,
       "load_w": 12,
       "pulse": null
     },
@@ -128,18 +128,18 @@
       "id": "pioneer.exterior.window.starboard.forward",
       "kind": "window",
       "position_m": [
-        35.86,
-        1.275,
-        3.555
+        35.26,
+        1.04,
+        3.325
       ],
       "color": [
-        1.0,
-        0.78,
-        0.43
+        0.1,
+        0.42,
+        0.5
       ],
-      "emission": 2.0,
-      "light_range_m": 6.0,
-      "light_intensity": 0.65,
+      "emission": 0.06,
+      "light_range_m": 2.0,
+      "light_intensity": 0.08,
       "load_w": 12,
       "pulse": null
     },
@@ -147,18 +147,18 @@
       "id": "pioneer.exterior.window.port.aft",
       "kind": "window",
       "position_m": [
-        34.02548,
-        0.9875,
-        -10.06504
+        33.02166,
+        1.09,
+        -9.86249
       ],
       "color": [
-        1.0,
-        0.78,
-        0.43
+        0.1,
+        0.42,
+        0.5
       ],
-      "emission": 2.0,
-      "light_range_m": 6.0,
-      "light_intensity": 0.65,
+      "emission": 0.06,
+      "light_range_m": 2.0,
+      "light_intensity": 0.08,
       "load_w": 12,
       "pulse": null
     },
@@ -166,18 +166,18 @@
       "id": "pioneer.exterior.window.starboard.aft",
       "kind": "window",
       "position_m": [
-        34.02548,
-        0.9875,
-        10.06504
+        33.02166,
+        1.09,
+        9.86249
       ],
       "color": [
-        1.0,
-        0.78,
-        0.43
+        0.1,
+        0.42,
+        0.5
       ],
-      "emission": 2.0,
-      "light_range_m": 6.0,
-      "light_intensity": 0.65,
+      "emission": 0.06,
+      "light_range_m": 2.0,
+      "light_intensity": 0.08,
       "load_w": 12,
       "pulse": null
     },
@@ -223,7 +223,7 @@
       "id": "pioneer.exterior.drive.port",
       "kind": "engine_glow",
       "position_m": [
-        -36.1,
+        -33.28,
         0.0,
         -12.5
       ],
@@ -242,7 +242,7 @@
       "id": "pioneer.exterior.drive.starboard",
       "kind": "engine_glow",
       "position_m": [
-        -36.1,
+        -33.28,
         0.0,
         12.5
       ],

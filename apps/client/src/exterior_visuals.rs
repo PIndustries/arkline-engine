@@ -141,11 +141,12 @@ impl Binding<'_> {
                 let (mesh, half) = match fixture.kind {
                     ExteriorFixtureKind::Navigation => (2, Vec3::splat(0.18)),
                     ExteriorFixtureKind::Strobe => (2, Vec3::splat(0.24)),
-                    ExteriorFixtureKind::Window => (0, Vec3::new(0.06, 0.2, 0.35)),
+                    // The authored recessed panes provide the Window surface; a
+                    // second axis-aligned cube would sit proud of wrapped glass.
+                    ExteriorFixtureKind::Window => return None,
                     ExteriorFixtureKind::Panel => (0, Vec3::new(0.08, 0.15, 0.25)),
-                    // The static GLB's opaque aft cap can hide its recessed throat.
-                    // A bounded axial glow surface uses the accepted nozzle mount,
-                    // retaining the authored hull and existing dynamic exhaust.
+                    // The accepted mount sits at the actual recessed throat,
+                    // inside the authored opening. Existing dynamic exhaust remains.
                     ExteriorFixtureKind::EngineGlow => (2, Vec3::new(0.18, 1.1, 1.1)),
                 };
                 Some((

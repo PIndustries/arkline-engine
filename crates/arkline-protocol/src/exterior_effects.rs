@@ -184,7 +184,7 @@ pub struct ExteriorWorldState {
     pub vessels: Vec<ExteriorVesselState>,
 }
 
-/// Mounts are measured against the published Study04 editable master.
+/// Mounts are measured against the published Study05 editable master.
 /// See assets/ships/pioneer/exterior-mounts.json for source surfaces and limits.
 pub fn default_pioneer_exterior() -> ExteriorDefinition {
     let mut fixtures = Vec::new();
@@ -244,10 +244,10 @@ pub fn default_pioneer_exterior() -> ExteriorDefinition {
         );
     }
     for (id, position) in [
-        ("window.port.forward", [35.86, 1.275, -3.555]),
-        ("window.starboard.forward", [35.86, 1.275, 3.555]),
-        ("window.port.aft", [34.02548, 0.9875, -10.06504]),
-        ("window.starboard.aft", [34.02548, 0.9875, 10.06504]),
+        ("window.port.forward", [35.26, 1.04, -3.325]),
+        ("window.starboard.forward", [35.26, 1.04, 3.325]),
+        ("window.port.aft", [33.02166, 1.09, -9.86249]),
+        ("window.starboard.aft", [33.02166, 1.09, 9.86249]),
     ] {
         add(id, Window, position, [1.0, 0.78, 0.43], 12, None);
     }
@@ -270,7 +270,7 @@ pub fn default_pioneer_exterior() -> ExteriorDefinition {
     add(
         "drive.port",
         EngineGlow,
-        [-36.10, 0.0, -12.5],
+        [-33.28, 0.0, -12.5],
         [0.15, 0.5, 1.0],
         0,
         None,
@@ -278,11 +278,21 @@ pub fn default_pioneer_exterior() -> ExteriorDefinition {
     add(
         "drive.starboard",
         EngineGlow,
-        [-36.10, 0.0, 12.5],
+        [-33.28, 0.0, 12.5],
         [0.15, 0.5, 1.0],
         0,
         None,
     );
+    // Authored recessed panes carry the visible surface. These are restrained
+    // presentation values, while the existing Window circuit still reserves12W.
+    for fixture in &mut fixtures {
+        if fixture.kind == Window {
+            fixture.color = [0.10, 0.42, 0.50];
+            fixture.emission = 0.06;
+            fixture.light_intensity = 0.08;
+            fixture.light_range_m = 2.0;
+        }
+    }
     ExteriorDefinition {
         schema_version: EXTERIOR_SCHEMA_VERSION,
         hull_asset_sha256: PIONEER_MATERIAL_SHA256.into(),
