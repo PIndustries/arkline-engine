@@ -584,6 +584,92 @@ fn full_editor_applies_content_while_paused_then_light_round_trip_uses_real_auth
 }
 
 #[test]
+fn applied_inspector_uses_ship_assignment_instead_of_shared_edit_target() {
+    let mut p = panel();
+    p.poll(&live());
+    let mut next = p.draft().clone();
+    let mut unrelated = next.templates["airlock"].clone();
+    unrelated.title = "Unrelated editing target".into();
+    next.templates.insert("unrelated".into(), unrelated);
+    p.edit(next, false);
+    p.apply();
+    p.selected_template = "unrelated".into();
+    p.edit_shared = true;
+    p.operate = true;
+    assert_eq!(p.displayed_panel().unwrap().title, "Pioneer airlock");
+    p.selected_vessel = "unassigned-ship".into();
+    assert!(p.displayed_panel().is_none());
+    p.operate = false;
+    assert_eq!(
+        p.displayed_panel().unwrap().title,
+        "Unrelated editing target"
+    );
+}
+
+#[test]
+fn applied_inspector_and_request_keep_light_binding_after_unapplied_pressure_edit() {
+    let context = live();
+    let mut p = panel();
+    p.poll(&context);
+    p.apply();
+    p.selected_control = 2;
+    let mut next = p.draft().clone();
+    next.templates.get_mut("airlock").unwrap().controls[1].binding = Binding::Pressure {
+        equipment: "pioneer.deck1.airlock.pressure".into(),
+        max_kpa: 120.,
+    };
+    p.edit(next, false);
+    p.operate = true;
+    let ctx = egui::Context::default();
+    frame(&mut p, &ctx, &context, vec![]);
+    let (output, _) = frame(&mut p, &ctx, &context, vec![]);
+    let inspector_text = |output: &egui::FullOutput| {
+        output
+            .shapes
+            .iter()
+            .filter_map(|s| match &s.shape {
+                egui::Shape::Text(t) if t.pos.x > 1200. => Some(t.galley.job.text.clone()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    let text = inspector_text(&output);
+    assert!(text.contains("pioneer.deck1.airlock.light"), "{text}");
+    assert!(text.contains("Light switch"), "{text}");
+    assert!(text.contains("Commanded: On"), "{text}");
+    assert!(text.contains("Reported output: Off"), "{text}");
+    assert!(text.contains("Unapplied draft changes"), "{text}");
+    assert!(!text.contains("pioneer.deck1.airlock.pressure"), "{text}");
+    assert!(!text.contains("Pressure:"), "{text}");
+    let point = text_point(&output, "Main light · command On · output Off");
+    frame(&mut p, &ctx, &context, pointer(point, true));
+    let (_, request) = frame(&mut p, &ctx, &context, pointer(point, false));
+    assert!(matches!(
+        request,
+        Some(Request::SetPioneerRoom {
+            action: PioneerRoomCommand::Light { on: false }
+        })
+    ));
+    assert!(
+        context
+            .assets
+            .as_ref()
+            .unwrap()
+            .pioneer_room
+            .as_ref()
+            .unwrap()
+            .light_commanded
+    );
+    p.operate = false;
+    let (output, request) = frame(&mut p, &ctx, &context, vec![]);
+    assert!(request.is_none());
+    let text = inspector_text(&output);
+    assert!(text.contains("pioneer.deck1.airlock.pressure"), "{text}");
+    assert!(text.contains("Pressure:"), "{text}");
+}
+
+#[test]
 fn applied_switch_pointer_click_emits_typed_request_without_predicting_output() {
     let context = live();
     let mut p = panel();

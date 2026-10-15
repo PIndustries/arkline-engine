@@ -508,6 +508,13 @@ impl CockpitPanel {
             doc.panel(&self.selected_vessel)
         }
     }
+    fn displayed_panel(&self) -> Option<&Panel> {
+        if self.operate {
+            self.applied.as_ref()?.document.panel(&self.selected_vessel)
+        } else {
+            self.panel(self.draft())
+        }
+    }
     fn panel_mut<'a>(&self, doc: &'a mut Document) -> Option<&'a mut Panel> {
         if self.edit_shared {
             doc.templates.get_mut(&self.selected_template)
@@ -590,7 +597,7 @@ impl CockpitPanel {
                 let id=format!("panel-{n}");let panel=next.templates[&self.selected_template].clone();next.templates.insert(id.clone(),panel);self.edit(next,false);self.selected_template=id;self.edit_shared=true;
             }
             ui.separator();ui.label("3 · Select a control");
-            if let Some(panel)=self.panel(self.draft()).cloned(){for c in panel.controls {ui.selectable_value(&mut self.selected_control,c.id,&c.label);}}
+            if let Some(panel)=self.displayed_panel().cloned(){for c in panel.controls {ui.selectable_value(&mut self.selected_control,c.id,&c.label);}}
             ui.separator();ui.small("Only the pressure gauge and room-light switch are supported. Panels are local project content.");
         });
         egui::SidePanel::right("cockpit_binding_inspector")
@@ -623,7 +630,7 @@ impl CockpitPanel {
             ui.label(&self.message);
             ui.separator();
             if self.operate {
-                let panel=self.applied.as_ref().and_then(|a|a.document.panel(&self.selected_vessel)).cloned();
+                let panel=self.displayed_panel().cloned();
                 if let Some(panel)=panel {if let Some(id)=self.draw_runtime(ui,&panel,live,&self.selected_vessel.clone()){request=self.light_request(live,&self.selected_vessel.clone(),id);}}
                 else {ui.label("This ship has no applied panel. Assign a template and Apply first.");}
             }else{
@@ -650,9 +657,25 @@ impl CockpitPanel {
     fn inspector(&mut self, ui: &mut egui::Ui, live: &Live) {
         ui.heading("Control inspector");
         ui.monospace(&self.selected_vessel);
-        let mut next = self.draft().clone();
-        let Some(panel) = self.panel_mut(&mut next) else {
-            ui.label("Choose a template or ship override.");
+        if self.operate {
+            ui.label("Applied panel");
+            if self
+                .applied
+                .as_ref()
+                .is_some_and(|a| &a.document != self.draft())
+            {
+                ui.colored_label(
+                    Color32::YELLOW,
+                    "Unapplied draft changes. Inspecting the applied panel.",
+                );
+            }
+        }
+        let Some(mut panel) = self.displayed_panel().cloned() else {
+            ui.label(if self.operate {
+                "This ship has no applied panel. Assign a template and Apply first."
+            } else {
+                "Choose a template or ship override."
+            });
             return;
         };
         let mut changed = false;
@@ -694,6 +717,7 @@ impl CockpitPanel {
             .iter_mut()
             .find(|c| c.id == self.selected_control)
         else {
+            ui.label("Select a control from the displayed panel.");
             return;
         };
         ui.separator();
@@ -761,7 +785,12 @@ impl CockpitPanel {
         ui.monospace(control.binding.equipment());
         ui.small("Pioneer · deck 1 · airlock · authoritative room telemetry");
         let binding = control.binding.clone();
-        if changed {
+        if changed && !self.operate {
+            let mut next = self.draft().clone();
+            let Some(target) = self.panel_mut(&mut next) else {
+                return;
+            };
+            *target = panel;
             self.edit(next, dragging);
         }
         ui.separator();
