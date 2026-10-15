@@ -1,10 +1,17 @@
 """Build Arkline's original, editable Pioneer hull. Run with Blender --background --python.
 Body axes in meters: +X bow, +Y up, +Z starboard. No downloaded assets.
 """
-import bpy, bmesh, math, pathlib, json, sys
-from mathutils import Vector
+import pathlib
 ROOT=pathlib.Path(__file__).resolve().parents[2]
-OUT=ROOT/'assets/ships/pioneer'; OUT.mkdir(parents=True,exist_ok=True)
+OUT=ROOT/'assets/ships/pioneer'
+# This construction recipe clears its scene. Never let it overwrite an editable
+# master, frozen export or evidence render that already exists in the checkout.
+if any((OUT/name).exists() or (OUT/name).is_symlink()
+       for name in ('pioneer.blend', 'pioneer.glb', 'pioneer-hull.png')):
+ raise RuntimeError('Refusing to overwrite existing Pioneer assets. Export the explicitly selected saved master with tools/art/export_pioneer.py into a new directory.')
+import bpy, bmesh, math, json, sys
+from mathutils import Vector
+OUT.mkdir(parents=True,exist_ok=True)
 bpy.context.preferences.filepaths.save_version=0
 bpy.ops.object.select_all(action='SELECT'); bpy.ops.object.delete(use_global=False)
 def v(p): return (p[0],-p[2],p[1])
