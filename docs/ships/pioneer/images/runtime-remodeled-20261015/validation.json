@@ -1,0 +1,479 @@
+{
+  "schema": "arkline.pioneer-combined-validation/v1",
+  "date_utc": "2026-10-15",
+  "production_and_capture_code_commit": "fb50b8ffb274c1b5a7ee537faccb9475edf03ecd",
+  "evidence_commit": "7747079c7f43017928fed41dc2699c76e7469cc0",
+  "workspace": {
+    "command": "python3 tools/build.py test --workspace --locked",
+    "build": "26.10.15.7033",
+    "passed": 673,
+    "failed": 0,
+    "explicit_ignores": 20,
+    "summaries": 55,
+    "results": [
+      [
+        6,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0
+      ],
+      [
+        1,
+        0,
+        0
+      ],
+      [
+        1,
+        0,
+        0
+      ],
+      [
+        250,
+        0,
+        19
+      ],
+      [
+        0,
+        0,
+        0
+      ],
+      [
+        8,
+        0,
+        0
+      ],
+      [
+        180,
+        0,
+        1
+      ],
+      [
+        34,
+        0,
+        0
+      ],
+      [
+        46,
+        0,
+        0
+      ],
+      [
+        4,
+        0,
+        0
+      ],
+      [
+        17,
+        0,
+        0
+      ],
+      [
+        1,
+        0,
+        0
+      ],
+      [
+        1,
+        0,
+        0
+      ],
+      [
+        3,
+        0,
+        0
+      ],
+      [
+        5,
+        0,
+        0
+      ],
+      [
+        4,
+        0,
+        0
+      ],
+      [
+        2,
+        0,
+        0
+      ],
+      [
+        3,
+        0,
+        0
+      ],
+      [
+        1,
+        0,
+        0
+      ],
+      [
+        2,
+        0,
+        0
+      ],
+      [
+        1,
+        0,
+        0
+      ],
+      [
+        2,
+        0,
+        0
+      ],
+      [
+        3,
+        0,
+        0
+      ],
+      [
+        4,
+        0,
+        0
+      ],
+      [
+        5,
+        0,
+        0
+      ],
+      [
+        2,
+        0,
+        0
+      ],
+      [
+        7,
+        0,
+        0
+      ],
+      [
+        2,
+        0,
+        0
+      ],
+      [
+        6,
+        0,
+        0
+      ],
+      [
+        6,
+        0,
+        0
+      ],
+      [
+        2,
+        0,
+        0
+      ],
+      [
+        5,
+        0,
+        0
+      ],
+      [
+        1,
+        0,
+        0
+      ],
+      [
+        3,
+        0,
+        0
+      ],
+      [
+        4,
+        0,
+        0
+      ],
+      [
+        3,
+        0,
+        0
+      ],
+      [
+        7,
+        0,
+        0
+      ],
+      [
+        5,
+        0,
+        0
+      ],
+      [
+        2,
+        0,
+        0
+      ],
+      [
+        2,
+        0,
+        0
+      ],
+      [
+        2,
+        0,
+        0
+      ],
+      [
+        2,
+        0,
+        0
+      ],
+      [
+        1,
+        0,
+        0
+      ],
+      [
+        6,
+        0,
+        0
+      ],
+      [
+        2,
+        0,
+        0
+      ],
+      [
+        1,
+        0,
+        0
+      ],
+      [
+        4,
+        0,
+        0
+      ],
+      [
+        13,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0
+      ],
+      [
+        1,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0
+      ]
+    ]
+  },
+  "strict_native": {
+    "command": "python3 tools/build.py clippy --workspace --all-targets --locked -- -D warnings",
+    "build": "26.10.15.7034",
+    "passed": true
+  },
+  "strict_wasm": {
+    "command": "python3 tools/build.py clippy --locked -p arkline-client --target wasm32-unknown-unknown -- -D warnings",
+    "build": "26.10.15.7035",
+    "passed": true
+  },
+  "formatting": "cargo fmt --all -- --check passed",
+  "packaging": {
+    "passed": 8,
+    "failed": 0
+  },
+  "exporter_portable": {
+    "passed": 15,
+    "failed": 0,
+    "explicit_bpy_skips": 3
+  },
+  "exporter_official_bpy501": {
+    "passed": 18,
+    "failed": 0,
+    "unsupported_source_variants": 22,
+    "independent_repeat_passed": true
+  },
+  "actual_engine": {
+    "build": "26.10.15.7032",
+    "source_commit": "fb50b8ffb274c1b5a7ee537faccb9475edf03ecd",
+    "receipt": "authority-receipt.json",
+    "native_application_build": "26.10.15.7031",
+    "native_application_receipt": "native-receipt.json"
+  },
+  "compatibility": "Historical graphs retain old hash; mismatch preserves actual pixels. Old accepted exterior worlds fail without rewriting world/clock/project files. No automatic migration.",
+  "logs_sha256": {
+    "test-remodeled-workspace.log": "cba1614ab6fd7feb79aa55ae573a0a5732115a7c7426c0a146704ce80c72c825",
+    "clippy-remodeled-native.log": "7f98f8668bca7a1d6588fddb8821859137ade9edb361608dac8c6ac2422b9d86",
+    "clippy-remodeled-wasm.log": "b683034f9651580c7dc7a5011ef57ec4b7d7b3d82e72b2ec78c82fd3c34da001",
+    "test-remodeled-packaging.log": "637ad693971420b70a01476cd5d51065ecc3c7af270c41cfe91899ec8c2db4bd",
+    "test-remodeled-export-portable.log": "27029c9429e55b7d53d7b2c7554f61afd024c36d25cc626743b36bc4a1e7b0d4",
+    "test-saved-master-exporter-final.log": "f733240ee089a7cdbb2fd8dd44c306e6f9da2b073389e5db427baea1d33042e2",
+    "test-remodeled-authority-belt.log": "faf50f92e5d95f2014bac9e57f5b6a35da46bfc1c810ac055a9cf9d24d3618ef",
+    "test-remodeled-gpu.log": "bfeca9cc1f4e80f211fb16e7ffca8f3cbf850072d74138642d445e8127272844"
+  },
+  "limits": [
+    "Counts overlap; do not sum separate suite/GPU/exporter runs into workspace count.",
+    "Cloud llvmpipe graphics; no hardware-GPU performance/frame-pacing result.",
+    "v05 shape completion, turret articulation/firing, ventral isolated ON pixels and moving assemblies remain open.",
+    "No Mac access, merge, deployment, release, issue closure, new PR or startup retry."
+  ],
+  "artifacts": {
+    "authority-receipt.json": {
+      "bytes": 51076,
+      "sha256": "661d07d3fa87375c206d0947909ae22163d71ffbc4628fa028226d0dd0fe9603"
+    },
+    "belt-visual-review.json": {
+      "bytes": 9818,
+      "sha256": "19088b301373fec6883255e11ad76ab1b13d1b7619767cf4032ac9ffeed4ff12"
+    },
+    "belt-visual-review.md": {
+      "bytes": 2869,
+      "sha256": "bd766de346f0bf79d9f361a6c5e4f206ec140b088d097b9b731735955dabf487"
+    },
+    "candidate-mapping-audit-v2.json": {
+      "bytes": 1640,
+      "sha256": "f30c6436928be7ca474779ed6df53b8323f770b209b5688611986ddfddbaf39a"
+    },
+    "independent-exporter-tests-v2.json": {
+      "bytes": 880,
+      "sha256": "b07d3f4433ea3d88fdd14d43ac6ad698f265f348501649953a70694376f1403c"
+    },
+    "native-receipt.json": {
+      "bytes": 41986,
+      "sha256": "9fdcf468b72c27f528c5b57c6b0dc04c3e3d0f8cb093262607356b5e292f4e4f"
+    },
+    "native-remodeled-applied-7031.png": {
+      "bytes": 400697,
+      "sha256": "74ebc15473ca0621942b550586b0d28e4e6bf1eece07bdcdb5e56d628f6215a3"
+    },
+    "native-remodeled-off-7031.png": {
+      "bytes": 401698,
+      "sha256": "ad76ac6084c1fa9af3a0a7c0d897a2a102f6ca2c4295c3c38c0a3c125d6779a5"
+    },
+    "native-remodeled-on-7031.png": {
+      "bytes": 400186,
+      "sha256": "a4257c7b3b93381ec567529bc10f4de1491d777e1d64e2841f52acfd4f1d88bd"
+    },
+    "native-remodeled-reopened-7031.png": {
+      "bytes": 327353,
+      "sha256": "acef4b186f843beb37f52d6b306edbba96d7a0c0351d490139d55406410d73d1"
+    },
+    "native-remodeled-reopened-exterior-7031.png": {
+      "bytes": 401131,
+      "sha256": "49b98d9490e39aead272f61a655399ebb6b955b83216f48cd399018118af48fc"
+    },
+    "native-remodeled-step-7031.png": {
+      "bytes": 400167,
+      "sha256": "0ee599aefd5a2cd3eeca9fec8318835d8339eccc89fc1fe7497dac83e65afcf2"
+    },
+    "normal-audit-diagnose.py": {
+      "bytes": 34332,
+      "sha256": "5cf2dc705806e5cb3f7769255b674143965181c83842167f9c37f160080539c6"
+    },
+    "normal-audit-diagnostic-copy-provenance.json": {
+      "bytes": 680,
+      "sha256": "fa7c4f6775a487270734657e5d7ac2af19bdffdda255e6b9ac0fca3371ed35a6"
+    },
+    "normal-audit-report.json": {
+      "bytes": 83142,
+      "sha256": "1a3998b1e96e5833a20c929008374bfdcf065cd4f7727039fb1c5da7aa1d2e3d"
+    },
+    "normal-audit-summary.json": {
+      "bytes": 6187,
+      "sha256": "b44109ebbaae8d77415d4cd64ea2b06e5f6d759fb3f0bc33bf667194e8d47914"
+    },
+    "pioneer-authority-active-front-quarter.png": {
+      "bytes": 155482,
+      "sha256": "010a1ac0bce79c94904af61f5692ce7bb9be5933c19b76e25b9ea05bd5f93f2d"
+    },
+    "pioneer-authority-active-rear.png": {
+      "bytes": 146499,
+      "sha256": "30b6641836b1459f7e7ea0c5b7450f3c2f11a094485a5dc39056625fd7bf511c"
+    },
+    "pioneer-authority-current-hash-graph-recovery.png": {
+      "bytes": 137490,
+      "sha256": "f11e7c2f34c0c9e095bac7a871e5c3c99f45d6b7a9c1a2408236926f40dcd5fe"
+    },
+    "pioneer-authority-exterior-off.png": {
+      "bytes": 146336,
+      "sha256": "81faccd5bc0e48985ee0ce8a2dfbae448a5f67a3b4f1194fb8954517751db39b"
+    },
+    "pioneer-authority-idle-bottom.png": {
+      "bytes": 59983,
+      "sha256": "3bb3ec53192edec8fc5ca32e1c216556300156ae26b393371fbbabc53cf0a6a7"
+    },
+    "pioneer-authority-idle-front-quarter.png": {
+      "bytes": 146900,
+      "sha256": "f32795336ebdf9c5645ed296c243b249ecf7537414f9588c08eead79713cb2ce"
+    },
+    "pioneer-authority-idle-front.png": {
+      "bytes": 94144,
+      "sha256": "4d1d5f911df74536787b675fe63249ff91cac60319b87f3e022cb6b86d0baadd"
+    },
+    "pioneer-authority-idle-rear.png": {
+      "bytes": 100573,
+      "sha256": "bb5557ccb59652866f160fd0e48e0be2ef60f07eafaf2e74d4f679ed6cff45bd"
+    },
+    "pioneer-authority-idle-side.png": {
+      "bytes": 117147,
+      "sha256": "d11b6196303a8a04d89b4dcb70cec03d4957de2c313bb20834c5138118260c9d"
+    },
+    "pioneer-authority-idle-top.png": {
+      "bytes": 242939,
+      "sha256": "2ce6599ac5078711b27fe741ac42576c04052625afa74f169a290df897e4da8d"
+    },
+    "pioneer-authority-old-hash-rejected.png": {
+      "bytes": 155482,
+      "sha256": "010a1ac0bce79c94904af61f5692ce7bb9be5933c19b76e25b9ea05bd5f93f2d"
+    },
+    "pioneer-authority-pre-thrust-idle.png": {
+      "bytes": 100878,
+      "sha256": "aa5f11047e6c2a2017252cb3812cb78d24f258c86f446ed2cf34888e0d7b3a9e"
+    },
+    "pioneer-authority-strobe-next-cycle.png": {
+      "bytes": 432075,
+      "sha256": "2631928775100691d03d1142db9857a78bd8c0db1daec2b6bbd28451f746c534"
+    },
+    "pioneer-authority-strobe-off.png": {
+      "bytes": 422452,
+      "sha256": "a07d0078f4fa6c83aa216b478cb4e796a904961e2d8e0a41e15a4748a407f7df"
+    },
+    "pioneer-authority-strobe-on.png": {
+      "bytes": 432075,
+      "sha256": "2631928775100691d03d1142db9857a78bd8c0db1daec2b6bbd28451f746c534"
+    },
+    "pioneer-authority-strobe-paused.png": {
+      "bytes": 432075,
+      "sha256": "2631928775100691d03d1142db9857a78bd8c0db1daec2b6bbd28451f746c534"
+    },
+    "pioneer-authority-strobe-step-50ms.png": {
+      "bytes": 432075,
+      "sha256": "2631928775100691d03d1142db9857a78bd8c0db1daec2b6bbd28451f746c534"
+    },
+    "pioneer-authority-thrust-command-accepted.png": {
+      "bytes": 99426,
+      "sha256": "8cc933389885eea4f367142a45e0d03fb12b7a1e52880088a5c64644951ae662"
+    }
+  }
+}
