@@ -319,7 +319,8 @@
     "source_commit": "fb50b8ffb274c1b5a7ee537faccb9475edf03ecd",
     "receipt": "authority-receipt.json",
     "native_application_build": "26.10.15.7031",
-    "native_application_receipt": "native-receipt.json"
+    "native_application_receipt": "native-receipt.json",
+    "reopened_full_inspector_capture": "native-remodeled-reopened-inspector-7031.png"
   },
   "compatibility": "Historical graphs retain old hash; mismatch preserves actual pixels. Old accepted exterior worlds fail without rewriting world/clock/project files. No automatic migration.",
   "logs_sha256": {
@@ -474,6 +475,10 @@
     "pioneer-authority-thrust-command-accepted.png": {
       "bytes": 99426,
       "sha256": "8cc933389885eea4f367142a45e0d03fb12b7a1e52880088a5c64644951ae662"
+    },
+    "native-remodeled-reopened-inspector-7031.png": {
+      "bytes": 401131,
+      "sha256": "49b98d9490e39aead272f61a655399ebb6b955b83216f48cd399018118af48fc"
     }
   }
 }
