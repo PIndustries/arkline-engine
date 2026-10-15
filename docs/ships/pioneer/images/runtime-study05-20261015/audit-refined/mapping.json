@@ -1,0 +1,67 @@
+{
+  "schema": "pioneer-study05-mapping-readonly/v1",
+  "outcome": "PASS exact source copy, source object/mesh/material snapshot identity, canonical9slots, complete686part spans and decoded runtime-gate data",
+  "script_sha256": "27f2041ec9c4ed4027da141825d4fffedda212b782a9cc647c12c5d227a7304e",
+  "hashes_before": {
+    "/workspace/arkline-runtime/study05-authored/source-v3/pioneer-study05.blend": "61eb70e1978668f5ca7256f237d9df14c47140b9bbbbce327875b68efcbe57c9",
+    "/workspace/arkline-runtime/study05-authored/export-v3/pioneer-study05.blend": "61eb70e1978668f5ca7256f237d9df14c47140b9bbbbce327875b68efcbe57c9",
+    "/workspace/arkline-runtime/study05-authored/export-v3/pioneer.glb": "8125644f007537437942d34169e527c08ddd2dfaed575c874e2263ff2b7cb123",
+    "/workspace/arkline-runtime/study05-authored/export-v3/receipt.json": "fadece504f99169f645559f5c903636b6555f8d8b3f3c3b856cc267b639d5429"
+  },
+  "hashes_after": {
+    "/workspace/arkline-runtime/study05-authored/source-v3/pioneer-study05.blend": "61eb70e1978668f5ca7256f237d9df14c47140b9bbbbce327875b68efcbe57c9",
+    "/workspace/arkline-runtime/study05-authored/export-v3/pioneer-study05.blend": "61eb70e1978668f5ca7256f237d9df14c47140b9bbbbce327875b68efcbe57c9",
+    "/workspace/arkline-runtime/study05-authored/export-v3/pioneer.glb": "8125644f007537437942d34169e527c08ddd2dfaed575c874e2263ff2b7cb123",
+    "/workspace/arkline-runtime/study05-authored/export-v3/receipt.json": "fadece504f99169f645559f5c903636b6555f8d8b3f3c3b856cc267b639d5429"
+  },
+  "models_unchanged": true,
+  "autoexecution_disabled": true,
+  "decoded": {
+    "triangles": 103466,
+    "primitives": 9,
+    "materials": 9,
+    "body_bounds_m": [
+      [
+        -36.0,
+        -9.0,
+        -19.0
+      ],
+      [
+        36.0,
+        9.0,
+        19.0
+      ]
+    ],
+    "bytes": 8700948,
+    "sha256": "8125644f007537437942d34169e527c08ddd2dfaed575c874e2263ff2b7cb123"
+  },
+  "source_parts": 686,
+  "parts_with_retained_triangles": 686,
+  "evaluated_triangles": 104884,
+  "dropped_triangles": 1418,
+  "canonical_materials": [
+    "Graphite ceramic armor",
+    "Titanium machinery",
+    "Recessed carbon",
+    "Emerald structural frames",
+    "Drive emission",
+    "Working lights",
+    "Navigation glass",
+    "Safety amber",
+    "Hull identification ivory"
+  ],
+  "receipt_recipe_hashes_matching_current_code": {
+    "export_pioneer.py": "ce1c5b64008223cfc06acce932cb2dbaf46c013a585bf586d7211422e8bea1cb",
+    "pioneer_export_contract.py": "c786532a9d380f02d9a9715bc9057c896a7971b36ec8ea049f9a2b553cb57c1d"
+  },
+  "all_names_unique_and_exact": true,
+  "all_source_mesh_names_and_world_matrices_match_receipt": true,
+  "all_part_material_slots_match_receipt": true,
+  "source_hash_name_snapshot_ids_match": true,
+  "part_spans_contiguous_complete": true,
+  "limits": [
+    "Part IDs are sourcehash+exactname snapshot identities, not durable cross-revision IDs. Changed source/hash cannot retarget old graphs.",
+    "The portable decoded float32 gate was exercised; actualRustdecoder/GPU/native appearance acceptance remains root responsibility.",
+    "No source/model/export saves or edits, builds or publication."
+  ]
+}

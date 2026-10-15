@@ -1,0 +1,3456 @@
+{
+  "date_utc": "2026-10-15",
+  "source_head": "5a8af77fe57fe90e0c2211ec2bb17cf1f46f33c4",
+  "blender_version": "5.0.1",
+  "blender_build_hash": "a3db93c5b259",
+  "diagnostic_script_sha256": "e96e70a4cf0c284b630768029ff98e9142d948b335b58d15d8e9914e7428e839",
+  "model_paths": {
+    "blend": "/workspace/arkline-runtime/study05-authored/source-v3/pioneer-study05.blend",
+    "glb": "/workspace/arkline-runtime/study05-authored/export-v3/pioneer.glb"
+  },
+  "hashes_before": {
+    "blend": "61eb70e1978668f5ca7256f237d9df14c47140b9bbbbce327875b68efcbe57c9",
+    "glb": "8125644f007537437942d34169e527c08ddd2dfaed575c874e2263ff2b7cb123"
+  },
+  "hashes_after": {
+    "blend": "61eb70e1978668f5ca7256f237d9df14c47140b9bbbbce327875b68efcbe57c9",
+    "glb": "8125644f007537437942d34169e527c08ddd2dfaed575c874e2263ff2b7cb123"
+  },
+  "models_unchanged": true,
+  "autoexecution_disabled": true,
+  "method": {
+    "source": "Evaluated depsgraph mesh; calc_loop_triangles, evaluated corner_normals; no modifier_apply/export/save.",
+    "coordinates": "Source positions: evaluated matrix_world then Blender-to-body (x,z,-y). Source normals: inverse-transpose matrix_world, then same proper rotation, normalize. GLB positions: scene graph world transforms; GLB normals: inverse-transpose node world, normalize. GLB Y-up is body frame.",
+    "correspondence": "Source exact position corner IDs form sorted triangle keys with exact material names. Every GLB point searches all 27 neighboring tolerance grid cells and retains all source points within Euclidean tolerance. Candidate source triangles intersect the three corner adjacency sets; every candidate tests all six corner permutations with actual Euclidean distances. No normal-based selection. Globally mutual unique same-winding pairs require exactly one candidate edge for each triangle across both windings. Additional winding-prioritized same-winding pairs require uniqueness only in that winding; mixed-orientation alternatives are explicitly counted. Unique mutual opposite-winding pairs are accepted only if neither side has any same-winding candidate. Duplicates/multiple valid corner assignments stay separate.",
+    "tolerance": "10 micrometres baseline, 20 and 100 micrometres sensitivity. Float32 ULP near 36m is 3.814697265625 micrometres; tolerance exceeds normal single-position storage error. Spatial buckets are candidate acceleration only, not distance acceptance.",
+    "degenerate": "Analysis-only near-zero cross-product squared <=1e-20 body-m4 excluded from correspondence, reported per file; positive triangle area <1e-6 body-m2 separately counted without assuming exporter deletion. This is NOT the engine runtime gate: importer scene units divide body positions by100, and its float32 cross-squared<=1e-20 scene-unit4 would be1e-12 body-m4 in exact arithmetic. No runtime gate reimplementation or acceptance claim is made here.",
+    "alternate_triangulation": "Unmatched GLB triangles may map uniquely to source polygon corner positions/material. Confirmed at tolerance only for n-2 triangles with matching directed and undirected polygon boundary, interior edges paired, copies of each source vertex agreeing on actual GLB positions within1e-12m, coplanarity within position tolerance, same winding, and absolute area difference <= max(1e-10m2, sum(0.5*tolerance*referenceTrianglePerimeter+1.5*tolerance^2)). The sum is a conservative 3D per-triangle area perturbation bound. Nonplanar, reversed, incoherent and other failed candidates remain unresolved. Alternate-group corner normals are not included in exact-triangle normal statistics.",
+    "normal_thresholds": "dot<0.999 is >2.5626 degrees; dot<0.95 is >18.1949 degrees. These are measurement bins, not an artist acceptance standard."
+  },
+  "source": {
+    "triangles": 104884,
+    "corners": 314652,
+    "finite_positions": true,
+    "finite_normals": true,
+    "bounds_min_body_m": [
+      -36.0,
+      -9.000000387430191,
+      -19.00000038743019
+    ],
+    "bounds_max_body_m": [
+      36.0,
+      9.000000476837158,
+      19.00000038743019
+    ],
+    "analysis_near_zero_cross_squared_le_1e_20_body_m4": 258,
+    "positive_area_below_1e_6_m2": 1194,
+    "triangles_by_material": {
+      "Emerald structural frames": 17636,
+      "Graphite ceramic armor": 15520,
+      "Navigation glass": 96,
+      "Recessed carbon": 9716,
+      "Titanium machinery": 52164,
+      "Hull identification ivory": 608,
+      "Safety amber": 7232,
+      "Drive emission": 568,
+      "Working lights": 1344
+    },
+    "maximum_post_transform_normalized_corner_normal_length_error": 3.3306690738754696e-16,
+    "mesh_objects": 686,
+    "modifiers": {
+      "BEVEL": 595,
+      "WEIGHTED_NORMAL": 591
+    },
+    "negative_world_determinant_objects": []
+  },
+  "glb": {
+    "triangles": 103466,
+    "corners": 310398,
+    "finite_positions": true,
+    "finite_normals": true,
+    "bounds_min_body_m": [
+      -36.0,
+      -9.0,
+      -19.0
+    ],
+    "bounds_max_body_m": [
+      36.0,
+      9.0,
+      19.0
+    ],
+    "analysis_near_zero_cross_squared_le_1e_20_body_m4": 0,
+    "positive_area_below_1e_6_m2": 32,
+    "triangles_by_material": {
+      "Graphite ceramic armor": 14938,
+      "Titanium machinery": 52116,
+      "Recessed carbon": 9300,
+      "Emerald structural frames": 17588,
+      "Drive emission": 472,
+      "Working lights": 1296,
+      "Navigation glass": 96,
+      "Safety amber": 7056,
+      "Hull identification ivory": 604
+    },
+    "maximum_post_transform_normalized_corner_normal_length_error": 2.220446049250313e-16,
+    "decoded_node_primitives": [
+      {
+        "node": 0,
+        "mesh": 0,
+        "primitive": 0,
+        "material": "Graphite ceramic armor",
+        "triangles": 14938,
+        "world_matrix_row_major": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "normal_matrix_inverse_transpose": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "node": 0,
+        "mesh": 0,
+        "primitive": 1,
+        "material": "Titanium machinery",
+        "triangles": 52116,
+        "world_matrix_row_major": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "normal_matrix_inverse_transpose": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "node": 0,
+        "mesh": 0,
+        "primitive": 2,
+        "material": "Recessed carbon",
+        "triangles": 9300,
+        "world_matrix_row_major": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "normal_matrix_inverse_transpose": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "node": 0,
+        "mesh": 0,
+        "primitive": 3,
+        "material": "Emerald structural frames",
+        "triangles": 17588,
+        "world_matrix_row_major": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "normal_matrix_inverse_transpose": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "node": 0,
+        "mesh": 0,
+        "primitive": 4,
+        "material": "Drive emission",
+        "triangles": 472,
+        "world_matrix_row_major": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "normal_matrix_inverse_transpose": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "node": 0,
+        "mesh": 0,
+        "primitive": 5,
+        "material": "Working lights",
+        "triangles": 1296,
+        "world_matrix_row_major": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "normal_matrix_inverse_transpose": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "node": 0,
+        "mesh": 0,
+        "primitive": 6,
+        "material": "Navigation glass",
+        "triangles": 96,
+        "world_matrix_row_major": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "normal_matrix_inverse_transpose": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "node": 0,
+        "mesh": 0,
+        "primitive": 7,
+        "material": "Safety amber",
+        "triangles": 7056,
+        "world_matrix_row_major": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "normal_matrix_inverse_transpose": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "node": 0,
+        "mesh": 0,
+        "primitive": 8,
+        "material": "Hull identification ivory",
+        "triangles": 604,
+        "world_matrix_row_major": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "normal_matrix_inverse_transpose": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      }
+    ]
+  },
+  "correspondence": [
+    {
+      "tolerance_m": 1e-05,
+      "seconds": 8.80317234992981,
+      "source_exact_position_points": 55346,
+      "glb_exact_position_points": 55002,
+      "glb_unique_points_no_source_point_within_tolerance": 0,
+      "glb_unique_points_multiple_source_exact_point_candidates": 991,
+      "nearest_source_point_distance_m_statistics": {
+        "count": 55002,
+        "min": 0.0,
+        "max": 1.9224655954737354e-06,
+        "p50": 1.7943374184954607e-07,
+        "p95": 9.236709650653118e-07,
+        "p99": 1.113927355923703e-06
+      },
+      "nearest_sorted_corner_key_misses_recovered_by_neighbor_candidate_triangle_keys": 684,
+      "material_position_triangle_candidate_edges": 103458,
+      "candidate_pairs_with_ambiguous_corner_permutation_excluded": 8,
+      "globally_mutual_unique_same_winding": {
+        "triangles": 103458,
+        "corners": 310374,
+        "normal_dot_statistics": {
+          "count": 310374,
+          "min": 0.9999999999999987,
+          "max": 1.0,
+          "p50": 1.0,
+          "p95": 1.0,
+          "p99": 1.0
+        },
+        "normal_angle_degrees_statistics": {
+          "count": 310374,
+          "min": 0.0,
+          "max": 2.9575586669421963e-06,
+          "p50": 0.0,
+          "p95": 1.2074182697257333e-06,
+          "p99": 1.9090959104164224e-06
+        },
+        "max_corner_distance_m_statistics": {
+          "count": 103458,
+          "min": 0.0,
+          "max": 1.9224655954737354e-06,
+          "p50": 3.5762786865234375e-07,
+          "p95": 9.988225117247636e-07,
+          "p99": 1.2941479857535929e-06
+        },
+        "geometric_face_dot_statistics": {
+          "count": 103458,
+          "min": 0.9999990482569782,
+          "max": 1.0000000000000004,
+          "p50": 0.9999999999999205,
+          "p95": 1.0000000000000002,
+          "p99": 1.0000000000000002
+        },
+        "counts": {
+          "dot_lt_0": 0,
+          "dot_lt_05": 0,
+          "dot_lt_095": 0,
+          "dot_lt_0999": 0,
+          "dot_lt_099999": 0
+        },
+        "counts_by_material": {
+          "Graphite ceramic armor": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Titanium machinery": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Recessed carbon": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Emerald structural frames": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Drive emission": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Working lights": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Navigation glass": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Safety amber": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Hull identification ivory": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          }
+        },
+        "top_objects_by_dot_lt_0999": [
+          {
+            "object": "Bridge central armored brow",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Bridge corner armored brow port",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Bridge corner armored brow starboard",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.001",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.002",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.003",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.004",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.005",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.006",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.007",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.008",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.009",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.010",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.011",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.012",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.013",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.014",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.015",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Integrated bridge chin port",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Integrated bridge chin starboard",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Landing shoe",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Landing shoe.001",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Landing shoe.002",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Landing shoe.003",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Mining deck structural plinth",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Outboard drive nacelle",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Outboard drive nacelle.001",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Pressure hull",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Service bay armor",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          }
+        ],
+        "mismatch_examples": []
+      },
+      "unique_same_winding": {
+        "triangles": 103458,
+        "corners": 310374,
+        "normal_dot_statistics": {
+          "count": 310374,
+          "min": 0.9999999999999987,
+          "max": 1.0,
+          "p50": 1.0,
+          "p95": 1.0,
+          "p99": 1.0
+        },
+        "normal_angle_degrees_statistics": {
+          "count": 310374,
+          "min": 0.0,
+          "max": 2.9575586669421963e-06,
+          "p50": 0.0,
+          "p95": 1.2074182697257333e-06,
+          "p99": 1.9090959104164224e-06
+        },
+        "max_corner_distance_m_statistics": {
+          "count": 103458,
+          "min": 0.0,
+          "max": 1.9224655954737354e-06,
+          "p50": 3.5762786865234375e-07,
+          "p95": 9.988225117247636e-07,
+          "p99": 1.2941479857535929e-06
+        },
+        "geometric_face_dot_statistics": {
+          "count": 103458,
+          "min": 0.9999990482569782,
+          "max": 1.0000000000000004,
+          "p50": 0.9999999999999205,
+          "p95": 1.0000000000000002,
+          "p99": 1.0000000000000002
+        },
+        "counts": {
+          "dot_lt_0": 0,
+          "dot_lt_05": 0,
+          "dot_lt_095": 0,
+          "dot_lt_0999": 0,
+          "dot_lt_099999": 0
+        },
+        "counts_by_material": {
+          "Graphite ceramic armor": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Titanium machinery": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Recessed carbon": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Emerald structural frames": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Drive emission": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Working lights": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Navigation glass": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Safety amber": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Hull identification ivory": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          }
+        },
+        "top_objects_by_dot_lt_0999": [
+          {
+            "object": "Bridge central armored brow",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Bridge corner armored brow port",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Bridge corner armored brow starboard",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.001",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.002",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.003",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.004",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.005",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.006",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.007",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.008",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.009",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.010",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.011",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.012",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.013",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.014",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.015",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Integrated bridge chin port",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Integrated bridge chin starboard",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Landing shoe",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Landing shoe.001",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Landing shoe.002",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Landing shoe.003",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Mining deck structural plinth",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Outboard drive nacelle",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Outboard drive nacelle.001",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Pressure hull",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Service bay armor",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          }
+        ],
+        "mismatch_examples": []
+      },
+      "unique_same_winding_scope": "Mutual uniqueness within same-winding candidates; opposite-winding alternatives remain separately counted. Globally mutual unique subset is stricter and excludes them.",
+      "unique_opposite_winding": {
+        "triangles": 0,
+        "corners": 0,
+        "normal_dot_statistics": {
+          "count": 0
+        },
+        "normal_angle_degrees_statistics": {
+          "count": 0
+        },
+        "max_corner_distance_m_statistics": {
+          "count": 0
+        },
+        "geometric_face_dot_statistics": {
+          "count": 0
+        },
+        "counts": {
+          "dot_lt_0": 0,
+          "dot_lt_05": 0,
+          "dot_lt_095": 0,
+          "dot_lt_0999": 0,
+          "dot_lt_099999": 0
+        },
+        "counts_by_material": {},
+        "top_objects_by_dot_lt_0999": [],
+        "mismatch_examples": []
+      },
+      "source_triangles_with_both_winding_candidate_types": 0,
+      "glb_triangles_with_both_winding_candidate_types": 0,
+      "same_winding_source_triangles_with_multiple_glb_candidates": 0,
+      "same_winding_glb_triangles_with_multiple_source_candidates": 0,
+      "source_exact_duplicate_triangle_summary": {
+        "exact_material_position_duplicate_groups": 0,
+        "triangles_in_exact_material_position_duplicate_groups": 0,
+        "groups_containing_both_windings": 0,
+        "note": "Exact transformed float-coordinate keys only; tolerance candidate ambiguity is reported independently."
+      },
+      "glb_exact_duplicate_triangle_summary": {
+        "exact_material_position_duplicate_groups": 0,
+        "triangles_in_exact_material_position_duplicate_groups": 0,
+        "groups_containing_both_windings": 0,
+        "note": "Exact transformed float-coordinate keys only; tolerance candidate ambiguity is reported independently."
+      },
+      "ambiguous_duplicate_or_nearcoincident_source_triangles": 0,
+      "ambiguous_duplicate_or_nearcoincident_glb_triangles": 0,
+      "unmatched_source_triangles_no_material_position_candidate": 1168,
+      "unmatched_glb_triangles_no_material_position_candidate": 8,
+      "confirmed_alternate_triangulation_source_triangles_from_unmatched": 0,
+      "confirmed_alternate_triangulation_glb_triangles_from_unmatched": 0,
+      "confirmed_alternate_triangulation_polygons": 0,
+      "possible_alternate_triangulation_glb_triangles_unique_polygon_assignment": 0,
+      "possible_alternate_triangulation_glb_triangles_ambiguous_polygon_assignment": 0,
+      "alternate_triangulation_candidates": [],
+      "unconfirmed_alternate_triangulation_polygon_reason_combinations": {},
+      "unconfirmed_alternate_triangulation_unmatched_glb_triangle_reason_combinations": {},
+      "remaining_unmatched_source_triangles": 1168,
+      "remaining_unmatched_glb_triangles": 8,
+      "unmatched_source_by_material": {
+        "Graphite ceramic armor": 584,
+        "Recessed carbon": 288,
+        "Safety amber": 176,
+        "Titanium machinery": 24,
+        "Emerald structural frames": 48,
+        "Working lights": 48
+      },
+      "unmatched_glb_by_material": {
+        "Graphite ceramic armor": 8
+      },
+      "remaining_unmatched_glb_examples": [
+        {
+          "triangle": 12282,
+          "material": "Graphite ceramic armor",
+          "positions_body_m": [
+            [
+              -22.93000030517578,
+              6.489999771118164,
+              -0.9100000858306885
+            ],
+            [
+              -22.93000030517578,
+              6.489999771118164,
+              4.910000324249268
+            ],
+            [
+              -22.93000030517578,
+              6.490000247955322,
+              4.910000324249268
+            ]
+          ],
+          "area_m2": 1.3875962281417742e-06
+        },
+        {
+          "triangle": 12283,
+          "material": "Graphite ceramic armor",
+          "positions_body_m": [
+            [
+              -22.93000030517578,
+              6.489999771118164,
+              -0.9100000858306885
+            ],
+            [
+              -22.93000030517578,
+              6.490000247955322,
+              4.910000324249268
+            ],
+            [
+              -22.93000030517578,
+              6.490000247955322,
+              -0.9100000858306885
+            ]
+          ],
+          "area_m2": 1.3875962281417742e-06
+        },
+        {
+          "triangle": 12325,
+          "material": "Graphite ceramic armor",
+          "positions_body_m": [
+            [
+              -22.860000610351562,
+              6.489999771118164,
+              -0.9800000190734863
+            ],
+            [
+              -22.860000610351562,
+              6.490000247955322,
+              -0.9800000190734863
+            ],
+            [
+              -17.639999389648438,
+              6.490000247955322,
+              -0.9800000190734863
+            ]
+          ],
+          "area_m2": 1.2445452739484608e-06
+        },
+        {
+          "triangle": 12326,
+          "material": "Graphite ceramic armor",
+          "positions_body_m": [
+            [
+              -22.860000610351562,
+              6.489999771118164,
+              -0.9800000190734863
+            ],
+            [
+              -17.639999389648438,
+              6.490000247955322,
+              -0.9800000190734863
+            ],
+            [
+              -17.639999389648438,
+              6.489999771118164,
+              -0.9800000190734863
+            ]
+          ],
+          "area_m2": 1.2445452739484608e-06
+        },
+        {
+          "triangle": 12328,
+          "material": "Graphite ceramic armor",
+          "positions_body_m": [
+            [
+              -22.860000610351562,
+              6.489999771118164,
+              4.980000019073486
+            ],
+            [
+              -17.639999389648438,
+              6.489999771118164,
+              4.980000019073486
+            ],
+            [
+              -17.639999389648438,
+              6.490000247955322,
+              4.980000019073486
+            ]
+          ],
+          "area_m2": 1.2445452739484608e-06
+        },
+        {
+          "triangle": 12329,
+          "material": "Graphite ceramic armor",
+          "positions_body_m": [
+            [
+              -22.860000610351562,
+              6.489999771118164,
+              4.980000019073486
+            ],
+            [
+              -17.639999389648438,
+              6.490000247955322,
+              4.980000019073486
+            ],
+            [
+              -22.860000610351562,
+              6.490000247955322,
+              4.980000019073486
+            ]
+          ],
+          "area_m2": 1.2445452739484608e-06
+        },
+        {
+          "triangle": 12372,
+          "material": "Graphite ceramic armor",
+          "positions_body_m": [
+            [
+              -17.56999969482422,
+              6.489999771118164,
+              -0.9100000858306885
+            ],
+            [
+              -17.56999969482422,
+              6.490000247955322,
+              -0.9100000858306885
+            ],
+            [
+              -17.56999969482422,
+              6.490000247955322,
+              4.910000324249268
+            ]
+          ],
+          "area_m2": 1.3875962281417742e-06
+        },
+        {
+          "triangle": 12373,
+          "material": "Graphite ceramic armor",
+          "positions_body_m": [
+            [
+              -17.56999969482422,
+              6.489999771118164,
+              -0.9100000858306885
+            ],
+            [
+              -17.56999969482422,
+              6.490000247955322,
+              4.910000324249268
+            ],
+            [
+              -17.56999969482422,
+              6.489999771118164,
+              4.910000324249268
+            ]
+          ],
+          "area_m2": 1.3875962281417742e-06
+        }
+      ]
+    },
+    {
+      "tolerance_m": 2e-05,
+      "seconds": 8.382055521011353,
+      "source_exact_position_points": 55346,
+      "glb_exact_position_points": 55002,
+      "glb_unique_points_no_source_point_within_tolerance": 0,
+      "glb_unique_points_multiple_source_exact_point_candidates": 1064,
+      "nearest_source_point_distance_m_statistics": {
+        "count": 55002,
+        "min": 0.0,
+        "max": 1.9224655954737354e-06,
+        "p50": 1.7943374184954607e-07,
+        "p95": 9.236709650653118e-07,
+        "p99": 1.113927355923703e-06
+      },
+      "nearest_sorted_corner_key_misses_recovered_by_neighbor_candidate_triangle_keys": 684,
+      "material_position_triangle_candidate_edges": 103458,
+      "candidate_pairs_with_ambiguous_corner_permutation_excluded": 8,
+      "globally_mutual_unique_same_winding": {
+        "triangles": 103458,
+        "corners": 310374,
+        "normal_dot_statistics": {
+          "count": 310374,
+          "min": 0.9999999999999987,
+          "max": 1.0,
+          "p50": 1.0,
+          "p95": 1.0,
+          "p99": 1.0
+        },
+        "normal_angle_degrees_statistics": {
+          "count": 310374,
+          "min": 0.0,
+          "max": 2.9575586669421963e-06,
+          "p50": 0.0,
+          "p95": 1.2074182697257333e-06,
+          "p99": 1.9090959104164224e-06
+        },
+        "max_corner_distance_m_statistics": {
+          "count": 103458,
+          "min": 0.0,
+          "max": 1.9224655954737354e-06,
+          "p50": 3.5762786865234375e-07,
+          "p95": 9.988225117247636e-07,
+          "p99": 1.2941479857535929e-06
+        },
+        "geometric_face_dot_statistics": {
+          "count": 103458,
+          "min": 0.9999990482569782,
+          "max": 1.0000000000000004,
+          "p50": 0.9999999999999205,
+          "p95": 1.0000000000000002,
+          "p99": 1.0000000000000002
+        },
+        "counts": {
+          "dot_lt_0": 0,
+          "dot_lt_05": 0,
+          "dot_lt_095": 0,
+          "dot_lt_0999": 0,
+          "dot_lt_099999": 0
+        },
+        "counts_by_material": {
+          "Graphite ceramic armor": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Titanium machinery": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Recessed carbon": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Emerald structural frames": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Drive emission": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Working lights": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Navigation glass": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Safety amber": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Hull identification ivory": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          }
+        },
+        "top_objects_by_dot_lt_0999": [
+          {
+            "object": "Bridge central armored brow",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Bridge corner armored brow port",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Bridge corner armored brow starboard",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.001",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.002",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.003",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.004",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.005",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.006",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.007",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.008",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.009",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.010",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.011",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.012",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.013",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.014",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.015",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Integrated bridge chin port",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Integrated bridge chin starboard",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Landing shoe",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Landing shoe.001",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Landing shoe.002",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Landing shoe.003",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Mining deck structural plinth",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Outboard drive nacelle",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Outboard drive nacelle.001",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Pressure hull",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Service bay armor",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          }
+        ],
+        "mismatch_examples": []
+      },
+      "unique_same_winding": {
+        "triangles": 103458,
+        "corners": 310374,
+        "normal_dot_statistics": {
+          "count": 310374,
+          "min": 0.9999999999999987,
+          "max": 1.0,
+          "p50": 1.0,
+          "p95": 1.0,
+          "p99": 1.0
+        },
+        "normal_angle_degrees_statistics": {
+          "count": 310374,
+          "min": 0.0,
+          "max": 2.9575586669421963e-06,
+          "p50": 0.0,
+          "p95": 1.2074182697257333e-06,
+          "p99": 1.9090959104164224e-06
+        },
+        "max_corner_distance_m_statistics": {
+          "count": 103458,
+          "min": 0.0,
+          "max": 1.9224655954737354e-06,
+          "p50": 3.5762786865234375e-07,
+          "p95": 9.988225117247636e-07,
+          "p99": 1.2941479857535929e-06
+        },
+        "geometric_face_dot_statistics": {
+          "count": 103458,
+          "min": 0.9999990482569782,
+          "max": 1.0000000000000004,
+          "p50": 0.9999999999999205,
+          "p95": 1.0000000000000002,
+          "p99": 1.0000000000000002
+        },
+        "counts": {
+          "dot_lt_0": 0,
+          "dot_lt_05": 0,
+          "dot_lt_095": 0,
+          "dot_lt_0999": 0,
+          "dot_lt_099999": 0
+        },
+        "counts_by_material": {
+          "Graphite ceramic armor": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Titanium machinery": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Recessed carbon": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Emerald structural frames": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Drive emission": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Working lights": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Navigation glass": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Safety amber": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Hull identification ivory": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          }
+        },
+        "top_objects_by_dot_lt_0999": [
+          {
+            "object": "Bridge central armored brow",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Bridge corner armored brow port",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Bridge corner armored brow starboard",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.001",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.002",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.003",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.004",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.005",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.006",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.007",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.008",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.009",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.010",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.011",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.012",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.013",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.014",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.015",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Integrated bridge chin port",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Integrated bridge chin starboard",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Landing shoe",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Landing shoe.001",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Landing shoe.002",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Landing shoe.003",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Mining deck structural plinth",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Outboard drive nacelle",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Outboard drive nacelle.001",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Pressure hull",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Service bay armor",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          }
+        ],
+        "mismatch_examples": []
+      },
+      "unique_same_winding_scope": "Mutual uniqueness within same-winding candidates; opposite-winding alternatives remain separately counted. Globally mutual unique subset is stricter and excludes them.",
+      "unique_opposite_winding": {
+        "triangles": 0,
+        "corners": 0,
+        "normal_dot_statistics": {
+          "count": 0
+        },
+        "normal_angle_degrees_statistics": {
+          "count": 0
+        },
+        "max_corner_distance_m_statistics": {
+          "count": 0
+        },
+        "geometric_face_dot_statistics": {
+          "count": 0
+        },
+        "counts": {
+          "dot_lt_0": 0,
+          "dot_lt_05": 0,
+          "dot_lt_095": 0,
+          "dot_lt_0999": 0,
+          "dot_lt_099999": 0
+        },
+        "counts_by_material": {},
+        "top_objects_by_dot_lt_0999": [],
+        "mismatch_examples": []
+      },
+      "source_triangles_with_both_winding_candidate_types": 0,
+      "glb_triangles_with_both_winding_candidate_types": 0,
+      "same_winding_source_triangles_with_multiple_glb_candidates": 0,
+      "same_winding_glb_triangles_with_multiple_source_candidates": 0,
+      "source_exact_duplicate_triangle_summary": {
+        "exact_material_position_duplicate_groups": 0,
+        "triangles_in_exact_material_position_duplicate_groups": 0,
+        "groups_containing_both_windings": 0,
+        "note": "Exact transformed float-coordinate keys only; tolerance candidate ambiguity is reported independently."
+      },
+      "glb_exact_duplicate_triangle_summary": {
+        "exact_material_position_duplicate_groups": 0,
+        "triangles_in_exact_material_position_duplicate_groups": 0,
+        "groups_containing_both_windings": 0,
+        "note": "Exact transformed float-coordinate keys only; tolerance candidate ambiguity is reported independently."
+      },
+      "ambiguous_duplicate_or_nearcoincident_source_triangles": 0,
+      "ambiguous_duplicate_or_nearcoincident_glb_triangles": 0,
+      "unmatched_source_triangles_no_material_position_candidate": 1168,
+      "unmatched_glb_triangles_no_material_position_candidate": 8,
+      "confirmed_alternate_triangulation_source_triangles_from_unmatched": 0,
+      "confirmed_alternate_triangulation_glb_triangles_from_unmatched": 0,
+      "confirmed_alternate_triangulation_polygons": 0,
+      "possible_alternate_triangulation_glb_triangles_unique_polygon_assignment": 0,
+      "possible_alternate_triangulation_glb_triangles_ambiguous_polygon_assignment": 0,
+      "alternate_triangulation_candidates": [],
+      "unconfirmed_alternate_triangulation_polygon_reason_combinations": {},
+      "unconfirmed_alternate_triangulation_unmatched_glb_triangle_reason_combinations": {},
+      "remaining_unmatched_source_triangles": 1168,
+      "remaining_unmatched_glb_triangles": 8,
+      "unmatched_source_by_material": {
+        "Graphite ceramic armor": 584,
+        "Recessed carbon": 288,
+        "Safety amber": 176,
+        "Titanium machinery": 24,
+        "Emerald structural frames": 48,
+        "Working lights": 48
+      },
+      "unmatched_glb_by_material": {
+        "Graphite ceramic armor": 8
+      },
+      "remaining_unmatched_glb_examples": [
+        {
+          "triangle": 12282,
+          "material": "Graphite ceramic armor",
+          "positions_body_m": [
+            [
+              -22.93000030517578,
+              6.489999771118164,
+              -0.9100000858306885
+            ],
+            [
+              -22.93000030517578,
+              6.489999771118164,
+              4.910000324249268
+            ],
+            [
+              -22.93000030517578,
+              6.490000247955322,
+              4.910000324249268
+            ]
+          ],
+          "area_m2": 1.3875962281417742e-06
+        },
+        {
+          "triangle": 12283,
+          "material": "Graphite ceramic armor",
+          "positions_body_m": [
+            [
+              -22.93000030517578,
+              6.489999771118164,
+              -0.9100000858306885
+            ],
+            [
+              -22.93000030517578,
+              6.490000247955322,
+              4.910000324249268
+            ],
+            [
+              -22.93000030517578,
+              6.490000247955322,
+              -0.9100000858306885
+            ]
+          ],
+          "area_m2": 1.3875962281417742e-06
+        },
+        {
+          "triangle": 12325,
+          "material": "Graphite ceramic armor",
+          "positions_body_m": [
+            [
+              -22.860000610351562,
+              6.489999771118164,
+              -0.9800000190734863
+            ],
+            [
+              -22.860000610351562,
+              6.490000247955322,
+              -0.9800000190734863
+            ],
+            [
+              -17.639999389648438,
+              6.490000247955322,
+              -0.9800000190734863
+            ]
+          ],
+          "area_m2": 1.2445452739484608e-06
+        },
+        {
+          "triangle": 12326,
+          "material": "Graphite ceramic armor",
+          "positions_body_m": [
+            [
+              -22.860000610351562,
+              6.489999771118164,
+              -0.9800000190734863
+            ],
+            [
+              -17.639999389648438,
+              6.490000247955322,
+              -0.9800000190734863
+            ],
+            [
+              -17.639999389648438,
+              6.489999771118164,
+              -0.9800000190734863
+            ]
+          ],
+          "area_m2": 1.2445452739484608e-06
+        },
+        {
+          "triangle": 12328,
+          "material": "Graphite ceramic armor",
+          "positions_body_m": [
+            [
+              -22.860000610351562,
+              6.489999771118164,
+              4.980000019073486
+            ],
+            [
+              -17.639999389648438,
+              6.489999771118164,
+              4.980000019073486
+            ],
+            [
+              -17.639999389648438,
+              6.490000247955322,
+              4.980000019073486
+            ]
+          ],
+          "area_m2": 1.2445452739484608e-06
+        },
+        {
+          "triangle": 12329,
+          "material": "Graphite ceramic armor",
+          "positions_body_m": [
+            [
+              -22.860000610351562,
+              6.489999771118164,
+              4.980000019073486
+            ],
+            [
+              -17.639999389648438,
+              6.490000247955322,
+              4.980000019073486
+            ],
+            [
+              -22.860000610351562,
+              6.490000247955322,
+              4.980000019073486
+            ]
+          ],
+          "area_m2": 1.2445452739484608e-06
+        },
+        {
+          "triangle": 12372,
+          "material": "Graphite ceramic armor",
+          "positions_body_m": [
+            [
+              -17.56999969482422,
+              6.489999771118164,
+              -0.9100000858306885
+            ],
+            [
+              -17.56999969482422,
+              6.490000247955322,
+              -0.9100000858306885
+            ],
+            [
+              -17.56999969482422,
+              6.490000247955322,
+              4.910000324249268
+            ]
+          ],
+          "area_m2": 1.3875962281417742e-06
+        },
+        {
+          "triangle": 12373,
+          "material": "Graphite ceramic armor",
+          "positions_body_m": [
+            [
+              -17.56999969482422,
+              6.489999771118164,
+              -0.9100000858306885
+            ],
+            [
+              -17.56999969482422,
+              6.490000247955322,
+              4.910000324249268
+            ],
+            [
+              -17.56999969482422,
+              6.489999771118164,
+              4.910000324249268
+            ]
+          ],
+          "area_m2": 1.3875962281417742e-06
+        }
+      ]
+    },
+    {
+      "tolerance_m": 0.0001,
+      "seconds": 7.984933853149414,
+      "source_exact_position_points": 55346,
+      "glb_exact_position_points": 55002,
+      "glb_unique_points_no_source_point_within_tolerance": 0,
+      "glb_unique_points_multiple_source_exact_point_candidates": 1452,
+      "nearest_source_point_distance_m_statistics": {
+        "count": 55002,
+        "min": 0.0,
+        "max": 1.9224655954737354e-06,
+        "p50": 1.7943374184954607e-07,
+        "p95": 9.236709650653118e-07,
+        "p99": 1.113927355923703e-06
+      },
+      "nearest_sorted_corner_key_misses_recovered_by_neighbor_candidate_triangle_keys": 684,
+      "material_position_triangle_candidate_edges": 103458,
+      "candidate_pairs_with_ambiguous_corner_permutation_excluded": 8,
+      "globally_mutual_unique_same_winding": {
+        "triangles": 103458,
+        "corners": 310374,
+        "normal_dot_statistics": {
+          "count": 310374,
+          "min": 0.9999999999999987,
+          "max": 1.0,
+          "p50": 1.0,
+          "p95": 1.0,
+          "p99": 1.0
+        },
+        "normal_angle_degrees_statistics": {
+          "count": 310374,
+          "min": 0.0,
+          "max": 2.9575586669421963e-06,
+          "p50": 0.0,
+          "p95": 1.2074182697257333e-06,
+          "p99": 1.9090959104164224e-06
+        },
+        "max_corner_distance_m_statistics": {
+          "count": 103458,
+          "min": 0.0,
+          "max": 1.9224655954737354e-06,
+          "p50": 3.5762786865234375e-07,
+          "p95": 9.988225117247636e-07,
+          "p99": 1.2941479857535929e-06
+        },
+        "geometric_face_dot_statistics": {
+          "count": 103458,
+          "min": 0.9999990482569782,
+          "max": 1.0000000000000004,
+          "p50": 0.9999999999999205,
+          "p95": 1.0000000000000002,
+          "p99": 1.0000000000000002
+        },
+        "counts": {
+          "dot_lt_0": 0,
+          "dot_lt_05": 0,
+          "dot_lt_095": 0,
+          "dot_lt_0999": 0,
+          "dot_lt_099999": 0
+        },
+        "counts_by_material": {
+          "Graphite ceramic armor": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Titanium machinery": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Recessed carbon": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Emerald structural frames": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Drive emission": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Working lights": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Navigation glass": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Safety amber": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Hull identification ivory": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          }
+        },
+        "top_objects_by_dot_lt_0999": [
+          {
+            "object": "Bridge central armored brow",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Bridge corner armored brow port",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Bridge corner armored brow starboard",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.001",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.002",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.003",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.004",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.005",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.006",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.007",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.008",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.009",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.010",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.011",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.012",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.013",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.014",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.015",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Integrated bridge chin port",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Integrated bridge chin starboard",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Landing shoe",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Landing shoe.001",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Landing shoe.002",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Landing shoe.003",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Mining deck structural plinth",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Outboard drive nacelle",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Outboard drive nacelle.001",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Pressure hull",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Service bay armor",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          }
+        ],
+        "mismatch_examples": []
+      },
+      "unique_same_winding": {
+        "triangles": 103458,
+        "corners": 310374,
+        "normal_dot_statistics": {
+          "count": 310374,
+          "min": 0.9999999999999987,
+          "max": 1.0,
+          "p50": 1.0,
+          "p95": 1.0,
+          "p99": 1.0
+        },
+        "normal_angle_degrees_statistics": {
+          "count": 310374,
+          "min": 0.0,
+          "max": 2.9575586669421963e-06,
+          "p50": 0.0,
+          "p95": 1.2074182697257333e-06,
+          "p99": 1.9090959104164224e-06
+        },
+        "max_corner_distance_m_statistics": {
+          "count": 103458,
+          "min": 0.0,
+          "max": 1.9224655954737354e-06,
+          "p50": 3.5762786865234375e-07,
+          "p95": 9.988225117247636e-07,
+          "p99": 1.2941479857535929e-06
+        },
+        "geometric_face_dot_statistics": {
+          "count": 103458,
+          "min": 0.9999990482569782,
+          "max": 1.0000000000000004,
+          "p50": 0.9999999999999205,
+          "p95": 1.0000000000000002,
+          "p99": 1.0000000000000002
+        },
+        "counts": {
+          "dot_lt_0": 0,
+          "dot_lt_05": 0,
+          "dot_lt_095": 0,
+          "dot_lt_0999": 0,
+          "dot_lt_099999": 0
+        },
+        "counts_by_material": {
+          "Graphite ceramic armor": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Titanium machinery": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Recessed carbon": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Emerald structural frames": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Drive emission": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Working lights": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Navigation glass": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Safety amber": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          "Hull identification ivory": {
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          }
+        },
+        "top_objects_by_dot_lt_0999": [
+          {
+            "object": "Bridge central armored brow",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Bridge corner armored brow port",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Bridge corner armored brow starboard",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.001",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.002",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.003",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.004",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.005",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.006",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.007",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.008",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.009",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.010",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.011",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.012",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.013",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.014",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Coolant vessel clamp.015",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Integrated bridge chin port",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Integrated bridge chin starboard",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Landing shoe",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Landing shoe.001",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Landing shoe.002",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Landing shoe.003",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Mining deck structural plinth",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Outboard drive nacelle",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Outboard drive nacelle.001",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Pressure hull",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          },
+          {
+            "object": "Service bay armor",
+            "dot_lt_0": 0,
+            "dot_lt_05": 0,
+            "dot_lt_095": 0,
+            "dot_lt_0999": 0,
+            "dot_lt_099999": 0
+          }
+        ],
+        "mismatch_examples": []
+      },
+      "unique_same_winding_scope": "Mutual uniqueness within same-winding candidates; opposite-winding alternatives remain separately counted. Globally mutual unique subset is stricter and excludes them.",
+      "unique_opposite_winding": {
+        "triangles": 0,
+        "corners": 0,
+        "normal_dot_statistics": {
+          "count": 0
+        },
+        "normal_angle_degrees_statistics": {
+          "count": 0
+        },
+        "max_corner_distance_m_statistics": {
+          "count": 0
+        },
+        "geometric_face_dot_statistics": {
+          "count": 0
+        },
+        "counts": {
+          "dot_lt_0": 0,
+          "dot_lt_05": 0,
+          "dot_lt_095": 0,
+          "dot_lt_0999": 0,
+          "dot_lt_099999": 0
+        },
+        "counts_by_material": {},
+        "top_objects_by_dot_lt_0999": [],
+        "mismatch_examples": []
+      },
+      "source_triangles_with_both_winding_candidate_types": 0,
+      "glb_triangles_with_both_winding_candidate_types": 0,
+      "same_winding_source_triangles_with_multiple_glb_candidates": 0,
+      "same_winding_glb_triangles_with_multiple_source_candidates": 0,
+      "source_exact_duplicate_triangle_summary": {
+        "exact_material_position_duplicate_groups": 0,
+        "triangles_in_exact_material_position_duplicate_groups": 0,
+        "groups_containing_both_windings": 0,
+        "note": "Exact transformed float-coordinate keys only; tolerance candidate ambiguity is reported independently."
+      },
+      "glb_exact_duplicate_triangle_summary": {
+        "exact_material_position_duplicate_groups": 0,
+        "triangles_in_exact_material_position_duplicate_groups": 0,
+        "groups_containing_both_windings": 0,
+        "note": "Exact transformed float-coordinate keys only; tolerance candidate ambiguity is reported independently."
+      },
+      "ambiguous_duplicate_or_nearcoincident_source_triangles": 0,
+      "ambiguous_duplicate_or_nearcoincident_glb_triangles": 0,
+      "unmatched_source_triangles_no_material_position_candidate": 1168,
+      "unmatched_glb_triangles_no_material_position_candidate": 8,
+      "confirmed_alternate_triangulation_source_triangles_from_unmatched": 0,
+      "confirmed_alternate_triangulation_glb_triangles_from_unmatched": 0,
+      "confirmed_alternate_triangulation_polygons": 0,
+      "possible_alternate_triangulation_glb_triangles_unique_polygon_assignment": 0,
+      "possible_alternate_triangulation_glb_triangles_ambiguous_polygon_assignment": 0,
+      "alternate_triangulation_candidates": [],
+      "unconfirmed_alternate_triangulation_polygon_reason_combinations": {},
+      "unconfirmed_alternate_triangulation_unmatched_glb_triangle_reason_combinations": {},
+      "remaining_unmatched_source_triangles": 1168,
+      "remaining_unmatched_glb_triangles": 8,
+      "unmatched_source_by_material": {
+        "Graphite ceramic armor": 584,
+        "Recessed carbon": 288,
+        "Safety amber": 176,
+        "Titanium machinery": 24,
+        "Emerald structural frames": 48,
+        "Working lights": 48
+      },
+      "unmatched_glb_by_material": {
+        "Graphite ceramic armor": 8
+      },
+      "remaining_unmatched_glb_examples": [
+        {
+          "triangle": 12282,
+          "material": "Graphite ceramic armor",
+          "positions_body_m": [
+            [
+              -22.93000030517578,
+              6.489999771118164,
+              -0.9100000858306885
+            ],
+            [
+              -22.93000030517578,
+              6.489999771118164,
+              4.910000324249268
+            ],
+            [
+              -22.93000030517578,
+              6.490000247955322,
+              4.910000324249268
+            ]
+          ],
+          "area_m2": 1.3875962281417742e-06
+        },
+        {
+          "triangle": 12283,
+          "material": "Graphite ceramic armor",
+          "positions_body_m": [
+            [
+              -22.93000030517578,
+              6.489999771118164,
+              -0.9100000858306885
+            ],
+            [
+              -22.93000030517578,
+              6.490000247955322,
+              4.910000324249268
+            ],
+            [
+              -22.93000030517578,
+              6.490000247955322,
+              -0.9100000858306885
+            ]
+          ],
+          "area_m2": 1.3875962281417742e-06
+        },
+        {
+          "triangle": 12325,
+          "material": "Graphite ceramic armor",
+          "positions_body_m": [
+            [
+              -22.860000610351562,
+              6.489999771118164,
+              -0.9800000190734863
+            ],
+            [
+              -22.860000610351562,
+              6.490000247955322,
+              -0.9800000190734863
+            ],
+            [
+              -17.639999389648438,
+              6.490000247955322,
+              -0.9800000190734863
+            ]
+          ],
+          "area_m2": 1.2445452739484608e-06
+        },
+        {
+          "triangle": 12326,
+          "material": "Graphite ceramic armor",
+          "positions_body_m": [
+            [
+              -22.860000610351562,
+              6.489999771118164,
+              -0.9800000190734863
+            ],
+            [
+              -17.639999389648438,
+              6.490000247955322,
+              -0.9800000190734863
+            ],
+            [
+              -17.639999389648438,
+              6.489999771118164,
+              -0.9800000190734863
+            ]
+          ],
+          "area_m2": 1.2445452739484608e-06
+        },
+        {
+          "triangle": 12328,
+          "material": "Graphite ceramic armor",
+          "positions_body_m": [
+            [
+              -22.860000610351562,
+              6.489999771118164,
+              4.980000019073486
+            ],
+            [
+              -17.639999389648438,
+              6.489999771118164,
+              4.980000019073486
+            ],
+            [
+              -17.639999389648438,
+              6.490000247955322,
+              4.980000019073486
+            ]
+          ],
+          "area_m2": 1.2445452739484608e-06
+        },
+        {
+          "triangle": 12329,
+          "material": "Graphite ceramic armor",
+          "positions_body_m": [
+            [
+              -22.860000610351562,
+              6.489999771118164,
+              4.980000019073486
+            ],
+            [
+              -17.639999389648438,
+              6.490000247955322,
+              4.980000019073486
+            ],
+            [
+              -22.860000610351562,
+              6.490000247955322,
+              4.980000019073486
+            ]
+          ],
+          "area_m2": 1.2445452739484608e-06
+        },
+        {
+          "triangle": 12372,
+          "material": "Graphite ceramic armor",
+          "positions_body_m": [
+            [
+              -17.56999969482422,
+              6.489999771118164,
+              -0.9100000858306885
+            ],
+            [
+              -17.56999969482422,
+              6.490000247955322,
+              -0.9100000858306885
+            ],
+            [
+              -17.56999969482422,
+              6.490000247955322,
+              4.910000324249268
+            ]
+          ],
+          "area_m2": 1.3875962281417742e-06
+        },
+        {
+          "triangle": 12373,
+          "material": "Graphite ceramic armor",
+          "positions_body_m": [
+            [
+              -17.56999969482422,
+              6.489999771118164,
+              -0.9100000858306885
+            ],
+            [
+              -17.56999969482422,
+              6.490000247955322,
+              4.910000324249268
+            ],
+            [
+              -17.56999969482422,
+              6.489999771118164,
+              4.910000324249268
+            ]
+          ],
+          "area_m2": 1.3875962281417742e-06
+        }
+      ]
+    }
+  ],
+  "limits": [
+    "No claim of complete topology equality: duplicates, degenerate geometry and unmatched/nonplanar alternate tessellations are explicit.",
+    "This audits evaluated master corner normals against frozen export attributes, not offline rendering, actual engine output, canonical hull adoption, or the unpublished Mac exporter derivative.",
+    "No model mutation, regeneration, export, save, source edit, build, push, or Mac access occurred."
+  ]
+}

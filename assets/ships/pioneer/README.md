@@ -47,7 +47,7 @@ The engine supplies the moving mining turrets. Their mount centers are `(10.8, 9
 
 ## Relationship to the ship plans
 
-The current canonical source is the unchanged Study 04 master, installed through the reviewed cloud saved-master export on 2026-10-15. It is an intermediate hull and still needs substantial shape work against v05. It preserves the documented hull envelope and reserves the declared two-deck inhabited core. The construction palette, armored side machinery and paired roof mining mounts follow the visual direction in the Pioneer concept collection.
+The current canonical source is Study05, a cloud fidelity pass derived from the preserved Study04 master. It adds a shallower layered bow, actual recessed glazing, a varied recessed service/work deck and openings around the existing drive bells. Overall v05 matching remains unfinished. It preserves the documented hull envelope and reserves the declared two-deck inhabited core. The construction palette, armored side machinery and paired roof mining mounts follow the visual direction in the Pioneer concept collection.
 
 The following remain explicit work, not implemented features of this asset:
 
@@ -58,7 +58,7 @@ The following remain explicit work, not implemented features of this asset:
 - There is no new collision mesh, LOD chain, skeletal rig, texture set or physically rated structural model in this change.
 - Other ship classes still use their existing models. They must be authored and reviewed individually.
 
-`pioneer-hull.png` is an actual flight-engine capture on cloud build 26.10.15.7032, including both existing gameplay turrets and accepted powered exterior. The simulation moved to the belt through real warp commands to leave the station shadow. [Capture receipt](../../../docs/ships/pioneer/images/runtime-remodeled-20261015/authority-receipt.json) and [visual gap review](../../../docs/ships/pioneer/images/runtime-remodeled-20261015/belt-visual-review.md) preserve its scope.
+`pioneer-hull.png` is an actual flight-engine capture on cloud build26.10.15.7040, including both existing gameplay turrets and accepted powered exterior. [Matched before/after engine evidence](../../../docs/ships/pioneer/images/runtime-study05-20261015) and [refined source/export proof](../../../docs/ships/pioneer/images/runtime-study05-20261015/audit-refined/summary.md) record its scope.
 
 ## Industrial detail pass
 
@@ -66,10 +66,12 @@ The hull now separates the inhabited core from the stepped outboard pods. Fore a
 
 These exterior utility details remain visual assemblies. The connected room implementation is separately defined and validated; an external pipe or radiator must not be described as operational merely because its model is visible. The runtime still uses scalar materials, with no normal, roughness or occlusion textures.
 
-## Canonical cloud adoption · 2026-10-15
+## Canonical cloud adoption · Study05 · 2026-10-15
 
-The editable master is byte-identical to Study 04 (`772bf76a…`, 543 named meshes); the frozen study GLB remains in history. The fresh normal-preserving runtime export is `ed5e29cd…`, 78,244 triangles in nine canonical material batches, with exact 72 × 18 × 38 m bounds. [Export receipt](pioneer-export.json) maps every source part to its retained triangle ranges; [adoption record](pioneer-adoption.json) and [mount provenance](exterior-mounts.json) record the explicit binding decision and actual-engine evidence. The receipt was generated before adoption and names its byte-identical private source copy `pioneer-study.blend`.
+Study05 preserves the 72×18×38 m XYZ envelope, existing dynamic turret/drive registrations and nine canonical material identities. The editable source SHA is `61eb70e1…`, with686 named parts. The refined runtime GLB is `8125644f…`,103,466 triangles. [Export receipt](pioneer-export.json), [adoption record](pioneer-adoption.json), [source-authoring record](studies/study05/study05.json) and [fixture provenance](exterior-mounts.json) retain exact source/recipe/part spans and assumptions. The canonical master is byte-identical to receipt-selected `pioneer-study05.blend`. Study04 and both first/refined Study05 sources remain in Git history.
 
-Existing old-hash material documents retain their binding and are rejected by the new hull until explicitly replaced/rebound. Worlds with an accepted old-hash exterior fail startup without rewriting their world, clock or project files. Use a new preview project for this hull; retain the matching old build for old worlds. No automatic migration is supplied.
+Three separate beveled brow plates have actual joints and a recessed maintenance cover; cockpit panes sit in cut hull recesses with continuous gaskets and connected braces. The service roof has distinct access/exchanger/stowed-arm areas. Drive caps are actually opened, with counterbored flanges revealing the existing bells/throats. These are inferred static visual architecture: the service hatches and handling arm are not operable, and no pressure, structural, propulsion or fitted-interior claim follows.
 
-The forehead/chin, repetitive roof and side bays, stepped underside, work machinery and nozzle apertures remain visible v05 gaps. Outside-cap drive telemetry glow does not create an aperture; bright window emission does not implement transparent glass or a fitted bridge. Moving assemblies and source-part-specific surface emitters remain separate work.
+Glazing remains the supported opaque scalar-PBR approximation. Its metallic0.60/roughness0.12 and restrained acceptedWindow emission0.025 reduce the screenlike white appearance; fixture IDs/kinds/12Wloads, actual switch/clock behavior, total88W load and pulse/drive semantics are preserved. No transparent or reflected fitted cockpit exists. Visible Window surface comes from the authored glazing rather than raised procedural cuboids.
+
+Existing old-hash material documents retain their binding and are rejected until explicitly replaced/rebound. Worlds with accepted prior-hash exteriors fail without rewriting their world, clock or project files. Use a new preview project or retain the matching old build; no automatic migration is supplied. Broader side/collar/underside fidelity, richer materials, moving assemblies and independent source-part emitters remain separate work.

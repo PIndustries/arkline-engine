@@ -1,0 +1,204 @@
+{
+  "schema": "pioneer-study05-independent-source-export-review/v1",
+  "date_utc": "2026-10-15",
+  "outcome": "CLEAR for exact source/export data and selected source geometry; actual native appearance and explicit adoption remain root gates. This is not overall v05 visual completion.",
+  "source_sha256": "9cc3ac5d1e96937d8de1a61411ae0d80efd96e2394d71a90f62a88f5257c11b4",
+  "candidate_glb_sha256": "df8490f42379aca161df0aa26b24cb32ab8dbf73e83e0681ed2cfc29ef43a2c9",
+  "receipt_sha256": "0576abdd8995e324e4caf30eb81afb9e8ca0648a68afce5530b1c8f6f13287e7",
+  "source_copy_identical": true,
+  "all_model_bytes_unchanged": true,
+  "decoded_export": {
+    "triangles": 98858,
+    "primitives": 9,
+    "materials": 9,
+    "body_bounds_m": [
+      [
+        -36.0,
+        -9.0,
+        -19.0
+      ],
+      [
+        36.0,
+        9.0,
+        19.0
+      ]
+    ],
+    "bytes": 8313852,
+    "sha256": "df8490f42379aca161df0aa26b24cb32ab8dbf73e83e0681ed2cfc29ef43a2c9"
+  },
+  "mapping": {
+    "source_parts": 670,
+    "all_parts_retained": true,
+    "all_source_names_mesh_names_world_matrices_and_material_slots_match": true,
+    "source_hash_name_snapshot_ids_match": true,
+    "all_part_spans_contiguous_complete": true,
+    "canonical_material_slots": [
+      "Graphite ceramic armor",
+      "Titanium machinery",
+      "Recessed carbon",
+      "Emerald structural frames",
+      "Drive emission",
+      "Working lights",
+      "Navigation glass",
+      "Safety amber",
+      "Hull identification ivory"
+    ],
+    "evaluated_triangles": 100208,
+    "explicit_scaled_float32_gate_drops": 1350,
+    "retained_triangles": 98858,
+    "receipt_recipe_hashes_match_current_code": {
+      "export_pioneer.py": "ce1c5b64008223cfc06acce932cb2dbaf46c013a585bf586d7211422e8bea1cb",
+      "pioneer_export_contract.py": "c786532a9d380f02d9a9715bc9057c896a7971b36ec8ea049f9a2b553cb57c1d"
+    }
+  },
+  "normal_method": "Original peer-reviewed tolerance diagnostic copied with only input source/hash, GLB path/hash and output directory changed. Exact replacement comparison passed; algorithm unchanged.",
+  "normal_comparison": [
+    {
+      "tolerance_m": 1e-05,
+      "strict_triangles": 98850,
+      "strict_corners": 296550,
+      "strict_normal_mismatch_bins": {
+        "dot_lt_0": 0,
+        "dot_lt_05": 0,
+        "dot_lt_095": 0,
+        "dot_lt_0999": 0,
+        "dot_lt_099999": 0
+      },
+      "min_normal_dot": 0.9999999999999987,
+      "max_position_corner_error_m": 1.9224655954737354e-06,
+      "unique_reverse_winding_pairs": 0,
+      "mixed_orientation_candidates": 0,
+      "corner_permutation_ambiguities_excluded": 8,
+      "remaining_glb_triangles": 8,
+      "remaining_source_triangles": 1058
+    },
+    {
+      "tolerance_m": 2e-05,
+      "strict_triangles": 98850,
+      "strict_corners": 296550,
+      "strict_normal_mismatch_bins": {
+        "dot_lt_0": 0,
+        "dot_lt_05": 0,
+        "dot_lt_095": 0,
+        "dot_lt_0999": 0,
+        "dot_lt_099999": 0
+      },
+      "min_normal_dot": 0.9999999999999987,
+      "max_position_corner_error_m": 1.9224655954737354e-06,
+      "unique_reverse_winding_pairs": 0,
+      "mixed_orientation_candidates": 0,
+      "corner_permutation_ambiguities_excluded": 8,
+      "remaining_glb_triangles": 8,
+      "remaining_source_triangles": 1058
+    },
+    {
+      "tolerance_m": 0.0001,
+      "strict_triangles": 98850,
+      "strict_corners": 296550,
+      "strict_normal_mismatch_bins": {
+        "dot_lt_0": 0,
+        "dot_lt_05": 0,
+        "dot_lt_095": 0,
+        "dot_lt_0999": 0,
+        "dot_lt_099999": 0
+      },
+      "min_normal_dot": 0.9999999999999987,
+      "max_position_corner_error_m": 1.9224655954737354e-06,
+      "unique_reverse_winding_pairs": 0,
+      "mixed_orientation_candidates": 0,
+      "corner_permutation_ambiguities_excluded": 8,
+      "remaining_glb_triangles": 8,
+      "remaining_source_triangles": 1058
+    }
+  ],
+  "thin_face_supplement": {
+    "triangles": 8,
+    "corners": 24,
+    "object": "Study05 roof aft access cover",
+    "exact_float32_position_unique_same_winding_matches": 8,
+    "all_corner_normal_dots": 1.0,
+    "method_change_explicit": "Separate supplementary positional method, restricted by receipt source-part/material and exact source positions cast to float32 under all corner permutations; normals checked only after exactly one positional candidate is found. Original tolerance statistics remain unchanged.",
+    "minimum_triangle_height_m": 4.76837158203125e-07
+  },
+  "outward_source_geometry": {
+    "changed_new_parts_reviewed": 197,
+    "group_counts": {
+      "pioneer_study05_bow": 57,
+      "pioneer_study05_roof": 136,
+      "pioneer_study05_aft": 5
+    },
+    "all_raw_and_evaluated_closed_consistent_by_index": true,
+    "all_components_positive_signed_volume": true,
+    "raw_zero_area_triangles": 0,
+    "evaluated_analysis_zero_area_triangles": 72,
+    "evaluated_zero_area_limit": "Analysis geometry count, not the exporter float32 runtime predicate. Drops recorded independently in exact receipt."
+  },
+  "aft_apertures": {
+    "both_centerlines_first_hit": "Drive throat / Drive throat.001, Drive emission material",
+    "centerline_first_x_body_m": -33.200003,
+    "aft_rim_x_body_m": -36,
+    "recess_depth_m_approx": 2.8,
+    "global_rays": 106,
+    "direct_and_bvh_first_hit_distances_agree_within_m": 0.0001,
+    "boundary_caveat": "Exactly r=2.96m secondary named-part hits have projected-float64 versus BVH-float32 edge ambiguity. Global first intersection still agrees (the titanium aperture rim). These secondary hits do not support a precise aperture-boundary measurement.",
+    "scope": "True static recessed aperture with retained bell/throat and backwall; not open-through tube or physical propulsion validation."
+  },
+  "artifact_manifest": {
+    "check_mapping.py": {
+      "bytes": 4651,
+      "sha256": "14bd3b59be6887444cbaccb44ccf07c03c9dfced81d0580c391c05b7e48d510a"
+    },
+    "mapping.json": {
+      "bytes": 3158,
+      "sha256": "54ea19288521f05988e2ec47283d76081a60536bf0e6da55c2583bc8c400c3ee"
+    },
+    "normals/diagnose.py": {
+      "bytes": 34334,
+      "sha256": "1cdc268255ece37395a8516c7481f74170dd2f29907b5ecbf9d30500365c7ba5"
+    },
+    "normals/diagnostic-copy-provenance.json": {
+      "bytes": 1139,
+      "sha256": "5a8bbba44a8f3ad9bcef89fd42c2d023a383922e2492458f5c8dadefc855937d"
+    },
+    "normals/report.json": {
+      "bytes": 97337,
+      "sha256": "d22207caec527b9e2e20956f1489d5a6f4622974e4cd7ff591e21d05917bb6b5"
+    },
+    "check_thin_corners.py": {
+      "bytes": 3649,
+      "sha256": "5151f22bd24005f24bf21938580ac7d624f543fc59a0ef23fa2140ad88d6ee2e"
+    },
+    "thin-corner-supplement.json": {
+      "bytes": 11779,
+      "sha256": "2d07f3d397a1ef6d5fb86a5e2b7405661abbf0fd1868f14d92fcc872273ca8d7"
+    },
+    "geometry-peer/inspect_study05_geometry.py": {
+      "bytes": 8121,
+      "sha256": "caf3fd7d37030e999d3af801170dc0d860c63d26fe252e32fc69bf63e4553aaa"
+    },
+    "geometry-peer/study05-geometry.json": {
+      "bytes": 354687,
+      "sha256": "67b6093ad74296ecaae85ce2f62d241f877d18a0e2444036dd7bdd4d3532bf70"
+    },
+    "geometry-peer/summary.md": {
+      "bytes": 3567,
+      "sha256": "3642b9cc7b435c7f40e5d047975ff270c3e9dfb8072b492afeeaefb967a18f89"
+    },
+    "geometry-peer/aperture/review_aperture.py": {
+      "bytes": 8666,
+      "sha256": "fcc55c07ab6e39cd3ff7f8df2c0afb3311f2f82814adcc9e0fe690f885a4edc5"
+    },
+    "geometry-peer/aperture/aperture-review.json": {
+      "bytes": 477699,
+      "sha256": "0db50096e8fbff2933ed126a891e58ff17b3f5b29e851f5ed743ae42c61a7210"
+    }
+  },
+  "limits": [
+    "No claim of full topology equivalence. Strict tolerance comparison retains its eight excluded thin-corner ambiguities; the explicitly separate supplement checks those eight position correspondences and normals.",
+    "Closedness and orientation are indexed-edge geometric checks on selected changed parts; they do not certify vertex-manifoldness, absence of self-intersection, collision/physics adequacy or engineering ratings.",
+    "Part identities bind exact source hash and name within the snapshot. A new source/GLB hash must not silently retarget prior graphs or accepted exterior definitions.",
+    "Bow/bridge shape, recessed roof service/work architecture and true aft openings are the selected source scope; no completion claim for v05, interiors, turret articulation, conservation or moving machinery.",
+    "Actual Rust decoder, powered-exterior mounts/state behavior, readable engine images and any preview installation/publication remain root responsibility.",
+    "No repository/source/model/export saves, re-export, builds, Mac access or publication performed by this audit."
+  ]
+}

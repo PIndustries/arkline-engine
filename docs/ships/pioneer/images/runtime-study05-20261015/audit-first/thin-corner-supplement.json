@@ -1,0 +1,448 @@
+{
+  "schema": "pioneer-study05-thin-corner-position-only-supplement/v1",
+  "outcome": "All eight tolerance-ambiguous retained triangles have one exact float32-position/source-part/material candidate, same winding and matching corner normals. This supplements rather than changes the original strict tolerance counts.",
+  "method": "Evaluate saved source using the unchanged peer-reviewed diagnostic read_master and GLB reader. Restrict candidates to source object named in receipt for each retained GLB span; compare only source positions independently cast to IEEE float32 against decoded GLB positions under all six corner permutations. Require exactly one positional candidate, then check winding parity and corner-normal dot independently. Normals do not select candidates.",
+  "models_before": {
+    "source": "9cc3ac5d1e96937d8de1a61411ae0d80efd96e2394d71a90f62a88f5257c11b4",
+    "glb": "df8490f42379aca161df0aa26b24cb32ab8dbf73e83e0681ed2cfc29ef43a2c9"
+  },
+  "models_after": {
+    "source": "9cc3ac5d1e96937d8de1a61411ae0d80efd96e2394d71a90f62a88f5257c11b4",
+    "glb": "df8490f42379aca161df0aa26b24cb32ab8dbf73e83e0681ed2cfc29ef43a2c9"
+  },
+  "models_unchanged": true,
+  "autoexecution_disabled": true,
+  "script_sha256": "5151f22bd24005f24bf21938580ac7d624f543fc59a0ef23fa2140ad88d6ee2e",
+  "reused_diagnostic_sha256": "1cdc268255ece37395a8516c7481f74170dd2f29907b5ecbf9d30500365c7ba5",
+  "triangles": [
+    {
+      "glb_triangle": 9862,
+      "source_triangle": 15200,
+      "source_object": "Study05 roof aft access cover",
+      "source_material": "Graphite ceramic armor",
+      "exact_float32_position_candidate_count": 1,
+      "source_corner_permutation": [
+        0,
+        1,
+        2
+      ],
+      "same_winding": true,
+      "corner_normal_dots": [
+        1.0000000000000002,
+        1.0,
+        1.0000000000000002
+      ],
+      "source_unquantized_positions_body_m": [
+        [
+          -22.93000030517578,
+          6.489999771118164,
+          -0.9100000858306885
+        ],
+        [
+          -22.93000030517578,
+          6.489999771118164,
+          4.910000324249268
+        ],
+        [
+          -22.93000030517578,
+          6.490000247955322,
+          4.910000324249268
+        ]
+      ],
+      "glb_positions_body_m": [
+        [
+          -22.93000030517578,
+          6.489999771118164,
+          -0.9100000858306885
+        ],
+        [
+          -22.93000030517578,
+          6.489999771118164,
+          4.910000324249268
+        ],
+        [
+          -22.93000030517578,
+          6.490000247955322,
+          4.910000324249268
+        ]
+      ],
+      "maximum_prequantization_position_error_m": 0.0
+    },
+    {
+      "glb_triangle": 9863,
+      "source_triangle": 15201,
+      "source_object": "Study05 roof aft access cover",
+      "source_material": "Graphite ceramic armor",
+      "exact_float32_position_candidate_count": 1,
+      "source_corner_permutation": [
+        0,
+        1,
+        2
+      ],
+      "same_winding": true,
+      "corner_normal_dots": [
+        1.0000000000000002,
+        1.0000000000000002,
+        1.0
+      ],
+      "source_unquantized_positions_body_m": [
+        [
+          -22.93000030517578,
+          6.489999771118164,
+          -0.9100000858306885
+        ],
+        [
+          -22.93000030517578,
+          6.490000247955322,
+          4.910000324249268
+        ],
+        [
+          -22.93000030517578,
+          6.490000247955322,
+          -0.9100000858306885
+        ]
+      ],
+      "glb_positions_body_m": [
+        [
+          -22.93000030517578,
+          6.489999771118164,
+          -0.9100000858306885
+        ],
+        [
+          -22.93000030517578,
+          6.490000247955322,
+          4.910000324249268
+        ],
+        [
+          -22.93000030517578,
+          6.490000247955322,
+          -0.9100000858306885
+        ]
+      ],
+      "maximum_prequantization_position_error_m": 0.0
+    },
+    {
+      "glb_triangle": 9905,
+      "source_triangle": 15198,
+      "source_object": "Study05 roof aft access cover",
+      "source_material": "Graphite ceramic armor",
+      "exact_float32_position_candidate_count": 1,
+      "source_corner_permutation": [
+        0,
+        1,
+        2
+      ],
+      "same_winding": true,
+      "corner_normal_dots": [
+        1.0,
+        1.0000000000000002,
+        1.0
+      ],
+      "source_unquantized_positions_body_m": [
+        [
+          -22.860000610351562,
+          6.489999771118164,
+          -0.9800000190734863
+        ],
+        [
+          -22.860000610351562,
+          6.490000247955322,
+          -0.9800000190734863
+        ],
+        [
+          -17.639999389648438,
+          6.490000247955322,
+          -0.9800000190734863
+        ]
+      ],
+      "glb_positions_body_m": [
+        [
+          -22.860000610351562,
+          6.489999771118164,
+          -0.9800000190734863
+        ],
+        [
+          -22.860000610351562,
+          6.490000247955322,
+          -0.9800000190734863
+        ],
+        [
+          -17.639999389648438,
+          6.490000247955322,
+          -0.9800000190734863
+        ]
+      ],
+      "maximum_prequantization_position_error_m": 0.0
+    },
+    {
+      "glb_triangle": 9906,
+      "source_triangle": 15199,
+      "source_object": "Study05 roof aft access cover",
+      "source_material": "Graphite ceramic armor",
+      "exact_float32_position_candidate_count": 1,
+      "source_corner_permutation": [
+        0,
+        1,
+        2
+      ],
+      "same_winding": true,
+      "corner_normal_dots": [
+        1.0,
+        1.0,
+        1.0000000000000002
+      ],
+      "source_unquantized_positions_body_m": [
+        [
+          -22.860000610351562,
+          6.489999771118164,
+          -0.9800000190734863
+        ],
+        [
+          -17.639999389648438,
+          6.490000247955322,
+          -0.9800000190734863
+        ],
+        [
+          -17.639999389648438,
+          6.489999771118164,
+          -0.9800000190734863
+        ]
+      ],
+      "glb_positions_body_m": [
+        [
+          -22.860000610351562,
+          6.489999771118164,
+          -0.9800000190734863
+        ],
+        [
+          -17.639999389648438,
+          6.490000247955322,
+          -0.9800000190734863
+        ],
+        [
+          -17.639999389648438,
+          6.489999771118164,
+          -0.9800000190734863
+        ]
+      ],
+      "maximum_prequantization_position_error_m": 0.0
+    },
+    {
+      "glb_triangle": 9908,
+      "source_triangle": 15206,
+      "source_object": "Study05 roof aft access cover",
+      "source_material": "Graphite ceramic armor",
+      "exact_float32_position_candidate_count": 1,
+      "source_corner_permutation": [
+        0,
+        1,
+        2
+      ],
+      "same_winding": true,
+      "corner_normal_dots": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "source_unquantized_positions_body_m": [
+        [
+          -22.860000610351562,
+          6.489999771118164,
+          4.980000019073486
+        ],
+        [
+          -17.639999389648438,
+          6.489999771118164,
+          4.980000019073486
+        ],
+        [
+          -17.639999389648438,
+          6.490000247955322,
+          4.980000019073486
+        ]
+      ],
+      "glb_positions_body_m": [
+        [
+          -22.860000610351562,
+          6.489999771118164,
+          4.980000019073486
+        ],
+        [
+          -17.639999389648438,
+          6.489999771118164,
+          4.980000019073486
+        ],
+        [
+          -17.639999389648438,
+          6.490000247955322,
+          4.980000019073486
+        ]
+      ],
+      "maximum_prequantization_position_error_m": 0.0
+    },
+    {
+      "glb_triangle": 9909,
+      "source_triangle": 15207,
+      "source_object": "Study05 roof aft access cover",
+      "source_material": "Graphite ceramic armor",
+      "exact_float32_position_candidate_count": 1,
+      "source_corner_permutation": [
+        0,
+        1,
+        2
+      ],
+      "same_winding": true,
+      "corner_normal_dots": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "source_unquantized_positions_body_m": [
+        [
+          -22.860000610351562,
+          6.489999771118164,
+          4.980000019073486
+        ],
+        [
+          -17.639999389648438,
+          6.490000247955322,
+          4.980000019073486
+        ],
+        [
+          -22.860000610351562,
+          6.490000247955322,
+          4.980000019073486
+        ]
+      ],
+      "glb_positions_body_m": [
+        [
+          -22.860000610351562,
+          6.489999771118164,
+          4.980000019073486
+        ],
+        [
+          -17.639999389648438,
+          6.490000247955322,
+          4.980000019073486
+        ],
+        [
+          -22.860000610351562,
+          6.490000247955322,
+          4.980000019073486
+        ]
+      ],
+      "maximum_prequantization_position_error_m": 0.0
+    },
+    {
+      "glb_triangle": 9952,
+      "source_triangle": 15202,
+      "source_object": "Study05 roof aft access cover",
+      "source_material": "Graphite ceramic armor",
+      "exact_float32_position_candidate_count": 1,
+      "source_corner_permutation": [
+        0,
+        1,
+        2
+      ],
+      "same_winding": true,
+      "corner_normal_dots": [
+        1.0,
+        1.0000000000000002,
+        1.0
+      ],
+      "source_unquantized_positions_body_m": [
+        [
+          -17.56999969482422,
+          6.489999771118164,
+          -0.9100000858306885
+        ],
+        [
+          -17.56999969482422,
+          6.490000247955322,
+          -0.9100000858306885
+        ],
+        [
+          -17.56999969482422,
+          6.490000247955322,
+          4.910000324249268
+        ]
+      ],
+      "glb_positions_body_m": [
+        [
+          -17.56999969482422,
+          6.489999771118164,
+          -0.9100000858306885
+        ],
+        [
+          -17.56999969482422,
+          6.490000247955322,
+          -0.9100000858306885
+        ],
+        [
+          -17.56999969482422,
+          6.490000247955322,
+          4.910000324249268
+        ]
+      ],
+      "maximum_prequantization_position_error_m": 0.0
+    },
+    {
+      "glb_triangle": 9953,
+      "source_triangle": 15203,
+      "source_object": "Study05 roof aft access cover",
+      "source_material": "Graphite ceramic armor",
+      "exact_float32_position_candidate_count": 1,
+      "source_corner_permutation": [
+        0,
+        1,
+        2
+      ],
+      "same_winding": true,
+      "corner_normal_dots": [
+        1.0,
+        1.0,
+        1.0000000000000002
+      ],
+      "source_unquantized_positions_body_m": [
+        [
+          -17.56999969482422,
+          6.489999771118164,
+          -0.9100000858306885
+        ],
+        [
+          -17.56999969482422,
+          6.490000247955322,
+          4.910000324249268
+        ],
+        [
+          -17.56999969482422,
+          6.489999771118164,
+          4.910000324249268
+        ]
+      ],
+      "glb_positions_body_m": [
+        [
+          -17.56999969482422,
+          6.489999771118164,
+          -0.9100000858306885
+        ],
+        [
+          -17.56999969482422,
+          6.490000247955322,
+          4.910000324249268
+        ],
+        [
+          -17.56999969482422,
+          6.489999771118164,
+          4.910000324249268
+        ]
+      ],
+      "maximum_prequantization_position_error_m": 0.0
+    }
+  ],
+  "limits": [
+    "This exact float32 position comparison is a separate method for the eight named thin faces; strict10/20/100micrometre audit still reports98850triangles and8excluded corner-permutation ambiguities.",
+    "Restricting to the receipt-mapped source object adds source-part provenance to the positional condition. No claim about full topology equivalence or GPU/native appearance.",
+    "No source/model/export edits, saves, re-export, builds or publication."
+  ]
+}

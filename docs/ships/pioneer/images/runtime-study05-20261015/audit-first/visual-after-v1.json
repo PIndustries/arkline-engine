@@ -1,0 +1,133 @@
+{
+  "schema": "pioneer-study05-actual-engine-visual-review/v1",
+  "date_utc": "2026-10-15",
+  "outcome": "Meaningful selected-scope visual advance; request one bounded finish iteration before declaring bow/roof/nozzle visual acceptance. Source/export correctness clear separately. No overall v05 completion claim.",
+  "before": {
+    "build": "26.10.15.7036",
+    "source_commit": "df019ca2b12b82991fd65bc2ec5b3dcdc6232c61",
+    "asset_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+    "receipt_sha256": "f29a91e3d2f79471964dda9e4d37e1b96b4857cd59fd7e2a3720345493e5e26f"
+  },
+  "after": {
+    "build": "26.10.15.7038",
+    "source_commit": "a3928f23eefc171c12830e496fbd60ccf773dea7",
+    "asset_sha256": "df8490f42379aca161df0aa26b24cb32ab8dbf73e83e0681ed2cfc29ef43a2c9",
+    "receipt_sha256": "ba016a72831d59fdf63b6347a8aab9dd83f67cdaf533f8a4aeb0f93e04486bbb"
+  },
+  "matched_body_camera_fields": [
+    "eye_body_m",
+    "target_body_m",
+    "up_body",
+    "half_height_m",
+    "half_width_m",
+    "projection"
+  ],
+  "all_selected_cameras_equal": true,
+  "pixels_viewed": [
+    {
+      "name": "pioneer-authority-idle-front-quarter.png",
+      "before_path": "/workspace/arkline-runtime/study05-engine-before/pioneer-authority-idle-front-quarter.png",
+      "before_sha256": "f32795336ebdf9c5645ed296c243b249ecf7537414f9588c08eead79713cb2ce",
+      "after_path": "/workspace/arkline-runtime/study05-engine-after-v1/pioneer-authority-idle-front-quarter.png",
+      "after_sha256": "0402748fbf80148ef0a5e0ec5d8c693efd9c65031387d77be9c8aa4d2bd2e060"
+    },
+    {
+      "name": "pioneer-authority-idle-bridge-quarter.png",
+      "before_path": "/workspace/arkline-runtime/study05-engine-before/pioneer-authority-idle-bridge-quarter.png",
+      "before_sha256": "867059fded8467232f2283cf4084c34c78ecab7bef73638b9ad2f86bbd307f69",
+      "after_path": "/workspace/arkline-runtime/study05-engine-after-v1/pioneer-authority-idle-bridge-quarter.png",
+      "after_sha256": "53f64d1cecfa1ba5eb1da057ba42943e1b6985e89372ad3d812962688e421bd6"
+    },
+    {
+      "name": "pioneer-authority-idle-bridge-port-pane.png",
+      "before_path": "/workspace/arkline-runtime/study05-engine-before/pioneer-authority-idle-bridge-port-pane.png",
+      "before_sha256": "1e4b4d5e07b6702738c0037f5223c8b73d19b9607c57a3c9e5000c3db9582f1a",
+      "after_path": "/workspace/arkline-runtime/study05-engine-after-v1/pioneer-authority-idle-bridge-port-pane.png",
+      "after_sha256": "2c7ca9bad3aa2f1bb575d88ed9e0fc6386d330fc94cac3749daac78888ef184a"
+    },
+    {
+      "name": "pioneer-authority-idle-front.png",
+      "before_path": "/workspace/arkline-runtime/study05-engine-before/pioneer-authority-idle-front.png",
+      "before_sha256": "4d1d5f911df74536787b675fe63249ff91cac60319b87f3e022cb6b86d0baadd",
+      "after_path": "/workspace/arkline-runtime/study05-engine-after-v1/pioneer-authority-idle-front.png",
+      "after_sha256": "cebab9868f154ab0f0d1cfd84ebb6d6532e4148b045373f4ba8d8ce63db61b82"
+    },
+    {
+      "name": "pioneer-authority-idle-top.png",
+      "before_path": "/workspace/arkline-runtime/study05-engine-before/pioneer-authority-idle-top.png",
+      "before_sha256": "2ce6599ac5078711b27fe741ac42576c04052625afa74f169a290df897e4da8d",
+      "after_path": "/workspace/arkline-runtime/study05-engine-after-v1/pioneer-authority-idle-top.png",
+      "after_sha256": "6294c8cc427a66fb181f81e5a504521c5658d6789b8a62db466a4f0c4b8a22ab"
+    },
+    {
+      "name": "pioneer-authority-idle-aft-roof.png",
+      "before_path": "/workspace/arkline-runtime/study05-engine-before/pioneer-authority-idle-aft-roof.png",
+      "before_sha256": "747e75aadb838a2064da51ae61c22c840f007ab7ee2b4edbc999bb420b837c12",
+      "after_path": "/workspace/arkline-runtime/study05-engine-after-v1/pioneer-authority-idle-aft-roof.png",
+      "after_sha256": "d0ae69ef5e7b2dc6dc72c21fd40d34a97b8ef24d997902783048a007cabcbc0b"
+    },
+    {
+      "name": "pioneer-authority-idle-port-nozzle.png",
+      "before_path": "/workspace/arkline-runtime/study05-engine-before/pioneer-authority-idle-port-nozzle.png",
+      "before_sha256": "ad2c35409713db524a0f5aa1c9cc49215ad5404de4af08a5448e1050cdc46fc0",
+      "after_path": "/workspace/arkline-runtime/study05-engine-after-v1/pioneer-authority-idle-port-nozzle.png",
+      "after_sha256": "18116e2c4ddead423f5e72dedc48ddc944a55fd4677a7f9a0ea58d03296b5b94"
+    },
+    {
+      "name": "pioneer-authority-idle-rear.png",
+      "before_path": "/workspace/arkline-runtime/study05-engine-before/pioneer-authority-idle-rear.png",
+      "before_sha256": "bb5557ccb59652866f160fd0e48e0be2ef60f07eafaf2e74d4f679ed6cff45bd",
+      "after_path": "/workspace/arkline-runtime/study05-engine-after-v1/pioneer-authority-idle-rear.png",
+      "after_sha256": "7e9ad422aa3515c39848f5764992466a63d13c8d633f7a01c648ea06ccfd4026"
+    }
+  ],
+  "additional_pixels_viewed": [
+    {
+      "path": "/workspace/arkline-runtime/study05-engine-after-v1/pioneer-authority-off-bridge-quarter.png",
+      "sha256": "8259366faae0cc214ba4b3b93b77c28e32d69ee1ab39b33b9844f1006f61b709"
+    }
+  ],
+  "observed_improvements": [
+    "Clipped-white window overlay cards are removed; cooled restrained teal source panes retain visible frames, reveal depth and bow lamps.",
+    "Bow brow has distinct sloping armor pieces, seams, perimeter gaskets and lower chin profile, visibly different from Study04.",
+    "Repeated roof lid array replaced by recessed work/service zones with exchanger/handling/service objects.",
+    "Actual rear/nozzle pixels show circular rims, interior bell surfaces and depth to emissive throats through true static apertures.",
+    "Both existing dynamic gun assemblies remain visibly present; no duplicate static guns introduced."
+  ],
+  "bounded_followups": [
+    {
+      "priority": 1,
+      "area": "Aft rim finish",
+      "observation": "Striped/jagged outer band visible in actual port-nozzle close view.",
+      "source_evidence": "Rim front annulus X=-36 at radii2.93..3.16m overlaps retained cap plane X=-36 outside cutter radius2.96m. Independent radius3m rear rays produce coincident rim/nacelle/pressure-hull first hits.",
+      "recommendation": "Create a seated flange/counterbore/reveal or remove coplanar cap material beneath annulus, preserving aft hull extentX>=-36. Do not solve by moving the flange outside the envelope.",
+      "claim_limit": "Pixel pattern is consistent with source-confirmed coplanar overlap; no GPU depth-buffer readback or hardware-specific diagnosis claimed."
+    },
+    {
+      "priority": 2,
+      "area": "Bridge brace joints and glazing finish",
+      "observation": "Front diagonal bars terminate inside the large panes, reading as disconnected decorative strips. Restrained glazing is still uniform opaque teal, although much better than the prior luminous cards.",
+      "source_evidence": "Study05 cockpit diagonal brace authored endpoints(35.27,-.35,\u00b11.10)\u2192(35.27,2.43,\u00b14.15), inside front pane boundariesZ\u00b1.25..\u00b16.40,Y-.42..2.50.",
+      "recommendation": "Tie diagonals cleanly into actual perimeter/frame corners or remove partial bars; make gasket/lintel/sill joints continuous and legible. Preserve restrained emission. Opaque material contract should be described truthfully; transparency/interior is separate scope.",
+      "claim_limit": "No demand for an unimplemented transparent bridge, fake interior or new material system."
+    },
+    {
+      "priority": 3,
+      "area": "Roof manufactured hierarchy",
+      "observation": "Recessed architecture is improved, but low handling arm reads as a thin line at normalquarter scale; large green pipe clamps and empty forward well dominate smaller service units.",
+      "recommendation": "Strengthen a readable handling-arm base, primary articulated sections and stow cradle, plus one clear access/service-path hierarchy. Keep the recessed well; avoid refilling it with repeated lids or adding undifferentiated greebles.",
+      "claim_limit": "Authored machinery remains fixed decorative geometry unless operational rig/authority exists."
+    }
+  ],
+  "remaining_outside_selected_scope": [
+    "Layered side service equipment/collar finish and stepped underside still differ from v05.",
+    "Existing turret articulation/firing and proposed interiors remain separate acceptance.",
+    "No new physics, collision, structural or propulsion adequacy is established."
+  ],
+  "comparison_limits": [
+    "Before and after use equal recorded body-camera fields and existing actual sunlight; they are different accepted simulation runs and include deliberate window palette/fixture tuning as well as geometry. Do not label this geometry-only or unchanged-fixture-intensity across revisions.",
+    "After receipt wording no fixture intensity changes describes only within-run captures; before7036\u2192after7038 window tuning was intentionally changed.",
+    "Static native EGL captures on llvmpipe prove visible engine output, not a new interactive OS/TCP or frame-pacing journey.",
+    "No source/model/code/docs edits, saves, exports, builds or publication by this audit."
+  ]
+}
