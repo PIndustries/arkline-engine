@@ -4,6 +4,7 @@ pub mod collaborative_editor;
 pub mod collaborative_transport;
 mod drones;
 pub mod editor;
+mod exterior_effects;
 mod flight;
 mod identity;
 pub mod local_development;
@@ -46,6 +47,8 @@ struct Pilot {
 #[derive(Clone, Serialize, Deserialize)]
 struct World {
     #[serde(default)]
+    exterior_definition: ExteriorDefinitionState,
+    #[serde(default)]
     remote_controls: BTreeMap<String, String>,
     #[serde(default)]
     fleet_links: BTreeMap<String, String>,
@@ -78,6 +81,7 @@ fn default_next_drone_id() -> u64 {
 impl Default for World {
     fn default() -> Self {
         Self {
+            exterior_definition: ExteriorDefinitionState::default(),
             remote_controls: BTreeMap::new(),
             fleet_links: BTreeMap::new(),
             resource_jobs: BTreeMap::new(),
@@ -817,6 +821,17 @@ impl Server {
                 room_controls::execute(&mut world, name, action, now)?;
                 message = "Pioneer room command accepted";
             }
+            Request::SetPioneerExterior {
+                enabled,
+                expected_revision,
+            } => {
+                let name = session
+                    .as_ref()
+                    .context("connect before engineering commands")?;
+                ensure!(!remote, "exterior controls cannot be remotely delegated");
+                exterior_effects::execute(&mut world, name, enabled, expected_revision, now)?;
+                message = "Pioneer exterior command accepted";
+            }
             Request::BoardShip { id } => {
                 let name = session.as_ref().context("connect before boarding")?;
                 event = assets::board(&mut world, name, &id, now)?;
@@ -1325,6 +1340,7 @@ impl Server {
             .or(transport_session.as_ref())
             .and_then(|name| assets::view(&world, name));
         let snapshot = Snapshot {
+            exterior: Some(exterior_effects::view(&world, now)),
             remote_controls: world
                 .remote_controls
                 .iter()
@@ -1444,6 +1460,7 @@ fn validate(world: &World, room_layout: Option<&RoomLayoutDocument>) -> Result<(
         "active cargo exceeds hull capacity"
     );
     assets::validate(world)?;
+    exterior_effects::validate(world)?;
     room_controls::validate(world)?;
     mining::validate(world)?;
     universe::validate_locks(world)?;

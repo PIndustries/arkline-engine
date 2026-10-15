@@ -3,8 +3,8 @@
 use crate::editor::EditorWorld;
 use anyhow::{ensure, Result};
 use arkline_protocol::{
-    AssetsView, EditorEventGraph, EditorGraphDebug, EditorSceneState, Request, Response,
-    RoomLayoutDocument, RoomLayoutState, Snapshot,
+    AssetsView, EditorEventGraph, EditorGraphDebug, EditorSceneState, ExteriorDefinition,
+    ExteriorDefinitionState, Request, Response, RoomLayoutDocument, RoomLayoutState, Snapshot,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -183,6 +183,30 @@ impl CollaborativeEditorHost {
     ) -> Result<RoomLayoutState> {
         self.require_editor(id)?;
         self.world.room_layout_replace(expected_revision, document)
+    }
+    pub fn exterior_replace(
+        &mut self,
+        id: EditorSessionId,
+        expected_revision: u64,
+        document: ExteriorDefinition,
+    ) -> Result<ExteriorDefinitionState> {
+        self.require_editor(id)?;
+        self.world.exterior_replace(expected_revision, document)
+    }
+    pub fn exterior_set_enabled(
+        &mut self,
+        id: EditorSessionId,
+        enabled: bool,
+        expected_revision: u64,
+    ) -> Result<()> {
+        self.require_editor(id)?;
+        let session = &mut self
+            .sessions
+            .get_mut(&id)
+            .expect("role checked")
+            .server_session;
+        self.world
+            .exterior_set_enabled(session, enabled, expected_revision)
     }
 
     pub fn play(&mut self, id: EditorSessionId) -> Result<()> {

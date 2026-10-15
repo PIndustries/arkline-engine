@@ -62,6 +62,7 @@ fn advance_pair(
     power: &mut Option<PowerState>,
     occupied: bool,
     now: u64,
+    exterior_load: u64,
 ) -> Result<()> {
     let mut cursor = r.updated_at_ms;
     power::advance_state_with_load(power, ShipClass::Pioneer, cursor, 0)?;
@@ -79,7 +80,7 @@ fn advance_pair(
             let state = power.as_ref().unwrap();
             dt = dt.min(
                 (1000 - state.regen_remainder_mj)
-                    .div_ceil(state.regen_w)
+                    .div_ceil(state.regen_w - exterior_load)
                     .max(1),
             );
         }
@@ -94,7 +95,7 @@ fn advance_pair(
                 dt = dt.min((needed as u64).div_ceil(2));
             }
         }
-        let load = if powered { load_w(Some(r)) } else { 0 };
+        let load = exterior_load + if powered { load_w(Some(r)) } else { 0 };
         power::advance_state_with_load(power, ShipClass::Pioneer, cursor + dt, load)?;
         if r.vent_running {
             let delta = (dt as u128 * 2).min(ROOM_PRESSURE_PA as u128) as u32;
@@ -123,10 +124,8 @@ fn advance_pair(
     bail!("room integration exceeded finite transition budget")
 }
 pub(super) fn advance(w: &mut World, now: u64) -> Result<()> {
+    let exterior_load = w.exterior_definition.document.load_w();
     for (name, a) in &mut w.accounts {
-        let Some(r) = &mut a.pioneer_room else {
-            continue;
-        };
         let p = w.pilots.get_mut(name).unwrap();
         let active = p.view.ship_class == ShipClass::Pioneer;
         let occupied = active && doorway_occupied(p);
@@ -140,7 +139,16 @@ pub(super) fn advance(w: &mut World, now: u64) -> Result<()> {
                 .context("owned Pioneer missing")?
                 .power
         };
-        advance_pair(r, power, occupied, now)?;
+        let load = if a.pioneer_exterior_enabled {
+            exterior_load
+        } else {
+            0
+        };
+        let Some(r) = &mut a.pioneer_room else {
+            power::advance_state_with_load(power, ShipClass::Pioneer, now, load)?;
+            continue;
+        };
+        advance_pair(r, power, occupied, now, load)?;
         if !a.room_compatible {
             r.interlock = Some(
                 "Older session: door held open; reconnect all clients to enable room controls"
@@ -288,9 +296,9 @@ mod integration_tests {
     fn reserve_and_pressure_load_boundaries_are_polling_independent() {
         let (mut coarse, mut cp) = fixture();
         let (mut fine, mut fp) = (coarse.clone(), cp.clone());
-        advance_pair(&mut coarse, &mut cp, false, 20_000).unwrap();
+        advance_pair(&mut coarse, &mut cp, false, 20_000, 0).unwrap();
         for t in 1..=20_000 {
-            advance_pair(&mut fine, &mut fp, false, t).unwrap();
+            advance_pair(&mut fine, &mut fp, false, t, 0).unwrap();
         }
         assert_eq!(coarse, fine);
         assert_eq!(cp, fp);
@@ -298,9 +306,9 @@ mod integration_tests {
         assert_eq!(cp.as_ref().unwrap().charge_j, 122_710);
         assert_eq!(cp.as_ref().unwrap().regen_remainder_mj, 137);
         assert!(coarse.door_open && !coarse.vent_running);
-        advance_pair(&mut coarse, &mut cp, false, 1_000_000).unwrap();
+        advance_pair(&mut coarse, &mut cp, false, 1_000_000, 0).unwrap();
         for t in (21_000..=1_000_000).step_by(1000) {
-            advance_pair(&mut fine, &mut fp, false, t).unwrap();
+            advance_pair(&mut fine, &mut fp, false, t, 0).unwrap();
         }
         assert_eq!(coarse, fine);
         assert_eq!(cp, fp);
@@ -308,17 +316,17 @@ mod integration_tests {
     #[test]
     fn persisted_elapsed_interval_matches_continuous_ticks_and_is_bounded() {
         let (mut r, mut p) = fixture();
-        advance_pair(&mut r, &mut p, false, 500).unwrap();
+        advance_pair(&mut r, &mut p, false, 500, 0).unwrap();
         let json = serde_json::to_string(&(r.clone(), p.clone())).unwrap();
         let (mut restored, mut rp): (PioneerRoomState, Option<PowerState>) =
             serde_json::from_str(&json).unwrap();
-        advance_pair(&mut restored, &mut rp, false, 20_000).unwrap();
+        advance_pair(&mut restored, &mut rp, false, 20_000, 0).unwrap();
         for t in (600..=20_000).step_by(100) {
-            advance_pair(&mut r, &mut p, false, t).unwrap();
+            advance_pair(&mut r, &mut p, false, t, 0).unwrap();
         }
         assert_eq!((restored, rp), (r, p));
         let (mut r, mut p) = fixture();
-        advance_pair(&mut r, &mut p, false, u64::MAX).unwrap();
+        advance_pair(&mut r, &mut p, false, u64::MAX, 0).unwrap();
         assert_eq!(r.updated_at_ms, u64::MAX);
         assert_eq!(p.as_ref().unwrap().charge_j, p.as_ref().unwrap().capacity_j);
     }
@@ -331,9 +339,9 @@ mod integration_tests {
             cp.as_mut().unwrap().charge_j = 0;
             cp.as_mut().unwrap().regen_remainder_mj = 0;
             let (mut fine, mut fp) = (coarse.clone(), cp.clone());
-            advance_pair(&mut coarse, &mut cp, false, 50).unwrap();
+            advance_pair(&mut coarse, &mut cp, false, 50, 0).unwrap();
             for t in 1..=50 {
-                advance_pair(&mut fine, &mut fp, false, t).unwrap();
+                advance_pair(&mut fine, &mut fp, false, t, 0).unwrap();
             }
             assert_eq!(coarse, fine);
             assert_eq!(cp, fp);

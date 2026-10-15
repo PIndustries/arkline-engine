@@ -333,6 +333,68 @@ impl EditorWorld {
     pub fn room_layout_state(&self) -> RoomLayoutState {
         self.room_layout.clone()
     }
+    pub fn exterior_state(&self) -> Result<ExteriorDefinitionState> {
+        let json: String =
+            self.server
+                .db
+                .query_row("SELECT json FROM world WHERE id=1", [], |r| r.get(0))?;
+        let world: World = serde_json::from_str(&json)?;
+        Ok(world.exterior_definition)
+    }
+    /// Adopt one project definition for every Pioneer replica. The accepted
+    /// revision, circuit load anchors and room state share one SQLite commit.
+    pub fn exterior_replace(
+        &mut self,
+        expected_revision: u64,
+        document: ExteriorDefinition,
+    ) -> Result<ExteriorDefinitionState> {
+        document.validate().map_err(anyhow::Error::msg)?;
+        let now = self.time();
+        let tx = self.server.db.transaction()?;
+        let json: String = tx.query_row("SELECT json FROM world WHERE id=1", [], |r| r.get(0))?;
+        let mut world: World = serde_json::from_str(&json)?;
+        ensure!(
+            world.exterior_definition.revision == expected_revision,
+            "exterior definition revision conflict: expected {}, current {}",
+            expected_revision,
+            world.exterior_definition.revision
+        );
+        assets::ensure_accounts(&mut world);
+        power::advance(&mut world, now)?;
+        room_controls::advance(&mut world, now)?;
+        let next = ExteriorDefinitionState {
+            revision: expected_revision
+                .checked_add(1)
+                .context("exterior definition revision exhausted")?,
+            document,
+        };
+        world.exterior_definition = next.clone();
+        exterior_effects::anchor(&mut world, now);
+        validate(&world, self.server.editor_room_layout.as_ref())?;
+        tx.execute(
+            "UPDATE world SET json=?1 WHERE id=1",
+            [serde_json::to_string(&world)?],
+        )?;
+        tx.commit()?;
+        Ok(next)
+    }
+    /// Paused authoring operates the same owned circuit command at frozen time.
+    pub fn exterior_set_enabled(
+        &mut self,
+        session: &mut Option<String>,
+        enabled: bool,
+        expected_revision: u64,
+    ) -> Result<()> {
+        let response = self.handle(
+            session,
+            Request::SetPioneerExterior {
+                enabled,
+                expected_revision,
+            },
+        );
+        ensure!(response.ok, "{}", response.message);
+        Ok(())
+    }
     pub fn room_layout_replace(
         &mut self,
         expected_revision: u64,
@@ -485,6 +547,7 @@ fn request_kind(request: &Request) -> &'static str {
         Request::DepositCorporationOre { .. } => "deposit_corporation_ore",
         Request::WithdrawCorporationOre { .. } => "withdraw_corporation_ore",
         Request::SetPioneerRoom { .. } => "set_pioneer_room",
+        Request::SetPioneerExterior { .. } => "set_pioneer_exterior",
         Request::BoardShip { .. } => "board_ship",
         Request::AuthCapabilities => "auth_capabilities",
         Request::AccountConnect { .. } => "account_connect",

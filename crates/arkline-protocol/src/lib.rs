@@ -6,6 +6,8 @@ mod editor_graph;
 pub use editor_graph::*;
 mod room_equipment;
 pub use room_equipment::*;
+mod exterior_effects;
+pub use exterior_effects::*;
 mod pioneer_interior;
 pub use pioneer_interior::*;
 mod room_layout;
@@ -552,6 +554,10 @@ pub enum Request {
     SetPioneerRoom {
         action: PioneerRoomCommand,
     },
+    SetPioneerExterior {
+        enabled: bool,
+        expected_revision: u64,
+    },
     BoardShip {
         id: String,
     },
@@ -1086,6 +1092,9 @@ pub struct AssetsView {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Snapshot {
+    /// Presence advertises additive exterior schema support; older servers omit it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exterior: Option<ExteriorWorldState>,
     #[serde(default)]
     pub remote_controls: Vec<RemoteControlLease>,
     #[serde(default)]

@@ -6,7 +6,8 @@ use crate::collaborative_editor::{
 };
 use anyhow::{ensure, Context, Result};
 use arkline_protocol::{
-    EditorEventGraph, EditorSceneState, Request, Response, RoomLayoutDocument, RoomLayoutState,
+    EditorEventGraph, EditorSceneState, ExteriorDefinition, ExteriorDefinitionState, Request,
+    Response, RoomLayoutDocument, RoomLayoutState,
 };
 use rand::{rngs::OsRng, RngCore};
 use serde::{Deserialize, Serialize};
@@ -297,6 +298,33 @@ impl DevelopmentEditorHost {
             _ => Err(anyhow::anyhow!("unexpected editor authority response")),
         }
     }
+    pub fn replace_exterior(
+        &self,
+        expected_revision: u64,
+        document: ExteriorDefinition,
+    ) -> Result<ExteriorDefinitionState> {
+        match actor_call(
+            &self.actor,
+            Some(self.host_session),
+            ActorAction::ExteriorReplace {
+                expected_revision,
+                document,
+            },
+        )? {
+            ActorOutput::Exterior(state) => Ok(state),
+            _ => Err(anyhow::anyhow!("unexpected editor authority response")),
+        }
+    }
+    pub fn set_exterior_enabled(&self, enabled: bool, expected_revision: u64) -> Result<()> {
+        expect_accepted(actor_call(
+            &self.actor,
+            Some(self.host_session),
+            ActorAction::ExteriorEnabled {
+                enabled,
+                expected_revision,
+            },
+        )?)
+    }
     fn graph(&self, action: GraphAction) -> Result<()> {
         expect_accepted(actor_call(
             &self.actor,
@@ -421,6 +449,25 @@ impl DevelopmentEditorClient {
             reply => Err(self.unexpected_reply(reply)),
         }
     }
+    pub fn replace_exterior(
+        &mut self,
+        expected_revision: u64,
+        document: ExteriorDefinition,
+    ) -> Result<ExteriorDefinitionState> {
+        match self.exchange(WireRequest::ExteriorReplace {
+            expected_revision,
+            document,
+        })? {
+            WireReply::Exterior { state } => Ok(state),
+            reply => Err(self.unexpected_reply(reply)),
+        }
+    }
+    pub fn set_exterior_enabled(&mut self, enabled: bool, expected_revision: u64) -> Result<()> {
+        self.graph(WireRequest::ExteriorEnabled {
+            enabled,
+            expected_revision,
+        })
+    }
     pub fn leave(&mut self) -> Result<()> {
         if self.closed {
             return Ok(());
@@ -497,6 +544,14 @@ enum WireRequest {
         expected_revision: u64,
         document: RoomLayoutDocument,
     },
+    ExteriorReplace {
+        expected_revision: u64,
+        document: ExteriorDefinition,
+    },
+    ExteriorEnabled {
+        enabled: bool,
+        expected_revision: u64,
+    },
     Leave,
 }
 
@@ -516,6 +571,9 @@ enum WireReply {
     Accepted,
     RoomLayout {
         state: RoomLayoutState,
+    },
+    Exterior {
+        state: ExteriorDefinitionState,
     },
     Error {
         message: String,
@@ -550,6 +608,14 @@ enum ActorAction {
         expected_revision: u64,
         document: RoomLayoutDocument,
     },
+    ExteriorReplace {
+        expected_revision: u64,
+        document: ExteriorDefinition,
+    },
+    ExteriorEnabled {
+        enabled: bool,
+        expected_revision: u64,
+    },
     Leave,
 }
 enum ActorOutput {
@@ -558,6 +624,7 @@ enum ActorOutput {
     Game(Response),
     Accepted,
     RoomLayout(RoomLayoutState),
+    Exterior(ExteriorDefinitionState),
 }
 enum ActorCommand {
     Call {
@@ -764,6 +831,25 @@ fn dispatch(
                     expected_revision,
                     document,
                 )?))
+            }
+            ActorAction::ExteriorReplace {
+                expected_revision,
+                document,
+            } => Ok(ActorOutput::Exterior(authority.exterior_replace(
+                session.context("session required")?,
+                expected_revision,
+                document,
+            )?)),
+            ActorAction::ExteriorEnabled {
+                enabled,
+                expected_revision,
+            } => {
+                authority.exterior_set_enabled(
+                    session.context("session required")?,
+                    enabled,
+                    expected_revision,
+                )?;
+                Ok(ActorOutput::Accepted)
             }
             ActorAction::Leave => {
                 let id = session.context("session required")?;
@@ -993,6 +1079,26 @@ fn serve_joined_peer(
                 },
                 false,
             ),
+            WireRequest::ExteriorReplace {
+                expected_revision,
+                document,
+            } => (
+                ActorAction::ExteriorReplace {
+                    expected_revision,
+                    document,
+                },
+                false,
+            ),
+            WireRequest::ExteriorEnabled {
+                enabled,
+                expected_revision,
+            } => (
+                ActorAction::ExteriorEnabled {
+                    enabled,
+                    expected_revision,
+                },
+                false,
+            ),
             WireRequest::Leave => (ActorAction::Leave, true),
         };
         let output = match actor_call(actor, Some(id), action) {
@@ -1016,6 +1122,7 @@ fn serve_joined_peer(
             ActorOutput::Game(response) => WireReply::Game { response },
             ActorOutput::Accepted => WireReply::Accepted,
             ActorOutput::RoomLayout(state) => WireReply::RoomLayout { state },
+            ActorOutput::Exterior(state) => WireReply::Exterior { state },
             ActorOutput::Joined(..) => WireReply::Error {
                 message: "unexpected join response".into(),
             },

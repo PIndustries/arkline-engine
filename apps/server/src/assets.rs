@@ -1,6 +1,9 @@
 use super::*;
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub(super) struct Account {
+    /// Legacy and new vessels explicitly start with the exterior branch enabled.
+    #[serde(default = "exterior_enabled_by_default")]
+    pub(super) pioneer_exterior_enabled: bool,
     #[serde(default)]
     hull_catalog_version: u32,
     #[serde(default)]
@@ -15,6 +18,9 @@ pub(super) struct Account {
     storage: BTreeMap<u32, u64>,
     corporation: Option<String>,
 }
+fn exterior_enabled_by_default() -> bool {
+    true
+}
 #[derive(Clone, Serialize, Deserialize)]
 pub(super) struct Corporation {
     owner: String,
@@ -28,6 +34,7 @@ pub(super) fn ensure_accounts(world: &mut World) {
             .accounts
             .entry(name.clone())
             .or_insert_with(|| Account {
+                pioneer_exterior_enabled: true,
                 hull_catalog_version: 1,
                 fleet_hangar: false,
                 vessel_ids: Vec::new(),
