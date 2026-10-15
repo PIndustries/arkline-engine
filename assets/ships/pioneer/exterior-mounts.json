@@ -1,0 +1,657 @@
+{
+  "schema": "pioneer-fixture-mount-recommendations/v1",
+  "status": "applied to explicit reviewed Study04 cloud export; gameplay mounts, not engineering specifications",
+  "date_utc": "2026-10-15",
+  "claim": "https://github.com/PIndustries/arkline-engine/issues/10#issuecomment-6198723307",
+  "source_head": "4d2d8d965690799465c3fe36fe3257824452b4ae",
+  "coordinate_frame": "Body metres +X forward,+Y up,+Z starboard; Blender(x,y,z)->body(x,z,-y)",
+  "source_master_sha256": "772bf76aaf1416f28357e2f507963022c7c73b13fca58cb57e948e06761a7800",
+  "frozen_history_glb_sha256": "bfb743f8c0bd5bb0dd23a5e58a7f6851ce142b5a7e1a57a3387902f584d0a279",
+  "current_definition_sha256": "62b3cbb43a0c6d92b72801ef4ceff70c28d1863d99c14f505d0866410aa8e075",
+  "target_export_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+  "fixtures": [
+    {
+      "fixture_id": "pioneer.exterior.nav.port",
+      "kind": "navigation",
+      "current_position_body_m": [
+        -24.0,
+        2.8,
+        -18.95
+      ],
+      "recommended_position_body_m": [
+        -24.0,
+        2.8,
+        -18.95
+      ],
+      "source_snapshot_object": "Service identity backing",
+      "source_material_slots": [
+        "Recessed carbon"
+      ],
+      "source_evaluated_bounds_body_m": {
+        "min": [
+          -25.350000023841858,
+          2.474999964237213,
+          -18.869999922811985
+        ],
+        "max": [
+          -22.649999976158142,
+          3.1249999403953552,
+          -18.789999924600124
+        ]
+      },
+      "basis": "Retain current presentation mount, 0.08 m outward from the evaluated backing plane at Z=-18.87; this is not an authored navigation-device designation.",
+      "preserve_parameters": {
+        "color": [
+          1.0,
+          0.04,
+          0.02
+        ],
+        "emission": 2.0,
+        "light_range_m": 6.0,
+        "light_intensity": 0.65,
+        "load_w": 4,
+        "pulse": null
+      },
+      "applied_position_body_m": [
+        -24.0,
+        2.8,
+        -18.95
+      ]
+    },
+    {
+      "fixture_id": "pioneer.exterior.nav.starboard",
+      "kind": "navigation",
+      "current_position_body_m": [
+        -24.0,
+        2.8,
+        18.95
+      ],
+      "recommended_position_body_m": [
+        -24.0,
+        2.8,
+        18.95
+      ],
+      "source_snapshot_object": "Service identity backing.002",
+      "source_material_slots": [
+        "Recessed carbon"
+      ],
+      "source_evaluated_bounds_body_m": {
+        "min": [
+          -25.350000023841858,
+          2.474999964237213,
+          18.789999924600124
+        ],
+        "max": [
+          -22.649999976158142,
+          3.1249999403953552,
+          18.869999922811985
+        ]
+      },
+      "basis": "Retain current presentation mount, 0.08 m outward from the evaluated backing plane at Z=18.87; this is not an authored navigation-device designation.",
+      "preserve_parameters": {
+        "color": [
+          0.04,
+          1.0,
+          0.15
+        ],
+        "emission": 2.0,
+        "light_range_m": 6.0,
+        "light_intensity": 0.65,
+        "load_w": 4,
+        "pulse": null
+      },
+      "applied_position_body_m": [
+        -24.0,
+        2.8,
+        18.95
+      ]
+    },
+    {
+      "fixture_id": "pioneer.exterior.nav.aft",
+      "kind": "navigation",
+      "current_position_body_m": [
+        -36.05,
+        4.0,
+        0.0
+      ],
+      "recommended_position_body_m": [
+        -36.05,
+        4.0,
+        0.0
+      ],
+      "source_snapshot_object": "Pressure hull",
+      "source_material_slots": [
+        "Graphite ceramic armor"
+      ],
+      "source_evaluated_bounds_body_m": {
+        "min": [
+          -36.0,
+          -8.699999809265137,
+          -18.487468719482422
+        ],
+        "max": [
+          35.720001220703125,
+          8.300000190734863,
+          18.487468719482422
+        ]
+      },
+      "basis": "Retain current presentation mount, 0.05 m aft of evaluated opaque aft cap X=-36.",
+      "preserve_parameters": {
+        "color": [
+          0.9,
+          0.95,
+          1.0
+        ],
+        "emission": 2.0,
+        "light_range_m": 6.0,
+        "light_intensity": 0.65,
+        "load_w": 4,
+        "pulse": null
+      },
+      "applied_position_body_m": [
+        -36.05,
+        4.0,
+        0.0
+      ]
+    },
+    {
+      "fixture_id": "pioneer.exterior.strobe.dorsal",
+      "kind": "strobe",
+      "current_position_body_m": [
+        0.0,
+        9.1,
+        0.0
+      ],
+      "recommended_position_body_m": [
+        -8.0,
+        6.3,
+        0.0
+      ],
+      "source_snapshot_object": "Pressure hull",
+      "source_material_slots": [
+        "Graphite ceramic armor"
+      ],
+      "source_evaluated_bounds_body_m": {
+        "min": [
+          -36.0,
+          -8.699999809265137,
+          -18.487468719482422
+        ],
+        "max": [
+          35.720001220703125,
+          8.300000190734863,
+          18.487468719482422
+        ]
+      },
+      "basis": "New proposed presentation mount, 0.10 m above down-ray hit (-8,6.20000076,0); away from upper RCS support ray at X=0,Z=0. No authored strobe part exists.",
+      "preserve_parameters": {
+        "color": [
+          0.85,
+          0.93,
+          1.0
+        ],
+        "emission": 2.0,
+        "light_range_m": 6.0,
+        "light_intensity": 0.65,
+        "load_w": 8,
+        "pulse": {
+          "period_ms": 1000,
+          "on_ms": 100,
+          "phase_ms": 0
+        }
+      },
+      "applied_position_body_m": [
+        -8.0,
+        6.3,
+        0.0
+      ]
+    },
+    {
+      "fixture_id": "pioneer.exterior.strobe.ventral",
+      "kind": "strobe",
+      "current_position_body_m": [
+        0.0,
+        -9.1,
+        0.0
+      ],
+      "recommended_position_body_m": [
+        0.0,
+        -9.1,
+        0.0
+      ],
+      "source_snapshot_object": "Load bearing keel",
+      "source_material_slots": [
+        "Titanium machinery"
+      ],
+      "source_evaluated_bounds_body_m": {
+        "min": [
+          -28.0,
+          -9.0,
+          -4.0
+        ],
+        "max": [
+          24.0,
+          -8.0,
+          4.0
+        ]
+      },
+      "basis": "Retain current presentation mount, 0.10 m below evaluated keel lower surface Y=-9. No authored strobe part exists.",
+      "preserve_parameters": {
+        "color": [
+          0.85,
+          0.93,
+          1.0
+        ],
+        "emission": 2.0,
+        "light_range_m": 6.0,
+        "light_intensity": 0.65,
+        "load_w": 8,
+        "pulse": {
+          "period_ms": 1000,
+          "on_ms": 100,
+          "phase_ms": 500
+        }
+      },
+      "applied_position_body_m": [
+        0.0,
+        -9.1,
+        0.0
+      ]
+    },
+    {
+      "fixture_id": "pioneer.exterior.window.port.forward",
+      "kind": "window",
+      "current_position_body_m": [
+        33.0,
+        4.6,
+        -4.0
+      ],
+      "recommended_position_body_m": [
+        35.86,
+        1.275,
+        -3.555
+      ],
+      "source_snapshot_object": "Bridge front glazing port",
+      "source_material_slots": [
+        "Navigation glass"
+      ],
+      "source_evaluated_bounds_body_m": {
+        "min": [
+          35.79999923706055,
+          -1.5,
+          -6.949999809265137
+        ],
+        "max": [
+          35.79999923706055,
+          4.300000190734863,
+          -0.16000008583068848
+        ]
+      },
+      "basis": "Evaluated polygon centroid (35.79999924,1.27500004,-3.55499995) plus 0.06 m outward +X.",
+      "preserve_parameters": {
+        "color": [
+          1.0,
+          0.78,
+          0.43
+        ],
+        "emission": 2.0,
+        "light_range_m": 6.0,
+        "light_intensity": 0.65,
+        "load_w": 12,
+        "pulse": null
+      },
+      "applied_position_body_m": [
+        35.86,
+        1.275,
+        -3.555
+      ]
+    },
+    {
+      "fixture_id": "pioneer.exterior.window.starboard.forward",
+      "kind": "window",
+      "current_position_body_m": [
+        33.0,
+        4.6,
+        4.0
+      ],
+      "recommended_position_body_m": [
+        35.86,
+        1.275,
+        3.555
+      ],
+      "source_snapshot_object": "Bridge front glazing starboard",
+      "source_material_slots": [
+        "Navigation glass"
+      ],
+      "source_evaluated_bounds_body_m": {
+        "min": [
+          35.79999923706055,
+          -1.5,
+          0.16000008583068848
+        ],
+        "max": [
+          35.79999923706055,
+          4.300000190734863,
+          6.949999809265137
+        ]
+      },
+      "basis": "Evaluated polygon centroid (35.79999924,1.27500004,3.55499995) plus 0.06 m outward +X.",
+      "preserve_parameters": {
+        "color": [
+          1.0,
+          0.78,
+          0.43
+        ],
+        "emission": 2.0,
+        "light_range_m": 6.0,
+        "light_intensity": 0.65,
+        "load_w": 12,
+        "pulse": null
+      },
+      "applied_position_body_m": [
+        35.86,
+        1.275,
+        3.555
+      ]
+    },
+    {
+      "fixture_id": "pioneer.exterior.window.port.aft",
+      "kind": "window",
+      "current_position_body_m": [
+        30.0,
+        5.5,
+        -5.0
+      ],
+      "recommended_position_body_m": [
+        34.02548,
+        0.9875,
+        -10.06504
+      ],
+      "source_snapshot_object": "Bridge wrap glazing port",
+      "source_material_slots": [
+        "Navigation glass"
+      ],
+      "source_evaluated_bounds_body_m": {
+        "min": [
+          32.349998474121094,
+          -1.4999999403953552,
+          -11.515107154846191
+        ],
+        "max": [
+          35.619998931884766,
+          3.4000001549720764,
+          -8.526397705078125
+        ]
+      },
+      "basis": "Retain existing fixture ID, now proposed at evaluated wrap-glass centroid (33.98499870,0.98750007,-10.02075243) plus 0.06 m outward normal (0.67464560,0,-0.73814183).",
+      "preserve_parameters": {
+        "color": [
+          1.0,
+          0.78,
+          0.43
+        ],
+        "emission": 2.0,
+        "light_range_m": 6.0,
+        "light_intensity": 0.65,
+        "load_w": 12,
+        "pulse": null
+      },
+      "applied_position_body_m": [
+        34.02548,
+        0.9875,
+        -10.06504
+      ]
+    },
+    {
+      "fixture_id": "pioneer.exterior.window.starboard.aft",
+      "kind": "window",
+      "current_position_body_m": [
+        30.0,
+        5.5,
+        5.0
+      ],
+      "recommended_position_body_m": [
+        34.02548,
+        0.9875,
+        10.06504
+      ],
+      "source_snapshot_object": "Bridge wrap glazing starboard",
+      "source_material_slots": [
+        "Navigation glass"
+      ],
+      "source_evaluated_bounds_body_m": {
+        "min": [
+          32.349998474121094,
+          -1.4999999403953552,
+          8.526397705078125
+        ],
+        "max": [
+          35.619998931884766,
+          3.4000001549720764,
+          11.515107154846191
+        ]
+      },
+      "basis": "Retain existing fixture ID, now proposed at evaluated wrap-glass centroid (33.98499870,0.98750007,10.02075243) plus 0.06 m outward normal (0.67464560,0,0.73814183).",
+      "preserve_parameters": {
+        "color": [
+          1.0,
+          0.78,
+          0.43
+        ],
+        "emission": 2.0,
+        "light_range_m": 6.0,
+        "light_intensity": 0.65,
+        "load_w": 12,
+        "pulse": null
+      },
+      "applied_position_body_m": [
+        34.02548,
+        0.9875,
+        10.06504
+      ]
+    },
+    {
+      "fixture_id": "pioneer.exterior.panel.port",
+      "kind": "panel",
+      "current_position_body_m": [
+        36.05,
+        1.0,
+        -6.5
+      ],
+      "recommended_position_body_m": [
+        36.04,
+        -2.3,
+        -6.5
+      ],
+      "source_snapshot_object": "Bow worklight lens",
+      "source_material_slots": [
+        "Working lights"
+      ],
+      "source_evaluated_bounds_body_m": {
+        "min": [
+          35.899998627603054,
+          -2.4899999499320984,
+          -6.925000011920929
+        ],
+        "max": [
+          35.979998625814915,
+          -2.10999995470047,
+          -6.074999988079071
+        ]
+      },
+      "basis": "Evaluated lens center (35.93999863,-2.29999995,-6.5), front face X=35.97999863; proposed point 0.06 m outward +X. Source lamp moved down in Study04.",
+      "preserve_parameters": {
+        "color": [
+          0.15,
+          0.65,
+          1.0
+        ],
+        "emission": 2.0,
+        "light_range_m": 6.0,
+        "light_intensity": 0.65,
+        "load_w": 6,
+        "pulse": null
+      },
+      "applied_position_body_m": [
+        36.04,
+        -2.3,
+        -6.5
+      ]
+    },
+    {
+      "fixture_id": "pioneer.exterior.panel.starboard",
+      "kind": "panel",
+      "current_position_body_m": [
+        36.05,
+        1.0,
+        6.5
+      ],
+      "recommended_position_body_m": [
+        36.04,
+        -2.3,
+        6.5
+      ],
+      "source_snapshot_object": "Bow worklight lens.001",
+      "source_material_slots": [
+        "Working lights"
+      ],
+      "source_evaluated_bounds_body_m": {
+        "min": [
+          35.899998627603054,
+          -2.4899999499320984,
+          6.074999988079071
+        ],
+        "max": [
+          35.979998625814915,
+          -2.10999995470047,
+          6.925000011920929
+        ]
+      },
+      "basis": "Evaluated lens center (35.93999863,-2.29999995,6.5), front face X=35.97999863; proposed point 0.06 m outward +X. Source lamp moved down in Study04.",
+      "preserve_parameters": {
+        "color": [
+          0.15,
+          0.65,
+          1.0
+        ],
+        "emission": 2.0,
+        "light_range_m": 6.0,
+        "light_intensity": 0.65,
+        "load_w": 6,
+        "pulse": null
+      },
+      "applied_position_body_m": [
+        36.04,
+        -2.3,
+        6.5
+      ]
+    },
+    {
+      "fixture_id": "pioneer.exterior.drive.port",
+      "kind": "engine_glow",
+      "current_position_body_m": [
+        -35.95,
+        0.0,
+        -12.5
+      ],
+      "recommended_position_body_m": [
+        -36.1,
+        0.0,
+        -12.5
+      ],
+      "source_snapshot_object": "Outboard drive nacelle",
+      "source_material_slots": [
+        "Graphite ceramic armor"
+      ],
+      "source_evaluated_bounds_body_m": {
+        "min": [
+          -36.0,
+          -5.800000190734863,
+          -18.59999990463257
+        ],
+        "max": [
+          26.0,
+          6.099999904632568,
+          -9.400000095367432
+        ]
+      },
+      "basis": "Proposed local-light telemetry point 0.10 m aft of opaque cap X=-36. Existing Drive throat center (-33.15,0,-12.5) is behind that cap; this point does not make an aperture or establish a visible recessed nozzle.",
+      "preserve_parameters": {
+        "color": [
+          0.15,
+          0.5,
+          1.0
+        ],
+        "emission": 2.0,
+        "light_range_m": 6.0,
+        "light_intensity": 0.65,
+        "load_w": 0,
+        "pulse": null
+      },
+      "applied_position_body_m": [
+        -36.1,
+        0.0,
+        -12.5
+      ]
+    },
+    {
+      "fixture_id": "pioneer.exterior.drive.starboard",
+      "kind": "engine_glow",
+      "current_position_body_m": [
+        -35.95,
+        0.0,
+        12.5
+      ],
+      "recommended_position_body_m": [
+        -36.1,
+        0.0,
+        12.5
+      ],
+      "source_snapshot_object": "Outboard drive nacelle.001",
+      "source_material_slots": [
+        "Graphite ceramic armor"
+      ],
+      "source_evaluated_bounds_body_m": {
+        "min": [
+          -36.0,
+          -5.800000190734863,
+          9.400000095367432
+        ],
+        "max": [
+          26.0,
+          6.099999904632568,
+          18.59999990463257
+        ]
+      },
+      "basis": "Proposed local-light telemetry point 0.10 m aft of opaque cap X=-36. Existing Drive throat.001 center (-33.15,0,12.5) is behind that cap; this point does not make an aperture or establish a visible recessed nozzle.",
+      "preserve_parameters": {
+        "color": [
+          0.15,
+          0.5,
+          1.0
+        ],
+        "emission": 2.0,
+        "light_range_m": 6.0,
+        "light_intensity": 0.65,
+        "load_w": 0,
+        "pulse": null
+      },
+      "applied_position_body_m": [
+        -36.1,
+        0.0,
+        12.5
+      ]
+    }
+  ],
+  "unchanged_model_inputs": true,
+  "limits": [
+    "All offsets are explicit gameplay/presentation authoring choices grounded in measured source surfaces, not certified fixture clearances or equipment ratings.",
+    "Keep fixture IDs, emission, colors, ranges, intensities, loads and timing unchanged in this mount-only proposal.",
+    "Source object/material names identify this frozen source snapshot; they are not durable component IDs or an installed device binding.",
+    "Current static surface emission remains aggregated by material kind; these points do not independently bind each source part.",
+    "Four window points follow the new front/wrap glazing; the current added-lens renderer has no authored orientation field, so flush lens fit is not established by point placement.",
+    "The aft source retains opaque caps ahead of the original drive throat. Outside-cap local illumination must not be presented as completed recessed-nozzle geometry.",
+    "Blender source views omit the existing separate dynamic turrets; final engine captures must include both."
+  ],
+  "applied_definition_sha256": "20c9f2e81d0bcfb68dbffb397b6ccf6573731892d6e164173cfcfaa87c5ea58a"
+}

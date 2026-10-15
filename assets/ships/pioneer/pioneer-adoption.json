@@ -1,0 +1,58 @@
+{
+  "schema": "arkline.pioneer-model-adoption/v1",
+  "date_utc": "2026-10-15",
+  "status": "intermediate cloud preview adoption; native acceptance pending; not v05 visual completion",
+  "claim": "https://github.com/PIndustries/arkline-engine/issues/10#issuecomment-6198723307",
+  "coordination_before_adoption": "https://github.com/PIndustries/arkline-engine/issues/10#issuecomment-6199044626",
+  "prior_published_head": "4d2d8d965690799465c3fe36fe3257824452b4ae",
+  "exporter_integration_commit": "3ee211f3b30c8590b8ed55d64080578131a03d62",
+  "canonical": {
+    "editable_source": "pioneer.blend",
+    "source_sha256": "772bf76aaf1416f28357e2f507963022c7c73b13fca58cb57e948e06761a7800",
+    "glb": "pioneer.glb",
+    "glb_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+    "triangles": 78244,
+    "material_batches": 9,
+    "source_parts": 543,
+    "body_envelope_xyz_m": [
+      72,
+      18,
+      38
+    ]
+  },
+  "export_receipt": {
+    "path": "pioneer-export.json",
+    "sha256": "5467b970e6254c63fef552d5c1a609636fd913a1b333a8025a31dd112035adab",
+    "source_copy_note": "Receipt names the isolated export bundle copy pioneer-study.blend; canonical pioneer.blend is byte-identical."
+  },
+  "prior_canonical_glb_sha256": "f8f8cc65772c678a46606c27abe205d62c4e6ab37c350f79a0f3a4cdc0c6f402",
+  "frozen_study04_glb_sha256": "bfb743f8c0bd5bb0dd23a5e58a7f6851ce142b5a7e1a57a3387902f584d0a279",
+  "source_identity": "source-sha256-and-exact-name snapshot; not durable IDs across source changes",
+  "normal_review": {
+    "strict_same_winding_triangles": 78240,
+    "strict_corners": 234720,
+    "normal_dot_lt_0999": 0,
+    "normal_dot_lt_095": 0,
+    "reverse_winding_pairs": 0,
+    "unmatched_glb_triangles": 0,
+    "tolerances_m": [
+      1e-05,
+      2e-05,
+      0.0001
+    ],
+    "mixed_orientation_excluded_triangles": 4,
+    "report_sha256": "1a3998b1e96e5833a20c929008374bfdcf065cd4f7727039fb1c5da7aa1d2e3d"
+  },
+  "rust_decoder": {
+    "build": "26.10.15.7026",
+    "exact_hash_passed": true
+  },
+  "compatibility": "Old documents retain their hashes; mismatched material graphs are rejected. Old accepted exterior worlds fail without rewriting state; use a new preview project and retain the matching old build for old worlds. No automatic migration.",
+  "visual_gaps": [
+    "broad smooth brow and deep chin",
+    "repetitive roof/work machinery",
+    "continuous underside and equal side bays",
+    "opaque aft caps hide recessed drive throats"
+  ],
+  "power": "Existing authoritative simulation clock, owned circuit and drive telemetry; default88W load and emission/timing unchanged."
+}

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "hull_asset_sha256": "f8f8cc65772c678a46606c27abe205d62c4e6ab37c350f79a0f3a4cdc0c6f402",
+  "hull_asset_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
   "fixtures": [
     {
       "id": "pioneer.exterior.nav.port",
@@ -63,8 +63,8 @@
       "id": "pioneer.exterior.strobe.dorsal",
       "kind": "strobe",
       "position_m": [
-        0.0,
-        9.1,
+        -8.0,
+        6.3,
         0.0
       ],
       "color": [
@@ -109,9 +109,9 @@
       "id": "pioneer.exterior.window.port.forward",
       "kind": "window",
       "position_m": [
-        33.0,
-        4.6,
-        -4.0
+        35.86,
+        1.275,
+        -3.555
       ],
       "color": [
         1.0,
@@ -128,9 +128,9 @@
       "id": "pioneer.exterior.window.starboard.forward",
       "kind": "window",
       "position_m": [
-        33.0,
-        4.6,
-        4.0
+        35.86,
+        1.275,
+        3.555
       ],
       "color": [
         1.0,
@@ -147,9 +147,9 @@
       "id": "pioneer.exterior.window.port.aft",
       "kind": "window",
       "position_m": [
-        30.0,
-        5.5,
-        -5.0
+        34.02548,
+        0.9875,
+        -10.06504
       ],
       "color": [
         1.0,
@@ -166,9 +166,9 @@
       "id": "pioneer.exterior.window.starboard.aft",
       "kind": "window",
       "position_m": [
-        30.0,
-        5.5,
-        5.0
+        34.02548,
+        0.9875,
+        10.06504
       ],
       "color": [
         1.0,
@@ -185,8 +185,8 @@
       "id": "pioneer.exterior.panel.port",
       "kind": "panel",
       "position_m": [
-        36.05,
-        1.0,
+        36.04,
+        -2.3,
         -6.5
       ],
       "color": [
@@ -204,8 +204,8 @@
       "id": "pioneer.exterior.panel.starboard",
       "kind": "panel",
       "position_m": [
-        36.05,
-        1.0,
+        36.04,
+        -2.3,
         6.5
       ],
       "color": [
@@ -223,7 +223,7 @@
       "id": "pioneer.exterior.drive.port",
       "kind": "engine_glow",
       "position_m": [
-        -35.95,
+        -36.1,
         0.0,
         -12.5
       ],
@@ -242,7 +242,7 @@
       "id": "pioneer.exterior.drive.starboard",
       "kind": "engine_glow",
       "position_m": [
-        -35.95,
+        -36.1,
         0.0,
         12.5
       ],

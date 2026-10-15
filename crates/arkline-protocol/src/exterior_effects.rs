@@ -184,6 +184,8 @@ pub struct ExteriorWorldState {
     pub vessels: Vec<ExteriorVesselState>,
 }
 
+/// Mounts are measured against the published Study04 editable master.
+/// See assets/ships/pioneer/exterior-mounts.json for source surfaces and limits.
 pub fn default_pioneer_exterior() -> ExteriorDefinition {
     let mut fixtures = Vec::new();
     let mut add = |id: &str, kind, position_m, color, load_w, pulse| {
@@ -225,7 +227,7 @@ pub fn default_pioneer_exterior() -> ExteriorDefinition {
         None,
     );
     for (id, position, phase) in [
-        ("strobe.dorsal", [0.0, 9.1, 0.0], 0),
+        ("strobe.dorsal", [-8.0, 6.3, 0.0], 0),
         ("strobe.ventral", [0.0, -9.1, 0.0], 500),
     ] {
         add(
@@ -242,17 +244,17 @@ pub fn default_pioneer_exterior() -> ExteriorDefinition {
         );
     }
     for (id, position) in [
-        ("window.port.forward", [33.0, 4.6, -4.0]),
-        ("window.starboard.forward", [33.0, 4.6, 4.0]),
-        ("window.port.aft", [30.0, 5.5, -5.0]),
-        ("window.starboard.aft", [30.0, 5.5, 5.0]),
+        ("window.port.forward", [35.86, 1.275, -3.555]),
+        ("window.starboard.forward", [35.86, 1.275, 3.555]),
+        ("window.port.aft", [34.02548, 0.9875, -10.06504]),
+        ("window.starboard.aft", [34.02548, 0.9875, 10.06504]),
     ] {
         add(id, Window, position, [1.0, 0.78, 0.43], 12, None);
     }
     add(
         "panel.port",
         Panel,
-        [36.05, 1.0, -6.5],
+        [36.04, -2.3, -6.5],
         [0.15, 0.65, 1.0],
         6,
         None,
@@ -260,7 +262,7 @@ pub fn default_pioneer_exterior() -> ExteriorDefinition {
     add(
         "panel.starboard",
         Panel,
-        [36.05, 1.0, 6.5],
+        [36.04, -2.3, 6.5],
         [0.15, 0.65, 1.0],
         6,
         None,
@@ -268,7 +270,7 @@ pub fn default_pioneer_exterior() -> ExteriorDefinition {
     add(
         "drive.port",
         EngineGlow,
-        [-35.95, 0.0, -12.5],
+        [-36.10, 0.0, -12.5],
         [0.15, 0.5, 1.0],
         0,
         None,
@@ -276,7 +278,7 @@ pub fn default_pioneer_exterior() -> ExteriorDefinition {
     add(
         "drive.starboard",
         EngineGlow,
-        [-35.95, 0.0, 12.5],
+        [-36.10, 0.0, 12.5],
         [0.15, 0.5, 1.0],
         0,
         None,
