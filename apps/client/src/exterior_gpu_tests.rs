@@ -409,6 +409,76 @@ fn native_powered_exterior_frame_capture() {
             receiver_pixels > 8,
             "the separate non-emissive receiver must be illuminated"
         );
+        // Authoring fields must reach the material-batched source emitters,
+        // including EngineGlow, which has no added lens geometry.
+        let mut edited_material_pixels = serde_json::Map::new();
+        for (kind, name, eye) in [
+            (
+                arkline_protocol::ExteriorFixtureKind::EngineGlow,
+                "drive",
+                frame.eye,
+            ),
+            (
+                arkline_protocol::ExteriorFixtureKind::Window,
+                "window",
+                Vec3::new(0.85, 0.5, -0.95),
+            ),
+            (
+                arkline_protocol::ExteriorFixtureKind::Panel,
+                "panel",
+                Vec3::new(0.85, 0.5, -0.95),
+            ),
+        ] {
+            let mut edited = frame.clone();
+            edited.eye = eye;
+            edited.vp = Mat4::orthographic_rh_gl(-0.54, 0.54, -0.36, 0.36, 0.001, 4.)
+                * Mat4::look_at_rh(eye, Vec3::new(-0.04, 0., 0.), Vec3::Y);
+            edited.cockpit_vp = edited.vp;
+            edited.planet_vp = edited.vp;
+            let original = render(&mut renderer, &edited);
+            save(
+                &directory,
+                &format!("pioneer-exterior-{name}-before-edit.png"),
+                &original,
+            );
+            for fixture in &mut state(&mut edited).definition.document.fixtures {
+                if fixture.kind == kind {
+                    fixture.emission = 0.;
+                }
+            }
+            let zero = render(&mut renderer, &edited);
+            let zero_changed = changed(&original, &zero);
+            assert!(
+                zero_changed > 8,
+                "{name} emission=0 must change actual emitter pixels"
+            );
+            save(
+                &directory,
+                &format!("pioneer-exterior-{name}-emission-zero.png"),
+                &zero,
+            );
+            edited.exterior = frame.exterior.clone();
+            for fixture in &mut state(&mut edited).definition.document.fixtures {
+                if fixture.kind == kind {
+                    fixture.color = [1., 0.02, 0.01];
+                }
+            }
+            let red = render(&mut renderer, &edited);
+            let color_changed = changed(&original, &red);
+            assert!(
+                color_changed > 8,
+                "{name} color must change actual emitter pixels"
+            );
+            save(
+                &directory,
+                &format!("pioneer-exterior-{name}-color-red.png"),
+                &red,
+            );
+            edited_material_pixels.insert(
+                name.into(),
+                serde_json::json!({"emission_zero":zero_changed,"color":color_changed}),
+            );
+        }
         // A paused cached feed must accept new state without requiring clock advancement.
         let info = egui::PaintCallbackInfo {
             viewport: egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(960., 640.)),
@@ -443,6 +513,7 @@ fn native_powered_exterior_frame_capture() {
                 "off_idle_changed_pixels":changed(&off,&idle),"idle_active_changed_pixels":changed(&idle,&active),
                 "illumination_changed_pixels":illumination_pixels,"dynamic_turret_count":renderer.turrets.len(),
                 "receiver_changed_pixels":receiver_pixels,"post_graph_off_gate":true,
+                "edited_material_pixels":edited_material_pixels,
                 "limitations":["actual engine offscreen EGL capture; no OS interaction or TCP two-client journey", "diagnostic receiver crate is an authoritative scene fixture", "no model adoption or release publication"]
             })).unwrap()).unwrap();
         }
