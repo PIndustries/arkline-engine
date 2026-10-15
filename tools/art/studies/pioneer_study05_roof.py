@@ -169,22 +169,37 @@ def apply(bpy):
         tube('manifold branch '+str(i),(x,6.62,1.6),(x,6.62,2.0),.10)
         box('manifold isolation handle '+str(i),(x,6.86,1.6),(.32,.07,.08),'Safety amber',.02)
 
-    # Folded service arm, compact enough to remain inside the existing hull
-    # envelope.  It stays aft of the dynamic guns and off the strobe/RCS axis.
+    # Folded visual service arm, compact enough to remain inside the existing
+    # hull envelope.  Paired metal side plates leave a genuinely open centre;
+    # the raised knuckle reads above the bay rim without emission or a new mast.
+    # It stays aft of the dynamic guns and off the strobe/RCS axis.
     base=(-19.0,6.75,-4.8)
-    elbow=(-17.5,8.35,-4.8)
-    tip=(-9.8,7.8,-4.8)
+    elbow=(-17.5,8.45,-4.8)
+    tip=(-9.8,8.35,-4.8)
     tube('handling arm base foot',(-19,6.25,-4.8),base,.82)
     tube('handling arm base rotary casing',(-19,6.63,-4.8),(-19,7.02,-4.8),.65,
          'Graphite ceramic armor',16)
-    for label,a,b,w,t in [('root link',base,elbow,.73,.70),('folded main link',elbow,tip,.66,.60)]:
-        beam('handling arm '+label,a,b,w,t)
+    for label,a,b,width in [('root link',base,elbow,.73),('folded main link',elbow,tip,.66)]:
+        for side,dz in [('port',-.32),('starboard',.32)]:
+            aa=(a[0],a[1],a[2]+dz)
+            bb=(b[0],b[1],b[2]+dz)
+            beam('handling arm '+label+' '+side+' plate',aa,bb,width,.12,
+                 'Titanium machinery')
+    # Only the end pins bridge the plates; the intervening dark gap remains
+    # empty.  Dark centre collars make the angled root joint legible in closeup.
+    tube('handling arm root bearing',(base[0],base[1],base[2]-.32),
+         (base[0],base[1],base[2]+.32),.28,'Recessed carbon')
     for i,(x,y,z) in enumerate([elbow,tip]):
-        tube('handling arm pin '+str(i),(x,y,z-.49),(x,y,z+.49),.39)
+        tube('handling arm centre bearing '+str(i),(x,y,z-.25),(x,y,z+.25),.30,
+             'Recessed carbon')
+        tube('handling arm pin '+str(i),(x,y,z-.49),(x,y,z-.25),.39)
+        tube('handling arm starboard pin '+str(i),(x,y,z+.25),(x,y,z+.49),.39)
         tube('handling arm amber pin cap '+str(i),(x,y,z-.51),(x,y,z-.49),.25,'Safety amber')
+        tube('handling arm starboard amber pin cap '+str(i),(x,y,z+.49),(x,y,z+.51),.25,
+             'Safety amber')
     # The hydraulic-looking rod is explicitly visual; it is not a driven actuator.
-    tube('handling arm visual cylinder',(-18.85,7.0,-5.19),(-15.55,7.89,-5.19),.14)
-    tube('handling arm visual piston',(-15.55,7.89,-5.19),(-13.1,7.92,-5.19),.075)
+    tube('handling arm visual cylinder',(-18.85,7.0,-5.19),(-15.55,8.05,-5.19),.14)
+    tube('handling arm visual piston',(-15.55,8.05,-5.19),(-13.1,8.08,-5.19),.075)
     beam('handling arm stowed wrist',tip,(-9.1,6.92,-4.8),.42,.44,'Titanium machinery')
     box('handling arm tool cradle',(-9.1,6.52,-4.8),(1.65,.30,1.15),edge=.08)
     for side,z in [('port',-5.2),('starboard',-4.4)]:
