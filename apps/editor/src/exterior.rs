@@ -416,7 +416,14 @@ impl Exterior {
                     });
                     ui.horizontal_wrapped(|ui| {
                         ui.label("RGB color");
-                        ui.push_id("color", |ui| { ui.color_edit_button_rgb(&mut fixture.color); });
+                        ui.push_id("color", |ui| {
+                            // egui normalizes RGB through HSV even when closed.
+                            // Inspecting a fixture must preserve its exact authored values.
+                            let mut candidate = fixture.color;
+                            if ui.color_edit_button_rgb(&mut candidate).changed() {
+                                fixture.color = candidate;
+                            }
+                        });
                     });
                     ui.horizontal_wrapped(|ui| {
                         ui.label("Emission");

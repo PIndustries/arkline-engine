@@ -513,8 +513,10 @@ fn native_powered_exterior_frame_capture() {
                 "off_idle_changed_pixels":changed(&off,&idle),"idle_active_changed_pixels":changed(&idle,&active),
                 "illumination_changed_pixels":illumination_pixels,"dynamic_turret_count":renderer.turrets.len(),
                 "receiver_changed_pixels":receiver_pixels,"post_graph_off_gate":true,
+                "paused_frame_equal":true,"step_50_ms_same_pulse":true,"step_100_ms_changed":true,
+                "paused_feed_invalidated":true,"observer_same_snapshot_equal":true,
                 "edited_material_pixels":edited_material_pixels,
-                "limitations":["actual engine offscreen EGL capture; no OS interaction or TCP two-client journey", "diagnostic receiver crate is an authoritative scene fixture", "no model adoption or release publication"]
+                "limitations":["actual engine offscreen EGL capture; no OS interaction or TCP two-client journey", "diagnostic receiver crate uses the existing SurfaceProp path in this capture fixture", "no model adoption or release publication"]
             })).unwrap()).unwrap();
         }
         observer.destroy();
