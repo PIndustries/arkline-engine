@@ -676,10 +676,19 @@ fn native_authority_pioneer_adoption_capture() {
         expected_hash,
         "compiled hull must match the explicitly reviewed candidate export"
     );
+    let previous_hash = std::env::var("ARKLINE_ADOPTION_PREVIOUS_SHA256")
+        .unwrap_or_else(|_| PRE_ADOPTION_HULL_SHA256.into());
+    assert!(
+        previous_hash.len() == 64
+            && previous_hash
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)),
+        "previous hull binding must be an exact lowercase SHA-256"
+    );
     assert_ne!(
         pioneer_asset_sha256(),
-        PRE_ADOPTION_HULL_SHA256,
-        "this adoption capture requires the explicitly reviewed replacement hull to be installed"
+        previous_hash,
+        "the historical graph binding must differ from the installed reviewed hull"
     );
     unsafe {
         let (_egl, gl) = Egl::create();
@@ -823,7 +832,40 @@ fn native_authority_pioneer_adoption_capture() {
             changed(&off_pixels, &idle_pixels) > 8,
             "accepted exterior circuit must change visible pixels"
         );
+        let bridge_close = AuthorityCaptureCamera {
+            name: "bridge-quarter",
+            eye_m: [65., 12., -38.],
+            target_m: [33.5, 0.8, 0.],
+            up: [0., 1., 0.],
+            half_width_m: 18.,
+        };
+        // Frozen accepted OFF/IDLE snapshots share clock, pose and camera.
+        // These views expose opaque glazing depth without changing its output.
+        let bridge_off_pixels = capture("pioneer-authority-off-bridge-quarter", bridge_close, &off);
+        let bridge_idle_pixels =
+            capture("pioneer-authority-idle-bridge-quarter", bridge_close, &idle);
         for camera in [
+            AuthorityCaptureCamera {
+                name: "bridge-port-pane",
+                eye_m: [60., 5., -18.],
+                target_m: [35.8, 1.275, -3.555],
+                up: [0., 1., 0.],
+                half_width_m: 7.,
+            },
+            AuthorityCaptureCamera {
+                name: "aft-roof",
+                eye_m: [-62., 35., -48.],
+                target_m: [-20., 4., 0.],
+                up: [0., 1., 0.],
+                half_width_m: 23.,
+            },
+            AuthorityCaptureCamera {
+                name: "port-nozzle",
+                eye_m: [-68., 5., -12.5],
+                target_m: [-35.9, 0., -12.5],
+                up: [0., 1., 0.],
+                half_width_m: 9.,
+            },
             AuthorityCaptureCamera {
                 name: "side",
                 eye_m: [0., 20., -120.],
@@ -1048,7 +1090,7 @@ fn native_authority_pioneer_adoption_capture() {
         );
 
         let mut graph = arkline_protocol::material_graph::MaterialGraphDocument::pioneer_default();
-        graph.binding.asset_sha256 = PRE_ADOPTION_HULL_SHA256.into();
+        graph.binding.asset_sha256 = previous_hash.clone();
         renderer
             .spatial_material
             .queue(Some(Arc::new(MaterialRevision::new(1, 1, &graph).unwrap())))
@@ -1131,6 +1173,7 @@ fn native_authority_pioneer_adoption_capture() {
                 "review_attitude":{"method":"accepted Belt warp and yaw PilotInput with real fixed steps; existing sunlight and shadows unchanged","warp_started_ms":warp_started,"warp_arrival_ms":arrival,"yaw_steps":yaw_steps,"step_ms":50,"zero_input_settle_ms":50},
                 "omitted_snapshot_scene":["traffic","asteroids","gates","surface_props","other_pilots"],
                 "captures":captures,"off_idle_changed_pixels":changed(&off_pixels,&idle_pixels),
+                "close_bridge_off_idle_changed_pixels":changed(&bridge_off_pixels,&bridge_idle_pixels),
                 "idle_active_changed_pixels":same_time_drive_pixels,
                 "integrated_active_vs_initial_idle_changed_pixels":changed(&idle_pixels,&active_pixels),
                 "drive_comparison_same_simulation_time_ms":commanded.server_time_ms,"drive_comparison_camera":"rear",
@@ -1138,7 +1181,7 @@ fn native_authority_pioneer_adoption_capture() {
                 "strobe":{"id":strobe.id,"pulse":pulse,"on_time_ms":strobe_on.server_time_ms,
                     "off_time_ms":strobe_off_time,"changed_pixels":strobe_changed,"paused_pixels_equal":true,
                     "full_cycle_pixels_equal":true,"steps":steps},
-                "graph_binding":{"old_asset_sha256":PRE_ADOPTION_HULL_SHA256,"old_rejected":true,
+                "graph_binding":{"old_asset_sha256":previous_hash,"old_rejected":true,
                     "old_error_phase":"binding","rejection_pixels_unchanged":true,"recovery_asset_sha256":pioneer_asset_sha256(),"recovery_applied":true,"recovery_graph":"authored_surface_identity"},
                 "limitations":["actual authority plus native engine EGL capture; no OS window or TCP journey",
                     "camera isolates the accepted pilot; unrelated snapshot objects are omitted",
