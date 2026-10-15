@@ -1,7 +1,7 @@
 {
   "schema": "arkline.pioneer-model-adoption/v1",
   "date_utc": "2026-10-15",
-  "status": "intermediate cloud preview adoption; native acceptance pending; not v05 visual completion",
+  "status": "intermediate cloud preview adopted and captured in actual engine; v05 visual matching remains incomplete",
   "claim": "https://github.com/PIndustries/arkline-engine/issues/10#issuecomment-6198723307",
   "coordination_before_adoption": "https://github.com/PIndustries/arkline-engine/issues/10#issuecomment-6199044626",
   "prior_published_head": "4d2d8d965690799465c3fe36fe3257824452b4ae",
@@ -41,7 +41,8 @@
       0.0001
     ],
     "mixed_orientation_excluded_triangles": 4,
-    "report_sha256": "1a3998b1e96e5833a20c929008374bfdcf065cd4f7727039fb1c5da7aa1d2e3d"
+    "report_sha256": "1a3998b1e96e5833a20c929008374bfdcf065cd4f7727039fb1c5da7aa1d2e3d",
+    "report_path": "../../../docs/ships/pioneer/images/runtime-remodeled-20261015/normal-audit-report.json"
   },
   "rust_decoder": {
     "build": "26.10.15.7026",
@@ -54,5 +55,13 @@
     "continuous underside and equal side bays",
     "opaque aft caps hide recessed drive throats"
   ],
-  "power": "Existing authoritative simulation clock, owned circuit and drive telemetry; default88W load and emission/timing unchanged."
+  "power": "Existing authoritative simulation clock, owned circuit and drive telemetry; default88W load and emission/timing unchanged.",
+  "engine_acceptance": {
+    "authority_capture_build": "26.10.15.7032",
+    "authority_capture_source_commit": "fb50b8ffb274c1b5a7ee537faccb9475edf03ecd",
+    "authority_receipt": "../../../docs/ships/pioneer/images/runtime-remodeled-20261015/authority-receipt.json",
+    "native_application_build": "26.10.15.7031",
+    "native_application_source_commit": "e1498d890ddbb69d9c9571479c1e85bbb25637ce",
+    "note": "7032 adds only capture-test changes after 7031; both use identical adopted production geometry and powered exterior. Native saved definition explicitly accepted at revision1 while paused; Step50ms observed."
+  }
 }

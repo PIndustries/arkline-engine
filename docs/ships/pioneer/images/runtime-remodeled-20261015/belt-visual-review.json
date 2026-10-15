@@ -1,0 +1,206 @@
+{
+  "schema": "pioneer-native-belt-visual-review/v1",
+  "date_utc": "2026-10-15",
+  "outcome": "Accept as readable actual-engine intermediate Study04 adoption and powered-exterior checkpoint; not a v05 visual-completion claim.",
+  "capture_receipt": {
+    "path": "/workspace/arkline-runtime/pioneer-authority-belt/authority-receipt.json",
+    "sha256": "661d07d3fa87375c206d0947909ae22163d71ffbc4628fa028226d0dd0fe9603",
+    "source_commit": "fb50b8ffb274c1b5a7ee537faccb9475edf03ecd",
+    "build": "26.10.15.7032",
+    "asset_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+    "renderer": "llvmpipe (LLVM 19.1.7, 256 bits)",
+    "authority": "disposable arkline_server::editor::EditorWorld"
+  },
+  "source_head_observed": "fb50b8ffb274c1b5a7ee537faccb9475edf03ecd",
+  "actual_pixels_viewed": [
+    {
+      "path": "/workspace/arkline-runtime/pioneer-authority-belt/pioneer-authority-exterior-off.png",
+      "sha256": "81faccd5bc0e48985ee0ce8a2dfbae448a5f67a3b4f1194fb8954517751db39b"
+    },
+    {
+      "path": "/workspace/arkline-runtime/pioneer-authority-belt/pioneer-authority-idle-front-quarter.png",
+      "sha256": "f32795336ebdf9c5645ed296c243b249ecf7537414f9588c08eead79713cb2ce"
+    },
+    {
+      "path": "/workspace/arkline-runtime/pioneer-authority-belt/pioneer-authority-idle-front.png",
+      "sha256": "4d1d5f911df74536787b675fe63249ff91cac60319b87f3e022cb6b86d0baadd"
+    },
+    {
+      "path": "/workspace/arkline-runtime/pioneer-authority-belt/pioneer-authority-idle-side.png",
+      "sha256": "d11b6196303a8a04d89b4dcb70cec03d4957de2c313bb20834c5138118260c9d"
+    },
+    {
+      "path": "/workspace/arkline-runtime/pioneer-authority-belt/pioneer-authority-idle-top.png",
+      "sha256": "2ce6599ac5078711b27fe741ac42576c04052625afa74f169a290df897e4da8d"
+    },
+    {
+      "path": "/workspace/arkline-runtime/pioneer-authority-belt/pioneer-authority-idle-rear.png",
+      "sha256": "bb5557ccb59652866f160fd0e48e0be2ef60f07eafaf2e74d4f679ed6cff45bd"
+    },
+    {
+      "path": "/workspace/arkline-runtime/pioneer-authority-belt/pioneer-authority-idle-bottom.png",
+      "sha256": "3bb3ec53192edec8fc5ca32e1c216556300156ae26b393371fbbabc53cf0a6a7"
+    },
+    {
+      "path": "/workspace/arkline-runtime/pioneer-authority-belt/pioneer-authority-strobe-on.png",
+      "sha256": "2631928775100691d03d1142db9857a78bd8c0db1daec2b6bbd28451f746c534"
+    },
+    {
+      "path": "/workspace/arkline-runtime/pioneer-authority-belt/pioneer-authority-strobe-off.png",
+      "sha256": "a07d0078f4fa6c83aa216b478cb4e796a904961e2d8e0a41e15a4748a407f7df"
+    },
+    {
+      "path": "/workspace/arkline-runtime/pioneer-authority-belt/pioneer-authority-pre-thrust-idle.png",
+      "sha256": "aa5f11047e6c2a2017252cb3812cb78d24f258c86f446ed2cf34888e0d7b3a9e"
+    },
+    {
+      "path": "/workspace/arkline-runtime/pioneer-authority-belt/pioneer-authority-thrust-command-accepted.png",
+      "sha256": "8cc933389885eea4f367142a45e0d03fb12b7a1e52880088a5c64644951ae662"
+    }
+  ],
+  "reference_pixels_viewed": [
+    {
+      "path": "/workspace/arkline-engine/docs/ships/pioneer/images/v05-interior-review.jpg",
+      "sha256": "60219087d130e27d9c8c86824ee54ef373e8ce81fc466ebb1da235b5b49a5628"
+    },
+    {
+      "path": "/workspace/arkline-engine/docs/ships/pioneer/images/model-study/quarter.png",
+      "sha256": "5f81d83df3f086e9ee38e9b8404497446910a0c8e8319a881c7925b6dfd8df8d"
+    }
+  ],
+  "readability": "Actual native front-quarter/front/side/top show distinguishable emerald collars, graphite brow/roof plates, rails, radiators and side service equipment after accepted Belt warp and yaw. Sun/shadow parameters and fixture definition remain unchanged; prior station shadow diagnosis did not require normal flipping.",
+  "dynamic_turrets": {
+    "receipt_count": 2,
+    "pixel_observation": "Two distinct gun/barrel assemblies visibly mounted on the fore-roof green pad in top, front and quarter captures.",
+    "limit": "Static images establish visible presence; they do not alone demonstrate articulation, targeting, damage or mining operation."
+  },
+  "mount_binding": {
+    "fixture_count": 13,
+    "all_applied_positions_equal_provenance": true,
+    "definition_sha256": "20c9f2e81d0bcfb68dbffb397b6ccf6573731892d6e164173cfcfaa87c5ea58a",
+    "provenance_sha256": "e3102eb428683ecf32585448328e1779f10be1f88ed01d93d92abdc00953f6f7",
+    "target_matches_actual_asset": true,
+    "limit": "Positions bind source geometry snapshot; no new physical equipment ratings or independent per-part emissive graph bindings inferred."
+  },
+  "independent_decoded_pixel_comparisons": [
+    {
+      "a": "pioneer-authority-exterior-off.png",
+      "b": "pioneer-authority-idle-front-quarter.png",
+      "changed_pixels": 7698,
+      "exact_pixels_equal": false,
+      "changed_bbox_xyxy": [
+        200,
+        246,
+        782,
+        456
+      ]
+    },
+    {
+      "a": "pioneer-authority-strobe-on.png",
+      "b": "pioneer-authority-strobe-paused.png",
+      "changed_pixels": 0,
+      "exact_pixels_equal": true,
+      "changed_bbox_xyxy": null
+    },
+    {
+      "a": "pioneer-authority-strobe-on.png",
+      "b": "pioneer-authority-strobe-step-50ms.png",
+      "changed_pixels": 0,
+      "exact_pixels_equal": true,
+      "changed_bbox_xyxy": null
+    },
+    {
+      "a": "pioneer-authority-strobe-on.png",
+      "b": "pioneer-authority-strobe-off.png",
+      "changed_pixels": 100648,
+      "exact_pixels_equal": false,
+      "changed_bbox_xyxy": [
+        0,
+        0,
+        828,
+        639
+      ]
+    },
+    {
+      "a": "pioneer-authority-strobe-on.png",
+      "b": "pioneer-authority-strobe-next-cycle.png",
+      "changed_pixels": 0,
+      "exact_pixels_equal": true,
+      "changed_bbox_xyxy": null
+    },
+    {
+      "a": "pioneer-authority-pre-thrust-idle.png",
+      "b": "pioneer-authority-thrust-command-accepted.png",
+      "changed_pixels": 3536,
+      "exact_pixels_equal": false,
+      "changed_bbox_xyxy": [
+        218,
+        320,
+        736,
+        471
+      ]
+    }
+  ],
+  "state_evidence": {
+    "off_enabled": false,
+    "idle_enabled": true,
+    "idle_fixture_load_w": 88,
+    "dorsal_on_time_ms": 1792088753021,
+    "dorsal_off_time_ms": 1792088753121,
+    "dorsal_pulse": {
+      "on_ms": 100,
+      "period_ms": 1000,
+      "phase_ms": 0
+    },
+    "drive_comparison_same_simulation_time_ms": 1792088754021,
+    "same_time_idle_to_accepted_thrust_changed_pixels": 3536,
+    "note": "Accepted thrust comparison occurs at the same clock/camera before integration, isolating drive state. Later active/front-quarter also includes actual flight integration."
+  },
+  "visible_gaps": [
+    {
+      "area": "Bow/bridge silhouette",
+      "observed": "Broad uninterrupted forehead and deep continuous chin remain dominant. Front glazing follows the bow but powered white panels hide the tinted glass appearance.",
+      "v05_gap": "Compact multi-faceted bow, finer armored integration and visible cyan/tinted glazing detail remain unmatched.",
+      "status": "open"
+    },
+    {
+      "area": "Roof/work deck",
+      "observed": "Repeated paired plates, mirrored radiator strips and long straight rails/pipes. Both existing gun assemblies visible on the fore-roof pad.",
+      "v05_gap": "Distinct recessed work/cargo bays, crane, reels and varied machinery are absent. Turret housings/detail and distribution differ from the concept; reuse existing gameplay turrets.",
+      "status": "open"
+    },
+    {
+      "area": "Collars/shoulders and side bays",
+      "observed": "Fore/aft green collar geometry, rails, repeated service doors and conduits are now clearly readable.",
+      "v05_gap": "Layered armor seams, varied recess depth and more distinct equipment/service bays remain substantially simpler.",
+      "status": "open"
+    },
+    {
+      "area": "Underside/chin",
+      "observed": "Side view still has a largely straight lower slab. Bottom capture is predominantly unlit in this unchanged sun attitude.",
+      "v05_gap": "Stepped lower armor and varied service/support volumes are not established. Bottom darkness limits inspection of fine underside geometry.",
+      "status": "open"
+    },
+    {
+      "area": "Aft drive/nozzles",
+      "observed": "Two cyan round drive-state fixtures appear in front of a flat opaque aft cap. Same-time accepted thrust makes both brighter.",
+      "v05_gap": "No visible nozzle recess/aperture; these disks establish gameplay drive telemetry only.",
+      "status": "open"
+    },
+    {
+      "area": "Navigation/windows/strobes",
+      "observed": "Navigation points sit beside the source-backed side mounts; front/wrap window panels and bow lamps respond to exterior power. Dorsal strobe appears over verified roof support.",
+      "v05_gap": "Physical lamp housings/flush rotated wrap lenses and detailed glazing appearance are not proven by the overlay fixture geometry. Parameters remain gameplay assumptions, not equipment ratings.",
+      "status": "partial"
+    }
+  ],
+  "limits": [
+    "actual authority plus native engine EGL capture; no OS window or TCP journey",
+    "camera isolates the accepted pilot; unrelated snapshot objects are omitted",
+    "no fixture size, intensity, period or phase changes; no automatic source-part retargeting",
+    "Native EGL software GPU render using production engine path and actual EditorWorld authority; not a new interactive OS-window or TCP journey.",
+    "Pixel matches/differences were independently recomputed from decoded RGBA images, not inferred from PNG file bytes.",
+    "v05 proposed interiors, walking, crew fit and engineering values are design reference only; this review establishes no interior implementation.",
+    "No model, source, repo documentation, code or build changes were made by this audit; only scratch review artifacts."
+  ]
+}
