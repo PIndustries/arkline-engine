@@ -1,0 +1,37 @@
+{
+  "date_utc": "2026-10-15",
+  "before_build": "26.10.15.7012",
+  "reopened_build": "26.10.15.7019",
+  "simulation_time_ms": 1792084108007,
+  "accepted_definition_revision": 1,
+  "hull_asset_sha256": "f8f8cc65772c678a46606c27abe205d62c4e6ab37c350f79a0f3a4cdc0c6f402",
+  "fixture_ids": [
+    "pioneer.exterior.nav.port",
+    "pioneer.exterior.nav.starboard",
+    "pioneer.exterior.nav.aft",
+    "pioneer.exterior.strobe.dorsal",
+    "pioneer.exterior.strobe.ventral",
+    "pioneer.exterior.window.port.forward",
+    "pioneer.exterior.window.starboard.forward",
+    "pioneer.exterior.window.port.aft",
+    "pioneer.exterior.window.starboard.aft",
+    "pioneer.exterior.panel.port",
+    "pioneer.exterior.panel.starboard",
+    "pioneer.exterior.drive.port",
+    "pioneer.exterior.drive.starboard"
+  ],
+  "exterior_enabled": true,
+  "charge_j": 240000,
+  "saved_definition_sha256": "62b3cbb43a0c6d92b72801ef4ceff70c28d1863d99c14f505d0866410aa8e075",
+  "unchanged_clock_definition_power_location_and_saved_bytes": true,
+  "power_on_off_while_paused_clock_ms": 1792084107057,
+  "before_native_step_ms": 1792084107957,
+  "after_native_step_ms": 1792084108007,
+  "step_delta_ms": 50,
+  "notes": [
+    "Native OS pointer input toggled the owned circuit, saved the project definition and explicitly applied revision1.",
+    "An undock followed by pause showed IDLE; turning the exterior off darkened the roof glazing and bow lamps.",
+    "Process terminated after confirmed pause and fresh build reopened the same disposable project without replay.",
+    "This is current canonical hull f8f8cc65, not Study04 adoption."
+  ]
+}
