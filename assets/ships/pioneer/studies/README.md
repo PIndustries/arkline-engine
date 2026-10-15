@@ -1,16 +1,18 @@
-# Pioneer model study 02
+# Pioneer model study 03
 
-**2026-10-15 · Study, awaiting model review · Not the installed game hull**
+**2026-10-15 · Superseded study: bow-corner fan rejected; use study 04 for further review · Not the installed game hull**
 
 This snapshot preserves a real editable Blender master, its static GLB export and four matched Blender views. It derives from the original Pioneer source at `3e415204747cd9adaa146a9777831a7acc82e7cb` and is prepared for review through [existing draft PR 47](https://github.com/PIndustries/arkline-engine/pull/47).
 
-- Replaced intersecting shoulder overlay faces with closed armor volumes.
-- Recessed the central cargo/service deck, retained the turret support and added taller forward glazing and lower bow armor.
+- Extended visible green cladding over the evaluated outboard nacelles and fore/aft collars.
+- Connected frontal and side bridge glazing; lowered existing bow lamps below the glass.
+- Restored the upper centerline RCS ray surface to approximately Y=8.3 m with a transverse roof frame.
+- Added a corner brow fan that was rejected during visual review and superseded by study 04.
 
 ## Files and history
 
-- [Editable master](pioneer-study.blend) — 405,669 bytes.
-- [Static runtime-format export](pioneer-study.glb) — 6,917,496 bytes.
+- [Editable master](pioneer-study.blend) — 511,253 bytes.
+- [Static runtime-format export](pioneer-study.glb) — 7,756,576 bytes.
 - [Hashes, dimensions, material slots, camera settings and validation scope](study.json).
 - Matched views: [front](../../../../docs/ships/pioneer/images/model-study/front.png), [side](../../../../docs/ships/pioneer/images/model-study/side.png), [top](../../../../docs/ships/pioneer/images/model-study/top.png), [three-quarter](../../../../docs/ships/pioneer/images/model-study/quarter.png).
 
@@ -18,7 +20,7 @@ These stable paths change in separate study commits. Use the full Git commit SHA
 
 ## Editing and coordinates
 
-The Blender 5.0.1 master contains 530 individually named mesh objects and was saved **before** applying export modifiers, triangulating and joining parts by material. Open and edit that master, then export a derived copy. The GLB has nine material batches and cannot recover the source object granularity. The original `tools/art/build_pioneer.py` clears/rebuilds its scene; rerunning it is not a way to preserve edits in this derivative master. Portable derivative workers are not included in this snapshot; their hashes are provenance only, not a reproducible published build recipe.
+The Blender 5.0.1 master contains 541 individually named mesh objects and was saved **before** applying export modifiers, triangulating and joining parts by material. Open and edit that master, then export a derived copy. The GLB has nine material batches and cannot recover the source object granularity. The original `tools/art/build_pioneer.py` clears/rebuilds its scene; rerunning it is not a way to preserve edits in this derivative master. Portable derivative workers are not included in this snapshot; their hashes are provenance only, not a reproducible published build recipe.
 
 The runtime body uses metres, **+X forward, +Y up, +Z starboard**. Body `(x, y, z)` maps to Blender `(x, -z, y)`; Blender `(x, y, z)` maps back to body `(x, z, -y)`. glTF export uses Y-up. The shared origin and evaluated body envelope remain `(-36, -9, -19)` to `(36, 9, 19)` m: **72 × 18 × 38 m** (length × height × width). Indexed GLB extrema agree within the 1 mm inspection tolerance; that tolerance is not a manufacturing specification.
 
@@ -26,9 +28,9 @@ The existing articulated turret centers are `(10.8, 9.864, ±2.66)` m, above the
 
 ## Export checks
 
-Read-only packaging checks measured **68,938 triangles, nine primitives/material batches**, finite positions/normals, zero triangles at the runtime degeneracy threshold and indexed bounds within the declared envelope. Each source/export file is below 16 MiB. The recorded budget checks are static inspections, not execution of the Rust decoder or a GPU acceptance journey.
+Read-only packaging checks measured **79,434 triangles, nine primitives/material batches**, finite positions/normals, zero triangles at the runtime degeneracy threshold and indexed bounds within the declared envelope. Each source/export file is below 16 MiB. The recorded budget checks are static inspections, not execution of the Rust decoder or a GPU acceptance journey.
 
-The integration owner recorded native decoder/staging in build **26.10.15.5**: 68,938 triangles, nine material batches and 72 × 18 × 38 m measured bounds. This was a staged preview in a disposable project; no asset acceptance, save or canonical game adoption is claimed. See the [scope and evidence record](https://github.com/PIndustries/arkline-engine/issues/10#issuecomment-6195963159).
+Native decoder/staging acceptance is not recorded for study 03.
 
 The GLB preserves this explicit array order; a primitive's traversal position is not its material index. Graphite remains slot 0, but this study has a different asset hash and the existing exact-hash default binding remains unchanged.
 
@@ -48,9 +50,8 @@ The export is static, indexed and opaque, with scalar materials and no textures,
 
 ## Remaining limits
 
-- Existing outboard pod geometry still hides much of the green fore/aft collar coverage.
-- Bow and overall silhouette still require comparison and correction against v05.
-- Deck recess changes the derived upper RCS surface; mount clearance requires review before adoption.
+- Rejected visible bow/glazing corner fan creates crossing/intersecting facets; superseded by study 04.
+- Broad gray brow/chin and repeated roof/service equipment still differ from v05.
 - Study only: canonical game hull and exact-hash material default remain unchanged.
 - Static Blender renders omit the separate articulated gameplay mining turrets.
 - No working door, exterior light sequence, power connection, collision/interlock, interior registration or runtime animation is demonstrated.

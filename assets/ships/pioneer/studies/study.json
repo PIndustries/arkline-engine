@@ -1,31 +1,33 @@
 {
   "schema_version": 1,
-  "revision": "study-02",
+  "revision": "study-03",
   "date_utc": "2026-10-15",
-  "status": "study; not engine-installed or accepted as a finished reconstruction",
+  "status": "superseded study; rejected bow-corner fan; not engine-installed",
   "source_base_commit": "3e415204747cd9adaa146a9777831a7acc82e7cb",
   "integration_pull_request": "https://github.com/PIndustries/arkline-engine/pull/47",
   "ownership_claim": "https://github.com/PIndustries/arkline-engine/issues/10#issuecomment-6195963159",
   "original_source_sha256": "8ec754fc7afe6b67dcab6cbd6694bb04bdc03cc12e91ee96e0bca9e08bb24f6f",
   "changes": [
-    "Replaced intersecting shoulder overlay faces with closed armor volumes.",
-    "Recessed the central cargo/service deck, retained the turret support and added taller forward glazing and lower bow armor."
+    "Extended visible green cladding over the evaluated outboard nacelles and fore/aft collars.",
+    "Connected frontal and side bridge glazing; lowered existing bow lamps below the glass.",
+    "Restored the upper centerline RCS ray surface to approximately Y=8.3 m with a transverse roof frame.",
+    "Added a corner brow fan that was rejected during visual review and superseded by study 04."
   ],
   "artifacts": [
     {
       "path": "assets/ships/pioneer/studies/pioneer-study.blend",
-      "bytes": 405669,
-      "sha256": "77ab4504baa0e6fec49309d2452b52177ac49499573f6193ddf16099e0eeb3a2"
+      "bytes": 511253,
+      "sha256": "8bbb4b5af731bbab540cd094089daf2e8d70522e76396e06c4bb738d8ce8d3fc"
     },
     {
       "path": "assets/ships/pioneer/studies/pioneer-study.glb",
-      "bytes": 6917496,
-      "sha256": "57aad33aafbfb8b0cb2ed870a6e022efaa3cefc6e9a726e0e656827a49014a26"
+      "bytes": 7756576,
+      "sha256": "d0885dd140bc89b55f44eac75fc0f1958ceb3066bca36ce6a7b28619b6faa1ce"
     }
   ],
   "editable_source": {
     "blender_version": "5.0.1",
-    "named_mesh_objects": 530,
+    "named_mesh_objects": 541,
     "master_saved_before_batching": true,
     "all_objects_unparented": true,
     "authoritative_source": "pioneer-study.blend; preserve edits and export a derived copy"
@@ -91,8 +93,8 @@
     "mount_note": "These retained gameplay registrations are not proof of mechanism clearance or interior fit."
   },
   "static_export_checks": {
-    "sha256": "57aad33aafbfb8b0cb2ed870a6e022efaa3cefc6e9a726e0e656827a49014a26",
-    "bytes": 6917496,
+    "sha256": "d0885dd140bc89b55f44eac75fc0f1958ceb3066bca36ce6a7b28619b6faa1ce",
+    "bytes": 7756576,
     "material_slots": [
       "Graphite ceramic armor",
       "Titanium machinery",
@@ -106,8 +108,8 @@
     ],
     "primitive_slots": [
       3,
-      6,
       0,
+      6,
       1,
       2,
       4,
@@ -117,40 +119,40 @@
     ],
     "mesh_count": 9,
     "primitive_count": 9,
-    "triangles": 68938,
-    "expanded_corners": 206814,
+    "triangles": 79434,
+    "expanded_corners": 238302,
     "body_min_m": [
-      -36.0,
+      -36.000003814697266,
       -9.0,
-      -19.000000476837158
+      -19.00000035762787
     ],
     "body_max_m": [
-      36.0,
-      9.0,
-      19.000001907348633
+      35.999998569488525,
+      9.000000178813934,
+      19.0
     ],
     "body_xyz_m": [
-      72.0,
-      18.0,
-      38.00000238418579
+      72.00000238418579,
+      18.000000178813934,
+      38.00000035762787
     ],
     "bounds_match_72x18x38": true,
     "centered_bounds": true,
     "scope": "Read-only GLB structure, indexed bounds, finite normals and triangle/budget checks. This is not execution of the Rust decoder or GPU rendering.",
     "indexed_body_min_m": [
-      -36.0,
+      -36.000003814697266,
       -9.0,
-      -19.000000476837158
+      -19.00000035762787
     ],
     "indexed_body_max_m": [
-      36.0,
-      9.0,
-      19.000001907348633
+      35.999998569488525,
+      9.000000178813934,
+      19.0
     ],
     "indexed_body_xyz_m": [
-      72.0,
-      18.0,
-      38.00000238418579
+      72.00000238418579,
+      18.000000178813934,
+      38.00000035762787
     ],
     "bounds_inspection_tolerance_m": 0.001,
     "unused_position_rows": 0,
@@ -194,8 +196,8 @@
         ],
         "ortho_scale": 88.0,
         "path": "docs/ships/pioneer/images/model-study/front.png",
-        "bytes": 827868,
-        "sha256": "e55ee96cb4f7b79ae792592b8f0bcd096234ca05ca072391fa15cb7de23a408b"
+        "bytes": 831747,
+        "sha256": "392200045321bb6dec21ecd99752e3c49e5d9bf4b171cddc8882eec1d3fb770f"
       },
       {
         "view": "side",
@@ -211,8 +213,8 @@
         ],
         "ortho_scale": 88.0,
         "path": "docs/ships/pioneer/images/model-study/side.png",
-        "bytes": 874649,
-        "sha256": "04473b3bf7acd1b66c659c429c3baf8e88c8accc1e6b99876db8ff0b4e2b60fa"
+        "bytes": 877980,
+        "sha256": "81c6683c9e612175700bdd9355dfcddff5fad0994999b72a9cc76fce385e407d"
       },
       {
         "view": "top",
@@ -228,8 +230,8 @@
         ],
         "ortho_scale": 88.0,
         "path": "docs/ships/pioneer/images/model-study/top.png",
-        "bytes": 1016979,
-        "sha256": "39db0111937873636551510378b64442fe7e617b84aefc6d48be0b58a336945b"
+        "bytes": 1025761,
+        "sha256": "bd0f33aee5f0aa80cb23376a3b4e2c2ddb3c0707e8522ab7061941e72b3e42e4"
       },
       {
         "view": "quarter",
@@ -245,39 +247,30 @@
         ],
         "ortho_scale": 88.0,
         "path": "docs/ships/pioneer/images/model-study/quarter.png",
-        "bytes": 1093275,
-        "sha256": "a40e1e1c81c2dea16963bc10852a5ae9e835eee26748c8d347942d4b9f22eeff"
+        "bytes": 1102807,
+        "sha256": "87ba31b120276fdc48a5d47a5000c58440b960e09cf9e050e24ed72422ad8fd0"
       }
     ]
   },
   "provenance_worker_sha256": {
-    "study-worker.py": "65fbfc8e0066c237b552fbab6588a70af02797d2e739977ce8ee6f4fbed79065",
-    "after-launcher.py": "7b1cdf134f150c679b1e89cae6ec42e57c28b9baf19c4eefe5b61aba3e363974",
+    "study-worker.py": "51fd7d2cb4df81bac14481df2f6e71824f35127966fd919df5a1c21c5f8e46a6",
+    "after-launcher.py": "ae568ad6adc814fe0070049c5258d6afd945b0577b1c1ae5785be38221de97fd",
     "armor_volume.py": "8269989f1dbf01ab713fc3a54a3b61a0690e0eab31b7d114b67669d335fe84d1",
     "canonicalize_glb.py": "d8360e3f08ded1888ddb04d9c89155c562b4a6121f08a1e6bee1ec4781724868",
-    "study-launcher.py": "f6542f92a6c0efb9c5e8688c61590c97d79135aac4e25dd20b2f45c1d2a590a0"
+    "study-launcher.py": "ecd0042f3bdadc941b735ee571c6ebc96f8965a4b8b4f3b9efc1a02a673d009f"
   },
   "known_limits": [
-    "Existing outboard pod geometry still hides much of the green fore/aft collar coverage.",
-    "Bow and overall silhouette still require comparison and correction against v05.",
-    "Deck recess changes the derived upper RCS surface; mount clearance requires review before adoption.",
+    "Rejected visible bow/glazing corner fan creates crossing/intersecting facets; superseded by study 04.",
+    "Broad gray brow/chin and repeated roof/service equipment still differ from v05.",
     "Study only: canonical game hull and exact-hash material default remain unchanged.",
     "Static Blender renders omit the separate articulated gameplay mining turrets.",
     "No working door, exterior light sequence, power connection, collision/interlock, interior registration or runtime animation is demonstrated.",
     "Named editable mesh objects are preserved; no durable component IDs, semantic hierarchy or operational pivots are established.",
     "Decorative lamps/emissive material do not establish actual illumination or a physical electrical/thermal simulation."
   ],
-  "integration_owner_reported_native_staging": {
-    "status": "passed in disposable project; preview staged only",
-    "build": "26.10.15.5",
-    "triangles": 68938,
-    "material_batches": 9,
-    "measured_body_xyz_m": [
-      72,
-      18,
-      38
-    ],
-    "record": "https://github.com/PIndustries/arkline-engine/issues/10#issuecomment-6195963159",
-    "limits": "No accepted/saved asset, canonical world adoption, new-model GPU screenshot or live-system acceptance is established by staging."
+  "superseded_by": "study-04",
+  "adoption_review_record": "https://github.com/PIndustries/arkline-engine/issues/10#issuecomment-6196169539",
+  "native_staging": {
+    "status": "not recorded for this revision"
   }
 }
