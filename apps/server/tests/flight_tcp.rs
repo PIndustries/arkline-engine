@@ -59,6 +59,7 @@ impl Client {
     }
     fn connect(&mut self, token: Option<String>) -> Response {
         self.request(Request::Connect {
+            supports_room_controls: false,
             supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,

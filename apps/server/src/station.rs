@@ -213,11 +213,17 @@ fn in_obstacle(position: [f64; 3], obstacle: &StationObstacle) -> bool {
 }
 /// Existing saves may place an avatar where new walls or furnishings now stand.
 pub(super) fn migrate(w: &mut World) {
+    let doors: std::collections::BTreeMap<_, _> = w
+        .pilots
+        .keys()
+        .filter_map(|name| room_controls::door_obstacle(w, name).map(|o| (name.clone(), o)))
+        .collect();
     for (name, p) in &mut w.pilots {
         let fleet = w.accounts.get(name).is_some_and(|a| a.fleet_hangar);
         if let Some(a) = &mut p.view.station_avatar {
             if obstacles_for(p.view.ship_class, a.onboard_interior, fleet)
                 .iter()
+                .chain(doors.get(name))
                 .any(|o| in_obstacle(a.position, o))
             {
                 a.position = if a.onboard_interior {
@@ -235,6 +241,11 @@ pub(super) fn migrate(w: &mut World) {
     }
 }
 pub(super) fn advance(w: &mut World, now: u64) {
+    let doors: std::collections::BTreeMap<_, _> = w
+        .pilots
+        .keys()
+        .filter_map(|name| room_controls::door_obstacle(w, name).map(|o| (name.clone(), o)))
+        .collect();
     for (name, p) in &mut w.pilots {
         let fleet = w.accounts.get(name).is_some_and(|a| a.fleet_hangar);
         let Some(a) = &mut p.view.station_avatar else {
@@ -268,7 +279,10 @@ pub(super) fn advance(w: &mut World, now: u64) {
             / 1000.0;
         let layout = layout_for(p.view.ship_class, fleet);
         let hull = p.view.ship_class.spec();
-        let obstacles = obstacles_for(p.view.ship_class, a.onboard_interior, fleet);
+        let mut obstacles = obstacles_for(p.view.ship_class, a.onboard_interior, fleet);
+        if let Some(door) = doors.get(name) {
+            obstacles.push(*door);
+        }
         let (min_x, max_x, min_z, max_z) = if a.onboard_interior {
             (0.3, 31.7, 0.3, 13.7)
         } else {
@@ -340,6 +354,7 @@ pub(super) fn validate(w: &World) -> Result<()> {
                             && a.position[2] <= 13.7))
                     && !obstacles_for(p.view.ship_class, a.onboard_interior, fleet)
                         .iter()
+                        .chain(room_controls::door_obstacle(w, name).as_ref())
                         .any(|o| in_obstacle(a.position, o)),
                 "invalid station avatar"
             );

@@ -1,6 +1,52 @@
 //! Station embodiment is confirmed by the server; camera motion never boards a ship.
 use super::*;
 impl Cockpit {
+    pub(super) fn physical_engineering_window(&mut self, ctx: &egui::Context) {
+        let Some(id) = self.engineering_panel.clone() else {
+            return;
+        };
+        if !self.connected
+            || self.manual_remote.is_some()
+            || self
+                .own()
+                .as_ref()
+                .is_none_or(|p| !crate::room_controls::panel_access(p))
+            || self
+                .assets
+                .as_ref()
+                .is_none_or(|a| a.pioneer_room.is_none())
+        {
+            self.engineering_panel = None;
+            return;
+        }
+        let mut open = true;
+        egui::Window::new("Airlock engineering")
+            .id(egui::Id::new("physical_engineering"))
+            .open(&mut open)
+            .default_width(360.)
+            .max_width(480.)
+            .constrain_to(ctx.screen_rect().shrink(8.))
+            .vscroll(true)
+            .frame(self.overlay_frame(ctx))
+            .show(ctx, |ui| {
+                ui.small(format!("Device: {id}.breaker"));
+                self.pioneer_room_controls(ui, true);
+            });
+        if !open {
+            self.engineering_panel = None;
+        }
+    }
+
+    fn pioneer_room_controls(&mut self, ui: &mut egui::Ui, access: bool) {
+        if self.manual_remote.is_some() {
+            return;
+        }
+        let state = self.assets.as_ref().and_then(|a| a.pioneer_room.as_ref());
+        if let Some(command) = crate::room_controls::show(ui, state, self.can_operate() && access) {
+            self.send(Request::SetPioneerRoom { action: command });
+        }
+    }
+
     fn berth_ready(&self, id: &str) -> bool {
         self.can_operate()
             && self
@@ -47,6 +93,23 @@ impl Cockpit {
             return;
         }
         self.service_tab = match action {
+            HangarAction::Engineering(id) => {
+                if id == arkline_protocol::PIONEER_CONNECTED_ROOM.room_id
+                    && self.can_operate()
+                    && self.manual_remote.is_none()
+                    && self
+                        .assets
+                        .as_ref()
+                        .is_some_and(|a| a.pioneer_room.is_some())
+                    && self
+                        .own()
+                        .as_ref()
+                        .is_some_and(crate::room_controls::panel_access)
+                {
+                    self.engineering_panel = Some(id);
+                }
+                return;
+            }
             HangarAction::Overview => ServiceTab::Navigation,
             HangarAction::Ship => ServiceTab::Hangar,
             HangarAction::Inventory => ServiceTab::Cargo,
@@ -89,6 +152,9 @@ impl Cockpit {
         self.manual_remote.is_none() && self.own().is_some_and(|p| p.location == Location::Docked)
     }
     pub(super) fn station_actions(&mut self, ui: &mut egui::Ui) {
+        self.station_actions_with_engineering(ui, true);
+    }
+    fn station_actions_with_engineering(&mut self, ui: &mut egui::Ui, engineering: bool) {
         let Some(pilot) = self.own().filter(|p| p.location == Location::Docked) else {
             return;
         };
@@ -122,7 +188,7 @@ impl Cockpit {
                 ui.label(room);
                 ui.small("WASD / arrows walk · Space jump · RMB turn / look");
                 ui.small(
-                    "Room fixtures are prototypes. Power/cargo screens read actual ship data.",
+                    "Airlock engineering uses server-confirmed devices. Other room fixtures remain prototypes.",
                 );
                 if ui
                     .add_enabled(
@@ -165,6 +231,9 @@ impl Cockpit {
                     ui.small(format!("Return to airlock · {:.1} m", distance));
                 } else {
                     ui.small("Airlock exit is on deck 1. Return via the access-core lift.");
+                }
+                if engineering {
+                    self.pioneer_room_controls(ui, avatar.interior_deck == 1);
                 }
                 return;
             }
@@ -296,6 +365,9 @@ impl Cockpit {
                 }
             });
             ui.small("Drag with RMB to inspect your ship · wheel to zoom");
+            if engineering && pilot.ship_class == ShipClass::Pioneer {
+                self.pioneer_room_controls(ui, true);
+            }
         }
     }
     pub(super) fn station_overlay(&mut self, ctx: &egui::Context) {
@@ -311,7 +383,15 @@ impl Cockpit {
         .movable(false)
         .frame(self.overlay_frame(ctx))
         .show(ctx, |ui| {
-            self.station_actions(ui);
+            self.station_actions_with_engineering(ui, false);
+            if self
+                .own()
+                .is_some_and(|p| p.ship_class == ShipClass::Pioneer)
+                && ui.button("Room engineering").clicked()
+            {
+                self.services_open = true;
+                self.service_tab = ServiceTab::Station;
+            }
             self.power_gauge(ui);
         });
     }
@@ -404,6 +484,7 @@ mod tests {
         p.station_avatar=Some(serde_json::from_value(serde_json::json!({"position":[0,0,0],"heading":0,"moving":false,"updated_at_ms":1000})).unwrap());
         let (position, boarding_point) = arkline_protocol::fleet_berth(ShipClass::Pioneer);
         c.assets = Some(AssetsView {
+            pioneer_room: None,
             hangar: Some(arkline_protocol::HangarView {
                 layout: arkline_protocol::fleet_hangar_layout(),
                 berths: vec![arkline_protocol::HangarBerth {
@@ -462,6 +543,51 @@ mod tests {
     }
 
     #[test]
+    fn physical_engineering_opens_only_owned_accessible_room_and_closes_for_remote() {
+        let ctx = egui::Context::default();
+        let mut c = crate::tests::view_test_cockpit(&ctx);
+        let pilot = &mut c.snapshot.as_mut().unwrap().pilots[0];
+        pilot.location = Location::Docked;
+        pilot.ship_class = ShipClass::Pioneer;
+        pilot.station_avatar=Some(serde_json::from_value(serde_json::json!({"position":[6.,0.,3.],"heading":0.,"moving":false,"updated_at_ms":0,"onboard_interior":true,"interior_deck":1})).unwrap());
+        c.assets = Some(AssetsView {
+            pioneer_room: Some(arkline_protocol::PioneerRoomState::uncommissioned(
+                "own".into(),
+            )),
+            hangar: None,
+            pioneer_interior_available: true,
+            pioneer_interior_decks: 2,
+            ships: vec![],
+            storage: vec![],
+            corporation: None,
+            invitations: vec![],
+        });
+        let action = || {
+            flight3d::hangar::HangarAction::Engineering(
+                arkline_protocol::PIONEER_CONNECTED_ROOM.room_id.into(),
+            )
+        };
+        c.activate_quarters_terminal(flight3d::hangar::HangarAction::Engineering(
+            "foreign".into(),
+        ));
+        assert!(c.engineering_panel.is_none());
+        c.activate_quarters_terminal(action());
+        assert!(c.engineering_panel.is_some());
+        c.manual_remote = Some("worker".into());
+        let _ = ctx.run(Default::default(), |ctx| c.physical_engineering_window(ctx));
+        assert!(c.engineering_panel.is_none());
+        c.activate_quarters_terminal(action());
+        assert!(c.engineering_panel.is_none());
+        c.manual_remote = None;
+        c.snapshot.as_mut().unwrap().pilots[0]
+            .station_avatar
+            .as_mut()
+            .unwrap()
+            .position = [20., 0., 3.];
+        c.activate_quarters_terminal(action());
+        assert!(c.engineering_panel.is_none());
+    }
+    #[test]
     fn interior_button_requires_server_capability_and_sends_real_request() {
         fn frame(
             ctx: &egui::Context,
@@ -500,6 +626,7 @@ mod tests {
             let mut c = crate::tests::view_test_cockpit(&ctx);
             c.snapshot.as_mut().unwrap().pilots[0].location = Location::Docked;
             c.assets = Some(AssetsView {
+                pioneer_room: None,
                 hangar: None,
                 pioneer_interior_available: supported,
                 pioneer_interior_decks: if supported { 2 } else { 0 },

@@ -16,6 +16,7 @@ fn docked_hull_selection_persists_without_changing_economy_and_rejects_space() {
         let response = server.handle_at(
             &mut session,
             Request::Connect {
+                supports_room_controls: false,
                 supports_fleet_hangar: false,
                 supports_pioneer_interior: true,
                 protocol_version: PROTOCOL_VERSION,
@@ -72,6 +73,7 @@ fn docked_hull_selection_persists_without_changing_economy_and_rejects_space() {
         let response = server.handle_at(
             &mut None,
             Request::Connect {
+                supports_room_controls: false,
                 supports_fleet_hangar: false,
                 supports_pioneer_interior: true,
                 protocol_version: PROTOCOL_VERSION,

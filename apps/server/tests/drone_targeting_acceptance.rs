@@ -20,6 +20,7 @@ fn setup() -> (Server, Option<String>, u64, Snapshot) {
         &mut server,
         &mut session,
         Request::Connect {
+            supports_room_controls: false,
             supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,

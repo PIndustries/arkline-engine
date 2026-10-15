@@ -25,6 +25,18 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Vec<Primitive>, String> {
     {
         return Err("Unsupported ship extension".into());
     }
+    for material in document.materials() {
+        let pbr = material.pbr_metallic_roughness();
+        if material.alpha_mode() != gltf::material::AlphaMode::Opaque
+            || pbr.base_color_texture().is_some()
+            || pbr.metallic_roughness_texture().is_some()
+            || material.normal_texture().is_some()
+            || material.occlusion_texture().is_some()
+            || material.emissive_texture().is_some()
+        {
+            return Err("Only opaque untextured ship materials supported".into());
+        }
+    }
     let blob = document
         .blob
         .as_deref()
@@ -114,12 +126,6 @@ fn visit(
             }
             let material = p.material();
             let pbr = material.pbr_metallic_roughness();
-            if material.alpha_mode() != gltf::material::AlphaMode::Opaque
-                || pbr.base_color_texture().is_some()
-                || pbr.metallic_roughness_texture().is_some()
-            {
-                return Err("Only opaque untextured ship materials supported".into());
-            }
             let reader = p.reader(|_| Some(blob));
             let positions: Vec<_> = reader
                 .read_positions()
@@ -256,6 +262,52 @@ mod tests {
         assert_eq!(p.color, Vec3::new(0.1, 0.3, 0.1));
         assert_eq!(p.emission, 1.6);
         assert_eq!(p.emissive_color, Vec3::new(0.125, 1.0, 0.5));
+    }
+    #[test]
+    fn every_texture_channel_fails_closed_before_image_resolution() {
+        for channel in [
+            "baseColorTexture",
+            "metallicRoughnessTexture",
+            "normalTexture",
+            "occlusionTexture",
+            "emissiveTexture",
+        ] {
+            let original = fixture(2, [1.0; 3]);
+            let json_len = u32::from_le_bytes(original[12..16].try_into().unwrap()) as usize;
+            let mut document: serde_json::Value =
+                serde_json::from_slice(&original[20..20 + json_len]).unwrap();
+            // An external resource must never be resolved by this embedded-only decoder.
+            document["images"] = serde_json::json!([{"uri": "not-resolved.png"}]);
+            document["textures"] = serde_json::json!([{"source": 0}]);
+            let material = &mut document["materials"][0];
+            if matches!(channel, "baseColorTexture" | "metallicRoughnessTexture") {
+                material["pbrMetallicRoughness"][channel] = serde_json::json!({"index": 0});
+            } else {
+                material[channel] = serde_json::json!({"index": 0});
+            }
+            let mut json = serde_json::to_vec(&document).unwrap();
+            while json.len() % 4 != 0 {
+                json.push(b' ');
+            }
+            let binary_chunk = &original[20 + json_len..];
+            let mut bytes = Vec::new();
+            for n in [
+                0x46546c67u32,
+                2,
+                (20 + json.len() + binary_chunk.len()) as u32,
+                json.len() as u32,
+                0x4e4f534a,
+            ] {
+                bytes.extend_from_slice(&n.to_le_bytes());
+            }
+            bytes.extend(json);
+            bytes.extend(binary_chunk);
+            assert_eq!(
+                decode(&bytes).err().as_deref(),
+                Some("Only opaque untextured ship materials supported"),
+                "{channel} must fail explicitly rather than lose its appearance"
+            );
+        }
     }
     #[test]
     fn mirrored_nodes_keep_outward_winding() {

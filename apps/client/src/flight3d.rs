@@ -1779,6 +1779,7 @@ struct Uniforms {
     eye: Option<glow::UniformLocation>,
     material: Option<glow::UniformLocation>,
     material_params: Option<glow::UniformLocation>,
+    hull_surface: Option<glow::UniformLocation>,
     environment_atmosphere: Option<glow::UniformLocation>,
     station_lighting: Option<glow::UniformLocation>,
     environment_up: Option<glow::UniformLocation>,
@@ -1929,6 +1930,7 @@ impl Renderer {
             eye: gl.get_uniform_location(program, "eye"),
             material: gl.get_uniform_location(program, "material_kind"),
             material_params: gl.get_uniform_location(program, "material_params"),
+            hull_surface: gl.get_uniform_location(program, "hull_surface"),
             environment_atmosphere: gl.get_uniform_location(program, "environment_atmosphere"),
             station_lighting: gl.get_uniform_location(program, "station_lighting"),
             environment_up: gl.get_uniform_location(program, "environment_up"),
@@ -2018,6 +2020,14 @@ impl Renderer {
             params[3],
         );
         let gl = &self.gl;
+        gl.uniform_1_f32(
+            self.uniforms.hull_surface.as_ref(),
+            if embedded_primitive(mesh).is_some_and(|p| p.emission == 0.0 && p.roughness >= 0.25) {
+                1.0
+            } else {
+                0.0
+            },
+        );
         gl.uniform_matrix_4_f32_slice(self.uniforms.model.as_ref(), false, &model.to_cols_array());
         gl.uniform_3_f32(self.uniforms.color.as_ref(), color.x, color.y, color.z);
         gl.uniform_1_f32(self.uniforms.emission.as_ref(), emission);
@@ -3598,15 +3608,19 @@ fn turret_parts(class: ShipClass, rotation: Quat, module_id: u8) -> Vec<ModelPar
     let base = Mat4::from_rotation_translation(rotation, mount);
     let bottom = turret_deck(class, module_id) - radius * 0.3;
     let top = mount.y;
-    vec![
+    let mut parts = vec![
         (
-            2,
-            transform(mount, Vec3::splat(radius), Quat::IDENTITY),
+            8,
+            base * transform(
+                Vec3::ZERO,
+                Vec3::new(radius, radius * 0.7, radius * 0.8),
+                Quat::IDENTITY,
+            ),
             Vec3::new(0.24, 0.29, 0.31),
             0.0,
         ),
         (
-            0,
+            8,
             base * transform(
                 Vec3::X * (radius + barrel * 0.5),
                 Vec3::new(barrel * 0.5, radius * 0.22, radius * 0.22),
@@ -3635,7 +3649,44 @@ fn turret_parts(class: ShipClass, rotation: Quat, module_id: u8) -> Vec<ModelPar
             Vec3::new(0.20, 0.25, 0.27),
             0.0,
         ),
-    ]
+    ];
+    let pedestal = parts.pop().expect("turret pedestal");
+    // Armor, paired coolant jackets and rear power pack follow the same aim
+    // transform as the emitter; the muzzle and gameplay hardpoint stay unchanged.
+    for side in [-1.0, 1.0] {
+        parts.push((
+            8,
+            base * transform(
+                Vec3::new(radius * 0.1, 0.0, side * radius * 0.77),
+                Vec3::new(radius * 0.7, radius * 0.5, radius * 0.16),
+                Quat::IDENTITY,
+            ),
+            Vec3::new(0.035, 0.24, 0.10),
+            0.0,
+        ));
+        parts.push((
+            8,
+            base * transform(
+                Vec3::new(radius + barrel * 0.45, 0.0, side * radius * 0.31),
+                Vec3::new(barrel * 0.35, radius * 0.12, radius * 0.10),
+                Quat::IDENTITY,
+            ),
+            Vec3::new(0.28, 0.32, 0.31),
+            0.0,
+        ));
+    }
+    parts.push((
+        8,
+        base * transform(
+            Vec3::new(-radius * 0.8, radius * 0.15, 0.0),
+            Vec3::new(radius * 0.4, radius * 0.6, radius * 0.6),
+            Quat::IDENTITY,
+        ),
+        Vec3::new(0.065, 0.075, 0.072),
+        0.0,
+    ));
+    parts.push(pedestal);
+    parts
 }
 fn engine_mounts(class: ShipClass) -> Vec<Vec3> {
     if class == ShipClass::Pioneer {
@@ -4509,12 +4560,8 @@ const FRAGMENT: &str = concat!(
     include_str!("shaders/local_lighting.glsl"),
     r#"
 in vec3 world;in vec3 surface_normal;in vec3 local_position;
-uniform vec4 material_params;uniform float station_lighting;uniform float environment_atmosphere;uniform vec3 environment_up;
+uniform vec4 material_params;uniform float hull_surface;uniform float station_lighting;uniform float environment_atmosphere;uniform vec3 environment_up;
 uniform vec3 planet_center;uniform vec3 base_color;uniform vec3 eye;uniform float emission;uniform vec3 emissive_color;uniform int material_kind;out vec4 color;
-float ark_hash3(vec3 p){return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5453);}
-float ark_noise3(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
-return mix(mix(mix(ark_hash3(i),ark_hash3(i+vec3(1,0,0)),f.x),mix(ark_hash3(i+vec3(0,1,0)),ark_hash3(i+vec3(1,1,0)),f.x),f.y),
-mix(mix(ark_hash3(i+vec3(0,0,1)),ark_hash3(i+vec3(1,0,1)),f.x),mix(ark_hash3(i+vec3(0,1,1)),ark_hash3(i+vec3(1,1,1)),f.x),f.y),f.z);}
 float ark_terrain(vec3 p){return ark_noise3(p)*0.53+ark_noise3(p*2.07+13.8)*0.27+ark_noise3(p*4.13-7.1)*0.13+ark_noise3(p*8.41+29.4)*0.07;}
 void main(){vec3 n=normalize(surface_normal);if(!gl_FrontFacing)n=-n;vec3 l=normalize(vec3(-0.5,0.8,0.65));vec3 v=normalize(eye-world);
 float diffuse=max(dot(n,l),0.0);float facing=max(dot(n,v),0.0);float rim=pow(1.0-facing,3.0);
@@ -4544,6 +4591,7 @@ if(material_kind==1 || material_kind==2){
         metallic=mix(0.0,0.82,vein);roughness=mix(0.90,0.34,vein);
         albedo=mix(albedo,vec3(0.48,0.38,0.22),vein*0.72);
     }
+    if(hull_surface>0.5){ark_hull_surface(local_position*100.0,albedo,roughness,metallic);}
     // Existing screen panels use a dark dielectric backing; no canopy transmission is invented.
     if(material_params.w>0.5) albedo*=0.70;
     if(station_lighting>0.5){

@@ -1,0 +1,22 @@
+flowchart LR
+  n0["Ship reactor / capacitor endpoint"]
+  n1["Room mains breaker"]
+  n2["Bounded room controller"]
+  n3["Main room light"]
+  n4["Emergency light and reserve"]
+  n5["Scalar equalize / exhaust control"]
+  n6["Scalar room pressure measurement"]
+  n7["Interlocked corridor door"]
+  n0 -->|Power: power → supply| n1
+  n1 -->|Power: switched → power| n2
+  n1 -->|Power: switched → power| n3
+  n1 -->|Power: switched → power| n5
+  n1 -->|Power: switched → power| n7
+  n1 -->|Power: switched → charge| n4
+  n1 -->|Telemetry: status → breaker| n2
+  n1 -->|Telemetry: status → mains_status| n4
+  n6 -->|Telemetry: pressure → pressure| n2
+  n2 -->|Command: command → command| n3
+  n2 -->|Command: command → command| n5
+  n2 -->|Command: command → command| n7
+  n2 -->|Interlock: safe_open → safe_open| n7

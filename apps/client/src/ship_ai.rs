@@ -813,6 +813,7 @@ mod tests {
                 Request::Connect {
                     supports_pioneer_interior: true,
                     supports_fleet_hangar: true,
+                    supports_room_controls: true,
                     protocol_version: PROTOCOL_VERSION,
                     pilot: name.into(),
                     resume_token: None,
@@ -904,6 +905,7 @@ mod tests {
             Request::Connect {
                 supports_pioneer_interior: true,
                 supports_fleet_hangar: true,
+                supports_room_controls: true,
                 protocol_version: PROTOCOL_VERSION,
                 pilot: "WorkerQA".into(),
                 resume_token: initial.resume_token,

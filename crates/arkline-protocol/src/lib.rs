@@ -1,5 +1,7 @@
 //! Arkline v0.1 wire format and canonical economic event encoding.
 //! One JSON request/response per line over a local TCP connection.
+mod room_equipment;
+pub use room_equipment::*;
 mod pioneer_interior;
 pub use pioneer_interior::*;
 use serde::{Deserialize, Serialize};
@@ -531,10 +533,15 @@ pub enum Request {
     WithdrawCorporationOre {
         units: u64,
     },
+    SetPioneerRoom {
+        action: PioneerRoomCommand,
+    },
     BoardShip {
         id: String,
     },
     Connect {
+        #[serde(default)]
+        supports_room_controls: bool,
         #[serde(default)]
         supports_fleet_hangar: bool,
         /// Missing on older clients; only visual clients with interior support opt in.
@@ -1027,6 +1034,8 @@ pub struct CorporationView {
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AssetsView {
+    #[serde(default)]
+    pub pioneer_room: Option<PioneerRoomState>,
     #[serde(default)]
     pub hangar: Option<HangarView>,
     #[serde(default)]

@@ -23,6 +23,7 @@ fn multi_trip_delivery_survives_takeover_disconnect_and_crash_without_economic_r
         &mut s,
         &mut session,
         Request::Connect {
+            supports_room_controls: false,
             supports_fleet_hangar: false,
             supports_pioneer_interior: false,
             protocol_version: PROTOCOL_VERSION,
@@ -130,6 +131,7 @@ fn multi_trip_delivery_survives_takeover_disconnect_and_crash_without_economic_r
         &mut s,
         &mut session,
         Request::Connect {
+            supports_room_controls: false,
             supports_fleet_hangar: false,
             supports_pioneer_interior: false,
             protocol_version: PROTOCOL_VERSION,
@@ -159,6 +161,7 @@ fn multi_trip_delivery_survives_takeover_disconnect_and_crash_without_economic_r
         &mut s,
         &mut session,
         Request::Connect {
+            supports_room_controls: false,
             supports_fleet_hangar: false,
             supports_pioneer_interior: false,
             protocol_version: PROTOCOL_VERSION,
@@ -190,6 +193,7 @@ fn disconnect_during_active_extraction_stops_all_awards_and_resumes_owned_cargo(
         &mut s,
         &mut session,
         Request::Connect {
+            supports_room_controls: false,
             supports_fleet_hangar: false,
             supports_pioneer_interior: false,
             protocol_version: PROTOCOL_VERSION,
@@ -238,6 +242,7 @@ fn disconnect_during_active_extraction_stops_all_awards_and_resumes_owned_cargo(
     let denied = s.handle_at(
         &mut None,
         Request::Connect {
+            supports_room_controls: false,
             supports_fleet_hangar: false,
             supports_pioneer_interior: false,
             protocol_version: PROTOCOL_VERSION,
@@ -251,6 +256,7 @@ fn disconnect_during_active_extraction_stops_all_awards_and_resumes_owned_cargo(
         &mut s,
         &mut session,
         Request::Connect {
+            supports_room_controls: false,
             supports_fleet_hangar: false,
             supports_pioneer_interior: false,
             protocol_version: PROTOCOL_VERSION,

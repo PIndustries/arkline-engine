@@ -12,6 +12,7 @@ mod motion;
 mod pilot_input;
 mod remote_control_ui;
 mod resource_jobs_ui;
+mod room_controls;
 mod sandbox;
 mod services;
 #[cfg(not(target_arch = "wasm32"))]
@@ -264,6 +265,7 @@ fn worker(
         let mut response = reader.exchange(&Request::Connect {
             supports_pioneer_interior: true,
             supports_fleet_hangar: true,
+            supports_room_controls: true,
             protocol_version: PROTOCOL_VERSION,
             pilot: pilot.clone(),
             resume_token: token.clone(),
@@ -343,6 +345,7 @@ fn worker(
                             let mut resumed = next.exchange(&Request::Connect {
                                 supports_pioneer_interior: true,
                                 supports_fleet_hangar: true,
+                                supports_room_controls: true,
                                 protocol_version: PROTOCOL_VERSION,
                                 pilot: pilot.clone(),
                                 resume_token: token.clone(),
@@ -514,6 +517,7 @@ struct Cockpit {
     context_fly_to: Option<[f64; 3]>,
     overview_filter: OverviewFilter,
     services_open: bool,
+    engineering_panel: Option<String>,
     overview_nearest_first: bool,
     overview_open: bool,
 }
@@ -627,6 +631,7 @@ impl Cockpit {
             context_fly_to: None,
             overview_filter: OverviewFilter::All,
             services_open: false,
+            engineering_panel: None,
             overview_nearest_first: true,
             overview_open: true,
         }
@@ -1552,7 +1557,7 @@ impl Cockpit {
                     .desired_height(18.0)
                     .fill(self.accent())
                     .text(format!(
-                        "Capacitor {:.1}/{:.1} kJ · +{} W{}",
+                        "Capacitor {:.1}/{:.1} kJ · reactor {} W{}",
                         power.charge_j as f64 / 1000.0,
                         power.capacity_j as f64 / 1000.0,
                         power.regen_w,
@@ -3285,6 +3290,9 @@ impl eframe::App for Cockpit {
             self.frame_intervals.pop_front();
         }
         self.poll();
+        if !self.connected {
+            self.engineering_panel = None;
+        }
         self.sync_remote_control();
         self.poll_voice();
         self.poll_ship_ai();
@@ -3756,6 +3764,7 @@ impl eframe::App for Cockpit {
                     });
             }
         }
+        self.physical_engineering_window(ctx);
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
             .show(ctx, |ui| {
@@ -3773,6 +3782,7 @@ impl eframe::App for Cockpit {
                             now,
                             live,
                             self.assets.as_ref().and_then(|a| a.hangar.as_ref()),
+                            self.assets.as_ref().and_then(|a| a.pioneer_room.as_ref()),
                         ) {
                             self.activate_quarters_terminal(action);
                         }
@@ -4013,6 +4023,7 @@ fn main() -> eframe::Result<()> {
         None
     };
     let options = eframe::NativeOptions {
+        multisampling: 4,
         depth_buffer: 24,
         renderer: eframe::Renderer::Glow,
         viewport: egui::ViewportBuilder::default()
@@ -4955,7 +4966,7 @@ mod tests {
             let labels = frame(&ctx, &mut cockpit, vec![]);
             assert!(labels
                 .iter()
-                .any(|(text, _)| text.contains("Capacitor 2.5/10.0 kJ · +300 W")));
+                .any(|(text, _)| text.contains("Capacitor 2.5/10.0 kJ · reactor 300 W")));
             let rect = ctx
                 .memory(|m| m.area_rect(egui::Id::new("station_embodiment_controls")))
                 .unwrap();
@@ -5713,6 +5724,7 @@ mod tests {
     }
     fn asset_test_fixture() -> AssetsView {
         AssetsView {
+            pioneer_room: None,
             hangar: None,
             pioneer_interior_available: true,
             pioneer_interior_decks: 2,
@@ -5936,6 +5948,7 @@ mod tests {
             }],
         });
         cockpit.assets = Some(AssetsView {
+            pioneer_room: None,
             hangar: None,
             pioneer_interior_available: true,
             pioneer_interior_decks: 2,
@@ -6227,6 +6240,7 @@ mod tests {
                     Request::Connect {
                         supports_pioneer_interior: _,
                         supports_fleet_hangar: _,
+                        supports_room_controls: _,
                         protocol_version,
                         pilot,
                         resume_token,

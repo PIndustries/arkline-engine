@@ -10,6 +10,7 @@ fn connect(
     s.handle_at(
         session,
         Request::Connect {
+            supports_room_controls: false,
             supports_fleet_hangar: false,
             supports_pioneer_interior: supports,
             protocol_version: PROTOCOL_VERSION,
