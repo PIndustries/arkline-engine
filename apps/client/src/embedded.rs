@@ -337,11 +337,15 @@ impl EmbeddedClient {
         if !self.ready() {
             return Err("Editor authority is not ready".into());
         }
-        if self
-            .snapshot()
-            .is_none_or(|snapshot| snapshot.exterior.is_none())
-        {
-            return Err("This authority does not advertise powered exterior support".into());
+        if self.snapshot().is_none_or(|snapshot| {
+            snapshot
+                .exterior
+                .as_ref()
+                .is_none_or(|world| world.definition.document.validate().is_err())
+        }) {
+            return Err(
+                "This authority does not advertise compatible powered exterior support".into(),
+            );
         }
         if self.exterior_pending.is_some() {
             return Err("Waiting for the previous exterior acknowledgement".into());
@@ -1259,6 +1263,51 @@ mod tests {
     use super::*;
     mod room_acceptance {
         include!("embedded_room_acceptance.rs");
+    }
+
+    #[test]
+    fn exterior_commands_reject_unsupported_advertised_definitions() {
+        for bad_hash in [false, true] {
+            let (mut client, _) = debug_fixture();
+            let (clock, commands) = mpsc::sync_channel(4);
+            client.clock = clock;
+            let mut document = arkline_protocol::default_pioneer_exterior();
+            if bad_hash {
+                document.hull_asset_sha256 = "0".repeat(64);
+            } else {
+                document.schema_version += 1;
+            }
+            client.cockpit.snapshot.as_mut().unwrap().exterior =
+                Some(arkline_protocol::ExteriorWorldState {
+                    definition: arkline_protocol::ExteriorDefinitionState {
+                        revision: 0,
+                        document,
+                    },
+                    vessels: vec![],
+                });
+            assert!(client
+                .exterior_set_enabled(false, 0)
+                .unwrap_err()
+                .contains("support"));
+            assert!(commands.try_recv().is_err());
+            assert!(client.exterior_pending.is_none());
+            assert_eq!(client.exterior_sequence, 0);
+            client
+                .cockpit
+                .snapshot
+                .as_mut()
+                .unwrap()
+                .exterior
+                .as_mut()
+                .unwrap()
+                .definition
+                .document = arkline_protocol::default_pioneer_exterior();
+            assert_eq!(client.exterior_set_enabled(false, 0), Ok(1));
+            assert!(matches!(
+                commands.try_recv().unwrap(),
+                ClockCommand::Exterior(1, ExteriorCommand::Enable(false, 0))
+            ));
+        }
     }
 
     #[test]

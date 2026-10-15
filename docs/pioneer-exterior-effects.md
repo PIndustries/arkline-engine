@@ -23,7 +23,7 @@ Open **Game → Exterior** in the inspector. Select an existing fixture to edit 
 - **Apply to authority** sends the current draft with its expected live definition revision. This updates the shared Pioneer class definition only after the authority accepts it. A stale base must be reconciled with Load live, or explicitly rebased while retaining edits, before retrying.
 - **Turn exterior ON/OFF** affects only the authenticated pilot's supported vessel. The panel displays confirmed electrical enable/supply state and independent drive OFF / IDLE / ACTIVE state.
 
-Live commands appear only when `snapshot.exterior` advertises support. Project authoring remains usable with an older authority. An unsupported own-pilot vessel has no power command.
+Live commands require `snapshot.exterior` with a validated supported schema and exact hull binding. Unsupported peer definitions preserve project edits, disable live tracking, and leave any unconfirmed edit's outcome unknown; reconnect does not replay it. Project authoring remains usable with an older authority. An unsupported own-pilot vessel has no power command.
 
 Project I/O runs on a dedicated worker with one bounded pending request and a bounded result channel. Reads are limited to 64 KiB. Saves validate and serialize a submitted snapshot, write/sync a uniquely created same-directory temporary file, and atomically rename it over an ordinary file. Symlink destinations are rejected. An unreadable saved file locks Save until Reload succeeds or the user explicitly chooses **Reset to runtime defaults; allow file replacement**. Reset alone does not write anything.
 
