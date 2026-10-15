@@ -219,6 +219,22 @@ impl Exterior {
     }
 
     fn observe_live(&mut self, state: ExteriorWorldState) {
+        if let Err(error) = state.definition.document.validate() {
+            let unconfirmed = self.pending_live.is_some() || self.awaiting_definition.is_some();
+            self.live = None;
+            self.based_on_revision = None;
+            self.pending_live = None;
+            self.awaiting_definition = None;
+            self.message = format!(
+                "Exterior authority definition is unsupported or invalid: {error}. Live controls are disabled; project draft and saved state were kept. {}No exterior edit will replay.",
+                if unconfirmed {
+                    "The pending exterior edit's outcome is unknown; inspect accepted state before retrying. "
+                } else {
+                    ""
+                }
+            );
+            return;
+        }
         let follows_previous = self
             .live
             .as_ref()
@@ -856,6 +872,68 @@ mod tests {
         assert_eq!(panel.draft, newer);
         assert_eq!(panel.based_on_revision, Some(1));
         assert!(panel.awaiting_definition.is_none());
+    }
+
+    #[test]
+    fn unsupported_peer_definitions_preserve_project_and_disable_live_tracking() {
+        for invalid_hash in [false, true] {
+            let (mut panel, _results) = panel();
+            let original = panel.draft.clone();
+            panel.saved.fixtures[1].emission = 3.0;
+            let saved = panel.saved.clone();
+            panel.observe_live(state(4, original.clone()));
+            panel.pending_live = Some(PendingLive {
+                id: 7,
+                edit: LiveEdit::Enabled(false),
+            });
+            panel.awaiting_definition = Some((5, original.clone()));
+            let mut unsupported = original.clone();
+            unsupported.fixtures[0].emission = 8.0;
+            if invalid_hash {
+                unsupported.hull_asset_sha256 = "0".repeat(64);
+            } else {
+                unsupported.schema_version = 2;
+            }
+            let mut peer = state(5, unsupported);
+            peer.vessels.push(arkline_protocol::ExteriorVesselState {
+                pilot: "CompatibilityPilot".into(),
+                ship_class: arkline_protocol::ShipClass::Pioneer,
+                vessel_id: "compatibility-vessel".into(),
+                enabled: true,
+                powered: true,
+                drive: arkline_protocol::ExteriorDriveState::Idle,
+                load_w: original.load_w(),
+            });
+            panel.observe_live(peer);
+            assert_eq!(panel.draft, original);
+            assert_eq!(panel.saved, saved);
+            assert_eq!(panel.draft_revision, 0);
+            assert!(
+                panel.live.is_none(),
+                "invalid state must not expose power controls"
+            );
+            assert!(panel.based_on_revision.is_none());
+            assert!(panel.pending_live.is_none());
+            assert!(panel.awaiting_definition.is_none());
+            assert!(panel.message.contains("unsupported or invalid"));
+            assert!(panel.message.contains("outcome is unknown"));
+            assert!(panel.message.contains("No exterior edit will replay"));
+            panel.load_live_draft();
+            panel.rebase_draft();
+            panel.finish_live(7, &Ok(()));
+            assert_eq!(panel.draft, original);
+            assert!(panel.based_on_revision.is_none());
+            assert!(panel.awaiting_definition.is_none());
+
+            let mut valid = original;
+            valid.fixtures[0].emission = 4.0;
+            panel.observe_live(state(6, valid.clone()));
+            assert!(panel.live.is_some(), "a valid peer must remain supported");
+            panel.load_live_draft();
+            assert_eq!(panel.draft, valid);
+            assert_eq!(panel.based_on_revision, Some(6));
+            assert_eq!(panel.saved, saved);
+        }
     }
 
     #[test]
