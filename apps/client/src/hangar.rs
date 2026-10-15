@@ -1049,7 +1049,7 @@ mod tests {
         view.set_editor_free_camera(true, Some(pose));
         let _ = ctx.run(Default::default(), |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
-                view.ui(ui, &pilot, 1000, true, None, None);
+                view.ui(ui, &pilot, 1000, true, None, None, None, 1000);
             });
         });
         let camera = view.editor_camera_pose().unwrap();
@@ -1156,8 +1156,9 @@ mod tests {
                         ..Default::default()
                     },
                     |ctx| {
-                        egui::CentralPanel::default()
-                            .show(ctx, |ui| hangar.ui(ui, &pilot, 1000, true, None, None));
+                        egui::CentralPanel::default().show(ctx, |ui| {
+                            hangar.ui(ui, &pilot, 1000, true, None, None, None, 1000)
+                        });
                     },
                 );
             }
@@ -1185,7 +1186,16 @@ mod tests {
             view.follow_heading = Some(2.);
             let _ = ctx.run(Default::default(), |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    view.ui(ui, &pilot, 1000, true, fleet_mode.then_some(&fleet), None);
+                    view.ui(
+                        ui,
+                        &pilot,
+                        1000,
+                        true,
+                        fleet_mode.then_some(&fleet),
+                        None,
+                        None,
+                        1000,
+                    );
                 });
             });
             assert_eq!(view.fleet_mode, fleet_mode);

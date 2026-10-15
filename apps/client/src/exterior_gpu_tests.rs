@@ -480,13 +480,13 @@ fn native_powered_exterior_frame_capture() {
             );
         }
         // A paused cached feed must accept new state without requiring clock advancement.
-        let info = egui::PaintCallbackInfo {
+        let info = || egui::PaintCallbackInfo {
             viewport: egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(960., 640.)),
             clip_rect: egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(960., 640.)),
             pixels_per_point: 1.,
             screen_size_px: [960, 640],
         };
-        renderer.paint_cached_feed(&frame, 813, info, 1, Some(target.framebuffer));
+        renderer.paint_cached_feed(&frame, 813, info(), 1, Some(target.framebuffer));
         let feed_before = pixels(&gl);
         {
             let vessel = &mut state(&mut frame).vessels[0];
@@ -494,7 +494,7 @@ fn native_powered_exterior_frame_capture() {
             vessel.powered = false;
             vessel.drive = ExteriorDriveState::Off;
         }
-        renderer.paint_cached_feed(&frame, 813, info, 1, Some(target.framebuffer));
+        renderer.paint_cached_feed(&frame, 813, info(), 1, Some(target.framebuffer));
         let feed_after = pixels(&gl);
         assert!(
             changed(&feed_before, &feed_after) > 16,

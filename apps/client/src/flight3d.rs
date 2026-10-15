@@ -6066,6 +6066,7 @@ mod tests {
             warp: None,
         });
         let snapshot = Snapshot {
+            exterior: None,
             fleet_links: vec![],
             remote_controls: vec![],
             resource_jobs: vec![],
