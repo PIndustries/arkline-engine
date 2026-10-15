@@ -185,7 +185,7 @@ impl Renderer {
                 let mut casters = Vec::new();
                 // The same ship and asteroid meshes/transforms as the visible pass,
                 // including the own ship in cockpit view: hulls really block sunlight.
-                for p in &frame.pilots {
+                for p in &frame.scene.pilots {
                     if frame.space.position(p, frame.now).distance(frame.eye) > DEPTH + RADIUS {
                         continue;
                     }
@@ -205,7 +205,7 @@ impl Renderer {
                         }
                     }
                 }
-                for a in &frame.asteroids {
+                for a in &frame.scene.asteroids {
                     if frame.space.scene(a.position).distance(frame.eye) > DEPTH + RADIUS {
                         continue;
                     }
@@ -246,8 +246,8 @@ impl Renderer {
                         false,
                         &model.to_cols_array(),
                     );
-                    gl.bind_vertex_array(Some(self.meshes[mesh].vao));
-                    gl.draw_arrays(glow::TRIANGLES, 0, self.meshes[mesh].count);
+                    gl.bind_vertex_array(Some(self.meshes[mesh_index(mesh)].vao));
+                    gl.draw_arrays(glow::TRIANGLES, 0, self.meshes[mesh_index(mesh)].count);
                 }
             }
         }
@@ -385,7 +385,7 @@ pub(super) unsafe fn assert_occluder_depth(
     target: glow::Framebuffer,
 ) {
     let mut sample = frame.clone();
-    sample.asteroids = vec![Asteroid {
+    std::sync::Arc::make_mut(&mut sample.scene).asteroids = vec![Asteroid {
         id: 998,
         system_id: frame.system_id,
         name: "shadow fixture".into(),

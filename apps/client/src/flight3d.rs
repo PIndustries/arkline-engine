@@ -1,4 +1,14 @@
 //! Desktop and WebGL2 GPU flight view. Presentation only: never issues simulation commands.
+use crate::material_program::{
+    compile_material_program, MaterialShaderSource, SpatialMaterialUniforms,
+};
+use crate::spatial_material::{
+    MaterialProgramDiagnostic, MaterialProgramErrorPhase, MaterialProgramState,
+    MaterialProgramStatus, MaterialRevision, PreparedMaterialUpdate,
+};
+#[cfg(all(test, target_os = "macos"))]
+#[path = "spatial_material_gpu_tests.rs"]
+mod spatial_material_gpu_tests;
 use arkline_protocol::{
     gates, systems, Asteroid, Destination, Location, NavigationMode, NavigationTarget, PilotView,
     ShipClass, Snapshot, Stargate, BELT_POSITION, HOME_SYSTEM_ID, JUMP_DURATION_MS, SPACE_BOUND,
@@ -11,12 +21,23 @@ use glam::{Mat4, Quat, Vec3};
 use glow::HasContext;
 use std::sync::{Arc, Mutex};
 
+#[path = "imported_asset.rs"]
+pub mod imported_asset;
+
 #[path = "ship_asset.rs"]
 mod ship_asset;
 
+#[cfg(all(test, target_os = "linux"))]
+#[path = "exterior_gpu_tests.rs"]
+mod exterior_gpu_tests;
+#[path = "exterior_visuals.rs"]
+mod exterior_visuals;
 #[path = "local_lighting.rs"]
 mod local_lighting;
 
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "asset_gallery.rs"]
+pub mod asset_gallery;
 #[path = "hangar.rs"]
 pub mod hangar;
 
@@ -124,9 +145,21 @@ pub fn lane(name: &str) -> f32 {
 pub fn display_position(pilot: &PilotView, now: u64) -> [f64; 3] {
     super::motion::position(pilot, now)
 }
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Debug, PartialEq)]
 struct Space {
     origin: [f64; 3],
+}
+fn editor_camera_scene_space(
+    active: bool,
+    frozen: Option<Space>,
+    live: Space,
+) -> (Space, Option<Space>) {
+    if active {
+        let fixed = frozen.unwrap_or(live);
+        (fixed, Some(fixed))
+    } else {
+        (live, None)
+    }
 }
 impl Space {
     fn scene(self, meters: [f64; 3]) -> Vec3 {
@@ -252,6 +285,11 @@ pub struct FlightView {
     console_rect: Option<egui::Rect>,
     map_range: f64,
     space: Space,
+    /// Editor-only camera, expressed in the rendered scene's local coordinates.
+    free_camera: Option<(Vec3, f32, f32)>,
+    editor_free_camera_active: bool,
+    editor_free_camera_space: Option<Space>,
+    last_camera_pose: Option<(Vec3, f32, f32)>,
 }
 impl FlightView {
     // egui callbacks share ownership on one browser thread; SendWrapper guards access.
@@ -289,7 +327,30 @@ impl FlightView {
             console_rect: None,
             map_range: 1_000_000.0,
             space: Space::default(),
+            free_camera: None,
+            editor_free_camera_active: false,
+            editor_free_camera_space: None,
+            last_camera_pose: None,
         }
+    }
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    pub fn set_editor_free_camera(&mut self, active: bool, pose: Option<(Vec3, f32, f32)>) {
+        let reseed = active
+            && (!self.editor_free_camera_active || (pose.is_none() && self.free_camera.is_some()));
+        if !active {
+            self.editor_free_camera_space = None;
+        } else if reseed {
+            // An existing camera pose belongs to the last rendered origin,
+            // even when the pilot travels before the next rendered frame.
+            // A cleared pose lets a new scene establish its origin instead.
+            self.editor_free_camera_space = pose.map(|_| self.space);
+        }
+        self.editor_free_camera_active = active;
+        self.free_camera = pose;
+    }
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    pub fn editor_camera_pose(&self) -> Option<(Vec3, f32, f32)> {
+        self.last_camera_pose
     }
     pub fn set_remote_ship(&mut self, pilot: Option<String>) {
         self.remote_ship = pilot;
@@ -319,6 +380,46 @@ impl FlightView {
     #[cfg(test)]
     pub fn cockpit_console_rect(&self) -> Option<egui::Rect> {
         self.console_rect
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn set_material_preview(&mut self, preview: Option<crate::EmbeddedMaterialPreview>) {
+        if let Ok(renderer) = &self.renderer {
+            if let Ok(mut renderer) = renderer.lock() {
+                renderer.set_material_preview(preview);
+            }
+        }
+    }
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))] // Native editor authoring entry.
+    pub fn set_spatial_material(&mut self, material: Option<Arc<MaterialRevision>>) {
+        if let Ok(renderer) = &self.renderer {
+            if let Ok(mut renderer) = renderer.lock() {
+                let _ = renderer.spatial_material.queue(material);
+            }
+        }
+    }
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    pub fn spatial_material_status(&self) -> MaterialProgramStatus {
+        self.renderer
+            .as_ref()
+            .ok()
+            .and_then(|r| r.lock().ok().map(|r| r.spatial_material.status().clone()))
+            .unwrap_or_default()
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn set_debug_wireframe(&mut self, enabled: bool) {
+        if let Ok(renderer) = &self.renderer {
+            if let Ok(mut renderer) = renderer.lock() {
+                renderer.debug_wireframe = enabled;
+            }
+        }
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn debug_render_metrics(&self) -> DebugRenderMetrics {
+        self.renderer
+            .as_ref()
+            .ok()
+            .and_then(|r| r.lock().ok().map(|r| r.debug_metrics.get()))
+            .unwrap_or_default()
     }
     pub fn input_surface(&self) -> Option<(egui::Rect, egui::LayerId)> {
         self.input_surface
@@ -358,14 +459,22 @@ impl FlightView {
                 self.distance = ship_distance;
             }
         }
-        let space = Space {
+        let live_space = Space {
             origin: own_pilot.map_or(STATION_POSITION, |p| display_position(p, now)),
         };
+        let (space, editor_free_camera_space) = editor_camera_scene_space(
+            self.editor_free_camera_active,
+            self.editor_free_camera_space,
+            live_space,
+        );
+        self.editor_free_camera_space = editor_free_camera_space;
         let warp_tracking =
             own_pilot.is_some_and(|p| matches!(p.location, Location::InTransit { .. }));
         self.target = rebased_camera_target(self.target, self.space, space, warp_tracking);
         self.space = space;
-        let cockpit = matches!(mode, super::ViewMode::Cockpit);
+        let cockpit_mode = matches!(mode, super::ViewMode::Cockpit);
+        let cockpit = cockpit_mode && !self.editor_free_camera_active;
+        let editor_free_camera = self.editor_free_camera_active;
         let tactical = mode == super::ViewMode::Tactical3d;
         if tactical != self.tactical {
             let next = self.other_camera;
@@ -380,7 +489,7 @@ impl FlightView {
             self.focus_selection = false;
         }
 
-        let bounds = ui.ctx().screen_rect();
+        let bounds = ui.max_rect();
         let (camera_position, camera_size) = layout.position(
             "flight-camera",
             bounds,
@@ -401,7 +510,7 @@ impl FlightView {
                     resize
                 }
             })
-            .constrain_to(ui.ctx().screen_rect().shrink(8.0))
+            .constrain_to(ui.max_rect().shrink(8.0))
             .frame(
                 egui::Frame::window(&ui.ctx().style())
                     .fill(egui::Color32::from_rgba_unmultiplied(3, 9, 6, 212))
@@ -412,6 +521,11 @@ impl FlightView {
             .resizable(!layout.pinned)
             .collapsible(true)
             .show(ui.ctx(), |ui| {
+                if editor_free_camera {
+                    ui.label("Editor free camera · WASD move · E/Q or Space/C vertical · RMB look");
+                    camera_content = Some(ui.max_rect().size());
+                    return;
+                }
                 if cockpit {
                     ui.label("Pilot seat · full six-axis flight");
                     ui.small("W/S: thrust · A/D: strafe · Space/C: vertical");
@@ -489,20 +603,25 @@ impl FlightView {
         self.input_surface = (!pointer_on_instrument).then_some((rect, ui.layer_id()));
         // Foreground panels own their pointer input, including transparent
         // panel margins. Checking the layer also blocks a drag crossing a HUD.
-        let world_input = ui.input(|i| i.pointer.hover_pos()).is_some_and(|pointer| {
-            rect.contains(pointer)
-                && ui.ctx().layer_id_at(pointer) == Some(ui.layer_id())
-                && !(cockpit
-                    && cockpit_screens(own_pilot.map_or(ShipClass::Pioneer, |p| p.ship_class))
-                        .iter()
-                        .any(|(c, s)| instrument_rect(rect, *c, *s).contains(pointer)))
-        });
-        if !cockpit && world_input && response.dragged_by(egui::PointerButton::Primary) {
+        let world_input = !editor_free_camera
+            && ui.input(|i| i.pointer.hover_pos()).is_some_and(|pointer| {
+                rect.contains(pointer)
+                    && ui.ctx().layer_id_at(pointer) == Some(ui.layer_id())
+                    && !(cockpit
+                        && cockpit_screens(own_pilot.map_or(ShipClass::Pioneer, |p| p.ship_class))
+                            .iter()
+                            .any(|(c, s)| instrument_rect(rect, *c, *s).contains(pointer)))
+            });
+        if !cockpit
+            && !editor_free_camera
+            && world_input
+            && response.dragged_by(egui::PointerButton::Primary)
+        {
             let delta = ui.input(|i| i.pointer.delta());
             self.yaw -= delta.x * 0.007;
             self.pitch = (self.pitch + delta.y * 0.006).clamp(-1.25, 1.25);
         }
-        if !cockpit && world_input && response.hovered() {
+        if !cockpit && !editor_free_camera && world_input && response.hovered() {
             self.distance =
                 (self.distance * (-ui.input(|i| i.smooth_scroll_delta.y) * 0.002).exp()).clamp(
                     if tactical {
@@ -602,7 +721,7 @@ impl FlightView {
         let head_rotation = rotation
             * Quat::from_rotation_y(self.head_look[0])
             * Quat::from_rotation_z(self.head_look[1]);
-        let (eye, mut view) = if cockpit {
+        let (mut eye, mut view) = if cockpit {
             cockpit_camera(
                 own_pilot.map_or(Vec3::ZERO, |p| {
                     let spec = p.ship_class.spec();
@@ -624,6 +743,20 @@ impl FlightView {
         };
         if cockpit {
             view = Mat4::look_at_rh(eye, eye + head_rotation * Vec3::X, head_rotation * Vec3::Y);
+        }
+        let player_direction = view
+            .inverse()
+            .transform_vector3(Vec3::NEG_Z)
+            .normalize_or_zero();
+        self.last_camera_pose = Some((
+            eye,
+            player_direction.z.atan2(player_direction.x),
+            player_direction.y.clamp(-1.0, 1.0).asin(),
+        ));
+        if let Some((position, yaw, pitch)) = self.free_camera {
+            let direction = hangar::editor_camera_direction(yaw, pitch);
+            eye = position;
+            view = Mat4::look_at_rh(eye, eye + direction, Vec3::Y);
         }
 
         let projection = Mat4::perspective_rh_gl(
@@ -649,6 +782,7 @@ impl FlightView {
             Ok(renderer) => {
                 let renderer = renderer.clone();
                 let frame = Frame {
+                    exterior: snapshot.exterior.clone().map(Arc::new),
                     lighting_quality: self.lighting_quality,
                     cockpit_vp,
                     snapshot_time: snapshot.server_time_ms,
@@ -666,35 +800,37 @@ impl FlightView {
                     ) * view,
                     system_id,
                     ship_class: own_pilot.map_or(ShipClass::Pioneer, |p| p.ship_class),
-                    traffic: snapshot
-                        .traffic
-                        .iter()
-                        .filter(|a| a.system_id == system_id)
-                        .cloned()
-                        .collect(),
-                    surface_props: snapshot
-                        .surface_props
-                        .iter()
-                        .filter(|p| p.system_id == system_id)
-                        .cloned()
-                        .collect(),
                     drone_camera: false,
                     camera_drone: None,
+                    scene: Arc::new(FrameScene {
+                        traffic: snapshot
+                            .traffic
+                            .iter()
+                            .filter(|a| a.system_id == system_id)
+                            .cloned()
+                            .collect(),
+                        surface_props: snapshot
+                            .surface_props
+                            .iter()
+                            .filter(|p| p.system_id == system_id)
+                            .cloned()
+                            .collect(),
+                        asteroids: asteroids.clone(),
+                        gates: local_gates.clone(),
+                        pilots: snapshot
+                            .pilots
+                            .iter()
+                            .filter(|p| p.system_id == system_id && p.location != Location::Docked)
+                            .cloned()
+                            .collect(),
+                    }),
                     space,
                     cockpit,
                     rotation,
-                    asteroids: asteroids.clone(),
-                    gates: local_gates.clone(),
                     connected,
                     vp,
                     eye,
                     now,
-                    pilots: snapshot
-                        .pilots
-                        .iter()
-                        .filter(|p| p.system_id == system_id && p.location != Location::Docked)
-                        .cloned()
-                        .collect(),
                     own: pilot_name.to_string(),
 
                     docking: effects.events.iter().rev().find_map(|event| {
@@ -880,7 +1016,8 @@ impl FlightView {
                     .pilots
                     .iter()
                     .find(|pilot| pilot.name == pilot_name);
-                let can_navigate = connected
+                let can_navigate = !editor_free_camera
+                    && connected
                     && own_pilot.is_some_and(|pilot| {
                         pilot.flight.is_some()
                             && !matches!(
@@ -1014,7 +1151,10 @@ impl FlightView {
                         }
                     }
                 }
-                if !cockpit && (world_input || response.context_menu_opened()) {
+                if !cockpit
+                    && !editor_free_camera
+                    && (world_input || response.context_menu_opened())
+                {
                     response.context_menu(|ui| {
                         ui.label("Navigation");
                         match &self.context_object {
@@ -1525,29 +1665,34 @@ impl FlightView {
 }
 #[derive(Clone)]
 struct Frame {
+    exterior: Option<Arc<arkline_protocol::ExteriorWorldState>>,
     lighting_quality: super::lighting_settings::LightingQuality,
     cockpit_vp: Mat4,
     snapshot_time: u64,
     planet_vp: Mat4,
     system_id: u32,
     ship_class: ShipClass,
-    traffic: Vec<arkline_protocol::TrafficActor>,
-    surface_props: Vec<arkline_protocol::SurfaceProp>,
     drone_camera: bool,
     camera_drone: Option<u64>,
+    scene: Arc<FrameScene>,
     space: Space,
     cockpit: bool,
     rotation: Quat,
-    asteroids: Vec<Asteroid>,
-    gates: Vec<Stargate>,
     connected: bool,
     vp: Mat4,
     eye: Vec3,
     now: u64,
-    pilots: Vec<PilotView>,
     own: String,
 
     docking: Option<(f32, bool)>,
+}
+#[derive(Clone)]
+struct FrameScene {
+    traffic: Vec<arkline_protocol::TrafficActor>,
+    surface_props: Vec<arkline_protocol::SurfaceProp>,
+    asteroids: Vec<Asteroid>,
+    gates: Vec<Stargate>,
+    pilots: Vec<PilotView>,
 }
 #[derive(Clone, Copy)]
 struct Vertex {
@@ -1775,6 +1920,8 @@ struct Uniforms {
     color: Option<glow::UniformLocation>,
     emission: Option<glow::UniformLocation>,
     emissive_color: Option<glow::UniformLocation>,
+    emission_power: Option<glow::UniformLocation>,
+    emission_override: Option<glow::UniformLocation>,
     vp: Option<glow::UniformLocation>,
     eye: Option<glow::UniformLocation>,
     material: Option<glow::UniformLocation>,
@@ -1788,6 +1935,31 @@ struct Uniforms {
     planet_center: Option<glow::UniformLocation>,
     atmosphere: Option<glow::UniformLocation>,
     planet_up: Option<glow::UniformLocation>,
+}
+impl Uniforms {
+    unsafe fn new(gl: &glow::Context, program: glow::Program, background: glow::Program) -> Self {
+        Self {
+            planet_center: gl.get_uniform_location(program, "planet_center"),
+            atmosphere: gl.get_uniform_location(background, "atmosphere"),
+            planet_up: gl.get_uniform_location(background, "planet_up"),
+            model: gl.get_uniform_location(program, "model"),
+            color: gl.get_uniform_location(program, "base_color"),
+            emission: gl.get_uniform_location(program, "emission"),
+            emissive_color: gl.get_uniform_location(program, "emissive_color"),
+            emission_power: gl.get_uniform_location(program, "emission_power"),
+            emission_override: gl.get_uniform_location(program, "emission_override"),
+            vp: gl.get_uniform_location(program, "view_projection"),
+            eye: gl.get_uniform_location(program, "eye"),
+            material: gl.get_uniform_location(program, "material_kind"),
+            material_params: gl.get_uniform_location(program, "material_params"),
+            hull_surface: gl.get_uniform_location(program, "hull_surface"),
+            environment_atmosphere: gl.get_uniform_location(program, "environment_atmosphere"),
+            station_lighting: gl.get_uniform_location(program, "station_lighting"),
+            environment_up: gl.get_uniform_location(program, "environment_up"),
+            sky_inverse: gl.get_uniform_location(background, "inverse_view_projection"),
+            sky_eye: gl.get_uniform_location(background, "camera_eye"),
+        }
+    }
 }
 struct CachedFeed {
     key: u64,
@@ -1880,7 +2052,24 @@ impl CachedFeed {
         gl.delete_renderbuffer(self.depth);
     }
 }
+/// Submitted mesh work for the most recent GPU scene pass; excludes sky and shadow passes.
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct DebugRenderMetrics {
+    pub draw_calls: u64,
+    pub triangles: u64,
+    pub wireframe_draw_calls: u64,
+}
 struct Renderer {
+    exterior_emission: std::cell::Cell<exterior_visuals::EmissionPower>,
+    exterior_cache: Option<(Option<Arc<arkline_protocol::ExteriorWorldState>>, bool)>,
+    material_preview: Option<crate::EmbeddedMaterialPreview>,
+    spatial_material: MaterialProgramState,
+    spatial_uniforms: Option<SpatialMaterialUniforms>,
+    #[cfg(not(target_arch = "wasm32"))]
+    debug_wireframe: bool,
+    #[cfg(not(target_arch = "wasm32"))]
+    debug_metrics: std::cell::Cell<DebugRenderMetrics>,
     gl: Arc<glow::Context>,
     program: glow::Program,
     background: glow::Program,
@@ -1906,10 +2095,11 @@ impl Renderer {
         let program = compile(
             &gl,
             VERTEX,
-            &FRAGMENT.replacen(
-                "#version 150",
-                &format!("#version 150\n{}", sun_shadows::GLSL),
-                1,
+            &format!(
+                "{}{}{}",
+                mesh_fragment_prefix(),
+                AUTHORED_MATERIAL_FUNCTION,
+                FRAGMENT_BODY
             ),
         )?;
         let local_lights = local_lighting::Uniforms::new(&gl, program);
@@ -1918,25 +2108,7 @@ impl Renderer {
         let feed_program = compile(&gl, BACK_VERTEX, FEED_FRAGMENT)?;
         let empty = gl.create_vertex_array()?;
         let mut meshes = vec![];
-        let uniforms = Uniforms {
-            planet_center: gl.get_uniform_location(program, "planet_center"),
-            atmosphere: gl.get_uniform_location(background, "atmosphere"),
-            planet_up: gl.get_uniform_location(background, "planet_up"),
-            model: gl.get_uniform_location(program, "model"),
-            color: gl.get_uniform_location(program, "base_color"),
-            emission: gl.get_uniform_location(program, "emission"),
-            emissive_color: gl.get_uniform_location(program, "emissive_color"),
-            vp: gl.get_uniform_location(program, "view_projection"),
-            eye: gl.get_uniform_location(program, "eye"),
-            material: gl.get_uniform_location(program, "material_kind"),
-            material_params: gl.get_uniform_location(program, "material_params"),
-            hull_surface: gl.get_uniform_location(program, "hull_surface"),
-            environment_atmosphere: gl.get_uniform_location(program, "environment_atmosphere"),
-            station_lighting: gl.get_uniform_location(program, "station_lighting"),
-            environment_up: gl.get_uniform_location(program, "environment_up"),
-            sky_inverse: gl.get_uniform_location(background, "inverse_view_projection"),
-            sky_eye: gl.get_uniform_location(background, "camera_eye"),
-        };
+        let uniforms = Uniforms::new(&gl, program, background);
         let mut upload = vec![
             cube(),
             torus(1.0, 0.12),
@@ -1979,6 +2151,8 @@ impl Renderer {
         gl.bind_vertex_array(None);
         let shadow_fallback = sun_shadows::fallback(&gl)?;
         Ok(Self {
+            exterior_emission: Default::default(),
+            exterior_cache: None,
             gl,
             program,
             background,
@@ -1991,11 +2165,83 @@ impl Renderer {
             station_batches,
             feed_cache: Vec::new(),
             destroyed: false,
+            material_preview: None,
+            spatial_material: Default::default(),
+            spatial_uniforms: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            debug_wireframe: false,
+            #[cfg(not(target_arch = "wasm32"))]
+            debug_metrics: Default::default(),
             sun_shadows: Vec::new(),
             shadow_fallback,
             shadow_failed: false,
             turrets: std::collections::HashMap::new(),
         })
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    fn set_material_preview(&mut self, preview: Option<crate::EmbeddedMaterialPreview>) {
+        let preview = preview.map(crate::EmbeddedMaterialPreview::validated);
+        if self.material_preview != preview {
+            self.material_preview = preview;
+            // Geometry is unchanged: only per-draw uniforms and cached camera pixels change.
+            for feed in &mut self.feed_cache {
+                feed.painted_ms = None;
+            }
+        }
+    }
+    unsafe fn prepare_spatial_material(&mut self) {
+        let gl = self.gl.clone();
+        let background = self.background;
+        let update = self.spatial_material.prepare_validated(
+            |revision| {
+                let expected = arkline_protocol::material_graph::AssetMaterialBinding::pioneer();
+                if *revision.binding() != expected || revision.binding().asset_sha256 != pioneer_asset_sha256() {
+                    return Err(MaterialProgramDiagnostic {
+                        phase: MaterialProgramErrorPhase::Binding,
+                        node_ids: vec![],
+                        message: "This renderer supports only the current embedded Pioneer armor material slot 0. The previous valid surface remains visible.".into(),
+                    });
+                }
+                Ok(())
+            },
+            |revision| {
+                let source = MaterialShaderSource::new(&mesh_fragment_prefix(), revision, FRAGMENT_BODY);
+                compile_material_program(&gl, VERTEX, &source, revision, |gl, program| {
+                    Ok((Uniforms::new(gl, program, background), local_lighting::Uniforms::new(gl, program), SpatialMaterialUniforms::new(gl, program)))
+                })
+            },
+        );
+        let Some(update) = update else { return };
+        match self.spatial_material.commit(update) {
+            Ok(PreparedMaterialUpdate::Program { candidate, .. }) => {
+                candidate.install(
+                    &gl,
+                    &mut self.program,
+                    |(uniforms, local_lights, spatial)| {
+                        self.uniforms = uniforms;
+                        self.local_lights = local_lights;
+                        self.spatial_uniforms = Some(spatial);
+                    },
+                );
+            }
+            Err(PreparedMaterialUpdate::Program { candidate, .. }) => {
+                candidate.destroy(&gl);
+                return;
+            }
+            Err(_) => return,
+            Ok(_) => {}
+        }
+        // Includes parameter/binding/reset changes while the simulation is paused.
+        for feed in &mut self.feed_cache {
+            feed.painted_ms = None;
+        }
+    }
+    unsafe fn upload_spatial_material(&self) {
+        if let (Some(uniforms), Some(revision)) =
+            (&self.spatial_uniforms, self.spatial_material.applied())
+        {
+            uniforms.upload(&self.gl, revision);
+        }
     }
     unsafe fn draw(&self, mesh: usize, model: Mat4, color: Vec3, emission: f32) {
         self.draw_material(mesh, model, color, emission, Material::PaintedHull);
@@ -2008,10 +2254,31 @@ impl Renderer {
         emission: f32,
         material: Material,
     ) {
-        let params = embedded_primitive(mesh).map_or_else(
+        let graph_enabled = self.spatial_material.applied().is_some_and(|revision| {
+            embedded_primitive(mesh).is_some_and(|p| {
+                p.material_index == Some(revision.binding().material_index as usize)
+            })
+        });
+        let (color, emission) = if graph_enabled {
+            embedded_primitive(mesh).map_or((color, emission), |p| (p.color, p.emission))
+        } else {
+            preview_material(mesh, color, emission, self.material_preview)
+        };
+        let mut params = embedded_primitive(mesh).map_or_else(
             || material.parameters(),
             |p| [p.roughness, p.metallic, 0.0, 0.0],
         );
+        if let Some(preview) = self
+            .material_preview
+            .filter(|_| !graph_enabled && preview_paint(mesh))
+        {
+            if let Some(roughness) = preview.roughness {
+                params[0] = roughness.clamp(0.08, 1.0);
+            }
+            if let Some(metallic) = preview.metallic {
+                params[1] = metallic;
+            }
+        }
         self.gl.uniform_4_f32(
             self.uniforms.material_params.as_ref(),
             params[0],
@@ -2021,8 +2288,27 @@ impl Renderer {
         );
         let gl = &self.gl;
         gl.uniform_1_f32(
+            self.uniforms.emission_power.as_ref(),
+            self.exterior_emission.get().for_mesh(mesh),
+        );
+        let emitted = self.exterior_emission.get().override_for_mesh(mesh);
+        let color_override = emitted.unwrap_or(Vec3::ZERO);
+        gl.uniform_4_f32(
+            self.uniforms.emission_override.as_ref(),
+            color_override.x,
+            color_override.y,
+            color_override.z,
+            if emitted.is_some() { 1. } else { 0. },
+        );
+        if let Some(uniforms) = &self.spatial_uniforms {
+            uniforms.set_enabled(gl, graph_enabled);
+        }
+        gl.uniform_1_f32(
             self.uniforms.hull_surface.as_ref(),
-            if embedded_primitive(mesh).is_some_and(|p| p.emission == 0.0 && p.roughness >= 0.25) {
+            if !graph_enabled
+                && embedded_primitive(mesh)
+                    .is_some_and(|p| p.emission == 0.0 && p.roughness >= 0.25)
+            {
                 1.0
             } else {
                 0.0
@@ -2038,8 +2324,50 @@ impl Renderer {
             light_color.y,
             light_color.z,
         );
-        gl.bind_vertex_array(Some(self.meshes[mesh].vao));
-        gl.draw_arrays(glow::TRIANGLES, 0, self.meshes[mesh].count);
+        gl.bind_vertex_array(Some(self.meshes[mesh_index(mesh)].vao));
+        gl.draw_arrays(glow::TRIANGLES, 0, self.meshes[mesh_index(mesh)].count);
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let mut metrics = self.debug_metrics.get();
+            metrics.draw_calls += 1;
+            metrics.triangles += self.meshes[mesh_index(mesh)].count as u64 / 3;
+            if self.debug_wireframe {
+                let mut modes = [0; 2];
+                gl.get_parameter_i32_slice(glow::POLYGON_MODE, &mut modes);
+                let offset_enabled = gl.is_enabled(glow::POLYGON_OFFSET_LINE);
+                let factor = gl.get_parameter_f32(glow::POLYGON_OFFSET_FACTOR);
+                let units = gl.get_parameter_f32(glow::POLYGON_OFFSET_UNITS);
+                gl.enable(glow::POLYGON_OFFSET_LINE);
+                gl.polygon_offset(-1., -1.);
+                gl.polygon_mode(glow::FRONT_AND_BACK, glow::LINE);
+                gl.uniform_3_f32(self.uniforms.color.as_ref(), 0.02, 0.9, 0.25);
+                gl.uniform_3_f32(self.uniforms.emissive_color.as_ref(), 0.02, 0.9, 0.25);
+                gl.uniform_1_f32(self.uniforms.emission.as_ref(), 1.5);
+                if let Some(uniforms) = &self.spatial_uniforms {
+                    uniforms.set_enabled(gl, false);
+                }
+                gl.draw_arrays(glow::TRIANGLES, 0, self.meshes[mesh_index(mesh)].count);
+                if let Some(uniforms) = &self.spatial_uniforms {
+                    uniforms.set_enabled(gl, graph_enabled);
+                }
+                // Core GL uses a shared front/back polygon mode.
+                gl.polygon_mode(glow::FRONT_AND_BACK, modes[0] as u32);
+                gl.polygon_offset(factor, units);
+                if !offset_enabled {
+                    gl.disable(glow::POLYGON_OFFSET_LINE);
+                }
+                gl.uniform_3_f32(self.uniforms.color.as_ref(), color.x, color.y, color.z);
+                gl.uniform_3_f32(
+                    self.uniforms.emissive_color.as_ref(),
+                    light_color.x,
+                    light_color.y,
+                    light_color.z,
+                );
+                gl.uniform_1_f32(self.uniforms.emission.as_ref(), emission);
+                metrics.wireframe_draw_calls += 1;
+            }
+            self.debug_metrics.set(metrics);
+        }
     }
     unsafe fn paint_cached_feed(
         &mut self,
@@ -2049,6 +2377,9 @@ impl Renderer {
         count: usize,
         _callback_target: Option<glow::Framebuffer>,
     ) {
+        // Must precede feed_due: paused feeds also need the newly installed pixels.
+        self.prepare_spatial_material();
+        self.prepare_exterior(frame);
         let gl = self.gl.clone();
         let viewport = info.viewport_in_pixels();
         let (width, height) = feed_resolution(viewport.width_px, viewport.height_px);
@@ -2222,14 +2553,17 @@ impl Renderer {
         }
     }
     unsafe fn paint(&mut self, frame: &Frame, callback_target: Option<glow::Framebuffer>) {
+        self.prepare_spatial_material();
+        #[cfg(not(target_arch = "wasm32"))]
+        self.debug_metrics.set(Default::default());
         let space = frame.space;
         // Main and remote passes may show different systems. Keep recently drawn
         // turret state between passes so neither camera resets the other's slew.
         self.turrets.retain(|(name, _), state| {
-            frame.pilots.iter().any(|p| &p.name == name)
+            frame.scene.pilots.iter().any(|p| &p.name == name)
                 || frame.now.saturating_sub(state.last_ms) < 5000
         });
-        for pilot in &frame.pilots {
+        for pilot in &frame.scene.pilots {
             for module_id in 0..2 {
                 let state = self
                     .turrets
@@ -2258,6 +2592,7 @@ impl Renderer {
                 let desired = target
                     .and_then(|id| {
                         frame
+                            .scene
                             .asteroids
                             .iter()
                             .find(|a| a.id == id && a.system_id == pilot.system_id)
@@ -2328,6 +2663,7 @@ impl Renderer {
         gl.clear_depth_f32(1.0);
         gl.clear(glow::DEPTH_BUFFER_BIT);
         gl.use_program(Some(self.program));
+        self.upload_spatial_material();
         self.local_lights.upload(
             gl,
             frame,
@@ -2352,6 +2688,7 @@ impl Renderer {
             }
         }
         for asteroid in frame
+            .scene
             .asteroids
             .iter()
             .filter(|a| space.scene(a.position).distance(frame.eye) < 1100.0)
@@ -2374,6 +2711,7 @@ impl Renderer {
             );
         }
         for gate in frame
+            .scene
             .gates
             .iter()
             .filter(|g| space.scene(g.position).distance(frame.eye) < 1100.0)
@@ -2388,7 +2726,7 @@ impl Renderer {
                 );
             }
         }
-        for pilot in &frame.pilots {
+        for pilot in &frame.scene.pilots {
             if space.position(pilot, frame.now).distance(frame.eye) > 1100.0 {
                 continue;
             }
@@ -2399,10 +2737,14 @@ impl Renderer {
                 ship_orientation_at(pilot, frame.now),
             );
             if !frame.cockpit || !own {
+                let exterior = exterior_visuals::for_pilot(frame, pilot);
+                self.exterior_emission
+                    .set(exterior.map_or_else(Default::default, |b| b.emission_power()));
                 for &(mesh, model, color, emission) in cached_ship_parts(pilot.ship_class) {
                     self.draw_material(mesh, ship * model, color, emission, Material::BareMetal);
                 }
             }
+            self.exterior_emission.set(Default::default());
             for module_id in 0..2 {
                 if let Some(state) = self.turrets.get(&(pilot.name.clone(), module_id)) {
                     for (mesh, model, color, emission) in
@@ -2413,7 +2755,7 @@ impl Renderer {
                 }
             }
         }
-        for pilot in &frame.pilots {
+        for pilot in &frame.scene.pilots {
             for drone in fleet(pilot) {
                 if frame.camera_drone == Some(drone.id) && pilot.name == frame.own {
                     continue;
@@ -2448,7 +2790,7 @@ impl Renderer {
             }
         }
         if frame.connected {
-            for pilot in &frame.pilots {
+            for pilot in &frame.scene.pilots {
                 for drone in fleet(pilot) {
                     if drone.signal_strength <= 0.0
                         || (frame.camera_drone == Some(drone.id) && pilot.name == frame.own)
@@ -2461,6 +2803,7 @@ impl Renderer {
                             if drone.mining_cycle.is_some() =>
                         {
                             frame
+                                .scene
                                 .asteroids
                                 .iter()
                                 .find(|a| a.id == *target_id && a.ore > 0)
@@ -2477,6 +2820,7 @@ impl Renderer {
                             target_pilot,
                             target_drone_id,
                         } if frame.now % 1000 < 250 => frame
+                            .scene
                             .pilots
                             .iter()
                             .find(|p| p.name == *target_pilot)
@@ -2512,7 +2856,7 @@ impl Renderer {
     }
     /// Additive, depth-tested effects do not write depth or obscure UI meshes.
     unsafe fn paint_warp_tunnel(&self, frame: &Frame) {
-        let Some(pilot) = frame.pilots.iter().find(|p| p.name == frame.own) else {
+        let Some(pilot) = frame.scene.pilots.iter().find(|p| p.name == frame.own) else {
             return;
         };
         let Some((phase, progress)) = super::motion::warp_phase(pilot, frame.now) else {
@@ -2669,7 +3013,7 @@ impl Renderer {
         gl.enable(glow::BLEND);
         gl.blend_func_separate(glow::ONE, glow::ONE, glow::ZERO, glow::ONE);
         gl.depth_mask(false);
-        for pilot in &frame.pilots {
+        for pilot in &frame.scene.pilots {
             let ship_position = space.position(pilot, frame.now);
             if ship_position.distance(frame.eye) > 1100.0 {
                 continue;
@@ -2837,7 +3181,7 @@ impl Renderer {
                     else {
                         continue;
                     };
-                    let Some(asteroid) = frame.asteroids.iter().find(|a| {
+                    let Some(asteroid) = frame.scene.asteroids.iter().find(|a| {
                         a.id == cycle.target_id && super::effects::can_extract_target(pilot, a)
                     }) else {
                         continue;
@@ -3739,9 +4083,60 @@ fn pioneer_asset() -> Result<&'static Vec<ship_asset::Primitive>, String> {
         .as_ref()
         .map_err(Clone::clone)
 }
+// Ship-only role tags preserve shared primitive geometry without tinting station parts.
+const HULL_ROLE: usize = 1 << 24;
+const TRIM_ROLE: usize = 2 << 24;
+const EMISSION_ROLE: usize = 3 << 24;
+fn mesh_index(mesh: usize) -> usize {
+    mesh & 0x00ff_ffff
+}
+fn paint_role(mesh: usize) -> usize {
+    match mesh & !0x00ff_ffff {
+        HULL_ROLE => HULL_ROLE,
+        TRIM_ROLE => TRIM_ROLE,
+        _ => match embedded_primitive(mesh).map(|p| p.material_name.as_str()) {
+            Some("Graphite ceramic armor") => HULL_ROLE,
+            Some("Emerald structural frames") => TRIM_ROLE,
+            _ => 0,
+        },
+    }
+}
+fn preview_paint(mesh: usize) -> bool {
+    paint_role(mesh) != 0
+}
+fn preview_material(
+    mesh: usize,
+    color: Vec3,
+    emission: f32,
+    preview: Option<crate::EmbeddedMaterialPreview>,
+) -> (Vec3, f32) {
+    let Some(preview) = preview else {
+        return (color, emission);
+    };
+    let color = match paint_role(mesh) {
+        HULL_ROLE => Vec3::from_array(preview.hull_rgb),
+        TRIM_ROLE => Vec3::from_array(preview.trim_rgb),
+        _ => color,
+    };
+    let emission = if embedded_primitive(mesh).is_some() || mesh & !0x00ff_ffff == EMISSION_ROLE {
+        emission * preview.emissive_strength
+    } else {
+        emission
+    };
+    (color, emission)
+}
 fn embedded_primitive(mesh: usize) -> Option<&'static ship_asset::Primitive> {
     mesh.checked_sub(10)
         .and_then(|i| pioneer_asset().ok()?.get(i))
+}
+fn pioneer_asset_sha256() -> &'static str {
+    use sha2::{Digest, Sha256};
+    static HASH: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    HASH.get_or_init(|| {
+        hex::encode(Sha256::digest(include_bytes!(
+            "../../../assets/ships/pioneer/pioneer.glb"
+        )))
+    })
 }
 
 type ModelPart = (usize, Mat4, Vec3, f32);
@@ -4045,8 +4440,18 @@ fn build_ship_parts(class: ShipClass) -> Vec<ModelPart> {
     ) / 100.0;
     let fit =
         Mat4::from_scale(dimensions / (max - min)) * Mat4::from_translation(-(min + max) * 0.5);
-    for (_, model, _, _) in &mut parts.0 {
+    for (mesh, model, color, emission) in &mut parts.0 {
         *model = fit * *model;
+        // Roles assigned inside the ship builder, never inferred from scene colors.
+        if *emission > 0.0 {
+            *mesh |= EMISSION_ROLE;
+        } else if *emission == 0.0 {
+            if *color == graphite || *color == plate {
+                *mesh |= HULL_ROLE;
+            } else if *color == green {
+                *mesh |= TRIM_ROLE;
+            }
+        }
     }
     parts.0
 }
@@ -4217,6 +4622,18 @@ fn pioneer_construction_model() -> Vec<ModelPart> {
     for (_, m, _, _) in &mut p.0 {
         *m = fit * *m;
     }
+    // Keep the emergency procedural model on the same editor finish path as
+    // the authored GLB. The normal model receives these tags while importing
+    // its named material roles; this fallback has no named materials.
+    for (mesh, _, color, emission) in &mut p.0 {
+        if *emission > 0.0 {
+            *mesh |= EMISSION_ROLE;
+        } else if *color == dark || *color == steel {
+            *mesh |= HULL_ROLE;
+        } else if *color == trim || *color == green {
+            *mesh |= TRIM_ROLE;
+        }
+    }
     p.0
 }
 fn parts_bounds(parts: &[(usize, Mat4, Vec3, f32)]) -> (Vec3, Vec3) {
@@ -4343,7 +4760,7 @@ fn mesh_vertices(mesh: usize) -> Vec<Vertex> {
     if let Some(primitive) = embedded_primitive(mesh) {
         return primitive.vertices.clone();
     }
-    match mesh {
+    match mesh_index(mesh) {
         0 => cube(),
         1 => torus(1.0, 0.12),
         2 => sphere(false),
@@ -4553,15 +4970,20 @@ in vec3 position;in vec3 normal;uniform mat4 model;uniform mat4 view_projection;
 out vec3 world;out vec3 surface_normal;out vec3 local_position;
 void main(){local_position=position;vec4 p=model*vec4(position,1.0);world=p.xyz;surface_normal=transpose(inverse(mat3(model)))*normal;gl_Position=view_projection*p;}
 "#;
-const FRAGMENT: &str = concat!(
-    "#version 150\n",
-    include_str!("shaders/sky.glsl"),
-    include_str!("shaders/materials.glsl"),
-    include_str!("shaders/local_lighting.glsl"),
-    r#"
+fn mesh_fragment_prefix() -> String {
+    format!(
+        "#version 150\n{}{}{}{}",
+        sun_shadows::GLSL,
+        include_str!("shaders/sky.glsl"),
+        include_str!("shaders/materials.glsl"),
+        include_str!("shaders/local_lighting.glsl")
+    )
+}
+const AUTHORED_MATERIAL_FUNCTION: &str = "struct ArkSurface{vec3 base_color;float roughness;float metallic;vec3 emission;};ArkSurface ark_graph_surface(vec3 body_meters,ArkSurface authored_surface){return authored_surface;}\n";
+const FRAGMENT_BODY: &str = r#"
 in vec3 world;in vec3 surface_normal;in vec3 local_position;
-uniform vec4 material_params;uniform float hull_surface;uniform float station_lighting;uniform float environment_atmosphere;uniform vec3 environment_up;
-uniform vec3 planet_center;uniform vec3 base_color;uniform vec3 eye;uniform float emission;uniform vec3 emissive_color;uniform int material_kind;out vec4 color;
+uniform int ark_graph_enabled;uniform vec4 material_params;uniform float hull_surface;uniform float station_lighting;uniform float environment_atmosphere;uniform vec3 environment_up;
+uniform vec3 planet_center;uniform vec3 base_color;uniform vec3 eye;uniform float emission;uniform float emission_power;uniform vec4 emission_override;uniform vec3 emissive_color;uniform int material_kind;out vec4 color;
 float ark_terrain(vec3 p){return ark_noise3(p)*0.53+ark_noise3(p*2.07+13.8)*0.27+ark_noise3(p*4.13-7.1)*0.13+ark_noise3(p*8.41+29.4)*0.07;}
 void main(){vec3 n=normalize(surface_normal);if(!gl_FrontFacing)n=-n;vec3 l=normalize(vec3(-0.5,0.8,0.65));vec3 v=normalize(eye-world);
 float diffuse=max(dot(n,l),0.0);float facing=max(dot(n,v),0.0);float rim=pow(1.0-facing,3.0);
@@ -4586,6 +5008,12 @@ if(material_kind==1 || material_kind==2){
 }else{
     vec3 albedo=max(base_color,vec3(0.0));
     float roughness=material_params.x,metallic=material_params.y;
+    vec3 emitted=max(emissive_color,vec3(0.0))*max(emission,0.0);
+    if(ark_graph_enabled!=0){
+        ArkSurface authored=ArkSurface(albedo,roughness,metallic,emitted);
+        ArkSurface surface=ark_graph_surface(local_position*100.0,authored);
+        albedo=surface.base_color;roughness=surface.roughness;metallic=surface.metallic;emitted=surface.emission;
+    }
     if(material_params.z>0.5){
         float vein=1.0-smoothstep(0.045,0.11,abs(ark_noise3(local_position*5.0)-0.52));
         metallic=mix(0.0,0.82,vein);roughness=mix(0.90,0.34,vein);
@@ -4601,11 +5029,11 @@ if(material_kind==1 || material_kind==2){
         lit+=ark_environment(n,v,albedo,roughness,metallic,environment_atmosphere,environment_up);
     }
     lit+=ark_local_lighting(world,n,v,albedo,roughness,metallic);
-    lit+=max(emissive_color,vec3(0.0))*max(emission,0.0);
+    if(emission_override.a>0.5) emitted=max(emission_override.rgb,vec3(0.0));
+    lit+=emitted*emission_power;
 }
 color=vec4(ark_display(lit),1.0);}
-"#
-);
+"#;
 const BACK_VERTEX: &str = r#"#version 150
 out vec2 uv;void main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);uv=p;gl_Position=vec4(p*2.0-1.0,0.999,1.0);}
 "#;
@@ -4633,6 +5061,122 @@ c=mix(c,sky,atmosphere);color=vec4(ark_display(c),1.0);}
 
 #[cfg(test)]
 mod tests {
+    fn frame_for_scene_clone_test() -> Frame {
+        let vp = Mat4::IDENTITY;
+        Frame {
+            exterior: None,
+            lighting_quality: Default::default(),
+            cockpit_vp: vp,
+            snapshot_time: 1000,
+            planet_vp: vp,
+            system_id: 3,
+            ship_class: ShipClass::Pioneer,
+            drone_camera: false,
+            camera_drone: None,
+            scene: Arc::new(FrameScene {
+                traffic: vec![],
+                surface_props: vec![],
+                asteroids: vec![],
+                gates: vec![],
+                pilots: vec![],
+            }),
+            space: Space { origin: [0.; 3] },
+            cockpit: true,
+            rotation: Quat::IDENTITY,
+            connected: true,
+            vp,
+            eye: Vec3::ZERO,
+            now: 1000,
+            own: "fixture".into(),
+            docking: None,
+        }
+    }
+
+    #[test]
+    fn camera_frame_clones_share_scene_and_keep_camera_overrides_local() {
+        let original = frame_for_scene_clone_test();
+        let mut feed = original.clone();
+        assert!(Arc::ptr_eq(&original.scene, &feed.scene));
+
+        feed.drone_camera = true;
+        feed.camera_drone = Some(42);
+        feed.eye = Vec3::X;
+        feed.vp = Mat4::from_translation(Vec3::ONE);
+
+        assert!(!original.drone_camera);
+        assert_eq!(original.camera_drone, None);
+        assert_eq!(original.eye, Vec3::ZERO);
+        assert_eq!(original.vp, Mat4::IDENTITY);
+        assert_eq!(feed.camera_drone, Some(42));
+        assert_eq!(feed.eye, Vec3::X);
+        assert_eq!(feed.vp, Mat4::from_translation(Vec3::ONE));
+    }
+
+    #[test]
+    fn procedural_pioneer_fallback_keeps_editor_finish_roles() {
+        let preview = crate::EmbeddedMaterialPreview {
+            hull_rgb: [0.8, 0.1, 0.2],
+            trim_rgb: [0.2, 0.1, 0.8],
+            emissive_strength: 2.0,
+            ..Default::default()
+        };
+        let parts = pioneer_construction_model();
+        assert!(parts.iter().any(|p| paint_role(p.0) == HULL_ROLE));
+        assert!(parts.iter().any(|p| paint_role(p.0) == TRIM_ROLE));
+        assert!(parts.iter().any(|p| p.0 & !0x00ff_ffff == EMISSION_ROLE));
+        for &(mesh, _, color, emission) in &parts {
+            let (edited_color, edited_emission) =
+                preview_material(mesh, color, emission, Some(preview));
+            match paint_role(mesh) {
+                HULL_ROLE => assert_eq!(edited_color, Vec3::from_array(preview.hull_rgb)),
+                TRIM_ROLE => assert_eq!(edited_color, Vec3::from_array(preview.trim_rgb)),
+                _ => assert_eq!(edited_color, color),
+            }
+            if emission > 0.0 {
+                assert_eq!(edited_emission, emission * preview.emissive_strength);
+            }
+        }
+    }
+
+    #[test]
+    fn fleet_preview_roles_change_finish_not_geometry_or_station() {
+        let preview = crate::EmbeddedMaterialPreview {
+            hull_rgb: [0.8, 0.1, 0.2],
+            trim_rgb: [0.2, 0.1, 0.8],
+            ..Default::default()
+        };
+        for class in arkline_protocol::ALL_SHIP_CLASSES {
+            let parts = cached_ship_parts(class);
+            assert!(
+                parts.iter().any(|p| paint_role(p.0) == HULL_ROLE),
+                "{class:?}"
+            );
+            assert!(
+                parts.iter().any(|p| paint_role(p.0) == TRIM_ROLE),
+                "{class:?}"
+            );
+            for &(mesh, _, color, emission) in parts {
+                let edited = preview_material(mesh, color, emission, Some(preview));
+                assert_eq!(
+                    preview_material(mesh, color, emission, None),
+                    (color, emission)
+                );
+                if paint_role(mesh) == HULL_ROLE {
+                    assert_eq!(edited.0, Vec3::from_array(preview.hull_rgb));
+                }
+                if mesh & !0x00ff_ffff != 0 {
+                    let a = mesh_vertices(mesh);
+                    let b = mesh_vertices(mesh_index(mesh));
+                    assert_eq!(a.len(), b.len());
+                    assert!(a.iter().zip(&b).all(|(a, b)| a.p == b.p && a.n == b.n));
+                }
+            }
+        }
+        assert_eq!(
+            preview_material(0, Vec3::ONE, 0.0, Some(preview)),
+            (Vec3::ONE, 0.0)
+        );
+    }
     #[test]
     fn armor_surface_is_closed_outward_and_preserves_cube_envelope() {
         use std::collections::BTreeMap;
@@ -4810,26 +5354,29 @@ mod tests {
             let view = Mat4::look_at_rh(Vec3::ZERO, Vec3::X, Vec3::Y);
             let vp = Mat4::perspective_rh_gl(1.05, 1., 0.002, 1200.) * view;
             let mut frame = Frame {
+                exterior: None,
                 lighting_quality: Default::default(),
                 cockpit_vp: vp,
                 snapshot_time: 1000,
                 planet_vp: vp,
                 system_id: 3,
                 ship_class: ShipClass::Pioneer,
-                traffic: vec![],
-                surface_props: vec![],
                 drone_camera: true,
                 camera_drone: None,
+                scene: Arc::new(FrameScene {
+                    traffic: vec![],
+                    surface_props: vec![],
+                    asteroids: vec![],
+                    gates: vec![],
+                    pilots: vec![],
+                }),
                 space: Space { origin: [0.; 3] },
                 cockpit: false,
                 rotation: Quat::IDENTITY,
-                asteroids: vec![],
-                gates: vec![],
                 connected: true,
                 vp,
                 eye: Vec3::ZERO,
                 now: 1000,
-                pilots: vec![],
                 own: "fixture".into(),
                 docking: None,
             };
@@ -4959,6 +5506,175 @@ mod tests {
                 material_pixels[0], material_pixels[4],
                 "rock and screen glass cannot share roughness response"
             );
+            // Live editor changes use the same draw path in flight and dock scenes.
+            // No mesh rebuild; paused feed pixels are invalidated on edits and reset.
+            let hull_index = pioneer_asset()
+                .unwrap()
+                .iter()
+                .position(|p| p.material_name == "Graphite ceramic armor")
+                .unwrap()
+                + 10;
+            let mut preview_pixels = Vec::new();
+            for preview in [
+                None,
+                Some(crate::EmbeddedMaterialPreview {
+                    hull_rgb: [0.9, 0.02, 0.03],
+                    roughness: Some(0.2),
+                    metallic: Some(0.7),
+                    ..Default::default()
+                }),
+                None,
+            ] {
+                renderer.set_material_preview(preview);
+                if preview.is_some() {
+                    assert!(renderer
+                        .feed_cache
+                        .iter()
+                        .all(|cache| cache.painted_ms.is_none()));
+                }
+                gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
+                let primitive = embedded_primitive(hull_index).unwrap();
+                for side in [-1.0, 1.0] {
+                    renderer.draw_material(
+                        hull_index,
+                        Mat4::from_translation(Vec3::new(side * 0.75, 0.0, 0.0))
+                            * Mat4::from_scale(Vec3::splat(1.7)),
+                        primitive.color,
+                        primitive.emission,
+                        Material::PaintedHull,
+                    );
+                }
+                let mut pixels = vec![0u8; 128 * 128 * 4];
+                gl.read_pixels(
+                    0,
+                    0,
+                    128,
+                    128,
+                    glow::RGBA,
+                    glow::UNSIGNED_BYTE,
+                    glow::PixelPackData::Slice(Some(&mut pixels)),
+                );
+                preview_pixels.push(pixels);
+            }
+            assert_ne!(
+                preview_pixels[0], preview_pixels[1],
+                "live hull preview must change GPU output"
+            );
+            for half in [0usize, 64] {
+                assert!(
+                    (0..128).any(|y| (half..half + 64).any(|x| {
+                        let i = (y * 128 + x) * 4;
+                        preview_pixels[0][i..i + 3] != preview_pixels[1][i..i + 3]
+                    })),
+                    "both Pioneer instances must receive live finish"
+                );
+            }
+            assert_eq!(
+                preview_pixels[0], preview_pixels[2],
+                "reset restores authored GPU output"
+            );
+            // Independent PBR controls: identical authored hull, base color, camera,
+            // lights and exposure. Each pair changes exactly one scalar uniform.
+            let mut pbr_pixels = Vec::new();
+            for (roughness, metallic) in [(0.15, 0.0), (0.85, 0.0), (0.4, 0.0), (0.4, 1.0)] {
+                renderer.set_material_preview(Some(crate::EmbeddedMaterialPreview {
+                    hull_rgb: [0.3, 0.3, 0.3],
+                    roughness: Some(roughness),
+                    metallic: Some(metallic),
+                    ..Default::default()
+                }));
+                gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
+                let primitive = embedded_primitive(hull_index).unwrap();
+                renderer.draw_material(
+                    hull_index,
+                    Mat4::from_scale(Vec3::splat(3.0)),
+                    primitive.color,
+                    primitive.emission,
+                    Material::PaintedHull,
+                );
+                let mut pixels = vec![0u8; 128 * 128 * 4];
+                gl.read_pixels(
+                    0,
+                    0,
+                    128,
+                    128,
+                    glow::RGBA,
+                    glow::UNSIGNED_BYTE,
+                    glow::PixelPackData::Slice(Some(&mut pixels)),
+                );
+                assert_eq!(gl.get_error(), glow::NO_ERROR);
+                assert!(
+                    pixels
+                        .chunks_exact(4)
+                        .filter(|p| p[..3].iter().any(|v| *v > 8))
+                        .count()
+                        > 64,
+                    "PBR fixture must contain visible hull pixels"
+                );
+                pbr_pixels.push(pixels);
+            }
+            for (name, a, b) in [("roughness", 0, 1), ("metallic", 2, 3)] {
+                let changed = pbr_pixels[a]
+                    .chunks_exact(4)
+                    .zip(pbr_pixels[b].chunks_exact(4))
+                    .filter(|(a, b)| a[..3].iter().zip(&b[..3]).any(|(a, b)| a.abs_diff(*b) >= 2))
+                    .count();
+                assert!(
+                    changed > 16,
+                    "{name} alone must visibly change the same RGB hull: {changed} pixels"
+                );
+                eprintln!("independent {name} GPU response: {changed} pixels differ by >=2/255");
+            }
+            renderer.set_material_preview(None);
+            // Actual cached triangle-edge overlay and native GL-state restoration.
+            let mut wire_pixels = Vec::new();
+            for enabled in [false, true] {
+                renderer.debug_wireframe = enabled;
+                renderer.debug_metrics.set(Default::default());
+                gl.polygon_mode(glow::FRONT_AND_BACK, glow::FILL);
+                gl.disable(glow::POLYGON_OFFSET_LINE);
+                gl.polygon_offset(2., 3.);
+                gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
+                renderer.draw(0, Mat4::IDENTITY, Vec3::splat(0.15), 0.);
+                let mut pixels = vec![0u8; 128 * 128 * 4];
+                gl.read_pixels(
+                    0,
+                    0,
+                    128,
+                    128,
+                    glow::RGBA,
+                    glow::UNSIGNED_BYTE,
+                    glow::PixelPackData::Slice(Some(&mut pixels)),
+                );
+                wire_pixels.push(pixels);
+                let mut modes = [0; 2];
+                gl.get_parameter_i32_slice(glow::POLYGON_MODE, &mut modes);
+                assert_eq!(modes, [glow::FILL as i32; 2]);
+                assert!(!gl.is_enabled(glow::POLYGON_OFFSET_LINE));
+                assert_eq!(gl.get_parameter_f32(glow::POLYGON_OFFSET_FACTOR), 2.);
+                assert_eq!(gl.get_parameter_f32(glow::POLYGON_OFFSET_UNITS), 3.);
+                assert_eq!(renderer.debug_metrics.get().draw_calls, 1);
+                assert_eq!(
+                    renderer.debug_metrics.get().triangles,
+                    renderer.meshes[0].count as u64 / 3
+                );
+                assert_eq!(
+                    renderer.debug_metrics.get().wireframe_draw_calls,
+                    u64::from(enabled)
+                );
+                assert_eq!(gl.get_error(), glow::NO_ERROR);
+            }
+            assert!(
+                wire_pixels[0]
+                    .iter()
+                    .zip(&wire_pixels[1])
+                    .filter(|(a, b)| a != b)
+                    .count()
+                    > 40,
+                "wireframe must change actual GPU pixels"
+            );
+            renderer.debug_wireframe = false;
+            gl.polygon_offset(0., 0.);
             // Exercise the integrated local-light hook through the actual mesh BRDF,
             // not only the isolated attenuation shader test.
             gl.uniform_1_i32(
@@ -5350,6 +6066,7 @@ mod tests {
             warp: None,
         });
         let snapshot = Snapshot {
+            exterior: None,
             fleet_links: vec![],
             remote_controls: vec![],
             resource_jobs: vec![],
@@ -5470,7 +6187,13 @@ mod tests {
             }
             std::hint::black_box(mining_impact(source, &rock, space, 0));
         }
-        eprintln!("CPU render preparation500 iterations: reconstructed uncached {:?}; cached {:?}. Station draws {} -> {}",uncached,start.elapsed(),station_parts(space).len(),batches.len());
+        eprintln!(
+            "CPU render preparation500 iterations: reconstructed uncached {:?}; cached {:?}. Station draws {} -> {}",
+            uncached,
+            start.elapsed(),
+            station_parts(space).len(),
+            batches.len()
+        );
     }
     #[test]
     fn station_batches_preserve_bounds_vertices_and_reduce_draw_calls() {
@@ -5581,7 +6304,15 @@ mod tests {
         for _ in 0..100_000 {
             std::hint::black_box(pioneer_asset().unwrap());
         }
-        eprintln!("Pioneer asset: bytes={}, triangles={}, draw_calls={}, decode_once_us={}, cached_100000_accesses_us={}, debug_assertions={}", bytes.len(), parsed.iter().map(|p|p.vertices.len()/3).sum::<usize>(), cached.len(), decode.as_micros(), start.elapsed().as_micros(), cfg!(debug_assertions));
+        eprintln!(
+            "Pioneer asset: bytes={}, triangles={}, draw_calls={}, decode_once_us={}, cached_100000_accesses_us={}, debug_assertions={}",
+            bytes.len(),
+            parsed.iter().map(|p| p.vertices.len() / 3).sum::<usize>(),
+            cached.len(),
+            decode.as_micros(),
+            start.elapsed().as_micros(),
+            cfg!(debug_assertions)
+        );
     }
 
     #[test]
@@ -5620,10 +6351,11 @@ mod tests {
                     .map(area)
                     .sum();
                 assert!(luminous < total * 0.12, "Pioneer luminous surface budget");
-                assert!(primitives.iter().all(|p| p
-                    .vertices
-                    .iter()
-                    .all(|v| v.p.is_finite() && v.n.is_finite())));
+                assert!(primitives.iter().all(|p| {
+                    p.vertices
+                        .iter()
+                        .all(|v| v.p.is_finite() && v.n.is_finite())
+                }));
                 continue;
             }
             assert!(
@@ -5744,6 +6476,40 @@ mod tests {
         assert_eq!(warp_tunnel_intensity("WARP WARMUP", 0.0), 0.0);
         assert_eq!(warp_tunnel_intensity("WARP CRUISE", 0.5), 1.0);
         assert_eq!(warp_tunnel_intensity("WARP ARRIVAL", 1.0), 0.0);
+    }
+    #[test]
+    fn editor_free_camera_freezes_scene_origin_and_restores_live_player_origin() {
+        let initial = Space {
+            origin: [1_000_000.0, 20.0, -400.0],
+        };
+        let mut view = FlightView::new(None);
+        view.space = initial;
+        view.set_editor_free_camera(true, Some((Vec3::ZERO, 0.0, 0.0)));
+        assert_eq!(view.editor_free_camera_space, Some(initial));
+        view.set_editor_free_camera(false, None);
+        assert!(view.editor_free_camera_space.is_none());
+        let (first_frame, frozen) = editor_camera_scene_space(true, None, initial);
+        let camera = Vec3::new(7.0, 3.0, -2.0);
+        let camera_world = first_frame.world(camera);
+
+        // The ship's display origin moves by ten scene units, but the camera's
+        // scene transform remains anchored for the full free-camera session.
+        let ship_world = [1_001_000.0, 20.0, -400.0];
+        let moved_live = Space { origin: ship_world };
+        let (moving_frame, still_frozen) = editor_camera_scene_space(true, frozen, moved_live);
+        assert_eq!(moving_frame.origin, initial.origin);
+        assert_eq!(still_frozen.unwrap().origin, initial.origin);
+        assert_eq!(moving_frame.world(camera), camera_world);
+
+        // On disable, the normal scene origin follows the ship again, while the
+        // player target rebases to the same world point in that live frame.
+        let (restored, no_freeze) = editor_camera_scene_space(false, still_frozen, moved_live);
+        assert_eq!(restored.origin, ship_world);
+        assert!(no_freeze.is_none());
+        let player_target_during_freecam = moving_frame.scene(ship_world);
+        let restored_target =
+            rebased_camera_target(player_target_during_freecam, moving_frame, restored, false);
+        assert!(restored_target.length() < 1e-5);
     }
     #[test]
     fn cockpit_heading_and_au_relative_precision() {

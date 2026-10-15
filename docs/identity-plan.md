@@ -1,6 +1,6 @@
 # Website and game identity: current state and integration plan
 
-**Status: private Rust identity foundation deployed and tested; public account access and game integration are not implemented.** The private provider has passed isolated account and OIDC lifecycle checks. Public signup and the account-domain route remain disabled. A website account cannot currently authenticate an Arkline pilot; no game token exchange, account-linking migration or client browser callback is implemented.
+**Status: opt-in server account admission and native browser sign-in are implemented on the integration branch; official rollout is not verified.** The private provider previously passed isolated lifecycle checks. The engine now has resource-token validation, explicit dual-proof pilot linking, expiring transport sessions and a native PKCE callback flow. These require operator configuration and real provider acceptance before becoming official login. Browser/TUI account sign-in and lost-credential recovery remain unfinished. See [native sign-in](native-account-sign-in.md), [server admission](game-account-admission.md), [local development identities](local-development-identity.md), and the [Editor](editor.md).
 
 ## Current private foundation
 
@@ -9,6 +9,37 @@ Arkline has a separate private Rust account-service repository and account store
 Isolated acceptance covered registration with captured verification mail, password login and recovery, profile changes, logout, authorization code with S256 PKCE, token signature/claim checks, replay rejection, refresh/revocation, signing-key rotation, restart and backup restoration. The private workload's health, HTTPS issuer configuration and secure host-only cookie attributes were also checked. These results establish a foundation, not a completed public account launch or game sign-in journey.
 
 Owner administrator assignment/handoff, final public proxy/browser acceptance and game account-to-pilot linking remain separate work. Passkey support is not advertised as tested. Exact private runtime credentials and operator access details are intentionally outside this public document.
+
+## Optional GitHub sign-in to the same Arkline account
+
+This is planned private account-service work tracked in [#9](https://github.com/PIndustries/arkline-engine/issues/9). Provider registration, linking endpoints and a real GitHub-to-Arkline game sign-in journey are **not established** by the editor's GitHub integration. Local editor stabilization remains the immediate priority; this design does not enable public registration or change official server admission.
+
+The two GitHub uses have different credentials and consent:
+
+| Purpose | Credential consumer | Account boundary |
+| --- | --- | --- |
+| Editor community/repository access ([#48](https://github.com/PIndustries/arkline-engine/issues/48)) | GitHub API, through the editor's separately registered device-flow client | GitHub contributor account; no game identity or pilot claim |
+| Optional game sign-in using GitHub | Private Arkline account service completes the provider authorization | An alternative login method for the same Arkline account and stable Arkline subject |
+| Entering an Arkline world | Game server validates its configured Arkline issuer, resource audience, signature, expiry and scopes | Existing `(issuer, subject)` pilot ownership rules remain unchanged |
+
+The private service must bind a GitHub provider identifier and its immutable numeric user ID to an internal Arkline account. GitHub login names, display names and email addresses are mutable attributes, never ownership keys. A verified email match alone must not merge accounts. New-account registration, if enabled later, is an explicit flow subject to its own policy; an attempted login or ambiguous match must not silently create another pilot.
+
+Adding a provider link requires both a freshly authenticated existing Arkline account and successful GitHub authorization bound to that same account-management session. Use provider-flow state/callback protections and server-side token verification; do not accept an arbitrary client-supplied GitHub ID as proof. Enforce provider-ID uniqueness transactionally, reject conflicting ownership without mutation and audit link/unlink operations without storing tokens in the audit record. Repeated delivery of the same valid link must be idempotent.
+
+After GitHub authentication, the account service issues the ordinary Arkline access token with the same Arkline subject used by the account's other login methods and the configured world audience/scopes. The game does not receive or accept GitHub API tokens. Native game authorization still uses the configured Arkline authorization endpoint and PKCE; it does not switch its trust anchor to GitHub. Existing legacy pilots still require explicit proof of their saved pilot credential plus Arkline account authorization before binding. Neither a provider link nor repository membership grants corporation, fleet or operator powers.
+
+Unlinking requires recent Arkline authentication and must not remove the last usable login/recovery method without a separately verified recovery path. Define effects on active account sessions, outstanding grants and already-issued short-lived game tokens explicitly. GitHub app revocation and local editor sign-out are not equivalent to immediate Arkline game-session revocation. Developer repository/project API permissions remain separate from game sign-in consent; no repository-write permission should be silently requested to enter a world.
+
+Acceptance before enabling this provider:
+
+- Prove GitHub sign-in and another supported login resolve to the **same** Arkline subject, existing pilots, inventories and permissions before and after restart.
+- Reject absent/stale Arkline authentication, mismatched callback state, replayed authorization, arbitrary provider IDs and linking an ID already owned by another account; concurrent conflicting link requests produce one owner and no partial records.
+- Verify a GitHub username/email change does not change account ownership; matching emails do not auto-link or create duplicate pilots.
+- Preserve dual-proof legacy-pilot linking and fail safely when its original credential is missing.
+- Verify unlink/relink, last-method protection, provider denial/expiry/revocation and account recovery; document the actual session-revocation window.
+- Confirm GitHub tokens never enter game requests, project files, logs or public snapshots, and developer API scopes are not substituted for game scopes.
+
+Existing source already supplies optional Arkline access-token validation, stable issuer/subject bindings, transactional legacy linking and expiring game sessions. It does not supply the GitHub federation mapping, private account-link/unlink API, recovery policy or deployed provider acceptance described here. Browser/TUI account flows and immediate provider revocation remain separate gaps.
 
 ## Historical website investigation
 

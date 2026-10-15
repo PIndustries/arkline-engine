@@ -1,9 +1,27 @@
 //! Arkline v0.1 wire format and canonical economic event encoding.
 //! One JSON request/response per line over a local TCP connection.
+mod editor_scene;
+pub use editor_scene::*;
+mod editor_graph;
+pub use editor_graph::*;
 mod room_equipment;
 pub use room_equipment::*;
+mod exterior_effects;
+pub use exterior_effects::*;
 mod pioneer_interior;
 pub use pioneer_interior::*;
+mod room_layout;
+pub use room_layout::*;
+pub mod material_compile;
+pub mod material_graph;
+pub use material_compile::{
+    lower_material, LoweredMaterial, MaterialCosts, MaterialSourceSpan, MaterialUniformSlot,
+};
+pub use material_graph::{
+    AssetMaterialBinding, MaterialDiagnostic, MaterialDiagnosticCode, MaterialGraphDocument,
+    MaterialNode, MaterialNodeId, MaterialNodeOp, MaterialParameter, MaterialParameterId,
+    MaterialParameterValue, MaterialValueType, PIONEER_MATERIAL_SHA256,
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -13,6 +31,8 @@ pub const MAX_RESOURCE_JOB_UNITS: u64 = 1_000_000;
 pub const BUILD_VERSION: &str = include_str!("../../../BUILD_VERSION");
 
 pub const PROTOCOL_VERSION: u32 = 1;
+// Exterior effects remain additive v1: an optional snapshot advertises support,
+// and its independently versioned definition is required before new commands.
 pub const RULESET_VERSION: u32 = 1;
 pub const STARTER_CREDITS: u64 = 1_000;
 pub const INITIAL_BELT_ORE: u64 = 100_000;
@@ -536,8 +556,28 @@ pub enum Request {
     SetPioneerRoom {
         action: PioneerRoomCommand,
     },
+    SetPioneerExterior {
+        enabled: bool,
+        expected_revision: u64,
+    },
     BoardShip {
         id: String,
+    },
+    AuthCapabilities,
+    AccountConnect {
+        access_token: String,
+        pilot: String,
+        #[serde(default)]
+        legacy_resume_token: Option<String>,
+        #[serde(default)]
+        link_existing: bool,
+        protocol_version: u32,
+        #[serde(default)]
+        supports_room_controls: bool,
+        #[serde(default)]
+        supports_fleet_hangar: bool,
+        #[serde(default)]
+        supports_pioneer_interior: bool,
     },
     Connect {
         #[serde(default)]
@@ -1036,6 +1076,9 @@ pub struct CorporationView {
 pub struct AssetsView {
     #[serde(default)]
     pub pioneer_room: Option<PioneerRoomState>,
+    /// Host-authoritative, validated room geometry when a project layout is active.
+    #[serde(default)]
+    pub pioneer_room_layout: Option<RoomLayoutState>,
     #[serde(default)]
     pub hangar: Option<HangarView>,
     #[serde(default)]
@@ -1051,6 +1094,9 @@ pub struct AssetsView {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Snapshot {
+    /// Presence advertises additive exterior schema support; older servers omit it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exterior: Option<ExteriorWorldState>,
     #[serde(default)]
     pub remote_controls: Vec<RemoteControlLease>,
     #[serde(default)]
@@ -1180,7 +1226,18 @@ pub struct LedgerExport {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthCapabilities {
+    pub issuer: String,
+    pub audience: String,
+    pub profile: String,
+    pub required_scope: String,
+    pub auth_required: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Response {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auth: Option<AuthCapabilities>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub assets: Option<AssetsView>,
     pub ok: bool,
@@ -1196,6 +1253,7 @@ pub struct Response {
 impl Response {
     pub fn error(message: impl Into<String>) -> Self {
         Self {
+            auth: None,
             assets: None,
             ok: false,
             message: message.into(),
@@ -1222,6 +1280,17 @@ mod compatibility_tests {
         });
         let snapshot: Snapshot = serde_json::from_value(json).unwrap();
         assert!(snapshot.online_pilots.is_empty());
+        assert!(snapshot.exterior.is_none());
+    }
+    #[test]
+    fn exterior_commands_require_revision_and_are_not_remotely_delegable() {
+        assert!(serde_json::from_value::<Request>(
+            serde_json::json!({"command":"set_pioneer_exterior","enabled":true})
+        )
+        .is_err());
+        let request:Request=serde_json::from_value(serde_json::json!({"command":"set_pioneer_exterior","enabled":true,"expected_revision":0})).unwrap();
+        assert!(!request.is_remote_gameplay());
+        assert_eq!(PROTOCOL_VERSION, 1);
     }
 }
 

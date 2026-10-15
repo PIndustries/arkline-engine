@@ -94,8 +94,13 @@ pub struct PilotInput {
     aiming: bool,
     captured: bool,
     capture_failed: bool,
+    capture_disabled: bool,
 }
 impl PilotInput {
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn disable_capture(&mut self) {
+        self.capture_disabled = true;
+    }
     pub fn relinquish(&mut self, mailbox: &Mailbox) {
         mailbox.clear();
         self.active = false;
@@ -157,7 +162,7 @@ impl PilotInput {
             self.aiming = true;
             // macOS winit supports Locked. Other backends retain visible aiming
             // until their lock support can be checked through a result-bearing API.
-            if cfg!(target_os = "macos") && !self.capture_failed {
+            if cfg!(target_os = "macos") && !self.capture_failed && !self.capture_disabled {
                 ctx.send_viewport_cmd(egui::ViewportCommand::CursorGrab(egui::CursorGrab::Locked));
                 ctx.send_viewport_cmd(egui::ViewportCommand::CursorVisible(false));
                 self.captured = true;

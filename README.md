@@ -38,8 +38,7 @@ For a local universe, run `arkline-client --local`.
 
 The [player and developer guide](https://github.com/PIndustries/arkline-engine/wiki/Player-Guide)
 contains installation, platform requirements, source builds, first flight and
-validation commands. Current models are generated in Rust; GLB import is planned
-but is not implemented yet.
+validation commands. Pioneer uses an embedded GLB; other ships remain procedural.
 
 ## Official documentation
 

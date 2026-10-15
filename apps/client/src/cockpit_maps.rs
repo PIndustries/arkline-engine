@@ -397,37 +397,39 @@ pub(super) fn remote_ship_frame(
     feed.drone_camera = true;
     feed.camera_drone = None;
     feed.docking = None;
-    feed.pilots = snapshot
-        .pilots
-        .iter()
-        .filter(|p| {
-            p.system_id == worker.system_id
-                && (p.location != Location::Docked || p.name == worker.name)
-        })
-        .cloned()
-        .collect();
-    feed.asteroids = snapshot
-        .asteroids
-        .iter()
-        .filter(|a| a.system_id == worker.system_id)
-        .cloned()
-        .collect();
-    feed.gates = arkline_protocol::gates()
-        .into_iter()
-        .filter(|g| g.system_id == worker.system_id)
-        .collect();
-    feed.traffic = snapshot
-        .traffic
-        .iter()
-        .filter(|a| a.system_id == worker.system_id)
-        .cloned()
-        .collect();
-    feed.surface_props = snapshot
-        .surface_props
-        .iter()
-        .filter(|p| p.system_id == worker.system_id)
-        .cloned()
-        .collect();
+    feed.scene = std::sync::Arc::new(super::FrameScene {
+        traffic: snapshot
+            .traffic
+            .iter()
+            .filter(|a| a.system_id == worker.system_id)
+            .cloned()
+            .collect(),
+        surface_props: snapshot
+            .surface_props
+            .iter()
+            .filter(|p| p.system_id == worker.system_id)
+            .cloned()
+            .collect(),
+        pilots: snapshot
+            .pilots
+            .iter()
+            .filter(|p| {
+                p.system_id == worker.system_id
+                    && (p.location != Location::Docked || p.name == worker.name)
+            })
+            .cloned()
+            .collect(),
+        asteroids: snapshot
+            .asteroids
+            .iter()
+            .filter(|a| a.system_id == worker.system_id)
+            .cloned()
+            .collect(),
+        gates: arkline_protocol::gates()
+            .into_iter()
+            .filter(|g| g.system_id == worker.system_id)
+            .collect(),
+    });
     feed
 }
 
@@ -448,26 +450,29 @@ mod remote_tests {
     }
     fn main_frame() -> Frame {
         Frame {
+            exterior: None,
             lighting_quality: Default::default(),
             cockpit_vp: Mat4::IDENTITY,
             snapshot_time: 1000,
             planet_vp: Mat4::IDENTITY,
             system_id: 1,
             ship_class: ShipClass::Pioneer,
-            traffic: vec![],
-            surface_props: vec![],
             drone_camera: false,
             camera_drone: None,
+            scene: std::sync::Arc::new(super::FrameScene {
+                traffic: vec![],
+                surface_props: vec![],
+                asteroids: vec![],
+                gates: vec![],
+                pilots: vec![],
+            }),
             space: Space::default(),
             cockpit: true,
             rotation: Quat::IDENTITY,
-            asteroids: vec![],
-            gates: vec![],
             connected: true,
             vp: Mat4::IDENTITY,
             eye: Vec3::new(1.0, 2.0, 3.0),
             now: 1000,
-            pilots: vec![],
             own: "Controller".into(),
             docking: None,
         }
@@ -499,14 +504,15 @@ mod remote_tests {
         let worker = &s.pilots[1];
         let main = main_frame();
         let feed = remote_ship_frame(&main, &s, worker, 1.5);
+        assert!(!std::sync::Arc::ptr_eq(&feed.scene, &main.scene));
         assert_eq!(feed.space.origin, worker.flight.as_ref().unwrap().position);
         assert_eq!(feed.system_id, 2);
         assert_eq!(feed.own, "Worker");
-        assert_eq!(feed.pilots.len(), 1);
-        assert_eq!(feed.pilots[0].mining_modules, worker.mining_modules);
-        assert!(feed.gates.iter().all(|g| g.system_id == 2));
-        assert_eq!(feed.asteroids.len(), 1);
-        assert_eq!(feed.asteroids[0].id, 2);
+        assert_eq!(feed.scene.pilots.len(), 1);
+        assert_eq!(feed.scene.pilots[0].mining_modules, worker.mining_modules);
+        assert!(feed.scene.gates.iter().all(|g| g.system_id == 2));
+        assert_eq!(feed.scene.asteroids.len(), 1);
+        assert_eq!(feed.scene.asteroids[0].id, 2);
         let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(300.0, 200.0));
         assert!(
             project_point(feed.vp, rect, Vec3::ZERO)

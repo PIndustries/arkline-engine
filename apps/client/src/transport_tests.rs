@@ -2,6 +2,7 @@ use super::*;
 use std::net::TcpListener;
 fn response() -> Response {
     Response {
+        auth: None,
         assets: None,
         ok: true,
         message: "Connected".into(),
@@ -133,7 +134,7 @@ fn recovery_resumes_credentials_and_discards_uncertain_actions_and_controls() {
             server,
             "RecoveryPilot".into(),
             directory,
-            None,
+            WorkerIdentity::default(),
             commands_rx,
             updates_tx,
             mailbox,
@@ -256,7 +257,7 @@ fn snapshot_read_timeout_recovers_identity_without_replaying_snapshot_bytes() {
             address,
             "TimeoutPilot".into(),
             directory,
-            None,
+            WorkerIdentity::default(),
             commands_rx,
             updates_tx,
             pilot_input::Mailbox::default(),

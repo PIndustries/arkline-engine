@@ -16,7 +16,8 @@ const MAX_EXPORT_BYTES: usize = 64 * 1024 * 1024;
 pub fn audit(server: &str, checkpoint_path: &Path) -> Result<String, String> {
     // Cockpit windows share a universe checkpoint. Serialize the whole read /
     // verify / replace cycle so a slower audit cannot overwrite a newer anchor.
-    // The OS releases this lock on process exit, including crashes.
+    // Release explicitly when this audit ends: a concurrently forked child may
+    // still hold the same open file description until its exec completes.
     let _lock = checkpoint_lock(checkpoint_path)?;
     let pinned: Option<Checkpoint> = match fs::read(checkpoint_path) {
         Ok(bytes) => Some(
@@ -107,7 +108,16 @@ pub fn audit(server: &str, checkpoint_path: &Path) -> Result<String, String> {
     ))
 }
 
-fn checkpoint_lock(path: &Path) -> Result<fs::File, String> {
+/// Closing only this handle can leave the lock held by an inherited or cloned
+/// handle. Explicit unlock ends this audit's ownership on every return path.
+struct CheckpointLock(fs::File);
+impl Drop for CheckpointLock {
+    fn drop(&mut self) {
+        let _ = self.0.unlock();
+    }
+}
+
+fn checkpoint_lock(path: &Path) -> Result<CheckpointLock, String> {
     let parent = path
         .parent()
         .filter(|p| !p.as_os_str().is_empty())
@@ -129,7 +139,7 @@ fn checkpoint_lock(path: &Path) -> Result<fs::File, String> {
         .map_err(|e| format!("Cannot open audit lock: {e}"))?;
     file.try_lock()
         .map_err(|e| format!("Another cockpit may be auditing this universe; try again: {e}"))?;
-    Ok(file)
+    Ok(CheckpointLock(file))
 }
 
 fn save_checkpoint(path: &Path, checkpoint: &Checkpoint) -> Result<(), String> {
@@ -194,6 +204,7 @@ mod tests {
                 Request::ExportLedger
             ));
             let response = Response {
+                auth: None,
                 assets: None,
                 ok: true,
                 message: "Export".into(),
@@ -220,6 +231,7 @@ mod tests {
             protocol_version: PROTOCOL_VERSION,
             entries: vec![],
             snapshot: Snapshot {
+                exterior: None,
                 resource_jobs: vec![],
                 fleet_links: vec![],
                 remote_controls: vec![],
@@ -241,6 +253,7 @@ mod tests {
         task.join().unwrap();
         assert!(message.contains("First local checkpoint pinned"));
         let original = fs::read(&path).unwrap();
+        drop(checkpoint_lock(&path).expect("successful audit must release checkpoint ownership"));
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -257,11 +270,75 @@ mod tests {
         let mut tampered = export;
         tampered.snapshot.belt_ore -= 1;
         let (server, task) = serve(tampered);
-        assert!(audit(&server, &path)
-            .unwrap_err()
-            .contains("snapshot belt mismatch"));
+        let failure = audit(&server, &path).unwrap_err();
+        assert!(
+            failure.contains("snapshot belt mismatch"),
+            "unexpected audit failure: {failure}"
+        );
         task.join().unwrap();
         assert_eq!(fs::read(&path).unwrap(), original);
+        drop(
+            checkpoint_lock(&path).expect("verification failure must release checkpoint ownership"),
+        );
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn checkpoint_owner_drop_releases_lock_despite_live_duplicate() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!(
+            "arkline-ui-audit-inherited-lock-{}-{nonce}",
+            std::process::id()
+        ));
+        let path = dir.join("checkpoint.json");
+        let owner = checkpoint_lock(&path).unwrap();
+        // try_clone shares the same open file description, just as an inherited
+        // descriptor does between fork and exec in another parallel test.
+        let inherited = owner.0.try_clone().unwrap();
+        let failure = checkpoint_lock(&path)
+            .err()
+            .expect("concurrent ownership must still be rejected");
+        assert!(failure.contains("Another cockpit"), "{failure}");
+        drop(owner);
+        let next = checkpoint_lock(&path)
+            .unwrap_or_else(|error| panic!("ended audit left inherited lock ownership: {error}"));
+        drop(inherited);
+        let failure = checkpoint_lock(&path)
+            .err()
+            .expect("closing an old duplicate must not release the new audit's lock");
+        assert!(failure.contains("Another cockpit"), "{failure}");
+        drop(next);
+        drop(checkpoint_lock(&path).expect("new audit releases its own lock"));
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn invalid_checkpoint_failure_releases_lock_and_preserves_bytes() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!(
+            "arkline-ui-audit-invalid-lock-{}-{nonce}",
+            std::process::id()
+        ));
+        let path = dir.join("checkpoint.json");
+        drop(checkpoint_lock(&path).unwrap());
+        let original = b"invalid checkpoint";
+        fs::write(&path, original).unwrap();
+        let failure = audit("127.0.0.1:1", &path).unwrap_err();
+        assert!(
+            failure.contains("Invalid saved audit checkpoint"),
+            "unexpected audit failure: {failure}"
+        );
+        assert_eq!(fs::read(&path).unwrap(), original);
+        drop(
+            checkpoint_lock(&path).expect("early audit failure must release checkpoint ownership"),
+        );
         fs::remove_dir_all(dir).unwrap();
     }
 

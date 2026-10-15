@@ -171,7 +171,7 @@ impl Renderer {
     }
 
     pub(super) unsafe fn paint_living_world(&self, frame: &Frame) {
-        for actor in &frame.traffic {
+        for actor in &frame.scene.traffic {
             let pos = traffic_position(actor, frame);
             if pos.distance(frame.eye) > 1100.0 {
                 continue;
@@ -199,19 +199,21 @@ impl Renderer {
                 );
             }
         }
-        for pilot in &frame.pilots {
+        for pilot in &frame.scene.pilots {
             let pos = frame.space.position(pilot, frame.now);
             if pos.distance(frame.eye) > 1100.0 || (frame.cockpit && pilot.name == frame.own) {
                 continue;
             }
-            self.navigation_lights(
-                transform(pos, Vec3::ONE, ship_orientation_at(pilot, frame.now)),
-                pilot.ship_class,
-                frame.now,
-                0,
-            );
+            let pose = transform(pos, Vec3::ONE, ship_orientation_at(pilot, frame.now));
+            if let Some(binding) = exterior_visuals::for_pilot(frame, pilot) {
+                for (mesh, model, color, emission) in binding.parts(pose) {
+                    self.draw(mesh, model, color, emission);
+                }
+            } else {
+                self.navigation_lights(pose, pilot.ship_class, frame.now, 0);
+            }
         }
-        for prop in &frame.surface_props {
+        for prop in &frame.scene.surface_props {
             if frame.space.scene(prop.position).distance(frame.eye) > 1100.0 {
                 continue;
             }

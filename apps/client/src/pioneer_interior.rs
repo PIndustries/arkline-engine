@@ -1,6 +1,9 @@
 //! Docked Pioneer decks, rendered from the server's shared collision plan.
 use super::*;
-use arkline_protocol::{pioneer_interior_obstacles, StationObstacleKind, PIONEER_INTERIOR_ENTRY};
+use arkline_protocol::{
+    RoomLayoutDocument, RoomLayoutState, StationObstacleKind, PIONEER_INTERIOR_ENTRY,
+};
+use std::sync::Arc;
 fn block(p: &mut Parts, min: Vec3, max: Vec3, color: Vec3, emission: f32) {
     p.draw(
         0,
@@ -9,14 +12,56 @@ fn block(p: &mut Parts, min: Vec3, max: Vec3, color: Vec3, emission: f32) {
         emission,
     );
 }
+#[cfg(test)]
 pub(super) fn parts(deck: u8) -> Vec<ModelPart> {
-    cached_parts(deck).to_vec()
+    cached_parts(deck).as_ref().clone()
 }
-fn cached_parts(deck: u8) -> &'static [ModelPart] {
-    static DECKS: std::sync::OnceLock<[Vec<ModelPart>; 2]> = std::sync::OnceLock::new();
-    &DECKS.get_or_init(|| [build_parts(1), build_parts(2)])[usize::from(deck == 2)]
+pub(super) fn cached_parts(deck: u8) -> Arc<Vec<ModelPart>> {
+    static DECKS: std::sync::OnceLock<[Arc<Vec<ModelPart>>; 2]> = std::sync::OnceLock::new();
+    DECKS.get_or_init(|| {
+        let document = arkline_protocol::default_pioneer();
+        [
+            Arc::new(build_parts(1, &document)),
+            Arc::new(build_parts(2, &document)),
+        ]
+    })[usize::from(deck == 2)]
+    .clone()
 }
-fn build_parts(deck: u8) -> Vec<ModelPart> {
+
+pub(super) struct LayoutPartsCache {
+    revision: u64,
+    document: RoomLayoutDocument,
+    decks: [Arc<Vec<ModelPart>>; 2],
+}
+
+impl LayoutPartsCache {
+    pub(super) fn new(state: &RoomLayoutState) -> Option<Self> {
+        state.document.validate_live().ok()?;
+        Some(Self {
+            revision: state.revision,
+            document: state.document.clone(),
+            decks: [
+                Arc::new(build_parts(1, &state.document)),
+                Arc::new(build_parts(2, &state.document)),
+            ],
+        })
+    }
+
+    pub(super) fn matches(&self, state: &RoomLayoutState) -> bool {
+        self.revision == state.revision && self.document == state.document
+    }
+
+    #[cfg(test)]
+    pub(super) fn document(&self) -> &RoomLayoutDocument {
+        &self.document
+    }
+
+    pub(super) fn parts(&self, deck: u8) -> Arc<Vec<ModelPart>> {
+        self.decks[usize::from(deck == 2)].clone()
+    }
+}
+
+fn build_parts(deck: u8, document: &RoomLayoutDocument) -> Vec<ModelPart> {
     let mut p = Parts(Vec::new());
     let steel = Vec3::new(0.045, 0.065, 0.072);
     block(
@@ -33,7 +78,7 @@ fn build_parts(deck: u8) -> Vec<ModelPart> {
         steel,
         0.0,
     );
-    for o in pioneer_interior_obstacles() {
+    for o in document.obstacles(deck) {
         let min = Vec3::from_array(o.min.map(|v| v as f32));
         let max = Vec3::from_array(o.max.map(|v| v as f32));
         let fixture = matches!(o.kind, StationObstacleKind::Storage);
@@ -58,24 +103,37 @@ fn build_parts(deck: u8) -> Vec<ModelPart> {
             );
         }
     }
-    for &(_, x, z) in arkline_protocol::pioneer_rooms(deck) {
-        let x = x as f32;
-        let z = z as f32;
-        let door = x + 8.933333 / 2.0;
-        let face = if z < 7.0 { 5.65 } else { 8.2 };
+    for room in document.rooms.iter().filter(|room| room.deck == deck) {
+        let [x, z] = room.origin_xz_m.map(|v| v as f32);
+        let [length, depth, height] = room.clear_lwh_m.map(|v| v as f32);
+        let [door, _door_z] = room.door_center_xz_m.map(|v| v as f32);
+        let [door_width, door_height] = room.door_clear_wh_m.map(|v| v as f32);
+        let face = room.door_wall_z() as f32;
         for side in [-1.0, 1.0] {
+            let jamb_x = door + side * door_width * 0.5;
             block(
                 &mut p,
-                Vec3::new(door + side * 0.76 - 0.025, 0.0, face - 0.01),
-                Vec3::new(door + side * 0.76 + 0.025, 2.45, face + 0.17),
+                Vec3::new(jamb_x - 0.025, 0.0, face - 0.01),
+                Vec3::new(jamb_x + 0.025, door_height, face + 0.17),
                 Vec3::new(0.025, 0.35, 0.14),
                 0.5,
             );
         }
         block(
             &mut p,
-            Vec3::new(x + 0.6, 3.15, z + 2.2),
-            Vec3::new(x + 8.2, 3.18, z + 2.4),
+            Vec3::new(door - door_width * 0.5, door_height - 0.04, face - 0.01),
+            Vec3::new(door + door_width * 0.5, door_height, face + 0.17),
+            Vec3::new(0.025, 0.35, 0.14),
+            0.5,
+        );
+        block(
+            &mut p,
+            Vec3::new(x + 0.6, (height - 0.05).min(3.15), z + depth * 0.35),
+            Vec3::new(
+                x + (length - 0.6).max(0.7),
+                (height - 0.02).min(3.18),
+                z + depth * 0.65,
+            ),
             Vec3::new(0.5, 0.65, 0.55),
             0.7,
         );
@@ -189,7 +247,8 @@ fn build_parts(deck: u8) -> Vec<ModelPart> {
     }
     p.0
 }
-/// State-dependent parts are tiny; the detailed room shell stays cached.
+/// Compatibility helper used by the legacy render fixtures.
+#[cfg(test)]
 pub(super) fn parts_with_room(
     deck: u8,
     room: Option<&arkline_protocol::PioneerRoomState>,
@@ -251,25 +310,62 @@ pub(super) fn parts_with_room(
     }
     p.0
 }
-pub(super) fn camera_with_room(
-    target: Vec3,
-    desired: Vec3,
+
+/// Dynamic airlock outputs are returned separately from cached room geometry.
+pub(super) fn state_parts(
     deck: u8,
     room: Option<&arkline_protocol::PioneerRoomState>,
-) -> Vec3 {
-    let desired = camera(target, desired);
-    if deck == 1 && room.is_some_and(|s| !s.door_open) {
-        let d = arkline_protocol::PIONEER_CONNECTED_ROOM;
-        if let Some(t) = quarters::segment_box(
-            target,
-            desired,
-            Vec3::from_array(d.door_min.map(|v| v as f32)) - Vec3::splat(0.12),
-            Vec3::from_array(d.door_max.map(|v| v as f32)) + Vec3::splat(0.12),
-        ) {
-            return target.lerp(desired, (t - 0.03).max(0.));
-        }
+) -> Vec<ModelPart> {
+    let Some(s) = room.filter(|_| deck == arkline_protocol::PIONEER_CONNECTED_ROOM.deck) else {
+        return Vec::new();
+    };
+    let d = arkline_protocol::PIONEER_CONNECTED_ROOM;
+    let mut p = Parts(Vec::new());
+    for (point, half, color, on) in [
+        (
+            d.light_position,
+            Vec3::new(1.5, 0.025, 0.16),
+            Vec3::new(0.50, 0.65, 0.55),
+            s.light_on,
+        ),
+        (
+            d.emergency_position,
+            Vec3::new(0.2, 0.08, 0.03),
+            Vec3::new(1., 0.55, 0.27),
+            s.emergency_light_on,
+        ),
+        (
+            d.breaker_position,
+            Vec3::new(0.012, 0.10, 0.12),
+            Vec3::new(0.03, 0.6, 0.2),
+            s.commissioned && s.breaker_closed,
+        ),
+        (
+            d.vent_position,
+            Vec3::new(0.05, 0.03, 0.07),
+            Vec3::new(0.03, 0.5, 0.25),
+            s.vent_running,
+        ),
+    ] {
+        let center = Vec3::from_array(point.map(|v| v as f32));
+        block(
+            &mut p,
+            center - half,
+            center + half,
+            if on { color } else { Vec3::splat(0.025) },
+            if on { 0.8 } else { 0. },
+        );
     }
-    desired
+    if !s.door_open {
+        block(
+            &mut p,
+            Vec3::from_array(d.door_min.map(|v| v as f32)),
+            Vec3::from_array(d.door_max.map(|v| v as f32)),
+            Vec3::new(0.10, 0.14, 0.15),
+            0.,
+        );
+    }
+    p.0
 }
 fn point_in_panel(point: egui::Pos2, quad: &[egui::Pos2; 4]) -> bool {
     let mut positive = false;
@@ -289,13 +385,21 @@ fn panel_projection(
     eye: Vec3,
     pilot: &PilotView,
     room: Option<&arkline_protocol::PioneerRoomState>,
+    layout: Option<&RoomLayoutDocument>,
 ) -> Option<[egui::Pos2; 4]> {
     if !crate::room_controls::panel_access(pilot) || room.is_none() {
         return None;
     }
     let d = arkline_protocol::PIONEER_CONNECTED_ROOM;
     let center = Vec3::from_array(d.breaker_position.map(|v| v as f32)) + Vec3::X * 0.03;
-    let blocked = pioneer_interior_obstacles().iter().any(|o| {
+    let default_layout;
+    let document = if let Some(document) = layout {
+        document
+    } else {
+        default_layout = fallback_layout_document();
+        &default_layout
+    };
+    let blocked = document.obstacles(1).iter().any(|o| {
         quarters::segment_box(
             eye,
             center,
@@ -344,10 +448,11 @@ pub(super) fn device_panel(
     eye: Vec3,
     pilot: &PilotView,
     room: Option<&arkline_protocol::PioneerRoomState>,
+    layout: Option<&RoomLayoutDocument>,
     live: bool,
     unobstructed: bool,
 ) -> Option<HangarAction> {
-    let quad = panel_projection(rect, vp, eye, pilot, room)?;
+    let quad = panel_projection(rect, vp, eye, pilot, room, layout)?;
     let hovered = unobstructed
         && ui
             .ctx()
@@ -384,14 +489,19 @@ pub(super) fn device_panel(
     }
     None
 }
+#[cfg(test)]
 pub(super) fn camera(target: Vec3, desired: Vec3) -> Vec3 {
+    camera_in_layout(target, desired, 1, &fallback_layout_document())
+}
+
+fn camera_in_layout(target: Vec3, desired: Vec3, deck: u8, document: &RoomLayoutDocument) -> Vec3 {
     let desired = Vec3::new(
         desired.x.clamp(0.25, 31.75),
         desired.y.clamp(0.4, 2.95),
         desired.z.clamp(0.25, 13.75),
     );
     let mut limit = 1.0f32;
-    for o in pioneer_interior_obstacles() {
+    for o in document.obstacles(deck) {
         if let Some(t) = quarters::segment_box(
             target,
             desired,
@@ -403,21 +513,91 @@ pub(super) fn camera(target: Vec3, desired: Vec3) -> Vec3 {
     }
     target.lerp(desired, limit)
 }
-pub(super) fn labels(ui: &mut egui::Ui, rect: egui::Rect, vp: Mat4, pilot: &PilotView, live: bool) {
+
+fn fallback_layout_document() -> RoomLayoutDocument {
+    arkline_protocol::default_pioneer()
+}
+
+#[cfg(test)]
+pub(super) fn camera_with_room(
+    target: Vec3,
+    desired: Vec3,
+    deck: u8,
+    room: Option<&arkline_protocol::PioneerRoomState>,
+) -> Vec3 {
+    camera_with_layout(target, desired, deck, None, room)
+}
+
+pub(super) fn camera_with_layout(
+    target: Vec3,
+    desired: Vec3,
+    deck: u8,
+    layout: Option<&RoomLayoutDocument>,
+    room: Option<&arkline_protocol::PioneerRoomState>,
+) -> Vec3 {
+    let default_layout;
+    let document = if let Some(document) = layout {
+        document
+    } else {
+        default_layout = fallback_layout_document();
+        &default_layout
+    };
+    let desired = camera_in_layout(target, desired, deck, document);
+    if deck == 1 && room.is_some_and(|state| !state.door_open) {
+        let airlock = arkline_protocol::PIONEER_CONNECTED_ROOM;
+        if let Some(t) = quarters::segment_box(
+            target,
+            desired,
+            Vec3::from_array(airlock.door_min.map(|v| v as f32)) - Vec3::splat(0.12),
+            Vec3::from_array(airlock.door_max.map(|v| v as f32)) + Vec3::splat(0.12),
+        ) {
+            return target.lerp(desired, (t - 0.03).max(0.));
+        }
+    }
+    desired
+}
+
+fn room_at(
+    document: &RoomLayoutDocument,
+    deck: u8,
+    position: [f64; 3],
+) -> Option<&arkline_protocol::RoomLayout> {
+    document.rooms.iter().find(|room| {
+        let [x, z] = room.origin_xz_m;
+        let [length, depth, _] = room.clear_lwh_m;
+        room.deck == deck
+            && position[0] >= x
+            && position[0] <= x + length
+            && position[2] >= z
+            && position[2] <= z + depth
+    })
+}
+
+pub(super) fn labels(
+    ui: &mut egui::Ui,
+    rect: egui::Rect,
+    vp: Mat4,
+    pilot: &PilotView,
+    live: bool,
+    layout: Option<&RoomLayoutDocument>,
+) {
     let Some(a) = pilot.station_avatar.as_ref() else {
         return;
     };
     let pos = Vec3::from_array(a.position.map(|v| v as f32));
-    let room = arkline_protocol::pioneer_rooms(a.interior_deck)
-        .iter()
-        .find(|(_, x, z)| {
-            a.position[0] >= *x
-                && a.position[0] <= *x + 8.933334
-                && a.position[2] >= *z
-                && a.position[2] <= *z + 5.4
-        })
-        .map_or("ACCESS CORRIDOR", |(name, _, _)| *name);
-    let text = if room == "POWER CONTROL" {
+    let default_layout;
+    let document = if let Some(document) = layout {
+        document
+    } else {
+        default_layout = fallback_layout_document();
+        &default_layout
+    };
+    let room = room_at(document, a.interior_deck, a.position);
+    let room_name = room.map_or("ACCESS CORRIDOR", |room| room.name.as_str());
+    let source_role = room
+        .and_then(|room| room.source_role.as_deref())
+        .unwrap_or("");
+    let text = if source_role.eq_ignore_ascii_case("POWER CONTROL") {
         pilot
             .power
             .as_ref()
@@ -427,7 +607,7 @@ pub(super) fn labels(ui: &mut egui::Ui, rect: egui::Rect, vp: Mat4, pilot: &Pilo
                     p.charge_j, p.capacity_j, p.regen_w
                 )
             })
-    } else if room == "CARGO ACCESS" {
+    } else if source_role.eq_ignore_ascii_case("CARGO ACCESS") {
         format!(
             "Confirmed cargo {} ore / {} capacity",
             pilot.ore,
@@ -440,7 +620,7 @@ pub(super) fn labels(ui: &mut egui::Ui, rect: egui::Rect, vp: Mat4, pilot: &Pilo
         rect.left_top() + egui::vec2(20.0, 135.0),
         egui::Align2::LEFT_TOP,
         format!(
-            "{room}\n{} · {text}",
+            "{room_name}\n{} · {text}",
             if live {
                 "LIVE SHIP DATA"
             } else {
@@ -450,10 +630,17 @@ pub(super) fn labels(ui: &mut egui::Ui, rect: egui::Rect, vp: Mat4, pilot: &Pilo
         egui::FontId::proportional(14.0),
         egui::Color32::from_rgb(165, 230, 185),
     );
-    for &(name, x, z) in arkline_protocol::pioneer_rooms(a.interior_deck) {
-        let face = if z < 7.0 { 5.65 } else { 8.2 };
-        let at = Vec3::new((x + 8.933333 / 2.0) as f32, 2.7, face as f32);
-        let blocked = pioneer_interior_obstacles().iter().any(|o| {
+    for room in document
+        .rooms
+        .iter()
+        .filter(|room| room.deck == a.interior_deck)
+    {
+        let at = Vec3::new(
+            room.door_center_xz_m[0] as f32,
+            (room.door_clear_wh_m[1] as f32 + 0.2).min(3.05),
+            room.door_wall_z() as f32,
+        );
+        let blocked = document.obstacles(a.interior_deck).iter().any(|o| {
             quarters::segment_box(
                 pos + Vec3::Y * 1.6,
                 at,
@@ -467,7 +654,7 @@ pub(super) fn labels(ui: &mut egui::Ui, rect: egui::Rect, vp: Mat4, pilot: &Pilo
                 ui.painter().text(
                     screen,
                     egui::Align2::CENTER_CENTER,
-                    name,
+                    room.name.as_str(),
                     egui::FontId::proportional(12.0),
                     egui::Color32::LIGHT_GREEN,
                 );
@@ -494,7 +681,7 @@ mod tests {
             );
             let vp = Mat4::perspective_rh_gl(1., rect.aspect_ratio(), 0.08, 100.)
                 * Mat4::look_at_rh(eye, center, Vec3::Y);
-            let quad = panel_projection(rect, vp, eye, &pilot, Some(&room)).unwrap();
+            let quad = panel_projection(rect, vp, eye, &pilot, Some(&room), None).unwrap();
             let point = egui::pos2(
                 quad.iter().map(|p| p.x).sum::<f32>() / 4.,
                 quad.iter().map(|p| p.y).sum::<f32>() / 4.,
@@ -531,6 +718,7 @@ mod tests {
                                     eye,
                                     &pilot,
                                     Some(&room),
+                                    None,
                                     live,
                                     unobstructed,
                                 )
@@ -555,7 +743,7 @@ mod tests {
         let project = |eye, p: &PilotView| {
             let vp = Mat4::perspective_rh_gl(1., rect.aspect_ratio(), 0.08, 100.)
                 * Mat4::look_at_rh(eye, center, Vec3::Y);
-            panel_projection(rect, vp, eye, p, Some(&s))
+            panel_projection(rect, vp, eye, p, Some(&s), None)
         };
         assert!(project(Vec3::new(6., 1.65, 3.), &p).is_some());
         assert!(project(Vec3::new(6., 1.65, 7.), &p).is_none());
@@ -608,22 +796,132 @@ mod tests {
     }
     #[test]
     fn cached_decks_preserve_geometry_and_materials() {
+        let document = arkline_protocol::default_pioneer();
         for deck in [1, 2] {
-            assert_eq!(super::parts(deck), super::build_parts(deck));
-            assert!(std::ptr::eq(
-                super::cached_parts(deck),
-                super::cached_parts(deck)
+            assert_eq!(super::parts(deck), super::build_parts(deck, &document));
+            assert!(Arc::ptr_eq(
+                &super::cached_parts(deck),
+                &super::cached_parts(deck)
             ));
         }
+    }
+
+    #[test]
+    fn live_layout_changes_geometry_door_projection_and_cache_identity() {
+        let mut document = arkline_protocol::default_pioneer();
+        let baseline = super::build_parts(2, &document);
+        let room = document.rooms.iter_mut().find(|room| room.id == 8).unwrap();
+        room.door_clear_wh_m[0] += 0.35;
+        let door_x = room.door_center_xz_m[0] as f32;
+        let door_width = room.door_clear_wh_m[0] as f32;
+        let positive_jamb_x = door_x + door_width * 0.5;
+        let frame_z = room.door_wall_z() as f32 + 0.08;
+        assert!(document.validate_live().is_ok());
+        let edited = super::build_parts(2, &document);
+        assert_ne!(baseline, edited);
+        assert!(edited.iter().any(|(_, model, color, emission)| {
+            *color == Vec3::new(0.025, 0.35, 0.14)
+                && (*emission - 0.5).abs() < f32::EPSILON
+                && (model.w_axis.x - positive_jamb_x).abs() < 0.001
+                && (model.w_axis.z - frame_z).abs() < 0.001
+        }));
+
+        let state = RoomLayoutState {
+            revision: 12,
+            document: arkline_protocol::default_pioneer(),
+        };
+        let cache = LayoutPartsCache::new(&state).unwrap();
+        assert!(cache.matches(&state));
+        let changed_same_revision = RoomLayoutState {
+            revision: 12,
+            document,
+        };
+        assert!(!cache.matches(&changed_same_revision));
+        let changed_revision = RoomLayoutState {
+            revision: 13,
+            document: state.document.clone(),
+        };
+        assert!(!cache.matches(&changed_revision));
+        let other_session = LayoutPartsCache::new(&changed_same_revision).unwrap();
+        assert_ne!(cache.parts(2).as_ref(), other_session.parts(2).as_ref());
+    }
+
+    #[test]
+    fn removed_live_room_drops_its_bounds_and_prototype_fixture() {
+        let mut document = arkline_protocol::default_pioneer();
+        let removed = document.rooms.iter().find(|room| room.id == 2).unwrap();
+        let center = [
+            removed.origin_xz_m[0] + removed.clear_lwh_m[0] * 0.5,
+            0.0,
+            removed.origin_xz_m[1] + removed.clear_lwh_m[1] * 0.5,
+        ];
+        let [x, z] = removed.origin_xz_m;
+        let fixture_min = [x + 1.0, 0.0, z + 1.0];
+        let fixture_max = [x + 2.8, 1.4, z + 1.8];
+        let fixture_center = Vec3::from_array([
+            ((fixture_min[0] + fixture_max[0]) * 0.5) as f32,
+            ((fixture_min[1] + fixture_max[1]) * 0.5) as f32,
+            ((fixture_min[2] + fixture_max[2]) * 0.5) as f32,
+        ]);
+        let deck = removed.deck;
+        let rendered_before = super::build_parts(deck, &document);
+        let before = document.obstacles(deck);
+        assert!(before
+            .iter()
+            .any(|obstacle| obstacle.min == fixture_min && obstacle.max == fixture_max));
+        assert!(rendered_before.iter().any(|(_, model, color, emission)| {
+            *color == Vec3::new(0.09, 0.13, 0.14)
+                && *emission == 0.0
+                && model.w_axis.truncate().distance(fixture_center) < 0.001
+        }));
+        document.rooms.retain(|room| room.id != 2);
+        assert!(document.validate_live().is_ok());
+        assert_eq!(room_at(&document, deck, center), None);
+        assert!(!document
+            .obstacles(deck)
+            .iter()
+            .any(|obstacle| obstacle.min == fixture_min && obstacle.max == fixture_max));
+        let rendered_after = super::build_parts(deck, &document);
+        assert!(!rendered_after.iter().any(|(_, model, color, emission)| {
+            *color == Vec3::new(0.09, 0.13, 0.14)
+                && *emission == 0.0
+                && model.w_axis.truncate().distance(fixture_center) < 0.001
+        }));
+        let remaining = document.rooms.iter().find(|room| room.id == 3).unwrap();
+        let remaining_center = [
+            remaining.origin_xz_m[0] + remaining.clear_lwh_m[0] * 0.5,
+            0.0,
+            remaining.origin_xz_m[1] + remaining.clear_lwh_m[1] * 0.5,
+        ];
+        assert_eq!(
+            room_at(&document, deck, remaining_center).map(|room| room.id),
+            Some(3)
+        );
+        assert!(rendered_after.len() < rendered_before.len());
+        let previous = LayoutPartsCache::new(&RoomLayoutState {
+            revision: 1,
+            document: arkline_protocol::default_pioneer(),
+        })
+        .unwrap();
+        let next = LayoutPartsCache::new(&RoomLayoutState {
+            revision: 1,
+            document,
+        })
+        .unwrap();
+        assert!(!previous.matches(&RoomLayoutState {
+            revision: 1,
+            document: next.document().clone(),
+        }));
     }
     #[test]
     #[ignore = "Explicit CPU preparation measurement, not a GPU frame-rate benchmark"]
     fn static_deck_preparation_profile() {
         use std::hint::black_box;
         black_box(super::parts(1));
+        let document = arkline_protocol::default_pioneer();
         let start = std::time::Instant::now();
         for _ in 0..2000 {
-            black_box(super::build_parts(1));
+            black_box(super::build_parts(1, &document));
         }
         let rebuilt = start.elapsed();
         let start = std::time::Instant::now();

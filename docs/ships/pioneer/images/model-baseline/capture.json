@@ -1,0 +1,40 @@
+{
+  "date_utc": "2026-10-15",
+  "source_commit": "3e415204747cd9adaa146a9777831a7acc82e7cb",
+  "source_blend_sha256": "8ec754fc7afe6b67dcab6cbd6694bb04bdc03cc12e91ee96e0bca9e08bb24f6f",
+  "body_xyz_m": [
+    72,
+    18,
+    38
+  ],
+  "status": "before-remodel editable source renders; not an engine capture",
+  "blender": "5.0.1",
+  "render": "Cycles CPU, 16 samples, 1200x800, same cameras/lights as studies01-04",
+  "files": [
+    {
+      "file": "side.png",
+      "bytes": 881284,
+      "sha256": "a5ce2cdf030dd8cbdb0d7e860ef7b15a55ed5fd3a89a9b3f6bcc0d1429c3691e"
+    },
+    {
+      "file": "quarter.png",
+      "bytes": 1101766,
+      "sha256": "691893bf8ff4719a033f2abc48ccdb7d7bea2bf80cf89f36321c6cf5a178e183"
+    },
+    {
+      "file": "top.png",
+      "bytes": 1013918,
+      "sha256": "566133bd4904afdbe0dea238234df6ca4e9d07671b05cfc54ee3ada95006c177"
+    },
+    {
+      "file": "front.png",
+      "bytes": 818599,
+      "sha256": "38df08237370cb502316922526ce3f5dd1562a98397d861fe886a2c776c4611d"
+    },
+    {
+      "file": "supplied-reference.png",
+      "bytes": 2376831,
+      "sha256": "6dc55aa5473e1a589fadd9eae9899a330b795debb53ac4eccb6782dc2e774b52"
+    }
+  ]
+}

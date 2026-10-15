@@ -1,0 +1,50 @@
+{
+  "exporter_commit": "ff17e8727bda54e32ecf239d2136bd1074489701",
+  "source_master_sha256": "772bf76aaf1416f28357e2f507963022c7c73b13fca58cb57e948e06761a7800",
+  "source_copy_matches_selected": true,
+  "candidate_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+  "receipt_sha256": "5467b970e6254c63fef552d5c1a609636fd913a1b333a8025a31dd112035adab",
+  "candidate_bytes": 6582300,
+  "source_parts": 543,
+  "parts_with_retained_triangles": 543,
+  "all543names_once": true,
+  "mapping_contiguous_and_complete_and_snapshot_ids_match": true,
+  "mapping_errors": [],
+  "canonical_materials": [
+    "Graphite ceramic armor",
+    "Titanium machinery",
+    "Recessed carbon",
+    "Emerald structural frames",
+    "Drive emission",
+    "Working lights",
+    "Navigation glass",
+    "Safety amber",
+    "Hull identification ivory"
+  ],
+  "recipe_hashes_match_current": true,
+  "recipe_hashes": {
+    "export_pioneer.py": "ce1c5b64008223cfc06acce932cb2dbaf46c013a585bf586d7211422e8bea1cb",
+    "pioneer_export_contract.py": "c786532a9d380f02d9a9715bc9057c896a7971b36ec8ea049f9a2b553cb57c1d"
+  },
+  "triangles": 78244,
+  "evaluated_triangles": 79168,
+  "dropped_triangles": 924,
+  "retained_triangles": 78244,
+  "identity_scope": "source-sha256-and-exact-name snapshot; not durable cross-revision IDs",
+  "body_bounds_m": [
+    [
+      -36.0,
+      -9.0,
+      -19.0
+    ],
+    [
+      36.0,
+      9.0,
+      19.0
+    ]
+  ],
+  "limits": [
+    "Source snapshot name/hash IDs are not durable cross-revision component identities.",
+    "Native Rust decoder and actual GPU acceptance are performed independently by root."
+  ]
+}

@@ -12,6 +12,9 @@ mod quarters;
 pub use quarters::HangarAction;
 #[path = "fleet_hangar.rs"]
 pub(super) mod fleet_hangar;
+#[cfg(test)]
+#[path = "hangar_scale_tests.rs"]
+mod hangar_scale_tests;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OnFootView {
@@ -35,6 +38,11 @@ pub struct HangarView {
     follow: Option<Vec3>,
     follow_heading: Option<f64>,
     gait: avatar_animation::Gait,
+    editor_free_camera: Option<(Vec3, f32, f32)>,
+    editor_free_camera_active: bool,
+    last_camera_pose: Option<(Vec3, f32, f32)>,
+    room_layout: Option<arkline_protocol::RoomLayoutState>,
+    room_parts: Option<pioneer_interior::LayoutPartsCache>,
 }
 impl HangarView {
     // egui callbacks share ownership on one browser thread; SendWrapper guards access.
@@ -62,13 +70,82 @@ impl HangarView {
             follow: None,
             follow_heading: None,
             gait: Default::default(),
+            editor_free_camera: None,
+            editor_free_camera_active: false,
+            last_camera_pose: None,
+            room_layout: None,
+            room_parts: None,
         }
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn set_material_preview(&mut self, preview: Option<crate::EmbeddedMaterialPreview>) {
+        if let Some(renderer) = &self.renderer {
+            if let Ok(mut renderer) = renderer.lock() {
+                renderer.set_material_preview(preview);
+            }
+        }
+    }
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))] // Native editor authoring entry.
+    pub fn set_spatial_material(&mut self, material: Option<Arc<MaterialRevision>>) {
+        if let Some(renderer) = &self.renderer {
+            if let Ok(mut renderer) = renderer.lock() {
+                let _ = renderer.spatial_material.queue(material);
+            }
+        }
+    }
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    pub fn material_program_status(&self) -> MaterialProgramStatus {
+        self.renderer
+            .as_ref()
+            .and_then(|r| r.lock().ok().map(|r| r.spatial_material.status().clone()))
+            .unwrap_or_default()
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn set_debug_wireframe(&mut self, enabled: bool) {
+        if let Some(renderer) = &self.renderer {
+            if let Ok(mut renderer) = renderer.lock() {
+                renderer.debug_wireframe = enabled;
+            }
+        }
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn debug_render_metrics(&self) -> DebugRenderMetrics {
+        self.renderer
+            .as_ref()
+            .and_then(|r| r.lock().ok().map(|r| r.debug_metrics.get()))
+            .unwrap_or_default()
     }
     pub fn input_surface(&self) -> Option<(egui::Rect, egui::LayerId)> {
         self.surface
     }
     pub fn camera_yaw(&self) -> f64 {
         self.yaw as f64
+    }
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    pub fn set_editor_free_camera(&mut self, active: bool, pose: Option<(Vec3, f32, f32)>) {
+        self.editor_free_camera_active = active;
+        self.editor_free_camera = pose;
+    }
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    pub fn editor_camera_pose(&self) -> Option<(Vec3, f32, f32)> {
+        self.last_camera_pose
+    }
+    pub(crate) fn set_room_layout(&mut self, layout: Option<arkline_protocol::RoomLayoutState>) {
+        if let Some(next) = layout.as_ref() {
+            if self
+                .room_parts
+                .as_ref()
+                .is_some_and(|cached| cached.matches(next))
+            {
+                self.room_layout = layout;
+                return;
+            }
+        }
+        let layout = layout.filter(|state| state.document.validate_live().is_ok());
+        self.room_parts = layout
+            .as_ref()
+            .and_then(pioneer_interior::LayoutPartsCache::new);
+        self.room_layout = layout;
     }
     pub fn walk_turn(&self, heading: f64) -> f64 {
         if !self.walking {
@@ -83,6 +160,11 @@ impl HangarView {
             (angle * 3.0).clamp(-1.0, 1.0)
         }
     }
+    pub fn follow_walk_turn(&mut self, turn: f64, dt: f32) {
+        // Keep the RMB look target aligned when keyboard input turns the body.
+        // Otherwise the old camera yaw would immediately steer the avatar back.
+        self.yaw += (turn * 2.0 * dt as f64) as f32;
+    }
     pub fn destroy(&mut self) {
         if let Some(renderer) = self.renderer.take() {
             if let Ok(mut renderer) = renderer.lock() {
@@ -92,6 +174,7 @@ impl HangarView {
             }
         }
     }
+    #[allow(clippy::too_many_arguments)]
     pub fn ui(
         &mut self,
         ui: &mut egui::Ui,
@@ -100,6 +183,8 @@ impl HangarView {
         live: bool,
         fleet: Option<&arkline_protocol::HangarView>,
         room: Option<&arkline_protocol::PioneerRoomState>,
+        exterior: Option<&arkline_protocol::ExteriorWorldState>,
+        server_time_ms: u64,
     ) -> Option<HangarAction> {
         let (rect, response) =
             ui.allocate_exact_size(ui.available_size(), egui::Sense::click_and_drag());
@@ -110,6 +195,7 @@ impl HangarView {
             .as_ref()
             .is_some_and(|a| a.onboard_interior);
         let interior_deck = pilot.station_avatar.as_ref().map_or(1, |a| a.interior_deck);
+        let room_document = self.room_layout.as_ref().map(|layout| &layout.document);
         let reset_heading = self.fleet_mode != fleet.is_some()
             || self.walking != walking
             || self.interior != interior
@@ -132,21 +218,26 @@ impl HangarView {
             self.walking = walking;
             self.class = Some(pilot.ship_class);
         }
-        let unobstructed = ui
-            .ctx()
-            .pointer_hover_pos()
-            .is_some_and(|p| rect.contains(p) && ui.ctx().layer_id_at(p) == Some(ui.layer_id()));
+        let unobstructed = !self.editor_free_camera_active
+            && ui.ctx().pointer_hover_pos().is_some_and(|p| {
+                rect.contains(p) && ui.ctx().layer_id_at(p) == Some(ui.layer_id())
+            });
         // Response helpers also access Context: never invoke them inside an input lock.
-        let dragging = response.dragged_by(egui::PointerButton::Secondary)
-            || (!walking && response.dragged_by(egui::PointerButton::Primary));
+        let dragging = !self.editor_free_camera_active
+            && (response.dragged_by(egui::PointerButton::Secondary)
+                || (!walking && response.dragged_by(egui::PointerButton::Primary)));
         if unobstructed {
             ui.input(|i| {
                 if dragging {
-                    self.yaw -= i.pointer.delta().x * 0.007;
+                    // Dragging right should look/turn right with the pointer.
+                    self.yaw += i.pointer.delta().x * 0.007;
                     self.pitch = (self.pitch + i.pointer.delta().y * 0.005)
                         .clamp(if walking { -0.8 } else { 0.06 }, 1.25);
                 }
-                self.zoom = (self.zoom * (-i.smooth_scroll_delta.y * 0.002).exp()).clamp(0.45, 2.5);
+                if !self.editor_free_camera_active {
+                    self.zoom =
+                        (self.zoom * (-i.smooth_scroll_delta.y * 0.002).exp()).clamp(0.45, 2.5);
+                }
             });
         }
         let layout = hangar_layout(pilot.ship_class);
@@ -186,30 +277,72 @@ impl HangarView {
         eye.y = eye.y.max(0.6);
         if walking {
             eye = if interior {
-                pioneer_interior::camera_with_room(target, eye, interior_deck, room)
+                pioneer_interior::camera_with_layout(
+                    target,
+                    eye,
+                    interior_deck,
+                    room_document,
+                    room,
+                )
             } else if let Some(fleet) = fleet {
                 fleet_hangar::camera(fleet, target, eye)
             } else {
                 quarters::camera_eye(pilot.ship_class, target, eye)
             };
         }
-        let first_person = walking && self.on_foot_view == OnFootView::FirstPerson;
-        let look_target = if first_person {
+        let player_first_person = walking && self.on_foot_view == OnFootView::FirstPerson;
+        let first_person = player_first_person && !self.editor_free_camera_active;
+        let look_target = if player_first_person {
             eye = self.follow.unwrap() + Vec3::Y * 1.65;
             eye + forward * self.pitch.cos() - Vec3::Y * self.pitch.sin()
         } else {
             target
         };
-        let vp = Mat4::perspective_rh_gl(
-            55f32.to_radians(),
-            rect.aspect_ratio().max(0.1),
-            0.08,
-            30000.0,
-        ) * Mat4::look_at_rh(eye, look_target, Vec3::Y);
+        let player_direction = (look_target - eye).normalize_or_zero();
+        self.last_camera_pose = Some((
+            eye,
+            player_direction.z.atan2(player_direction.x),
+            player_direction.y.clamp(-1.0, 1.0).asin(),
+        ));
+        let mut look_target = look_target;
+        if let Some((position, yaw, pitch)) = self.editor_free_camera {
+            let direction = editor_camera_direction(yaw, pitch);
+            eye = position;
+            look_target = eye + direction;
+        }
+        let vp = view_projection(eye, look_target, rect.aspect_ratio());
+        let interior_base = if interior {
+            Some(
+                self.room_parts
+                    .as_ref()
+                    .map(|cache| cache.parts(interior_deck))
+                    .unwrap_or_else(|| pioneer_interior::cached_parts(interior_deck)),
+            )
+        } else {
+            None
+        };
+        let mut exterior_instances = Vec::new();
         let mut parts = if interior {
-            pioneer_interior::parts_with_room(interior_deck, room)
+            pioneer_interior::state_parts(interior_deck, room)
         } else if let Some(fleet) = fleet {
-            let mut p = fleet_hangar::parts(fleet, eye);
+            let bindings: Vec<_> = fleet_hangar::visible(fleet, eye)
+                .into_iter()
+                .filter_map(|berth| {
+                    exterior_visuals::for_vessel(exterior, &berth.id, server_time_ms, live)
+                        .map(|binding| (berth, binding))
+                })
+                .collect();
+            let hidden: Vec<_> = bindings
+                .iter()
+                .map(|(berth, _)| berth.id.as_str())
+                .collect();
+            let mut p = fleet_hangar::parts_except_hulls(fleet, eye, &hidden);
+            for (berth, binding) in bindings {
+                exterior_instances.push(binding.instance(
+                    fleet_hangar::hull_transform(berth),
+                    fleet_hangar::hull_parts(berth).collect(),
+                ));
+            }
             let t = Mat4::from_translation(fleet_hangar::quarters_offset());
             p.extend(
                 quarters::room_parts(ShipClass::Pioneer, now)
@@ -219,6 +352,17 @@ impl HangarView {
             p
         } else {
             let mut p = bay_parts(pilot.ship_class);
+            if let Some(binding) =
+                exterior_visuals::for_pilot_state(exterior, pilot, server_time_ms, live)
+            {
+                p.retain(|(mesh, _, _, _)| embedded_primitive(*mesh).is_none());
+                let pose = Mat4::from_scale_rotation_translation(
+                    Vec3::splat(100.),
+                    Quat::IDENTITY,
+                    Vec3::from_array(layout.ship_center.map(|v| v as f32)),
+                );
+                exterior_instances.push(binding.instance(pose, bay_hull_parts(pilot.ship_class)));
+            }
             p.extend(quarters::room_parts(pilot.ship_class, now));
             p
         };
@@ -236,7 +380,7 @@ impl HangarView {
                 avatar.moving && live,
                 avatar.seated,
             );
-            if !first_person {
+            if should_render_avatar(first_person, self.editor_free_camera_active, eye, position) {
                 parts.extend(avatar_parts(&visual_avatar, pose, self.follow));
             }
         }
@@ -247,9 +391,17 @@ impl HangarView {
             ui.painter().add(egui::PaintCallback {
                 rect,
                 callback: Arc::new(egui_glow::CallbackFn::new(move |_, _| {
-                    if let Ok(renderer) = renderer.lock() {
+                    if let Ok(mut renderer) = renderer.lock() {
                         unsafe {
-                            paint(&renderer, vp, eye, &parts);
+                            paint_with_lighting(
+                                &mut renderer,
+                                vp,
+                                eye,
+                                interior_base.as_ref().map(|parts| parts.as_slice()),
+                                &parts,
+                                true,
+                                &exterior_instances,
+                            );
                         }
                     }
                 })),
@@ -280,8 +432,10 @@ impl HangarView {
                     "PRIVATE BAY"
                 },
                 pilot.ship_class.spec().name,
-                if walking {
-                    "ON FOOT · WASD / arrows walk · Right-drag turn / look · Space jump"
+                if self.editor_free_camera_active {
+                    "EDITOR FREE CAMERA · WASD move · E/Q or Space/C vertical · Shift fast · RMB look"
+                } else if walking {
+                    "ON FOOT · W/S or Up/Down move · A/D or Left/Right turn · Q/E strafe · RMB look · Space jump"
                 } else {
                     "SHIP INSPECTION · Drag orbit · Wheel zoom · Disembark to explore"
                 }
@@ -290,8 +444,18 @@ impl HangarView {
             egui::Color32::from_rgb(150, 220, 185),
         );
         if interior {
-            pioneer_interior::labels(ui, rect, vp, pilot, live);
-            pioneer_interior::device_panel(ui, rect, vp, eye, pilot, room, live, unobstructed)
+            pioneer_interior::labels(ui, rect, vp, pilot, live, room_document);
+            pioneer_interior::device_panel(
+                ui,
+                rect,
+                vp,
+                eye,
+                pilot,
+                room,
+                room_document,
+                live,
+                unobstructed,
+            )
         } else if let Some(fleet) = fleet {
             let terminal = quarters::fleet_terminals(ui, rect, vp, eye, pilot, unobstructed, live);
             terminal.or_else(|| {
@@ -308,6 +472,42 @@ fn third_person_eye(target: Vec3, heading: f32, pitch: f32, distance: f32) -> Ve
     target - forward * distance * pitch.cos() + Vec3::Y * distance * pitch.sin()
 }
 
+pub(super) fn editor_camera_direction(yaw: f32, pitch: f32) -> Vec3 {
+    Vec3::new(
+        yaw.cos() * pitch.cos(),
+        pitch.sin(),
+        yaw.sin() * pitch.cos(),
+    )
+}
+
+fn should_render_avatar(
+    first_person: bool,
+    free_camera_active: bool,
+    camera: Vec3,
+    avatar_position: Vec3,
+) -> bool {
+    if first_person {
+        return false;
+    }
+    if !free_camera_active {
+        return true;
+    }
+
+    // The torso and head occupy a narrow vertical column above the avatar
+    // root. Hide the model while the editor camera intersects that envelope.
+    let offset = camera - avatar_position;
+    let horizontal_radius = 0.38;
+    let inside_body_height = (-0.15..=1.95).contains(&offset.y);
+    let inside_body_radius =
+        offset.x * offset.x + offset.z * offset.z <= horizontal_radius * horizontal_radius;
+    !(inside_body_height && inside_body_radius)
+}
+
+fn view_projection(eye: Vec3, target: Vec3, aspect: f32) -> Mat4 {
+    Mat4::perspective_rh_gl(55f32.to_radians(), aspect.max(0.1), 0.08, 30000.0)
+        * Mat4::look_at_rh(eye, target, Vec3::Y)
+}
+
 fn bay_parts(class: ShipClass) -> Vec<ModelPart> {
     cached_bay_parts(class).to_vec()
 }
@@ -319,6 +519,20 @@ fn cached_bay_parts(class: ShipClass) -> &'static [ModelPart] {
         .position(|c| *c == class)
         .unwrap();
     BAYS[index].get_or_init(|| build_bay_parts(class))
+}
+// Keep hull instance composition shared with calibration tests. These matrices
+// are the ones submitted to the meter-space hangar renderer.
+fn bay_hull_parts(class: ShipClass) -> Vec<ModelPart> {
+    let bay = hangar_layout(class);
+    let parent = Mat4::from_scale_rotation_translation(
+        Vec3::splat(100.0),
+        Quat::IDENTITY,
+        Vec3::from_array(bay.ship_center.map(|v| v as f32)),
+    );
+    ship_parts(class)
+        .into_iter()
+        .map(|(mesh, m, c, e)| (mesh, parent * m, c, e * 0.25))
+        .collect()
 }
 fn build_bay_parts(class: ShipClass) -> Vec<ModelPart> {
     let bay = hangar_layout(class);
@@ -428,16 +642,7 @@ fn build_bay_parts(class: ShipClass) -> Vec<ModelPart> {
             || c.z < room.min[2] as f32
             || c.z > room.max[2] as f32 + 1.5
     });
-    let parent = Mat4::from_scale_rotation_translation(
-        Vec3::splat(100.0),
-        Quat::IDENTITY,
-        Vec3::from_array(bay.ship_center.map(|v| v as f32)),
-    );
-    p.0.extend(
-        ship_parts(class)
-            .into_iter()
-            .map(|(mesh, m, c, e)| (mesh, parent * m, c, e * 0.25)),
-    );
+    p.0.extend(bay_hull_parts(class));
     p.0
 }
 fn avatar_parts(
@@ -628,7 +833,49 @@ fn avatar_parts(
     }
     p.0
 }
-unsafe fn paint(renderer: &Renderer, vp: Mat4, eye: Vec3, parts: &[ModelPart]) {
+#[cfg(test)]
+fn apply_material_preview(parts: &mut [ModelPart], preview: crate::EmbeddedMaterialPreview) {
+    for (mesh, _, color, emission) in parts {
+        (*color, *emission) = preview_material(*mesh, *color, *emission, Some(preview.validated()));
+    }
+}
+#[cfg(all(test, target_os = "macos"))]
+pub(super) unsafe fn paint(renderer: &mut Renderer, vp: Mat4, eye: Vec3, parts: &[ModelPart]) {
+    paint_with_base(renderer, vp, eye, None, parts);
+}
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) unsafe fn paint_preview(
+    renderer: &mut Renderer,
+    vp: Mat4,
+    eye: Vec3,
+    parts: &[ModelPart],
+    station_lighting: bool,
+) {
+    paint_with_lighting(renderer, vp, eye, None, parts, station_lighting, &[]);
+}
+
+#[cfg(all(test, target_os = "macos"))]
+unsafe fn paint_with_base(
+    renderer: &mut Renderer,
+    vp: Mat4,
+    eye: Vec3,
+    base: Option<&[ModelPart]>,
+    dynamic: &[ModelPart],
+) {
+    paint_with_lighting(renderer, vp, eye, base, dynamic, true, &[]);
+}
+unsafe fn paint_with_lighting(
+    renderer: &mut Renderer,
+    vp: Mat4,
+    eye: Vec3,
+    base: Option<&[ModelPart]>,
+    dynamic: &[ModelPart],
+    station_lighting: bool,
+    exterior: &[exterior_visuals::Instance],
+) {
+    renderer.prepare_spatial_material();
+    #[cfg(not(target_arch = "wasm32"))]
+    renderer.debug_metrics.set(Default::default());
     if renderer.destroyed {
         return;
     }
@@ -642,13 +889,16 @@ unsafe fn paint(renderer: &Renderer, vp: Mat4, eye: Vec3, parts: &[ModelPart]) {
     gl.clear_color(0.008, 0.014, 0.019, 1.0);
     gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
     gl.use_program(Some(renderer.program));
+    renderer.upload_spatial_material();
     gl.uniform_1_f32(
         gl.get_uniform_location(renderer.program, "station_lighting")
             .as_ref(),
-        1.0,
+        if station_lighting { 1.0 } else { 0.0 },
     );
-    let mut lights: Vec<_> = parts
-        .iter()
+    let mut lights: Vec<_> = base
+        .into_iter()
+        .flatten()
+        .chain(dynamic.iter())
         .filter(|(mesh, _, color, emission)| {
             *mesh == 0 && *emission >= 0.7 && color.min_element() > 0.25
         })
@@ -659,21 +909,98 @@ unsafe fn paint(renderer: &Renderer, vp: Mat4, eye: Vec3, parts: &[ModelPart]) {
             .total_cmp(&b.0.distance_squared(eye))
     });
     lights.truncate(8);
-    renderer.local_lights.upload_station(gl, &lights);
+    if exterior.is_empty() {
+        renderer.local_lights.upload_station(gl, &lights);
+    } else {
+        let mut combined: Vec<_> = lights
+            .into_iter()
+            .map(|(position, color)| local_lighting::Light {
+                position,
+                range: 30.,
+                color,
+                power: 2.5,
+            })
+            .chain(
+                exterior
+                    .iter()
+                    .flat_map(|instance| instance.lights.iter().copied()),
+            )
+            .collect();
+        combined.sort_by(|a, b| {
+            (a.position.distance(eye) - a.range)
+                .max(0.)
+                .total_cmp(&(b.position.distance(eye) - b.range).max(0.))
+        });
+        renderer.local_lights.upload_lights(gl, combined);
+    }
     let shadow_texture = renderer.disable_sun_shadow();
     gl.uniform_1_f32(renderer.uniforms.environment_atmosphere.as_ref(), 0.0);
     gl.uniform_3_f32(renderer.uniforms.environment_up.as_ref(), 0.0, 1.0, 0.0);
     gl.uniform_matrix_4_f32_slice(renderer.uniforms.vp.as_ref(), false, &vp.to_cols_array());
     gl.uniform_3_f32(renderer.uniforms.eye.as_ref(), eye.x, eye.y, eye.z);
     gl.uniform_1_i32(renderer.uniforms.material.as_ref(), 0);
-    for &(mesh, model, color, emission) in parts {
+    for &(mesh, model, color, emission) in base.into_iter().flatten().chain(dynamic.iter()) {
         renderer.draw(mesh, model, color, emission);
+    }
+    for instance in exterior {
+        renderer.exterior_emission.set(instance.emission);
+        for &(mesh, model, color, emission) in &instance.hull {
+            renderer.draw(mesh, model, color, emission);
+        }
+        renderer.exterior_emission.set(Default::default());
+        for &(mesh, model, color, emission) in &instance.fixtures {
+            renderer.draw(mesh, model, color, emission);
+        }
     }
     renderer.restore_shadow_texture(shadow_texture);
 }
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn live_material_preview_changes_only_authored_pioneer_materials() {
+        let original = bay_parts(ShipClass::Pioneer);
+        let mut preview_parts = original.clone();
+        let preview = crate::EmbeddedMaterialPreview {
+            hull_rgb: [0.7, 0.03, 0.1],
+            trim_rgb: [0.1, 0.2, 0.9],
+            emissive_strength: 0.,
+            ..Default::default()
+        };
+        apply_material_preview(&mut preview_parts, preview);
+        let mut hull_changed = false;
+        let mut trim_changed = false;
+        let mut emission_changed = false;
+        for (before, after) in original.iter().zip(&preview_parts) {
+            assert_eq!(before.0, after.0);
+            assert_eq!(before.1, after.1);
+            match embedded_primitive(before.0) {
+                None => assert_eq!(
+                    before, after,
+                    "station and dynamic geometry must not change"
+                ),
+                Some(p) => {
+                    if p.material_name == "Graphite ceramic armor" {
+                        assert_eq!(after.2, Vec3::from_array(preview.hull_rgb));
+                        hull_changed |= before.2 != after.2;
+                    } else if p.material_name == "Emerald structural frames" {
+                        assert_eq!(after.2, Vec3::from_array(preview.trim_rgb));
+                        trim_changed |= before.2 != after.2;
+                    } else {
+                        assert_eq!(before.2, after.2);
+                    }
+                    assert_eq!(after.3, 0.);
+                    emission_changed |= before.3 > 0.;
+                }
+            }
+        }
+        assert!(hull_changed && trim_changed && emission_changed);
+        assert_eq!(
+            original,
+            bay_parts(ShipClass::Pioneer),
+            "preview must not mutate cached authored scene"
+        );
+    }
     #[test]
     fn cached_bays_preserve_every_transform_and_material() {
         for class in arkline_protocol::ALL_SHIP_CLASSES {
@@ -706,6 +1033,74 @@ mod tests {
         );
     }
     use super::*;
+    #[test]
+    fn editor_camera_pose_uses_fly_angles_and_preserves_player_camera_pose() {
+        let forward = editor_camera_direction(0.0, 0.0);
+        assert!(forward.distance(Vec3::X) < 1e-6);
+        let up = editor_camera_direction(0.0, std::f32::consts::FRAC_PI_2);
+        assert!(up.distance(Vec3::Y) < 1e-6);
+
+        let ctx = egui::Context::default();
+        let pilot: PilotView = serde_json::from_value(serde_json::json!({
+            "name":"FreecamQA","credits":0,"ore":0,"location":Location::Docked
+        }))
+        .unwrap();
+        let pose = (Vec3::new(12.0, 8.0, -4.0), 1.2, -0.25);
+        let mut view = HangarView::new(None);
+        view.set_editor_free_camera(true, Some(pose));
+        let _ = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                view.ui(ui, &pilot, 1000, true, None, None, None, 1000);
+            });
+        });
+        let camera = view.editor_camera_pose().unwrap();
+        assert!(camera.0.is_finite());
+        assert!(camera.0.distance(pose.0) > 1.0);
+        assert_eq!(view.editor_free_camera, Some(pose));
+    }
+
+    #[test]
+    fn free_camera_hides_avatar_only_while_camera_overlaps_body_or_head() {
+        let avatar = Vec3::new(4.0, 0.0, -2.0);
+        let seeded_first_person_eye = avatar + Vec3::Y * 1.65;
+
+        // Regular first person continues hiding the body and regular third
+        // person continues showing it, independent of the proximity helper.
+        assert!(!should_render_avatar(
+            true,
+            false,
+            seeded_first_person_eye,
+            avatar
+        ));
+        assert!(should_render_avatar(
+            false,
+            false,
+            seeded_first_person_eye,
+            avatar
+        ));
+
+        // The editor camera begins at the player's eye, then restores the
+        // avatar as soon as it clears the body/head envelope.
+        assert!(!should_render_avatar(
+            false,
+            true,
+            seeded_first_person_eye,
+            avatar
+        ));
+        assert!(should_render_avatar(
+            false,
+            true,
+            seeded_first_person_eye + Vec3::Z * 0.5,
+            avatar
+        ));
+        assert!(should_render_avatar(
+            false,
+            true,
+            avatar + Vec3::Y * 2.1,
+            avatar
+        ));
+    }
+
     #[test]
     fn third_person_remains_behind_avatar_at_every_heading() {
         for heading in [0.0, 1.2, -2.7, std::f32::consts::PI] {
@@ -762,12 +1157,13 @@ mod tests {
                         ..Default::default()
                     },
                     |ctx| {
-                        egui::CentralPanel::default()
-                            .show(ctx, |ui| hangar.ui(ui, &pilot, 1000, true, None, None));
+                        egui::CentralPanel::default().show(ctx, |ui| {
+                            hangar.ui(ui, &pilot, 1000, true, None, None, None, 1000)
+                        });
                     },
                 );
             }
-            tx.send(hangar.camera_yaw() != initial).unwrap();
+            tx.send(hangar.camera_yaw() > initial).unwrap();
         });
         assert!(rx
             .recv_timeout(std::time::Duration::from_secs(3))
@@ -791,7 +1187,16 @@ mod tests {
             view.follow_heading = Some(2.);
             let _ = ctx.run(Default::default(), |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    view.ui(ui, &pilot, 1000, true, fleet_mode.then_some(&fleet), None);
+                    view.ui(
+                        ui,
+                        &pilot,
+                        1000,
+                        true,
+                        fleet_mode.then_some(&fleet),
+                        None,
+                        None,
+                        1000,
+                    );
                 });
             });
             assert_eq!(view.fleet_mode, fleet_mode);
@@ -900,7 +1305,7 @@ mod tests {
             let eye = Vec3::new(60.0, 40.0, 65.0);
             let vp = Mat4::perspective_rh_gl(1.0, 1.0, 0.08, 30000.0)
                 * Mat4::look_at_rh(eye, Vec3::new(0.0, 5.0, 0.0), Vec3::Y);
-            paint(&renderer, vp, eye, &bay_parts(ShipClass::Pioneer));
+            paint(&mut renderer, vp, eye, &bay_parts(ShipClass::Pioneer));
             let mut pixels = vec![0u8; 128 * 128 * 4];
             gl.read_pixels(
                 0,
@@ -932,7 +1337,7 @@ mod tests {
                     state.emergency_light_on = mode == "emergency";
                     state.door_open = false;
                     paint(
-                        &renderer,
+                        &mut renderer,
                         vp,
                         eye,
                         &pioneer_interior::parts_with_room(1, Some(&state)),
@@ -1003,7 +1408,7 @@ mod tests {
                         };
                         parts.extend(avatar_parts(&avatar, Default::default(), None));
                     }
-                    paint(&renderer, vp, eye, &parts);
+                    paint(&mut renderer, vp, eye, &parts);
                     let mut rgba = vec![0u8; 1280 * 720 * 4];
                     gl.read_pixels(
                         0,
@@ -1083,7 +1488,7 @@ mod tests {
                             .into_iter()
                             .map(|(mesh, m, c, e)| (mesh, t * m, c, e)),
                     );
-                    paint(&renderer, vp, eye, &parts);
+                    paint(&mut renderer, vp, eye, &parts);
                     let mut rgba = vec![0; 1280 * 720 * 4];
                     gl.read_pixels(
                         0,
@@ -1120,7 +1525,7 @@ mod tests {
                     * Mat4::look_at_rh(eye, aim, Vec3::Y);
                 let mut parts = bay_parts(ShipClass::Pioneer);
                 parts.extend(quarters::room_parts(ShipClass::Pioneer, 1000));
-                paint(&renderer, vp, eye, &parts);
+                paint(&mut renderer, vp, eye, &parts);
                 let mut rgba = vec![0u8; 1280 * 720 * 4];
                 gl.read_pixels(
                     0,
@@ -1142,7 +1547,7 @@ mod tests {
                 let aim = Vec3::new(0.0, 1.7, q.min[2] as f32 - 8.0);
                 let vp = Mat4::perspective_rh_gl(1.3, 1280.0 / 720.0, 0.08, 30000.0)
                     * Mat4::look_at_rh(eye, aim, Vec3::Y);
-                paint(&renderer, vp, eye, &parts);
+                paint(&mut renderer, vp, eye, &parts);
                 gl.read_pixels(
                     0,
                     0,
@@ -1202,7 +1607,7 @@ mod tests {
                         Vec3::new(0.045, 0.07, 0.07),
                         0.0,
                     ));
-                    paint(&renderer, vp, eye, &parts);
+                    paint(&mut renderer, vp, eye, &parts);
                     let mut rgba = vec![0u8; tile * tile * 4];
                     gl.read_pixels(
                         0,

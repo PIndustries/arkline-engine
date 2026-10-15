@@ -8,7 +8,7 @@ Each fixture lists local XYZ and ship XYZ in meters, assigned upstream reference
 
 Suppression has its own proposed deck branch and non-potable supply, not an assumed connection to drinking water. No agent, pressure, coverage radius, sprinkler count certification or real-world installation specification is implied. Equipment footprints, voltage/current/pinout, cable/pipe sizes, mounting structures, RF coverage, signal protocol, hazard classification, release/inhibit behavior and complete physical routes remain unresolved. Hardware must be fitted to actual room meshes before implementation.
 
-All current room placements are proposals. The game does not yet implement walking inside ship hulls, these physical outlets, room sensor telemetry, fire suppression or fluid circuits. This package covers the explicitly proposed human core, not every possible compartment on the large industrial hulls.
+All current room placements are proposals. Pioneer has two walkable docked decks. The physical outlets, full room-sensor networks, fire suppression and distributed fluid circuits described here remain proposals. This package covers the explicitly proposed human core, not every possible compartment on the large industrial hulls.
 
 Browse a ship directory for its complete room index. See systems-reference.md and each ship’s plan.svg for the topology and inherited deck reservations. The ZIP includes every earlier ship concept unchanged; this supplement adds room plans rather than replacing that history.
 

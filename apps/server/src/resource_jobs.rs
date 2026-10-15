@@ -483,7 +483,7 @@ pub(super) fn advance(s: &mut Server, now: u64) -> Result<()> {
             let launch = matches!(command, Request::LaunchDroneClass { .. });
             // This is the ordinary validated command handler, with a server-established
             // worker identity. Internal commands alone bypass manual takeover cancellation.
-            let result = s.execute(&mut Some(name.clone()), command, now, true);
+            let result = s.execute(&mut Some(name.clone()), command, now, true, None);
             let mut w = load(s)?;
             let j = w.resource_jobs.get_mut(&name).unwrap();
             match result {

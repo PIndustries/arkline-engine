@@ -1,6 +1,13 @@
+pub mod access_tokens;
 mod assets;
+pub mod collaborative_editor;
+pub mod collaborative_transport;
 mod drones;
+pub mod editor;
+mod exterior_effects;
 mod flight;
+mod identity;
+pub mod local_development;
 mod mining;
 mod power;
 mod remote_control;
@@ -27,6 +34,8 @@ use std::{
 struct Pilot {
     view: PilotView,
     token_hash: String,
+    #[serde(default)]
+    identity: Option<identity::Binding>,
     last_mine_ms: Option<u64>,
     #[serde(default)]
     warp: Option<flight::WarpPath>,
@@ -37,6 +46,8 @@ struct Pilot {
 }
 #[derive(Clone, Serialize, Deserialize)]
 struct World {
+    #[serde(default)]
+    exterior_definition: ExteriorDefinitionState,
     #[serde(default)]
     remote_controls: BTreeMap<String, String>,
     #[serde(default)]
@@ -70,6 +81,7 @@ fn default_next_drone_id() -> u64 {
 impl Default for World {
     fn default() -> Self {
         Self {
+            exterior_definition: ExteriorDefinitionState::default(),
             remote_controls: BTreeMap::new(),
             fleet_links: BTreeMap::new(),
             resource_jobs: BTreeMap::new(),
@@ -100,10 +112,24 @@ fn token_hash(token: &str) -> String {
     hex::encode(Sha256::digest(token.as_bytes()))
 }
 
+/// Release flock explicitly: a concurrently forked child may still hold a copy
+/// of the open file description until exec, even though this File is CLOEXEC.
+/// Stored after SQLite in Server so authority is released only after DB close.
+struct OwnershipLock(std::fs::File);
+impl Drop for OwnershipLock {
+    fn drop(&mut self) {
+        let _ = FileExt::unlock(&self.0);
+    }
+}
+
 /// One connection, protected by the transport's mutex, serializes all writes.
 /// The durable state and its economic event commit in one SQLite transaction.
 pub struct Server {
+    local_development: bool,
+    editor_room_layout: Option<RoomLayoutDocument>,
+    editor_time: Option<u64>,
     db: Connection,
+    auth: Option<identity::Authenticator>,
     online_sessions: BTreeMap<String, usize>,
     // Conservative latch: clear only after ALL sessions for this pilot leave.
     interior_incompatible: std::collections::BTreeSet<String>,
@@ -111,10 +137,57 @@ pub struct Server {
     room_incompatible: std::collections::BTreeSet<String>,
     // Kept after db so SQLite closes before authority is released. Never unlink
     // the sidecar: replacing its inode would allow competing locks.
-    _ownership_lock: Option<std::fs::File>,
+    _ownership_lock: Option<OwnershipLock>,
 }
 impl Server {
+    pub(crate) fn set_editor_room_layout(&mut self, document: RoomLayoutDocument) {
+        self.editor_room_layout = Some(document);
+    }
+
+    pub(crate) fn validate_editor_room_layout(&self, document: &RoomLayoutDocument) -> Result<()> {
+        document.validate_live().map_err(anyhow::Error::msg)?;
+        let json: String = self
+            .db
+            .query_row("SELECT json FROM world WHERE id=1", [], |row| row.get(0))?;
+        let world: World = serde_json::from_str(&json)?;
+        station::validate_room_layout(&world, document)
+    }
+
+    pub fn is_local_development(&self) -> bool {
+        self.local_development
+    }
+    pub fn open_local_development(directory: impl AsRef<Path>) -> Result<Self> {
+        Self::open_realm(
+            local_development::database_path(directory.as_ref())?,
+            true,
+            false,
+        )
+    }
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
+        Self::open_realm(path, false, false)
+    }
+    fn open_realm(
+        path: impl AsRef<Path>,
+        local_development: bool,
+        editor_mode: bool,
+    ) -> Result<Self> {
+        Self::open_realm_with_layout(path, local_development, editor_mode, None)
+    }
+
+    pub(crate) fn open_editor_realm(
+        path: impl AsRef<Path>,
+        document: RoomLayoutDocument,
+    ) -> Result<Self> {
+        document.validate_live().map_err(anyhow::Error::msg)?;
+        Self::open_realm_with_layout(path, true, true, Some(document))
+    }
+
+    fn open_realm_with_layout(
+        path: impl AsRef<Path>,
+        local_development: bool,
+        editor_mode: bool,
+        editor_room_layout: Option<RoomLayoutDocument>,
+    ) -> Result<Self> {
         let path = path.as_ref();
         if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
             std::fs::create_dir_all(parent)?;
@@ -146,19 +219,31 @@ impl Server {
                 .open(&sidecar)
                 .context("cannot open database ownership lock")?;
             file.try_lock_exclusive().context("world database is already owned by another server (or ownership lock is unavailable)")?;
-            Some(file)
+            Some(OwnershipLock(file))
         };
-        let db = Connection::open(path)?;
+        let existed = path.exists();
+        let mut db = Connection::open(path)?;
+        local_development::establish_realm(&mut db, local_development, existed)?;
+        #[cfg(unix)]
+        if local_development {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(
+                path.parent().unwrap(),
+                std::fs::Permissions::from_mode(0o700),
+            )?;
+        }
         db.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;
             CREATE TABLE IF NOT EXISTS world (id INTEGER PRIMARY KEY CHECK(id=1), json TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS ledger (sequence INTEGER PRIMARY KEY, json TEXT NOT NULL);")?;
+        db.execute_batch("CREATE TABLE IF NOT EXISTS identity_audit (pilot TEXT PRIMARY KEY, issuer TEXT NOT NULL, subject TEXT NOT NULL, linked_at_ms INTEGER NOT NULL);")?;
         db.execute(
             "INSERT OR IGNORE INTO world(id,json) VALUES(1,?1)",
             [serde_json::to_string(&World::default())?],
         )?;
         let json: String = db.query_row("SELECT json FROM world WHERE id=1", [], |r| r.get(0))?;
         let mut world: World = serde_json::from_str(&json)?;
-        let now = now_ms();
+        let editor_time = editor::open_clock(&mut db, editor_mode)?;
+        let now = editor_time.unwrap_or_else(now_ms);
         flight::migrate_spatial(&mut world);
         universe::ensure_asteroids(&mut world);
         assets::ensure_accounts(&mut world);
@@ -168,7 +253,13 @@ impl Server {
         room_controls::advance(&mut world, now)?;
         world.remote_controls.clear();
         resource_jobs::cancel_all(&mut world, now, "Server restarted");
-        station::migrate(&mut world);
+        if let Some(room_layout) = editor_room_layout.as_ref() {
+            // An editor layout must be compatible with persisted pilot
+            // positions before migration. Do not silently relocate avatars
+            // when an externally changed layout file would trap them.
+            station::validate_room_layout(&world, room_layout)?;
+        }
+        station::migrate(&mut world, editor_room_layout.as_ref());
         for pilot in world.pilots.values_mut() {
             mining::stop_all(pilot, "Server restarted");
             pilot.controls = None;
@@ -188,13 +279,17 @@ impl Server {
                 }
             }
         }
-        validate(&world)?;
+        validate(&world, editor_room_layout.as_ref())?;
         let stopped = serde_json::to_string(&world)?;
         if stopped != json {
             db.execute("UPDATE world SET json=?1 WHERE id=1", [stopped])?;
         }
         Ok(Self {
+            local_development,
+            editor_room_layout,
+            editor_time,
             db,
+            auth: None,
             online_sessions: BTreeMap::new(),
             interior_incompatible: Default::default(),
             fleet_incompatible: Default::default(),
@@ -224,7 +319,8 @@ impl Server {
             Request::Connect {
                 resume_token: None,
                 ..
-            } | Request::PlaceSell { .. }
+            } | Request::AccountConnect { .. }
+                | Request::PlaceSell { .. }
         ) {
             return Ok(false);
         }
@@ -233,7 +329,9 @@ impl Server {
             .query_row("SELECT json FROM world WHERE id=1", [], |r| r.get(0))?;
         let w: World = serde_json::from_str(&raw)?;
         match request {
-            Request::Connect { pilot, .. } if !w.pilots.contains_key(pilot) => {
+            Request::Connect { pilot, .. } | Request::AccountConnect { pilot, .. }
+                if !w.pilots.contains_key(pilot) =>
+            {
                 ensure!(
                     w.pilots.len() < max_pilots,
                     "public world registration capacity reached"
@@ -261,9 +359,24 @@ impl Server {
     pub fn handle_at(
         &mut self,
         session: &mut Option<String>,
-        mut request: Request,
+        request: Request,
         now: u64,
     ) -> Response {
+        self.handle_identity_at(session, request, now, None)
+    }
+    fn handle_identity_at(
+        &mut self,
+        session: &mut Option<String>,
+        mut request: Request,
+        now: u64,
+        account: Option<identity::Admission>,
+    ) -> Response {
+        if matches!(request, Request::Connect { .. })
+            && account.is_none()
+            && self.auth.as_ref().is_some_and(|a| a.required)
+        {
+            return Response::error("account authentication required");
+        }
         let previous = session.clone();
         let legacy_room = matches!(
             &request,
@@ -315,7 +428,7 @@ impl Server {
         {
             return Response::error("Close older or terminal clients, then disconnect and reconnect all sessions for this pilot before entering the interior");
         }
-        match self.execute(session, request, now, false) {
+        match self.execute(session, request, now, false, account) {
             Ok(mut response) => {
                 // execute changes the session only after a successful durable
                 // commit. Repeated Connect on one socket must not double-count.
@@ -379,6 +492,9 @@ impl Server {
         self.tick_at(now_ms())
     }
     pub fn tick_at(&mut self, now: u64) -> Result<()> {
+        if let Some(previous) = self.editor_time {
+            ensure!(now >= previous, "editor time cannot move backwards");
+        }
         let tx = self.db.transaction()?;
         let json: String = tx.query_row("SELECT json FROM world WHERE id=1", [], |r| r.get(0))?;
         let mut world: World = serde_json::from_str(&json)?;
@@ -390,7 +506,7 @@ impl Server {
         power::advance(&mut world, now)?;
         room_controls::advance(&mut world, now)?;
         flight::advance(&mut world, now);
-        station::advance(&mut world, now);
+        station::advance(&mut world, now, self.editor_room_layout.as_ref());
         surface::update(&mut world);
         universe::advance_locks(&mut world, now);
         let mut events = mining::advance(&mut world, now);
@@ -401,12 +517,21 @@ impl Server {
         for event in events {
             append_event(&tx, &mut entries, event, now)?;
         }
-        validate(&world)?;
+        validate(&world, self.editor_room_layout.as_ref())?;
         let next = serde_json::to_string(&world)?;
         if next != json {
             tx.execute("UPDATE world SET json=?1 WHERE id=1", [next])?;
         }
+        if self.editor_time.is_some() {
+            tx.execute(
+                "UPDATE editor_clock SET time_ms=?1 WHERE id=1",
+                [now.to_string()],
+            )?;
+        }
         tx.commit()?;
+        if self.editor_time.is_some() {
+            self.editor_time = Some(now);
+        }
         resource_jobs::advance(self, now)?;
         Ok(())
     }
@@ -420,7 +545,7 @@ impl Server {
         mining::ensure_modules(&mut world);
         drones::ensure_fleets(&mut world)?;
 
-        let now = now_ms();
+        let now = self.editor_time.unwrap_or_else(now_ms);
         remote_control::release_controller(&mut world, name);
         let controlled: Vec<String> = world
             .resource_jobs
@@ -441,7 +566,7 @@ impl Server {
                 worker == name && self.online_sessions.contains_key(controller)
             });
         if delegated {
-            validate(&world)?;
+            validate(&world, self.editor_room_layout.as_ref())?;
             tx.execute(
                 "UPDATE world SET json=?1 WHERE id=1",
                 [serde_json::to_string(&world)?],
@@ -469,7 +594,7 @@ impl Server {
                 }
             }
         }
-        validate(&world)?;
+        validate(&world, self.editor_room_layout.as_ref())?;
         let next = serde_json::to_string(&world)?;
         if next != json {
             tx.execute("UPDATE world SET json=?1 WHERE id=1", [next])?;
@@ -483,6 +608,7 @@ impl Server {
         request: Request,
         now: u64,
         automated: bool,
+        account: Option<identity::Admission>,
     ) -> Result<Response> {
         let transport_session = session;
         let mut effective_session = transport_session.clone();
@@ -522,7 +648,7 @@ impl Server {
         power::advance(&mut world, now)?;
         room_controls::advance(&mut world, now)?;
         flight::advance(&mut world, now);
-        station::advance(&mut world, now);
+        station::advance(&mut world, now, self.editor_room_layout.as_ref());
         surface::update(&mut world);
         universe::advance_locks(&mut world, now);
         let mut token = None;
@@ -695,6 +821,17 @@ impl Server {
                 room_controls::execute(&mut world, name, action, now)?;
                 message = "Pioneer room command accepted";
             }
+            Request::SetPioneerExterior {
+                enabled,
+                expected_revision,
+            } => {
+                let name = session
+                    .as_ref()
+                    .context("connect before engineering commands")?;
+                ensure!(!remote, "exterior controls cannot be remotely delegated");
+                exterior_effects::execute(&mut world, name, enabled, expected_revision, now)?;
+                message = "Pioneer exterior command accepted";
+            }
             Request::BoardShip { id } => {
                 let name = session.as_ref().context("connect before boarding")?;
                 event = assets::board(&mut world, name, &id, now)?;
@@ -712,6 +849,9 @@ impl Server {
                 let outcome = assets::execute(&mut world, name, request, now)?;
                 event = outcome;
                 message = "Station assets updated";
+            }
+            Request::AccountConnect { .. } | Request::AuthCapabilities => {
+                bail!("use authenticated transport admission")
             }
             Request::Connect {
                 supports_room_controls,
@@ -733,13 +873,18 @@ impl Server {
                             .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-'),
                     "pilot name must be 1-24 ASCII letters, digits, underscore or hyphen"
                 );
+                if let Some(a) = &account {
+                    identity::authorize(&world, &pilot, a, resume_token.as_deref())?;
+                }
                 if let Some(existing) = world.pilots.get(&pilot) {
-                    let supplied =
-                        resume_token.context("resume token required for existing pilot")?;
-                    ensure!(
-                        token_hash(&supplied) == existing.token_hash,
-                        "invalid resume token"
-                    );
+                    if account.is_none() {
+                        let supplied =
+                            resume_token.context("resume token required for existing pilot")?;
+                        ensure!(
+                            token_hash(&supplied) == existing.token_hash,
+                            "invalid resume token"
+                        );
+                    }
                     if !supports_pioneer_interior {
                         let existing = world.pilots.get_mut(&pilot).unwrap();
                         if existing
@@ -796,16 +941,26 @@ impl Server {
                                 locked_asteroid: None,
                             },
                             token_hash: token_hash(&issued),
+                            identity: None,
                             last_mine_ms: None,
                             warp: None,
                             controls: None,
                             walk_input: None,
                         },
                     );
-                    token = Some(issued);
+                    if account.is_none() {
+                        token = Some(issued);
+                    }
                     event = Some(EconomicEvent::PilotCreated {
                         pilot: pilot.clone(),
                     });
+                }
+                if let Some(a) = &account {
+                    let p = world.pilots.get_mut(&pilot).unwrap();
+                    if p.identity.is_none() {
+                        p.identity = Some(a.binding.clone());
+                        tx.execute("INSERT INTO identity_audit(pilot, issuer, subject, linked_at_ms) VALUES(?1,?2,?3,?4)", params![pilot, a.binding.issuer, a.binding.subject, now])?;
+                    }
                 }
                 assets::ensure_accounts(&mut world);
                 world.accounts.get_mut(&pilot).unwrap().room_compatible = supports_room_controls;
@@ -1165,7 +1320,7 @@ impl Server {
         drones::ensure_fleets(&mut world)?;
         power::advance(&mut world, now)?;
         room_controls::advance(&mut world, now)?;
-        validate(&world)?;
+        validate(&world, self.editor_room_layout.as_ref())?;
         let mut entries = load_entries(&tx, export)?;
         for event in cycle_events.into_iter().chain(event) {
             append_event(&tx, &mut entries, event, now)?;
@@ -1185,6 +1340,7 @@ impl Server {
             .or(transport_session.as_ref())
             .and_then(|name| assets::view(&world, name));
         let snapshot = Snapshot {
+            exterior: Some(exterior_effects::view(&world, now)),
             remote_controls: world
                 .remote_controls
                 .iter()
@@ -1228,6 +1384,7 @@ impl Server {
             *transport_session = Some(pilot);
         }
         Ok(Response {
+            auth: None,
             assets: private_assets,
             ok: true,
             message: message.into(),
@@ -1290,8 +1447,8 @@ fn add_cargo(current: u64, units: u64, capacity: u64) -> Result<u64> {
     ensure!(next <= capacity, "cargo capacity exceeded");
     Ok(next)
 }
-fn validate(world: &World) -> Result<()> {
-    station::validate(world)?;
+fn validate(world: &World, room_layout: Option<&RoomLayoutDocument>) -> Result<()> {
+    station::validate(world, room_layout)?;
     remote_control::validate(world)?;
     resource_jobs::validate(world)?;
     surface::validate(world)?;
@@ -1303,6 +1460,7 @@ fn validate(world: &World) -> Result<()> {
         "active cargo exceeds hull capacity"
     );
     assets::validate(world)?;
+    exterior_effects::validate(world)?;
     room_controls::validate(world)?;
     mining::validate(world)?;
     universe::validate_locks(world)?;
@@ -1392,5 +1550,46 @@ mod tests {
                 .ok
         );
         assert_eq!(server.db.total_changes(), before + 2);
+    }
+}
+
+#[cfg(all(test, unix))]
+mod ownership_release_tests {
+    use super::*;
+
+    #[test]
+    fn server_drop_releases_authority_with_inherited_descriptor_still_open() {
+        let root = std::env::temp_dir().join(format!(
+            "arkline-inherited-lock-{}-{}",
+            std::process::id(),
+            rand::random::<u64>()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        let path = root.join("world.sqlite");
+        let server = Server::open(&path).unwrap();
+        // dup has the same open-file-description lifetime as a fork-inherited FD.
+        // A concurrently spawning process can retain it briefly until exec.
+        let inherited = server
+            ._ownership_lock
+            .as_ref()
+            .unwrap()
+            .0
+            .try_clone()
+            .unwrap();
+        assert!(
+            Server::open(&path).is_err(),
+            "live writer must remain exclusive"
+        );
+        drop(server);
+        let reopened = Server::open(&path)
+            .expect("dropped server must release authority before an inherited FD closes");
+        drop(inherited);
+        assert!(
+            Server::open(&path).is_err(),
+            "closing the old descriptor must not release the new writer's lock"
+        );
+        drop(reopened);
+        assert!(Server::open(&path).is_ok());
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

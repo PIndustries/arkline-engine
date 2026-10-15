@@ -44,13 +44,10 @@ show the real connection state before entering it. Separate universes must not b
 presented as an already shared economy or as automatically interoperable worlds.
 Cross-universe identity, assets, travel and trust would need explicit designs.
 
-That is a future direction. The repository remains private pending owner validation,
-with AGPL-3.0-only selected for the source. Community node registration, official
+That is a future direction. The source is public under AGPL-3.0-only. Community node registration, official
 node certification, uptime rewards, distributed authority/consensus and universe
 federation are **not implemented**. The existing independent verifier checks supplied
-economic history; it does not establish any of those network guarantees. Defining
-operator governance and approving repository publication remain separate decisions
-before a public release. No future node or licensing proposal changes the current server's
+economic history; it does not establish any of those network guarantees. Operator governance for these proposed capabilities remains separate from source publication. No future node or licensing proposal changes the current server's
 authority or the meaning of today's economic audit.
 
 ## Future MIDI device controls

@@ -3,11 +3,11 @@ use super::*;
 
 pub(super) const MAX_LIGHTS: usize = 8;
 #[derive(Clone, Copy, Debug, Default)]
-struct Light {
-    position: Vec3,
-    range: f32,
-    color: Vec3,
-    power: f32,
+pub(super) struct Light {
+    pub(super) position: Vec3,
+    pub(super) range: f32,
+    pub(super) color: Vec3,
+    pub(super) power: f32,
 }
 #[derive(Default)]
 struct Lights {
@@ -81,7 +81,7 @@ fn collect(
         return lights;
     }
     let budget = budget.min(if frame.drone_camera { 2 } else { MAX_LIGHTS });
-    for pilot in &frame.pilots {
+    for pilot in &frame.scene.pilots {
         if pilot.system_id != frame.system_id
             || !matches!(pilot.location, Location::Station | Location::Belt)
         {
@@ -93,6 +93,11 @@ fn collect(
         }
         let rotation = ship_orientation_at(pilot, frame.now);
         let pose = Mat4::from_rotation_translation(rotation, position);
+        if let Some(binding) = exterior_visuals::for_pilot(frame, pilot) {
+            for light in binding.lights(pose) {
+                lights.offer(light, frame.eye, budget);
+            }
+        }
         let acceleration = confirmed_body_acceleration(pilot, frame.now);
         for axis in 0..3 {
             let component = acceleration[axis];
@@ -122,6 +127,7 @@ fn collect(
                 continue;
             };
             let Some(asteroid) = frame
+                .scene
                 .asteroids
                 .iter()
                 .find(|a| a.id == cycle.target_id && eligible_mining(pilot, a))
@@ -172,6 +178,7 @@ fn collect(
                 continue;
             }
             let Some(asteroid) = frame
+                .scene
                 .asteroids
                 .iter()
                 .find(|a| a.id == target_id && a.system_id == pilot.system_id && a.ore > 0)
@@ -214,14 +221,40 @@ impl Uniforms {
         }
     }
     pub(super) unsafe fn upload_station(&self, gl: &glow::Context, lights: &[(Vec3, Vec3)]) {
-        let mut positions = [0.0; MAX_LIGHTS * 4];
-        let mut colors = [0.0; MAX_LIGHTS * 4];
-        for (i, (position, color)) in lights.iter().take(MAX_LIGHTS).enumerate() {
-            positions[i * 4..i * 4 + 4]
-                .copy_from_slice(&[position.x, position.y, position.z, 30.0]);
-            colors[i * 4..i * 4 + 4].copy_from_slice(&[color.x, color.y, color.z, 2.5]);
+        self.upload_lights(
+            gl,
+            lights.iter().map(|(position, color)| Light {
+                position: *position,
+                range: 30.,
+                color: *color,
+                power: 2.5,
+            }),
+        );
+    }
+    pub(super) unsafe fn upload_lights(
+        &self,
+        gl: &glow::Context,
+        lights: impl IntoIterator<Item = Light>,
+    ) {
+        let mut positions = [0.; MAX_LIGHTS * 4];
+        let mut colors = [0.; MAX_LIGHTS * 4];
+        let mut count = 0;
+        for (i, light) in lights.into_iter().take(MAX_LIGHTS).enumerate() {
+            positions[i * 4..i * 4 + 4].copy_from_slice(&[
+                light.position.x,
+                light.position.y,
+                light.position.z,
+                light.range,
+            ]);
+            colors[i * 4..i * 4 + 4].copy_from_slice(&[
+                light.color.x,
+                light.color.y,
+                light.color.z,
+                light.power,
+            ]);
+            count = i as i32 + 1;
         }
-        gl.uniform_1_i32(self.count.as_ref(), lights.len().min(MAX_LIGHTS) as i32);
+        gl.uniform_1_i32(self.count.as_ref(), count);
         gl.uniform_4_f32_slice(self.positions.as_ref(), &positions);
         gl.uniform_4_f32_slice(self.colors.as_ref(), &colors);
     }
@@ -264,29 +297,35 @@ mod tests {
     use super::*;
     fn frame() -> Frame {
         Frame {
+            exterior: None,
             lighting_quality: Default::default(),
             cockpit_vp: Mat4::IDENTITY,
             snapshot_time: 1000,
             planet_vp: Mat4::IDENTITY,
             system_id: 1,
             ship_class: ShipClass::Pioneer,
-            traffic: vec![],
-            surface_props: vec![],
             drone_camera: false,
             camera_drone: None,
+            scene: std::sync::Arc::new(FrameScene {
+                traffic: vec![],
+                surface_props: vec![],
+                asteroids: vec![],
+                gates: vec![],
+                pilots: vec![],
+            }),
             space: Space::default(),
             cockpit: false,
             rotation: Quat::IDENTITY,
-            asteroids: vec![],
-            gates: vec![],
             connected: true,
             vp: Mat4::IDENTITY,
             eye: Vec3::ZERO,
             now: 1000,
-            pilots: vec![],
             own: "fixture".into(),
             docking: None,
         }
+    }
+    fn scene_mut(frame: &mut Frame) -> &mut FrameScene {
+        std::sync::Arc::make_mut(&mut frame.scene)
     }
     fn pilot() -> PilotView {
         serde_json::from_value(serde_json::json!({"name":"fixture","credits":100,"ore":0,
@@ -330,10 +369,14 @@ mod tests {
     #[test]
     fn coasting_stale_disconnected_and_docked_cannot_emit_thruster_light() {
         let mut f = frame();
-        f.pilots.push(pilot());
+        scene_mut(&mut f).pilots.push(pilot());
         let turrets = std::collections::HashMap::new();
         assert_eq!(collect(&f, &turrets, 8).len, 0);
-        f.pilots[0].flight.as_mut().unwrap().acceleration = [150.0, 0.0, 0.0];
+        scene_mut(&mut f).pilots[0]
+            .flight
+            .as_mut()
+            .unwrap()
+            .acceleration = [150.0, 0.0, 0.0];
         assert!(collect(&f, &turrets, 8).len > 0);
         f.connected = false;
         assert_eq!(collect(&f, &turrets, 8).len, 0);
@@ -341,14 +384,14 @@ mod tests {
         f.now = 2600;
         assert_eq!(collect(&f, &turrets, 8).len, 0);
         f.now = 1000;
-        f.pilots[0].location = Location::Docked;
+        scene_mut(&mut f).pilots[0].location = Location::Docked;
         assert_eq!(collect(&f, &turrets, 8).len, 0);
     }
     #[test]
     fn mining_needs_confirmed_assignment_lock_range_and_aligned_barrel() {
         let mut f = frame();
-        f.pilots.push(pilot());
-        f.asteroids.push(Asteroid {
+        scene_mut(&mut f).pilots.push(pilot());
+        scene_mut(&mut f).asteroids.push(Asteroid {
             id: 1,
             system_id: 1,
             name: "fixture rock".into(),
@@ -366,17 +409,17 @@ mod tests {
             },
         );
         assert_eq!(collect(&f, &turrets, 8).len, 0);
-        f.pilots[0].mining_modules=serde_json::from_value(serde_json::json!([{
+        scene_mut(&mut f).pilots[0].mining_modules=serde_json::from_value(serde_json::json!([{
             "module_id":0,"target_id":1,"cycle_started_at_ms":900,"cycle_completes_at_ms":3000,"stop_reason":null}])).unwrap();
         let lights = collect(&f, &turrets, 8);
         assert_eq!(lights.len, 1);
         assert!(lights.entries[0].position.x > 1.0);
-        f.pilots[0].locked_asteroids.clear();
+        scene_mut(&mut f).pilots[0].locked_asteroids.clear();
         assert_eq!(collect(&f, &turrets, 8).len, 0);
-        f.pilots[0].locked_asteroids.push(1);
+        scene_mut(&mut f).pilots[0].locked_asteroids.push(1);
         turrets.get_mut(&("fixture".into(), 0)).unwrap().rotation = Quat::from_rotation_y(2.0);
         assert_eq!(collect(&f, &turrets, 8).len, 0);
-        f.asteroids[0].ore = 0;
+        scene_mut(&mut f).asteroids[0].ore = 0;
         assert_eq!(collect(&f, &turrets, 8).len, 0);
     }
     #[test]
@@ -388,8 +431,8 @@ mod tests {
             "position":[200.0,0.0,0.0],"velocity":[0.0,0.0,0.0],"heading":[1.0,0.0,0.0],
             "mode":arkline_protocol::DroneMode::Mining{target_id:1},"updated_at_ms":1000,
             "mining_cycle":{"started_at_ms":900,"completes_at_ms":5000}}])).unwrap();
-        f.pilots.push(p);
-        f.asteroids.push(Asteroid {
+        scene_mut(&mut f).pilots.push(p);
+        scene_mut(&mut f).asteroids.push(Asteroid {
             id: 1,
             system_id: 1,
             name: "rock".into(),
@@ -399,13 +442,13 @@ mod tests {
         });
         let turrets = std::collections::HashMap::new();
         assert_eq!(collect(&f, &turrets, 8).len, 1);
-        f.pilots[0].drones[0].signal_strength = 0.0;
+        scene_mut(&mut f).pilots[0].drones[0].signal_strength = 0.0;
         assert_eq!(collect(&f, &turrets, 8).len, 0);
-        f.pilots[0].drones[0].signal_strength = 1.0;
-        f.pilots[0].drones[0].position = [-5000.0, 0.0, 0.0];
+        scene_mut(&mut f).pilots[0].drones[0].signal_strength = 1.0;
+        scene_mut(&mut f).pilots[0].drones[0].position = [-5000.0, 0.0, 0.0];
         assert_eq!(collect(&f, &turrets, 8).len, 0);
-        f.pilots[0].drones[0].position = [200.0, 0.0, 0.0];
-        f.pilots[0].drones[0].mining_cycle = None;
+        scene_mut(&mut f).pilots[0].drones[0].position = [200.0, 0.0, 0.0];
+        scene_mut(&mut f).pilots[0].drones[0].mining_cycle = None;
         assert_eq!(collect(&f, &turrets, 8).len, 0);
     }
     #[test]
@@ -413,7 +456,7 @@ mod tests {
         let mut f = frame();
         let mut p = pilot();
         p.flight.as_mut().unwrap().acceleration = [150.0, 150.0, 150.0];
-        f.pilots.push(p);
+        scene_mut(&mut f).pilots.push(p);
         let turrets = std::collections::HashMap::new();
         assert!(collect(&f, &turrets, 8).len >= 3);
         f.drone_camera = true;
@@ -465,9 +508,11 @@ fn native_local_light_has_bounded_illumination() {
             .cast()
         });
         // Substitute unit BRDF to measure only this module's radiance/window.
-        let fragment=concat!("#version 150\nvec3 ark_brdf(vec3 n,vec3 v,vec3 l,vec3 a,float r,float m){return vec3(1.0);}\n",
+        let fragment = concat!(
+            "#version 150\nvec3 ark_brdf(vec3 n,vec3 v,vec3 l,vec3 a,float r,float m){return vec3(1.0);}\n",
             include_str!("shaders/local_lighting.glsl"),
-            "\nuniform vec3 sample_world;out vec4 color;void main(){color=vec4(ark_local_lighting(sample_world,vec3(0,0,1),vec3(0,0,1),vec3(1),0.5,0.0),1);}");
+            "\nuniform vec3 sample_world;out vec4 color;void main(){color=vec4(ark_local_lighting(sample_world,vec3(0,0,1),vec3(0,0,1),vec3(1),0.5,0.0),1);}"
+        );
         let program = compile(&gl, BACK_VERTEX, fragment).unwrap();
         let target = CachedFeed::create(&gl, 123, 8, 8).unwrap();
         gl.bind_framebuffer(glow::FRAMEBUFFER, Some(target.framebuffer));

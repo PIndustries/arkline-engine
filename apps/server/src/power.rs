@@ -17,7 +17,7 @@ pub(super) fn advance_state_with_load(
     let spec = power_spec(class);
     ensure!(
         load <= spec.regen_w,
-        "room load exceeds supported reactor budget"
+        "combined circuit load exceeds supported reactor budget"
     );
     let state = power.get_or_insert(PowerState {
         charge_j: spec.capacity_j,
@@ -54,20 +54,15 @@ pub(super) fn advance_state_with_load(
     Ok(())
 }
 pub(super) fn advance(world: &mut World, now: u64) -> Result<()> {
-    for (name, p) in &mut world.pilots {
-        if p.view.ship_class == ShipClass::Pioneer
-            && world
-                .accounts
-                .get(name)
-                .is_some_and(|a| a.pioneer_room.is_some())
-        {
+    for p in world.pilots.values_mut() {
+        if p.view.ship_class == ShipClass::Pioneer {
             continue;
         }
         advance_state(&mut p.view.power, p.view.ship_class, now)?;
     }
     for account in world.accounts.values_mut() {
         for ship in &mut account.ships {
-            if ship.ship_class == ShipClass::Pioneer && account.pioneer_room.is_some() {
+            if ship.ship_class == ShipClass::Pioneer {
                 continue;
             }
             advance_state(&mut ship.power, ship.ship_class, now)?;
@@ -214,6 +209,9 @@ mod tests {
             .handle_at(&mut session, Request::Snapshot, 500)
             .snapshot
             .unwrap();
-        assert_eq!(later.pilots[0].power.as_ref().unwrap().charge_j, 1600);
+        assert_eq!(
+            later.pilots[0].power.as_ref().unwrap().charge_j,
+            1600 - default_pioneer_exterior().load_w() / 2
+        );
     }
 }

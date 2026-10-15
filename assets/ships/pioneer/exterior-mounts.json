@@ -1,0 +1,301 @@
+{
+  "schema": "pioneer-fixture-mount-recommendations/v1",
+  "status": "applied Study05 inferred visual registration; no engineering ratings",
+  "date_utc": "2026-10-15",
+  "claim": "https://github.com/PIndustries/arkline-engine/issues/10#issuecomment-6199911507",
+  "source_head": "2abbc22197b5530bd11e76bf665b828a4033db27",
+  "source_master_sha256": "61eb70e1978668f5ca7256f237d9df14c47140b9bbbbce327875b68efcbe57c9",
+  "target_export_sha256": "8125644f007537437942d34169e527c08ddd2dfaed575c874e2263ff2b7cb123",
+  "coordinate_frame": "centered body metres +Xforward,+Yup,+Zstarboard",
+  "current_definition_sha256": "7f5b1ef4f44273d6e15a7048d986a33fe85700a05f23bce98aeb6da39438a842",
+  "prior_mount_receipt": "https://github.com/PIndustries/arkline-engine/blob/2abbc22197b5530bd11e76bf665b828a4033db27/assets/ships/pioneer/exterior-mounts.json",
+  "fixtures": [
+    {
+      "fixture_id": "pioneer.exterior.nav.port",
+      "kind": "navigation",
+      "applied_position_body_m": [
+        -24.0,
+        2.8,
+        -18.95
+      ],
+      "color": [
+        1.0,
+        0.04,
+        0.02
+      ],
+      "emission": 2.0,
+      "light_range_m": 6.0,
+      "light_intensity": 0.65,
+      "load_w": 4,
+      "pulse": null,
+      "source_reference": "Unchanged registration from prior verified Study04 mount receipt at2abbc221",
+      "basis": "Geometry in the corresponding fixture region retained; source coordinates unchanged."
+    },
+    {
+      "fixture_id": "pioneer.exterior.nav.starboard",
+      "kind": "navigation",
+      "applied_position_body_m": [
+        -24.0,
+        2.8,
+        18.95
+      ],
+      "color": [
+        0.04,
+        1.0,
+        0.15
+      ],
+      "emission": 2.0,
+      "light_range_m": 6.0,
+      "light_intensity": 0.65,
+      "load_w": 4,
+      "pulse": null,
+      "source_reference": "Unchanged registration from prior verified Study04 mount receipt at2abbc221",
+      "basis": "Geometry in the corresponding fixture region retained; source coordinates unchanged."
+    },
+    {
+      "fixture_id": "pioneer.exterior.nav.aft",
+      "kind": "navigation",
+      "applied_position_body_m": [
+        -36.05,
+        4.0,
+        0.0
+      ],
+      "color": [
+        0.9,
+        0.95,
+        1.0
+      ],
+      "emission": 2.0,
+      "light_range_m": 6.0,
+      "light_intensity": 0.65,
+      "load_w": 4,
+      "pulse": null,
+      "source_reference": "Unchanged registration from prior verified Study04 mount receipt at2abbc221",
+      "basis": "Geometry in the corresponding fixture region retained; source coordinates unchanged."
+    },
+    {
+      "fixture_id": "pioneer.exterior.strobe.dorsal",
+      "kind": "strobe",
+      "applied_position_body_m": [
+        -8.0,
+        6.3,
+        0.0
+      ],
+      "color": [
+        0.85,
+        0.93,
+        1.0
+      ],
+      "emission": 2.0,
+      "light_range_m": 6.0,
+      "light_intensity": 0.65,
+      "load_w": 8,
+      "pulse": {
+        "period_ms": 1000,
+        "on_ms": 100,
+        "phase_ms": 0
+      },
+      "source_reference": "Unchanged registration from prior verified Study04 mount receipt at2abbc221",
+      "basis": "Geometry in the corresponding fixture region retained; source coordinates unchanged."
+    },
+    {
+      "fixture_id": "pioneer.exterior.strobe.ventral",
+      "kind": "strobe",
+      "applied_position_body_m": [
+        0.0,
+        -9.1,
+        0.0
+      ],
+      "color": [
+        0.85,
+        0.93,
+        1.0
+      ],
+      "emission": 2.0,
+      "light_range_m": 6.0,
+      "light_intensity": 0.65,
+      "load_w": 8,
+      "pulse": {
+        "period_ms": 1000,
+        "on_ms": 100,
+        "phase_ms": 500
+      },
+      "source_reference": "Unchanged registration from prior verified Study04 mount receipt at2abbc221",
+      "basis": "Geometry in the corresponding fixture region retained; source coordinates unchanged."
+    },
+    {
+      "fixture_id": "pioneer.exterior.window.port.forward",
+      "kind": "window",
+      "applied_position_body_m": [
+        35.26,
+        1.04,
+        -3.325
+      ],
+      "color": [
+        0.1,
+        0.42,
+        0.5
+      ],
+      "emission": 0.025,
+      "light_range_m": 2.0,
+      "light_intensity": 0.08,
+      "load_w": 12,
+      "pulse": null,
+      "source_part": "Bridge front glazing port",
+      "basis": "Actual recessed source pane centroid plus0.06m outward; authored pane supplies visible surface, no extra cuboid. Opaque scalar-PBR approximation, not fitted interior."
+    },
+    {
+      "fixture_id": "pioneer.exterior.window.starboard.forward",
+      "kind": "window",
+      "applied_position_body_m": [
+        35.26,
+        1.04,
+        3.325
+      ],
+      "color": [
+        0.1,
+        0.42,
+        0.5
+      ],
+      "emission": 0.025,
+      "light_range_m": 2.0,
+      "light_intensity": 0.08,
+      "load_w": 12,
+      "pulse": null,
+      "source_part": "Bridge front glazing starboard",
+      "basis": "Actual recessed source pane centroid plus0.06m outward; authored pane supplies visible surface, no extra cuboid. Opaque scalar-PBR approximation, not fitted interior."
+    },
+    {
+      "fixture_id": "pioneer.exterior.window.port.aft",
+      "kind": "window",
+      "applied_position_body_m": [
+        33.02166,
+        1.09,
+        -9.86249
+      ],
+      "color": [
+        0.1,
+        0.42,
+        0.5
+      ],
+      "emission": 0.025,
+      "light_range_m": 2.0,
+      "light_intensity": 0.08,
+      "load_w": 12,
+      "pulse": null,
+      "source_part": "Bridge wrap glazing port",
+      "basis": "Actual recessed source pane centroid plus0.06m outward; authored pane supplies visible surface, no extra cuboid. Opaque scalar-PBR approximation, not fitted interior."
+    },
+    {
+      "fixture_id": "pioneer.exterior.window.starboard.aft",
+      "kind": "window",
+      "applied_position_body_m": [
+        33.02166,
+        1.09,
+        9.86249
+      ],
+      "color": [
+        0.1,
+        0.42,
+        0.5
+      ],
+      "emission": 0.025,
+      "light_range_m": 2.0,
+      "light_intensity": 0.08,
+      "load_w": 12,
+      "pulse": null,
+      "source_part": "Bridge wrap glazing starboard",
+      "basis": "Actual recessed source pane centroid plus0.06m outward; authored pane supplies visible surface, no extra cuboid. Opaque scalar-PBR approximation, not fitted interior."
+    },
+    {
+      "fixture_id": "pioneer.exterior.panel.port",
+      "kind": "panel",
+      "applied_position_body_m": [
+        36.04,
+        -2.3,
+        -6.5
+      ],
+      "color": [
+        0.15,
+        0.65,
+        1.0
+      ],
+      "emission": 2.0,
+      "light_range_m": 6.0,
+      "light_intensity": 0.65,
+      "load_w": 6,
+      "pulse": null,
+      "source_reference": "Unchanged registration from prior verified Study04 mount receipt at2abbc221",
+      "basis": "Geometry in the corresponding fixture region retained; source coordinates unchanged."
+    },
+    {
+      "fixture_id": "pioneer.exterior.panel.starboard",
+      "kind": "panel",
+      "applied_position_body_m": [
+        36.04,
+        -2.3,
+        6.5
+      ],
+      "color": [
+        0.15,
+        0.65,
+        1.0
+      ],
+      "emission": 2.0,
+      "light_range_m": 6.0,
+      "light_intensity": 0.65,
+      "load_w": 6,
+      "pulse": null,
+      "source_reference": "Unchanged registration from prior verified Study04 mount receipt at2abbc221",
+      "basis": "Geometry in the corresponding fixture region retained; source coordinates unchanged."
+    },
+    {
+      "fixture_id": "pioneer.exterior.drive.port",
+      "kind": "engine_glow",
+      "applied_position_body_m": [
+        -33.28,
+        0.0,
+        -12.5
+      ],
+      "color": [
+        0.15,
+        0.5,
+        1.0
+      ],
+      "emission": 2.0,
+      "light_range_m": 6.0,
+      "light_intensity": 0.65,
+      "load_w": 0,
+      "pulse": null,
+      "source_part": "Drive throat",
+      "basis": "0.08m aft of the existing throat front atX=-33.2, inside real cap/counterbore openings; existing drive telemetry retained."
+    },
+    {
+      "fixture_id": "pioneer.exterior.drive.starboard",
+      "kind": "engine_glow",
+      "applied_position_body_m": [
+        -33.28,
+        0.0,
+        12.5
+      ],
+      "color": [
+        0.15,
+        0.5,
+        1.0
+      ],
+      "emission": 2.0,
+      "light_range_m": 6.0,
+      "light_intensity": 0.65,
+      "load_w": 0,
+      "pulse": null,
+      "source_part": "Drive throat.001",
+      "basis": "0.08m aft of the existing throat front atX=-33.2, inside real cap/counterbore openings; existing drive telemetry retained."
+    }
+  ],
+  "load_w": 88,
+  "limits": [
+    "All13 stable fixtureIDs/kinds/loads/pulses and real power/clock semantics retained.",
+    "FourWindow presentation values deliberately reduced; sourceglassmetallic.60/roughness.12. No transparency/optical rating.",
+    "Sourcepart-specific independent batch emitters remain unfinished."
+  ]
+}

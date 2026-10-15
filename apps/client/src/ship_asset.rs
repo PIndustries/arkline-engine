@@ -3,6 +3,9 @@ use super::{Mat4, Vec3, Vertex};
 
 pub(super) struct Primitive {
     pub vertices: Vec<Vertex>,
+    /// Source glTF identity; renderer mesh offsets and display names are not bindings.
+    pub material_index: Option<usize>,
+    pub material_name: String,
     pub color: Vec3,
     pub emission: f32,
     pub emissive_color: Vec3,
@@ -190,6 +193,8 @@ fn visit(
                 Vec3::ZERO
             };
             out.push(Primitive {
+                material_index: material.index(),
+                material_name: material.name().unwrap_or("").to_owned(),
                 vertices,
                 color,
                 emission,
@@ -208,6 +213,72 @@ fn visit(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[ignore = "Explicit exact-hash saved-master candidate through the real Rust ship decoder"]
+    fn reviewed_pioneer_candidate_decodes_at_exact_hash() {
+        use sha2::{Digest, Sha256};
+        let path = std::env::var_os("ARKLINE_PIONEER_CANDIDATE")
+            .expect("set ARKLINE_PIONEER_CANDIDATE to the reviewed GLB");
+        let expected = std::env::var("ARKLINE_PIONEER_CANDIDATE_SHA256")
+            .expect("set ARKLINE_PIONEER_CANDIDATE_SHA256 from the reviewed receipt");
+        let expected_triangles: usize = std::env::var("ARKLINE_PIONEER_CANDIDATE_TRIANGLES")
+            .expect("set ARKLINE_PIONEER_CANDIDATE_TRIANGLES from the reviewed receipt")
+            .parse()
+            .expect("the reviewed triangle count must be an integer");
+        let bytes = std::fs::read(path).unwrap();
+        let actual = hex::encode(Sha256::digest(&bytes));
+        assert_eq!(
+            actual, expected,
+            "staging must use the reviewed exact bytes"
+        );
+        let primitives = decode(&bytes).expect("real Rust decoder must accept the candidate");
+        let names = [
+            "Graphite ceramic armor",
+            "Titanium machinery",
+            "Recessed carbon",
+            "Emerald structural frames",
+            "Drive emission",
+            "Working lights",
+            "Navigation glass",
+            "Safety amber",
+            "Hull identification ivory",
+        ];
+        assert_eq!(primitives.len(), names.len());
+        for (index, (part, name)) in primitives.iter().zip(names).enumerate() {
+            assert_eq!(part.material_index, Some(index));
+            assert_eq!(part.material_name, name);
+        }
+        let mut min = Vec3::splat(f32::INFINITY);
+        let mut max = Vec3::splat(f32::NEG_INFINITY);
+        for point in primitives
+            .iter()
+            .flat_map(|part| &part.vertices)
+            .map(|v| v.p)
+        {
+            min = min.min(point);
+            max = max.max(point);
+        }
+        assert!(min.distance(Vec3::new(-0.36, -0.09, -0.19)) < 0.00001);
+        assert!(max.distance(Vec3::new(0.36, 0.09, 0.19)) < 0.00001);
+        let triangles = primitives
+            .iter()
+            .map(|p| p.vertices.len() / 3)
+            .sum::<usize>();
+        assert_eq!(
+            triangles, expected_triangles,
+            "reviewed receipt triangle count"
+        );
+        eprintln!(
+            "PIONEER_CANDIDATE {}",
+            serde_json::json!({
+                "sha256":actual,"bytes":bytes.len(),"triangles":triangles,
+                "material_batches":primitives.len(),"min_body_m":(min*100.).to_array(),
+                "max_body_m":(max*100.).to_array(),"decoder":"arkline-client ship_asset::decode",
+            })
+        );
+    }
+
     fn fixture(index: u16, scale: [f32; 3]) -> Vec<u8> {
         let mut binary = Vec::new();
         for v in [

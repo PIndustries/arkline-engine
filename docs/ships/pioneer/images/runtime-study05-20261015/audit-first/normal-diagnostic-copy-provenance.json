@@ -1,0 +1,12 @@
+{
+  "original_script_sha256": "5cf2dc705806e5cb3f7769255b674143965181c83842167f9c37f160080539c6",
+  "candidate_script_sha256": "1cdc268255ece37395a8516c7481f74170dd2f29907b5ecbf9d30500365c7ba5",
+  "only_changes": {
+    "OUT = Path('/workspace/arkline-runtime/pioneer-mount-visual-audit/candidate-normal-audit-v2')": "OUT = Path('/workspace/arkline-runtime/study05-audit/normals')",
+    "BLEND = ROOT / 'assets/ships/pioneer/studies/pioneer-study.blend'": "BLEND = Path('/workspace/arkline-runtime/study05-authored/source-v1/pioneer-study05.blend')",
+    "GLB = Path('/workspace/arkline-runtime/export-candidate-v2/pioneer.glb')": "GLB = Path('/workspace/arkline-runtime/study05-authored/export-v1/pioneer.glb')",
+    "772bf76aaf1416f28357e2f507963022c7c73b13fca58cb57e948e06761a7800": "9cc3ac5d1e96937d8de1a61411ae0d80efd96e2394d71a90f62a88f5257c11b4",
+    "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a": "df8490f42379aca161df0aa26b24cb32ab8dbf73e83e0681ed2cfc29ef43a2c9"
+  },
+  "method_change": "None. Source path/hash, GLB path/hash and output directory only; tolerance/correspondence/normal algorithms unchanged."
+}

@@ -34,20 +34,48 @@ and [API reference](docs/api.md). The official account service is operated separ
 local worlds currently use the documented pilot credentials. Configurable OAuth/OIDC
 integration is planned, not part of the current login implementation.
 
-## Track work in GitHub
+## Coordinate work in GitHub
 
 Use the [community roadmap](https://github.com/orgs/PIndustries/projects/14),
 [issues](https://github.com/PIndustries/arkline-engine/issues) and
 [milestones](https://github.com/PIndustries/arkline-engine/milestones) to coordinate.
-Search for an existing issue before opening another. Include the problem, scope,
-reproduction steps where relevant, and the checks that would demonstrate completion.
-Ideas stay labeled `proposal` until their scope is agreed. Milestones describe
-outcomes, not delivery-date promises.
+Before starting work or delegating it, read the latest issue, project card, linked
+pull request and recent comments. Check the current owner, status, branch, base SHA
+and active scope. Search for an existing issue and use it when it covers the work;
+open a new issue only when no existing issue fits. Do not begin a conflicting
+workstream until its owner has agreed on the boundary.
 
-Link implementation pull requests to the issue. Mark work in progress when it is
-actively being implemented; close it when its acceptance checks have evidence.
-If deployment is part of acceptance, a merged pull request alone is not completion.
-Record blockers and remaining limits in the issue so contributors can pick up work.
+Publish a workstream claim on the issue before implementation or dispatch. Include
+one accountable owner, the branch and worktree, exact base commit SHA, files or
+symbols owned, dependencies, non-goals, acceptance checks, and the versioned test
+plan. Use the templates in the [development coordination guide](docs/development-coordination.md).
+Keep the claim current as its branch, scope or dependencies change.
+
+Refresh the issue after posting to detect competing claims before editing. Use
+`In Progress` only for active implementation or validation. Focus Now / Next / Later
+is priority, not ownership or execution. Use `Todo` for
+planned or waiting work; if implementation is blocked, keep the blocker visible on
+the issue. A stale claim is a request to contact its owner: ask them to update it
+or explicitly release the scope. Do not silently delete, reassign or treat a claim
+as expired.
+
+Give parallel work separate branches and worktrees. Check file and symbol ownership
+before editing. If scopes overlap, agree on the split and update the public claim
+before either side changes the overlapping code. Never force-push a branch others
+use or hard-reset a shared checkout. When a base branch advances, coordinate how
+to incorporate it before rebasing or merging, and preserve commits made by others.
+
+When delegating to a contributor, include the claim link, owner, branch,
+base SHA and exact paths or symbols they may change. Keep the delegation inside that
+scope; publish a separate claim before expanding it. The coordinator remains
+responsible for integration and reporting the resulting diff and checks.
+
+Append progress to the issue or pull request as separate facts: implementation,
+tests, push, exact-SHA CI, merge and release. Include build versions and links to
+relevant logs; attach long output as a file when useful, and remove credentials,
+tokens and private world data. A passing test, pushed branch, passing CI, merged PR
+and released build are different results. Record remaining limits and blockers so
+the next contributor can continue without guessing.
 
 Write commits in plain, specific language describing the resulting change. Preserve
 accurate Git authorship and attribution; do not add promotional or generated filler.

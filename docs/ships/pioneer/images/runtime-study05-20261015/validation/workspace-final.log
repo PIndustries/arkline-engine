@@ -1,0 +1,1030 @@
+Arkline build 26.10.15.7043
+   Compiling arkline-protocol v0.1.0 (/workspace/arkline-engine/crates/arkline-protocol)
+   Compiling arkline-verifier v0.1.0 (/workspace/arkline-engine/apps/verifier)
+   Compiling arkline-server v0.1.0 (/workspace/arkline-engine/apps/server)
+   Compiling arkline-client v0.1.0 (/workspace/arkline-engine/apps/client)
+   Compiling arkline-editor v0.1.0 (/workspace/arkline-engine/apps/editor)
+   Compiling arkline-cli v0.1.0 (/workspace/arkline-engine/apps/cli)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 56.14s
+     Running unittests src/main.rs (target/debug/deps/arkline_asset_tool-c9fc1aa939fe0351)
+
+running 6 tests
+test tests::malformed_accessor_layout_returns_error_without_panicking ... ok
+test tests::rejects_cycles_and_budget_abuse ... ok
+test tests::rejects_external_and_bad_views ... ok
+test tests::reads_geometry_and_transform ... ok
+test tests::rejects_declared_buffer_overrun_sparse_and_unrepresentable_extent ... ok
+test tests::rejects_truncation ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/arkline-894f2e0eddea23f0)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/arkline_client-e05099e691f058ea)
+
+running 269 tests
+test account_login::tests::cancellation_releases_callback_without_waiting_for_timeout ... ok
+test account_login::tests::config_rejects_insecure_and_mixed_providers ... ok
+test account_login::tests::expired_account_never_downgrades_to_legacy_connect ... ok
+test account_login::tests::token_body_bound_applies_before_json_parse_and_cancellation_is_checked ... ok
+test account_login::tests::callback_rejects_csrf_duplicates_and_wrong_issuer ... ok
+test account_login::tests::tokens_are_bound_to_endpoint_pilot_and_expiration ... ok
+test audit::tests::checkpoint_owner_drop_releases_lock_despite_live_duplicate ... ok
+test audit::tests::concurrent_cockpit_audit_cannot_replace_checkpoint ... ok
+test audit::tests::invalid_checkpoint_failure_releases_lock_and_preserves_bytes ... ok
+test audit::tests::successful_audit_pins_history_and_failure_preserves_anchor ... ok
+test boot::tests::animation_cannot_complete_a_missing_or_failed_connection ... ok
+test boot::tests::stages_never_claim_an_unconfirmed_world_or_session ... ok
+test effects::tests::active_module_visuals_precede_rewards_and_stop_on_server_state ... ok
+test account_login::tests::token_http_adapter_preserves_success_and_caps_declared_and_streamed_bodies ... ok
+test effects::tests::separate_module_beams_use_each_confirmed_target ... ok
+test effects::tests::surface_range_and_system_gate_the_exact_target ... ok
+test effects::tests::unrelated_ore_updates_and_changed_targets_do_not_create_beams ... ok
+test effects::tests::confirmed_target_extraction_animates_once_and_expires ... ok
+test embedded::shared::tests::only_explicit_busy_snapshot_error_is_retryable ... ok
+test embedded::tests::confirmed_stop_resume_feedback_clears_only_its_own_waiting_notice ... ok
+test account_login::tests::callback_listener_ignores_unrelated_requests_then_accepts_matching_state ... ok
+test embedded::tests::debug_view_changes_only_camera_and_logs_bounded_ordered_transitions ... ok
+test embedded::tests::debug_view_rejects_embodiment_changes_and_disconnected_controls ... ok
+test embedded::shared::tests::host_and_join_share_state_but_only_host_controls_clock ... ok
+test embedded::tests::embedded_frame_leaves_editor_panels_and_window_ownership_intact ... ok
+test embedded::tests::embedded_free_camera_moves_without_issuing_station_gameplay_commands ... ok
+test embedded::tests::embedded_free_camera_input_has_expected_axes_and_ignores_outside_or_repeated_input ... ok
+test embedded::tests::embedded_host_join_switches_share_world_and_return_to_preserved_local_world ... ok
+test embedded::tests::embedded_stop_resume_clears_notice_and_preserves_world_and_authored_graph ... ok
+test embedded::tests::exterior_commands_require_advertised_support_and_do_not_replay_lost_acknowledgements ... ok
+test embedded::tests::exterior_commands_reject_unsupported_advertised_definitions ... ok
+test embedded::tests::free_camera_suppresses_gameplay_input_even_over_viewport ... ok
+test embedded::tests::free_camera_temporarily_uses_3d_and_restores_tactical_view ... ok
+test embedded::tests::graph_commands_are_bounded_acknowledged_and_do_not_optimistically_pause ... ok
+test embedded::tests::hangar_access_anchor_and_paint_stay_above_editor_console ... ok
+test embedded::tests::hidden_poll_drains_state_without_paint_or_input ... ok
+
+running 1 test
+test embedded::tests::embedded_scene_state_local_and_shared_workers_ack_confirmed_placement ... ok
+test embedded::tests::room_acceptance::process_guest_helper ... ignored, spawned by the independent-process acceptance test
+test embedded::tests::room_acceptance::process_host_helper ... ignored, spawned by the independent-process acceptance test
+test account_login::tests::callback_trickle_cannot_extend_deadline_and_cancel_interrupts_read ... ok
+test embedded::tests::session_switch_rejects_nonlocal_transport_without_losing_the_current_world ... ok
+
+running 1 test
+test embedded::tests::scene_state_lost_ack_cancels_pending_without_replay_or_late_camera_reset ... ok
+test embedded::tests::exterior_local_and_shared_workers_ack_paused_edits_and_preserve_clock ... ok
+test flight3d::cockpit_maps::remote_tests::remote_authorization_is_live_revocable_and_does_not_require_worker_session ... ok
+test flight3d::cockpit_maps::remote_tests::worker_camera_rebases_actual_pose_filters_system_and_leaves_main_unchanged ... ok
+test flight3d::cockpit_maps::tests::ship_relative_contacts_follow_heading_and_preserve_distance_scale ... ok
+test flight3d::exterior_gpu_tests::native_authority_pioneer_adoption_capture ... ignored, Explicit installed-hull capture from real disposable EditorWorld commands and clock; no OS window
+test flight3d::exterior_gpu_tests::native_powered_exterior_frame_capture ... ignored, Explicit actual flight Renderer::paint EGL powered-exterior capture; no OS window
+test flight3d::asset_gallery::tests::all_classes_use_two_identical_cached_assets_with_only_display_transform_changed ... ok
+test embedded::tests::worker_pauses_steps_restarts_and_preserves_authenticated_pilot ... ok
+test flight3d::hangar::avatar_animation::tests::cycle_alternates_contact_and_lift_and_repeats ... ok
+test flight3d::hangar::avatar_animation::tests::epoch_size_does_not_change_gait ... ok
+test flight3d::hangar::avatar_animation::tests::sparse_network_samples_keep_a_full_cycle_in_motion ... ok
+test flight3d::hangar::avatar_animation::tests::zero_displacement_turn_is_idle_and_stop_settles_restart_and_seat ... ok
+test flight3d::hangar::avatar_follow::tests::crosses_pi_by_short_arc_and_reset_adopts_new_pose ... ok
+test flight3d::hangar::avatar_follow::tests::frame_rates_settle_equally_and_stopped_heading_stays_still ... ok
+test flight3d::hangar::avatar_follow::tests::sparse_confirmed_turn_samples_do_not_snap_camera_between_frames ... ok
+test flight3d::hangar::fleet_hangar::tests::camera_does_not_cross_hull_and_visible_list_is_bounded ... ok
+test flight3d::hangar::fleet_hangar::tests::physical_boarding_requires_authority_range_ground_and_live_state ... ok
+test embedded::tests::room_acceptance::process_guest_helper ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 268 filtered out; finished in 0.43s
+
+test embedded::tests::room_acceptance::process_host_helper ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 268 filtered out; finished in 0.56s
+
+test embedded::tests::room_acceptance::independent_processes_share_room_revisions_and_host_clock ... ok
+test flight3d::hangar::fleet_hangar::tests::world_board_button_pointer_click_returns_real_vessel_id ... ok
+test flight3d::hangar::fleet_hangar::tests::render_transform_preserves_meter_dimensions_and_fixed_berths ... ok
+test flight3d::exterior_visuals::tests::exterior_requires_exact_hull_and_stable_vessel_identity ... ok
+test flight3d::hangar::hangar_scale_tests::hangar_scale_export_cpu_evidence ... ignored, Writes a new CPU calibration evidence directory; set ARKLINE_SCALE_EVIDENCE_DIR
+test flight3d::exterior_visuals::tests::exterior_drive_active_survives_branch_off_and_stale_state_goes_dark ... ok
+test flight3d::hangar::hangar_scale_tests::hangar_scale_reference_avatar_and_perspective_landmarks_agree_in_meters ... ok
+test flight3d::hangar::pioneer_interior::tests::cached_decks_preserve_geometry_and_materials ... ok
+test flight3d::hangar::pioneer_interior::tests::camera_stays_below_ceiling_and_on_same_side_of_bulkhead ... ok
+test flight3d::hangar::pioneer_interior::tests::confirmed_device_outputs_control_light_emission_and_door_geometry ... ok
+test flight3d::hangar::pioneer_interior::tests::live_layout_changes_geometry_door_projection_and_cache_identity ... ok
+test flight3d::hangar::hangar_scale_tests::hangar_scale_actual_private_instance_has_meter_bounds_and_floor_clearance ... ok
+test flight3d::hangar::pioneer_interior::tests::physical_panel_rejects_wrong_deck_distance_wall_and_backface ... ok
+test flight3d::hangar::pioneer_interior::tests::removed_live_room_drops_its_bounds_and_prototype_fixture ... ok
+test flight3d::hangar::pioneer_interior::tests::static_deck_preparation_profile ... ignored, Explicit CPU preparation measurement, not a GPU frame-rate benchmark
+test flight3d::hangar::pioneer_interior::tests::physical_panel_click_uses_actual_quad_in_both_camera_views ... ok
+test flight3d::hangar::hangar_scale_tests::hangar_scale_actual_fleet_instances_keep_pioneer_size_in_mixed_hall ... ok
+test flight3d::hangar::quarters::tests::segment_collision_stops_at_wall_and_passes_door_gap ... ok
+test flight3d::hangar::quarters::tests::room_geometry_finite_for_all_hulls ... ok
+test flight3d::hangar::tests::avatar_has_human_scale_and_walk_articulation ... ok
+test flight3d::hangar::tests::cached_bays_preserve_every_transform_and_material ... ok
+test flight3d::hangar::quarters::tests::projected_terminal_click_requires_nearby_avatar_and_clear_input_layer ... ok
+test flight3d::hangar::tests::editor_camera_pose_uses_fly_angles_and_preserves_player_camera_pose ... ok
+test flight3d::hangar::tests::free_camera_hides_avatar_only_while_camera_overlaps_body_or_head ... ok
+test flight3d::hangar::tests::hovered_and_dragged_egui_frames_finish_without_context_reentry ... ok
+test flight3d::hangar::tests::live_material_preview_changes_only_authored_pioneer_materials ... ok
+test flight3d::hangar::tests::static_bay_preparation_profile ... ignored, Explicit CPU preparation measurement, not a GPU frame-rate benchmark
+test flight3d::hangar::tests::third_person_remains_behind_avatar_at_every_heading ... ok
+test flight3d::imported_asset::tests::imported_materials_belong_to_the_imported_batches ... ok
+test flight3d::imported_asset::tests::linux_gpu_import_replacement_materials_and_resource_cleanup ... ignored, Explicit actual EGL/llvmpipe GPU acceptance; no app window
+test flight3d::hangar::tests::fleet_coordinate_switch_discards_camera_history ... ok
+test flight3d::local_lighting::tests::drone_impact_requires_live_cycle_signal_lock_and_nearby_ore ... ok
+test flight3d::local_lighting::tests::coasting_stale_disconnected_and_docked_cannot_emit_thruster_light ... ok
+test flight3d::local_lighting::tests::mining_needs_confirmed_assignment_lock_range_and_aligned_barrel ... ok
+test flight3d::local_lighting::tests::nearest_selection_is_bounded_finite_and_range_limited ... ok
+test flight3d::materials::tests::fresnel_split_never_adds_metal_diffuse_energy ... ok
+test flight3d::materials::tests::materials_are_bounded_and_do_not_infer_metal_from_brightness ... ok
+test flight3d::local_lighting::tests::feeds_limit_uniform_light_budget_to_two ... ok
+test flight3d::ship_asset::tests::embedded_geometry_preserves_meters_transforms_normals_and_materials ... ok
+test flight3d::ship_asset::tests::bad_indices_and_singular_transforms_fail_closed ... ok
+test flight3d::ship_asset::tests::mirrored_nodes_keep_outward_winding ... ok
+test flight3d::ship_asset::tests::every_texture_channel_fails_closed_before_image_resolution ... ok
+test flight3d::ship_asset::tests::reviewed_pioneer_candidate_decodes_at_exact_hash ... ignored, Explicit exact-hash saved-master candidate through the real Rust ship decoder
+test flight3d::sun_shadows::tests::camera_relative_au_origin_keeps_local_precision ... ok
+test flight3d::hangar::tests::every_bay_preserves_real_hull_geometry ... ok
+test flight3d::sun_shadows::tests::projection_is_finite_for_disabled_size ... ok
+test flight3d::sun_shadows::tests::receiver_and_sun_caster_are_in_depth_volume ... ok
+test flight3d::tests::armor_surface_is_closed_outward_and_preserves_cube_envelope ... ok
+test flight3d::tests::asteroid_spin_is_slow_epoch_stable_and_shared_by_picking_and_beams ... ok
+test flight3d::tests::beam_transform_ends_on_requested_points_and_rejects_empty_segments ... ok
+test flight3d::tests::camera_frame_clones_share_scene_and_keep_camera_overrides_local ... ok
+test flight3d::tests::cockpit_heading_and_au_relative_precision ... ok
+test flight3d::tests::cockpit_roll_rotates_camera_up_without_leveling ... ok
+test flight3d::tests::cockpit_telemetry_uses_ship_state_and_marks_disconnection_stale ... ok
+test flight3d::ship_asset::tests::repeated_meshless_children_cannot_expand_traversal_exponentially ... ok
+test flight3d::tests::drone_camera_modes_keep_target_visible_and_bound_extrapolation ... ok
+test flight3d::tests::drone_camera_uses_drone_pose_and_stays_inside_physical_screen ... ok
+test flight3d::tests::drone_feed_budget_and_tiles_are_bounded ... ok
+test flight3d::tests::editor_free_camera_freezes_scene_origin_and_restores_live_player_origin ... ok
+test flight3d::tests::extrapolation_is_bounded_and_warp_uses_server_position ... ok
+test flight3d::tests::fleet_preview_roles_change_finish_not_geometry_or_station ... ok
+test flight3d::tests::construction_fleet_geometry_has_bounded_parts_and_restrained_lamps ... ok
+test flight3d::tests::head_look_is_bounded_and_release_recenters_without_ship_rotation ... ok
+test flight3d::tests::geometry_is_finite_with_valid_normals_and_nondegenerate_faces ... ok
+test flight3d::tests::industrial_shell_is_closed_outward_bounded_and_pickable ... ok
+test flight3d::tests::instrument_faces_match_projection_and_do_not_overlap_after_resize ... ok
+test flight3d::sun_shadows::tests::caster_budget_retains_nearest_geometry ... ok
+test flight3d::tests::mining_targets_exact_authoritative_asteroid ... ok
+test flight3d::tests::mining_turret_slews_at_finite_rate_and_beam_starts_at_barrel_tip ... ok
+test flight3d::tests::navigation_projection_roundtrips_horizontal_plane ... ok
+test flight3d::tests::pioneer_asset_and_parts_are_cached_with_bounded_draw_calls ... ok
+test flight3d::tests::pioneer_asset_decode_timing ... ignored, Explicit CPU decode/cache timing, no GPU or UI
+test flight3d::tests::pioneer_engine_effects_use_two_authored_nozzles_not_material_lamps ... ok
+test flight3d::tests::procedural_pioneer_fallback_keeps_editor_finish_roles ... ok
+test flight3d::tests::mesh_picking_uses_nearest_surface_and_gate_hole_is_empty ... ok
+test flight3d::tests::render_preparation_profile ... ignored
+test flight3d::tests::stable_pilot_lane_does_not_depend_on_roster_or_view ... ok
+test flight3d::tests::station_batches_preserve_bounds_vertices_and_reduce_draw_calls ... ok
+test flight3d::tests::hulls_match_public_meter_dimensions_and_picking_surfaces ... ok
+test flight3d::tests::tactical_navigation_reaches_plane_at_maximum_zoom ... ok
+test flight3d::tests::tactical_rings_use_real_kilometers_and_bounded_geometry ... ok
+test flight3d::tests::tactical_ship_center_and_meter_scale_survive_astronomical_rebase ... ok
+test flight3d::tests::turret_pedestal_extends_into_measured_hull_deck ... ok
+test flight3d::tests::two_module_mounts_are_distinct_supported_and_forward_of_seat ... ok
+test flight3d::tests::warp_camera_tracks_rebased_ship_without_threshold_jumps ... ok
+test flight3d::tests::warp_phases_hold_warmup_then_launch_cruise_and_arrive ... ok
+test flight3d::tests::warp_routes_match_both_directions_and_clamp ... ok
+test flight3d::world_visuals::tests::surface_visuals_share_authoritative_spherical_ground ... ok
+test interior_acceptance::both_decks_pointer_keyboard_airlock_board_undock ... ignored, Explicit full Cockpit input+authoritative simulated-clock journey; no native window/GPU
+test flight3d::tests::reaction_thrusters_use_confirmed_acceleration_not_speed_and_mount_on_mesh ... ok
+test layout::tests::delayed_save_does_not_block_frames_or_discard_newer_preferences ... ok
+test layout::tests::failed_background_save_retains_changes_and_backs_off ... ok
+test layout::tests::reflow_ignores_pointer_capture_and_reset_restores_default_anchors ... ok
+test layout::tests::resize_keeps_right_and_bottom_anchors_and_move_persists ... ok
+test layout::tests::shutdown_flush_saves_latest_after_older_writer_and_bounds_stalls ... ok
+test lighting_settings::tests::secondary_views_never_multiply_primary_budgets ... ok
+test material_preview::tests::corrupt_or_unbounded_overrides_are_safe ... ok
+test material_program::tests::driver_lines_map_to_nodes_independent_of_template_prefix ... ok
+test material_program::tests::driver_logs_are_bounded_at_utf8_boundaries ... ok
+test motion::tests::area_changes_do_not_lerp_across_universe ... ok
+test motion::tests::manual_lease_expiry_never_rewinds_and_history_eviction_keeps_clock ... ok
+test motion::tests::manual_orientation_uses_short_delay_and_shortest_quaternion_path ... ok
+test motion::tests::snapshots_interpolate_continuously_and_never_change_economic_data ... ok
+test motion::tests::terminal_arrival_phase_uses_authoritative_deadline_and_keeps_moving ... ok
+test motion::tests::warp_moves_between_snapshots_and_preserves_au_precision ... ok
+test pilot_input::tests::autopilot_handoff_discards_queued_release_but_held_controls_can_retake ... ok
+test pilot_input::tests::focus_loss_releases_hidden_cursor_and_raw_motion_aims_without_pointer_motion ... ok
+test pilot_input::tests::keyboard_axes_and_focus_loss_match_six_degree_controls ... ok
+test pilot_input::tests::latest_generation_keeps_release_and_its_exact_target_together ... ok
+test pilot_input::tests::mailbox_replaces_stale_thrust_with_release ... ok
+test pilot_input::tests::release_and_suppression_emit_one_neutral_without_canceling_autopilot ... ok
+test pilot_input::tests::remote_target_is_pinned_and_return_never_relabels_queued_thrust ... ok
+test pilot_input::tests::shift_arrows_do_not_send_ship_rotation ... ok
+test flight3d::tests::station_is_twenty_km_and_berths_are_clear ... ok
+test room_controls::tests::manual_door_is_explicit_and_vent_choice_is_real ... ok
+test ship_ai::tests::actual_spark_accepts_multi_trip_goal ... ignored, requires the configured Spark SSH inference service
+test ship_ai::tests::actual_spark_understands_mining_followup ... ignored, Explicit invocation contacts the configured Spark SSH model
+test ship_ai::tests::conversation_keeps_followup_context_but_never_a_completion_receipt ... ok
+test ship_ai::tests::drone_intents_require_owned_ids_and_current_system_asteroids ... ok
+test ship_ai::tests::endpoint_cannot_inject_ssh_options_and_cancel_discards_queued_intent ... ok
+test ship_ai::tests::only_bounded_supported_single_intents_can_escape_adapter ... ok
+test ship_ai::tests::spark_drives_delegated_drone_haul_over_real_tcp ... ignored, Requires Spark and ARKLINE_QA_SERVER_BINARY; uses an isolated temporary universe
+test ship_ai::tests::spark_interprets_resource_goal_without_executing_it ... ignored, Requires explicitly selected Spark host and loaded model; no game commands sent
+test ship_ai::tests::status_is_derived_from_sample_and_prose_never_executes ... ok
+test room_controls::tests::commissioning_click_returns_command_only_when_live ... ok
+test flight3d::hangar::hangar_scale_tests::hangar_scale_yaw_preserves_intrinsic_dimensions_and_uses_negative_heading ... ok
+test sound_engine::tests::actual_output_callback_runs ... ignored, Explicit invocation plays procedural sound on the actual default device
+test ship_layouts::tests::bundled_layouts_match_fleet_and_fit_rooms ... ok
+test sound_engine::tests::export_audio_preview ... ignored, Explicit offline WAV export; set ARKLINE_AUDIO_PREVIEW_PATH to a new output file
+test ship_layouts::tests::filtered_details_follow_visible_fittings_and_empty_rooms_are_honest ... ok
+test sound_engine::tests::idle_and_cue_envelopes_reach_silence ... ok
+test sound_engine::tests::offline_mix_is_finite_limited_and_mute_fades ... ok
+test sound_engine::tests::saturated_cue_pool_does_not_reset_an_audible_voice ... ok
+test sound_scene::tests::coasting_is_quiet_but_real_braking_and_rotation_are_audible ... ok
+test sound_scene::tests::connection_source_stale_and_reordered_snapshots_never_replay_history ... ok
+test sound_scene::tests::drone_launch_recall_and_shot_need_real_state_evidence ... ok
+test sound_scene::tests::mining_lifecycle_coalesces_modules_and_ignores_cycle_boundaries ... ok
+test sound_scene::tests::mining_needs_confirmed_deadline_and_gain_not_purchase_or_every_frame ... ok
+test sound_scene::tests::nearby_arrivals_are_local_confirmed_and_never_replayed ... ok
+test sound_scene::tests::warp_and_lock_follow_authoritative_transitions_not_predicted_arrival ... ok
+test sound_scene::tests::warp_entry_live_clock_crossing_is_latched_without_initial_replay ... ok
+test sound_settings::tests::malformed_out_of_range_missing_and_oversized_preferences_fall_back ... ok
+test sound_settings::tests::preferences_round_trip_and_invalid_save_preserves_existing_file ... ok
+test sound_engine::tests::steady_layers_have_low_high_frequency_energy_and_preserve_headroom ... ok
+test station_ui::tests::closed_airlock_requires_nearby_authoritative_open_command_before_exit ... ok
+test station_ui::tests::docked_hangar_requires_own_view_and_gathering_requires_embarked_pilot ... ok
+test station_ui::tests::embedded_boarded_docked_pilot_uses_cockpit_and_interiors_keep_hangar_scene ... ok
+test station_ui::tests::embedded_docked_strip_reserves_little_viewport_and_keeps_actions_live ... ok
+test station_ui::tests::arrows_match_wasd_and_space_sends_one_authoritative_jump ... ok
+test station_ui::tests::embedded_hangar_boarding_actions_stay_visible_and_obey_authority_gates ... ok
+test station_ui::tests::embedded_interior_exit_stays_visible_and_explains_paused_gate ... ok
+test station_ui::tests::missing_resume_guidance_does_not_imply_retry_recovers_identity ... ok
+test station_ui::tests::physical_berth_action_routes_exact_owned_id_and_rejects_unknown_or_distant ... ok
+test station_ui::tests::physical_engineering_opens_only_owned_accessible_room_and_closes_for_remote ... ok
+test station_ui::tests::interior_button_requires_server_capability_and_sends_real_request ... ok
+test station_ui::tests::station_room_name_uses_live_room_bounds_and_name ... ok
+test station_ui::tests::quarters_terminal_routes_services_and_seating_clears_movement ... ok
+test station_ui::tests::walk_controls_are_own_only_and_release_on_focus_loss ... ok
+test station_ui::tests::walk_key_release_replaces_pending_thrust_with_neutral ... ok
+test target_controls::feed_tests::destroyed_or_missing_selection_falls_back_without_duplicate_feeds ... ok
+test target_controls::feed_tests::feed_pages_are_bounded_and_contain_selected_drone ... ok
+test tests::acquiring_lock_blocks_duplicate_and_extract_until_server_confirmation ... ok
+test tests::action_range_uses_physical_position_and_rejects_docked_or_transit ... ok
+test tests::boot_blocks_flight_commands_until_cockpit_entry ... ok
+test tests::capital_hull_can_dock_at_server_surface_envelope_boundary ... ok
+test tests::connection_persists_private_credential_and_resumes_identity ... ok
+test tests::corporation_actions_use_real_requests_and_owner_storage_permissions ... ok
+test tests::docking_opens_station_once_and_missing_assets_never_claim_empty_inventory ... ok
+test tests::drone_asteroid_waypoint_faces_drone_and_stays_outside_surface ... ok
+test tests::drone_controls_emit_real_launch_hold_recall_and_selected_position ... ok
+test tests::embedded_initial_docking_does_not_open_services_or_close_explicit_services ... ok
+test tests::five_lock_rack_selects_independent_turret_targets_and_unlocks_one ... ok
+test interior_acceptance::on_foot_camera_buttons_and_ship_command_boundary ... ok
+test station_ui::tests::walk_keys_map_to_move_turn_and_strafe_axes ... ok
+test tests::floating_overlay_blocks_scene_pointer_but_empty_space_allows_it ... ok
+test tests::fleet_selection_routes_commands_by_id_and_limits_each_class ... ok
+test tests::hangar_boards_docked_hull_and_waits_for_confirmation_but_disables_in_space ... ok
+test tests::local_map_retains_meter_precision_at_astronomical_origin ... ok
+test tests::manual_takeover_cancels_pending_voice_order ... ok
+test tests::inventory_is_remote_visible_but_transfers_and_boarding_require_local_dock ... ok
+test tests::mining_activation_uses_confirmed_lock_while_browsing_station ... ok
+test tests::mining_turret_activation_and_stop_use_slot_identity_without_quantity ... ok
+test tests::hangar_undock_is_visible_on_every_tab_and_disabled_offline ... ok
+test tests::physical_console_fleet_click_sends_real_command_without_flight_input ... ok
+test tests::remote_control_blocks_account_actions_and_revocation_restores_player ... ok
+test tests::physical_ai_console_scrolls_prompt_into_clipped_interactive_screen ... ok
+test tests::remote_view_takeover_and_return_never_change_player_identity ... ok
+test tests::resource_job_requires_explicit_worker_permission_and_ready_ship ... ok
+test tests::resource_job_pointer_start_routes_selected_worker_and_stale_ai_is_cancelled ... ok
+test tests::selected_planet_uses_continuous_flight_entry_and_hulls_use_actual_cargo ... ok
+test tests::tactical_cursor_zoom_preserves_anchor_and_bounds_span ... ok
+test tests::surface_sandbox_commands_require_confirmed_near_ground_and_owned_props ... ok
+test tests::tactical_pointer_projection_preserves_meter_coordinates ... ok
+test tests::tactical_empty_drag_pans_without_selecting_or_sending_navigation ... ok
+test tests::view_buttons_switch_without_mutating_navigation_or_selection ... ok
+test tests::warp_waits_for_confirmed_capacitor_without_speculative_recharge ... ok
+test theme::tests::persists_choices_and_falls_back_for_invalid_configuration ... ok
+test transport::tests::native_verified_wss_reaches_both_official_relays ... ignored, requires the official public relays; read-only snapshot checks
+test transport::tests::websocket_binary_reply_is_rejected_without_retry ... ok
+test transport::tests::websocket_round_trip_preserves_json_and_authentication_boundary ... ok
+test tests::voice_order_is_discarded_when_ship_session_or_freshness_changes ... ok
+test tests::overview_pointer_drag_persists_and_reflows_in_real_app_update ... ok
+test transport_tests::fragments_survive_transient_read_timeouts ... ok
+test transport_tests::partial_response_timeout_has_actionable_message_and_bounded_deadline ... ok
+test transport_tests::recovery_resumes_credentials_and_discards_uncertain_actions_and_controls ... ok
+test voice::tests::fake_helper_stop_final_and_deadline_do_not_block_caller ... ok
+test voice::tests::parser_bounds_unicode_and_rejects_unknown_events ... ok
+test transport_tests::trickling_bytes_cannot_extend_total_response_deadline ... ok
+test sound_engine::tests::complete_palette_has_finite_bounded_transients_and_silent_tails ... ok
+test transport_tests::snapshot_read_timeout_recovers_identity_without_replaying_snapshot_bytes ... ok
+
+test result: ok. 250 passed; 0 failed; 19 ignored; 0 measured; 0 filtered out; finished in 9.69s
+
+     Running unittests src/main.rs (target/debug/deps/arkline_client-99c0f5e2c6ed01f9)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/spatial_material_contract.rs (target/debug/deps/spatial_material_contract-65d10deb8446cdc5)
+
+running 8 tests
+test failed_topology_preserves_last_good_and_retries_only_explicitly ... ok
+test coalesces_edits_and_keeps_parameter_updates_out_of_the_compiler ... ok
+test disable_is_deferred_until_commit_and_keeps_stale_watermark ... ok
+test material_program::tests::driver_lines_map_to_nodes_independent_of_template_prefix ... ok
+test cached_driver_errors_follow_current_node_ids_without_recompiling ... ok
+test layout_edits_preserve_lowered_content_and_parameter_pack ... ok
+test material_program::tests::driver_logs_are_bounded_at_utf8_boundaries ... ok
+test stale_or_conflicting_revisions_cannot_replace_the_latest_request ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/main.rs (target/debug/deps/arkline_editor-e773fb060bbe0421)
+
+running 181 tests
+test asset_document::tests::graph_save_load_history_and_rejected_save_keep_previous_file ... ok
+test asset_document::tests::legacy_materials_keep_authored_pbr_and_override_history_roundtrips ... ok
+test asset_document::tests::refuses_linked_assets_or_destination ... ok
+test asset_document::tests::rejects_invalid_schema_colors_and_oversized_load ... ok
+test asset_document::tests::validated_history_is_bounded_and_branching_discards_redo ... ok
+test asset_document::tests::save_load_and_invalid_save_preserve_previous_document ... ok
+test cockpit::tests::applied_inspector_uses_ship_assignment_instead_of_shared_edit_target ... ok
+test cockpit::tests::corrupt_file_is_not_overwritten_until_recovery_is_explicit ... ok
+test cockpit::tests::closing_an_old_project_cannot_deliver_its_save_into_a_new_project ... ok
+test cockpit::tests::applied_switch_pointer_click_emits_typed_request_without_predicting_output ... ok
+test cockpit::tests::applied_inspector_and_request_keep_light_binding_after_unapplied_pressure_edit ... ok
+test cockpit::tests::delayed_save_keeps_newer_draft_and_tracks_submitted_snapshot ... ok
+test cockpit::tests::file_recovery_cannot_follow_symbolic_links ... ok
+test cockpit::tests::failed_reads_preserve_saved_and_applied_content_until_explicit_recovery ... ok
+test cockpit::tests::geometry_uses_the_same_edge_relative_clamping_as_existing_hud ... ok
+test cockpit::tests::invalid_documents_bindings_and_geometry_are_rejected ... ok
+test cockpit::tests::delayed_reload_keeps_redo_even_if_value_returns_to_its_original ... ok
+test cockpit::tests::late_startup_selects_the_saved_ship_override_without_installing_runtime ... ok
+test cockpit::tests::failed_save_keeps_previous_saved_baseline_and_draft ... ok
+test cockpit::tests::lost_worker_locks_saving_and_does_not_replay ... ok
+test cockpit::tests::missing_file_starts_with_template_but_not_saved_or_applied ... ok
+test cockpit::tests::readings_keep_pressure_units_and_command_output_distinct ... ok
+test cockpit::tests::only_new_reported_state_can_clear_pending_command_and_timeout_never_replays ... ok
+test cockpit::tests::stale_startup_result_cannot_replace_a_control_drag ... ok
+test cockpit::tests::save_reopen_is_local_content_and_does_not_install_runtime ... ok
+test cockpit::tests::templates_are_inherited_until_explicit_full_ship_override ... ok
+test cockpit::tests::switch_requires_applied_content_matching_vessel_and_current_session_gates ... ok
+test component_view::tests::center_projects_to_view_center ... ok
+test component_view::tests::hull_contains_projected_box_center ... ok
+test component_view::tests::invalid_box_is_not_renderable ... ok
+test component_view::tests::nearer_overlapping_box_wins_pick_depth ... ok
+test engineering_document::tests::invalid_mass_box_and_identity_are_rejected ... ok
+test engineering_document::tests::mass_center_and_parallel_axis_inertia_are_computed_about_com ... ok
+test engineering_document::tests::roundtrip_failed_save_preserves_old_and_history_branches ... ok
+test engineering_document::tests::undo_and_old_backup_reload_do_not_reuse_component_ids ... ok
+test equipment::tests::disabled_controls_and_missing_room_telemetry_emit_no_request ... ok
+test cockpit::tests::visible_workspace_selects_drags_and_applies_without_operating_draft ... ok
+test equipment::tests::paused_session_can_add_supported_commands_to_the_local_draft ... ok
+test event_graph::tests::draft_roundtrip_and_invalid_replace_preserves_saved_graph ... ok
+test event_graph::tests::drag_history_is_one_undo_step_and_draft_save_identity_is_exact ... ok
+test equipment::tests::equipment_buttons_emit_the_existing_typed_room_requests ... ok
+test event_graph::tests::replacing_draft_source_clears_stale_undo_redo_and_drag_state ... ok
+test event_graph::tests::room_action_append_respects_graph_node_limit_without_partial_edit ... ok
+test event_graph::tests::room_action_append_selects_valid_undoable_nodes_and_rejects_unsupported_action ... ok
+test event_graph::tests::symlink_events_directory_is_rejected ... ok
+test exterior::tests::accepted_apply_preserves_newer_edits_and_waits_for_confirmed_snapshot ... ok
+test exterior::tests::explicit_rebase_keeps_saved_candidate_without_installing_it_live ... ok
+test exterior::tests::failed_save_and_apply_preserve_newer_draft_and_confirmed_definition ... ok
+test event_graph::tests::real_canvas_drag_moves_node_without_panning_or_rewiring ... ok
+test exterior::tests::peer_changes_refresh_clean_drafts_and_require_reconciliation_for_local_edits ... ok
+test exterior::tests::invalid_and_oversized_files_are_not_silently_replaced ... ok
+test exterior::tests::published_fixture_document_matches_runtime_default ... ok
+test exterior::tests::project_roundtrip_preserves_fixture_identity_and_hull_binding ... ok
+test exterior::tests::reconnect_cancels_pending_mutation_and_save_completion_cannot_replay_it ... ok
+test exterior::tests::successful_save_keeps_edits_made_during_disk_write_and_never_queues_apply ... ok
+test exterior::tests::superseded_apply_unlocks_reconciliation_without_adopting_peer_edits ... ok
+test exterior::tests::symbolic_link_destinations_are_rejected_without_changing_the_target ... ok
+test exterior::tests::unchanged_apply_does_not_confirm_against_the_prior_snapshot ... ok
+test exterior::tests::unsupported_peer_definitions_preserve_project_and_disable_live_tracking ... ok
+test github::tests::failed_refresh_retains_only_failed_sections ... ok
+test github::tests::http_redirect_is_not_followed_and_error_body_is_not_displayed ... ok
+test github::tests::identity_change_discards_previous_cache_and_pending_response ... ok
+test github::tests::issue_parser_excludes_pull_requests_and_preserves_body ... ok
+test github::tests::live_official_read_only_workspace ... ignored, explicit live anonymous read-only GitHub API acceptance
+test github::tests::repository_input_cannot_become_options_or_extra_paths ... ok
+test github::tests::response_bounds_errors_and_cancellation_never_echo_body ... ok
+test github::tests::revoked_or_different_identity_never_retains_authenticated_sections ... ok
+test github::tests::wiki_content_limits_cancellation_and_discovery_never_require_disk ... ok
+test github::tests::wiki_links_are_same_repository_flat_decoded_and_bounded ... ok
+test github_auth::tests::cancelled_delivery_removes_already_saved_credential_and_replacement_clears_old_account ... ok
+test github_auth::tests::device_validation_and_slowdown_fail_closed ... ok
+test github_auth::tests::simulated_http_bounds_and_redirect_rejection ... ok
+test github_auth::tests::stale_worker_authorization_cannot_restore_cancelled_session ... ok
+test github_auth::tests::successful_reply_requires_bearer_and_records_expiry_without_refresh_token ... ok
+test exterior::tests::selected_fixture_color_widget_preserves_draft_without_input ... ok
+test imports::tests::candidate_text_during_reload_preserves_new_source_and_license ... ok
+test cockpit::tests::full_editor_applies_content_while_paused_then_light_round_trip_uses_real_authority ... ok
+test imports::tests::catalog_and_selected_input_reject_symlinks_and_nonordinary_files ... ok
+test imports::tests::catalog_excludes_runtime_content_and_reports_bounded_partial_results ... ok
+test imports::tests::changed_project_selection_discards_late_native_picker_result ... ok
+test imports::tests::corrupt_index_locks_save_until_explicit_recovery ... ok
+test imports::tests::delayed_reload_cannot_replace_newer_accepted_geometry ... ok
+test imports::tests::assets_workspace_pointer_and_keys_leave_real_authority_unchanged ... ok
+test imports::tests::drop_import_uses_same_verified_pipeline_without_touching_authority ... ok
+test imports::tests::explicit_verified_reimport_repairs_a_damaged_same_hash_blob ... ok
+test imports::tests::failed_content_write_and_interrupted_publication_preserve_previous_index ... ok
+test imports::tests::externally_selected_bytes_reopen_without_original_or_absolute_binding ... ok
+test imports::tests::failed_replacement_and_cancel_preserve_accepted_saved_content ... ok
+test imports::tests::import_accept_save_reopen_and_same_id_replacement ... ok
+test imports::tests::lost_worker_result_disables_save_without_replay ... ok
+test imports::tests::malformed_geometry_and_index_budgets_fail_closed ... ok
+test imports::tests::missing_or_hash_mismatched_reopen_is_unavailable_without_fallback ... ok
+test cockpit::tests::preview_drag_and_flight_keys_do_not_operate_the_live_ship ... ok
+test imports::tests::picker_cancel_and_failed_external_import_keep_verified_state ... ok
+test imports::tests::save_completion_keeps_newer_accepted_revision_unsaved ... ok
+test imports::tests::project_browser_lists_nested_glbs_and_filters_without_paths_to_type ... ok
+test imports::tests::stale_cancelled_result_cannot_replace_newer_state ... ok
+test imports::tests::traversal_symlink_and_nonordinary_content_paths_are_rejected ... ok
+test imports::tests::unsupported_features_and_hierarchy_budgets_are_rejected ... ok
+test imports::tests::visible_inspect_accept_save_reload_workflow ... ok
+test imports::tests::worker_and_project_switch_keep_storage_isolated ... ok
+test material_graph::tests::evaluates_connected_mix_and_multiply ... ok
+test material_graph::tests::rejected_connections_preserve_graph ... ok
+test material_graph::tests::removing_source_disconnects_consumers ... ok
+test material_graph::tests::validates_entire_graph_and_range ... ok
+test materials::persistence_tests::broken_symlinks_are_errors_and_recovery_cannot_follow_them ... ok
+test materials::persistence_tests::corrupt_file_stays_untouched_until_explicit_replacement ... ok
+test materials::persistence_tests::different_project_cannot_receive_this_panels_operations ... ok
+test materials::persistence_tests::failed_save_keeps_saved_snapshot_and_newer_draft ... ok
+test materials::persistence_tests::late_reload_preserves_an_uncommitted_node_drag ... ok
+test materials::persistence_tests::lost_save_worker_reports_unknown_outcome_without_retry ... ok
+test materials::persistence_tests::mismatched_receipt_locks_saving_without_accepting_other_document ... ok
+test materials::persistence_tests::missing_material_is_not_a_load_error_or_a_claim_that_a_file_was_saved ... ok
+test materials::persistence_tests::reload_failure_protects_last_good_draft_and_successful_reload_unlocks ... ok
+test materials::persistence_tests::reload_is_undoable_and_restores_legacy_material_without_an_edit_in_flight ... ok
+test materials::persistence_tests::save_keeps_submitted_snapshot_and_ui_runs_while_storage_is_blocked ... ok
+test materials::persistence_tests::stale_reload_keeps_undo_redo_even_when_document_returns_to_starting_value ... ok
+test materials::persistence_tests::startup_is_async_and_preserves_early_edits_and_disabled_preview ... ok
+test materials::tests::graph_edits_drive_preview_and_undo_restores_renderer_values ... ok
+test materials::tests::history_moves_clear_pending_connections_across_imported_node_kinds ... ok
+test materials::tests::idle_material_panel_preserves_document_history_and_disabled_preview ... ok
+test materials::tests::imported_extreme_ids_reject_presets_without_changing_document_or_redo ... ok
+test materials::tests::port_clicks_connect_typed_nodes_and_update_output ... ok
+test physics_lab::tests::cloud_uses_declared_linear_scale ... ok
+test physics_lab::tests::extremes_remain_finite_and_work_is_bounded ... ok
+test physics_lab::tests::fixed_step_matches_force_over_mass_minus_gravity ... ok
+test imports::tests::import_view_input_does_not_fly_an_undocked_running_ship ... ok
+test physics_lab::tests::pause_and_reset_are_deterministic ... ok
+test physics_lab::tests::render_cadence_does_not_change_fixed_step_result ... ok
+test physics_lab::tests::parameter_groups_wrap_and_stack_without_horizontal_overflow ... ok
+test physics_lab::tests::visible_step_button_advances_one_fixed_step ... ok
+test provenance::tests::github_links_only_use_explicit_safe_origins ... ok
+test provenance::tests::persisted_component_mapping_requires_unique_valid_pretty_line ... ok
+test rooms::tests::add_and_delete_preserve_monotonic_ids_and_source_reference ... ok
+test rooms::tests::failed_project_save_never_prepares_a_live_mutation ... ok
+test rooms::tests::invalid_positions_dimensions_ids_and_doors_are_rejected ... ok
+test rooms::tests::peer_revision_follows_clean_live_draft_but_preserves_local_edits ... ok
+test rooms::tests::project_room_document_round_trips ... ok
+test rooms::tests::refuses_symlink_assets_and_destination ... ok
+test rooms::tests::reload_completion_keeps_edits_made_after_reload_started ... ok
+test rooms::tests::save_apply_button_saves_project_and_updates_real_authority_while_paused ... ok
+test rooms::tests::save_completion_applies_submitted_revision_and_keeps_newer_draft ... ok
+test rooms::tests::save_completion_keeps_newer_edits_as_unsaved ... ok
+test rooms::tests::session_change_cancels_disk_pending_apply_and_reports_unconfirmed_issued_edit ... ok
+test rooms::tests::source_baseline_preserves_twelve_runtime_room_references ... ok
+test service_paths::tests::candidate_path_json_round_trips_through_atomic_project_storage ... ok
+test service_paths::tests::refuses_symlink_assets_and_destination_without_changing_target ... ok
+test service_paths::tests::rejects_unresolved_component_endpoints ... ok
+test service_paths::tests::reload_completion_keeps_edits_made_after_reload_started ... ok
+test service_paths::tests::save_completion_keeps_edits_made_after_submission_unsaved ... ok
+test service_paths::tests::unreadable_saved_file_blocks_save_until_explicit_reset ... ok
+test service_paths::tests::validates_waypoint_count_finiteness_and_envelope ... ok
+test surface_materials::tests::accepted_save_precedes_reopen_even_if_the_old_worker_has_not_started ... ok
+test surface_materials::tests::background_pan_keeps_drag_ownership_when_pointer_crosses_a_node ... ok
+test surface_materials::tests::canvas_edits_are_saved_and_undoable_without_gpu_revisions ... ok
+test surface_materials::tests::canvas_port_gestures_connect_typed_nodes_and_publish_valid_revision ... ok
+test surface_materials::tests::corrupt_file_and_failed_reload_preserve_draft_until_explicit_replacement ... ok
+test surface_materials::tests::failed_old_worker_releases_project_order_for_reopen ... ok
+test surface_materials::tests::idle_inspector_preserves_valid_large_values_and_hdr_emission ... ok
+test surface_materials::tests::invalid_draft_keeps_last_good_revision_and_remains_undoable ... ok
+test surface_materials::tests::late_reload_preserves_an_uncommitted_node_drag ... ok
+test surface_materials::tests::late_save_keeps_newer_edits_and_ui_does_not_wait_for_storage ... ok
+test surface_materials::tests::mismatched_save_receipt_locks_writes_without_replacing_saved_baseline ... ok
+test surface_materials::tests::node_id_exhaustion_does_not_discard_redo_or_modify_the_draft ... ok
+test surface_materials::tests::oversized_or_invalid_graph_never_replaces_a_valid_file ... ok
+test surface_materials::tests::persisted_graph_roundtrips_exact_binding_parameters_seed_and_layout ... ok
+test surface_materials::tests::reload_keeps_early_edits_history_and_disabled_preview ... ok
+test imports::tests::transformed_asymmetric_geometry_is_measured_without_fitting ... ok
+test surface_materials::tests::symbolic_link_files_and_directories_are_not_followed_even_when_missing ... ok
+test surface_materials::tests::typed_connections_reject_mismatch_and_cycles_without_mutation ... ok
+test imports::tests::candidate_text_path_change_discards_pending_import_result ... ok
+test tests::multisampling_override_accepts_supported_counts_and_rejects_invalid_values ... ok
+test tests::project_environment_is_optional_and_explicit_path_wins ... ok
+test surface_materials::tests::reopening_waits_for_an_already_submitted_save_from_the_closed_panel ... ok
+test provenance::tests::disposable_git_reports_untracked_committed_and_modified ... ok
+test tests::editor_controls_remain_reachable_in_final_accessibility_tree ... ok
+test tests::room_name_accepts_pointer_and_text_events_in_paused_full_editor ... ok
+test tests::toolbar_controls_are_visible_above_the_game_viewport ... ok
+test tests::session_dialog_controls_remain_reachable_after_game_and_material_updates ... ok
+test tests::toolbar_play_from_engineering_workspace_returns_to_game_and_runs ... ok
+test tests::scene_toolbar_places_pilot_while_paused_and_material_workspace_has_graph_panels ... ok
+
+test result: ok. 180 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 2.00s
+
+     Running unittests src/lib.rs (target/debug/deps/arkline_protocol-89712008497aad37)
+
+running 34 tests
+test compatibility_tests::exterior_commands_require_revision_and_are_not_remotely_delegable ... ok
+test editor_graph::tests::rejects_cycles_ports_and_duplicate_ids ... ok
+test compatibility_tests::older_snapshots_default_to_no_reported_presence ... ok
+test exterior_effects::tests::definition_bounds_identity_hash_and_versions_are_enforced ... ok
+test exterior_effects::tests::pulse_uses_only_simulation_time_and_drive_does_not_follow_branch_switch ... ok
+test local_warp_tests::launch_and_arrival_are_visible_continuous_nonstop_legs ... ok
+test local_warp_tests::old_paths_remain_legacy_and_alignment_handles_opposite_headings ... ok
+test exterior_effects::tests::historical_pioneer_exterior_hash_is_preserved_and_rejected_after_model_adoption ... ok
+test material_compile::tests::degenerate_scalar_operations_are_defined_and_finite ... ok
+test material_compile::tests::admits_four_distinct_noises_and_rejects_five ... ok
+test material_compile::tests::equal_seed_values_do_not_alias_independently_editable_seeds ... ok
+test material_compile::tests::folds_constants_but_not_exposed_parameters_and_shares_noise ... ok
+test material_compile::tests::authored_section_bounds_are_uniform_only_and_authored_input_is_preserved ... ok
+test material_compile::tests::spatial_default_has_bounded_glsl_uniforms_and_diagnostic_map ... ok
+test material_compile::tests::unreachable_invalid_nodes_and_budgeted_deep_paths_are_rejected ... ok
+test material_compile::tests::negative_zero_is_canonical_and_type_edits_require_new_topology ... ok
+test material_compile::tests::layout_node_parameter_order_names_and_numeric_edits_have_correct_keys ... ok
+test material_graph::tests::default_round_trip_and_fixed_binding ... ok
+test material_compile::tests::uniform_budget_is_independent_of_node_budget ... ok
+test material_graph::tests::section_mask_has_exact_authored_outside_and_smooth_inward_feather ... ok
+test material_graph::tests::rejects_invalid_values_identity_schema_and_file_fields ... ok
+test room_equipment::catalog_tests::catalog_ids_and_typed_connections_are_complete_and_unique ... ok
+test material_graph::tests::types_missing_nodes_and_unreachable_cycles_are_rejected ... ok
+test material_graph::tests::historical_pioneer_hash_survives_roundtrip_and_lowering_after_model_adoption ... ok
+test material_graph::tests::section_validation_rejects_inverted_or_nonfinite_bounds_and_bad_feather ... ok
+test room_equipment::catalog_tests::catalog_ratings_and_positions_reference_implemented_definitions ... ok
+test room_layout::tests::authored_doors_within_stage_tolerance_use_normalized_wall_planes ... ok
+test room_layout::tests::default_layout_is_live_safe_and_preserves_open_airlock_passage ... ok
+test room_layout::tests::live_validation_rejects_corridor_intrusion_and_airlock_drift ... ok
+test room_layout::tests::live_validation_rejects_doors_facing_away_from_corridor ... ok
+test room_layout::tests::room_shells_have_closed_rear_walls_without_orphaned_room_fixtures ... ok
+test room_layout::tests::moved_and_resized_non_airlock_room_changes_only_its_deck_projection ... ok
+test room_equipment::catalog_tests::generated_json_matches_authoritative_catalog ... ok
+test warp_tests::physical_trajectory_is_continuous_bounded_and_distance_dependent ... ok
+
+test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/lib.rs (target/debug/deps/arkline_server-2a13a6bd86b0951b)
+
+running 46 tests
+test collaborative_editor::tests::roles_are_enforced_and_leaving_executor_clears_bound_work ... ok
+test collaborative_editor::tests::sessions_observe_one_world_clock_and_revision_conflicts_are_rejected ... ok
+test collaborative_editor::tests::scene_state_changes_only_the_actor_and_viewers_observe_without_mutation_rights ... ok
+test collaborative_transport::tests::malformed_or_late_rpc_reply_poisons_client_connection ... ok
+test collaborative_transport::tests::cancelled_calls_do_not_dispatch_and_abandoned_join_is_cleaned_up ... ok
+test editor::events::pending_tests::debug_queue_matches_due_then_insertion_order_and_is_bounded ... ok
+test collaborative_transport::tests::exterior_paused_apply_and_owned_switches_agree_across_two_clients_and_viewer ... ok
+test editor::graph_tests::breakpoint_and_node_step_are_not_partial_simulation_ticks ... ok
+test collaborative_editor::tests::session_limit_and_id_exhaustion_fail_closed ... ok
+test editor::graph_tests::delay_uses_only_simulation_time_and_restart_discards_execution_not_world_clock ... ok
+test editor::graph_tests::rejected_graph_room_command_is_traced_and_does_not_follow_edge ... ok
+test editor::graph_tests::rejected_revision_cycle_or_busy_replace_preserves_graph_and_queue ... ok
+test collaborative_transport::tests::two_loopback_peers_share_clock_graph_and_role_authority ... ok
+test editor::tests::exterior_apply_is_atomic_preserves_room_state_and_reopens_paused_without_replay ... ok
+test editor::graph_tests::graph_room_commands_preserve_power_and_pressure_interlocks ... ok
+test editor::tests::failed_clock_commit_rolls_back_world_and_pauses_without_backlog ... ok
+test editor::graph_tests::automatic_delay_queue_saturation_pauses_without_losing_connected_world ... ok
+test editor::tests::externally_replaced_layout_cannot_relocate_persisted_avatar_on_reopen ... ok
+test editor::graph_tests::tick_roots_have_stable_id_order_and_trace_is_bounded ... ok
+test editor::tests::rejected_scene_state_jumps_do_not_mutate_or_dock_the_ship ... ok
+test editor::tests::pioneer_airlock_exit_works_with_default_and_edited_layouts_and_respects_door ... ok
+test editor::tests::room_layout_loader_rejects_oversized_and_symlink_files ... ok
+test editor::tests::safe_layout_replace_is_allowed_while_playing_and_is_in_snapshot_assets ... ok
+test editor::tests::scene_state_jump_keeps_authored_collision_and_airlock_door_enforced ... ok
+test editor::tests::restart_preserves_clock_and_charge_and_cannot_open_as_network_world ... ok
+test editor::tests::scene_state_jumps_preserve_clock_systems_and_use_valid_landings ... ok
+test exterior_effects::tests::drive_uses_fresh_input_and_warp_independently_of_exterior_enable ... ok
+test exterior_effects::tests::historical_exterior_world_is_rejected_without_retargeting_persisted_state ... ok
+test exterior_effects::tests::inactive_pioneer_keeps_its_owned_circuit_load_and_identity ... ok
+test exterior_effects::tests::legacy_defaults_on_and_only_owned_active_circuit_can_be_operated ... ok
+test local_development::tests::all_listeners_and_origins_are_loopback_fail_closed ... ok
+test ownership_release_tests::server_drop_releases_authority_with_inherited_descriptor_still_open ... ok
+test power::tests::boarding_keeps_charge_with_each_physical_hull ... ok
+test power::tests::fractional_regeneration_is_independent_of_polling_frequency ... ok
+test power::tests::full_idle_time_cannot_refund_new_spending_and_extreme_elapsed_is_bounded ... ok
+test power::tests::missing_schema_initializes_at_current_time_and_future_timestamps_do_not_regen ... ok
+test room_controls::integration_tests::catalog_operating_loads_match_controller_budget ... ok
+test room_controls::integration_tests::combined_exterior_load_preserves_pressure_reserve_and_empty_capacitor_boundaries ... ok
+test room_controls::integration_tests::persisted_elapsed_interval_matches_continuous_ticks_and_is_bounded ... ok
+test exterior_effects::tests::exterior_only_and_combined_room_load_use_one_cadence_independent_integrator ... ok
+test room_controls::integration_tests::power_recovery_and_emergency_expiry_are_cadence_independent ... ok
+test editor::tests::live_layout_changes_drive_real_walk_collision_and_reject_trapping_or_stale_edits ... ok
+test room_controls::integration_tests::reserve_and_pressure_load_boundaries_are_polling_independent ... ok
+test tests::polling_writes_only_when_a_persisted_arrival_changes_state ... ok
+test traffic::tests::schedule_is_finite_periodic_continuous_and_avoids_station_and_berths ... ok
+test editor::tests::paused_movement_and_mining_freeze_and_resume_only_explicit_ticks ... ok
+
+test result: ok. 46 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.32s
+
+     Running unittests src/main.rs (target/debug/deps/arkline_server-8252abd44b0648ab)
+
+running 4 tests
+test identity_listener_tests::account_tokens_require_encrypted_remote_transport ... ok
+test websocket::tests::health_requires_a_recent_successful_tick ... ok
+test websocket::tests::rate_budget_is_bounded_and_refills_by_elapsed_time ... ok
+test websocket::tests::reply_buffer_never_grows_past_cap ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/access_tokens.rs (target/debug/deps/access_tokens-8ceaa477d3774c8f)
+
+running 17 tests
+test account_new_pilot_no_permanent_credential_and_required_policy ... ok
+test accepts_signed_resource_access_token_without_granting_pilot_identity ... ok
+test default_is_disabled_and_misconfiguration_is_not_silently_enabled ... ok
+test conflicting_links_serialize_to_one_owner ... ok
+test binding_survives_restart_and_failed_token_changes_nothing ... ok
+test explicit_key_rotation_requires_new_trusted_configuration ... ok
+test failed_signed_claim_and_public_caps_do_not_create_or_link ... ok
+test dual_proof_binding_and_expiry_preserve_legacy_ownership ... ok
+test rejects_ambiguous_weak_private_oversized_or_misused_trusted_keys ... ok
+test rejects_id_tokens_even_with_matching_signature_audience_and_claims ... ok
+test real_tcp_and_websocket_share_account_admission ... ok
+test rauthy_profile_is_explicit_and_never_a_generic_claim_fallback ... ok
+test approved_clients_are_exact_bounded_and_profile_specific ... ok
+test requires_every_configured_scope_and_rejects_unsigned_tokens ... ok
+test sender_constrained_tokens_are_rejected_in_every_profile_until_proofs_exist ... ok
+test rejects_wrong_issuer_audience_missing_claims_scopes_and_time ... ok
+test rejects_wrong_algorithm_signature_kid_and_untrusted_header_key_sources ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.33s
+
+     Running tests/assets_validation.rs (target/debug/deps/assets_validation-20e905dd2464cbc1)
+
+running 1 test
+test corrupt_hangar_and_storage_fail_open_without_panicking ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/asteroids.rs (target/debug/deps/asteroids-06945f5bac246882)
+
+running 1 test
+test explicit_asteroid_lock_depletion_and_legacy_migration_conserve_ore ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+     Running tests/drone_targeting_acceptance.rs (target/debug/deps/drone_targeting_acceptance-67f55df8e38e78ac)
+
+running 3 tests
+test pending_and_complete_locks_share_cap_and_targeted_unlock_isolates_miners ... ok
+test recon_drone_moves_in_world_returns_and_rejects_invalid_orders_without_economics ... ok
+test recon_returns_after_signal_loss_and_cannot_survive_departure ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.69s
+
+     Running tests/economy.rs (target/debug/deps/economy-59576a30a87e9a7a)
+
+running 5 tests
+test independent_in_memory_worlds_do_not_share_ownership_lock ... ok
+test database_has_one_lifetime_owner ... ok
+test restart_preserves_auth_travel_and_completed_mining ... ok
+test concurrent_buyers_cannot_duplicate_fill ... ok
+test unauthorized_and_failed_trade_leave_ledger_unchanged ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests/fleet_acceptance.rs (target/debug/deps/fleet_acceptance-334cd85b7c933137)
+
+running 4 tests
+test full_fleet_caps_ids_and_control_ownership_are_server_enforced ... ok
+test attack_drone_damages_only_assigned_foreign_drone_and_destroys_it ... ok
+test mining_drone_approaches_then_repeats_real_economic_cycles ... ok
+test signal_loss_forces_return_and_denies_control_until_recovered ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.78s
+
+     Running tests/fleet_formation.rs (target/debug/deps/fleet_formation-d9132ff200e59e3b)
+
+running 2 tests
+test recalled_middle_slot_is_reused_without_overlap_and_first_mirror_tracks_removal ... ok
+test full_formations_clear_every_hull_at_pitch_and_preserve_first_spawn_scale ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.47s
+
+     Running tests/fleet_hangar.rs (target/debug/deps/fleet_hangar-36827e3d5cfca220)
+
+running 3 tests
+test legacy_private_hangar_keeps_class_selection ... ok
+test old_client_recovery_is_authenticated_and_latched_until_all_sessions_close ... ok
+test walk_board_restart_identity_and_ownership ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.01s
+
+     Running tests/fleet_hangar_migration.rs (target/debug/deps/fleet_hangar_migration-78c77b0d8b52df2a)
+
+running 1 test
+test pre_fleet_sqlite_upgrade_preserves_nonempty_holdings_and_ledger_then_ids_survive_restart ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests/fleet_lifecycle.rs (target/debug/deps/fleet_lifecycle-b725e5115048bf4b)
+
+running 2 tests
+test legacy_singleton_schema_recovers_safely_once ... ok
+test restart_clears_deployed_fleet_without_reusing_ids_or_changing_economy ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/flight_tcp.rs (target/debug/deps/flight_tcp-4a5b0f5dd051d45b)
+
+running 1 test
+test commanded_flight_stops_and_survives_process_restart_without_economic_changes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.31s
+
+     Running tests/inertia_orbits.rs (target/debug/deps/inertia_orbits-3f9bf074dbb2cef5)
+
+running 2 tests
+test stop_preserves_momentum_then_brakes_with_hull_mass_and_actual_acceleration ... ok
+test explicit_drone_orbit_moves_continuously_in_range_and_hold_stops_it ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.13s
+
+     Running tests/interior_compatibility.rs (target/debug/deps/interior_compatibility-340905692532a04a)
+
+running 3 tests
+test rejected_legacy_authentication_never_installs_latch ... ok
+test persisted_interior_recovers_for_old_client_after_restart ... ok
+test authenticated_legacy_recovery_and_concurrent_latch_preserve_ownership ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/journey.rs (target/debug/deps/journey-4f3ab8426a2e3c0a)
+
+running 4 tests
+test transport_presence_counts_sessions_without_removing_persistent_ships ... ok
+test direct_piloting_over_tcp_expires_without_losing_roll ... ok
+test gates_connect_three_systems_survive_restart_and_preserve_targeted_mining has been running for over 60 seconds
+test two_pilots_trade_recover_and_export_consistent_history has been running for over 60 seconds
+test two_pilots_trade_recover_and_export_consistent_history ... ok
+test gates_connect_three_systems_survive_restart_and_preserve_targeted_mining ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 102.72s
+
+     Running tests/local_development.rs (target/debug/deps/local_development-bca8bfa25a9e4841)
+
+running 5 tests
+test development_directory_and_db_cannot_alias_another_world ... ok
+test official_auth_configuration_is_rejected_before_keys_are_read_in_local_realm ... ok
+test existing_unmarked_world_is_legacy_only_and_local_refusal_preserves_contents ... ok
+test public_binding_and_db_override_fail_before_creating_world ... ok
+test local_identity_is_persistent_authenticated_and_cannot_resume_in_other_realm ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/mining_loop_acceptance.rs (target/debug/deps/mining_loop_acceptance-8d084e05813e8019)
+
+running 2 tests
+test disconnect_during_active_extraction_stops_all_awards_and_resumes_owned_cargo ... ok
+test multi_trip_delivery_survives_takeover_disconnect_and_crash_without_economic_replay ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.08s
+
+     Running tests/mining_modules.rs (target/debug/deps/mining_modules-77f1b365278cd1e2)
+
+running 7 tests
+test boarding_resets_module_reasons_and_legacy_missing_slots_migrate_idle ... ok
+test activation_validation_interruptions_and_suspended_clock_do_not_award ... ok
+test restart_cancels_cycles_without_offline_mining ... ok
+test two_modules_repeat_exactly_at_deadline_and_stop_without_partial_award ... ok
+test depletion_and_capacity_clip_only_the_terminal_cycle_and_stop ... ok
+test rejected_deadline_command_rolls_back_then_tick_awards_exactly_once ... ok
+test pending_lock_cannot_activate_and_leaving_range_stops_repeat ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.76s
+
+     Running tests/multi_lock_migration.rs (target/debug/deps/multi_lock_migration-c132bf6040f1e4cf)
+
+running 2 tests
+test drone_last_logout_and_transition_cleanup_preserve_economy ... ok
+test legacy_lock_migrates_once_completed_locks_persist_pending_and_drone_cancel ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/navigation.rs (target/debug/deps/navigation-6480b3670f2efdaf)
+
+running 6 tests
+test legacy_world_gains_flight_without_changing_inventory_or_history ... ok
+test astronomical_migration_preserves_local_offset_and_economic_history ... ok
+test persisted_public_trajectory_samples_exactly_after_restart ... ok
+test warp_holds_source_during_warmup_and_arrives_in_range ... ok
+test flight_accelerates_brakes_validates_and_last_logout_stops ... ok
+test orbit_settles_and_keep_range_tracks_a_moving_ship ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.10s
+
+     Running tests/piloting.rs (target/debug/deps/piloting-e71078ecf2ff29a1)
+
+running 6 tests
+test abrupt_restart_clears_live_input_and_migrates_legacy_heading ... ok
+test diagonal_inputs_are_normalized_and_jump_rejects_controls ... ok
+test logout_and_restart_preserve_full_quaternion_and_do_not_resume_thrust ... ok
+test lease_expiry_neutral_and_invalid_inputs_are_safe ... ok
+test all_six_translation_axes_preserve_attitude_and_obey_acceleration ... ok
+test body_rotations_include_roll_and_forward_thrust_follows_rotated_axes ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+     Running tests/pioneer_interior.rs (target/debug/deps/pioneer_interior-2a163b7d2bf06d59)
+
+running 2 tests
+test old_avatar_and_assets_never_claim_interior_support ... ok
+test interior_rooms_doors_restart_and_boarding_lifecycle ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.38s
+
+     Running tests/power_acceptance.rs (target/debug/deps/power_acceptance-3570841881c74e56)
+
+running 5 tests
+test saved_charge_survives_restart_without_reissuing_a_full_capacitor ... ok
+test reactor_regenerates_caps_and_failed_warp_never_draws_charge ... ok
+test attack_drone_draws_only_for_actual_shot_and_holds_when_empty ... ok
+test drone_mining_pays_on_completion_and_empty_capacitor_cannot_create_ore ... ok
+test turret_completion_draws_once_and_insufficient_charge_stops_without_ore ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/quarters_acceptance.rs (target/debug/deps/quarters_acceptance-59bc46f35ef57a4e)
+
+running 1 test
+test walk_quarters_and_return_to_board_without_moving_ship_or_economy ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.59s
+
+     Running tests/quarters_server.rs (target/debug/deps/quarters_server-ba64a746fb9fbc1c)
+
+running 3 tests
+test old_positions_in_new_obstacles_relocate_once_but_valid_quarters_positions_persist ... ok
+test sofa_requires_proximity_survives_reconnect_and_walking_stands_in_place ... ok
+test doorway_is_open_but_walls_and_furniture_block_authoritative_steps ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.76s
+
+     Running tests/remote_control.rs (target/debug/deps/remote_control-78985bdc8aeb6aaf)
+
+running 4 tests
+test restart_clears_lease_and_live_remote_input_but_keeps_permission_and_ship ... ok
+test worker_logout_retains_remote_lease_until_last_controller_socket_closes ... ok
+test remote_gameplay_preserves_identity_private_assets_and_rejects_unsafe_wrappers ... ok
+test switching_rejects_stale_target_input_and_revocation_and_reconnect_release ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/resource_job_atomicity.rs (target/debug/deps/resource_job_atomicity-100c0faf114e9b6c)
+
+running 3 tests
+test lost_mining_drone_blocks_job_with_explicit_reason ... ok
+test completed_delivery_and_job_counter_survive_reopening_together ... ok
+test failed_delivery_write_rolls_back_ore_ledger_and_progress_across_restart ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.20s
+
+     Running tests/resource_jobs.rs (target/debug/deps/resource_jobs-4b7b28611e64df03)
+
+running 7 tests
+test jobs_require_permission_and_cancel_on_manual_takeover_disconnect_and_restart ... ok
+test revocation_reconnect_explicit_cancel_and_admission_are_authoritative ... ok
+test depleted_belt_returns_without_fabricating_ore_and_charge_wait_is_bounded ... ok
+test job_uses_real_turrets_drones_travel_and_storage_with_verifiable_ledger ... ok
+test space_jobs_count_carried_cargo_but_only_report_new_extraction ... ok
+test two_delegated_workers_finish_parallel_hauls_with_only_controller_online ... ok
+test four_thousand_goal_repeats_real_hauls_with_cumulative_progress ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 50.50s
+
+     Running tests/room_controls.rs (target/debug/deps/room_controls-dd4070392f275831)
+
+running 5 tests
+test equipment_stays_with_pioneer_and_other_pilots_cannot_address_it ... ok
+test breaker_emergency_manual_door_restore_and_pressure_interlock ... ok
+test legacy_recovery_requires_auth_and_mixed_sessions_cannot_reclose_invisible_door ... ok
+test authoritative_door_collision_access_and_non_remote_commands ... ok
+test persisted_per_vessel_and_load_reduces_capacitor_regeneration ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests/ships.rs (target/debug/deps/ships-0c9ae8be14ebbc7c)
+
+running 2 tests
+test legacy_pilot_defaults_to_pioneer_and_dimensions_are_meters ... ok
+test docked_hull_selection_persists_without_changing_economy_and_rejects_space ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/station_assets.rs (target/debug/deps/station_assets-8cbf962813133b44)
+
+running 2 tests
+test legacy_nonledger_hull_selection_migrates_once_without_minting_cargo ... ok
+test boarding_storage_corporation_authorization_and_restart_conserve_all_ore ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+
+     Running tests/station_jump.rs (target/debug/deps/station_jump-86854da4bb41511a)
+
+running 2 tests
+test legacy_avatar_defaults_to_grounded ... ok
+test jump_is_authoritative_bounded_and_cleared_on_disconnect_and_restart ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/station_walking.rs (target/debug/deps/station_walking-7c4ffce04406e05d)
+
+running 2 tests
+test walking_cannot_impersonate_worker_and_disembarking_releases_remote_control ... ok
+test walking_is_authoritative_bounded_and_stops_on_expiry_logout_and_restart ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests/station_walking_tcp.rs (target/debug/deps/station_walking_tcp-1b64b204b1664362)
+
+running 1 test
+test real_socket_walk_expiry_and_boarding_preserve_ship_economy ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.19s
+
+     Running tests/surface_sandbox.rs (target/debug/deps/surface_sandbox-9355a237cca4c63a)
+
+running 6 tests
+test old_hangar_gains_new_hulls_once_and_larger_cargo_replays ... ok
+test every_hull_launches_clear_of_station_and_can_dock_from_its_scaled_berth ... ok
+test station_is_above_atmosphere_and_planet_approach_is_five_kilometres_up ... ok
+test capital_surface_tools_measure_from_hull_and_prop_limit_is_authoritative ... ok
+test continuous_descent_ground_contact_and_owned_props_persist_without_economy_changes ... ok
+test prospector_fills_its_own_capacity_and_ledger_verifier_accepts_over_legacy_limit ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.78s
+
+     Running tests/targeting.rs (target/debug/deps/targeting-62d0de4441928baa)
+
+running 2 tests
+test acquisition_deadline_idempotence_additional_lock_unlock_and_early_mining ... ok
+test invalidation_on_range_loss_warp_logout_and_restart ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.43s
+
+     Running tests/traffic_acceptance.rs (target/debug/deps/traffic_acceptance-a343f37d4553c2ce)
+
+running 1 test
+test traffic_is_deterministic_bounded_and_separate_from_players_and_economy ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/websocket_transport.rs (target/debug/deps/websocket_transport-9410eec3d21d9e07)
+
+running 4 tests
+test ping_bursts_are_bounded_and_binary_is_rejected ... ok
+test presence_cleanup_and_oversize_disconnect ... ok
+test fragmented_text_is_one_request_and_large_http_headers_are_closed ... ok
+test origins_health_auth_and_registration_bounds ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+     Running unittests src/lib.rs (target/debug/deps/arkline_verifier-315b59c8fc833e4a)
+
+running 13 tests
+test tests::fabricated_credit_and_duplicate_identity ... ok
+test tests::individual_reserves_match_legacy_economic_total ... ok
+test tests::inactive_personal_and_shared_cargo_replay_without_double_counting ... ok
+test tests::corporation_permissions_and_personal_balances_are_replayed ... ok
+test tests::missing_and_reordered_events ... ok
+test tests::overspend_and_oversell_even_when_rehashed ... ok
+test tests::replay_id_conflict_and_order_id_reuse ... ok
+test tests::pinned_rollback_and_rewrite ... ok
+test tests::reject_unknown_versions_backwards_time_and_bad_genesis ... ok
+test tests::snapshot_mismatch_and_duplicates ... ok
+test tests::tampered_event_hash ... ok
+test tests::rehashed_hull_cargo_fabrication_and_cross_station_load_are_rejected ... ok
+test tests::successful_replay ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/main.rs (target/debug/deps/arkline_verifier-bd99b08e553dde2e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/checkpoint_cli.rs (target/debug/deps/checkpoint_cli-fa98255f1385b1c5)
+
+running 1 test
+test checkpoint_advances_only_after_full_verification ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+   Doc-tests arkline_client
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests arkline_protocol
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests arkline_server
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests arkline_verifier
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

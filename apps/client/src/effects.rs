@@ -152,6 +152,7 @@ mod tests {
     use arkline_protocol::*;
     fn snapshot(ore: u64, remaining: u64) -> Snapshot {
         Snapshot {
+            exterior: None,
             resource_jobs: vec![],
             fleet_links: vec![],
             remote_controls: vec![],

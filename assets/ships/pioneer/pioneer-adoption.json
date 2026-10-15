@@ -1,0 +1,60 @@
+{
+  "schema": "arkline.pioneer-model-adoption/v1",
+  "date_utc": "2026-10-15",
+  "status": "Study05 refined source adopted, actual engine7040 and native7042 accepted; selected bow/service scope visually reviewed; overall v05 unfinished; draft unmerged",
+  "claim": "https://github.com/PIndustries/arkline-engine/issues/10#issuecomment-6199911507",
+  "prior_published_head": "2abbc22197b5530bd11e76bf665b828a4033db27",
+  "prior_canonical_glb_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+  "prior_study05_preview_glb_sha256": "df8490f42379aca161df0aa26b24cb32ab8dbf73e83e0681ed2cfc29ef43a2c9",
+  "canonical": {
+    "editable_source": "pioneer.blend",
+    "source_sha256": "61eb70e1978668f5ca7256f237d9df14c47140b9bbbbce327875b68efcbe57c9",
+    "glb": "pioneer.glb",
+    "glb_sha256": "8125644f007537437942d34169e527c08ddd2dfaed575c874e2263ff2b7cb123",
+    "triangles": 103466,
+    "material_batches": 9,
+    "source_parts": 686,
+    "body_envelope_xyz_m": [
+      72,
+      18,
+      38
+    ]
+  },
+  "export_receipt": {
+    "path": "pioneer-export.json",
+    "sha256": "fadece504f99169f645559f5c903636b6555f8d8b3f3c3b856cc267b639d5429",
+    "source_copy_note": "Canonical pioneer.blend is byte-identical to receipt-selected pioneer-study05.blend."
+  },
+  "source_identity": "source-hash/exact-name snapshot mappings;35 prior lids/rails explicitly removed, retained material identities preserved; no durable cross-revision ID claim",
+  "selected_scope": [
+    "faceted layered bow and true recessed framed glazing with connected braces",
+    "recessed service/work bays and stowed visual handling arm",
+    "true recessed existing drive openings with counterbored flange joints"
+  ],
+  "presentation": "Windows emission 0.025 with cool state-driven output; opaque PBR glass metallic 0.60/roughness 0.12. No fitted interior/transmission claim. Default load 88 W; pulse/drive/power semantics retained.",
+  "compatibility": "Prior accepted-hash worlds refuse without rewriting state; old graphs retain hashes and require explicit replacement/rebinding. New preview project; no automatic migration.",
+  "visual_gaps": [
+    "broader side/collar and underside architecture still needs review againstv05",
+    "textures/normalmaps/interiorreflection/transmission unsupported",
+    "moving/crane/hatch operation and fitted interior not implemented"
+  ],
+  "engine_acceptance": {
+    "authority_build": "26.10.15.7040",
+    "authority_source_commit": "15ce32c1d18975383d1d4e9a13e4e479c9085cfd",
+    "receipt": "../../../docs/ships/pioneer/images/runtime-study05-20261015/refined/authority-receipt.json",
+    "matched_before_build": "26.10.15.7036",
+    "first_study05_build": "26.10.15.7038",
+    "changes_between_runs": "Source geometry and declared Window tuning differ. Cameras, renderer/sunlight, fixture identities, loads and pulse periods are retained. Separate real disposable worlds; no fabricated flight/power state.",
+    "native_build": "26.10.15.7042",
+    "native_source_commit": "c663a3bf9afd550495118e0d7f105f9c13a79b07",
+    "native_receipt": "../../../docs/ships/pioneer/images/runtime-study05-20261015/native/native-receipt.json"
+  },
+  "normal_review": {
+    "strict_same_winding_triangles": 103458,
+    "strict_corners": 310374,
+    "normal_mismatch_bins": 0,
+    "separate_exact_position_thin_triangles": 8,
+    "separate_normal_dots": 1.0,
+    "report": "../../../docs/ships/pioneer/images/runtime-study05-20261015/audit-refined/summary.json"
+  }
+}

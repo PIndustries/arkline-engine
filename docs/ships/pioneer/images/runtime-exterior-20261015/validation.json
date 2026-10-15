@@ -1,0 +1,104 @@
+{
+  "date_utc": "2026-10-15",
+  "implementation_parent_commit": "8b5bcd88b5b8ac8e6a553c454e1e8d584e4f6604",
+  "package": {
+    "build": "26.10.15.7019",
+    "profile": "Linux x86_64 debug, MSAA0, Mesa software OpenGL",
+    "sha256": "230d2585f0374ed8e13225f9775c79acb4ce6e810d2e8cde82c98e1331239be6"
+  },
+  "checks": {
+    "workspace": {
+      "build": "26.10.15.7014",
+      "result_summaries": 55,
+      "passed": 667,
+      "failed": 0,
+      "ignored": 18
+    },
+    "editor": {
+      "build": "26.10.15.7016",
+      "result_summaries": 1,
+      "passed": 179,
+      "failed": 0,
+      "ignored": 1
+    },
+    "native_gpu": {
+      "build": "26.10.15.7013",
+      "passed": 1,
+      "failed": 0
+    },
+    "strict_workspace_clippy": {
+      "build": "26.10.15.7017",
+      "passed": true
+    },
+    "strict_wasm_clippy": {
+      "build": "26.10.15.7011",
+      "passed": true
+    }
+  },
+  "canonical_asset_adopted": false,
+  "canonical_asset_sha256": "f8f8cc65772c678a46606c27abe205d62c4e6ab37c350f79a0f3a4cdc0c6f402",
+  "study04_staged_sha256": "bfb743f8c0bd5bb0dd23a5e58a7f6851ce142b5a7e1a57a3387902f584d0a279",
+  "publication": "local proof artifacts; no merge or release",
+  "artifacts": [
+    {
+      "path": "gpu-off.png",
+      "bytes": 157699,
+      "sha256": "48cd6a1c9d102c4770c4016d1e7d3618db3b95f0d07b6b70f64cf75d7aa2891d"
+    },
+    {
+      "path": "gpu-idle.png",
+      "bytes": 159650,
+      "sha256": "f4e7cba08b76fb0fd427d9148d431257d1ca388f71e02a6ae314c6b594d323ca"
+    },
+    {
+      "path": "gpu-active.png",
+      "bytes": 159563,
+      "sha256": "821d873f616551f70248973277f3d5f3ecb583fb05f4823a820722586dd20786"
+    },
+    {
+      "path": "gpu-front-window.png",
+      "bytes": 177925,
+      "sha256": "d199ff354cd247d0de3a5188405856c61d9f0c073e32a171d29d2b7f5ba95559"
+    },
+    {
+      "path": "gpu-receipt.json",
+      "bytes": 1160,
+      "sha256": "6f3130013a1d7ef0a12bd5beba03bfdc6f16e0f4b3cea3f01152316663c6fa1d"
+    },
+    {
+      "path": "native-idle-7012.png",
+      "bytes": 346496,
+      "sha256": "2d752f9f008d5a7b8eddf8f530b6814d31161305513bc4e8994d9d34a29a92c7"
+    },
+    {
+      "path": "native-off-7012.png",
+      "bytes": 348894,
+      "sha256": "002ac68761f63404bfd1725e534c50bf66ae888c4b77e85abd5b23ff84e9b598"
+    },
+    {
+      "path": "native-step-7012.png",
+      "bytes": 349091,
+      "sha256": "6ff47f5a22be3c2fa04f19b1213fd4f689bd60ff74771bd983687fe9e9361dcf"
+    },
+    {
+      "path": "native-reopened-7019.png",
+      "bytes": 305023,
+      "sha256": "1491f269e6e13fa098003eac3ab7b7d7497363f1bb8d91b43a7b8ecd0c8a3dca"
+    },
+    {
+      "path": "native-restart-receipt.json",
+      "bytes": 1617,
+      "sha256": "c87e1007c0a6ea160560cb24bbfb1b7e3c6fca24d67143ecce7422d7f26543c0"
+    },
+    {
+      "path": "study04-staged-7102.png",
+      "bytes": 182735,
+      "sha256": "0247c8383eac5c3284eaca14afa073d45bc0795d19ae297af604350c03079743"
+    },
+    {
+      "path": "source-readonly-audit.json",
+      "bytes": 22618,
+      "sha256": "0d59455fc17a07723d31ec621b4bc8e48d75a09c208b4f229894b1ccb57e66d3"
+    }
+  ]
+}
