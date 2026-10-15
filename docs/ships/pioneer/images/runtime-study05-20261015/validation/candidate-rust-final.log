@@ -11,4 +11,3 @@ PIONEER_CANDIDATE {"bytes":8700948,"decoder":"arkline-client ship_asset::decode"
 test flight3d::ship_asset::tests::reviewed_pioneer_candidate_decodes_at_exact_hash ... ok
 
 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 268 filtered out; finished in 0.50s
-

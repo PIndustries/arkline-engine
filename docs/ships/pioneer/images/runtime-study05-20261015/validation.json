@@ -596,8 +596,8 @@
     },
     {
       "path": "validation/candidate-rust-final.log",
-      "bytes": 969,
-      "sha256": "ad0590d7356f2bdb98cfc55f1d2044e3614d6a7d4fffe9c22e8513a871aba8a7"
+      "bytes": 968,
+      "sha256": "e9387aa0f07218fc26f3be3241b2722bade010b61880b3e49367cafa19bfe620"
     },
     {
       "path": "validation/clippy-final.log",
@@ -616,8 +616,40 @@
     },
     {
       "path": "validation/workspace-final.log",
-      "bytes": 73524,
-      "sha256": "7923d0184ee8b94052285ec95b3b7122587721c7780f397bc3c06731130e80ae"
+      "bytes": 73523,
+      "sha256": "64736a266eb451e2808f03028756a9954a122145462a06ab22a3ee0904b098ef"
+    }
+  ],
+  "log_copies": [
+    {
+      "path": "validation/candidate-rust-final.log",
+      "original_bytes": 969,
+      "original_sha256": "ad0590d7356f2bdb98cfc55f1d2044e3614d6a7d4fffe9c22e8513a871aba8a7",
+      "normalization": "terminal blank lines removed; all output lines retained"
+    },
+    {
+      "path": "validation/workspace-final.log",
+      "original_bytes": 73524,
+      "original_sha256": "7923d0184ee8b94052285ec95b3b7122587721c7780f397bc3c06731130e80ae",
+      "normalization": "terminal blank lines removed; all output lines retained"
+    },
+    {
+      "path": "validation/wasm-final.log",
+      "original_bytes": 264,
+      "original_sha256": "3088d498f57cf45a6f83581e6f1f4de6872df7eab1910567a776257c9728c1fe",
+      "normalization": "byte-identical original"
+    },
+    {
+      "path": "validation/python-final.log",
+      "original_bytes": 152,
+      "original_sha256": "a74aa46477ff596a1a4c7823006713408486ce08f668c5a5ca7ba8a594bf7659",
+      "normalization": "byte-identical original"
+    },
+    {
+      "path": "validation/clippy-final.log",
+      "original_bytes": 563,
+      "original_sha256": "da7c22b5700ffb143d6da4a55dcf95564b4803a975d45b1e339a3ead08e45974",
+      "normalization": "byte-identical original"
     }
   ]
 }
