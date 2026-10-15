@@ -1,6 +1,8 @@
 //! The editor owns the window; a dedicated worker owns the local authority and SQLite.
 use super::*;
-use arkline_protocol::{EditorEventGraph, EditorGraphDebug, EditorSceneState, RoomLayoutDocument};
+use arkline_protocol::{
+    EditorEventGraph, EditorGraphDebug, EditorSceneState, ExteriorDefinition, RoomLayoutDocument,
+};
 use arkline_server::editor::EditorWorld;
 use eframe::App;
 use glam::Vec3;
@@ -107,6 +109,7 @@ pub struct EmbeddedEventDebugState {
     pub ack: Option<EmbeddedEventAck>,
     pub room_ack: Option<EmbeddedEventAck>,
     pub scene_ack: Option<EmbeddedEventAck>,
+    pub exterior_ack: Option<EmbeddedEventAck>,
 }
 enum GraphCommand {
     Replace {
@@ -118,12 +121,17 @@ enum GraphCommand {
     Step,
     Clear,
 }
+enum ExteriorCommand {
+    Replace(u64, ExteriorDefinition),
+    Enable(bool, u64),
+}
 const STOP_REQUEST_NOTICE: &str = "Stop requested; waiting for local authority";
 
 enum ClockCommand {
     Graph(u64, GraphCommand),
     RoomLayout(u64, u64, RoomLayoutDocument),
     SceneState(u64, EditorSceneState),
+    Exterior(u64, ExteriorCommand),
     Play,
     Pause,
     Step,
@@ -149,6 +157,9 @@ pub struct EmbeddedClient {
     scene_pending: Option<(u64, EditorSceneState)>,
     scene_ack: Option<EmbeddedEventAck>,
     scene_sequence: u64,
+    exterior_pending: Option<u64>,
+    exterior_ack: Option<EmbeddedEventAck>,
+    exterior_sequence: u64,
     session_generation: u64,
     states: Receiver<EmbeddedStatus>,
     state: EmbeddedStatus,
@@ -203,6 +214,9 @@ impl EmbeddedClient {
             scene_pending: None,
             scene_ack: None,
             scene_sequence: 0,
+            exterior_pending: None,
+            exterior_ack: None,
+            exterior_sequence: 0,
             session_generation: 0,
             states: connection.states,
             state: EmbeddedStatus::Loading,
@@ -305,6 +319,46 @@ impl EmbeddedClient {
         self.room_ack = None;
         Ok(id)
     }
+    pub fn exterior_ack(&self) -> Option<&EmbeddedEventAck> {
+        self.exterior_ack.as_ref()
+    }
+    pub fn exterior_replace(
+        &mut self,
+        revision: u64,
+        document: ExteriorDefinition,
+    ) -> Result<u64, String> {
+        document.validate()?;
+        self.queue_exterior(ExteriorCommand::Replace(revision, document))
+    }
+    pub fn exterior_set_enabled(&mut self, enabled: bool, revision: u64) -> Result<u64, String> {
+        self.queue_exterior(ExteriorCommand::Enable(enabled, revision))
+    }
+    fn queue_exterior(&mut self, command: ExteriorCommand) -> Result<u64, String> {
+        if !self.ready() {
+            return Err("Editor authority is not ready".into());
+        }
+        if self
+            .snapshot()
+            .and_then(|snapshot| snapshot.exterior.as_ref())
+            .is_none()
+        {
+            return Err("This authority does not advertise powered exterior support".into());
+        }
+        if self.exterior_pending.is_some() {
+            return Err("Waiting for the previous exterior acknowledgement".into());
+        }
+        let id = self
+            .exterior_sequence
+            .checked_add(1)
+            .ok_or("Exterior command sequence exhausted")?;
+        self.clock
+            .try_send(ClockCommand::Exterior(id, command))
+            .map_err(|_| "Editor command queue is full or closed".to_string())?;
+        self.exterior_sequence = id;
+        self.exterior_pending = Some(id);
+        self.exterior_ack = None;
+        Ok(id)
+    }
     pub fn graph_replace(
         &mut self,
         revision: u64,
@@ -376,6 +430,14 @@ impl EmbeddedClient {
                 self.room_pending = None;
                 self.room_ack = Some(ack.clone());
             }
+            if let Some(ack) = graph
+                .exterior_ack
+                .as_ref()
+                .filter(|ack| Some(ack.id) == self.exterior_pending)
+            {
+                self.exterior_pending = None;
+                self.exterior_ack = Some(ack.clone());
+            }
             if graph
                 .ack
                 .as_ref()
@@ -406,6 +468,22 @@ impl EmbeddedClient {
                 self.cockpit.notice =
                     "Stop outcome unknown; reconnect and inspect the confirmed state.".into();
             }
+        }
+        if self.exterior_pending.is_some()
+            && (matches!(
+                self.state,
+                EmbeddedStatus::Error(_) | EmbeddedStatus::Stopped
+            ) || !self.cockpit.connected
+                || self
+                    .worker
+                    .as_ref()
+                    .is_some_and(|worker| worker.is_finished()))
+        {
+            let id = self
+                .exterior_pending
+                .take()
+                .expect("pending exterior checked");
+            self.exterior_ack = Some(EmbeddedEventAck { id, result: Err("Exterior outcome unknown; reconnect and inspect accepted state. The command was not replayed.".into()) });
         }
         if self.scene_pending.is_some()
             && (matches!(
@@ -653,6 +731,8 @@ impl EmbeddedClient {
         self.room_ack = None;
         self.scene_pending = None;
         self.scene_ack = None;
+        self.exterior_pending = None;
+        self.exterior_ack = None;
         self.session_generation = self.session_generation.saturating_add(1);
         self.session_info = None;
         self.session_updates = connection.info;
@@ -983,11 +1063,13 @@ fn run(
     let mut graph_ack = None;
     let mut room_ack = None;
     let mut scene_ack = None;
+    let mut exterior_ack = None;
     let mut pending_graph_state = Some(EmbeddedEventDebugState {
         debug: world.graph_debug(),
         ack: None,
         room_ack: None,
         scene_ack: None,
+        exterior_ack: None,
     });
     let mut last_status = EmbeddedStatus::Paused;
     let mut snapshot_dirty = false;
@@ -1000,6 +1082,23 @@ fn run(
                     .set_scene_state(&session, state)
                     .map_err(|error| error.to_string());
                 scene_ack = Some(EmbeddedEventAck { id, result });
+                snapshot_dirty = true;
+            }
+            Ok(ClockCommand::Exterior(id, command)) => {
+                let result = if session.is_none() {
+                    Err("Local world is stopped".into())
+                } else {
+                    match command {
+                        ExteriorCommand::Replace(revision, document) => {
+                            world.exterior_replace(revision, document).map(|_| ())
+                        }
+                        ExteriorCommand::Enable(enabled, revision) => {
+                            world.exterior_set_enabled(&session, enabled, revision)
+                        }
+                    }
+                    .map_err(|error| error.to_string())
+                };
+                exterior_ack = Some(EmbeddedEventAck { id, result });
                 snapshot_dirty = true;
             }
             Ok(ClockCommand::RoomLayout(id, revision, document)) => {
@@ -1126,6 +1225,7 @@ fn run(
                 ack: graph_ack.clone(),
                 room_ack: room_ack.clone(),
                 scene_ack: scene_ack.clone(),
+                exterior_ack: exterior_ack.clone(),
             });
         }
         if let Some(debug) = pending_graph_state.take() {
@@ -1160,6 +1260,196 @@ mod tests {
     use super::*;
     mod room_acceptance {
         include!("embedded_room_acceptance.rs");
+    }
+
+    #[test]
+    fn exterior_commands_require_advertised_support_and_do_not_replay_lost_acknowledgements() {
+        let (mut client, _) = debug_fixture();
+        client.cockpit.snapshot.as_mut().unwrap().exterior = None;
+        assert!(client
+            .exterior_set_enabled(false, 0)
+            .unwrap_err()
+            .contains("advertise"));
+        assert!(client.exterior_pending.is_none());
+        // A worker/connection loss leaves an explicit unknown result, never a replay.
+        client.exterior_pending = Some(7);
+        client.state = EmbeddedStatus::Stopped;
+        client.poll();
+        assert!(client.exterior_pending.is_none());
+        let ack = client.exterior_ack().unwrap();
+        assert_eq!(ack.id, 7);
+        assert!(ack.result.as_ref().unwrap_err().contains("not replayed"));
+    }
+
+    #[test]
+    fn exterior_local_and_shared_workers_ack_paused_edits_and_preserve_clock() {
+        fn wait(client: &mut EmbeddedClient, predicate: impl Fn(&EmbeddedClient) -> bool) {
+            let deadline = Instant::now() + Duration::from_secs(8);
+            while Instant::now() < deadline {
+                client.poll();
+                if predicate(client) {
+                    return;
+                }
+                assert!(
+                    !matches!(client.status(), EmbeddedStatus::Error(_)),
+                    "worker failed"
+                );
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            panic!(
+                "exterior acknowledgement/snapshot did not arrive: {:?}",
+                client.exterior_ack()
+            );
+        }
+        fn finish(client: &mut EmbeddedClient) {
+            let _ = client.clock.try_send(ClockCommand::Shutdown);
+            client.cockpit.updates = None;
+            if let Some(worker) = client.worker.take() {
+                worker.join().unwrap();
+            }
+        }
+        fn set_off(client: &mut EmbeddedClient) {
+            let revision = client
+                .snapshot()
+                .unwrap()
+                .exterior
+                .as_ref()
+                .unwrap()
+                .definition
+                .revision;
+            let time = client.snapshot().unwrap().server_time_ms;
+            let id = client.exterior_set_enabled(false, revision).unwrap();
+            assert!(client.exterior_set_enabled(true, revision).is_err());
+            wait(client, |client| {
+                client.exterior_ack().is_some_and(|ack| ack.id == id)
+                    && client
+                        .snapshot()
+                        .unwrap()
+                        .exterior
+                        .as_ref()
+                        .unwrap()
+                        .vessels
+                        .iter()
+                        .any(|vessel| vessel.pilot == client.pilot() && !vessel.enabled)
+            });
+            assert!(client.exterior_ack().unwrap().result.is_ok());
+            assert_eq!(client.snapshot().unwrap().server_time_ms, time);
+            assert_eq!(client.status(), &EmbeddedStatus::Paused);
+        }
+        let directory = std::env::temp_dir().join(format!(
+            "arkline-exterior-bridge-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let (mut local, _) = debug_fixture();
+        local.data_dir = directory.join("local");
+        local
+            .switch_session(EmbeddedSessionMode::Local, "ExteriorLocal".into())
+            .unwrap();
+        wait(&mut local, |client| {
+            client.ready() && client.snapshot().is_some_and(|s| s.exterior.is_some())
+        });
+        set_off(&mut local);
+        let mut document = local
+            .snapshot()
+            .unwrap()
+            .exterior
+            .as_ref()
+            .unwrap()
+            .definition
+            .document
+            .clone();
+        document.fixtures[0].emission *= 0.5;
+        let id = local.exterior_replace(0, document.clone()).unwrap();
+        wait(&mut local, |client| {
+            client.exterior_ack().is_some_and(|ack| ack.id == id)
+                && client
+                    .snapshot()
+                    .unwrap()
+                    .exterior
+                    .as_ref()
+                    .unwrap()
+                    .definition
+                    .revision
+                    == 1
+        });
+        assert!(local.exterior_ack().unwrap().result.is_ok());
+        let id = local.exterior_replace(0, document).unwrap();
+        wait(&mut local, |client| {
+            client.exterior_ack().is_some_and(|ack| ack.id == id)
+        });
+        assert!(local.exterior_ack().unwrap().result.is_err());
+        assert_eq!(
+            local
+                .snapshot()
+                .unwrap()
+                .exterior
+                .as_ref()
+                .unwrap()
+                .definition
+                .revision,
+            1
+        );
+        finish(&mut local);
+
+        let (mut host, _) = debug_fixture();
+        host.data_dir = directory.join("host");
+        host.switch_session(
+            EmbeddedSessionMode::Host {
+                bind_addr: "127.0.0.1:0".parse().unwrap(),
+            },
+            "ExteriorHost".into(),
+        )
+        .unwrap();
+        wait(&mut host, |client| {
+            client.ready() && client.session_info().is_some()
+        });
+        let info = host.session_info().unwrap();
+        let mode = EmbeddedSessionMode::Join {
+            address: info.address.unwrap(),
+            secret: info.editor_secret.clone().unwrap(),
+        };
+        let (mut guest, _) = debug_fixture();
+        guest.data_dir = directory.join("guest");
+        guest.switch_session(mode, "ExteriorGuest".into()).unwrap();
+        wait(&mut guest, |client| {
+            client.ready() && client.snapshot().is_some_and(|s| s.exterior.is_some())
+        });
+        set_off(&mut guest);
+        wait(&mut host, |client| {
+            client
+                .snapshot()
+                .unwrap()
+                .exterior
+                .as_ref()
+                .unwrap()
+                .vessels
+                .iter()
+                .any(|vessel| vessel.pilot == "ExteriorGuest" && !vessel.enabled)
+        });
+        assert!(host
+            .snapshot()
+            .unwrap()
+            .exterior
+            .as_ref()
+            .unwrap()
+            .vessels
+            .iter()
+            .any(|vessel| vessel.pilot == "ExteriorHost" && vessel.enabled));
+        let time = host.snapshot().unwrap().server_time_ms;
+        host.step();
+        wait(&mut host, |client| {
+            client.snapshot().unwrap().server_time_ms == time + 50
+        });
+        wait(&mut guest, |client| {
+            client.snapshot().unwrap().server_time_ms == time + 50
+        });
+        finish(&mut guest);
+        finish(&mut host);
+        std::fs::remove_dir_all(directory).unwrap();
     }
 
     #[test]
@@ -1698,6 +1988,9 @@ mod tests {
                 scene_pending: None,
                 scene_ack: None,
                 scene_sequence: 0,
+                exterior_pending: None,
+                exterior_ack: None,
+                exterior_sequence: 0,
                 session_generation: 0,
                 states,
                 state: EmbeddedStatus::Paused,
@@ -1900,6 +2193,7 @@ mod tests {
                 ack: None,
                 room_ack: None,
                 scene_ack: Some(EmbeddedEventAck { id, result: Ok(()) }),
+                exterior_ack: None,
             }
         }
         for status in [
@@ -2044,6 +2338,7 @@ mod tests {
                 }),
                 room_ack: None,
                 scene_ack: None,
+                exterior_ack: None,
             })
             .unwrap();
         client.poll();
@@ -2190,6 +2485,9 @@ mod tests {
             scene_pending: None,
             scene_ack: None,
             scene_sequence: 0,
+            exterior_pending: None,
+            exterior_ack: None,
+            exterior_sequence: 0,
             session_generation: 0,
             states: receiver,
             state: EmbeddedStatus::Loading,

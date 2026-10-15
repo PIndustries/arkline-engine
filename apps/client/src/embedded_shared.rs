@@ -28,6 +28,24 @@ struct OpenedPeer {
 }
 
 impl Peer {
+    fn exterior(&mut self, command: ExteriorCommand) -> Result<(), String> {
+        match (self, command) {
+            (Self::Host(host), ExteriorCommand::Replace(revision, document)) => host
+                .replace_exterior(revision, document)
+                .map(|_| ())
+                .map_err(|e| e.to_string()),
+            (Self::Join(client), ExteriorCommand::Replace(revision, document)) => client
+                .replace_exterior(revision, document)
+                .map(|_| ())
+                .map_err(|e| e.to_string()),
+            (Self::Host(host), ExteriorCommand::Enable(enabled, revision)) => host
+                .set_exterior_enabled(enabled, revision)
+                .map_err(|e| e.to_string()),
+            (Self::Join(client), ExteriorCommand::Enable(enabled, revision)) => client
+                .set_exterior_enabled(enabled, revision)
+                .map_err(|e| e.to_string()),
+        }
+    }
     fn set_scene_state(&mut self, state: EditorSceneState) -> Result<(), String> {
         match self {
             Self::Host(host) => host
@@ -300,6 +318,7 @@ fn run_loop(
     let mut graph_ack: Option<EmbeddedEventAck> = None;
     let mut room_ack: Option<EmbeddedEventAck> = None;
     let mut scene_ack: Option<EmbeddedEventAck> = None;
+    let mut exterior_ack: Option<EmbeddedEventAck> = None;
     let mut consecutive_busy_snapshots = 0_u8;
     let mut busy_notice_sent = false;
 
@@ -317,6 +336,17 @@ fn run_loop(
                     peer.set_scene_state(state)
                 };
                 scene_ack = Some(EmbeddedEventAck {
+                    id,
+                    result: result.map_err(|error| redact(error, secret)),
+                });
+            }
+            Ok(ClockCommand::Exterior(id, command)) => {
+                let result = if stopped {
+                    Err("This editor's controls are suspended; resume before applying exterior changes".into())
+                } else {
+                    peer.exterior(command)
+                };
+                exterior_ack = Some(EmbeddedEventAck {
                     id,
                     result: result.map_err(|error| redact(error, secret)),
                 });
@@ -504,6 +534,7 @@ fn run_loop(
             ack: graph_ack.clone(),
             room_ack: room_ack.clone(),
             scene_ack: scene_ack.clone(),
+            exterior_ack: exterior_ack.clone(),
         };
         match graph_states.try_send(graph_state) {
             Ok(()) | Err(TrySendError::Full(_)) => {}
