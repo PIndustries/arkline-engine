@@ -1,5 +1,7 @@
 //! One-window local development workspace using the real game client and authority.
 mod asset_document;
+mod cockpit;
+mod cockpit_document;
 mod community;
 mod component_view;
 mod engineering;
@@ -24,6 +26,7 @@ const BUILD: &str = include_str!("../../../BUILD_VERSION");
 const GREEN: Color32 = Color32::from_rgb(62, 233, 145);
 const MUTED: Color32 = Color32::from_rgb(140, 165, 158);
 struct Editor {
+    cockpit: cockpit::CockpitPanel,
     client: EmbeddedClient,
     project: PathBuf,
     selected_pilot: String,
@@ -62,6 +65,7 @@ impl Editor {
     fn new(cc: &eframe::CreationContext<'_>, project: PathBuf, pilot: String) -> Self {
         let client = EmbeddedClient::new(cc, project.join(".arkline-studio"), pilot.clone());
         Self {
+            cockpit: cockpit::CockpitPanel::open(&project),
             materials: materials::Materials::open(&project),
             engineering: engineering::Engineering::open(&project),
             service_paths: service_paths::ServicePaths::open(&project),
@@ -162,6 +166,7 @@ impl Editor {
 impl eframe::App for Editor {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         self.client.poll();
+        self.cockpit.poll(&cockpit::Live::from_client(&self.client));
         self.rooms.poll_live(&mut self.client);
         self.community.poll();
         let clock_control = self.client.can_control_clock();
@@ -294,6 +299,7 @@ impl eframe::App for Editor {
                     self.inspector_tab = 0;
                 }
                 ui.selectable_value(&mut self.workspace, 3, "Materials");
+                ui.selectable_value(&mut self.workspace, 4, "Cockpit");
                 ui.selectable_value(&mut self.workspace, 2, "Physics lab");
                 if ui
                     .selectable_value(&mut self.workspace, 1, "Community · GitHub")
@@ -352,6 +358,18 @@ impl eframe::App for Editor {
                 }
             });
         });
+        }
+        if self.workspace == 4 {
+            self.client.poll_hidden();
+            if let Some(request) = self
+                .cockpit
+                .show(ctx, &cockpit::Live::from_client(&self.client))
+            {
+                self.client.send_command(request);
+            }
+            self.session_controls(ctx);
+            ctx.request_repaint_after(Duration::from_millis(33));
+            return;
         }
         if self.workspace == 3 {
             self.client.poll_hidden();
@@ -549,6 +567,12 @@ impl eframe::App for Editor {
                 self.engineering.viewport(ui);
             });
         } else {
+            if let Some(request) = self
+                .cockpit
+                .show_applied(ctx, &cockpit::Live::from_client(&self.client))
+            {
+                self.client.send_command(request);
+            }
             self.client.update(ctx, frame);
         }
         // Editor dialogs are drawn after the embedded client's UI pass, which
@@ -1040,7 +1064,11 @@ mod tests {
             );
         }
         let deadline = std::time::Instant::now() + Duration::from_secs(5);
-        while editor.client.scene_state() != Some(arkline_protocol::EditorSceneState::StationHangar)
+        // Snapshot and acknowledgement arrive on separate channels. Observing
+        // the new scene does not mean poll has drained its acknowledgement yet.
+        while (editor.client.scene_state()
+            != Some(arkline_protocol::EditorSceneState::StationHangar)
+            || editor.client.scene_state_ack().is_none())
             && std::time::Instant::now() < deadline
         {
             editor.client.poll();
@@ -1050,7 +1078,12 @@ mod tests {
             editor.client.scene_state(),
             Some(arkline_protocol::EditorSceneState::StationHangar)
         );
-        assert!(editor.client.scene_state_ack().unwrap().result.is_ok());
+        assert!(editor
+            .client
+            .scene_state_ack()
+            .expect("scene acknowledgement should arrive before the deadline")
+            .result
+            .is_ok());
         assert!(editor.client.paused());
         assert_eq!(editor.client.snapshot().unwrap().server_time_ms, time);
         editor.workspace = 3;

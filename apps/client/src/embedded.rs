@@ -830,6 +830,14 @@ impl EmbeddedClient {
     pub fn send_command(&mut self, request: Request) {
         self.cockpit.send(request);
     }
+    /// Read-only view of the same gate used by typed equipment requests.
+    pub fn equipment_controls_ready(&self) -> bool {
+        self.state == EmbeddedStatus::Running && self.cockpit.can_operate()
+    }
+    /// Existing session feedback, not a correlated command acknowledgement.
+    pub fn command_notice(&self) -> &str {
+        &self.cockpit.notice
+    }
 }
 fn gameplay_input_allowed(pointer_in_viewport: bool, free_camera: bool) -> bool {
     pointer_in_viewport && !free_camera
