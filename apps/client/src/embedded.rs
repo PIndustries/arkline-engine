@@ -339,8 +339,7 @@ impl EmbeddedClient {
         }
         if self
             .snapshot()
-            .and_then(|snapshot| snapshot.exterior.as_ref())
-            .is_none()
+            .is_none_or(|snapshot| snapshot.exterior.is_none())
         {
             return Err("This authority does not advertise powered exterior support".into());
         }
@@ -1093,7 +1092,7 @@ fn run(
                             world.exterior_replace(revision, document).map(|_| ())
                         }
                         ExteriorCommand::Enable(enabled, revision) => {
-                            world.exterior_set_enabled(&session, enabled, revision)
+                            world.exterior_set_enabled(&mut session, enabled, revision)
                         }
                     }
                     .map_err(|error| error.to_string())

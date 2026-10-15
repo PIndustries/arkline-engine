@@ -4000,6 +4000,8 @@ impl eframe::App for Cockpit {
                             live,
                             self.assets.as_ref().and_then(|a| a.hangar.as_ref()),
                             self.assets.as_ref().and_then(|a| a.pioneer_room.as_ref()),
+                            self.snapshot.as_ref().and_then(|s| s.exterior.as_ref()),
+                            self.snapshot.as_ref().map_or(now, |s| s.server_time_ms),
                         ) {
                             self.activate_quarters_terminal(action);
                         }
@@ -4715,6 +4717,7 @@ mod tests {
         cockpit.connected = true;
         cockpit.pilot = "pilot".into();
         cockpit.snapshot = Some(Snapshot {
+            exterior: None,
             resource_jobs: vec![],
             fleet_links: vec![],
             remote_controls: vec![],
@@ -6211,6 +6214,7 @@ mod tests {
         cockpit.connected = true;
         cockpit.pilot = "pilot".into();
         cockpit.snapshot = Some(Snapshot {
+            exterior: None,
             resource_jobs: vec![],
             fleet_links: vec![],
             remote_controls: vec![],

@@ -303,7 +303,7 @@ impl Exterior {
                 }
             },
             Err(error) => {
-                self.message = format!("Live apply rejected: {error}. Local edits and the accepted live definition were kept.");
+                self.message = format!("Live apply was not confirmed: {error}. Local edits and the accepted live definition were kept.");
             }
         }
     }

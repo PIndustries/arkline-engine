@@ -231,6 +231,7 @@ mod tests {
             protocol_version: PROTOCOL_VERSION,
             entries: vec![],
             snapshot: Snapshot {
+                exterior: None,
                 resource_jobs: vec![],
                 fleet_links: vec![],
                 remote_controls: vec![],
