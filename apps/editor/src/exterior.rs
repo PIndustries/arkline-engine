@@ -220,18 +220,12 @@ impl Exterior {
 
     fn observe_live(&mut self, state: ExteriorWorldState) {
         if let Err(error) = state.definition.document.validate() {
-            let unconfirmed = self.pending_live.is_some() || self.awaiting_definition.is_some();
             self.live = None;
             self.based_on_revision = None;
             self.pending_live = None;
             self.awaiting_definition = None;
             self.message = format!(
-                "Exterior authority definition is unsupported or invalid: {error}. Live controls are disabled; project draft and saved state were kept. {}No exterior edit will replay.",
-                if unconfirmed {
-                    "The pending exterior edit's outcome is unknown; inspect accepted state before retrying. "
-                } else {
-                    ""
-                }
+                "Exterior authority definition is unsupported or invalid: {error}. Live controls are disabled; project draft and saved state were kept. Any pending exterior edit's outcome is unknown; inspect accepted state before retrying. No exterior edit will replay."
             );
             return;
         }
@@ -916,6 +910,13 @@ mod tests {
             assert!(panel.pending_live.is_none());
             assert!(panel.awaiting_definition.is_none());
             assert!(panel.message.contains("unsupported or invalid"));
+            assert!(panel.message.contains("outcome is unknown"));
+            assert!(panel.message.contains("No exterior edit will replay"));
+            // The visible panel polls again after the editor's background poll.
+            // Repeated unsupported snapshots must retain outcome uncertainty.
+            let mut repeated = original.clone();
+            repeated.schema_version = 2;
+            panel.observe_live(state(5, repeated));
             assert!(panel.message.contains("outcome is unknown"));
             assert!(panel.message.contains("No exterior edit will replay"));
             panel.load_live_draft();
