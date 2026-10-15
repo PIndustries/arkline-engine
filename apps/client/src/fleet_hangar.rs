@@ -45,7 +45,11 @@ pub(super) fn visible(fleet: &FleetView, eye: Vec3) -> Vec<&HangarBerth> {
     berths.truncate(16);
     berths
 }
+#[cfg(test)]
 pub(super) fn parts(fleet: &FleetView, eye: Vec3) -> Vec<ModelPart> {
+    parts_except_hulls(fleet, eye, &[])
+}
+pub(super) fn parts_except_hulls(fleet: &FleetView, eye: Vec3, hidden: &[&str]) -> Vec<ModelPart> {
     let mut p = Parts(Vec::new());
     let l = fleet.layout.half_length as f32;
     let w = fleet
@@ -155,7 +159,9 @@ pub(super) fn parts(fleet: &FleetView, eye: Vec3) -> Vec<ModelPart> {
             0.5,
         );
         let t = hull_transform(b);
-        p.0.extend(hull_parts(b));
+        if !hidden.contains(&b.id.as_str()) {
+            p.0.extend(hull_parts(b));
+        }
         for slot in 0..2 {
             p.0.extend(
                 turret_parts(b.ship_class, Quat::IDENTITY, slot)

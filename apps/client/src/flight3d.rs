@@ -27,6 +27,11 @@ pub mod imported_asset;
 #[path = "ship_asset.rs"]
 mod ship_asset;
 
+#[cfg(all(test, target_os = "linux"))]
+#[path = "exterior_gpu_tests.rs"]
+mod exterior_gpu_tests;
+#[path = "exterior_visuals.rs"]
+mod exterior_visuals;
 #[path = "local_lighting.rs"]
 mod local_lighting;
 
@@ -777,6 +782,7 @@ impl FlightView {
             Ok(renderer) => {
                 let renderer = renderer.clone();
                 let frame = Frame {
+                    exterior: snapshot.exterior.clone().map(Arc::new),
                     lighting_quality: self.lighting_quality,
                     cockpit_vp,
                     snapshot_time: snapshot.server_time_ms,
@@ -1659,6 +1665,7 @@ impl FlightView {
 }
 #[derive(Clone)]
 struct Frame {
+    exterior: Option<Arc<arkline_protocol::ExteriorWorldState>>,
     lighting_quality: super::lighting_settings::LightingQuality,
     cockpit_vp: Mat4,
     snapshot_time: u64,
@@ -1913,6 +1920,7 @@ struct Uniforms {
     color: Option<glow::UniformLocation>,
     emission: Option<glow::UniformLocation>,
     emissive_color: Option<glow::UniformLocation>,
+    emission_power: Option<glow::UniformLocation>,
     vp: Option<glow::UniformLocation>,
     eye: Option<glow::UniformLocation>,
     material: Option<glow::UniformLocation>,
@@ -1937,6 +1945,7 @@ impl Uniforms {
             color: gl.get_uniform_location(program, "base_color"),
             emission: gl.get_uniform_location(program, "emission"),
             emissive_color: gl.get_uniform_location(program, "emissive_color"),
+            emission_power: gl.get_uniform_location(program, "emission_power"),
             vp: gl.get_uniform_location(program, "view_projection"),
             eye: gl.get_uniform_location(program, "eye"),
             material: gl.get_uniform_location(program, "material_kind"),
@@ -2050,6 +2059,8 @@ pub struct DebugRenderMetrics {
     pub wireframe_draw_calls: u64,
 }
 struct Renderer {
+    exterior_emission: std::cell::Cell<exterior_visuals::EmissionPower>,
+    exterior_cache: Option<(Option<Arc<arkline_protocol::ExteriorWorldState>>, bool)>,
     material_preview: Option<crate::EmbeddedMaterialPreview>,
     spatial_material: MaterialProgramState,
     spatial_uniforms: Option<SpatialMaterialUniforms>,
@@ -2138,6 +2149,8 @@ impl Renderer {
         gl.bind_vertex_array(None);
         let shadow_fallback = sun_shadows::fallback(&gl)?;
         Ok(Self {
+            exterior_emission: Default::default(),
+            exterior_cache: None,
             gl,
             program,
             background,
@@ -2272,6 +2285,10 @@ impl Renderer {
             params[3],
         );
         let gl = &self.gl;
+        gl.uniform_1_f32(
+            self.uniforms.emission_power.as_ref(),
+            self.exterior_emission.get().for_mesh(mesh),
+        );
         if let Some(uniforms) = &self.spatial_uniforms {
             uniforms.set_enabled(gl, graph_enabled);
         }
@@ -2351,6 +2368,7 @@ impl Renderer {
     ) {
         // Must precede feed_due: paused feeds also need the newly installed pixels.
         self.prepare_spatial_material();
+        self.prepare_exterior(frame);
         let gl = self.gl.clone();
         let viewport = info.viewport_in_pixels();
         let (width, height) = feed_resolution(viewport.width_px, viewport.height_px);
@@ -2708,10 +2726,14 @@ impl Renderer {
                 ship_orientation_at(pilot, frame.now),
             );
             if !frame.cockpit || !own {
+                let exterior = exterior_visuals::for_pilot(frame, pilot);
+                self.exterior_emission
+                    .set(exterior.map_or_else(Default::default, |b| b.emission_power()));
                 for &(mesh, model, color, emission) in cached_ship_parts(pilot.ship_class) {
                     self.draw_material(mesh, ship * model, color, emission, Material::BareMetal);
                 }
             }
+            self.exterior_emission.set(Default::default());
             for module_id in 0..2 {
                 if let Some(state) = self.turrets.get(&(pilot.name.clone(), module_id)) {
                     for (mesh, model, color, emission) in
@@ -4950,7 +4972,7 @@ const AUTHORED_MATERIAL_FUNCTION: &str = "struct ArkSurface{vec3 base_color;floa
 const FRAGMENT_BODY: &str = r#"
 in vec3 world;in vec3 surface_normal;in vec3 local_position;
 uniform int ark_graph_enabled;uniform vec4 material_params;uniform float hull_surface;uniform float station_lighting;uniform float environment_atmosphere;uniform vec3 environment_up;
-uniform vec3 planet_center;uniform vec3 base_color;uniform vec3 eye;uniform float emission;uniform vec3 emissive_color;uniform int material_kind;out vec4 color;
+uniform vec3 planet_center;uniform vec3 base_color;uniform vec3 eye;uniform float emission;uniform float emission_power;uniform vec3 emissive_color;uniform int material_kind;out vec4 color;
 float ark_terrain(vec3 p){return ark_noise3(p)*0.53+ark_noise3(p*2.07+13.8)*0.27+ark_noise3(p*4.13-7.1)*0.13+ark_noise3(p*8.41+29.4)*0.07;}
 void main(){vec3 n=normalize(surface_normal);if(!gl_FrontFacing)n=-n;vec3 l=normalize(vec3(-0.5,0.8,0.65));vec3 v=normalize(eye-world);
 float diffuse=max(dot(n,l),0.0);float facing=max(dot(n,v),0.0);float rim=pow(1.0-facing,3.0);
@@ -4996,7 +5018,7 @@ if(material_kind==1 || material_kind==2){
         lit+=ark_environment(n,v,albedo,roughness,metallic,environment_atmosphere,environment_up);
     }
     lit+=ark_local_lighting(world,n,v,albedo,roughness,metallic);
-    lit+=emitted;
+    lit+=emitted*emission_power;
 }
 color=vec4(ark_display(lit),1.0);}
 "#;
@@ -5030,6 +5052,7 @@ mod tests {
     fn frame_for_scene_clone_test() -> Frame {
         let vp = Mat4::IDENTITY;
         Frame {
+            exterior: None,
             lighting_quality: Default::default(),
             cockpit_vp: vp,
             snapshot_time: 1000,
@@ -5319,6 +5342,7 @@ mod tests {
             let view = Mat4::look_at_rh(Vec3::ZERO, Vec3::X, Vec3::Y);
             let vp = Mat4::perspective_rh_gl(1.05, 1., 0.002, 1200.) * view;
             let mut frame = Frame {
+                exterior: None,
                 lighting_quality: Default::default(),
                 cockpit_vp: vp,
                 snapshot_time: 1000,
@@ -6150,7 +6174,13 @@ mod tests {
             }
             std::hint::black_box(mining_impact(source, &rock, space, 0));
         }
-        eprintln!("CPU render preparation500 iterations: reconstructed uncached {:?}; cached {:?}. Station draws {} -> {}",uncached,start.elapsed(),station_parts(space).len(),batches.len());
+        eprintln!(
+            "CPU render preparation500 iterations: reconstructed uncached {:?}; cached {:?}. Station draws {} -> {}",
+            uncached,
+            start.elapsed(),
+            station_parts(space).len(),
+            batches.len()
+        );
     }
     #[test]
     fn station_batches_preserve_bounds_vertices_and_reduce_draw_calls() {
@@ -6261,7 +6291,15 @@ mod tests {
         for _ in 0..100_000 {
             std::hint::black_box(pioneer_asset().unwrap());
         }
-        eprintln!("Pioneer asset: bytes={}, triangles={}, draw_calls={}, decode_once_us={}, cached_100000_accesses_us={}, debug_assertions={}", bytes.len(), parsed.iter().map(|p|p.vertices.len()/3).sum::<usize>(), cached.len(), decode.as_micros(), start.elapsed().as_micros(), cfg!(debug_assertions));
+        eprintln!(
+            "Pioneer asset: bytes={}, triangles={}, draw_calls={}, decode_once_us={}, cached_100000_accesses_us={}, debug_assertions={}",
+            bytes.len(),
+            parsed.iter().map(|p| p.vertices.len() / 3).sum::<usize>(),
+            cached.len(),
+            decode.as_micros(),
+            start.elapsed().as_micros(),
+            cfg!(debug_assertions)
+        );
     }
 
     #[test]
@@ -6300,10 +6338,11 @@ mod tests {
                     .map(area)
                     .sum();
                 assert!(luminous < total * 0.12, "Pioneer luminous surface budget");
-                assert!(primitives.iter().all(|p| p
-                    .vertices
-                    .iter()
-                    .all(|v| v.p.is_finite() && v.n.is_finite())));
+                assert!(primitives.iter().all(|p| {
+                    p.vertices
+                        .iter()
+                        .all(|v| v.p.is_finite() && v.n.is_finite())
+                }));
                 continue;
             }
             assert!(

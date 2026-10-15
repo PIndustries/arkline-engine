@@ -182,6 +182,8 @@ impl HangarView {
         live: bool,
         fleet: Option<&arkline_protocol::HangarView>,
         room: Option<&arkline_protocol::PioneerRoomState>,
+        exterior: Option<&arkline_protocol::ExteriorWorldState>,
+        server_time_ms: u64,
     ) -> Option<HangarAction> {
         let (rect, response) =
             ui.allocate_exact_size(ui.available_size(), egui::Sense::click_and_drag());
@@ -318,10 +320,28 @@ impl HangarView {
         } else {
             None
         };
+        let mut exterior_instances = Vec::new();
         let mut parts = if interior {
             pioneer_interior::state_parts(interior_deck, room)
         } else if let Some(fleet) = fleet {
-            let mut p = fleet_hangar::parts(fleet, eye);
+            let bindings: Vec<_> = fleet_hangar::visible(fleet, eye)
+                .into_iter()
+                .filter_map(|berth| {
+                    exterior_visuals::for_vessel(exterior, &berth.id, server_time_ms, live)
+                        .map(|binding| (berth, binding))
+                })
+                .collect();
+            let hidden: Vec<_> = bindings
+                .iter()
+                .map(|(berth, _)| berth.id.as_str())
+                .collect();
+            let mut p = fleet_hangar::parts_except_hulls(fleet, eye, &hidden);
+            for (berth, binding) in bindings {
+                exterior_instances.push(binding.instance(
+                    fleet_hangar::hull_transform(berth),
+                    fleet_hangar::hull_parts(berth).collect(),
+                ));
+            }
             let t = Mat4::from_translation(fleet_hangar::quarters_offset());
             p.extend(
                 quarters::room_parts(ShipClass::Pioneer, now)
@@ -331,6 +351,17 @@ impl HangarView {
             p
         } else {
             let mut p = bay_parts(pilot.ship_class);
+            if let Some(binding) =
+                exterior_visuals::for_pilot_state(exterior, pilot, server_time_ms, live)
+            {
+                p.retain(|(mesh, _, _, _)| embedded_primitive(*mesh).is_none());
+                let pose = Mat4::from_scale_rotation_translation(
+                    Vec3::splat(100.),
+                    Quat::IDENTITY,
+                    Vec3::from_array(layout.ship_center.map(|v| v as f32)),
+                );
+                exterior_instances.push(binding.instance(pose, bay_hull_parts(pilot.ship_class)));
+            }
             p.extend(quarters::room_parts(pilot.ship_class, now));
             p
         };
@@ -361,12 +392,14 @@ impl HangarView {
                 callback: Arc::new(egui_glow::CallbackFn::new(move |_, _| {
                     if let Ok(mut renderer) = renderer.lock() {
                         unsafe {
-                            paint_with_base(
+                            paint_with_lighting(
                                 &mut renderer,
                                 vp,
                                 eye,
                                 interior_base.as_ref().map(|parts| parts.as_slice()),
                                 &parts,
+                                true,
+                                &exterior_instances,
                             );
                         }
                     }
@@ -817,9 +850,10 @@ pub(super) unsafe fn paint_preview(
     parts: &[ModelPart],
     station_lighting: bool,
 ) {
-    paint_with_lighting(renderer, vp, eye, None, parts, station_lighting);
+    paint_with_lighting(renderer, vp, eye, None, parts, station_lighting, &[]);
 }
 
+#[cfg(all(test, target_os = "macos"))]
 unsafe fn paint_with_base(
     renderer: &mut Renderer,
     vp: Mat4,
@@ -827,7 +861,7 @@ unsafe fn paint_with_base(
     base: Option<&[ModelPart]>,
     dynamic: &[ModelPart],
 ) {
-    paint_with_lighting(renderer, vp, eye, base, dynamic, true);
+    paint_with_lighting(renderer, vp, eye, base, dynamic, true, &[]);
 }
 unsafe fn paint_with_lighting(
     renderer: &mut Renderer,
@@ -836,6 +870,7 @@ unsafe fn paint_with_lighting(
     base: Option<&[ModelPart]>,
     dynamic: &[ModelPart],
     station_lighting: bool,
+    exterior: &[exterior_visuals::Instance],
 ) {
     renderer.prepare_spatial_material();
     #[cfg(not(target_arch = "wasm32"))]
@@ -873,7 +908,30 @@ unsafe fn paint_with_lighting(
             .total_cmp(&b.0.distance_squared(eye))
     });
     lights.truncate(8);
-    renderer.local_lights.upload_station(gl, &lights);
+    if exterior.is_empty() {
+        renderer.local_lights.upload_station(gl, &lights);
+    } else {
+        let mut combined: Vec<_> = lights
+            .into_iter()
+            .map(|(position, color)| local_lighting::Light {
+                position,
+                range: 30.,
+                color,
+                power: 2.5,
+            })
+            .chain(
+                exterior
+                    .iter()
+                    .flat_map(|instance| instance.lights.iter().copied()),
+            )
+            .collect();
+        combined.sort_by(|a, b| {
+            (a.position.distance(eye) - a.range)
+                .max(0.)
+                .total_cmp(&(b.position.distance(eye) - b.range).max(0.))
+        });
+        renderer.local_lights.upload_lights(gl, combined);
+    }
     let shadow_texture = renderer.disable_sun_shadow();
     gl.uniform_1_f32(renderer.uniforms.environment_atmosphere.as_ref(), 0.0);
     gl.uniform_3_f32(renderer.uniforms.environment_up.as_ref(), 0.0, 1.0, 0.0);
@@ -882,6 +940,16 @@ unsafe fn paint_with_lighting(
     gl.uniform_1_i32(renderer.uniforms.material.as_ref(), 0);
     for &(mesh, model, color, emission) in base.into_iter().flatten().chain(dynamic.iter()) {
         renderer.draw(mesh, model, color, emission);
+    }
+    for instance in exterior {
+        renderer.exterior_emission.set(instance.emission);
+        for &(mesh, model, color, emission) in &instance.hull {
+            renderer.draw(mesh, model, color, emission);
+        }
+        renderer.exterior_emission.set(Default::default());
+        for &(mesh, model, color, emission) in &instance.fixtures {
+            renderer.draw(mesh, model, color, emission);
+        }
     }
     renderer.restore_shadow_texture(shadow_texture);
 }

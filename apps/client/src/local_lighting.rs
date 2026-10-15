@@ -3,11 +3,11 @@ use super::*;
 
 pub(super) const MAX_LIGHTS: usize = 8;
 #[derive(Clone, Copy, Debug, Default)]
-struct Light {
-    position: Vec3,
-    range: f32,
-    color: Vec3,
-    power: f32,
+pub(super) struct Light {
+    pub(super) position: Vec3,
+    pub(super) range: f32,
+    pub(super) color: Vec3,
+    pub(super) power: f32,
 }
 #[derive(Default)]
 struct Lights {
@@ -93,6 +93,11 @@ fn collect(
         }
         let rotation = ship_orientation_at(pilot, frame.now);
         let pose = Mat4::from_rotation_translation(rotation, position);
+        if let Some(binding) = exterior_visuals::for_pilot(frame, pilot) {
+            for light in binding.lights(pose) {
+                lights.offer(light, frame.eye, budget);
+            }
+        }
         let acceleration = confirmed_body_acceleration(pilot, frame.now);
         for axis in 0..3 {
             let component = acceleration[axis];
@@ -216,14 +221,40 @@ impl Uniforms {
         }
     }
     pub(super) unsafe fn upload_station(&self, gl: &glow::Context, lights: &[(Vec3, Vec3)]) {
-        let mut positions = [0.0; MAX_LIGHTS * 4];
-        let mut colors = [0.0; MAX_LIGHTS * 4];
-        for (i, (position, color)) in lights.iter().take(MAX_LIGHTS).enumerate() {
-            positions[i * 4..i * 4 + 4]
-                .copy_from_slice(&[position.x, position.y, position.z, 30.0]);
-            colors[i * 4..i * 4 + 4].copy_from_slice(&[color.x, color.y, color.z, 2.5]);
+        self.upload_lights(
+            gl,
+            lights.iter().map(|(position, color)| Light {
+                position: *position,
+                range: 30.,
+                color: *color,
+                power: 2.5,
+            }),
+        );
+    }
+    pub(super) unsafe fn upload_lights(
+        &self,
+        gl: &glow::Context,
+        lights: impl IntoIterator<Item = Light>,
+    ) {
+        let mut positions = [0.; MAX_LIGHTS * 4];
+        let mut colors = [0.; MAX_LIGHTS * 4];
+        let mut count = 0;
+        for (i, light) in lights.into_iter().take(MAX_LIGHTS).enumerate() {
+            positions[i * 4..i * 4 + 4].copy_from_slice(&[
+                light.position.x,
+                light.position.y,
+                light.position.z,
+                light.range,
+            ]);
+            colors[i * 4..i * 4 + 4].copy_from_slice(&[
+                light.color.x,
+                light.color.y,
+                light.color.z,
+                light.power,
+            ]);
+            count += 1;
         }
-        gl.uniform_1_i32(self.count.as_ref(), lights.len().min(MAX_LIGHTS) as i32);
+        gl.uniform_1_i32(self.count.as_ref(), count);
         gl.uniform_4_f32_slice(self.positions.as_ref(), &positions);
         gl.uniform_4_f32_slice(self.colors.as_ref(), &colors);
     }
@@ -266,6 +297,7 @@ mod tests {
     use super::*;
     fn frame() -> Frame {
         Frame {
+            exterior: None,
             lighting_quality: Default::default(),
             cockpit_vp: Mat4::IDENTITY,
             snapshot_time: 1000,
@@ -476,9 +508,11 @@ fn native_local_light_has_bounded_illumination() {
             .cast()
         });
         // Substitute unit BRDF to measure only this module's radiance/window.
-        let fragment=concat!("#version 150\nvec3 ark_brdf(vec3 n,vec3 v,vec3 l,vec3 a,float r,float m){return vec3(1.0);}\n",
+        let fragment = concat!(
+            "#version 150\nvec3 ark_brdf(vec3 n,vec3 v,vec3 l,vec3 a,float r,float m){return vec3(1.0);}\n",
             include_str!("shaders/local_lighting.glsl"),
-            "\nuniform vec3 sample_world;out vec4 color;void main(){color=vec4(ark_local_lighting(sample_world,vec3(0,0,1),vec3(0,0,1),vec3(1),0.5,0.0),1);}");
+            "\nuniform vec3 sample_world;out vec4 color;void main(){color=vec4(ark_local_lighting(sample_world,vec3(0,0,1),vec3(0,0,1),vec3(1),0.5,0.0),1);}"
+        );
         let program = compile(&gl, BACK_VERTEX, fragment).unwrap();
         let target = CachedFeed::create(&gl, 123, 8, 8).unwrap();
         gl.bind_framebuffer(glow::FRAMEBUFFER, Some(target.framebuffer));

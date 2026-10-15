@@ -266,6 +266,7 @@ fn native_spatial_material_pioneer_section_and_paused_feeds() {
         let flight_vp = Mat4::orthographic_rh_gl(-0.42, 0.42, -0.21, 0.21, 0.001, 2.)
             * Mat4::look_at_rh(flight_eye, Vec3::new(-0.1, 0., 0.), Vec3::Y);
         let frame = Frame {
+            exterior: None,
             lighting_quality: Default::default(),
             cockpit_vp: flight_vp,
             snapshot_time: 1000,
@@ -356,7 +357,10 @@ fn native_spatial_material_pioneer_section_and_paused_feeds() {
         );
         assert_eq!(renderer.meshes.len(), mesh_count);
         assert_eq!(gl.get_error(), glow::NO_ERROR);
-        eprintln!("Pioneer section: {section_changed}/73728 changed pixels; {outside} outside samples unchanged; {inside_changed} inside samples changed; paused feed {} pixels changed", changed(&feed_before, &feed_after));
+        eprintln!(
+            "Pioneer section: {section_changed}/73728 changed pixels; {outside} outside samples unchanged; {inside_changed} inside samples changed; paused feed {} pixels changed",
+            changed(&feed_before, &feed_after)
+        );
         if let Some(directory) = &directory {
             std::fs::write(directory.join("receipt.json"), serde_json::to_vec_pretty(&serde_json::json!({"build":include_str!("../../../BUILD_VERSION").trim(),"asset_sha256":pioneer_asset_sha256(),"vendor":gl.get_parameter_string(glow::VENDOR),"renderer":gl.get_parameter_string(glow::RENDERER),"gl_version":gl.get_parameter_string(glow::VERSION),"section_changed_pixels":section_changed,"outside_unchanged_samples":outside,"inside_changed_samples":inside_changed,"paused_feed_changed_pixels":changed(&feed_before,&feed_after),"compilation_count":compile_count,"limitations":["offscreen native GPU acceptance; no operating-system UI journey","matched mesh preview uses existing lighting; no released build claim","WebGL execution requires separate browser evidence"]})).unwrap()).unwrap();
         }

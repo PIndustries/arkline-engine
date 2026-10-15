@@ -204,12 +204,14 @@ impl Renderer {
             if pos.distance(frame.eye) > 1100.0 || (frame.cockpit && pilot.name == frame.own) {
                 continue;
             }
-            self.navigation_lights(
-                transform(pos, Vec3::ONE, ship_orientation_at(pilot, frame.now)),
-                pilot.ship_class,
-                frame.now,
-                0,
-            );
+            let pose = transform(pos, Vec3::ONE, ship_orientation_at(pilot, frame.now));
+            if let Some(binding) = exterior_visuals::for_pilot(frame, pilot) {
+                for (mesh, model, color, emission) in binding.parts(pose) {
+                    self.draw(mesh, model, color, emission);
+                }
+            } else {
+                self.navigation_lights(pose, pilot.ship_class, frame.now, 0);
+            }
         }
         for prop in &frame.scene.surface_props {
             if frame.space.scene(prop.position).distance(frame.eye) > 1100.0 {
