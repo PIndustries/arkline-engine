@@ -141,6 +141,109 @@ fn changed(a: &[u8], b: &[u8]) -> usize {
         .filter(|(a, b)| a != b)
         .count()
 }
+unsafe fn depths(gl: &glow::Context) -> Vec<f32> {
+    let mut bytes = vec![0; 960 * 640 * 4];
+    gl.read_pixels(
+        0,
+        0,
+        960,
+        640,
+        glow::DEPTH_COMPONENT,
+        glow::FLOAT,
+        glow::PixelPackData::Slice(Some(&mut bytes)),
+    );
+    assert_eq!(gl.get_error(), glow::NO_ERROR);
+    bytes
+        .chunks_exact(4)
+        .map(|p| f32::from_ne_bytes(p.try_into().unwrap()))
+        .collect()
+}
+fn receiver_changed(frame: &Frame, depth: &[f32], a: &[u8], b: &[u8]) -> usize {
+    // Reconstruct the actual visible surface from the engine's depth buffer.
+    // The crate lies beyond X=-38m, outside the hull's -36m aft extent.
+    let inverse = frame.vp.inverse();
+    a.chunks_exact(4)
+        .zip(b.chunks_exact(4))
+        .enumerate()
+        .filter(|(i, (a, b))| {
+            if a == b {
+                return false;
+            }
+            let point = inverse
+                * glam::Vec4::new(
+                    ((*i % 960) as f32 + 0.5) / 480. - 1.,
+                    ((*i / 960) as f32 + 0.5) / 320. - 1.,
+                    depth[*i] * 2. - 1.,
+                    1.,
+                );
+            let point = point.truncate() / point.w;
+            point.cmpge(Vec3::new(-0.4601, -0.0751, -0.1651)).all()
+                && point.cmple(Vec3::new(-0.3799, 0.0051, -0.0849)).all()
+        })
+        .count()
+}
+
+unsafe fn assert_post_graph_power_gate(gl: &glow::Context, renderer: &Renderer, frame: &Frame) {
+    // Exercise the integrated mesh shader with a graph that explicitly emits.
+    // Current editor bindings remain restricted to armor material slot zero.
+    let program = compile(gl, VERTEX, &format!("{}{}{}", mesh_fragment_prefix(),
+        "struct ArkSurface{vec3 base_color;float roughness;float metallic;vec3 emission;};ArkSurface ark_graph_surface(vec3 p,ArkSurface s){s.emission=vec3(4.0);return s;}", FRAGMENT_BODY)).unwrap();
+    gl.use_program(Some(program));
+    gl.uniform_matrix_4_f32_slice(
+        gl.get_uniform_location(program, "view_projection").as_ref(),
+        false,
+        &frame.vp.to_cols_array(),
+    );
+    gl.uniform_matrix_4_f32_slice(
+        gl.get_uniform_location(program, "model").as_ref(),
+        false,
+        &Mat4::IDENTITY.to_cols_array(),
+    );
+    gl.uniform_3_f32(
+        gl.get_uniform_location(program, "eye").as_ref(),
+        frame.eye.x,
+        frame.eye.y,
+        frame.eye.z,
+    );
+    gl.uniform_4_f32(
+        gl.get_uniform_location(program, "material_params").as_ref(),
+        0.5,
+        0.,
+        0.,
+        0.,
+    );
+    gl.bind_vertex_array(Some(renderer.meshes[14].vao));
+    gl.disable(glow::DEPTH_TEST);
+    let render = |power, graph| {
+        gl.clear_color(0., 0., 0., 1.);
+        gl.clear(glow::COLOR_BUFFER_BIT);
+        gl.uniform_1_f32(
+            gl.get_uniform_location(program, "emission_power").as_ref(),
+            power,
+        );
+        gl.uniform_1_i32(
+            gl.get_uniform_location(program, "ark_graph_enabled")
+                .as_ref(),
+            graph,
+        );
+        gl.draw_arrays(glow::TRIANGLES, 0, renderer.meshes[14].count);
+        pixels(gl)
+    };
+    let powered = render(1., 1);
+    let off = render(0., 1);
+    let authored_dark = render(1., 0);
+    assert!(
+        changed(&powered, &off) > 16,
+        "power gates graph-authored emission"
+    );
+    assert_eq!(
+        off, authored_dark,
+        "OFF must suppress emission after graph evaluation"
+    );
+    gl.bind_vertex_array(None);
+    gl.use_program(None);
+    gl.delete_program(program);
+}
 fn save(directory: &Option<std::path::PathBuf>, name: &str, pixels: &[u8]) {
     if let Some(directory) = directory {
         let flipped: Vec<_> = pixels
@@ -290,15 +393,21 @@ fn native_powered_exterior_frame_capture() {
         );
         // Same source pixels and geometry; only local illumination is removed.
         let lit = step100;
+        let lit_depth = depths(&gl);
         for fixture in &mut state(&mut frame).definition.document.fixtures {
             fixture.light_intensity = 0.;
         }
         let unlit = render(&mut renderer, &frame);
         save(&directory, "pioneer-exterior-emission-only.png", &unlit);
         let illumination_pixels = changed(&lit, &unlit);
+        let receiver_pixels = receiver_changed(&frame, &lit_depth, &lit, &unlit);
         assert!(
             illumination_pixels > 32,
             "powered fixtures must illuminate non-emissive receiving surfaces"
+        );
+        assert!(
+            receiver_pixels > 8,
+            "the separate non-emissive receiver must be illuminated"
         );
         // A paused cached feed must accept new state without requiring clock advancement.
         let info = egui::PaintCallbackInfo {
@@ -325,6 +434,7 @@ fn native_powered_exterior_frame_capture() {
         let mut observer = Renderer::new(gl.clone()).unwrap();
         let observer_pixels = render(&mut observer, &frame);
         assert_eq!(render(&mut renderer, &frame), observer_pixels);
+        assert_post_graph_power_gate(&gl, &renderer, &frame);
         if let Some(directory) = directory {
             std::fs::write(directory.join("receipt.json"),serde_json::to_vec_pretty(&serde_json::json!({
                 "build":include_str!("../../../BUILD_VERSION").trim(),"asset_sha256":pioneer_asset_sha256(),
@@ -332,6 +442,7 @@ fn native_powered_exterior_frame_capture() {
                 "gl_version":gl.get_parameter_string(glow::VERSION),"viewport":[960,640],
                 "off_idle_changed_pixels":changed(&off,&idle),"idle_active_changed_pixels":changed(&idle,&active),
                 "illumination_changed_pixels":illumination_pixels,"dynamic_turret_count":renderer.turrets.len(),
+                "receiver_changed_pixels":receiver_pixels,"post_graph_off_gate":true,
                 "limitations":["actual engine offscreen EGL capture; no OS interaction or TCP two-client journey", "diagnostic receiver crate is an authoritative scene fixture", "no model adoption or release publication"]
             })).unwrap()).unwrap();
         }
