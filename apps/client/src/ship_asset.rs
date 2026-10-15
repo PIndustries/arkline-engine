@@ -222,6 +222,10 @@ mod tests {
             .expect("set ARKLINE_PIONEER_CANDIDATE to the reviewed GLB");
         let expected = std::env::var("ARKLINE_PIONEER_CANDIDATE_SHA256")
             .expect("set ARKLINE_PIONEER_CANDIDATE_SHA256 from the reviewed receipt");
+        let expected_triangles: usize = std::env::var("ARKLINE_PIONEER_CANDIDATE_TRIANGLES")
+            .expect("set ARKLINE_PIONEER_CANDIDATE_TRIANGLES from the reviewed receipt")
+            .parse()
+            .expect("the reviewed triangle count must be an integer");
         let bytes = std::fs::read(path).unwrap();
         let actual = hex::encode(Sha256::digest(&bytes));
         assert_eq!(
@@ -261,7 +265,10 @@ mod tests {
             .iter()
             .map(|p| p.vertices.len() / 3)
             .sum::<usize>();
-        assert!((70_000..100_000).contains(&triangles));
+        assert_eq!(
+            triangles, expected_triangles,
+            "reviewed receipt triangle count"
+        );
         eprintln!(
             "PIONEER_CANDIDATE {}",
             serde_json::json!({
