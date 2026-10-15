@@ -1,0 +1,14 @@
+Arkline build 26.10.15.7041
+   Compiling arkline-protocol v0.1.0 (/workspace/arkline-engine/crates/arkline-protocol)
+   Compiling arkline-verifier v0.1.0 (/workspace/arkline-engine/apps/verifier)
+   Compiling arkline-server v0.1.0 (/workspace/arkline-engine/apps/server)
+   Compiling arkline-client v0.1.0 (/workspace/arkline-engine/apps/client)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 12.45s
+     Running unittests src/lib.rs (target/debug/deps/arkline_client-d922b353129effd7)
+
+running 1 test
+PIONEER_CANDIDATE {"bytes":8700948,"decoder":"arkline-client ship_asset::decode","material_batches":9,"max_body_m":[36.0,9.0,19.0],"min_body_m":[-36.0,-9.0,-19.0],"sha256":"8125644f007537437942d34169e527c08ddd2dfaed575c874e2263ff2b7cb123","triangles":103466}
+test flight3d::ship_asset::tests::reviewed_pioneer_candidate_decodes_at_exact_hash ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 268 filtered out; finished in 0.50s
+

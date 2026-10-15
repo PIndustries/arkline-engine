@@ -1,7 +1,7 @@
 {
   "schema": "arkline.pioneer-model-adoption/v1",
   "date_utc": "2026-10-15",
-  "status": "Study05 refined cloud preview adopted and actual-engine7040 captured; native application acceptance pending; not overallv05 completion",
+  "status": "Study05 refined source adopted, actual engine7040 and native7042 accepted; selected bow/service scope visually reviewed; overall v05 unfinished; draft unmerged",
   "claim": "https://github.com/PIndustries/arkline-engine/issues/10#issuecomment-6199911507",
   "prior_published_head": "2abbc22197b5530bd11e76bf665b828a4033db27",
   "prior_canonical_glb_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
@@ -23,7 +23,7 @@
   "export_receipt": {
     "path": "pioneer-export.json",
     "sha256": "fadece504f99169f645559f5c903636b6555f8d8b3f3c3b856cc267b639d5429",
-    "source_copy_note": "Canonicalpioneer.blend is byte-identical to receiptselectedpioneer-study05.blend."
+    "source_copy_note": "Canonical pioneer.blend is byte-identical to receipt-selected pioneer-study05.blend."
   },
   "source_identity": "source-hash/exact-name snapshot mappings;35 prior lids/rails explicitly removed, retained material identities preserved; no durable cross-revision ID claim",
   "selected_scope": [
@@ -31,7 +31,7 @@
     "recessed service/work bays and stowed visual handling arm",
     "true recessed existing drive openings with counterbored flange joints"
   ],
-  "presentation": "Windows0.025 coolstate-driven output,glassopaquePBRmetallic.60/roughness.12; no fitted interior/transmission claim. Defaultload88W,pulse/drive/power semantics unchanged.",
+  "presentation": "Windows emission 0.025 with cool state-driven output; opaque PBR glass metallic 0.60/roughness 0.12. No fitted interior/transmission claim. Default load 88 W; pulse/drive/power semantics retained.",
   "compatibility": "Prior accepted-hash worlds refuse without rewriting state; old graphs retain hashes and require explicit replacement/rebinding. New preview project; no automatic migration.",
   "visual_gaps": [
     "broader side/collar and underside architecture still needs review againstv05",
@@ -44,9 +44,10 @@
     "receipt": "../../../docs/ships/pioneer/images/runtime-study05-20261015/refined/authority-receipt.json",
     "matched_before_build": "26.10.15.7036",
     "first_study05_build": "26.10.15.7038",
-    "changes_between_runs": "Sourcegeometry and declaredWindow tuning differ; cameras,renderer/sunlight,powerfixtureidentities,loads andperiods retained. Separate real disposable worlds; no fabricated flight/powerstate.",
+    "changes_between_runs": "Source geometry and declared Window tuning differ. Cameras, renderer/sunlight, fixture identities, loads and pulse periods are retained. Separate real disposable worlds; no fabricated flight/power state.",
     "native_build": "26.10.15.7042",
-    "native_source_commit": "c663a3bf9afd550495118e0d7f105f9c13a79b07"
+    "native_source_commit": "c663a3bf9afd550495118e0d7f105f9c13a79b07",
+    "native_receipt": "../../../docs/ships/pioneer/images/runtime-study05-20261015/native/native-receipt.json"
   },
   "normal_review": {
     "strict_same_winding_triangles": 103458,

@@ -1,0 +1,4 @@
+Arkline build 26.10.15.7045
+    Checking arkline-protocol v0.1.0 (/workspace/arkline-engine/crates/arkline-protocol)
+    Checking arkline-client v0.1.0 (/workspace/arkline-engine/apps/client)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.51s

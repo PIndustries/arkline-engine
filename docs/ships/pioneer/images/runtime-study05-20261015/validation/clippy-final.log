@@ -1,0 +1,8 @@
+Arkline build 26.10.15.7044
+    Checking arkline-protocol v0.1.0 (/workspace/arkline-engine/crates/arkline-protocol)
+    Checking arkline-verifier v0.1.0 (/workspace/arkline-engine/apps/verifier)
+    Checking arkline-server v0.1.0 (/workspace/arkline-engine/apps/server)
+    Checking arkline-cli v0.1.0 (/workspace/arkline-engine/apps/cli)
+    Checking arkline-client v0.1.0 (/workspace/arkline-engine/apps/client)
+    Checking arkline-editor v0.1.0 (/workspace/arkline-engine/apps/editor)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 11.57s

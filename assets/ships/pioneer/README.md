@@ -16,7 +16,7 @@ Select the saved `.blend` explicitly and provide a new output directory outside 
 
 ```sh
 python3 tools/art/export_pioneer.py \
-  --source assets/ships/pioneer/studies/pioneer-study.blend \
+  --source assets/ships/pioneer/pioneer.blend \
   --output-dir /absolute/new/pioneer-review \
   --degenerate-policy drop \
   --blender /path/to/blender-5.0.1
@@ -68,7 +68,7 @@ These exterior utility details remain visual assemblies. The connected room impl
 
 ## Canonical cloud adoption · Study05 · 2026-10-15
 
-Study05 preserves the 72×18×38 m XYZ envelope, existing dynamic turret/drive registrations and nine canonical material identities. The editable source SHA is `61eb70e1…`, with686 named parts. The refined runtime GLB is `8125644f…`,103,466 triangles. [Export receipt](pioneer-export.json), [adoption record](pioneer-adoption.json), [source-authoring record](studies/study05/study05.json) and [fixture provenance](exterior-mounts.json) retain exact source/recipe/part spans and assumptions. The canonical master is byte-identical to receipt-selected `pioneer-study05.blend`. Study04 and both first/refined Study05 sources remain in Git history.
+Study05 preserves the 72×18×38 m XYZ envelope, existing dynamic turret/drive registrations and nine canonical material identities. The editable source SHA is `61eb70e1…`, with 686 named parts. The refined runtime GLB is `8125644f…`, 103,466 triangles. [Export receipt](pioneer-export.json), [adoption record](pioneer-adoption.json), [source-authoring record](studies/study05/study05.json) and [fixture provenance](exterior-mounts.json) retain exact source/recipe/part spans and assumptions. The canonical master is byte-identical to receipt-selected `pioneer-study05.blend`. Study04 and both first/refined Study05 sources remain in Git history.
 
 Three separate beveled brow plates have actual joints and a recessed maintenance cover; cockpit panes sit in cut hull recesses with continuous gaskets and connected braces. The service roof has distinct access/exchanger/stowed-arm areas. Drive caps are actually opened, with counterbored flanges revealing the existing bells/throats. These are inferred static visual architecture: the service hatches and handling arm are not operable, and no pressure, structural, propulsion or fitted-interior claim follows.
 
