@@ -660,6 +660,48 @@ mod tests {
     }
 
     #[test]
+    fn selected_fixture_color_widget_preserves_draft_without_input() {
+        let project = Project::new();
+        let ctx = egui::Context::default();
+        let cc = eframe::CreationContext::_new_kittest(ctx.clone());
+        let mut client = EmbeddedClient::new(
+            &cc,
+            project.0.join(".arkline-studio"),
+            "ExteriorIdleColorPilot".into(),
+        );
+        let (mut panel, _results) = panel();
+        panel.selected = Some(panel.draft.fixtures[0].id.clone());
+        let original = panel.draft.clone();
+        for _ in 0..2 {
+            let _output = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(1500.0, 960.0),
+                    )),
+                    events: vec![],
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default()
+                        .show(ctx, |ui| panel.show(ui, &project.0, &mut client));
+                },
+            );
+        }
+        client.on_exit();
+        assert_eq!(
+            panel.draft.fixtures[0].color.map(f32::to_bits),
+            original.fixtures[0].color.map(f32::to_bits),
+            "merely displaying the selected fixture changed its authored RGB color: {:?} -> {:?}",
+            original.fixtures[0].color,
+            panel.draft.fixtures[0].color,
+        );
+        assert_eq!(panel.draft, original);
+        assert_eq!(panel.draft_revision, 0);
+        assert_eq!(panel.draft, panel.saved);
+    }
+
+    #[test]
     fn published_fixture_document_matches_runtime_default() {
         let document: ExteriorDefinition = serde_json::from_str(include_str!(
             "../../../assets/ships/pioneer/exterior-v1.json"
