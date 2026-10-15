@@ -292,6 +292,21 @@ pub fn default_pioneer_exterior() -> ExteriorDefinition {
 mod tests {
     use super::*;
     #[test]
+    fn historical_pioneer_exterior_hash_is_preserved_and_rejected_after_model_adoption() {
+        let historical_hash = "f8f8cc65772c678a46606c27abe205d62c4e6ab37c350f79a0f3a4cdc0c6f402";
+        let mut historical = default_pioneer_exterior();
+        historical.validate().unwrap();
+        assert_ne!(historical.hull_asset_sha256, historical_hash);
+        historical.hull_asset_sha256 = historical_hash.into();
+        let serialized = serde_json::to_vec(&historical).unwrap();
+        let restored: ExteriorDefinition = serde_json::from_slice(&serialized).unwrap();
+        assert_eq!(restored, historical);
+        assert_eq!(restored.hull_asset_sha256, historical_hash);
+        assert!(restored.validate().unwrap_err().contains("hull asset hash"));
+        assert_eq!(serde_json::to_vec(&restored).unwrap(), serialized);
+    }
+
+    #[test]
     fn definition_bounds_identity_hash_and_versions_are_enforced() {
         let d = default_pioneer_exterior();
         d.validate().unwrap();

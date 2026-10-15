@@ -730,6 +730,26 @@ pub fn body_box_mask(
 mod tests {
     use super::*;
     #[test]
+    fn historical_pioneer_hash_survives_roundtrip_and_lowering_after_model_adoption() {
+        let historical_hash = "f8f8cc65772c678a46606c27abe205d62c4e6ab37c350f79a0f3a4cdc0c6f402";
+        let current = MaterialGraphDocument::pioneer_default();
+        assert_ne!(current.binding.asset_sha256, historical_hash);
+        assert_eq!(current.binding.asset_sha256, PIONEER_MATERIAL_SHA256);
+
+        let mut historical = current;
+        historical.binding.asset_sha256 = historical_hash.into();
+        historical.validate().unwrap();
+        let serialized = serde_json::to_vec(&historical).unwrap();
+        let restored: MaterialGraphDocument = serde_json::from_slice(&serialized).unwrap();
+        assert_eq!(restored, historical);
+        assert_eq!(restored.binding.asset_sha256, historical_hash);
+        let lowered = crate::material_compile::lower_material(&restored).unwrap();
+        assert_eq!(lowered.binding, historical.binding);
+        assert_ne!(lowered.binding, AssetMaterialBinding::pioneer());
+        assert_eq!(serde_json::to_vec(&restored).unwrap(), serialized);
+    }
+
+    #[test]
     fn default_round_trip_and_fixed_binding() {
         let doc = MaterialGraphDocument::pioneer_default();
         doc.validate().unwrap();

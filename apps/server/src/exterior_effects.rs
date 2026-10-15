@@ -175,6 +175,110 @@ mod tests {
         .unwrap();
     }
     #[test]
+    fn historical_exterior_world_is_rejected_without_retargeting_persisted_state() {
+        let historical_hash = "f8f8cc65772c678a46606c27abe205d62c4e6ab37c350f79a0f3a4cdc0c6f402";
+        assert_ne!(PIONEER_MATERIAL_SHA256, historical_hash);
+        for editor_mode in [false, true] {
+            let directory = std::env::temp_dir().join(format!(
+                "arkline-old-exterior-{}-{}-{editor_mode}",
+                std::process::id(),
+                rand::random::<u64>()
+            ));
+            let database = directory.join("world.sqlite");
+            if editor_mode {
+                let mut editor = editor::EditorWorld::open(&directory).unwrap();
+                let mut session = None;
+                let response = editor.handle(
+                    &mut session,
+                    Request::Connect {
+                        supports_room_controls: true,
+                        supports_fleet_hangar: false,
+                        supports_pioneer_interior: true,
+                        protocol_version: PROTOCOL_VERSION,
+                        pilot: "HistoricalHash".into(),
+                        resume_token: None,
+                    },
+                );
+                assert!(response.ok, "{}", response.message);
+                editor.exterior_set_enabled(&mut session, false, 0).unwrap();
+                editor.step(50).unwrap();
+            } else {
+                let mut server = Server::open(&database).unwrap();
+                let now = now_ms();
+                let mut session = connect(&mut server, "HistoricalHash", now);
+                let response = server.handle_at(
+                    &mut session,
+                    Request::SetPioneerExterior {
+                        enabled: false,
+                        expected_revision: 0,
+                    },
+                    now,
+                );
+                assert!(response.ok, "{}", response.message);
+            }
+
+            let db = Connection::open(&database).unwrap();
+            let raw: String = db
+                .query_row("SELECT json FROM world WHERE id=1", [], |r| r.get(0))
+                .unwrap();
+            let mut historical: serde_json::Value = serde_json::from_str(&raw).unwrap();
+            historical["exterior_definition"]["document"]["hull_asset_sha256"] =
+                historical_hash.into();
+            historical["exterior_definition"]["revision"] = 7.into();
+            let before = historical.to_string();
+            db.execute("UPDATE world SET json=?1 WHERE id=1", [&before])
+                .unwrap();
+            let clock_before: Option<String> = editor_mode.then(|| {
+                db.query_row("SELECT time_ms FROM editor_clock WHERE id=1", [], |r| {
+                    r.get(0)
+                })
+                .unwrap()
+            });
+            drop(db);
+
+            let assets = directory.join("Assets");
+            std::fs::create_dir(&assets).unwrap();
+            let exterior_file = assets.join("Pioneer.exterior.json");
+            let exterior_bytes =
+                serde_json::to_vec(&historical["exterior_definition"]["document"]).unwrap();
+            std::fs::write(&exterior_file, &exterior_bytes).unwrap();
+            let surface_file = assets.join("Pioneer.surface.json");
+            let mut surface = MaterialGraphDocument::pioneer_default();
+            surface.binding.asset_sha256 = historical_hash.into();
+            let surface_bytes = serde_json::to_vec(&surface).unwrap();
+            std::fs::write(&surface_file, &surface_bytes).unwrap();
+
+            let error = if editor_mode {
+                editor::EditorWorld::open(&directory).err().expect(
+                    "old accepted exterior binding must not be retargeted by opening the editor",
+                )
+            } else {
+                Server::open(&database).err().expect(
+                    "old accepted exterior binding must not be retargeted by server startup",
+                )
+            };
+            assert!(error.to_string().contains("hull asset hash"), "{error}");
+            let db = Connection::open(&database).unwrap();
+            let after: String = db
+                .query_row("SELECT json FROM world WHERE id=1", [], |r| r.get(0))
+                .unwrap();
+            assert_eq!(after, before);
+            if let Some(clock_before) = clock_before {
+                let clock_after: String = db
+                    .query_row("SELECT time_ms FROM editor_clock WHERE id=1", [], |r| {
+                        r.get(0)
+                    })
+                    .unwrap();
+                assert_eq!(clock_after, clock_before);
+            }
+            assert_eq!(std::fs::read(&exterior_file).unwrap(), exterior_bytes);
+            assert_eq!(std::fs::read(&surface_file).unwrap(), surface_bytes);
+            drop(db);
+            std::fs::remove_dir_all(directory).unwrap();
+        }
+    }
+
+    #[test]
     fn legacy_defaults_on_and_only_owned_active_circuit_can_be_operated() {
         let mut s = Server::open(":memory:").unwrap();
         let mut a = connect(&mut s, "A", 0);
