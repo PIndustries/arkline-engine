@@ -11,6 +11,9 @@ use glam::{Mat4, Quat, Vec3};
 use glow::HasContext;
 use std::sync::{Arc, Mutex};
 
+#[path = "imported_asset.rs"]
+pub mod imported_asset;
+
 #[path = "ship_asset.rs"]
 mod ship_asset;
 

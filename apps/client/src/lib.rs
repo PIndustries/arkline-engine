@@ -1,5 +1,6 @@
 #[cfg(not(target_arch = "wasm32"))]
 pub use flight3d::asset_gallery::EmbeddedAssetGallery;
+pub use flight3d::imported_asset::{ImportReport, ImportedAssetPreview, ImportedGeometry};
 #[cfg(not(target_arch = "wasm32"))]
 pub use flight3d::DebugRenderMetrics;
 mod material_preview;
