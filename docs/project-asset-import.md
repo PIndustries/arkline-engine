@@ -23,7 +23,10 @@ renderer. It does not replace the live ship or create world entities.
 The initial asset slot keeps the same asset ID across replacements and increments
 its revision/hash. To replace it, inspect another GLB, review its changed geometry
 and accept/save it. **Cancel staged** discards a candidate without touching the
-accepted or saved revision. Saved source/license references belong to that accepted
+accepted or saved revision. Editing the path also discards the old candidate and
+invalidates its pending inspection result. Source/license text entered during a
+Reload survives that completion, while the saved geometry still loads normally.
+Saved source/license references belong to that accepted
 revision; editing candidate references alone does not change the saved record.
 
 ## Supported content

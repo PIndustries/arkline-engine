@@ -663,3 +663,100 @@ fn explicit_verified_reimport_repairs_a_damaged_same_hash_blob() {
     assert_eq!(reopened.index.asset.as_ref().unwrap().id, record.id);
     assert_eq!(reopened.accepted.unwrap().sha256, record.sha256);
 }
+
+fn replace_candidate_text(p: &mut Imports, ctx: &egui::Context, label: &str, value: &str) {
+    frame(p, ctx, vec![]);
+    let o = frame(p, ctx, vec![]);
+    let pos = point(&o, label) + egui::vec2(0., 24.);
+    click(p, ctx, pos);
+    frame(
+        p,
+        ctx,
+        vec![
+            egui::Event::Key {
+                key: egui::Key::A,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers {
+                    ctrl: true,
+                    command: true,
+                    ..Default::default()
+                },
+            },
+            egui::Event::Text(value.into()),
+        ],
+    );
+}
+#[test]
+fn candidate_text_during_reload_preserves_new_source_and_license() {
+    let v = Verified::decode(WEDGE.to_vec()).unwrap();
+    let index = AssetIndex::default()
+        .accept(&v, "saved source".into(), "saved license".into())
+        .unwrap();
+    let (release, gate) = mpsc::channel();
+    let expected = index.clone();
+    let mut p = Imports::with_worker(move |work| {
+        assert!(matches!(work, Work::Load));
+        gate.recv_timeout(Duration::from_secs(5)).unwrap();
+        Ok(Answer::Loaded(Loaded {
+            index: index.clone(),
+            verified: Some(v.clone()),
+            unavailable: None,
+        }))
+    });
+    let ctx = egui::Context::default();
+    replace_candidate_text(
+        &mut p,
+        &ctx,
+        "Candidate source reference (blank = unknown)",
+        "new source",
+    );
+    replace_candidate_text(
+        &mut p,
+        &ctx,
+        "Candidate license reference (blank = unknown)",
+        "new license",
+    );
+    assert_eq!(p.source, "new source");
+    assert_eq!(p.license, "new license");
+    release.send(()).unwrap();
+    settle(&mut p);
+    assert_eq!(p.source, "new source");
+    assert_eq!(p.license, "new license");
+    assert_eq!(p.index, expected);
+    assert!(p.accepted.is_some());
+}
+#[test]
+fn candidate_text_path_change_discards_pending_import_result() {
+    let (release, gate) = mpsc::channel();
+    let mut p = Imports::with_worker(move |work| match work {
+        Work::Load => Ok(Answer::Loaded(Loaded {
+            index: AssetIndex::default(),
+            verified: None,
+            unavailable: None,
+        })),
+        Work::Import(_) => {
+            gate.recv_timeout(Duration::from_secs(5)).unwrap();
+            Ok(Answer::Imported(Verified::decode(WEDGE.to_vec()).unwrap()))
+        }
+        _ => unreachable!(),
+    });
+    settle(&mut p);
+    p.path = "held.glb".into();
+    p.stage();
+    let ctx = egui::Context::default();
+    replace_candidate_text(&mut p, &ctx, "Project-relative .glb path", "changed.glb");
+    assert_eq!(p.path, "changed.glb");
+    release.send(()).unwrap();
+    let end = Instant::now() + Duration::from_secs(1);
+    while Instant::now() < end {
+        p.poll();
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(
+        p.staged.is_none(),
+        "Old geometry must not be staged underneath a newly typed path"
+    );
+    assert!(p.index.asset.is_none());
+}

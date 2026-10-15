@@ -37,6 +37,7 @@ struct Pending {
     id: u64,
     kind: Kind,
     edit: u64,
+    candidate: u64,
 }
 pub struct Imports {
     sender: Option<SyncSender<Job>>,
@@ -44,6 +45,7 @@ pub struct Imports {
     pending: Option<Pending>,
     serial: u64,
     edit: u64,
+    candidate: u64,
     pub(super) index: AssetIndex,
     pub(super) saved: Option<AssetIndex>,
     pub(super) accepted: Option<Verified>,
@@ -86,6 +88,7 @@ impl Imports {
             pending: None,
             serial: 0,
             edit: 0,
+            candidate: 0,
             index: AssetIndex::default(),
             saved: None,
             accepted: None,
@@ -118,10 +121,25 @@ impl Imports {
                 id,
                 kind,
                 edit: self.edit,
+                candidate: self.candidate,
             });
             self.message = "Checking project asset…".into();
         } else {
             self.message="Asset worker is unavailable or still finishing a cancelled operation. Nothing was retried.".into();
+        }
+    }
+    fn candidate_changed(&mut self, path_changed: bool) {
+        self.candidate += 1;
+        if path_changed {
+            self.staged = None;
+            self.show_staged = false;
+            if self
+                .pending
+                .as_ref()
+                .is_some_and(|p| p.kind == Kind::Import)
+            {
+                self.cancel();
+            }
         }
     }
     pub(super) fn stage(&mut self) {
@@ -202,9 +220,11 @@ impl Imports {
                                 self.staged = None;
                                 self.show_staged = false;
                                 self.shown = None;
-                                if let Some(a) = &self.index.asset {
-                                    self.source = a.source_reference.clone();
-                                    self.license = a.license_reference.clone();
+                                if pending.candidate == self.candidate {
+                                    if let Some(a) = &self.index.asset {
+                                        self.source = a.source_reference.clone();
+                                        self.license = a.license_reference.clone();
+                                    }
                                 }
                                 self.message=loaded.unavailable.map(|e|format!("Saved asset unavailable: {e}. Import a verified replacement; no fallback was substituted.")).unwrap_or_else(||"Loaded project asset references; geometry rechecked from saved bytes.".into());
                             } else {
@@ -252,12 +272,12 @@ impl Imports {
         self.poll();
         egui::SidePanel::left("project_assets").default_width(350.).width_range(300. ..=480.).show(ctx,|ui|{egui::ScrollArea::vertical().show(ui,|ui|{
             ui.heading("Project assets");ui.label("Static GLB preview · project content only");
-            ui.label("Project-relative .glb path");ui.text_edit_singleline(&mut self.path);
+            ui.label("Project-relative .glb path");if ui.text_edit_singleline(&mut self.path).changed(){self.candidate_changed(true);}
             ui.small("Place the file inside this project. One asset slot; Import replaces its preview candidate.");
             ui.horizontal(|ui|{if ui.add_enabled(self.pending.is_none(),egui::Button::new("Inspect GLB")).clicked(){self.stage();}
                 if ui.add_enabled(self.staged.is_some()||self.pending.as_ref().is_some_and(|p|p.kind!=Kind::Save),egui::Button::new("Cancel staged")).clicked(){self.cancel();}});
-            ui.label("Candidate source reference (blank = unknown)");ui.text_edit_singleline(&mut self.source);
-            ui.label("Candidate license reference (blank = unknown)");ui.text_edit_singleline(&mut self.license);
+            ui.label("Candidate source reference (blank = unknown)");if ui.text_edit_singleline(&mut self.source).changed(){self.candidate_changed(false);}
+            ui.label("Candidate license reference (blank = unknown)");if ui.text_edit_singleline(&mut self.license).changed(){self.candidate_changed(false);}
             ui.horizontal(|ui|{if ui.add_enabled(self.staged.is_some(),egui::Button::new("Accept preview")).clicked(){self.accept();}
                 if ui.add_enabled(!self.blocked&&self.pending.is_none()&&self.accepted.is_some(),egui::Button::new("Save assets")).clicked(){self.save();}});
             if ui.add_enabled(self.pending.is_none(),egui::Button::new("Reload assets")).clicked(){self.queue(Work::Load,Kind::Load);}
