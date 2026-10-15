@@ -1,9 +1,11 @@
 //! Project asset preview. Own geometry/material bindings; no world state or commands.
 use super::*;
+#[cfg(not(target_arch = "wasm32"))]
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Serialize, Deserialize))]
+#[cfg_attr(not(target_arch = "wasm32"), serde(deny_unknown_fields))]
 pub struct ImportReport {
     pub version: u32,
     pub min_m: [f32; 3],
@@ -18,6 +20,13 @@ pub struct ImportedGeometry {
     pub report: ImportReport,
 }
 impl ImportedGeometry {
+    /// Expanded transformed triangle corners, preserving the imported body-meter frame.
+    pub fn triangle_positions_m(&self) -> impl Iterator<Item = [f32; 3]> + '_ {
+        self.parts
+            .iter()
+            .flat_map(|p| p.vertices.iter().map(|v| (v.p * 100.).to_array()))
+    }
+
     pub fn decode(bytes: &[u8]) -> Result<Self, String> {
         if bytes.len() > 16 * 1024 * 1024 {
             return Err("GLB exceeds 16 MiB".into());
@@ -95,6 +104,7 @@ impl ImportedGeometry {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub struct ImportedAssetPreview {
     renderer: Option<Arc<Mutex<PreviewGpu>>>,
     error: Option<String>,
@@ -102,6 +112,7 @@ pub struct ImportedAssetPreview {
     pitch: f32,
     zoom: f32,
 }
+#[cfg(not(target_arch = "wasm32"))]
 impl ImportedAssetPreview {
     pub fn new(gl: Option<&Arc<glow::Context>>) -> Self {
         let result = gl.map(|gl| unsafe { PreviewGpu::new(gl.clone()) });
@@ -238,6 +249,7 @@ impl ImportedAssetPreview {
         }
     }
 }
+#[cfg(not(target_arch = "wasm32"))]
 struct PreviewMesh {
     vao: glow::VertexArray,
     buffer: glow::Buffer,
@@ -247,11 +259,13 @@ struct PreviewMesh {
     roughness: f32,
     metallic: f32,
 }
+#[cfg(not(target_arch = "wasm32"))]
 struct PreviewGpu {
     gl: Arc<glow::Context>,
     program: glow::Program,
     meshes: Vec<PreviewMesh>,
 }
+#[cfg(not(target_arch = "wasm32"))]
 impl PreviewGpu {
     unsafe fn new(gl: Arc<glow::Context>) -> Result<Self, String> {
         let program = compile(

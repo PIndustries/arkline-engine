@@ -1,6 +1,6 @@
 # Project GLB preview
 
-The **Assets** workspace imports one static GLB into a local project preview. It
+The native editor’s **Assets** workspace imports one static GLB into a local project preview. It
 renders the imported triangles and scalar material bindings using an independent
 renderer. It does not replace the live ship or create world entities.
 
@@ -85,5 +85,6 @@ ARKLINE_IMPORT_GPU_EVIDENCE=/tmp/import-gpu \
 
 It creates a private surfaceless EGL context, renders both fixtures and the actual
 Pioneer, checks color/geometry differences and obsolete GPU resource deletion,
-and optionally writes PPM captures. Native Mac and visible-desktop acceptance are
+and optionally writes PPM captures. The pure geometry decoder also compiles for the browser client; this change does
+not add a browser editor/import interface. Native Mac and visible-desktop acceptance are
 separate observed checks. No merge, release or deployment follows from importing.
