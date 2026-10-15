@@ -174,6 +174,7 @@ impl HangarView {
             }
         }
     }
+    #[allow(clippy::too_many_arguments)]
     pub fn ui(
         &mut self,
         ui: &mut egui::Ui,

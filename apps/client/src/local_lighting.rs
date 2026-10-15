@@ -252,7 +252,7 @@ impl Uniforms {
                 light.color.z,
                 light.power,
             ]);
-            count += 1;
+            count = i as i32 + 1;
         }
         gl.uniform_1_i32(self.count.as_ref(), count);
         gl.uniform_4_f32_slice(self.positions.as_ref(), &positions);
