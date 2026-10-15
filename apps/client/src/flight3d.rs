@@ -1921,6 +1921,7 @@ struct Uniforms {
     emission: Option<glow::UniformLocation>,
     emissive_color: Option<glow::UniformLocation>,
     emission_power: Option<glow::UniformLocation>,
+    emission_override: Option<glow::UniformLocation>,
     vp: Option<glow::UniformLocation>,
     eye: Option<glow::UniformLocation>,
     material: Option<glow::UniformLocation>,
@@ -1946,6 +1947,7 @@ impl Uniforms {
             emission: gl.get_uniform_location(program, "emission"),
             emissive_color: gl.get_uniform_location(program, "emissive_color"),
             emission_power: gl.get_uniform_location(program, "emission_power"),
+            emission_override: gl.get_uniform_location(program, "emission_override"),
             vp: gl.get_uniform_location(program, "view_projection"),
             eye: gl.get_uniform_location(program, "eye"),
             material: gl.get_uniform_location(program, "material_kind"),
@@ -2288,6 +2290,15 @@ impl Renderer {
         gl.uniform_1_f32(
             self.uniforms.emission_power.as_ref(),
             self.exterior_emission.get().for_mesh(mesh),
+        );
+        let emitted = self.exterior_emission.get().override_for_mesh(mesh);
+        let color_override = emitted.unwrap_or(Vec3::ZERO);
+        gl.uniform_4_f32(
+            self.uniforms.emission_override.as_ref(),
+            color_override.x,
+            color_override.y,
+            color_override.z,
+            if emitted.is_some() { 1. } else { 0. },
         );
         if let Some(uniforms) = &self.spatial_uniforms {
             uniforms.set_enabled(gl, graph_enabled);
@@ -4972,7 +4983,7 @@ const AUTHORED_MATERIAL_FUNCTION: &str = "struct ArkSurface{vec3 base_color;floa
 const FRAGMENT_BODY: &str = r#"
 in vec3 world;in vec3 surface_normal;in vec3 local_position;
 uniform int ark_graph_enabled;uniform vec4 material_params;uniform float hull_surface;uniform float station_lighting;uniform float environment_atmosphere;uniform vec3 environment_up;
-uniform vec3 planet_center;uniform vec3 base_color;uniform vec3 eye;uniform float emission;uniform float emission_power;uniform vec3 emissive_color;uniform int material_kind;out vec4 color;
+uniform vec3 planet_center;uniform vec3 base_color;uniform vec3 eye;uniform float emission;uniform float emission_power;uniform vec4 emission_override;uniform vec3 emissive_color;uniform int material_kind;out vec4 color;
 float ark_terrain(vec3 p){return ark_noise3(p)*0.53+ark_noise3(p*2.07+13.8)*0.27+ark_noise3(p*4.13-7.1)*0.13+ark_noise3(p*8.41+29.4)*0.07;}
 void main(){vec3 n=normalize(surface_normal);if(!gl_FrontFacing)n=-n;vec3 l=normalize(vec3(-0.5,0.8,0.65));vec3 v=normalize(eye-world);
 float diffuse=max(dot(n,l),0.0);float facing=max(dot(n,v),0.0);float rim=pow(1.0-facing,3.0);
@@ -5018,6 +5029,7 @@ if(material_kind==1 || material_kind==2){
         lit+=ark_environment(n,v,albedo,roughness,metallic,environment_atmosphere,environment_up);
     }
     lit+=ark_local_lighting(world,n,v,albedo,roughness,metallic);
+    if(emission_override.a>0.5) emitted=max(emission_override.rgb,vec3(0.0));
     lit+=emitted*emission_power;
 }
 color=vec4(ark_display(lit),1.0);}

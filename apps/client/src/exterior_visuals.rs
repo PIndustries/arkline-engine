@@ -2,28 +2,33 @@
 use super::*;
 use arkline_protocol::{ExteriorFixtureKind, ExteriorVesselState, ExteriorWorldState};
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(super) struct EmissionPower {
-    drive: f32,
-    panels: f32,
-    windows: f32,
-}
-impl Default for EmissionPower {
-    fn default() -> Self {
-        Self {
-            drive: 1.,
-            panels: 1.,
-            windows: 1.,
-        }
-    }
+    drive: Vec3,
+    panels: Vec3,
+    windows: Vec3,
+    controlled: bool,
 }
 impl EmissionPower {
     pub(super) fn for_mesh(self, mesh: usize) -> f32 {
+        if self
+            .override_for_mesh(mesh)
+            .is_some_and(|emitted| emitted.max_element() == 0.)
+        {
+            0.
+        } else {
+            1.
+        }
+    }
+    pub(super) fn override_for_mesh(self, mesh: usize) -> Option<Vec3> {
+        if !self.controlled {
+            return None;
+        }
         match embedded_primitive(mesh).and_then(|p| p.material_index) {
-            Some(4) => self.drive,
-            Some(5) => self.panels,
-            Some(6) => self.windows,
-            _ => 1.,
+            Some(4) => Some(self.drive),
+            Some(5) => Some(self.panels),
+            Some(6) => Some(self.windows),
+            _ => None,
         }
     }
 }
@@ -104,16 +109,19 @@ impl Binding<'_> {
     }
     pub(super) fn emission_power(self) -> EmissionPower {
         let mut result = EmissionPower {
-            drive: 0.,
-            panels: 0.,
-            windows: 0.,
+            controlled: true,
+            ..Default::default()
         };
         for fixture in &self.world.definition.document.fixtures {
-            let value = self.output(fixture);
+            let emitted =
+                Vec3::from_array(fixture.color) * (fixture.emission * self.output(fixture));
+            // The published GLB batches these source parts by material. The
+            // maximum channel energy drives that shared batch; individual
+            // fixture lenses and illumination retain their own values.
             match fixture.kind {
-                ExteriorFixtureKind::EngineGlow => result.drive = result.drive.max(value),
-                ExteriorFixtureKind::Panel => result.panels = result.panels.max(value),
-                ExteriorFixtureKind::Window => result.windows = result.windows.max(value),
+                ExteriorFixtureKind::EngineGlow => result.drive = result.drive.max(emitted),
+                ExteriorFixtureKind::Panel => result.panels = result.panels.max(emitted),
+                ExteriorFixtureKind::Window => result.windows = result.windows.max(emitted),
                 _ => {}
             }
         }
@@ -175,7 +183,7 @@ impl Binding<'_> {
 }
 
 impl Renderer {
-    fn prepare_exterior(&mut self, frame: &Frame) {
+    pub(super) fn prepare_exterior(&mut self, frame: &Frame) {
         let live = frame.connected && frame.now.saturating_sub(frame.snapshot_time) <= 1500;
         let next = (frame.exterior.clone(), live);
         if self.exterior_cache.as_ref() != Some(&next) {
@@ -230,10 +238,10 @@ mod tests {
         let mut world = world();
         world.vessels[0].drive = arkline_protocol::ExteriorDriveState::Active;
         let binding = for_vessel(Some(&world), "v1:fixture:Pioneer", 1000, true).unwrap();
-        assert_eq!(binding.emission_power().drive, 1.);
-        assert_eq!(binding.emission_power().windows, 0.);
+        assert!(binding.emission_power().drive.max_element() > 0.);
+        assert_eq!(binding.emission_power().windows, Vec3::ZERO);
         let stale = for_vessel(Some(&world), "v1:fixture:Pioneer", 1000, false).unwrap();
-        assert_eq!(stale.emission_power().drive, 0.);
+        assert_eq!(stale.emission_power().drive, Vec3::ZERO);
         assert!(stale.lights(Mat4::IDENTITY).is_empty());
     }
 }
