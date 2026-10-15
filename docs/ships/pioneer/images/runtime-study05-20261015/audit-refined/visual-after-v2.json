@@ -1,0 +1,297 @@
+{
+  "schema": "pioneer-study05-refined-actual-engine-visual-review/v1",
+  "date_utc": "2026-10-15",
+  "outcome": "CLEAR for selected bow/bridge construction, recessed service/work architecture and true aft aperture finish refinements in actual engine7040. Significant v05 work remains; no overall-completion claim.",
+  "captures": {
+    "before7036": {
+      "build": "26.10.15.7036",
+      "source_commit": "df019ca2b12b82991fd65bc2ec5b3dcdc6232c61",
+      "asset_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+      "receipt_path": "/workspace/arkline-runtime/study05-engine-before/authority-receipt.json",
+      "receipt_sha256": "f29a91e3d2f79471964dda9e4d37e1b96b4857cd59fd7e2a3720345493e5e26f"
+    },
+    "v17038": {
+      "build": "26.10.15.7038",
+      "source_commit": "a3928f23eefc171c12830e496fbd60ccf773dea7",
+      "asset_sha256": "df8490f42379aca161df0aa26b24cb32ab8dbf73e83e0681ed2cfc29ef43a2c9",
+      "receipt_path": "/workspace/arkline-runtime/study05-engine-after-v1/authority-receipt.json",
+      "receipt_sha256": "ba016a72831d59fdf63b6347a8aab9dd83f67cdaf533f8a4aeb0f93e04486bbb"
+    },
+    "v27040": {
+      "build": "26.10.15.7040",
+      "source_commit": "15ce32c1d18975383d1d4e9a13e4e479c9085cfd",
+      "asset_sha256": "8125644f007537437942d34169e527c08ddd2dfaed575c874e2263ff2b7cb123",
+      "receipt_path": "/workspace/arkline-runtime/study05-engine-after-v2/authority-receipt.json",
+      "receipt_sha256": "829520ff3b0689c130f6ed6dcf2c47455863e6a4a3e9f99053d4acba6dab0f6d"
+    }
+  },
+  "selected_source_sha256": "61eb70e1978668f5ca7256f237d9df14c47140b9bbbbce327875b68efcbe57c9",
+  "matched_body_camera_fields": [
+    "eye_body_m",
+    "target_body_m",
+    "up_body",
+    "half_height_m",
+    "half_width_m",
+    "projection"
+  ],
+  "all_selected_cameras_equal": true,
+  "pixels_viewed": [
+    {
+      "name": "pioneer-authority-idle-front-quarter.png",
+      "before7036": {
+        "path": "/workspace/arkline-runtime/study05-engine-before/pioneer-authority-idle-front-quarter.png",
+        "sha256": "f32795336ebdf9c5645ed296c243b249ecf7537414f9588c08eead79713cb2ce"
+      },
+      "v17038": {
+        "path": "/workspace/arkline-runtime/study05-engine-after-v1/pioneer-authority-idle-front-quarter.png",
+        "sha256": "0402748fbf80148ef0a5e0ec5d8c693efd9c65031387d77be9c8aa4d2bd2e060"
+      },
+      "v27040": {
+        "path": "/workspace/arkline-runtime/study05-engine-after-v2/pioneer-authority-idle-front-quarter.png",
+        "sha256": "54e31c3242594f071d29132c7e0618a36bfe08ce6c45881b258ffd5abf885548"
+      }
+    },
+    {
+      "name": "pioneer-authority-idle-bridge-quarter.png",
+      "before7036": {
+        "path": "/workspace/arkline-runtime/study05-engine-before/pioneer-authority-idle-bridge-quarter.png",
+        "sha256": "867059fded8467232f2283cf4084c34c78ecab7bef73638b9ad2f86bbd307f69"
+      },
+      "v17038": {
+        "path": "/workspace/arkline-runtime/study05-engine-after-v1/pioneer-authority-idle-bridge-quarter.png",
+        "sha256": "53f64d1cecfa1ba5eb1da057ba42943e1b6985e89372ad3d812962688e421bd6"
+      },
+      "v27040": {
+        "path": "/workspace/arkline-runtime/study05-engine-after-v2/pioneer-authority-idle-bridge-quarter.png",
+        "sha256": "2013d4a806ec4005a8b18be0ea6fb4ff6f44c99857b63ac44f0258c99655206c"
+      }
+    },
+    {
+      "name": "pioneer-authority-idle-bridge-port-pane.png",
+      "before7036": {
+        "path": "/workspace/arkline-runtime/study05-engine-before/pioneer-authority-idle-bridge-port-pane.png",
+        "sha256": "1e4b4d5e07b6702738c0037f5223c8b73d19b9607c57a3c9e5000c3db9582f1a"
+      },
+      "v17038": {
+        "path": "/workspace/arkline-runtime/study05-engine-after-v1/pioneer-authority-idle-bridge-port-pane.png",
+        "sha256": "2c7ca9bad3aa2f1bb575d88ed9e0fc6386d330fc94cac3749daac78888ef184a"
+      },
+      "v27040": {
+        "path": "/workspace/arkline-runtime/study05-engine-after-v2/pioneer-authority-idle-bridge-port-pane.png",
+        "sha256": "2f3f786b665ad05a0eaf00a3a7ae3cc97e6cb8360ed16a6e559281c5122a53c2"
+      }
+    },
+    {
+      "name": "pioneer-authority-idle-front.png",
+      "before7036": {
+        "path": "/workspace/arkline-runtime/study05-engine-before/pioneer-authority-idle-front.png",
+        "sha256": "4d1d5f911df74536787b675fe63249ff91cac60319b87f3e022cb6b86d0baadd"
+      },
+      "v17038": {
+        "path": "/workspace/arkline-runtime/study05-engine-after-v1/pioneer-authority-idle-front.png",
+        "sha256": "cebab9868f154ab0f0d1cfd84ebb6d6532e4148b045373f4ba8d8ce63db61b82"
+      },
+      "v27040": {
+        "path": "/workspace/arkline-runtime/study05-engine-after-v2/pioneer-authority-idle-front.png",
+        "sha256": "bae7772e37ebf6e55927c528ca155524aff12bee0abb9c895ade77842a45e59d"
+      }
+    },
+    {
+      "name": "pioneer-authority-idle-top.png",
+      "before7036": {
+        "path": "/workspace/arkline-runtime/study05-engine-before/pioneer-authority-idle-top.png",
+        "sha256": "2ce6599ac5078711b27fe741ac42576c04052625afa74f169a290df897e4da8d"
+      },
+      "v17038": {
+        "path": "/workspace/arkline-runtime/study05-engine-after-v1/pioneer-authority-idle-top.png",
+        "sha256": "6294c8cc427a66fb181f81e5a504521c5658d6789b8a62db466a4f0c4b8a22ab"
+      },
+      "v27040": {
+        "path": "/workspace/arkline-runtime/study05-engine-after-v2/pioneer-authority-idle-top.png",
+        "sha256": "e7b3b0b1b429b20c8470f9b38c4b728109f0ddcef1db63d2fc1ba105019674a7"
+      }
+    },
+    {
+      "name": "pioneer-authority-idle-aft-roof.png",
+      "before7036": {
+        "path": "/workspace/arkline-runtime/study05-engine-before/pioneer-authority-idle-aft-roof.png",
+        "sha256": "747e75aadb838a2064da51ae61c22c840f007ab7ee2b4edbc999bb420b837c12"
+      },
+      "v17038": {
+        "path": "/workspace/arkline-runtime/study05-engine-after-v1/pioneer-authority-idle-aft-roof.png",
+        "sha256": "d0ae69ef5e7b2dc6dc72c21fd40d34a97b8ef24d997902783048a007cabcbc0b"
+      },
+      "v27040": {
+        "path": "/workspace/arkline-runtime/study05-engine-after-v2/pioneer-authority-idle-aft-roof.png",
+        "sha256": "bf63678c188126ec44c3770c2aa6eef89cdde5391c2f98e221c359eac2d29d3d"
+      }
+    },
+    {
+      "name": "pioneer-authority-idle-port-nozzle.png",
+      "before7036": {
+        "path": "/workspace/arkline-runtime/study05-engine-before/pioneer-authority-idle-port-nozzle.png",
+        "sha256": "ad2c35409713db524a0f5aa1c9cc49215ad5404de4af08a5448e1050cdc46fc0"
+      },
+      "v17038": {
+        "path": "/workspace/arkline-runtime/study05-engine-after-v1/pioneer-authority-idle-port-nozzle.png",
+        "sha256": "18116e2c4ddead423f5e72dedc48ddc944a55fd4677a7f9a0ea58d03296b5b94"
+      },
+      "v27040": {
+        "path": "/workspace/arkline-runtime/study05-engine-after-v2/pioneer-authority-idle-port-nozzle.png",
+        "sha256": "bcbe2a9eef4a6a6bb34e8e8c3e9fa8ebf3c21aed087b9da75cd65b24ea397c6f"
+      }
+    },
+    {
+      "name": "pioneer-authority-idle-rear.png",
+      "before7036": {
+        "path": "/workspace/arkline-runtime/study05-engine-before/pioneer-authority-idle-rear.png",
+        "sha256": "bb5557ccb59652866f160fd0e48e0be2ef60f07eafaf2e74d4f679ed6cff45bd"
+      },
+      "v17038": {
+        "path": "/workspace/arkline-runtime/study05-engine-after-v1/pioneer-authority-idle-rear.png",
+        "sha256": "7e9ad422aa3515c39848f5764992466a63d13c8d633f7a01c648ea06ccfd4026"
+      },
+      "v27040": {
+        "path": "/workspace/arkline-runtime/study05-engine-after-v2/pioneer-authority-idle-rear.png",
+        "sha256": "aa637b93e2cbeeac5d0a7cf8bb6ecf154ea6e62ec086f5f275d073a83c4fcc4a"
+      }
+    }
+  ],
+  "off_bridge_pixels_viewed": {
+    "path": "/workspace/arkline-runtime/study05-engine-after-v2/pioneer-authority-off-bridge-quarter.png",
+    "sha256": "0deb337751f92e31dbb2038c4afe5b19686c0e7c4d36d0fff9fe701e3fa1feed"
+  },
+  "reference": {
+    "path": "/workspace/arkline-engine/docs/ships/pioneer/images/v05-interior-review.jpg",
+    "sha256": "60219087d130e27d9c8c86824ee54ef373e8ce81fc466ebb1da235b5b49a5628",
+    "scope": "Previously viewed actual concept pixels; visual direction, not certified measurements or implementation."
+  },
+  "selected_refinements": [
+    {
+      "area": "Bridge joints",
+      "status": "clear",
+      "actual_observation": "Both front diagonal bars visibly meet the inner frame corners/gasket junctions. Prior floating partial strips are gone. Continuous frame/reveal and bow-lamp mounts remain legible in pane close-up."
+    },
+    {
+      "area": "Three brow plates",
+      "status": "clear",
+      "actual_observation": "Three thick faceted plates have visible raised edges and dark recessed joints, plus a small service pocket. Close bridge-quarter shows constructed plate thickness instead of seam lines laid over a single plane."
+    },
+    {
+      "area": "Roof handling architecture",
+      "status": "clear_for_authored_static_scope",
+      "actual_observation": "Raised metallic paired links, yellow/metal pivot details, base and folded/stow relationship are readable in aft-roof close view. Recessed work/service deck stays open and distinct from former repeated roof lids."
+    },
+    {
+      "area": "Aft flange and openings",
+      "status": "clear",
+      "actual_observation": "Old dense striped/jagged rim band in7038closeup is absent in7040. A thin continuous seated outer rim and interior bell/throat depth are visible. Both rear openings remain distinct."
+    },
+    {
+      "area": "Powered glass and existing turrets",
+      "status": "clear_for_presentation",
+      "actual_observation": "Glazing is restrained dark/navy teal with visible framing instead of flat-white luminous cards; lamps remain readable. Both existing gun assemblies remain visible on their fore-roof support."
+    }
+  ],
+  "remaining_gaps": [
+    "Opaque material contract remains: dark restrained panes do not establish transparent glass, interior reflections or a fitted bridge.",
+    "Stowed arm is fixed decorative source geometry; close-view readability does not prove operation, rigging or clearances. Its normal-quarter prominence remains lower than the concept raised crane.",
+    "Side bays/collars, underside steps, equipment variation and overall v05 silhouette/detail remain visibly unfinished.",
+    "Source counterbore floor faces remain mutually coincident behind the seated flange. This was disclosed by source audit; no global overlap-free claim is made.",
+    "Turret articulation/firing, fitted interiors, physical systems and engineering adequacy remain separate scope."
+  ],
+  "decoded_image_differences": [
+    {
+      "earlier": "before7036",
+      "file": "pioneer-authority-idle-front-quarter.png",
+      "changed_pixels": 46127
+    },
+    {
+      "earlier": "before7036",
+      "file": "pioneer-authority-idle-bridge-quarter.png",
+      "changed_pixels": 242564
+    },
+    {
+      "earlier": "before7036",
+      "file": "pioneer-authority-idle-bridge-port-pane.png",
+      "changed_pixels": 526658
+    },
+    {
+      "earlier": "before7036",
+      "file": "pioneer-authority-idle-front.png",
+      "changed_pixels": 108012
+    },
+    {
+      "earlier": "before7036",
+      "file": "pioneer-authority-idle-top.png",
+      "changed_pixels": 123068
+    },
+    {
+      "earlier": "before7036",
+      "file": "pioneer-authority-idle-aft-roof.png",
+      "changed_pixels": 128655
+    },
+    {
+      "earlier": "before7036",
+      "file": "pioneer-authority-idle-port-nozzle.png",
+      "changed_pixels": 126967
+    },
+    {
+      "earlier": "before7036",
+      "file": "pioneer-authority-idle-rear.png",
+      "changed_pixels": 41328
+    },
+    {
+      "earlier": "v17038",
+      "file": "pioneer-authority-idle-front-quarter.png",
+      "changed_pixels": 10119
+    },
+    {
+      "earlier": "v17038",
+      "file": "pioneer-authority-idle-bridge-quarter.png",
+      "changed_pixels": 75486
+    },
+    {
+      "earlier": "v17038",
+      "file": "pioneer-authority-idle-bridge-port-pane.png",
+      "changed_pixels": 305451
+    },
+    {
+      "earlier": "v17038",
+      "file": "pioneer-authority-idle-front.png",
+      "changed_pixels": 29406
+    },
+    {
+      "earlier": "v17038",
+      "file": "pioneer-authority-idle-top.png",
+      "changed_pixels": 27197
+    },
+    {
+      "earlier": "v17038",
+      "file": "pioneer-authority-idle-aft-roof.png",
+      "changed_pixels": 7074
+    },
+    {
+      "earlier": "v17038",
+      "file": "pioneer-authority-idle-port-nozzle.png",
+      "changed_pixels": 5395
+    },
+    {
+      "earlier": "v17038",
+      "file": "pioneer-authority-idle-rear.png",
+      "changed_pixels": 1378
+    }
+  ],
+  "receipt_state_context": {
+    "dynamic_turrets": 2,
+    "off_idle_changed_pixels": 4093,
+    "same_time_idle_accepted_thrust_changed_pixels": 6305,
+    "fixture_definition_modified_within_run": false
+  },
+  "limits": [
+    "Visual review is actual native EGL engine output with real EditorWorld authority and accepted flight state, not a new OS-window/TCP acceptance or hardware-GPU/frame-pacing test.",
+    "Before7036,v17038,v27040 use equal recorded body-relative camera fields but different accepted simulation runs. Window palette/emission/local-light tuning changes across revisions were explicit; no claim of geometry-only comparison or unchanged intensity across revisions.",
+    "Source normal/mapping/winding and aperture-ray proof is separately recorded in summary.json; visual clearance does not replace that evidence.",
+    "No source/model/repo/code/docs edits, re-export, builds, Mac access or publication by this review."
+  ]
+}
