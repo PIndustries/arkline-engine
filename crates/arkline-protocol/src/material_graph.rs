@@ -14,7 +14,7 @@ pub const MATERIAL_VALUE_LIMIT: f32 = 1_000_000.0;
 /// Avoid subnormal feather division/flush-to-zero differences on GPU drivers.
 pub const MATERIAL_MIN_FEATHER_M: f32 = 0.000001;
 pub const PIONEER_MATERIAL_SHA256: &str =
-    "df8490f42379aca161df0aa26b24cb32ab8dbf73e83e0681ed2cfc29ef43a2c9";
+    "8125644f007537437942d34169e527c08ddd2dfaed575c874e2263ff2b7cb123";
 pub type MaterialNodeId = u32;
 pub type MaterialParameterId = u32;
 

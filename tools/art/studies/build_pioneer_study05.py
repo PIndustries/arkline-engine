@@ -41,6 +41,19 @@ def main():
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         reports[name] = module.apply(bpy)
+    # Opaque scalar-PBR approximation: reduce the diffuse colored sheet while
+    # retaining the exact material identity. Actual powered emission is the
+    # separate accepted Window fixture parameter, not this source shader.
+    glass = bpy.data.materials['Navigation glass']
+    shader = glass.node_tree.nodes.get('Principled BSDF')
+    shader.inputs['Metallic'].default_value = .60
+    shader.inputs['Roughness'].default_value = .12
+    reports['glazing_material'] = {
+        'name': glass.name, 'metallic': .60, 'roughness': .12,
+        'base_color_retained': list(shader.inputs['Base Color'].default_value),
+        'scope': 'Opaque scalar-PBR visual approximation; no transmission, '
+                 'fitted interior or optical engineering claim.',
+    }
     bpy.context.view_layer.update()
     after = {o.name: [m.name for m in o.data.materials]
              for o in bpy.context.scene.objects if o.type == 'MESH'}

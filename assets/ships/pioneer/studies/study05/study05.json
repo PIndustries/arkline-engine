@@ -3,12 +3,12 @@
   "revision": "study05",
   "date_utc": "2026-10-15",
   "source_master_sha256": "772bf76aaf1416f28357e2f507963022c7c73b13fca58cb57e948e06761a7800",
-  "source_study05_sha256": "9cc3ac5d1e96937d8de1a61411ae0d80efd96e2394d71a90f62a88f5257c11b4",
+  "source_study05_sha256": "61eb70e1978668f5ca7256f237d9df14c47140b9bbbbce327875b68efcbe57c9",
   "recipes": {
-    "build_pioneer_study05.py": "14f1382f3888a7605e3fd2edbe623b0e01132d9d43f39fa3caa56cd73cccc91c",
-    "pioneer_study05_bow.py": "497f5674921e8281b9704e4bdfd53ba3e1292dd420519c45ec1fd45eafe20f0f",
-    "pioneer_study05_roof.py": "735279d37754ab43a6c16d0a5cbe880d01c6d57c51ca48ca14a527e6531aca08",
-    "pioneer_study05_aft.py": "bc968482f30874669c28ff145c1f72b8f9217cf383cfa7d415f9a48e38cb59c1"
+    "build_pioneer_study05.py": "65e8ce0aa2018219569c8ab19bf6457c12b98e20908168bdbcb97063bad429d3",
+    "pioneer_study05_bow.py": "503a3de65813ce1fae0753cfe0afbed377cf49fb7dbdbe9ed56a5d46fa8f6764",
+    "pioneer_study05_roof.py": "4ba539e26d93da0ba55a2053fef8c5393d8d0d5e903108549f59300e6d53acb2",
+    "pioneer_study05_aft.py": "0dbeb39efafbc822c31081cedb344388591e5827b94b01178c9774be3883a403"
   },
   "bounds_body_m": [
     [
@@ -23,7 +23,7 @@
     ]
   ],
   "parts_before": 543,
-  "parts_after": 670,
+  "parts_after": 686,
   "removed_parts": [
     "Cargo access recess",
     "Cargo access recess.001",
@@ -66,12 +66,19 @@
     "Aft drive aperture rim starboard",
     "Study05 bridge armor parting line port",
     "Study05 bridge armor parting line starboard",
-    "Study05 bridge brow seam port",
-    "Study05 bridge brow seam starboard",
+    "Study05 bridge brow armor port",
+    "Study05 bridge brow armor starboard",
+    "Study05 bridge brow service coaming",
+    "Study05 bridge brow service cover",
+    "Study05 bridge brow service latch",
     "Study05 bridge front gasket port -1",
     "Study05 bridge front gasket port 1",
+    "Study05 bridge front gasket port lower",
+    "Study05 bridge front gasket port upper",
     "Study05 bridge front gasket starboard -1",
     "Study05 bridge front gasket starboard 1",
+    "Study05 bridge front gasket starboard lower",
+    "Study05 bridge front gasket starboard upper",
     "Study05 bridge recessed sill port",
     "Study05 bridge recessed sill starboard",
     "Study05 bridge recessed upper reveal port",
@@ -143,11 +150,20 @@
     "Study05 roof handling arm amber pin cap 1",
     "Study05 roof handling arm base foot",
     "Study05 roof handling arm base rotary casing",
-    "Study05 roof handling arm folded main link",
+    "Study05 roof handling arm centre bearing 0",
+    "Study05 roof handling arm centre bearing 1",
+    "Study05 roof handling arm folded main link port plate",
+    "Study05 roof handling arm folded main link starboard plate",
     "Study05 roof handling arm pin 0",
     "Study05 roof handling arm pin 1",
     "Study05 roof handling arm port stowed jaw",
-    "Study05 roof handling arm root link",
+    "Study05 roof handling arm root bearing",
+    "Study05 roof handling arm root link port plate",
+    "Study05 roof handling arm root link starboard plate",
+    "Study05 roof handling arm starboard amber pin cap 0",
+    "Study05 roof handling arm starboard amber pin cap 1",
+    "Study05 roof handling arm starboard pin 0",
+    "Study05 roof handling arm starboard pin 1",
     "Study05 roof handling arm starboard stowed jaw",
     "Study05 roof handling arm stowed wrist",
     "Study05 roof handling arm tool cradle",
@@ -267,12 +283,19 @@
       "new_objects": [
         "Study05 bridge armor parting line port",
         "Study05 bridge armor parting line starboard",
-        "Study05 bridge brow seam port",
-        "Study05 bridge brow seam starboard",
+        "Study05 bridge brow armor port",
+        "Study05 bridge brow armor starboard",
+        "Study05 bridge brow service coaming",
+        "Study05 bridge brow service cover",
+        "Study05 bridge brow service latch",
         "Study05 bridge front gasket port -1",
         "Study05 bridge front gasket port 1",
+        "Study05 bridge front gasket port lower",
+        "Study05 bridge front gasket port upper",
         "Study05 bridge front gasket starboard -1",
         "Study05 bridge front gasket starboard 1",
+        "Study05 bridge front gasket starboard lower",
+        "Study05 bridge front gasket starboard upper",
         "Study05 bridge recessed sill port",
         "Study05 bridge recessed sill starboard",
         "Study05 bridge recessed upper reveal port",
@@ -408,6 +431,20 @@
         }
       ],
       "canonical_materials_added": [],
+      "brow_armor": {
+        "panels": [
+          "Bridge central armored brow",
+          "Study05 bridge brow armor port",
+          "Study05 bridge brow armor starboard"
+        ],
+        "nominal_vertical_thickness_m": 0.32,
+        "open_lateral_joint_m": 0.2,
+        "service_cover_face_m": [
+          1.57,
+          1.07
+        ],
+        "service_cover_recess_m": 0.2
+      },
       "inferred_details": [
         "exterior fixed service hatches/latches",
         "armor seams and reveal construction"
@@ -1056,12 +1093,21 @@
         "Study05 roof manifold isolation handle 2",
         "Study05 roof handling arm base foot",
         "Study05 roof handling arm base rotary casing",
-        "Study05 roof handling arm root link",
-        "Study05 roof handling arm folded main link",
+        "Study05 roof handling arm root link port plate",
+        "Study05 roof handling arm root link starboard plate",
+        "Study05 roof handling arm folded main link port plate",
+        "Study05 roof handling arm folded main link starboard plate",
+        "Study05 roof handling arm root bearing",
+        "Study05 roof handling arm centre bearing 0",
         "Study05 roof handling arm pin 0",
+        "Study05 roof handling arm starboard pin 0",
         "Study05 roof handling arm amber pin cap 0",
+        "Study05 roof handling arm starboard amber pin cap 0",
+        "Study05 roof handling arm centre bearing 1",
         "Study05 roof handling arm pin 1",
+        "Study05 roof handling arm starboard pin 1",
         "Study05 roof handling arm amber pin cap 1",
+        "Study05 roof handling arm starboard amber pin cap 1",
         "Study05 roof handling arm visual cylinder",
         "Study05 roof handling arm visual piston",
         "Study05 roof handling arm stowed wrist",
@@ -1185,6 +1231,13 @@
         "Aft drive aperture rim starboard"
       ],
       "opening_radius_m": 2.96,
+      "counterbore": {
+        "radius_m": 3.32,
+        "floor_x_m": -35.63,
+        "flange_front_x_m": -35.99,
+        "flange_back_x_m": -35.65,
+        "outer_flange_radius_m": 3.16
+      },
       "existing_drive_centers_body_m": [
         [
           -35.9,
@@ -1216,20 +1269,6 @@
               "distance_m": 6.799997806549072
             },
             {
-              "part": "Outboard drive nacelle",
-              "position_body_m": [
-                -31.799999237060547,
-                0.0,
-                -12.5
-              ],
-              "normal_body": [
-                -1.0,
-                1.4476022158760316e-07,
-                0.0
-              ],
-              "distance_m": 8.199999809265137
-            },
-            {
               "part": "Pressure hull",
               "position_body_m": [
                 -31.799999237060547,
@@ -1239,6 +1278,20 @@
               "normal_body": [
                 -0.9999999403953552,
                 -5.24938918999851e-08,
+                0.0
+              ],
+              "distance_m": 8.200000762939453
+            },
+            {
+              "part": "Outboard drive nacelle",
+              "position_body_m": [
+                -31.799999237060547,
+                0.0,
+                -12.5
+              ],
+              "normal_body": [
+                -0.9999999403953552,
+                2.268182583975431e-07,
                 0.0
               ],
               "distance_m": 8.200000762939453
@@ -1263,20 +1316,6 @@
               "distance_m": 6.799997806549072
             },
             {
-              "part": "Pressure hull",
-              "position_body_m": [
-                -31.799999237060547,
-                0.0,
-                12.5
-              ],
-              "normal_body": [
-                -1.0,
-                -1.749796041394802e-08,
-                0.0
-              ],
-              "distance_m": 8.200000762939453
-            },
-            {
               "part": "Outboard drive nacelle.001",
               "position_body_m": [
                 -31.799999237060547,
@@ -1285,7 +1324,21 @@
               ],
               "normal_body": [
                 -1.0,
-                -1.4476013632247486e-07,
+                -1.4476023579845787e-07,
+                0.0
+              ],
+              "distance_m": 8.199999809265137
+            },
+            {
+              "part": "Pressure hull",
+              "position_body_m": [
+                -31.799999237060547,
+                0.0,
+                12.5
+              ],
+              "normal_body": [
+                -1.0,
+                -3.2371232805417094e-07,
                 0.0
               ],
               "distance_m": 8.200000762939453
@@ -1294,6 +1347,18 @@
         }
       ],
       "scope": "Real static source cap openings and rims; existing bells/throats retained. Aperture dimensions are inferred authoring choices, not a verified propulsion or structural specification."
+    },
+    "glazing_material": {
+      "name": "Navigation glass",
+      "metallic": 0.6,
+      "roughness": 0.12,
+      "base_color_retained": [
+        0.006000000052154064,
+        0.054999999701976776,
+        0.07500000298023224,
+        1.0
+      ],
+      "scope": "Opaque scalar-PBR visual approximation; no transmission, fitted interior or optical engineering claim."
     }
   },
   "scope": "Editable inferred visual architecture; no fitted interior, operating crane/hatch, propulsion or engineering rating."

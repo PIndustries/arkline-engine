@@ -1,19 +1,19 @@
 {
   "schema": "arkline.pioneer-model-adoption/v1",
   "date_utc": "2026-10-15",
-  "status": "intermediate cloud preview adopted and captured in actual engine; v05 visual matching remains incomplete",
-  "claim": "https://github.com/PIndustries/arkline-engine/issues/10#issuecomment-6198723307",
-  "coordination_before_adoption": "https://github.com/PIndustries/arkline-engine/issues/10#issuecomment-6199044626",
-  "prior_published_head": "4d2d8d965690799465c3fe36fe3257824452b4ae",
-  "exporter_integration_commit": "3ee211f3b30c8590b8ed55d64080578131a03d62",
+  "status": "Study05 refined cloud preview adopted; actual-engine acceptance pending; overall v05 visual work remains",
+  "claim": "https://github.com/PIndustries/arkline-engine/issues/10#issuecomment-6199911507",
+  "prior_published_head": "2abbc22197b5530bd11e76bf665b828a4033db27",
+  "prior_canonical_glb_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+  "prior_study05_preview_glb_sha256": "df8490f42379aca161df0aa26b24cb32ab8dbf73e83e0681ed2cfc29ef43a2c9",
   "canonical": {
     "editable_source": "pioneer.blend",
-    "source_sha256": "772bf76aaf1416f28357e2f507963022c7c73b13fca58cb57e948e06761a7800",
+    "source_sha256": "61eb70e1978668f5ca7256f237d9df14c47140b9bbbbce327875b68efcbe57c9",
     "glb": "pioneer.glb",
-    "glb_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
-    "triangles": 78244,
+    "glb_sha256": "8125644f007537437942d34169e527c08ddd2dfaed575c874e2263ff2b7cb123",
+    "triangles": 103466,
     "material_batches": 9,
-    "source_parts": 543,
+    "source_parts": 686,
     "body_envelope_xyz_m": [
       72,
       18,
@@ -22,46 +22,20 @@
   },
   "export_receipt": {
     "path": "pioneer-export.json",
-    "sha256": "5467b970e6254c63fef552d5c1a609636fd913a1b333a8025a31dd112035adab",
-    "source_copy_note": "Receipt names the isolated export bundle copy pioneer-study.blend; canonical pioneer.blend is byte-identical."
+    "sha256": "fadece504f99169f645559f5c903636b6555f8d8b3f3c3b856cc267b639d5429",
+    "source_copy_note": "Canonicalpioneer.blend is byte-identical to receiptselectedpioneer-study05.blend."
   },
-  "prior_canonical_glb_sha256": "f8f8cc65772c678a46606c27abe205d62c4e6ab37c350f79a0f3a4cdc0c6f402",
-  "frozen_study04_glb_sha256": "bfb743f8c0bd5bb0dd23a5e58a7f6851ce142b5a7e1a57a3387902f584d0a279",
-  "source_identity": "source-sha256-and-exact-name snapshot; not durable IDs across source changes",
-  "normal_review": {
-    "strict_same_winding_triangles": 78240,
-    "strict_corners": 234720,
-    "normal_dot_lt_0999": 0,
-    "normal_dot_lt_095": 0,
-    "reverse_winding_pairs": 0,
-    "unmatched_glb_triangles": 0,
-    "tolerances_m": [
-      1e-05,
-      2e-05,
-      0.0001
-    ],
-    "mixed_orientation_excluded_triangles": 4,
-    "report_sha256": "1a3998b1e96e5833a20c929008374bfdcf065cd4f7727039fb1c5da7aa1d2e3d",
-    "report_path": "../../../docs/ships/pioneer/images/runtime-remodeled-20261015/normal-audit-report.json"
-  },
-  "rust_decoder": {
-    "build": "26.10.15.7026",
-    "exact_hash_passed": true
-  },
-  "compatibility": "Old documents retain their hashes; mismatched material graphs are rejected. Old accepted exterior worlds fail without rewriting state; use a new preview project and retain the matching old build for old worlds. No automatic migration.",
-  "visual_gaps": [
-    "broad smooth brow and deep chin",
-    "repetitive roof/work machinery",
-    "continuous underside and equal side bays",
-    "opaque aft caps hide recessed drive throats"
+  "source_identity": "source-hash/exact-name snapshot mappings;35 prior lids/rails explicitly removed, retained material identities preserved; no durable cross-revision ID claim",
+  "selected_scope": [
+    "faceted layered bow and true recessed framed glazing with connected braces",
+    "recessed service/work bays and stowed visual handling arm",
+    "true recessed existing drive openings with counterbored flange joints"
   ],
-  "power": "Existing authoritative simulation clock, owned circuit and drive telemetry; default88W load and emission/timing unchanged.",
-  "engine_acceptance": {
-    "authority_capture_build": "26.10.15.7032",
-    "authority_capture_source_commit": "fb50b8ffb274c1b5a7ee537faccb9475edf03ecd",
-    "authority_receipt": "../../../docs/ships/pioneer/images/runtime-remodeled-20261015/authority-receipt.json",
-    "native_application_build": "26.10.15.7031",
-    "native_application_source_commit": "e1498d890ddbb69d9c9571479c1e85bbb25637ce",
-    "note": "7032 adds only capture-test changes after 7031; both use identical adopted production geometry and powered exterior. Native saved definition explicitly accepted at revision1 while paused; Step50ms observed."
-  }
+  "presentation": "Windows0.025 coolstate-driven output,glassopaquePBRmetallic.60/roughness.12; no fitted interior/transmission claim. Defaultload88W,pulse/drive/power semantics unchanged.",
+  "compatibility": "Prior accepted-hash worlds refuse without rewriting state; old graphs retain hashes and require explicit replacement/rebinding. New preview project; no automatic migration.",
+  "visual_gaps": [
+    "broader side/collar and underside architecture still needs review againstv05",
+    "textures/normalmaps/interiorreflection/transmission unsupported",
+    "moving/crane/hatch operation and fitted interior not implemented"
+  ]
 }

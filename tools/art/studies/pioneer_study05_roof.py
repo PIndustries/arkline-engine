@@ -77,7 +77,8 @@ def apply(bpy):
         points = [tuple(p + up*dy*width/2 + side*dz*thickness/2)
                   for p in (a,b) for dy,dz in [(-1,-1),(1,-1),(1,1),(-1,1)]]
         return mesh(label, points, [(0,3,2,1),(4,5,6,7),(0,1,5,4),
-                                   (1,2,6,5),(2,3,7,6),(3,0,4,7)], material, .065)
+                                   (1,2,6,5),(2,3,7,6),(3,0,4,7)], material,
+                    min(.045, thickness*.20, width*.15))
 
     def coaming(label, xmin, xmax, z, bottom, top, width=.34):
         # A short chamfered rim, not a full replacement roof covering the bay.

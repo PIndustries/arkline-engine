@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "hull_asset_sha256": "df8490f42379aca161df0aa26b24cb32ab8dbf73e83e0681ed2cfc29ef43a2c9",
+  "hull_asset_sha256": "8125644f007537437942d34169e527c08ddd2dfaed575c874e2263ff2b7cb123",
   "fixtures": [
     {
       "id": "pioneer.exterior.nav.port",
@@ -118,7 +118,7 @@
         0.42,
         0.5
       ],
-      "emission": 0.06,
+      "emission": 0.025,
       "light_range_m": 2.0,
       "light_intensity": 0.08,
       "load_w": 12,
@@ -137,7 +137,7 @@
         0.42,
         0.5
       ],
-      "emission": 0.06,
+      "emission": 0.025,
       "light_range_m": 2.0,
       "light_intensity": 0.08,
       "load_w": 12,
@@ -156,7 +156,7 @@
         0.42,
         0.5
       ],
-      "emission": 0.06,
+      "emission": 0.025,
       "light_range_m": 2.0,
       "light_intensity": 0.08,
       "load_w": 12,
@@ -175,7 +175,7 @@
         0.42,
         0.5
       ],
-      "emission": 0.06,
+      "emission": 0.025,
       "light_range_m": 2.0,
       "light_intensity": 0.08,
       "load_w": 12,

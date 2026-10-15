@@ -13,10 +13,10 @@ def apply(bpy):
     def body(v):
         return Vector((v.x, v.z, -v.y))
 
-    def cut(obj, center_z):
+    def cut(obj, center_z, *, radius=2.96, depth=7.0, center_x=-35.3):
         bpy.ops.mesh.primitive_cylinder_add(
-            vertices=48, radius=2.96, depth=7.0,
-            location=(-35.3, -center_z, 0.0),
+            vertices=48, radius=radius, depth=depth,
+            location=(center_x, -center_z, 0.0),
             rotation=(0.0, math.pi / 2, 0.0))
         cutter = bpy.context.object
         cutter.name = 'Study05 temporary aft aperture cutter'
@@ -39,13 +39,16 @@ def apply(bpy):
     ]:
         for obj in (hull, bpy.data.objects[nacelle]):
             cut(obj, z)
+            # Seat the flange in a genuine counterbore. A coplanar annulus on
+            # the old X=-36 cap produces depth fighting instead of a joint.
+            cut(obj, z, radius=3.32, depth=.70, center_x=-35.98)
             if obj.name not in changed:
                 changed.append(obj.name)
         # A closed, faceted annular rim provides an actual reveal at the cut
         # boundary. It does not cover the existing recessed bell or throat.
         verts = []
-        profile = [(-36.0, 3.16), (-35.76, 3.16),
-                   (-35.76, 2.93), (-36.0, 2.93)]
+        profile = [(-35.99, 3.16), (-35.65, 3.16),
+                   (-35.65, 2.93), (-35.99, 2.93)]
         for x, radius in profile:
             for i in range(48):
                 angle = math.tau * i / 48
@@ -104,6 +107,10 @@ def apply(bpy):
         'added_parts': ['Aft drive aperture rim port',
                         'Aft drive aperture rim starboard'],
         'opening_radius_m': 2.96,
+        'counterbore': {'radius_m': 3.32, 'floor_x_m': -35.63,
+                        'flange_front_x_m': -35.99,
+                        'flange_back_x_m': -35.65,
+                        'outer_flange_radius_m': 3.16},
         'existing_drive_centers_body_m': [[-35.9, 0, -12.5], [-35.9, 0, 12.5]],
         'centerline_visibility_proof': proof,
         'scope': 'Real static source cap openings and rims; existing bells/throats '

@@ -284,11 +284,11 @@ pub fn default_pioneer_exterior() -> ExteriorDefinition {
         None,
     );
     // Authored recessed panes carry the visible surface. These are restrained
-    // presentation values, while the existing Window circuit still reserves12W.
+    // presentation values, while the existing Window circuit still reserves 12 W.
     for fixture in &mut fixtures {
         if fixture.kind == Window {
             fixture.color = [0.10, 0.42, 0.50];
-            fixture.emission = 0.06;
+            fixture.emission = 0.025;
             fixture.light_intensity = 0.08;
             fixture.light_range_m = 2.0;
         }
