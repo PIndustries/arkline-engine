@@ -53,7 +53,7 @@ Existing cockpit flight, finite-ore mining, drones, cargo/storage, resource jobs
 
 All PRs in this table were **draft, open and unmerged** when checked. The dependency chain is #42 → #44 → #47; #52–#56 target #47's branch as separate contributions. They are not one accepted native build yet.
 
-| Work | Published head | What it adds; remaining boundary |
+| Work | Implementation checkpoint | What it adds; remaining boundary |
 | --- | --- | --- |
 | [#47 Editor](https://github.com/PIndustries/arkline-engine/pull/47) | `3827de9` | Embedded local game/authority, typed material graph, scene destinations, host-accepted room geometry and loopback shared sessions. Candidate routes/engineering/material files remain local; they do not install utilities or become shared project files. |
 | [#52 Hangar scale](https://github.com/PIndustries/arkline-engine/pull/52) | `c6b057b` | Calibrated CPU projections and tests of actual render-list transforms. Geometry is unchanged; comparison with native rendered pixels remains open. |
@@ -70,6 +70,8 @@ The #54 inspection found 524 source meshes, ten material datablocks and no paren
 - **Development Mac evidence:** #44 records an isolated room commissioning → breaker loss/emergency → restore → exhaust/interlock → equalization/safe opening → exit/reboard journey. #47 records package **26.10.14.49 / `196ef4f`** material save/reload, two native editors sharing clock and accepted room geometry, and Host-to-Local behavior. The later **.56 / `3827de9`** package and green CI do not repeat those native journeys.
 - **Later contributions:** #52–#56 link successful published-head CI and separate focused receipts. #54's 30 local Python/Blender checks include four real-source Blender tests; existing CI does not run that opt-in Blender extraction. CPU scale evidence does not resolve the reported native visual scale defect.
 - **Linux visual receipts:** [cockpit recheck](https://github.com/PIndustries/arkline-engine/pull/55#issuecomment-6181539800) and [importer receipt](https://github.com/PIndustries/arkline-engine/pull/56#issuecomment-6182883524) establish their stated visible Linux journeys, locally composed with a separate startup patch. They do not establish native Mac acceptance or a published combined build. The importer also retains a [stale candidate-status message finding](https://github.com/PIndustries/arkline-engine/pull/56#issuecomment-6182670358).
+
+- **Combined local Mac checkpoint:** the [validation receipt](https://github.com/PIndustries/arkline-engine/issues/45#issuecomment-6184733715) records isolated `d86a9bc` combining #47 code with #52–#56: **590 passed / 0 failed / 20 ignored** on test build **26.10.14.59**, strict desktop/browser checks and an optimized ad-hoc signed Mac package **.60**. Native UI journeys and calibrated hangar pixels remain pending. The four opt-in real-source Blender checks are blocked before Blender starts by Mac `RLIMIT_AS` setup; 26 non-Blender checks pass. This combined candidate is local, unpublished and has no exact-head CI.
 
 No feature is marked complete from a screenshot, test count or green workflow alone. Record future combined-native results with exact source composition, build version, disposable fixture, observed journey and remaining failures; keep published-head CI separate from local integration tests.
 
