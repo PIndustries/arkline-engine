@@ -524,3 +524,553 @@ fn native_powered_exterior_frame_capture() {
         renderer.destroy();
     }
 }
+
+const AUTHORITY_CAPTURE_PILOT: &str = "PioneerAdoptionQA";
+const PRE_ADOPTION_HULL_SHA256: &str =
+    "f8f8cc65772c678a46606c27abe205d62c4e6ab37c350f79a0f3a4cdc0c6f402";
+
+struct AuthorityCaptureDirectory(std::path::PathBuf);
+impl AuthorityCaptureDirectory {
+    fn new() -> Self {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        Self(std::env::temp_dir().join(format!(
+            "arkline-pioneer-adoption-{}-{nonce}",
+            std::process::id()
+        )))
+    }
+}
+impl Drop for AuthorityCaptureDirectory {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+fn authority_request(
+    world: &mut arkline_server::editor::EditorWorld,
+    session: &mut Option<String>,
+    request: arkline_protocol::Request,
+) -> Snapshot {
+    let response = world.handle(session, request);
+    assert!(
+        response.ok,
+        "authority rejected capture command: {}",
+        response.message
+    );
+    response
+        .snapshot
+        .expect("accepted capture command supplies a snapshot")
+}
+fn authority_pilot(snapshot: &Snapshot) -> &PilotView {
+    snapshot
+        .pilots
+        .iter()
+        .find(|p| p.name == AUTHORITY_CAPTURE_PILOT)
+        .unwrap()
+}
+fn authority_vessel(snapshot: &Snapshot) -> &ExteriorVesselState {
+    snapshot
+        .exterior
+        .as_ref()
+        .unwrap()
+        .vessels
+        .iter()
+        .find(|v| v.pilot == AUTHORITY_CAPTURE_PILOT && v.ship_class == ShipClass::Pioneer)
+        .unwrap()
+}
+
+#[derive(Clone, Copy)]
+struct AuthorityCaptureCamera {
+    name: &'static str,
+    eye_m: [f32; 3],
+    target_m: [f32; 3],
+    up: [f32; 3],
+    half_width_m: f32,
+}
+impl AuthorityCaptureCamera {
+    fn frame(self, snapshot: &Snapshot) -> Frame {
+        let pilot = authority_pilot(snapshot);
+        let now = snapshot.server_time_ms;
+        let space = Space {
+            origin: display_position(pilot, now),
+        };
+        let rotation = ship_orientation_at(pilot, now);
+        let eye = rotation * Vec3::from_array(self.eye_m) / 100.;
+        let target = rotation * Vec3::from_array(self.target_m) / 100.;
+        let half_width = self.half_width_m / 100.;
+        let half_height = half_width * 2. / 3.;
+        let vp = Mat4::orthographic_rh_gl(
+            -half_width,
+            half_width,
+            -half_height,
+            half_height,
+            0.001,
+            8.,
+        ) * Mat4::look_at_rh(eye, target, rotation * Vec3::from_array(self.up));
+        Frame {
+            exterior: snapshot.exterior.clone().map(Arc::new),
+            lighting_quality: super::super::lighting_settings::LightingQuality::High,
+            cockpit_vp: vp,
+            snapshot_time: now,
+            planet_vp: vp,
+            system_id: pilot.system_id,
+            ship_class: pilot.ship_class,
+            drone_camera: false,
+            camera_drone: None,
+            // Isolate the actual accepted pilot for model review. No diagnostic
+            // props, invented equipment, traffic, rocks or extra pilots are added.
+            scene: Arc::new(FrameScene {
+                traffic: vec![],
+                surface_props: vec![],
+                asteroids: vec![],
+                gates: vec![],
+                pilots: vec![pilot.clone()],
+            }),
+            space,
+            cockpit: false,
+            rotation,
+            connected: true,
+            vp,
+            eye,
+            now,
+            own: AUTHORITY_CAPTURE_PILOT.into(),
+            docking: None,
+        }
+    }
+    fn receipt(self, frame: &Frame) -> serde_json::Value {
+        serde_json::json!({"name":self.name,"projection":"orthographic",
+            "eye_body_m":self.eye_m,"target_body_m":self.target_m,"up_body":self.up,
+            "half_width_m":self.half_width_m,"half_height_m":self.half_width_m*2./3.,
+            "eye_scene":frame.eye.to_array(),"origin_world_m":frame.space.origin,
+            "view_projection":frame.vp.to_cols_array()})
+    }
+}
+fn authority_public_receipt(snapshot: &Snapshot) -> serde_json::Value {
+    let pilot = authority_pilot(snapshot);
+    let exterior = snapshot.exterior.as_ref().unwrap();
+    let flight = pilot.flight.as_ref().unwrap();
+    // Select only public renderer inputs; never serialize Response or session.
+    serde_json::json!({"simulation_time_ms":snapshot.server_time_ms,
+        "definition_revision":exterior.definition.revision,
+        "hull_asset_sha256":exterior.definition.document.hull_asset_sha256,
+        "vessel":authority_vessel(snapshot),"power":pilot.power,
+        "flight":{"position_m":flight.position,"velocity_m_s":flight.velocity,
+            "acceleration_m_s2":flight.acceleration,"orientation":flight.orientation,
+            "updated_at_ms":flight.updated_at_ms},
+        "strobe_outputs":exterior.definition.document.fixtures.iter()
+            .filter(|f|f.kind==arkline_protocol::ExteriorFixtureKind::Strobe)
+            .map(|f|serde_json::json!({"id":f.id,"pulse":f.pulse,
+                "output":f.output(authority_vessel(snapshot),snapshot.server_time_ms)})).collect::<Vec<_>>()})
+}
+
+#[test]
+#[ignore = "Explicit installed-hull capture from real disposable EditorWorld commands and clock; no OS window"]
+fn native_authority_pioneer_adoption_capture() {
+    use arkline_protocol::{ExteriorFixtureKind, Request};
+    let expected_hash = std::env::var("ARKLINE_ADOPTION_EXPECTED_SHA256")
+        .expect("set ARKLINE_ADOPTION_EXPECTED_SHA256 to the reviewed candidate export hash");
+    assert_eq!(
+        pioneer_asset_sha256(),
+        expected_hash,
+        "compiled hull must match the explicitly reviewed candidate export"
+    );
+    assert_ne!(
+        pioneer_asset_sha256(),
+        PRE_ADOPTION_HULL_SHA256,
+        "this adoption capture requires the explicitly reviewed replacement hull to be installed"
+    );
+    unsafe {
+        let (_egl, gl) = Egl::create();
+        let directory =
+            std::env::var_os("ARKLINE_ADOPTION_CAPTURE_DIR").map(std::path::PathBuf::from);
+        if let Some(directory) = &directory {
+            std::fs::create_dir_all(directory).unwrap();
+        }
+        let sandbox = AuthorityCaptureDirectory::new();
+        let mut world = arkline_server::editor::EditorWorld::open(&sandbox.0).unwrap();
+        let mut session = None;
+        authority_request(
+            &mut world,
+            &mut session,
+            Request::Connect {
+                supports_room_controls: true,
+                supports_fleet_hangar: true,
+                supports_pioneer_interior: true,
+                protocol_version: arkline_protocol::PROTOCOL_VERSION,
+                pilot: AUTHORITY_CAPTURE_PILOT.into(),
+                resume_token: None,
+            },
+        );
+        authority_request(&mut world, &mut session, Request::Undock);
+        let accepted_definition = world.exterior_state().unwrap();
+        assert_eq!(
+            accepted_definition.document,
+            arkline_protocol::default_pioneer_exterior(),
+            "capture must use the unchanged installed default fixture definition"
+        );
+        assert_eq!(
+            accepted_definition.document.hull_asset_sha256,
+            pioneer_asset_sha256()
+        );
+        world
+            .exterior_set_enabled(&mut session, false, accepted_definition.revision)
+            .unwrap();
+        let off = authority_request(&mut world, &mut session, Request::Snapshot);
+        assert!(!authority_vessel(&off).powered);
+        world
+            .exterior_set_enabled(&mut session, true, accepted_definition.revision)
+            .unwrap();
+        let idle = authority_request(&mut world, &mut session, Request::Snapshot);
+        assert!(authority_vessel(&idle).powered);
+        assert_eq!(authority_vessel(&idle).drive, ExteriorDriveState::Idle);
+        assert_eq!(off.server_time_ms, idle.server_time_ms);
+
+        let mut renderer = Renderer::new(gl.clone()).unwrap();
+        let target = CachedFeed::create(&gl, 1814, 960, 640).unwrap();
+        let render = |renderer: &mut Renderer, frame: &Frame| {
+            gl.bind_framebuffer(glow::FRAMEBUFFER, Some(target.framebuffer));
+            gl.viewport(0, 0, 960, 640);
+            gl.disable(glow::SCISSOR_TEST);
+            gl.color_mask(true, true, true, true);
+            renderer.paint(frame, Some(target.framebuffer));
+            pixels(&gl)
+        };
+        let front = AuthorityCaptureCamera {
+            name: "front-quarter",
+            eye_m: [95., 50., -95.],
+            target_m: [0.; 3],
+            up: [0., 1., 0.],
+            half_width_m: 54.,
+        };
+        let rear = AuthorityCaptureCamera {
+            name: "rear",
+            eye_m: [-120., 15., 0.],
+            target_m: [0.; 3],
+            up: [0., 1., 0.],
+            half_width_m: 30.,
+        };
+        let mut captures = Vec::new();
+        let mut capture = |name: &str, camera: AuthorityCaptureCamera, snapshot: &Snapshot| {
+            let frame = camera.frame(snapshot);
+            let image = render(&mut renderer, &frame);
+            save(&directory, &format!("{name}.png"), &image);
+            captures.push(serde_json::json!({"file":format!("{name}.png"),
+                "camera":camera.receipt(&frame),"authority":authority_public_receipt(snapshot)}));
+            image
+        };
+        let off_pixels = capture("pioneer-authority-exterior-off", front, &off);
+        let idle_pixels = capture("pioneer-authority-idle-front-quarter", front, &idle);
+        assert!(
+            changed(&off_pixels, &idle_pixels) > 8,
+            "accepted exterior circuit must change visible pixels"
+        );
+        for camera in [
+            AuthorityCaptureCamera {
+                name: "side",
+                eye_m: [0., 20., -120.],
+                target_m: [0.; 3],
+                up: [0., 1., 0.],
+                half_width_m: 45.,
+            },
+            AuthorityCaptureCamera {
+                name: "top",
+                eye_m: [0., 120., 0.],
+                target_m: [0.; 3],
+                up: [0., 0., -1.],
+                half_width_m: 45.,
+            },
+            AuthorityCaptureCamera {
+                name: "rear",
+                eye_m: [-120., 15., 0.],
+                target_m: [0.; 3],
+                up: [0., 1., 0.],
+                half_width_m: 30.,
+            },
+        ] {
+            capture(
+                &format!("pioneer-authority-idle-{}", camera.name),
+                camera,
+                &idle,
+            );
+        }
+
+        // Find an ON interval using only genuine fixed ticks. Neither phase nor
+        // period is edited to arrange the evidence.
+        let strobe = accepted_definition
+            .document
+            .fixtures
+            .iter()
+            .filter(|f| f.kind == ExteriorFixtureKind::Strobe)
+            .max_by(|a, b| a.position_m[1].total_cmp(&b.position_m[1]))
+            .unwrap();
+        let pulse = strobe.pulse.unwrap();
+        assert_eq!(pulse.period_ms, 1000);
+        assert_eq!(pulse.on_ms, 100);
+        let mut strobe_on = idle.clone();
+        for _ in 0..20 {
+            if strobe.output(authority_vessel(&strobe_on), strobe_on.server_time_ms) > 0. {
+                break;
+            }
+            world.step(50).unwrap();
+            strobe_on = authority_request(&mut world, &mut session, Request::Snapshot);
+        }
+        assert_eq!(
+            strobe.output(authority_vessel(&strobe_on), strobe_on.server_time_ms),
+            1.
+        );
+        let strobe_target = strobe.position_m.map(|v| v as f32);
+        let strobe_camera = AuthorityCaptureCamera {
+            name: "dorsal-strobe-closeup",
+            eye_m: [
+                strobe_target[0] + 8.,
+                strobe_target[1] + 12.,
+                strobe_target[2] - 10.,
+            ],
+            target_m: strobe_target,
+            up: [0., 1., 0.],
+            half_width_m: 3.,
+        };
+        let on_pixels = capture("pioneer-authority-strobe-on", strobe_camera, &strobe_on);
+        world.play();
+        world.pause();
+        assert!(world.is_paused());
+        world.advance(250).unwrap();
+        let paused = authority_request(&mut world, &mut session, Request::Snapshot);
+        assert_eq!(paused.server_time_ms, strobe_on.server_time_ms);
+        assert_eq!(paused.exterior, strobe_on.exterior);
+        let paused_pixels = capture("pioneer-authority-strobe-paused", strobe_camera, &paused);
+        assert_eq!(
+            on_pixels, paused_pixels,
+            "actual paused authority must freeze rendered phase"
+        );
+        let mut steps = Vec::new();
+        let mut first_off = None;
+        let mut cycle_pixels = None;
+        for index in 1..=20 {
+            let previous = world.time();
+            world.step(50).unwrap();
+            assert_eq!(world.time(), previous + 50);
+            let stepped = authority_request(&mut world, &mut session, Request::Snapshot);
+            let output = strobe.output(authority_vessel(&stepped), stepped.server_time_ms);
+            steps.push(serde_json::json!({"step":index,"delta_ms":50,
+                "simulation_time_ms":stepped.server_time_ms,"strobe_output":output}));
+            if index == 1 {
+                capture(
+                    "pioneer-authority-strobe-step-50ms",
+                    strobe_camera,
+                    &stepped,
+                );
+            }
+            if output == 0. && first_off.is_none() {
+                let image = capture("pioneer-authority-strobe-off", strobe_camera, &stepped);
+                first_off = Some((stepped.server_time_ms, image));
+            }
+            if index == 20 {
+                assert_eq!(stepped.server_time_ms, strobe_on.server_time_ms + 1000);
+                assert_eq!(output, 1.);
+                cycle_pixels = Some(capture(
+                    "pioneer-authority-strobe-next-cycle",
+                    strobe_camera,
+                    &stepped,
+                ));
+            }
+        }
+        let (strobe_off_time, off_strobe_pixels) = first_off.unwrap();
+        let strobe_changed = changed(&on_pixels, &off_strobe_pixels);
+        assert!(
+            strobe_changed > 8,
+            "unchanged default strobe must visibly switch on real tick boundaries"
+        );
+        assert_eq!(
+            on_pixels,
+            cycle_pixels.unwrap(),
+            "default phase repeats after twenty real 50ms steps"
+        );
+
+        let pre_thrust_idle = authority_request(
+            &mut world,
+            &mut session,
+            Request::PilotInput {
+                translation: [0.; 3],
+                rotation: [0.; 3],
+            },
+        );
+        assert_eq!(
+            authority_vessel(&pre_thrust_idle).drive,
+            ExteriorDriveState::Idle
+        );
+        let pre_thrust_pixels =
+            capture("pioneer-authority-pre-thrust-idle", rear, &pre_thrust_idle);
+        let commanded = authority_request(
+            &mut world,
+            &mut session,
+            Request::PilotInput {
+                translation: [1., 0., 0.],
+                rotation: [0.; 3],
+            },
+        );
+        assert_eq!(pre_thrust_idle.server_time_ms, commanded.server_time_ms);
+        assert_eq!(
+            authority_pilot(&pre_thrust_idle)
+                .flight
+                .as_ref()
+                .unwrap()
+                .position,
+            authority_pilot(&commanded)
+                .flight
+                .as_ref()
+                .unwrap()
+                .position
+        );
+        assert_eq!(
+            authority_vessel(&commanded).drive,
+            ExteriorDriveState::Active
+        );
+        let commanded_pixels = capture(
+            "pioneer-authority-thrust-command-accepted",
+            rear,
+            &commanded,
+        );
+        let same_time_drive_pixels = changed(&pre_thrust_pixels, &commanded_pixels);
+        assert!(same_time_drive_pixels > 8,
+            "same-time accepted drive telemetry must change visible pixels without a strobe phase change");
+        let before_thrust = world.time();
+        world.step(50).unwrap();
+        let active = authority_request(&mut world, &mut session, Request::Snapshot);
+        assert_eq!(active.server_time_ms, before_thrust + 50);
+        assert_eq!(authority_vessel(&active).drive, ExteriorDriveState::Active);
+        assert!(
+            authority_pilot(&active)
+                .flight
+                .as_ref()
+                .unwrap()
+                .acceleration[0]
+                > 0.
+        );
+        let active_pixels = capture("pioneer-authority-active-front-quarter", front, &active);
+        assert!(
+            changed(&idle_pixels, &active_pixels) > 8,
+            "accepted thrust must change actual engine presentation"
+        );
+        capture(
+            "pioneer-authority-active-rear",
+            AuthorityCaptureCamera {
+                name: "rear",
+                eye_m: [-120., 15., 0.],
+                target_m: [0.; 3],
+                up: [0., 1., 0.],
+                half_width_m: 30.,
+            },
+            &active,
+        );
+        // All camera captures are complete; subsequent checks use the actual
+        // renderer's gameplay turret cache and material admission path.
+        assert_eq!(
+            renderer.turrets.len(),
+            2,
+            "existing gameplay turrets must be present"
+        );
+
+        let mut graph = arkline_protocol::material_graph::MaterialGraphDocument::pioneer_default();
+        graph.binding.asset_sha256 = PRE_ADOPTION_HULL_SHA256.into();
+        renderer
+            .spatial_material
+            .queue(Some(Arc::new(MaterialRevision::new(1, 1, &graph).unwrap())))
+            .unwrap();
+        renderer.prepare_spatial_material();
+        let rejected = renderer.spatial_material.status().clone();
+        assert_eq!(
+            rejected.phase,
+            crate::spatial_material::MaterialProgramPhase::Rejected
+        );
+        assert!(rejected
+            .diagnostics
+            .iter()
+            .any(|d| d.phase == MaterialProgramErrorPhase::Binding));
+        assert!(renderer.spatial_material.applied().is_none());
+        let rejected_pixels = render(&mut renderer, &front.frame(&active));
+        assert_eq!(
+            active_pixels, rejected_pixels,
+            "rejected historical binding must leave authored hull pixels unchanged"
+        );
+        save(
+            &directory,
+            "pioneer-authority-old-hash-rejected.png",
+            &rejected_pixels,
+        );
+        graph.binding = arkline_protocol::material_graph::AssetMaterialBinding::pioneer();
+        let authored_surface = graph
+            .nodes
+            .iter()
+            .find(|node| {
+                matches!(
+                    node.op,
+                    arkline_protocol::material_graph::MaterialNodeOp::AuthoredSurface
+                )
+            })
+            .unwrap()
+            .id;
+        for node in &mut graph.nodes {
+            if matches!(
+                node.op,
+                arkline_protocol::material_graph::MaterialNodeOp::SurfaceOutput { .. }
+            ) {
+                node.op = arkline_protocol::material_graph::MaterialNodeOp::SurfaceOutput {
+                    surface: authored_surface,
+                };
+            }
+        }
+        renderer
+            .spatial_material
+            .queue(Some(Arc::new(MaterialRevision::new(1, 2, &graph).unwrap())))
+            .unwrap();
+        let recovery_frame = front.frame(&active);
+        let recovered_pixels = render(&mut renderer, &recovery_frame);
+        assert_eq!(
+            renderer.spatial_material.status().phase,
+            crate::spatial_material::MaterialProgramPhase::Applied
+        );
+        assert_eq!(
+            renderer
+                .spatial_material
+                .applied()
+                .unwrap()
+                .binding()
+                .asset_sha256,
+            pioneer_asset_sha256()
+        );
+        save(
+            &directory,
+            "pioneer-authority-current-hash-graph-recovery.png",
+            &recovered_pixels,
+        );
+        if let Some(directory) = directory {
+            std::fs::write(directory.join("authority-receipt.json"),serde_json::to_vec_pretty(&serde_json::json!({
+                "build":include_str!("../../../BUILD_VERSION").trim(),"asset_sha256":pioneer_asset_sha256(),
+                "reviewed_expected_asset_sha256":expected_hash,
+                "source_commit":std::env::var("ARKLINE_CAPTURE_SOURCE_COMMIT").ok(),
+                "vendor":gl.get_parameter_string(glow::VENDOR),"renderer":gl.get_parameter_string(glow::RENDERER),
+                "gl_version":gl.get_parameter_string(glow::VERSION),"viewport":[960,640],
+                "authority":"disposable arkline_server::editor::EditorWorld", "fixture_definition_modified":false,
+                "omitted_snapshot_scene":["traffic","asteroids","gates","surface_props","other_pilots"],
+                "captures":captures,"off_idle_changed_pixels":changed(&off_pixels,&idle_pixels),
+                "idle_active_changed_pixels":same_time_drive_pixels,
+                "integrated_active_vs_initial_idle_changed_pixels":changed(&idle_pixels,&active_pixels),
+                "drive_comparison_same_simulation_time_ms":commanded.server_time_ms,"drive_comparison_camera":"rear",
+                "dynamic_turret_count":renderer.turrets.len(),
+                "strobe":{"id":strobe.id,"pulse":pulse,"on_time_ms":strobe_on.server_time_ms,
+                    "off_time_ms":strobe_off_time,"changed_pixels":strobe_changed,"paused_pixels_equal":true,
+                    "full_cycle_pixels_equal":true,"steps":steps},
+                "graph_binding":{"old_asset_sha256":PRE_ADOPTION_HULL_SHA256,"old_rejected":true,
+                    "old_error_phase":"binding","rejection_pixels_unchanged":true,"recovery_asset_sha256":pioneer_asset_sha256(),"recovery_applied":true,"recovery_graph":"authored_surface_identity"},
+                "limitations":["actual authority plus native engine EGL capture; no OS window or TCP journey",
+                    "camera isolates the accepted pilot; unrelated snapshot objects are omitted",
+                    "no fixture size, intensity, period or phase changes; no automatic source-part retargeting"]
+            })).unwrap()).unwrap();
+        }
+        target.destroy(&gl);
+        renderer.destroy();
+    }
+}
