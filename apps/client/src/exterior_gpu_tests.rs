@@ -653,7 +653,7 @@ fn authority_public_receipt(snapshot: &Snapshot) -> serde_json::Value {
     let flight = pilot.flight.as_ref().unwrap();
     // Select only public renderer inputs; never serialize Response or session.
     serde_json::json!({"simulation_time_ms":snapshot.server_time_ms,
-        "definition_revision":exterior.definition.revision,
+        "definition_revision":exterior.definition.revision,"location":pilot.location,"system_id":pilot.system_id,
         "hull_asset_sha256":exterior.definition.document.hull_asset_sha256,
         "vessel":authority_vessel(snapshot),"power":pilot.power,
         "flight":{"position_m":flight.position,"velocity_m_s":flight.velocity,
@@ -704,18 +704,53 @@ fn native_authority_pioneer_adoption_capture() {
             },
         );
         authority_request(&mut world, &mut session, Request::Undock);
-        // Turn the actual vessel toward the existing world sunlight so the
-        // concept-angle geometry is readable. No renderer light is altered.
-        for _ in 0..40 {
+        // Leave the real station's shadow through an accepted warp and fixed
+        // authority ticks. The renderer retains its ordinary sun and shadows.
+        let warping = authority_request(
+            &mut world,
+            &mut session,
+            Request::Warp {
+                destination: arkline_protocol::Destination::Belt,
+            },
+        );
+        let arrival = authority_pilot(&warping)
+            .flight
+            .as_ref()
+            .unwrap()
+            .warp
+            .as_ref()
+            .unwrap()
+            .arrives_at_ms;
+        let warp_started = world.time();
+        assert!(arrival - warp_started < 120_000);
+        while world.time() < arrival {
+            world.step(50).unwrap();
+        }
+        let arrived = authority_request(&mut world, &mut session, Request::Snapshot);
+        assert_eq!(authority_pilot(&arrived).location, Location::Belt);
+        // Align the concept-angle camera with the existing horizontal sunlight
+        // through real yaw controls. Never write an orientation or a power state.
+        let heading = authority_pilot(&arrived).flight.as_ref().unwrap().heading;
+        let current_yaw = (-heading[2]).atan2(heading[0]);
+        let target_yaw = (-0.65f64).atan2(-0.5) - std::f64::consts::FRAC_PI_4;
+        let mut remaining = (target_yaw - current_yaw + std::f64::consts::PI)
+            .rem_euclid(std::f64::consts::TAU)
+            - std::f64::consts::PI;
+        let mut yaw_steps = 0;
+        while remaining.abs() > 1e-10 {
+            let input = (remaining / (arkline_protocol::MAX_ANGULAR_SPEED * 0.05)).clamp(-1., 1.);
             authority_request(
                 &mut world,
                 &mut session,
                 Request::PilotInput {
                     translation: [0.; 3],
-                    rotation: [0., 1., 0.],
+                    rotation: [0., input, 0.],
                 },
             );
             world.step(50).unwrap();
+            remaining -= input * arkline_protocol::MAX_ANGULAR_SPEED * 0.05;
+            yaw_steps += 1;
+            assert!(yaw_steps <= 41);
         }
         authority_request(
             &mut world,
@@ -1093,7 +1128,7 @@ fn native_authority_pioneer_adoption_capture() {
                 "vendor":gl.get_parameter_string(glow::VENDOR),"renderer":gl.get_parameter_string(glow::RENDERER),
                 "gl_version":gl.get_parameter_string(glow::VERSION),"viewport":[960,640],
                 "authority":"disposable arkline_server::editor::EditorWorld", "fixture_definition_modified":false,
-                "review_attitude":{"method":"accepted yaw PilotInput and real fixed steps; existing sunlight unchanged","yaw_steps":40,"step_ms":50,"zero_input_settle_ms":50},
+                "review_attitude":{"method":"accepted Belt warp and yaw PilotInput with real fixed steps; existing sunlight and shadows unchanged","warp_started_ms":warp_started,"warp_arrival_ms":arrival,"yaw_steps":yaw_steps,"step_ms":50,"zero_input_settle_ms":50},
                 "omitted_snapshot_scene":["traffic","asteroids","gates","surface_props","other_pilots"],
                 "captures":captures,"off_idle_changed_pixels":changed(&off_pixels,&idle_pixels),
                 "idle_active_changed_pixels":same_time_drive_pixels,
