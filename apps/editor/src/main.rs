@@ -1,5 +1,7 @@
 //! One-window local development workspace using the real game client and authority.
 mod asset_document;
+mod cockpit;
+mod cockpit_document;
 mod community;
 mod component_view;
 mod engineering;
@@ -8,6 +10,8 @@ mod equipment;
 mod event_graph;
 mod github;
 mod github_auth;
+mod import_document;
+mod imports;
 mod inspector;
 mod material_graph;
 mod materials;
@@ -17,6 +21,7 @@ mod render_debug;
 mod rooms;
 mod service_paths;
 mod session_panel;
+mod surface_materials;
 use arkline_client::{EmbeddedAssetGallery, EmbeddedClient, EmbeddedStatus};
 use eframe::egui::{self, Color32, RichText};
 use std::{collections::VecDeque, path::PathBuf, time::Duration};
@@ -24,6 +29,8 @@ const BUILD: &str = include_str!("../../../BUILD_VERSION");
 const GREEN: Color32 = Color32::from_rgb(62, 233, 145);
 const MUTED: Color32 = Color32::from_rgb(140, 165, 158);
 struct Editor {
+    cockpit: cockpit::CockpitPanel,
+    imports: imports::Imports,
     client: EmbeddedClient,
     project: PathBuf,
     selected_pilot: String,
@@ -33,6 +40,9 @@ struct Editor {
     bottom_tab: usize,
     inspector_tab: usize,
     materials: materials::Materials,
+    surface_materials: surface_materials::SurfaceMaterials,
+    surface_mode: bool,
+    surface_hangar_light: bool,
     engineering: engineering::Engineering,
     service_paths: service_paths::ServicePaths,
     rooms: rooms::Rooms,
@@ -60,9 +70,21 @@ impl Editor {
         }
     }
     fn new(cc: &eframe::CreationContext<'_>, project: PathBuf, pilot: String) -> Self {
+        static MATERIAL_GENERATION: std::sync::atomic::AtomicU64 =
+            std::sync::atomic::AtomicU64::new(1);
+        let material_generation =
+            MATERIAL_GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let client = EmbeddedClient::new(cc, project.join(".arkline-studio"), pilot.clone());
         Self {
+            cockpit: cockpit::CockpitPanel::open(&project),
+            imports: imports::Imports::open(&project),
             materials: materials::Materials::open(&project),
+            surface_materials: surface_materials::SurfaceMaterials::open(
+                &project,
+                material_generation,
+            ),
+            surface_mode: false,
+            surface_hangar_light: true,
             engineering: engineering::Engineering::open(&project),
             service_paths: service_paths::ServicePaths::open(&project),
             rooms: rooms::Rooms::open(&project),
@@ -162,8 +184,16 @@ impl Editor {
 impl eframe::App for Editor {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         self.client.poll();
+        self.cockpit.poll(&cockpit::Live::from_client(&self.client));
         self.rooms.poll_live(&mut self.client);
         self.community.poll();
+        let surface_revision = self.surface_materials.revision();
+        self.client.set_spatial_material(surface_revision.clone());
+        if let Some(gallery) = &mut self.asset_gallery {
+            gallery.set_spatial_material(surface_revision.clone());
+            self.surface_materials
+                .set_program_status(gallery.material_program_status());
+        }
         let clock_control = self.client.can_control_clock();
         let status = match self.client.status() {
             EmbeddedStatus::Loading => "LOADING".into(),
@@ -294,6 +324,8 @@ impl eframe::App for Editor {
                     self.inspector_tab = 0;
                 }
                 ui.selectable_value(&mut self.workspace, 3, "Materials");
+                ui.selectable_value(&mut self.workspace, 4, "Cockpit");
+                ui.selectable_value(&mut self.workspace, 5, "Assets");
                 ui.selectable_value(&mut self.workspace, 2, "Physics lab");
                 if ui
                     .selectable_value(&mut self.workspace, 1, "Community · GitHub")
@@ -325,6 +357,17 @@ impl eframe::App for Editor {
         if self.workspace == 0 {
             self.scene_controls(ctx);
         }
+        if self.workspace == 3 {
+            egui::TopBottomPanel::top("editor_material_mode").show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.selectable_value(&mut self.surface_mode, false, "Fleet finish");
+                    ui.selectable_value(&mut self.surface_mode, true, "Hull surface");
+                });
+                if self.surface_mode {
+                    self.surface_materials.toolbar(ui);
+                }
+            });
+        }
         if self.events_open && self.workspace == 0 {
             egui::TopBottomPanel::bottom("editor_event_flow")
                 .resizable(true)
@@ -352,6 +395,71 @@ impl eframe::App for Editor {
                 }
             });
         });
+        }
+        if self.workspace == 4 {
+            self.client.poll_hidden();
+            if let Some(request) = self
+                .cockpit
+                .show(ctx, &cockpit::Live::from_client(&self.client))
+            {
+                self.client.send_command(request);
+            }
+            self.session_controls(ctx);
+            ctx.request_repaint_after(Duration::from_millis(33));
+            return;
+        }
+        if self.workspace == 5 {
+            self.client.poll_hidden();
+            self.imports.show(ctx, self.graphics.as_ref());
+            self.session_controls(ctx);
+            ctx.request_repaint_after(Duration::from_millis(33));
+            return;
+        }
+        if self.workspace == 3 && self.surface_mode {
+            self.client.poll_hidden();
+            egui::SidePanel::right("surface_material_inspector")
+                .resizable(true)
+                .default_width(310.)
+                .width_range(255. ..=500.)
+                .show(ctx, |ui| {
+                    egui::ScrollArea::vertical()
+                        .id_salt("surface_inspector_scroll")
+                        .show(ui, |ui| self.surface_materials.show_node_inspector(ui));
+                });
+            egui::SidePanel::left("surface_material_library")
+                .resizable(true)
+                .default_width(360.)
+                .width_range(280. ..=560.)
+                .show(ctx, |ui| {
+                    egui::ScrollArea::vertical()
+                        .id_salt("surface_library_scroll")
+                        .max_height((ui.available_height() * 0.4).clamp(120., 280.))
+                        .show(ui, |ui| self.surface_materials.show_library(ui));
+                    ui.separator();
+                    ui.strong("PIONEER HULL SECTION");
+                    ui.horizontal(|ui| {
+                        ui.selectable_value(&mut self.surface_hangar_light, true, "Hangar light");
+                        ui.selectable_value(&mut self.surface_hangar_light, false, "Space light");
+                    });
+                    let gallery = self
+                        .asset_gallery
+                        .get_or_insert_with(|| EmbeddedAssetGallery::new(self.graphics.as_ref()));
+                    gallery.select_ship(arkline_protocol::ShipClass::Pioneer);
+                    gallery.set_preview_station_lighting(self.surface_hangar_light);
+                    gallery.set_spatial_material(self.surface_materials.revision());
+                    let height = ui.available_height().clamp(160., 440.);
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(ui.available_width(), height),
+                        egui::Layout::top_down(egui::Align::Min),
+                        |ui| gallery.show_hull_surface(ui, self.materials.preview()),
+                    );
+                });
+            egui::CentralPanel::default().show(ctx, |ui| {
+                self.surface_materials.show_graph(ui);
+            });
+            self.session_controls(ctx);
+            ctx.request_repaint_after(Duration::from_millis(33));
+            return;
         }
         if self.workspace == 3 {
             self.client.poll_hidden();
@@ -385,11 +493,11 @@ impl eframe::App for Editor {
                         egui::vec2(ui.available_width(), height),
                         egui::Layout::top_down(egui::Align::Min),
                         |ui| {
-                            self.asset_gallery
-                                .get_or_insert_with(|| {
-                                    EmbeddedAssetGallery::new(self.graphics.as_ref())
-                                })
-                                .show_compact(ui, self.materials.preview());
+                            let gallery = self.asset_gallery.get_or_insert_with(|| {
+                                EmbeddedAssetGallery::new(self.graphics.as_ref())
+                            });
+                            gallery.set_preview_station_lighting(true);
+                            gallery.show_compact(ui, self.materials.preview());
                         },
                     );
                 });
@@ -549,6 +657,12 @@ impl eframe::App for Editor {
                 self.engineering.viewport(ui);
             });
         } else {
+            if let Some(request) = self
+                .cockpit
+                .show_applied(ctx, &cockpit::Live::from_client(&self.client))
+            {
+                self.client.send_command(request);
+            }
             self.client.update(ctx, frame);
         }
         // Editor dialogs are drawn after the embedded client's UI pass, which
@@ -558,6 +672,7 @@ impl eframe::App for Editor {
     }
     fn on_exit(&mut self, _: Option<&eframe::glow::Context>) {
         self.client.on_exit();
+        self.imports.destroy();
         if let Some(gallery) = &mut self.asset_gallery {
             gallery.destroy();
         }
@@ -1040,7 +1155,11 @@ mod tests {
             );
         }
         let deadline = std::time::Instant::now() + Duration::from_secs(5);
-        while editor.client.scene_state() != Some(arkline_protocol::EditorSceneState::StationHangar)
+        // Snapshot and acknowledgement arrive on separate channels. Observing
+        // the new scene does not mean poll has drained its acknowledgement yet.
+        while (editor.client.scene_state()
+            != Some(arkline_protocol::EditorSceneState::StationHangar)
+            || editor.client.scene_state_ack().is_none())
             && std::time::Instant::now() < deadline
         {
             editor.client.poll();
@@ -1050,7 +1169,12 @@ mod tests {
             editor.client.scene_state(),
             Some(arkline_protocol::EditorSceneState::StationHangar)
         );
-        assert!(editor.client.scene_state_ack().unwrap().result.is_ok());
+        assert!(editor
+            .client
+            .scene_state_ack()
+            .expect("scene acknowledgement should arrive before the deadline")
+            .result
+            .is_ok());
         assert!(editor.client.paused());
         assert_eq!(editor.client.snapshot().unwrap().server_time_ms, time);
         editor.workspace = 3;

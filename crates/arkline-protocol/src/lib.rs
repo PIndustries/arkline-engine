@@ -10,6 +10,16 @@ mod pioneer_interior;
 pub use pioneer_interior::*;
 mod room_layout;
 pub use room_layout::*;
+pub mod material_compile;
+pub mod material_graph;
+pub use material_compile::{
+    lower_material, LoweredMaterial, MaterialCosts, MaterialSourceSpan, MaterialUniformSlot,
+};
+pub use material_graph::{
+    AssetMaterialBinding, MaterialDiagnostic, MaterialDiagnosticCode, MaterialGraphDocument,
+    MaterialNode, MaterialNodeId, MaterialNodeOp, MaterialParameter, MaterialParameterId,
+    MaterialParameterValue, MaterialValueType, PIONEER_MATERIAL_SHA256,
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 

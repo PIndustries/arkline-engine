@@ -1,9 +1,18 @@
 #[cfg(not(target_arch = "wasm32"))]
 pub use flight3d::asset_gallery::EmbeddedAssetGallery;
 #[cfg(not(target_arch = "wasm32"))]
+pub use flight3d::imported_asset::ImportedAssetPreview;
+pub use flight3d::imported_asset::{ImportReport, ImportedGeometry};
+#[cfg(not(target_arch = "wasm32"))]
 pub use flight3d::DebugRenderMetrics;
 mod material_preview;
 pub use material_preview::EmbeddedMaterialPreview;
+mod material_program;
+mod spatial_material;
+pub use spatial_material::{
+    MaterialProgramDiagnostic, MaterialProgramErrorPhase, MaterialProgramPhase,
+    MaterialProgramStatus, MaterialRevision, MaterialStamp,
+};
 #[cfg(not(target_arch = "wasm32"))]
 mod embedded;
 #[cfg(not(target_arch = "wasm32"))]
@@ -22,6 +31,7 @@ mod browser;
 mod effects;
 mod flight3d;
 mod layout;
+pub use layout::panel_geometry as cockpit_panel_geometry;
 mod lighting_settings;
 mod motion;
 mod pilot_input;

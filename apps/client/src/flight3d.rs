@@ -1,4 +1,14 @@
 //! Desktop and WebGL2 GPU flight view. Presentation only: never issues simulation commands.
+use crate::material_program::{
+    compile_material_program, MaterialShaderSource, SpatialMaterialUniforms,
+};
+use crate::spatial_material::{
+    MaterialProgramDiagnostic, MaterialProgramErrorPhase, MaterialProgramState,
+    MaterialProgramStatus, MaterialRevision, PreparedMaterialUpdate,
+};
+#[cfg(all(test, target_os = "macos"))]
+#[path = "spatial_material_gpu_tests.rs"]
+mod spatial_material_gpu_tests;
 use arkline_protocol::{
     gates, systems, Asteroid, Destination, Location, NavigationMode, NavigationTarget, PilotView,
     ShipClass, Snapshot, Stargate, BELT_POSITION, HOME_SYSTEM_ID, JUMP_DURATION_MS, SPACE_BOUND,
@@ -10,6 +20,9 @@ use eframe::{egui, egui_glow, glow};
 use glam::{Mat4, Quat, Vec3};
 use glow::HasContext;
 use std::sync::{Arc, Mutex};
+
+#[path = "imported_asset.rs"]
+pub mod imported_asset;
 
 #[path = "ship_asset.rs"]
 mod ship_asset;
@@ -370,6 +383,22 @@ impl FlightView {
                 renderer.set_material_preview(preview);
             }
         }
+    }
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))] // Native editor authoring entry.
+    pub fn set_spatial_material(&mut self, material: Option<Arc<MaterialRevision>>) {
+        if let Ok(renderer) = &self.renderer {
+            if let Ok(mut renderer) = renderer.lock() {
+                let _ = renderer.spatial_material.queue(material);
+            }
+        }
+    }
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    pub fn spatial_material_status(&self) -> MaterialProgramStatus {
+        self.renderer
+            .as_ref()
+            .ok()
+            .and_then(|r| r.lock().ok().map(|r| r.spatial_material.status().clone()))
+            .unwrap_or_default()
     }
     #[cfg(not(target_arch = "wasm32"))]
     pub fn set_debug_wireframe(&mut self, enabled: bool) {
@@ -1898,6 +1927,29 @@ struct Uniforms {
     atmosphere: Option<glow::UniformLocation>,
     planet_up: Option<glow::UniformLocation>,
 }
+impl Uniforms {
+    unsafe fn new(gl: &glow::Context, program: glow::Program, background: glow::Program) -> Self {
+        Self {
+            planet_center: gl.get_uniform_location(program, "planet_center"),
+            atmosphere: gl.get_uniform_location(background, "atmosphere"),
+            planet_up: gl.get_uniform_location(background, "planet_up"),
+            model: gl.get_uniform_location(program, "model"),
+            color: gl.get_uniform_location(program, "base_color"),
+            emission: gl.get_uniform_location(program, "emission"),
+            emissive_color: gl.get_uniform_location(program, "emissive_color"),
+            vp: gl.get_uniform_location(program, "view_projection"),
+            eye: gl.get_uniform_location(program, "eye"),
+            material: gl.get_uniform_location(program, "material_kind"),
+            material_params: gl.get_uniform_location(program, "material_params"),
+            hull_surface: gl.get_uniform_location(program, "hull_surface"),
+            environment_atmosphere: gl.get_uniform_location(program, "environment_atmosphere"),
+            station_lighting: gl.get_uniform_location(program, "station_lighting"),
+            environment_up: gl.get_uniform_location(program, "environment_up"),
+            sky_inverse: gl.get_uniform_location(background, "inverse_view_projection"),
+            sky_eye: gl.get_uniform_location(background, "camera_eye"),
+        }
+    }
+}
 struct CachedFeed {
     key: u64,
     framebuffer: glow::Framebuffer,
@@ -1999,6 +2051,8 @@ pub struct DebugRenderMetrics {
 }
 struct Renderer {
     material_preview: Option<crate::EmbeddedMaterialPreview>,
+    spatial_material: MaterialProgramState,
+    spatial_uniforms: Option<SpatialMaterialUniforms>,
     #[cfg(not(target_arch = "wasm32"))]
     debug_wireframe: bool,
     #[cfg(not(target_arch = "wasm32"))]
@@ -2028,10 +2082,11 @@ impl Renderer {
         let program = compile(
             &gl,
             VERTEX,
-            &FRAGMENT.replacen(
-                "#version 150",
-                &format!("#version 150\n{}", sun_shadows::GLSL),
-                1,
+            &format!(
+                "{}{}{}",
+                mesh_fragment_prefix(),
+                AUTHORED_MATERIAL_FUNCTION,
+                FRAGMENT_BODY
             ),
         )?;
         let local_lights = local_lighting::Uniforms::new(&gl, program);
@@ -2040,25 +2095,7 @@ impl Renderer {
         let feed_program = compile(&gl, BACK_VERTEX, FEED_FRAGMENT)?;
         let empty = gl.create_vertex_array()?;
         let mut meshes = vec![];
-        let uniforms = Uniforms {
-            planet_center: gl.get_uniform_location(program, "planet_center"),
-            atmosphere: gl.get_uniform_location(background, "atmosphere"),
-            planet_up: gl.get_uniform_location(background, "planet_up"),
-            model: gl.get_uniform_location(program, "model"),
-            color: gl.get_uniform_location(program, "base_color"),
-            emission: gl.get_uniform_location(program, "emission"),
-            emissive_color: gl.get_uniform_location(program, "emissive_color"),
-            vp: gl.get_uniform_location(program, "view_projection"),
-            eye: gl.get_uniform_location(program, "eye"),
-            material: gl.get_uniform_location(program, "material_kind"),
-            material_params: gl.get_uniform_location(program, "material_params"),
-            hull_surface: gl.get_uniform_location(program, "hull_surface"),
-            environment_atmosphere: gl.get_uniform_location(program, "environment_atmosphere"),
-            station_lighting: gl.get_uniform_location(program, "station_lighting"),
-            environment_up: gl.get_uniform_location(program, "environment_up"),
-            sky_inverse: gl.get_uniform_location(background, "inverse_view_projection"),
-            sky_eye: gl.get_uniform_location(background, "camera_eye"),
-        };
+        let uniforms = Uniforms::new(&gl, program, background);
         let mut upload = vec![
             cube(),
             torus(1.0, 0.12),
@@ -2114,6 +2151,8 @@ impl Renderer {
             feed_cache: Vec::new(),
             destroyed: false,
             material_preview: None,
+            spatial_material: Default::default(),
+            spatial_uniforms: None,
             #[cfg(not(target_arch = "wasm32"))]
             debug_wireframe: false,
             #[cfg(not(target_arch = "wasm32"))]
@@ -2135,6 +2174,60 @@ impl Renderer {
             }
         }
     }
+    unsafe fn prepare_spatial_material(&mut self) {
+        let gl = self.gl.clone();
+        let background = self.background;
+        let update = self.spatial_material.prepare_validated(
+            |revision| {
+                let expected = arkline_protocol::material_graph::AssetMaterialBinding::pioneer();
+                if *revision.binding() != expected || revision.binding().asset_sha256 != pioneer_asset_sha256() {
+                    return Err(MaterialProgramDiagnostic {
+                        phase: MaterialProgramErrorPhase::Binding,
+                        node_ids: vec![],
+                        message: "This renderer supports only the current embedded Pioneer armor material slot 0. The previous valid surface remains visible.".into(),
+                    });
+                }
+                Ok(())
+            },
+            |revision| {
+                let source = MaterialShaderSource::new(&mesh_fragment_prefix(), revision, FRAGMENT_BODY);
+                compile_material_program(&gl, VERTEX, &source, revision, |gl, program| {
+                    Ok((Uniforms::new(gl, program, background), local_lighting::Uniforms::new(gl, program), SpatialMaterialUniforms::new(gl, program)))
+                })
+            },
+        );
+        let Some(update) = update else { return };
+        match self.spatial_material.commit(update) {
+            Ok(PreparedMaterialUpdate::Program { candidate, .. }) => {
+                candidate.install(
+                    &gl,
+                    &mut self.program,
+                    |(uniforms, local_lights, spatial)| {
+                        self.uniforms = uniforms;
+                        self.local_lights = local_lights;
+                        self.spatial_uniforms = Some(spatial);
+                    },
+                );
+            }
+            Err(PreparedMaterialUpdate::Program { candidate, .. }) => {
+                candidate.destroy(&gl);
+                return;
+            }
+            Err(_) => return,
+            Ok(_) => {}
+        }
+        // Includes parameter/binding/reset changes while the simulation is paused.
+        for feed in &mut self.feed_cache {
+            feed.painted_ms = None;
+        }
+    }
+    unsafe fn upload_spatial_material(&self) {
+        if let (Some(uniforms), Some(revision)) =
+            (&self.spatial_uniforms, self.spatial_material.applied())
+        {
+            uniforms.upload(&self.gl, revision);
+        }
+    }
     unsafe fn draw(&self, mesh: usize, model: Mat4, color: Vec3, emission: f32) {
         self.draw_material(mesh, model, color, emission, Material::PaintedHull);
     }
@@ -2146,12 +2239,24 @@ impl Renderer {
         emission: f32,
         material: Material,
     ) {
-        let (color, emission) = preview_material(mesh, color, emission, self.material_preview);
+        let graph_enabled = self.spatial_material.applied().is_some_and(|revision| {
+            embedded_primitive(mesh).is_some_and(|p| {
+                p.material_index == Some(revision.binding().material_index as usize)
+            })
+        });
+        let (color, emission) = if graph_enabled {
+            embedded_primitive(mesh).map_or((color, emission), |p| (p.color, p.emission))
+        } else {
+            preview_material(mesh, color, emission, self.material_preview)
+        };
         let mut params = embedded_primitive(mesh).map_or_else(
             || material.parameters(),
             |p| [p.roughness, p.metallic, 0.0, 0.0],
         );
-        if let Some(preview) = self.material_preview.filter(|_| preview_paint(mesh)) {
+        if let Some(preview) = self
+            .material_preview
+            .filter(|_| !graph_enabled && preview_paint(mesh))
+        {
             if let Some(roughness) = preview.roughness {
                 params[0] = roughness.clamp(0.08, 1.0);
             }
@@ -2167,9 +2272,15 @@ impl Renderer {
             params[3],
         );
         let gl = &self.gl;
+        if let Some(uniforms) = &self.spatial_uniforms {
+            uniforms.set_enabled(gl, graph_enabled);
+        }
         gl.uniform_1_f32(
             self.uniforms.hull_surface.as_ref(),
-            if embedded_primitive(mesh).is_some_and(|p| p.emission == 0.0 && p.roughness >= 0.25) {
+            if !graph_enabled
+                && embedded_primitive(mesh)
+                    .is_some_and(|p| p.emission == 0.0 && p.roughness >= 0.25)
+            {
                 1.0
             } else {
                 0.0
@@ -2204,7 +2315,13 @@ impl Renderer {
                 gl.uniform_3_f32(self.uniforms.color.as_ref(), 0.02, 0.9, 0.25);
                 gl.uniform_3_f32(self.uniforms.emissive_color.as_ref(), 0.02, 0.9, 0.25);
                 gl.uniform_1_f32(self.uniforms.emission.as_ref(), 1.5);
+                if let Some(uniforms) = &self.spatial_uniforms {
+                    uniforms.set_enabled(gl, false);
+                }
                 gl.draw_arrays(glow::TRIANGLES, 0, self.meshes[mesh_index(mesh)].count);
+                if let Some(uniforms) = &self.spatial_uniforms {
+                    uniforms.set_enabled(gl, graph_enabled);
+                }
                 // Core GL uses a shared front/back polygon mode.
                 gl.polygon_mode(glow::FRONT_AND_BACK, modes[0] as u32);
                 gl.polygon_offset(factor, units);
@@ -2232,6 +2349,8 @@ impl Renderer {
         count: usize,
         _callback_target: Option<glow::Framebuffer>,
     ) {
+        // Must precede feed_due: paused feeds also need the newly installed pixels.
+        self.prepare_spatial_material();
         let gl = self.gl.clone();
         let viewport = info.viewport_in_pixels();
         let (width, height) = feed_resolution(viewport.width_px, viewport.height_px);
@@ -2405,6 +2524,7 @@ impl Renderer {
         }
     }
     unsafe fn paint(&mut self, frame: &Frame, callback_target: Option<glow::Framebuffer>) {
+        self.prepare_spatial_material();
         #[cfg(not(target_arch = "wasm32"))]
         self.debug_metrics.set(Default::default());
         let space = frame.space;
@@ -2514,6 +2634,7 @@ impl Renderer {
         gl.clear_depth_f32(1.0);
         gl.clear(glow::DEPTH_BUFFER_BIT);
         gl.use_program(Some(self.program));
+        self.upload_spatial_material();
         self.local_lights.upload(
             gl,
             frame,
@@ -3975,6 +4096,15 @@ fn embedded_primitive(mesh: usize) -> Option<&'static ship_asset::Primitive> {
     mesh.checked_sub(10)
         .and_then(|i| pioneer_asset().ok()?.get(i))
 }
+fn pioneer_asset_sha256() -> &'static str {
+    use sha2::{Digest, Sha256};
+    static HASH: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    HASH.get_or_init(|| {
+        hex::encode(Sha256::digest(include_bytes!(
+            "../../../assets/ships/pioneer/pioneer.glb"
+        )))
+    })
+}
 
 type ModelPart = (usize, Mat4, Vec3, f32);
 fn ship_parts(class: ShipClass) -> Vec<ModelPart> {
@@ -4807,14 +4937,19 @@ in vec3 position;in vec3 normal;uniform mat4 model;uniform mat4 view_projection;
 out vec3 world;out vec3 surface_normal;out vec3 local_position;
 void main(){local_position=position;vec4 p=model*vec4(position,1.0);world=p.xyz;surface_normal=transpose(inverse(mat3(model)))*normal;gl_Position=view_projection*p;}
 "#;
-const FRAGMENT: &str = concat!(
-    "#version 150\n",
-    include_str!("shaders/sky.glsl"),
-    include_str!("shaders/materials.glsl"),
-    include_str!("shaders/local_lighting.glsl"),
-    r#"
+fn mesh_fragment_prefix() -> String {
+    format!(
+        "#version 150\n{}{}{}{}",
+        sun_shadows::GLSL,
+        include_str!("shaders/sky.glsl"),
+        include_str!("shaders/materials.glsl"),
+        include_str!("shaders/local_lighting.glsl")
+    )
+}
+const AUTHORED_MATERIAL_FUNCTION: &str = "struct ArkSurface{vec3 base_color;float roughness;float metallic;vec3 emission;};ArkSurface ark_graph_surface(vec3 body_meters,ArkSurface authored_surface){return authored_surface;}\n";
+const FRAGMENT_BODY: &str = r#"
 in vec3 world;in vec3 surface_normal;in vec3 local_position;
-uniform vec4 material_params;uniform float hull_surface;uniform float station_lighting;uniform float environment_atmosphere;uniform vec3 environment_up;
+uniform int ark_graph_enabled;uniform vec4 material_params;uniform float hull_surface;uniform float station_lighting;uniform float environment_atmosphere;uniform vec3 environment_up;
 uniform vec3 planet_center;uniform vec3 base_color;uniform vec3 eye;uniform float emission;uniform vec3 emissive_color;uniform int material_kind;out vec4 color;
 float ark_terrain(vec3 p){return ark_noise3(p)*0.53+ark_noise3(p*2.07+13.8)*0.27+ark_noise3(p*4.13-7.1)*0.13+ark_noise3(p*8.41+29.4)*0.07;}
 void main(){vec3 n=normalize(surface_normal);if(!gl_FrontFacing)n=-n;vec3 l=normalize(vec3(-0.5,0.8,0.65));vec3 v=normalize(eye-world);
@@ -4840,6 +4975,12 @@ if(material_kind==1 || material_kind==2){
 }else{
     vec3 albedo=max(base_color,vec3(0.0));
     float roughness=material_params.x,metallic=material_params.y;
+    vec3 emitted=max(emissive_color,vec3(0.0))*max(emission,0.0);
+    if(ark_graph_enabled!=0){
+        ArkSurface authored=ArkSurface(albedo,roughness,metallic,emitted);
+        ArkSurface surface=ark_graph_surface(local_position*100.0,authored);
+        albedo=surface.base_color;roughness=surface.roughness;metallic=surface.metallic;emitted=surface.emission;
+    }
     if(material_params.z>0.5){
         float vein=1.0-smoothstep(0.045,0.11,abs(ark_noise3(local_position*5.0)-0.52));
         metallic=mix(0.0,0.82,vein);roughness=mix(0.90,0.34,vein);
@@ -4855,11 +4996,10 @@ if(material_kind==1 || material_kind==2){
         lit+=ark_environment(n,v,albedo,roughness,metallic,environment_atmosphere,environment_up);
     }
     lit+=ark_local_lighting(world,n,v,albedo,roughness,metallic);
-    lit+=max(emissive_color,vec3(0.0))*max(emission,0.0);
+    lit+=emitted;
 }
 color=vec4(ark_display(lit),1.0);}
-"#
-);
+"#;
 const BACK_VERTEX: &str = r#"#version 150
 out vec2 uv;void main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);uv=p;gl_Position=vec4(p*2.0-1.0,0.999,1.0);}
 "#;

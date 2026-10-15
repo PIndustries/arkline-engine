@@ -10,6 +10,8 @@ pub struct EmbeddedAssetGallery {
     yaw: f32,
     pitch: f32,
     zoom: f32,
+    preview_station_lighting: bool,
+    hull_surface_camera: bool,
 }
 impl EmbeddedAssetGallery {
     pub fn new(gl: Option<&Arc<glow::Context>>) -> Self {
@@ -28,9 +30,35 @@ impl EmbeddedAssetGallery {
             yaw: 1.15,
             pitch: 0.4,
             zoom: 1.0,
+            preview_station_lighting: true,
+            hull_surface_camera: false,
+        }
+    }
+    pub fn set_spatial_material(&mut self, material: Option<Arc<MaterialRevision>>) {
+        if let Some(renderer) = &self.renderer {
+            if let Ok(mut renderer) = renderer.lock() {
+                let _ = renderer.spatial_material.queue(material);
+            }
+        }
+    }
+    pub fn material_program_status(&self) -> MaterialProgramStatus {
+        self.renderer
+            .as_ref()
+            .and_then(|r| r.lock().ok().map(|r| r.spatial_material.status().clone()))
+            .unwrap_or_default()
+    }
+    pub fn set_preview_station_lighting(&mut self, station: bool) {
+        self.preview_station_lighting = station;
+    }
+    pub fn select_ship(&mut self, class: ShipClass) {
+        if self.selected != class {
+            self.selected = class;
+            self.parts = Arc::new(comparison_parts(class));
+            self.compact_parts = Arc::new(single_preview_parts(class));
         }
     }
     pub fn show(&mut self, ui: &mut egui::Ui, preview: Option<crate::EmbeddedMaterialPreview>) {
+        self.hull_surface_camera = false;
         ui.heading("Ship asset comparison");
         ui.label("Asset comparison — not world scale. Two instances of the selected asset; no ships are spawned.");
         ui.horizontal_wrapped(|ui| {
@@ -78,6 +106,7 @@ impl EmbeddedAssetGallery {
         ui: &mut egui::Ui,
         preview: Option<crate::EmbeddedMaterialPreview>,
     ) {
+        self.hull_surface_camera = false;
         egui::ComboBox::from_id_salt("material_preview_ship")
             .selected_text(self.selected.spec().name)
             .show_ui(ui, |ui| {
@@ -93,6 +122,29 @@ impl EmbeddedAssetGallery {
                 }
             });
         ui.small("Drag to orbit · wheel to zoom");
+        self.paint_canvas(ui, preview, true);
+    }
+    /// The spatial surface binding is explicitly Pioneer armor, never a class selector.
+    pub fn show_hull_surface(
+        &mut self,
+        ui: &mut egui::Ui,
+        preview: Option<crate::EmbeddedMaterialPreview>,
+    ) {
+        self.select_ship(ShipClass::Pioneer);
+        if !self.hull_surface_camera {
+            self.yaw = -1.15;
+            self.pitch = 0.25;
+            self.zoom = 0.8;
+            self.hull_surface_camera = true;
+        }
+        ui.horizontal(|ui| {
+            ui.small("Pioneer armor section · drag to orbit · wheel to zoom");
+            if ui.small_button("Reset camera").clicked() {
+                self.yaw = -1.15;
+                self.pitch = 0.25;
+                self.zoom = 0.8;
+            }
+        });
         self.paint_canvas(ui, preview, true);
     }
     fn paint_canvas(
@@ -137,6 +189,7 @@ impl EmbeddedAssetGallery {
                 100.,
             ) * Mat4::look_at_rh(eye, Vec3::ZERO, Vec3::Y);
             let renderer = renderer.clone();
+            let station_lighting = self.preview_station_lighting;
             let parts = if compact {
                 self.compact_parts.clone()
             } else {
@@ -145,9 +198,9 @@ impl EmbeddedAssetGallery {
             canvas.add(egui::PaintCallback {
                 rect,
                 callback: Arc::new(egui_glow::CallbackFn::new(move |_, _| {
-                    if let Ok(renderer) = renderer.lock() {
+                    if let Ok(mut renderer) = renderer.lock() {
                         unsafe {
-                            hangar::paint(&renderer, vp, eye, &parts);
+                            hangar::paint_preview(&mut renderer, vp, eye, &parts, station_lighting);
                         }
                     }
                 })),
@@ -299,7 +352,7 @@ mod tests {
                 pixels
             };
             let parts = comparison_parts(ShipClass::Pioneer);
-            hangar::paint(&renderer, vp, eye, &parts);
+            hangar::paint(&mut renderer, vp, eye, &parts);
             let original = read();
             renderer.set_material_preview(Some(crate::EmbeddedMaterialPreview {
                 hull_rgb: [0.8, 0.04, 0.02],
@@ -308,7 +361,7 @@ mod tests {
                 metallic: Some(0.),
                 ..Default::default()
             }));
-            hangar::paint(&renderer, vp, eye, &parts);
+            hangar::paint(&mut renderer, vp, eye, &parts);
             let edited = read();
             for half in 0..2 {
                 let changed = original
@@ -323,7 +376,7 @@ mod tests {
                 );
             }
             renderer.set_material_preview(None);
-            hangar::paint(&renderer, vp, eye, &parts);
+            hangar::paint(&mut renderer, vp, eye, &parts);
             assert_eq!(
                 original,
                 read(),

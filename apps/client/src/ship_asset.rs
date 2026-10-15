@@ -3,6 +3,8 @@ use super::{Mat4, Vec3, Vertex};
 
 pub(super) struct Primitive {
     pub vertices: Vec<Vertex>,
+    /// Source glTF identity; renderer mesh offsets and display names are not bindings.
+    pub material_index: Option<usize>,
     pub material_name: String,
     pub color: Vec3,
     pub emission: f32,
@@ -191,6 +193,7 @@ fn visit(
                 Vec3::ZERO
             };
             out.push(Primitive {
+                material_index: material.index(),
                 material_name: material.name().unwrap_or("").to_owned(),
                 vertices,
                 color,

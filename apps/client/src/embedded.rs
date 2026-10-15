@@ -827,8 +827,32 @@ impl EmbeddedClient {
             .hangar_view
             .set_material_preview(preview.map(EmbeddedMaterialPreview::validated));
     }
+    pub fn set_spatial_material(
+        &mut self,
+        material: Option<std::sync::Arc<crate::MaterialRevision>>,
+    ) {
+        self.cockpit
+            .flight_view
+            .set_spatial_material(material.clone());
+        self.cockpit.hangar_view.set_spatial_material(material);
+    }
+    pub fn material_program_status(&self) -> crate::MaterialProgramStatus {
+        if self.cockpit.in_station_hangar() {
+            self.cockpit.hangar_view.material_program_status()
+        } else {
+            self.cockpit.flight_view.spatial_material_status()
+        }
+    }
     pub fn send_command(&mut self, request: Request) {
         self.cockpit.send(request);
+    }
+    /// Read-only view of the same gate used by typed equipment requests.
+    pub fn equipment_controls_ready(&self) -> bool {
+        self.state == EmbeddedStatus::Running && self.cockpit.can_operate()
+    }
+    /// Existing session feedback, not a correlated command acknowledgement.
+    pub fn command_notice(&self) -> &str {
+        &self.cockpit.notice
     }
 }
 fn gameplay_input_allowed(pointer_in_viewport: bool, free_camera: bool) -> bool {

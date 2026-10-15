@@ -9,6 +9,13 @@ pub(super) fn hull_transform(berth: &HangarBerth) -> Mat4 {
         Vec3::from_array(berth.position.map(|v| v as f32)),
     )
 }
+/// Body only; articulated turrets have a separate envelope.
+pub(super) fn hull_parts(berth: &HangarBerth) -> impl Iterator<Item = ModelPart> + '_ {
+    let parent = hull_transform(berth);
+    cached_ship_parts(berth.ship_class)
+        .iter()
+        .map(move |&(mesh, model, color, emission)| (mesh, parent * model, color, emission * 0.2))
+}
 pub(super) fn board_distance(avatar: &StationAvatar, berth: &HangarBerth) -> f64 {
     avatar
         .position
@@ -148,11 +155,7 @@ pub(super) fn parts(fleet: &FleetView, eye: Vec3) -> Vec<ModelPart> {
             0.5,
         );
         let t = hull_transform(b);
-        p.0.extend(
-            cached_ship_parts(b.ship_class)
-                .iter()
-                .map(|&(mesh, m, c, e)| (mesh, t * m, c, e * 0.2)),
-        );
+        p.0.extend(hull_parts(b));
         for slot in 0..2 {
             p.0.extend(
                 turret_parts(b.ship_class, Quat::IDENTITY, slot)

@@ -12,6 +12,9 @@ mod quarters;
 pub use quarters::HangarAction;
 #[path = "fleet_hangar.rs"]
 pub(super) mod fleet_hangar;
+#[cfg(test)]
+#[path = "hangar_scale_tests.rs"]
+mod hangar_scale_tests;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OnFootView {
@@ -81,6 +84,21 @@ impl HangarView {
                 renderer.set_material_preview(preview);
             }
         }
+    }
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))] // Native editor authoring entry.
+    pub fn set_spatial_material(&mut self, material: Option<Arc<MaterialRevision>>) {
+        if let Some(renderer) = &self.renderer {
+            if let Ok(mut renderer) = renderer.lock() {
+                let _ = renderer.spatial_material.queue(material);
+            }
+        }
+    }
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    pub fn material_program_status(&self) -> MaterialProgramStatus {
+        self.renderer
+            .as_ref()
+            .and_then(|r| r.lock().ok().map(|r| r.spatial_material.status().clone()))
+            .unwrap_or_default()
     }
     #[cfg(not(target_arch = "wasm32"))]
     pub fn set_debug_wireframe(&mut self, enabled: bool) {
@@ -289,12 +307,7 @@ impl HangarView {
             eye = position;
             look_target = eye + direction;
         }
-        let vp = Mat4::perspective_rh_gl(
-            55f32.to_radians(),
-            rect.aspect_ratio().max(0.1),
-            0.08,
-            30000.0,
-        ) * Mat4::look_at_rh(eye, look_target, Vec3::Y);
+        let vp = view_projection(eye, look_target, rect.aspect_ratio());
         let interior_base = if interior {
             Some(
                 self.room_parts
@@ -346,10 +359,10 @@ impl HangarView {
             ui.painter().add(egui::PaintCallback {
                 rect,
                 callback: Arc::new(egui_glow::CallbackFn::new(move |_, _| {
-                    if let Ok(renderer) = renderer.lock() {
+                    if let Ok(mut renderer) = renderer.lock() {
                         unsafe {
                             paint_with_base(
-                                &renderer,
+                                &mut renderer,
                                 vp,
                                 eye,
                                 interior_base.as_ref().map(|parts| parts.as_slice()),
@@ -456,6 +469,11 @@ fn should_render_avatar(
     !(inside_body_height && inside_body_radius)
 }
 
+fn view_projection(eye: Vec3, target: Vec3, aspect: f32) -> Mat4 {
+    Mat4::perspective_rh_gl(55f32.to_radians(), aspect.max(0.1), 0.08, 30000.0)
+        * Mat4::look_at_rh(eye, target, Vec3::Y)
+}
+
 fn bay_parts(class: ShipClass) -> Vec<ModelPart> {
     cached_bay_parts(class).to_vec()
 }
@@ -467,6 +485,20 @@ fn cached_bay_parts(class: ShipClass) -> &'static [ModelPart] {
         .position(|c| *c == class)
         .unwrap();
     BAYS[index].get_or_init(|| build_bay_parts(class))
+}
+// Keep hull instance composition shared with calibration tests. These matrices
+// are the ones submitted to the meter-space hangar renderer.
+fn bay_hull_parts(class: ShipClass) -> Vec<ModelPart> {
+    let bay = hangar_layout(class);
+    let parent = Mat4::from_scale_rotation_translation(
+        Vec3::splat(100.0),
+        Quat::IDENTITY,
+        Vec3::from_array(bay.ship_center.map(|v| v as f32)),
+    );
+    ship_parts(class)
+        .into_iter()
+        .map(|(mesh, m, c, e)| (mesh, parent * m, c, e * 0.25))
+        .collect()
 }
 fn build_bay_parts(class: ShipClass) -> Vec<ModelPart> {
     let bay = hangar_layout(class);
@@ -576,16 +608,7 @@ fn build_bay_parts(class: ShipClass) -> Vec<ModelPart> {
             || c.z < room.min[2] as f32
             || c.z > room.max[2] as f32 + 1.5
     });
-    let parent = Mat4::from_scale_rotation_translation(
-        Vec3::splat(100.0),
-        Quat::IDENTITY,
-        Vec3::from_array(bay.ship_center.map(|v| v as f32)),
-    );
-    p.0.extend(
-        ship_parts(class)
-            .into_iter()
-            .map(|(mesh, m, c, e)| (mesh, parent * m, c, e * 0.25)),
-    );
+    p.0.extend(bay_hull_parts(class));
     p.0
 }
 fn avatar_parts(
@@ -782,18 +805,39 @@ fn apply_material_preview(parts: &mut [ModelPart], preview: crate::EmbeddedMater
         (*color, *emission) = preview_material(*mesh, *color, *emission, Some(preview.validated()));
     }
 }
-#[cfg(not(target_arch = "wasm32"))]
-pub(super) unsafe fn paint(renderer: &Renderer, vp: Mat4, eye: Vec3, parts: &[ModelPart]) {
+#[cfg(all(test, not(target_arch = "wasm32")))]
+pub(super) unsafe fn paint(renderer: &mut Renderer, vp: Mat4, eye: Vec3, parts: &[ModelPart]) {
     paint_with_base(renderer, vp, eye, None, parts);
+}
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) unsafe fn paint_preview(
+    renderer: &mut Renderer,
+    vp: Mat4,
+    eye: Vec3,
+    parts: &[ModelPart],
+    station_lighting: bool,
+) {
+    paint_with_lighting(renderer, vp, eye, None, parts, station_lighting);
 }
 
 unsafe fn paint_with_base(
-    renderer: &Renderer,
+    renderer: &mut Renderer,
     vp: Mat4,
     eye: Vec3,
     base: Option<&[ModelPart]>,
     dynamic: &[ModelPart],
 ) {
+    paint_with_lighting(renderer, vp, eye, base, dynamic, true);
+}
+unsafe fn paint_with_lighting(
+    renderer: &mut Renderer,
+    vp: Mat4,
+    eye: Vec3,
+    base: Option<&[ModelPart]>,
+    dynamic: &[ModelPart],
+    station_lighting: bool,
+) {
+    renderer.prepare_spatial_material();
     #[cfg(not(target_arch = "wasm32"))]
     renderer.debug_metrics.set(Default::default());
     if renderer.destroyed {
@@ -809,10 +853,11 @@ unsafe fn paint_with_base(
     gl.clear_color(0.008, 0.014, 0.019, 1.0);
     gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
     gl.use_program(Some(renderer.program));
+    renderer.upload_spatial_material();
     gl.uniform_1_f32(
         gl.get_uniform_location(renderer.program, "station_lighting")
             .as_ref(),
-        1.0,
+        if station_lighting { 1.0 } else { 0.0 },
     );
     let mut lights: Vec<_> = base
         .into_iter()
@@ -1181,7 +1226,7 @@ mod tests {
             let eye = Vec3::new(60.0, 40.0, 65.0);
             let vp = Mat4::perspective_rh_gl(1.0, 1.0, 0.08, 30000.0)
                 * Mat4::look_at_rh(eye, Vec3::new(0.0, 5.0, 0.0), Vec3::Y);
-            paint(&renderer, vp, eye, &bay_parts(ShipClass::Pioneer));
+            paint(&mut renderer, vp, eye, &bay_parts(ShipClass::Pioneer));
             let mut pixels = vec![0u8; 128 * 128 * 4];
             gl.read_pixels(
                 0,
@@ -1213,7 +1258,7 @@ mod tests {
                     state.emergency_light_on = mode == "emergency";
                     state.door_open = false;
                     paint(
-                        &renderer,
+                        &mut renderer,
                         vp,
                         eye,
                         &pioneer_interior::parts_with_room(1, Some(&state)),
@@ -1284,7 +1329,7 @@ mod tests {
                         };
                         parts.extend(avatar_parts(&avatar, Default::default(), None));
                     }
-                    paint(&renderer, vp, eye, &parts);
+                    paint(&mut renderer, vp, eye, &parts);
                     let mut rgba = vec![0u8; 1280 * 720 * 4];
                     gl.read_pixels(
                         0,
@@ -1364,7 +1409,7 @@ mod tests {
                             .into_iter()
                             .map(|(mesh, m, c, e)| (mesh, t * m, c, e)),
                     );
-                    paint(&renderer, vp, eye, &parts);
+                    paint(&mut renderer, vp, eye, &parts);
                     let mut rgba = vec![0; 1280 * 720 * 4];
                     gl.read_pixels(
                         0,
@@ -1401,7 +1446,7 @@ mod tests {
                     * Mat4::look_at_rh(eye, aim, Vec3::Y);
                 let mut parts = bay_parts(ShipClass::Pioneer);
                 parts.extend(quarters::room_parts(ShipClass::Pioneer, 1000));
-                paint(&renderer, vp, eye, &parts);
+                paint(&mut renderer, vp, eye, &parts);
                 let mut rgba = vec![0u8; 1280 * 720 * 4];
                 gl.read_pixels(
                     0,
@@ -1423,7 +1468,7 @@ mod tests {
                 let aim = Vec3::new(0.0, 1.7, q.min[2] as f32 - 8.0);
                 let vp = Mat4::perspective_rh_gl(1.3, 1280.0 / 720.0, 0.08, 30000.0)
                     * Mat4::look_at_rh(eye, aim, Vec3::Y);
-                paint(&renderer, vp, eye, &parts);
+                paint(&mut renderer, vp, eye, &parts);
                 gl.read_pixels(
                     0,
                     0,
@@ -1483,7 +1528,7 @@ mod tests {
                         Vec3::new(0.045, 0.07, 0.07),
                         0.0,
                     ));
-                    paint(&renderer, vp, eye, &parts);
+                    paint(&mut renderer, vp, eye, &parts);
                     let mut rgba = vec![0u8; tile * tile * 4];
                     gl.read_pixels(
                         0,
