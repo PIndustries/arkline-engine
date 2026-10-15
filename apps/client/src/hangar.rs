@@ -805,7 +805,7 @@ fn apply_material_preview(parts: &mut [ModelPart], preview: crate::EmbeddedMater
         (*color, *emission) = preview_material(*mesh, *color, *emission, Some(preview.validated()));
     }
 }
-#[cfg(all(test, not(target_arch = "wasm32")))]
+#[cfg(all(test, target_os = "macos"))]
 pub(super) unsafe fn paint(renderer: &mut Renderer, vp: Mat4, eye: Vec3, parts: &[ModelPart]) {
     paint_with_base(renderer, vp, eye, None, parts);
 }
