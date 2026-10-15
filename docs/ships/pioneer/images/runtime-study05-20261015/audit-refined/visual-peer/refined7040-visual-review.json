@@ -1,0 +1,904 @@
+{
+  "schema": "arkline.study05-refined-engine-visual-peer/v1",
+  "status": "selected-aft-roof-refinement-clear-not-overall-v05-completion",
+  "runs": {
+    "before7036": {
+      "build": "26.10.15.7036",
+      "source_commit": "df019ca2b12b82991fd65bc2ec5b3dcdc6232c61",
+      "asset_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+      "receipt_sha256": "f29a91e3d2f79471964dda9e4d37e1b96b4857cd59fd7e2a3720345493e5e26f",
+      "fixture_definition_modified": false
+    },
+    "after7038": {
+      "build": "26.10.15.7038",
+      "source_commit": "a3928f23eefc171c12830e496fbd60ccf773dea7",
+      "asset_sha256": "df8490f42379aca161df0aa26b24cb32ab8dbf73e83e0681ed2cfc29ef43a2c9",
+      "receipt_sha256": "ba016a72831d59fdf63b6347a8aab9dd83f67cdaf533f8a4aeb0f93e04486bbb",
+      "fixture_definition_modified": false
+    },
+    "refined7040": {
+      "build": "26.10.15.7040",
+      "source_commit": "15ce32c1d18975383d1d4e9a13e4e479c9085cfd",
+      "asset_sha256": "8125644f007537437942d34169e527c08ddd2dfaed575c874e2263ff2b7cb123",
+      "receipt_sha256": "829520ff3b0689c130f6ed6dcf2c47455863e6a4a3e9f99053d4acba6dab0f6d",
+      "fixture_definition_modified": false
+    }
+  },
+  "reference": {
+    "path": "/workspace/arkline-engine/docs/ships/pioneer/images/v05-interior-review.jpg",
+    "sha256": "60219087d130e27d9c8c86824ee54ef373e8ce81fc466ebb1da235b5b49a5628",
+    "use": "Visual direction only; no measured equipment dimensions/ratings inferred."
+  },
+  "matched_cameras": {
+    "aft-roof": true,
+    "port-nozzle": true,
+    "rear": true,
+    "top": true,
+    "front-quarter": true
+  },
+  "method": "Reviewed actual unedited original PNGs with view_image across the before/refinement review tasks. Independent nozzle peer additionally viewed all six 7038/7040 port-nozzle/rear/aft-roof originals. All five camera records exactlymatch across 7036, 7038, 7040. No offline rendering or image transformation.",
+  "selected_findings": [
+    {
+      "area": "aft rim finish",
+      "result": "clear in supplied frames",
+      "observation": "7040 port-nozzle image has a continuous outer rim. The obvious repeated horizontal striped/sawtooth band visible in 7038 is gone. Rear and aft-roof show both clean rims at their respective distances."
+    },
+    {
+      "area": "true aft openings",
+      "result": "clear",
+      "observation": "The layered nozzle/bell recess and retained emissive cyan throat are visible through the opening; no opaque external cap covers its center. This agrees with separate source-v3 ray proof."
+    },
+    {
+      "area": "raised handling arm",
+      "result": "visible refinement clear in close view",
+      "observation": "Aft-roof view now shows raised paired metal links, a distinct root/elbow/end and amber pins against the deck. It reads as a coherent stowed assembly more clearly than the low dark 7038 line."
+    },
+    {
+      "area": "purposeful roof architecture",
+      "result": "substantive improvement over 7036",
+      "observation": "The repetitive floating cover grid is replaced by an open recessed work area with separate hood/vent, finned assemblies, hatch/reel details, coaming and folded arm. Major assemblies have different shapes and levels."
+    }
+  ],
+  "remaining_limits": [
+    "At the normal whole-ship quarter/top scale, some small machinery and connections remain lowcontrast/compressed; this review does not claim the reference hero crane silhouette or final v05 fidelity is fully reproduced.",
+    "Only static stowed arm appearance is established; no functional crane, deployment, rig, lifting capacity or articulation is inferred.",
+    "Known pressure-hull/nacelle cap floors remain mutually coincident behind the separated flange; they produce no obvious artifact in these supplied frames. Static PNGs cannot prove absence of temporal z-fighting.",
+    "No overall ship v05 completion or final bow/bridge acceptance; parent independently reviews brow/glazing/braces/manufactured scale.",
+    "Native EGL llvmpipe engine captures do not establishOS interaction, hardware performance, release or publication."
+  ],
+  "selected_immediate_blocker": null,
+  "next_visual_direction_if_fidelity_scope_expands": "Keep a clear hierarchy of major roof assemblies before adding fine detail. If closer matching to v05 hero crane is required, judge its silhouette from the normal ship-wide camera rather than only closeups, preserving canonical hull envelope and turret/RCS clearances.",
+  "independent_nozzle_receipt": {
+    "path": "/workspace/arkline-runtime/study05-audit-v2/visual-peer/nozzle/nozzle-visual-review.json",
+    "sha256": "9be74eb73a0f938784c34a6e0e2af5b3ef1871cf17a5f6b18165f3554600338e"
+  },
+  "source_geometry_summary": "/workspace/arkline-runtime/study05-audit-v2/geometry-peer/summary.md",
+  "images": [
+    {
+      "run": "before7036",
+      "view": "aft-roof",
+      "path": "/workspace/arkline-runtime/study05-engine-before/pioneer-authority-idle-aft-roof.png",
+      "sha256": "747e75aadb838a2064da51ae61c22c840f007ab7ee2b4edbc999bb420b837c12",
+      "camera": {
+        "eye_body_m": [
+          -62.0,
+          35.0,
+          -48.0
+        ],
+        "eye_scene": [
+          0.6768750548362732,
+          0.3499999940395355,
+          0.3957778811454773
+        ],
+        "half_height_m": 15.333333015441895,
+        "half_width_m": 23.0,
+        "name": "aft-roof",
+        "origin_world_m": [
+          299195741250.0,
+          0.0,
+          1000.0
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          -20.0,
+          4.0,
+          0.0
+        ],
+        "up_body": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "view_projection": [
+          2.874282121658325,
+          -2.139073371887207,
+          -0.16872729361057281,
+          0.0,
+          0.0,
+          5.8656086921691895,
+          -0.10929875075817108,
+          0.0,
+          -3.2622220516204834,
+          -1.8846970796585083,
+          -0.14866241812705994,
+          0.0,
+          -0.6544144153594971,
+          0.14084386825561523,
+          -0.7889509201049805,
+          1.0
+        ]
+      }
+    },
+    {
+      "run": "before7036",
+      "view": "port-nozzle",
+      "path": "/workspace/arkline-runtime/study05-engine-before/pioneer-authority-idle-port-nozzle.png",
+      "sha256": "ad2c35409713db524a0f5aa1c9cc49215ad5404de4af08a5448e1050cdc46fc0",
+      "camera": {
+        "eye_body_m": [
+          -68.0,
+          5.0,
+          -12.5
+        ],
+        "eye_scene": [
+          0.6904556751251221,
+          0.05000000074505806,
+          0.03599941357970238
+        ],
+        "half_height_m": 6.0,
+        "half_width_m": 9.0,
+        "name": "port-nozzle",
+        "origin_world_m": [
+          299195741250.0,
+          0.0,
+          1000.0
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          -35.900001525878906,
+          0.0,
+          -12.5
+        ],
+        "up_body": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "view_projection": [
+          -1.4371018409729004,
+          -2.543577194213867,
+          -0.24497708678245544,
+          0.0,
+          0.0,
+          16.468090057373047,
+          -0.038481660187244415,
+          0.0,
+          -11.017782211303711,
+          0.3317708969116211,
+          0.03195352852344513,
+          0.0,
+          1.3888888359069824,
+          0.9208793044090271,
+          -0.830330491065979,
+          1.0
+        ]
+      }
+    },
+    {
+      "run": "before7036",
+      "view": "rear",
+      "path": "/workspace/arkline-runtime/study05-engine-before/pioneer-authority-idle-rear.png",
+      "sha256": "bb5557ccb59652866f160fd0e48e0be2ef60f07eafaf2e74d4f679ed6cff45bd",
+      "camera": {
+        "eye_body_m": [
+          -120.0,
+          15.0,
+          0.0
+        ],
+        "eye_scene": [
+          1.1899205446243286,
+          0.15000000596046448,
+          -0.15520702302455902
+        ],
+        "half_height_m": 20.0,
+        "half_width_m": 30.0,
+        "name": "rear",
+        "origin_world_m": [
+          299195741250.0,
+          0.0,
+          1000.0
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up_body": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "view_projection": [
+          -0.43113061785697937,
+          -0.6149644255638123,
+          -0.24601653218269348,
+          0.0,
+          0.0,
+          4.961389064788818,
+          -0.031012559309601784,
+          0.0,
+          -3.3053345680236816,
+          0.08021275699138641,
+          0.03208911418914795,
+          0.0,
+          -0.0,
+          -3.958120942115784e-08,
+          -0.6978776454925537,
+          1.0
+        ]
+      }
+    },
+    {
+      "run": "before7036",
+      "view": "top",
+      "path": "/workspace/arkline-runtime/study05-engine-before/pioneer-authority-idle-top.png",
+      "sha256": "2ce6599ac5078711b27fe741ac42576c04052625afa74f169a290df897e4da8d",
+      "camera": {
+        "eye_body_m": [
+          0.0,
+          120.0,
+          0.0
+        ],
+        "eye_scene": [
+          -0.0,
+          1.2000000476837158,
+          0.0
+        ],
+        "half_height_m": 30.0,
+        "half_width_m": 45.0,
+        "name": "top",
+        "origin_world_m": [
+          299195741250.0,
+          0.0,
+          1000.0
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up_body": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "view_projection": [
+          2.203556776046753,
+          -0.43113064765930176,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          -0.2500312626361847,
+          0.0,
+          -0.2874204218387604,
+          -3.30533504486084,
+          0.0,
+          0.0,
+          -0.0,
+          -0.0,
+          -0.7002125978469849,
+          1.0
+        ]
+      }
+    },
+    {
+      "run": "before7036",
+      "view": "front-quarter",
+      "path": "/workspace/arkline-runtime/study05-engine-before/pioneer-authority-idle-front-quarter.png",
+      "sha256": "f32795336ebdf9c5645ed296c243b249ecf7537414f9588c08eead79713cb2ce",
+      "camera": {
+        "eye_body_m": [
+          95.0,
+          50.0,
+          -95.0
+        ],
+        "eye_scene": [
+          -0.8191481828689575,
+          0.5000001192092896,
+          1.0648926496505737
+        ],
+        "half_height_m": 36.0,
+        "half_width_m": 54.0,
+        "name": "front-quarter",
+        "origin_world_m": [
+          299195741250.0,
+          0.0,
+          1000.0
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up_body": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "view_projection": [
+          1.4678221940994263,
+          0.5907252430915833,
+          0.14287322759628296,
+          0.0,
+          0.0,
+          2.6033358573913574,
+          -0.08720843493938446,
+          0.0,
+          1.129094123840332,
+          -0.7679427266120911,
+          -0.18573518097400665,
+          0.0,
+          -1.103789699641311e-07,
+          -8.278422569674149e-08,
+          -0.6418234705924988,
+          1.0
+        ]
+      }
+    },
+    {
+      "run": "after7038",
+      "view": "aft-roof",
+      "path": "/workspace/arkline-runtime/study05-engine-after-v1/pioneer-authority-idle-aft-roof.png",
+      "sha256": "d0ae69ef5e7b2dc6dc72c21fd40d34a97b8ef24d997902783048a007cabcbc0b",
+      "camera": {
+        "eye_body_m": [
+          -62.0,
+          35.0,
+          -48.0
+        ],
+        "eye_scene": [
+          0.6768750548362732,
+          0.3499999940395355,
+          0.3957778811454773
+        ],
+        "half_height_m": 15.333333015441895,
+        "half_width_m": 23.0,
+        "name": "aft-roof",
+        "origin_world_m": [
+          299195741250.0,
+          0.0,
+          1000.0
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          -20.0,
+          4.0,
+          0.0
+        ],
+        "up_body": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "view_projection": [
+          2.874282121658325,
+          -2.139073371887207,
+          -0.16872729361057281,
+          0.0,
+          0.0,
+          5.8656086921691895,
+          -0.10929875075817108,
+          0.0,
+          -3.2622220516204834,
+          -1.8846970796585083,
+          -0.14866241812705994,
+          0.0,
+          -0.6544144153594971,
+          0.14084386825561523,
+          -0.7889509201049805,
+          1.0
+        ]
+      }
+    },
+    {
+      "run": "after7038",
+      "view": "port-nozzle",
+      "path": "/workspace/arkline-runtime/study05-engine-after-v1/pioneer-authority-idle-port-nozzle.png",
+      "sha256": "18116e2c4ddead423f5e72dedc48ddc944a55fd4677a7f9a0ea58d03296b5b94",
+      "camera": {
+        "eye_body_m": [
+          -68.0,
+          5.0,
+          -12.5
+        ],
+        "eye_scene": [
+          0.6904556751251221,
+          0.05000000074505806,
+          0.03599941357970238
+        ],
+        "half_height_m": 6.0,
+        "half_width_m": 9.0,
+        "name": "port-nozzle",
+        "origin_world_m": [
+          299195741250.0,
+          0.0,
+          1000.0
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          -35.900001525878906,
+          0.0,
+          -12.5
+        ],
+        "up_body": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "view_projection": [
+          -1.4371018409729004,
+          -2.543577194213867,
+          -0.24497708678245544,
+          0.0,
+          0.0,
+          16.468090057373047,
+          -0.038481660187244415,
+          0.0,
+          -11.017782211303711,
+          0.3317708969116211,
+          0.03195352852344513,
+          0.0,
+          1.3888888359069824,
+          0.9208793044090271,
+          -0.830330491065979,
+          1.0
+        ]
+      }
+    },
+    {
+      "run": "after7038",
+      "view": "rear",
+      "path": "/workspace/arkline-runtime/study05-engine-after-v1/pioneer-authority-idle-rear.png",
+      "sha256": "7e9ad422aa3515c39848f5764992466a63d13c8d633f7a01c648ea06ccfd4026",
+      "camera": {
+        "eye_body_m": [
+          -120.0,
+          15.0,
+          0.0
+        ],
+        "eye_scene": [
+          1.1899205446243286,
+          0.15000000596046448,
+          -0.15520702302455902
+        ],
+        "half_height_m": 20.0,
+        "half_width_m": 30.0,
+        "name": "rear",
+        "origin_world_m": [
+          299195741250.0,
+          0.0,
+          1000.0
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up_body": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "view_projection": [
+          -0.43113061785697937,
+          -0.6149644255638123,
+          -0.24601653218269348,
+          0.0,
+          0.0,
+          4.961389064788818,
+          -0.031012559309601784,
+          0.0,
+          -3.3053345680236816,
+          0.08021275699138641,
+          0.03208911418914795,
+          0.0,
+          -0.0,
+          -3.958120942115784e-08,
+          -0.6978776454925537,
+          1.0
+        ]
+      }
+    },
+    {
+      "run": "after7038",
+      "view": "top",
+      "path": "/workspace/arkline-runtime/study05-engine-after-v1/pioneer-authority-idle-top.png",
+      "sha256": "6294c8cc427a66fb181f81e5a504521c5658d6789b8a62db466a4f0c4b8a22ab",
+      "camera": {
+        "eye_body_m": [
+          0.0,
+          120.0,
+          0.0
+        ],
+        "eye_scene": [
+          -0.0,
+          1.2000000476837158,
+          0.0
+        ],
+        "half_height_m": 30.0,
+        "half_width_m": 45.0,
+        "name": "top",
+        "origin_world_m": [
+          299195741250.0,
+          0.0,
+          1000.0
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up_body": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "view_projection": [
+          2.203556776046753,
+          -0.43113064765930176,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          -0.2500312626361847,
+          0.0,
+          -0.2874204218387604,
+          -3.30533504486084,
+          0.0,
+          0.0,
+          -0.0,
+          -0.0,
+          -0.7002125978469849,
+          1.0
+        ]
+      }
+    },
+    {
+      "run": "after7038",
+      "view": "front-quarter",
+      "path": "/workspace/arkline-runtime/study05-engine-after-v1/pioneer-authority-idle-front-quarter.png",
+      "sha256": "0402748fbf80148ef0a5e0ec5d8c693efd9c65031387d77be9c8aa4d2bd2e060",
+      "camera": {
+        "eye_body_m": [
+          95.0,
+          50.0,
+          -95.0
+        ],
+        "eye_scene": [
+          -0.8191481828689575,
+          0.5000001192092896,
+          1.0648926496505737
+        ],
+        "half_height_m": 36.0,
+        "half_width_m": 54.0,
+        "name": "front-quarter",
+        "origin_world_m": [
+          299195741250.0,
+          0.0,
+          1000.0
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up_body": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "view_projection": [
+          1.4678221940994263,
+          0.5907252430915833,
+          0.14287322759628296,
+          0.0,
+          0.0,
+          2.6033358573913574,
+          -0.08720843493938446,
+          0.0,
+          1.129094123840332,
+          -0.7679427266120911,
+          -0.18573518097400665,
+          0.0,
+          -1.103789699641311e-07,
+          -8.278422569674149e-08,
+          -0.6418234705924988,
+          1.0
+        ]
+      }
+    },
+    {
+      "run": "refined7040",
+      "view": "aft-roof",
+      "path": "/workspace/arkline-runtime/study05-engine-after-v2/pioneer-authority-idle-aft-roof.png",
+      "sha256": "bf63678c188126ec44c3770c2aa6eef89cdde5391c2f98e221c359eac2d29d3d",
+      "camera": {
+        "eye_body_m": [
+          -62.0,
+          35.0,
+          -48.0
+        ],
+        "eye_scene": [
+          0.6768750548362732,
+          0.3499999940395355,
+          0.3957778811454773
+        ],
+        "half_height_m": 15.333333015441895,
+        "half_width_m": 23.0,
+        "name": "aft-roof",
+        "origin_world_m": [
+          299195741250.0,
+          0.0,
+          1000.0
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          -20.0,
+          4.0,
+          0.0
+        ],
+        "up_body": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "view_projection": [
+          2.874282121658325,
+          -2.139073371887207,
+          -0.16872729361057281,
+          0.0,
+          0.0,
+          5.8656086921691895,
+          -0.10929875075817108,
+          0.0,
+          -3.2622220516204834,
+          -1.8846970796585083,
+          -0.14866241812705994,
+          0.0,
+          -0.6544144153594971,
+          0.14084386825561523,
+          -0.7889509201049805,
+          1.0
+        ]
+      }
+    },
+    {
+      "run": "refined7040",
+      "view": "port-nozzle",
+      "path": "/workspace/arkline-runtime/study05-engine-after-v2/pioneer-authority-idle-port-nozzle.png",
+      "sha256": "bcbe2a9eef4a6a6bb34e8e8c3e9fa8ebf3c21aed087b9da75cd65b24ea397c6f",
+      "camera": {
+        "eye_body_m": [
+          -68.0,
+          5.0,
+          -12.5
+        ],
+        "eye_scene": [
+          0.6904556751251221,
+          0.05000000074505806,
+          0.03599941357970238
+        ],
+        "half_height_m": 6.0,
+        "half_width_m": 9.0,
+        "name": "port-nozzle",
+        "origin_world_m": [
+          299195741250.0,
+          0.0,
+          1000.0
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          -35.900001525878906,
+          0.0,
+          -12.5
+        ],
+        "up_body": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "view_projection": [
+          -1.4371018409729004,
+          -2.543577194213867,
+          -0.24497708678245544,
+          0.0,
+          0.0,
+          16.468090057373047,
+          -0.038481660187244415,
+          0.0,
+          -11.017782211303711,
+          0.3317708969116211,
+          0.03195352852344513,
+          0.0,
+          1.3888888359069824,
+          0.9208793044090271,
+          -0.830330491065979,
+          1.0
+        ]
+      }
+    },
+    {
+      "run": "refined7040",
+      "view": "rear",
+      "path": "/workspace/arkline-runtime/study05-engine-after-v2/pioneer-authority-idle-rear.png",
+      "sha256": "aa637b93e2cbeeac5d0a7cf8bb6ecf154ea6e62ec086f5f275d073a83c4fcc4a",
+      "camera": {
+        "eye_body_m": [
+          -120.0,
+          15.0,
+          0.0
+        ],
+        "eye_scene": [
+          1.1899205446243286,
+          0.15000000596046448,
+          -0.15520702302455902
+        ],
+        "half_height_m": 20.0,
+        "half_width_m": 30.0,
+        "name": "rear",
+        "origin_world_m": [
+          299195741250.0,
+          0.0,
+          1000.0
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up_body": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "view_projection": [
+          -0.43113061785697937,
+          -0.6149644255638123,
+          -0.24601653218269348,
+          0.0,
+          0.0,
+          4.961389064788818,
+          -0.031012559309601784,
+          0.0,
+          -3.3053345680236816,
+          0.08021275699138641,
+          0.03208911418914795,
+          0.0,
+          -0.0,
+          -3.958120942115784e-08,
+          -0.6978776454925537,
+          1.0
+        ]
+      }
+    },
+    {
+      "run": "refined7040",
+      "view": "top",
+      "path": "/workspace/arkline-runtime/study05-engine-after-v2/pioneer-authority-idle-top.png",
+      "sha256": "e7b3b0b1b429b20c8470f9b38c4b728109f0ddcef1db63d2fc1ba105019674a7",
+      "camera": {
+        "eye_body_m": [
+          0.0,
+          120.0,
+          0.0
+        ],
+        "eye_scene": [
+          -0.0,
+          1.2000000476837158,
+          0.0
+        ],
+        "half_height_m": 30.0,
+        "half_width_m": 45.0,
+        "name": "top",
+        "origin_world_m": [
+          299195741250.0,
+          0.0,
+          1000.0
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up_body": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "view_projection": [
+          2.203556776046753,
+          -0.43113064765930176,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          -0.2500312626361847,
+          0.0,
+          -0.2874204218387604,
+          -3.30533504486084,
+          0.0,
+          0.0,
+          -0.0,
+          -0.0,
+          -0.7002125978469849,
+          1.0
+        ]
+      }
+    },
+    {
+      "run": "refined7040",
+      "view": "front-quarter",
+      "path": "/workspace/arkline-runtime/study05-engine-after-v2/pioneer-authority-idle-front-quarter.png",
+      "sha256": "54e31c3242594f071d29132c7e0618a36bfe08ce6c45881b258ffd5abf885548",
+      "camera": {
+        "eye_body_m": [
+          95.0,
+          50.0,
+          -95.0
+        ],
+        "eye_scene": [
+          -0.8191481828689575,
+          0.5000001192092896,
+          1.0648926496505737
+        ],
+        "half_height_m": 36.0,
+        "half_width_m": 54.0,
+        "name": "front-quarter",
+        "origin_world_m": [
+          299195741250.0,
+          0.0,
+          1000.0
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up_body": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "view_projection": [
+          1.4678221940994263,
+          0.5907252430915833,
+          0.14287322759628296,
+          0.0,
+          0.0,
+          2.6033358573913574,
+          -0.08720843493938446,
+          0.0,
+          1.129094123840332,
+          -0.7679427266120911,
+          -0.18573518097400665,
+          0.0,
+          -1.103789699641311e-07,
+          -8.278422569674149e-08,
+          -0.6418234705924988,
+          1.0
+        ]
+      }
+    }
+  ],
+  "actions": "Only approved scratch evidence written; no source/model/export save,repo edit,build,Cargo,Mac access or publication."
+}
