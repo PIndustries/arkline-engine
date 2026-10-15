@@ -1,6 +1,6 @@
 # Pioneer exterior effects
 
-This document describes the bounded powered-exterior slice for issue [#43](https://github.com/PIndustries/arkline-engine/issues/43), under the [cloud implementation claim](https://github.com/PIndustries/arkline-engine/issues/43#issuecomment-6197382437). Source changes, automated verification, runtime captures, and publication are separate evidence. Engine acceptance captures and exact-SHA test results belong in the claim / draft carrier once produced.
+Pioneer's powered exterior uses 13 hull-bound fixtures on an 88 W circuit, with simulation-clock strobes and requested/effective power state. See [issue #43](https://github.com/PIndustries/arkline-engine/issues/43) and the [implementation record](https://github.com/PIndustries/arkline-engine/issues/43#issuecomment-6197382437) for its development history.
 
 The [Pioneer design wiki](https://github.com/PIndustries/arkline-engine/wiki/Ship-Pioneer) supplies the canonical 72 m X × 18 m Y × 38 m Z hull envelope. Fixture coordinates use ship-local meters with +X forward, +Y up, and Z across the beam. The fixture mounts, colors, pulse timings and wattages in this slice are editable gameplay assumptions. They are not verified engineering specifications from the wiki and do not claim a new hull-model match.
 

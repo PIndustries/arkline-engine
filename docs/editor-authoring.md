@@ -1,5 +1,7 @@
 # Editor authoring and automation roadmap
 
+Design roadmap and dated implementation notes. See the [editor guide](editor.md) for current usage.
+
 Tracking: [Editor workspace #45](https://github.com/PIndustries/arkline-engine/issues/45). This is a staged design, not a claim that the editor can already create and import arbitrary ships. Native acceptance for a packaged build must be recorded separately.
 
 ## Current source boundary

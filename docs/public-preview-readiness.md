@@ -1,9 +1,11 @@
 # Open-source developer alpha readiness
 
-Historical assessment below: stabilization work for 26.10.10.24. The repository remains private.
-The owner selected AGPL-3.0-only. Publication still requires explicit approval.
+Historical assessment for build 26.10.10.24. At that checkpoint, the repository was private.
+The owner had selected AGPL-3.0-only. Publication still required explicit approval.
 A public source alpha does not imply that the official network is ready for
 untrusted Internet players.
+
+See [Releases](https://github.com/PIndustries/arkline-engine/releases) for published packages.
 
 ## Update: 2026-10-11
 
