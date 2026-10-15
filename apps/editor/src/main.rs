@@ -8,6 +8,8 @@ mod equipment;
 mod event_graph;
 mod github;
 mod github_auth;
+mod import_document;
+mod imports;
 mod inspector;
 mod material_graph;
 mod materials;
@@ -24,6 +26,7 @@ const BUILD: &str = include_str!("../../../BUILD_VERSION");
 const GREEN: Color32 = Color32::from_rgb(62, 233, 145);
 const MUTED: Color32 = Color32::from_rgb(140, 165, 158);
 struct Editor {
+    imports: imports::Imports,
     client: EmbeddedClient,
     project: PathBuf,
     selected_pilot: String,
@@ -62,6 +65,7 @@ impl Editor {
     fn new(cc: &eframe::CreationContext<'_>, project: PathBuf, pilot: String) -> Self {
         let client = EmbeddedClient::new(cc, project.join(".arkline-studio"), pilot.clone());
         Self {
+            imports: imports::Imports::open(&project),
             materials: materials::Materials::open(&project),
             engineering: engineering::Engineering::open(&project),
             service_paths: service_paths::ServicePaths::open(&project),
@@ -294,6 +298,7 @@ impl eframe::App for Editor {
                     self.inspector_tab = 0;
                 }
                 ui.selectable_value(&mut self.workspace, 3, "Materials");
+                ui.selectable_value(&mut self.workspace, 5, "Assets");
                 ui.selectable_value(&mut self.workspace, 2, "Physics lab");
                 if ui
                     .selectable_value(&mut self.workspace, 1, "Community · GitHub")
@@ -352,6 +357,13 @@ impl eframe::App for Editor {
                 }
             });
         });
+        }
+        if self.workspace == 5 {
+            self.client.poll_hidden();
+            self.imports.show(ctx, self.graphics.as_ref());
+            self.session_controls(ctx);
+            ctx.request_repaint_after(Duration::from_millis(33));
+            return;
         }
         if self.workspace == 3 {
             self.client.poll_hidden();
@@ -558,6 +570,7 @@ impl eframe::App for Editor {
     }
     fn on_exit(&mut self, _: Option<&eframe::glow::Context>) {
         self.client.on_exit();
+        self.imports.destroy();
         if let Some(gallery) = &mut self.asset_gallery {
             gallery.destroy();
         }
