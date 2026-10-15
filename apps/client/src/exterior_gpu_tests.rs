@@ -177,8 +177,8 @@ fn receiver_changed(frame: &Frame, depth: &[f32], a: &[u8], b: &[u8]) -> usize {
                     1.,
                 );
             let point = point.truncate() / point.w;
-            point.cmpge(Vec3::new(-0.4601, -0.0751, -0.1651)).all()
-                && point.cmple(Vec3::new(-0.3799, 0.0051, -0.0849)).all()
+            point.cmpge(Vec3::new(-0.4601, -0.1001, -0.1651)).all()
+                && point.cmple(Vec3::new(-0.3799, -0.0199, -0.0849)).all()
         })
         .count()
 }
@@ -305,7 +305,7 @@ fn frame() -> Frame {
                 owner: "ExteriorQA".into(),
                 system_id: 3,
                 kind: arkline_protocol::SurfacePropKind::Crate,
-                position: [-42., -3.5, -12.5],
+                position: [-42., -6., -12.5],
             }],
             asteroids: vec![],
             gates: vec![],
@@ -407,10 +407,10 @@ fn native_powered_exterior_frame_capture() {
         );
         assert!(
             receiver_pixels > 8,
-            "the separate non-emissive receiver must be illuminated"
+            "the separate non-emissive receiver must be illuminated: {receiver_pixels} receiver pixels, {illumination_pixels} total"
         );
         // Authoring fields must reach the material-batched source emitters,
-        // including EngineGlow, which has no added lens geometry.
+        // including the source drive material and its bounded nozzle glow surface.
         let mut edited_material_pixels = serde_json::Map::new();
         for (kind, name, eye) in [
             (
