@@ -127,19 +127,37 @@ def apply(bpy):
         cut_box((33.2,1.03,s*9.75),(5.2,3.7,4.7))
     hull.data.update()
 
-    # Existing identity survives even where geometry becomes a different panel.
-    # These are thin faceted armor skins over the modified core, rather than a
-    # continuous tall opaque forehead. Gaps deliberately expose the dark core.
-    prism('Bridge central armored brow',
-          [(26.3,6.9,-6.5),(26.3,6.9,6.5),(35.9,3.88,6.9),(35.9,3.88,-6.9)],
-          (.30,.95,0),.23,armor,.055)
+    # Three separate 0.32m armor solids have open 0.20m joints. Their
+    # longitudinal bends and lowered outer facets replace the old surface seam
+    # strips. The existing core remains visible at the bottom of each joint.
+    def roof_panel(name, sections):
+        verts=[]
+        for x,z_left,z_right,y_left,y_right in sections:
+            verts.extend([(x,y_left,z_left),(x,y_right,z_right),
+                          (x,y_right-.32,z_right),(x,y_left-.32,z_left)])
+        faces=[(0,3,2,1)]
+        for k in range(len(sections)-1):
+            for i in range(4):
+                a=k*4+i; b=k*4+(i+1)%4
+                faces.append((a,b,b+4,a+4))
+        faces.append(tuple(range((len(sections)-1)*4,len(sections)*4)))
+        return mesh(name,verts,faces,armor,.045)
+
+    center_plate=roof_panel('Bridge central armored brow',
+                 [(26.3,-3.05,3.05,7.15,7.15),
+                  (31.1,-3.40,3.40,5.80,5.80),
+                  (35.9,-3.75,3.75,4.08,4.08)])
     for s,label in ((-1,'port'),(1,'starboard')):
+        sections=[(26.3,s*3.25,s*6.50,7.11,6.94),
+                  (31.1,s*3.60,s*6.70,5.76,5.34),
+                  (35.9,s*3.95,s*6.90,4.04,3.91)]
+        roof_panel('Study05 bridge brow armor '+label,sections)
+        # A separate descending terrace keeps a real edge between the crown
+        # plate and the outer green shoulder, as in the reference architecture.
         prism('Bridge corner armored brow '+label,
-              [(26.4,6.7,s*6.8),(26.4,6.1,s*10.0),(31.8,4.75,s*11.2),(35.88,3.66,s*7.15)],
+              [(26.4,6.65,s*6.78),(26.4,6.1,s*10.0),
+               (31.8,4.75,s*11.2),(35.88,3.62,s*7.15)],
               (.25,.93,s*.28),.20,armor,.05)
-        # Short visible central seam and edge inset break the previous single
-        # forehead slab into plausible manufactured plates.
-        bar('Study05 bridge brow seam '+label,(27.0,6.75,s*3.1),(35.5,4.08,s*3.8),.08,.04,carbon,(.30,.95,0))
         # Shoulder protection stays outside the bridge cavity and has a compact
         # front section, rather than the old wide rising slab at the brow.
         shoulder = bpy.data.objects['Integrated forward shoulder '+label]
@@ -150,6 +168,47 @@ def apply(bpy):
             vertex.co = shoulder.matrix_world.inverted() @ Vector(cv((x,yy,z)))
         shoulder.data.update()
         changed.append(shoulder.name)
+
+    # One small service cover supplies a human maintenance scale cue. Its
+    # coaming surrounds an actual hole through the center armor panel; the
+    # cover is set 0.20m down in that pocket, above the existing opaque core.
+    # This is fixed authored exterior geometry, with no door/interior claim.
+    service_u=Vector((1,-1.35/4.8,0)).normalized()
+    service_v=Vector((0,0,1))
+    service_n=Vector((1.35/4.8,1,0)).normalized()
+    service_center=Vector((29.1,7.15-(29.1-26.3)*1.35/4.8,0))
+    def service_rect(length,width,offset):
+        c=service_center+service_n*offset
+        u=service_u*length/2;v=service_v*width/2
+        return [c-u-v,c+u-v,c+u+v,c-u+v]
+    cutter=prism('Study05 temporary brow service cutter',
+                 service_rect(1.65,1.15,.40),service_n,1.0,carbon)
+    bpy.context.view_layer.objects.active=center_plate
+    mod=center_plate.modifiers.new('Cut recessed service cover aperture','BOOLEAN')
+    mod.operation='DIFFERENCE';mod.solver='EXACT';mod.object=cutter
+    while center_plate.modifiers.find(mod.name)>0:
+        bpy.ops.object.modifier_move_up(modifier=mod.name)
+    bpy.ops.object.modifier_apply(modifier=mod.name)
+    bpy.data.objects.remove(cutter,do_unlink=True)
+    created.remove('Study05 temporary brow service cutter')
+    # Four connected loops make a single solid, bevelled coaming ring.
+    loops=[service_rect(1.95,1.45,.045),service_rect(1.65,1.15,.045),
+           service_rect(1.95,1.45,-.15),service_rect(1.65,1.15,-.15)]
+    verts=[tuple(p) for loop in loops for p in loop]
+    faces=[]
+    for k in range(4):
+        j=(k+1)%4
+        faces.extend([(k,j,4+j,4+k),(8+k,12+k,12+j,8+j),
+                      (k,8+k,8+j,j),(4+k,4+j,12+j,12+k)])
+    mesh('Study05 bridge brow service coaming',verts,faces,metal,.02)
+    prism('Study05 bridge brow service cover',service_rect(1.57,1.07,-.20),
+          service_n,.065,armor,.025)
+    # A 0.22m hand latch remains below the coaming's top, so it cannot read as a
+    # full-size crew access hatch or an unrelated raised roof ornament.
+    c=service_center+service_n*(-.12)+service_u*.40
+    u=service_u*.035;v=service_v*.11
+    prism('Study05 bridge brow service latch',[c-u-v,c+u-v,c+u+v,c-u+v],
+          service_n,.065,metal,.012)
 
     windows = []
     for s,label in ((-1,'port'),(1,'starboard')):
@@ -193,10 +252,20 @@ def apply(bpy):
         prism('Study05 bridge recessed upper reveal '+label,
               [(35.82,2.86,s*.18),(35.20,2.50,s*.18),(35.20,2.50,s*7.78),(35.82,2.71,s*7.78)],
               (0,-1,0),.16,carbon,.025)
-        for sign,z in ((-1,.14),(1,7.82)):
-            box('Study05 bridge front gasket '+label+' '+str(sign),(35.26,1.035,s*z),(.09,3.14,.10),carbon,.01)
-        # Diagonal narrow support references the concept glazing subdivisions.
-        bar('Study05 cockpit diagonal brace '+label,(35.27,-.35,s*1.10),(35.27,2.43,s*4.15),.075,.07,metal,(1,0,0))
+        # All four inner gasket strips meet at the actual front-pane corners.
+        # Their back faces overlap the glass by 0.02m, avoiding a floating trim
+        # strip or a gap between the gasket and opaque pane edge.
+        for sign,z in ((-1,.25),(1,6.40)):
+            bar('Study05 bridge front gasket '+label+' '+str(sign),
+                (35.32,-.42,s*z),(35.32,2.50,s*z),.10,.14,carbon,(1,0,0))
+        for y,edge_name in ((-.42,'lower'),(2.50,'upper')):
+            bar('Study05 bridge front gasket '+label+' '+edge_name,
+                (35.32,y,s*.25),(35.32,y,s*6.40),.10,.14,carbon,(1,0,0))
+        # The protective diagonal joins the real outer frame at both ends.
+        # It overlaps the center mullion/lower lintel and upper lintel solids;
+        # unlike the former short bar, neither end floats inside a glass pane.
+        bar('Study05 cockpit diagonal brace '+label,
+            (35.62,-.61,s*.11),(35.62,2.72,s*6.48),.075,.07,metal,(1,0,0))
         # Small fixed exterior service hatch: 1.05m × 1.55m, with a hand-sized
         # latch. It is a modeled scale cue, not a working entrance or interior.
         # This X26→32 side facet tapers 4.6m in Z over 6m in X.
@@ -240,6 +309,10 @@ def apply(bpy):
             'pressure_hull_bow_vertices_changed':changed_vertices,
             'actual_hull_cut':'front and wrap bridge cavities, applied exact difference',
             'windows':windows,'canonical_materials_added':[],
+            'brow_armor':{'panels':['Bridge central armored brow',
+                          'Study05 bridge brow armor port','Study05 bridge brow armor starboard'],
+                          'nominal_vertical_thickness_m':.32,'open_lateral_joint_m':.20,
+                          'service_cover_face_m':[1.57,1.07],'service_cover_recess_m':.20},
             'inferred_details':['exterior fixed service hatches/latches','armor seams and reveal construction'],
             'not_implemented':['fitted crew interior','working doors/access','structural or pressure certification'],
             'source_names_preserved':sorted(source_names & set(o.name for o in bpy.context.scene.objects))}
