@@ -8,6 +8,7 @@ mod engineering;
 mod engineering_document;
 mod equipment;
 mod event_graph;
+mod exterior;
 mod github;
 mod github_auth;
 mod import_document;
@@ -46,6 +47,7 @@ struct Editor {
     engineering: engineering::Engineering,
     service_paths: service_paths::ServicePaths,
     rooms: rooms::Rooms,
+    exterior: exterior::Exterior,
     session_panel: session_panel::SessionPanel,
     community: community::Community,
     event_graph: event_graph::EventGraphPanel,
@@ -88,6 +90,7 @@ impl Editor {
             engineering: engineering::Engineering::open(&project),
             service_paths: service_paths::ServicePaths::open(&project),
             rooms: rooms::Rooms::open(&project),
+            exterior: exterior::Exterior::open(&project),
             session_panel: session_panel::SessionPanel::default(),
             community: community::Community::open(&project),
             event_graph: event_graph::EventGraphPanel::open(&project),
@@ -186,6 +189,7 @@ impl eframe::App for Editor {
         self.client.poll();
         self.cockpit.poll(&cockpit::Live::from_client(&self.client));
         self.rooms.poll_live(&mut self.client);
+        self.exterior.poll_live(&mut self.client);
         self.community.poll();
         let surface_revision = self.surface_materials.revision();
         self.client.set_spatial_material(surface_revision.clone());
@@ -581,6 +585,7 @@ impl eframe::App for Editor {
                     ui.selectable_value(&mut self.inspector_tab, 0, "Live state");
                     ui.selectable_value(&mut self.inspector_tab, 4, "Equipment");
                     ui.selectable_value(&mut self.inspector_tab, 6, "Room layout");
+                    ui.selectable_value(&mut self.inspector_tab, 7, "Exterior");
                 });
                 ui.horizontal_wrapped(|ui| {
                     ui.selectable_value(&mut self.inspector_tab, 2, "Ship design");
@@ -613,6 +618,8 @@ impl eframe::App for Editor {
                         } else if self.inspector_tab == 3 {
                             self.render_debug
                                 .show(ui, &mut self.client, &mut self.wireframe);
+                        } else if self.inspector_tab == 7 {
+                            self.exterior.show(ui, &self.project, &mut self.client);
                         } else if self.inspector_tab == 6 {
                             self.rooms.show(ui, &self.project, &mut self.client);
                         } else if self.inspector_tab == 5 {
@@ -691,6 +698,18 @@ fn project_path(
         })
         .unwrap_or(default)
 }
+fn editor_msaa(value: Option<&std::ffi::OsStr>) -> Result<u16, String> {
+    match value {
+        None => Ok(4),
+        Some(value) => match value.to_str() {
+            Some("0") => Ok(0),
+            Some("2") => Ok(2),
+            Some("4") => Ok(4),
+            Some("8") => Ok(8),
+            _ => Err("ARKLINE_EDITOR_MSAA must be 0, 2, 4 or 8".into()),
+        },
+    }
+}
 fn main() -> eframe::Result<()> {
     let mut project = std::env::current_dir()
         .unwrap_or_else(|_| PathBuf::from("."))
@@ -712,7 +731,7 @@ fn main() -> eframe::Result<()> {
         match arg.as_str() {
             "--help" | "-h" => {
                 println!(
-                    "Arkline Editor {}\nUsage: arkline-editor [--project PATH] [--pilot NAME]\nARKLINE_EDITOR_PROJECT sets the default project; --project overrides it. Blank environment values are ignored.\nEmbedded game viewport with local Play, Pause, Step and Stop. No separate client windows or public connections.",
+                    "Arkline Editor {}\nUsage: arkline-editor [--project PATH] [--pilot NAME]\nARKLINE_EDITOR_PROJECT sets the default project; --project overrides it. Blank environment values are ignored.\nARKLINE_EDITOR_MSAA sets graphics multisampling to 0, 2, 4 or 8 (default 4).\nEmbedded game viewport with local Play, Pause, Step and Stop. No separate client windows or public connections.",
                     BUILD.trim()
                 );
                 return Ok(());
@@ -736,9 +755,14 @@ fn main() -> eframe::Result<()> {
             }
         }
     }
+    let multisampling = editor_msaa(std::env::var_os("ARKLINE_EDITOR_MSAA").as_deref())
+        .unwrap_or_else(|error| {
+            eprintln!("{error}");
+            std::process::exit(2)
+        });
     let options = eframe::NativeOptions {
         renderer: eframe::Renderer::Glow,
-        multisampling: 4,
+        multisampling,
         depth_buffer: 24,
         viewport: egui::ViewportBuilder::default()
             .with_title(format!("Arkline Editor — {}", BUILD.trim()))
@@ -763,6 +787,22 @@ fn main() -> eframe::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn multisampling_override_accepts_supported_counts_and_rejects_invalid_values() {
+        use std::ffi::OsStr;
+        assert_eq!(super::editor_msaa(None).unwrap(), 4);
+        for samples in ["0", "2", "4", "8"] {
+            assert_eq!(
+                super::editor_msaa(Some(OsStr::new(samples))).unwrap(),
+                samples.parse::<u16>().unwrap()
+            );
+        }
+        for invalid in ["", "1", "3", "16", " 0", "NaN"] {
+            assert!(super::editor_msaa(Some(OsStr::new(invalid)))
+                .unwrap_err()
+                .contains("ARKLINE_EDITOR_MSAA"));
+        }
+    }
     use super::*;
     use eframe::App;
     #[test]
