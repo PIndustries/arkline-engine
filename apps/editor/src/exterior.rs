@@ -37,7 +37,10 @@ struct PendingIo {
     draft_revision: u64,
 }
 enum LiveEdit {
-    Definition(ExteriorDefinition),
+    Definition {
+        revision: u64,
+        document: ExteriorDefinition,
+    },
     Enabled(bool),
 }
 struct PendingLive {
@@ -62,7 +65,7 @@ pub struct Exterior {
     pending_live: Option<PendingLive>,
     // An acknowledgement can precede its snapshot. Match the accepted document
     // before advancing the draft base; never render an unconfirmed definition.
-    awaiting_definition: Option<ExteriorDefinition>,
+    awaiting_definition: Option<(u64, ExteriorDefinition)>,
 }
 
 impl Exterior {
@@ -220,13 +223,23 @@ impl Exterior {
             .live
             .as_ref()
             .is_some_and(|previous| self.draft == previous.definition.document);
-        let accepted_submission = self
+        let accepted_submission =
+            self.awaiting_definition
+                .as_ref()
+                .is_some_and(|(revision, document)| {
+                    state.definition.revision >= *revision && document == &state.definition.document
+                });
+        let superseded_submission = self
             .awaiting_definition
             .as_ref()
-            .is_some_and(|document| document == &state.definition.document);
+            .and_then(|(revision, _)| (state.definition.revision > *revision).then_some(*revision));
         if accepted_submission {
             self.based_on_revision = Some(state.definition.revision);
             self.awaiting_definition = None;
+        } else if let Some(revision) = superseded_submission {
+            self.based_on_revision = Some(revision);
+            self.awaiting_definition = None;
+            self.message = "Applied definition was superseded by a newer authority revision. Local edits were kept; reconcile the current live definition before applying again.".into();
         } else if self.draft == state.definition.document {
             self.based_on_revision = Some(state.definition.revision);
         } else if follows_previous && self.pending_io.is_none() && !self.load_blocked {
@@ -280,8 +293,9 @@ impl Exterior {
         let pending = self.pending_live.take().unwrap();
         match result {
             Ok(()) => match pending.edit {
-                LiveEdit::Definition(document) => {
-                    self.awaiting_definition = Some(document);
+                LiveEdit::Definition { revision, document } => {
+                    self.awaiting_definition =
+                        revision.checked_add(1).map(|revision| (revision, document));
                     self.message = "Authority accepted the exterior definition; awaiting confirmed snapshot. Project save remains separate.".into();
                 }
                 LiveEdit::Enabled(enabled) => {
@@ -337,7 +351,7 @@ impl Exterior {
                 if ui.add_enabled(self.pending_io.is_none(), egui::Button::new("Reload saved")).clicked() {
                     self.queue(Operation::Reload, IoRequest::Reload(project.to_path_buf()));
                 }
-                if ui.add_enabled(self.live.is_some() && self.pending_live.is_none(), egui::Button::new("Load live (replace draft)")).clicked() {
+                if ui.add_enabled(self.live.is_some() && self.pending_live.is_none() && self.awaiting_definition.is_none(), egui::Button::new("Load live (replace draft)")).clicked() {
                     self.load_live_draft();
                 }
                 let stale = self.live.as_ref().is_some_and(|live| self.based_on_revision != Some(live.definition.revision));
@@ -356,7 +370,7 @@ impl Exterior {
                         let document = self.draft.clone();
                         match client.exterior_replace(revision, document.clone()) {
                             Ok(id) => {
-                                self.pending_live = Some(PendingLive { id, edit: LiveEdit::Definition(document) });
+                                self.pending_live = Some(PendingLive { id, edit: LiveEdit::Definition { revision, document } });
                                 self.message = "Waiting for authority acknowledgement…".into();
                             }
                             Err(error) => self.message = format!("Apply could not be queued: {error}. Draft kept."),
@@ -724,7 +738,10 @@ mod tests {
         let submitted = panel.draft.clone();
         panel.pending_live = Some(PendingLive {
             id: 10,
-            edit: LiveEdit::Definition(submitted),
+            edit: LiveEdit::Definition {
+                revision: 4,
+                document: submitted,
+            },
         });
         panel.draft.fixtures[1].emission = 5.0;
         panel.draft_revision = 2;
@@ -776,7 +793,10 @@ mod tests {
         let submitted = panel.draft.clone();
         panel.pending_live = Some(PendingLive {
             id: 1,
-            edit: LiveEdit::Definition(submitted.clone()),
+            edit: LiveEdit::Definition {
+                revision: 0,
+                document: submitted.clone(),
+            },
         });
         panel.draft.fixtures[1].emission = 5.0;
         let newer = panel.draft.clone();
@@ -809,6 +829,49 @@ mod tests {
     }
 
     #[test]
+    fn unchanged_apply_does_not_confirm_against_the_prior_snapshot() {
+        let (mut panel, _) = panel();
+        let document = default_pioneer_exterior();
+        panel.observe_live(state(4, document.clone()));
+        panel.pending_live = Some(PendingLive {
+            id: 1,
+            edit: LiveEdit::Definition {
+                revision: 4,
+                document: document.clone(),
+            },
+        });
+        panel.finish_live(1, &Ok(()));
+        panel.observe_live(state(4, document.clone()));
+        assert!(panel.awaiting_definition.is_some());
+        panel.observe_live(state(5, document));
+        assert!(panel.awaiting_definition.is_none());
+        assert_eq!(panel.based_on_revision, Some(5));
+    }
+
+    #[test]
+    fn superseded_apply_unlocks_reconciliation_without_adopting_peer_edits() {
+        let (mut panel, _) = panel();
+        panel.observe_live(state(4, default_pioneer_exterior()));
+        panel.draft.fixtures[0].emission = 7.0;
+        panel.pending_live = Some(PendingLive {
+            id: 1,
+            edit: LiveEdit::Definition {
+                revision: 4,
+                document: panel.draft.clone(),
+            },
+        });
+        panel.finish_live(1, &Ok(()));
+        let local = panel.draft.clone();
+        let mut peer = default_pioneer_exterior();
+        peer.fixtures[1].emission = 6.0;
+        panel.observe_live(state(6, peer));
+        assert!(panel.awaiting_definition.is_none());
+        assert_eq!(panel.based_on_revision, Some(5));
+        assert_eq!(panel.draft, local);
+        assert!(panel.message.contains("superseded"));
+    }
+
+    #[test]
     fn explicit_rebase_keeps_saved_candidate_without_installing_it_live() {
         let (mut panel, _) = panel();
         panel.observe_live(state(5, default_pioneer_exterior()));
@@ -828,7 +891,10 @@ mod tests {
         panel.observe_live(state(8, default_pioneer_exterior()));
         panel.pending_live = Some(PendingLive {
             id: 3,
-            edit: LiveEdit::Definition(panel.draft.clone()),
+            edit: LiveEdit::Definition {
+                revision: 8,
+                document: panel.draft.clone(),
+            },
         });
         panel.pending_io = Some(PendingIo {
             operation: Operation::Save,
