@@ -209,6 +209,9 @@ mod tests {
             .handle_at(&mut session, Request::Snapshot, 500)
             .snapshot
             .unwrap();
-        assert_eq!(later.pilots[0].power.as_ref().unwrap().charge_j, 1600);
+        assert_eq!(
+            later.pilots[0].power.as_ref().unwrap().charge_j,
+            1600 - default_pioneer_exterior().load_w() / 2
+        );
     }
 }

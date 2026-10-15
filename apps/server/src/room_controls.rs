@@ -124,6 +124,7 @@ fn advance_pair(
     bail!("room integration exceeded finite transition budget")
 }
 pub(super) fn advance(w: &mut World, now: u64) -> Result<()> {
+    exterior_effects::validate(w)?;
     let exterior_load = w.exterior_definition.document.load_w();
     for (name, a) in &mut w.accounts {
         let p = w.pilots.get_mut(name).unwrap();

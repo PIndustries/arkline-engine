@@ -613,6 +613,79 @@ pub(super) fn open_clock(db: &mut Connection, editor: bool) -> Result<Option<u64
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn exterior_apply_is_atomic_preserves_room_state_and_reopens_paused_without_replay() {
+        let path = dir();
+        let mut w = EditorWorld::open(&path).unwrap();
+        let mut session = None;
+        let token = call(&mut w, &mut session, connect_interior()).resume_token;
+        call(
+            &mut w,
+            &mut session,
+            Request::SetPioneerRoom {
+                action: PioneerRoomCommand::Breaker { closed: true },
+            },
+        );
+        let room_before = call(&mut w, &mut session, Request::Snapshot)
+            .assets
+            .unwrap()
+            .pioneer_room;
+        let mut document = default_pioneer_exterior();
+        document.fixtures[3].pulse.as_mut().unwrap().on_ms = 50;
+        let accepted = w.exterior_replace(0, document.clone()).unwrap();
+        assert_eq!(accepted.revision, 1);
+        assert_eq!(w.time(), 0);
+        assert_eq!(
+            call(&mut w, &mut session, Request::Snapshot)
+                .assets
+                .unwrap()
+                .pioneer_room,
+            room_before
+        );
+        assert!(w.exterior_replace(0, document.clone()).is_err());
+        let mut wrong_hull = document.clone();
+        wrong_hull.hull_asset_sha256 = "0".repeat(64);
+        assert!(w.exterior_replace(1, wrong_hull).is_err());
+        let before = persisted_world(&w);
+        w.server.db.execute_batch("CREATE TRIGGER reject_exterior BEFORE UPDATE ON world BEGIN SELECT RAISE(ABORT, 'test exterior write failure'); END;").unwrap();
+        document.fixtures[0].load_w += 1;
+        assert!(w.exterior_replace(1, document).is_err());
+        assert_eq!(w.exterior_state().unwrap(), accepted);
+        assert_eq!(persisted_world(&w), before);
+        w.server
+            .db
+            .execute_batch("DROP TRIGGER reject_exterior")
+            .unwrap();
+        w.exterior_set_enabled(&mut session, false, 1).unwrap();
+        let off = snapshot(&mut w).exterior.unwrap();
+        assert!(!off.vessels[0].powered);
+        w.advance(250).unwrap();
+        assert_eq!(snapshot(&mut w).exterior.unwrap(), off);
+        w.exterior_set_enabled(&mut session, true, 1).unwrap();
+        let on = snapshot(&mut w).exterior.unwrap();
+        assert_eq!(
+            on.definition.document.fixtures[3].output(&on.vessels[0], w.time()),
+            1.0
+        );
+        w.step(50).unwrap();
+        assert_eq!(w.time(), 50);
+        let stepped = snapshot(&mut w).exterior.unwrap();
+        assert_eq!(
+            stepped.definition.document.fixtures[3].output(&stepped.vessels[0], w.time()),
+            0.0
+        );
+        w.exterior_set_enabled(&mut session, false, 1).unwrap();
+        let saved = snapshot(&mut w).exterior.unwrap();
+        drop(w);
+        let mut w = EditorWorld::open(&path).unwrap();
+        let mut session = None;
+        call(&mut w, &mut session, connect(token));
+        assert!(w.is_paused());
+        assert_eq!(w.time(), 50);
+        assert_eq!(snapshot(&mut w).exterior.unwrap(), saved);
+        drop(w);
+        std::fs::remove_dir_all(path).unwrap();
+    }
     fn dir() -> std::path::PathBuf {
         std::env::temp_dir().join(format!("arkline-editor-clock-{}", rand::random::<u64>()))
     }

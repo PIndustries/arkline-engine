@@ -57,7 +57,7 @@ impl ExteriorFixture {
         }
         let on = self.pulse.is_none_or(|p| {
             p.period_ms > 0
-                && ((time_ms % p.period_ms + p.phase_ms % p.period_ms) % p.period_ms) < p.on_ms
+                && ((time_ms as u128 + p.phase_ms as u128) % p.period_ms as u128) < p.on_ms as u128
         });
         if on {
             1.0

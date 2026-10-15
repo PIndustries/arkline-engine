@@ -31,6 +31,8 @@ pub const MAX_RESOURCE_JOB_UNITS: u64 = 1_000_000;
 pub const BUILD_VERSION: &str = include_str!("../../../BUILD_VERSION");
 
 pub const PROTOCOL_VERSION: u32 = 1;
+// Exterior effects remain additive v1: an optional snapshot advertises support,
+// and its independently versioned definition is required before new commands.
 pub const RULESET_VERSION: u32 = 1;
 pub const STARTER_CREDITS: u64 = 1_000;
 pub const INITIAL_BELT_ORE: u64 = 100_000;
@@ -1278,6 +1280,17 @@ mod compatibility_tests {
         });
         let snapshot: Snapshot = serde_json::from_value(json).unwrap();
         assert!(snapshot.online_pilots.is_empty());
+        assert!(snapshot.exterior.is_none());
+    }
+    #[test]
+    fn exterior_commands_require_revision_and_are_not_remotely_delegable() {
+        assert!(serde_json::from_value::<Request>(
+            serde_json::json!({"command":"set_pioneer_exterior","enabled":true})
+        )
+        .is_err());
+        let request:Request=serde_json::from_value(serde_json::json!({"command":"set_pioneer_exterior","enabled":true,"expected_revision":0})).unwrap();
+        assert!(!request.is_remote_gameplay());
+        assert_eq!(PROTOCOL_VERSION, 1);
     }
 }
 

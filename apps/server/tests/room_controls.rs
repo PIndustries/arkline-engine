@@ -293,6 +293,7 @@ fn persisted_per_vessel_and_load_reduces_capacitor_regeneration() {
             .unwrap()
             .charge_j,
         initial + power_spec(ShipClass::Pioneer).regen_w
+            - default_pioneer_exterior().load_w()
             - ROOM_LIGHT_W
             - ROOM_VENT_W
             - ROOM_CONTROLLER_W

@@ -69,7 +69,7 @@ fn reactor_regenerates_caps_and_failed_warp_never_draws_charge() {
     let state = ok(&mut s, &mut p, Request::Snapshot, 1000);
     assert_eq!(
         state.pilots[0].power.as_ref().unwrap().charge_j,
-        100 + spec.regen_w
+        100 + spec.regen_w - default_pioneer_exterior().load_w()
     );
     f.charge("Power", spec.warp_cost_j - 1, 1000);
     assert!(

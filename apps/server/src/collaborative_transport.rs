@@ -1285,6 +1285,90 @@ mod tests {
     }
 
     #[test]
+    fn exterior_paused_apply_and_owned_switches_agree_across_two_clients_and_viewer() {
+        let directory = root();
+        let secrets = DevelopmentEditorJoinSecrets::injected("exterior-editor", "exterior-viewer");
+        let host = DevelopmentEditorHost::bind(
+            DevelopmentEditorConfig::new(&directory, connect("ExteriorHost"))
+                .with_bind_addr(SocketAddr::from(([127, 0, 0, 1], 0)))
+                .with_join_secrets(secrets.clone()),
+        )
+        .unwrap();
+        let (mut editor, _) = DevelopmentEditorClient::connect(
+            host.local_addr(),
+            secrets.editor_secret(),
+            Some(connect("ExteriorEditor")),
+        )
+        .unwrap();
+        let (mut viewer, _) =
+            DevelopmentEditorClient::connect(host.local_addr(), secrets.viewer_secret(), None)
+                .unwrap();
+        let mut document = arkline_protocol::default_pioneer_exterior();
+        document.fixtures[3].pulse.as_mut().unwrap().on_ms = 50;
+        let accepted = editor.replace_exterior(0, document.clone()).unwrap();
+        assert_eq!(accepted.revision, 1);
+        let before = host.snapshot().unwrap();
+        assert!(before.paused);
+        assert_eq!(before.simulation_time_ms, 0);
+        assert!(editor.replace_exterior(0, document.clone()).is_err());
+        assert!(viewer.replace_exterior(1, document.clone()).is_err());
+        assert!(viewer.set_exterior_enabled(false, 1).is_err());
+        assert!(host.set_exterior_enabled(false, 0).is_err());
+        host.set_exterior_enabled(false, 1).unwrap();
+        let shared = host.snapshot().unwrap().snapshot.exterior.unwrap();
+        assert_eq!(
+            shared,
+            editor.snapshot().unwrap().snapshot.exterior.unwrap()
+        );
+        assert_eq!(
+            shared,
+            viewer.snapshot().unwrap().snapshot.exterior.unwrap()
+        );
+        assert!(
+            !shared
+                .vessels
+                .iter()
+                .find(|v| v.pilot == "ExteriorHost")
+                .unwrap()
+                .powered
+        );
+        assert!(
+            shared
+                .vessels
+                .iter()
+                .find(|v| v.pilot == "ExteriorEditor")
+                .unwrap()
+                .powered
+        );
+        document.hull_asset_sha256 = "0".repeat(64);
+        assert!(editor.replace_exterior(1, document).is_err());
+        host.clock(ClockAction::Step { delta_ms: 50 }).unwrap();
+        let after = viewer.snapshot().unwrap();
+        assert!(after.paused);
+        assert_eq!(after.simulation_time_ms, 50);
+        assert_eq!(
+            after.snapshot.exterior,
+            editor.snapshot().unwrap().snapshot.exterior
+        );
+        let state = after.snapshot.exterior.unwrap();
+        let vessel = state
+            .vessels
+            .iter()
+            .find(|v| v.pilot == "ExteriorEditor")
+            .unwrap();
+        assert_eq!(
+            state.definition.document.fixtures[3].output(vessel, 50),
+            0.0
+        );
+        editor.leave().unwrap();
+        viewer.leave().unwrap();
+        drop(editor);
+        drop(viewer);
+        host.shutdown_and_wait_from_worker().unwrap();
+        drop(host);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+    #[test]
     fn two_loopback_peers_share_clock_graph_and_role_authority() {
         let directory = root();
         let secrets = DevelopmentEditorJoinSecrets::injected("editor-test", "viewer-test");
