@@ -72,12 +72,11 @@ fn drive(p: &Pilot, now: u64) -> ExteriorDriveState {
         .controls
         .as_ref()
         .is_some_and(|i| now < i.expires_at_ms && i.translation.iter().any(|v| v.abs() > 1e-6));
-    let automatic = p.view.flight.as_ref().is_some_and(|f| {
-        f.updated_at_ms == now
-            && !matches!(f.mode, NavigationMode::Manual | NavigationMode::Stop)
-            && f.acceleration.iter().any(|v| v.abs() > 1e-6)
-    });
-    if warp || input || automatic {
+    let acceleration =
+        p.view.flight.as_ref().is_some_and(|f| {
+            f.updated_at_ms == now && f.acceleration.iter().any(|v| v.abs() > 1e-6)
+        });
+    if warp || input || acceleration {
         ExteriorDriveState::Active
     } else if p.view.power.as_ref().is_some_and(|p| p.charge_j > 0)
         && !matches!(p.view.location, Location::Jumping { .. })
@@ -108,7 +107,10 @@ pub(super) fn view(w: &World, now: u64) -> ExteriorWorldState {
             ExteriorVesselState {
                 pilot: name.clone(),
                 ship_class: ShipClass::Pioneer,
-                vessel_id: format!("v1:{name}:Pioneer"),
+                vessel_id: a
+                    .vessel_id(ShipClass::Pioneer)
+                    .expect("validated owned Pioneer identity")
+                    .to_owned(),
                 enabled: a.pioneer_exterior_enabled,
                 powered,
                 drive: if active {
@@ -333,6 +335,47 @@ mod tests {
         }
     }
     #[test]
+    fn inactive_pioneer_keeps_its_owned_circuit_load_and_identity() {
+        let mut s = Server::open(":memory:").unwrap();
+        let mut session = connect(&mut s, "Parked", 0);
+        let mut initial = world(&s);
+        initial
+            .pilots
+            .get_mut("Parked")
+            .unwrap()
+            .view
+            .power
+            .as_mut()
+            .unwrap()
+            .charge_j = 100_000;
+        save(&s, &initial);
+        let changed = s.handle_at(
+            &mut session,
+            Request::SelectShip {
+                ship_class: ShipClass::Prospector,
+            },
+            0,
+        );
+        assert!(changed.ok, "{}", changed.message);
+        let later = s.handle_at(&mut session, Request::Snapshot, 1000);
+        assert!(later.ok, "{}", later.message);
+        let parked = later
+            .assets
+            .unwrap()
+            .ships
+            .into_iter()
+            .find(|s| s.ship_class == ShipClass::Pioneer)
+            .unwrap();
+        assert_eq!(
+            parked.power.unwrap().charge_j,
+            100_000 + 1200 - default_pioneer_exterior().load_w()
+        );
+        let state = later.snapshot.unwrap().exterior.unwrap();
+        assert_eq!(state.vessels[0].vessel_id, "v1:Parked:Pioneer");
+        assert!(state.vessels[0].enabled && state.vessels[0].powered);
+        assert_eq!(state.vessels[0].drive, ExteriorDriveState::Off);
+    }
+    #[test]
     fn drive_uses_fresh_input_and_warp_independently_of_exterior_enable() {
         let mut s = Server::open(":memory:").unwrap();
         let mut session = connect(&mut s, "Drive", 0);
@@ -363,7 +406,24 @@ mod tests {
         let expired = snapshot(&mut s, &mut session, PILOT_INPUT_LEASE_MS + 1)
             .exterior
             .unwrap();
-        assert_eq!(expired.vessels[0].drive, ExteriorDriveState::Idle);
+        // Expired manual input still leaves real braking in the freshly
+        // advanced flight state. The branch switch cannot darken that activity.
+        assert_eq!(expired.vessels[0].drive, ExteriorDriveState::Active);
+        let mut residual = world(&s).pilots["Drive"].clone();
+        residual.controls = None;
+        let flight = residual.view.flight.as_mut().unwrap();
+        flight.mode = NavigationMode::Stop;
+        flight.acceleration = [1.0, 0.0, 0.0];
+        flight.updated_at_ms = PILOT_INPUT_LEASE_MS;
+        assert_eq!(
+            drive(&residual, PILOT_INPUT_LEASE_MS + 1),
+            ExteriorDriveState::Idle
+        );
+        residual.view.flight.as_mut().unwrap().updated_at_ms = PILOT_INPUT_LEASE_MS + 1;
+        assert_eq!(
+            drive(&residual, PILOT_INPUT_LEASE_MS + 1),
+            ExteriorDriveState::Active
+        );
         let warp = s.handle_at(
             &mut session,
             Request::Warp {

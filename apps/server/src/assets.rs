@@ -21,6 +21,14 @@ pub(super) struct Account {
 fn exterior_enabled_by_default() -> bool {
     true
 }
+impl Account {
+    pub(super) fn vessel_id(&self, class: ShipClass) -> Option<&str> {
+        self.vessel_ids
+            .iter()
+            .find(|(c, _)| *c == class)
+            .map(|(_, id)| id.as_str())
+    }
+}
 #[derive(Clone, Serialize, Deserialize)]
 pub(super) struct Corporation {
     owner: String,

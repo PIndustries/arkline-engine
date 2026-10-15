@@ -332,6 +332,21 @@ mod integration_tests {
         assert_eq!(p.as_ref().unwrap().charge_j, p.as_ref().unwrap().capacity_j);
     }
     #[test]
+    fn combined_exterior_load_preserves_pressure_reserve_and_empty_capacitor_boundaries() {
+        let (mut coarse, mut cp) = fixture();
+        cp.as_mut().unwrap().charge_j = 0;
+        cp.as_mut().unwrap().regen_remainder_mj = 0;
+        let (mut fine, mut fp) = (coarse.clone(), cp.clone());
+        let load = default_pioneer_exterior().load_w();
+        advance_pair(&mut coarse, &mut cp, false, 20_000, load).unwrap();
+        for t in 1..=20_000 {
+            advance_pair(&mut fine, &mut fp, false, t, load).unwrap();
+        }
+        assert_eq!(coarse, fine);
+        assert_eq!(cp, fp);
+        assert!(coarse.door_open && !coarse.vent_running);
+    }
+    #[test]
     fn power_recovery_and_emergency_expiry_are_cadence_independent() {
         for blackout in [false, true] {
             let (mut coarse, mut cp) = fixture();

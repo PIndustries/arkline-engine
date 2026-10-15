@@ -1303,13 +1303,15 @@ mod tests {
         let (mut viewer, _) =
             DevelopmentEditorClient::connect(host.local_addr(), secrets.viewer_secret(), None)
                 .unwrap();
+        let initial_time = host.snapshot().unwrap().simulation_time_ms;
         let mut document = arkline_protocol::default_pioneer_exterior();
         document.fixtures[3].pulse.as_mut().unwrap().on_ms = 50;
+        document.fixtures[3].pulse.as_mut().unwrap().phase_ms = (1000 - initial_time % 1000) % 1000;
         let accepted = editor.replace_exterior(0, document.clone()).unwrap();
         assert_eq!(accepted.revision, 1);
         let before = host.snapshot().unwrap();
         assert!(before.paused);
-        assert_eq!(before.simulation_time_ms, 0);
+        assert_eq!(before.simulation_time_ms, initial_time);
         assert!(editor.replace_exterior(0, document.clone()).is_err());
         assert!(viewer.replace_exterior(1, document.clone()).is_err());
         assert!(viewer.set_exterior_enabled(false, 1).is_err());
@@ -1345,7 +1347,7 @@ mod tests {
         host.clock(ClockAction::Step { delta_ms: 50 }).unwrap();
         let after = viewer.snapshot().unwrap();
         assert!(after.paused);
-        assert_eq!(after.simulation_time_ms, 50);
+        assert_eq!(after.simulation_time_ms, initial_time + 50);
         assert_eq!(
             after.snapshot.exterior,
             editor.snapshot().unwrap().snapshot.exterior
@@ -1357,7 +1359,7 @@ mod tests {
             .find(|v| v.pilot == "ExteriorEditor")
             .unwrap();
         assert_eq!(
-            state.definition.document.fixtures[3].output(vessel, 50),
+            state.definition.document.fixtures[3].output(vessel, after.simulation_time_ms),
             0.0
         );
         editor.leave().unwrap();

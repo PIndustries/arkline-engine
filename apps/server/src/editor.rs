@@ -617,6 +617,7 @@ mod tests {
     fn exterior_apply_is_atomic_preserves_room_state_and_reopens_paused_without_replay() {
         let path = dir();
         let mut w = EditorWorld::open(&path).unwrap();
+        let initial_time = w.time();
         let mut session = None;
         let token = call(&mut w, &mut session, connect_interior()).resume_token;
         call(
@@ -632,9 +633,10 @@ mod tests {
             .pioneer_room;
         let mut document = default_pioneer_exterior();
         document.fixtures[3].pulse.as_mut().unwrap().on_ms = 50;
+        document.fixtures[3].pulse.as_mut().unwrap().phase_ms = (1000 - initial_time % 1000) % 1000;
         let accepted = w.exterior_replace(0, document.clone()).unwrap();
         assert_eq!(accepted.revision, 1);
-        assert_eq!(w.time(), 0);
+        assert_eq!(w.time(), initial_time);
         assert_eq!(
             call(&mut w, &mut session, Request::Snapshot)
                 .assets
@@ -668,7 +670,7 @@ mod tests {
             1.0
         );
         w.step(50).unwrap();
-        assert_eq!(w.time(), 50);
+        assert_eq!(w.time(), initial_time + 50);
         let stepped = snapshot(&mut w).exterior.unwrap();
         assert_eq!(
             stepped.definition.document.fixtures[3].output(&stepped.vessels[0], w.time()),
@@ -681,7 +683,7 @@ mod tests {
         let mut session = None;
         call(&mut w, &mut session, connect(token));
         assert!(w.is_paused());
-        assert_eq!(w.time(), 50);
+        assert_eq!(w.time(), initial_time + 50);
         assert_eq!(snapshot(&mut w).exterior.unwrap(), saved);
         drop(w);
         std::fs::remove_dir_all(path).unwrap();
