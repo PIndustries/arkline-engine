@@ -704,6 +704,28 @@ fn native_authority_pioneer_adoption_capture() {
             },
         );
         authority_request(&mut world, &mut session, Request::Undock);
+        // Turn the actual vessel toward the existing world sunlight so the
+        // concept-angle geometry is readable. No renderer light is altered.
+        for _ in 0..40 {
+            authority_request(
+                &mut world,
+                &mut session,
+                Request::PilotInput {
+                    translation: [0.; 3],
+                    rotation: [0., 1., 0.],
+                },
+            );
+            world.step(50).unwrap();
+        }
+        authority_request(
+            &mut world,
+            &mut session,
+            Request::PilotInput {
+                translation: [0.; 3],
+                rotation: [0.; 3],
+            },
+        );
+        world.step(50).unwrap();
         let accepted_definition = world.exterior_state().unwrap();
         assert_eq!(
             accepted_definition.document,
@@ -955,13 +977,16 @@ fn native_authority_pioneer_adoption_capture() {
         let active = authority_request(&mut world, &mut session, Request::Snapshot);
         assert_eq!(active.server_time_ms, before_thrust + 50);
         assert_eq!(authority_vessel(&active).drive, ExteriorDriveState::Active);
+        let active_flight = authority_pilot(&active).flight.as_ref().unwrap();
         assert!(
-            authority_pilot(&active)
-                .flight
-                .as_ref()
-                .unwrap()
-                .acceleration[0]
-                > 0.
+            active_flight
+                .acceleration
+                .iter()
+                .zip(active_flight.heading)
+                .map(|(a, h)| a * h)
+                .sum::<f64>()
+                > 0.,
+            "accepted body-forward input must integrate real forward acceleration"
         );
         let active_pixels = capture("pioneer-authority-active-front-quarter", front, &active);
         assert!(
@@ -1068,6 +1093,7 @@ fn native_authority_pioneer_adoption_capture() {
                 "vendor":gl.get_parameter_string(glow::VENDOR),"renderer":gl.get_parameter_string(glow::RENDERER),
                 "gl_version":gl.get_parameter_string(glow::VERSION),"viewport":[960,640],
                 "authority":"disposable arkline_server::editor::EditorWorld", "fixture_definition_modified":false,
+                "review_attitude":{"method":"accepted yaw PilotInput and real fixed steps; existing sunlight unchanged","yaw_steps":40,"step_ms":50,"zero_input_settle_ms":50},
                 "omitted_snapshot_scene":["traffic","asteroids","gates","surface_props","other_pilots"],
                 "captures":captures,"off_idle_changed_pixels":changed(&off_pixels,&idle_pixels),
                 "idle_active_changed_pixels":same_time_drive_pixels,
