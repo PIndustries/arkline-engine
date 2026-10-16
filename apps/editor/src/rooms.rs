@@ -377,79 +377,83 @@ impl Rooms {
     pub fn show(&mut self, ui: &mut egui::Ui, project: &Path, client: &mut EmbeddedClient) {
         self.poll_live(client);
         let frame_draft = self.draft.clone();
-        ui.heading("Room layout");
-        ui.colored_label(
-            egui::Color32::from_rgb(255, 191, 104),
-            "PIONEER · LIVE INTERIOR AUTHORING",
-        );
-        ui.small("Save + apply live updates the shared Pioneer blueprint, its walls and walking collision after authority approval. Equipment and utilities keep their existing contracts.");
-        if let Some(live) = &self.live {
-            ui.label(format!(
-                "Live revision {} · draft base {}",
-                live.revision,
-                self.based_on_revision
-                    .map_or_else(|| "unlinked".into(), |r| r.to_string())
-            ));
-            if self.based_on_revision != Some(live.revision) {
-                ui.colored_label(egui::Color32::from_rgb(255, 191, 104), "This draft is not based on the latest live layout. Load live before editing/applying it.");
-            }
-        } else {
-            ui.small("Waiting for the authority's room-layout state…");
-        }
-        ui.small(format!(
-            "Source reference: {RUNTIME_SOURCE} · 2 decks · {:.0} × {:.0} m plan each",
-            PIONEER_INTERIOR_SIZE[0], PIONEER_INTERIOR_SIZE[1]
-        ));
-
-        ui.horizontal_wrapped(|ui| {
-            if ui.add_enabled(self.pending.is_none() && self.draft.rooms.len() < MAX_ROOMS, egui::Button::new("Add room")).clicked() {
-                match self.draft.add_room() {
-                    Ok(id) => { self.selected = Some(id); self.message = "Added a candidate room; set its position, dimensions, and door opening.".into(); }
-                    Err(error) => self.message = error,
-                }
-            }
-            if ui.add_enabled(self.can_save(), egui::Button::new("Save draft")).clicked() {
-                self.queue(IoOperation::Save, IoRequest::Save(project.to_path_buf(), self.draft.clone()));
-            }
-            let live_ready = client.ready() && self.pending_live.is_none() && self.can_save()
-                && self.live.as_ref().is_some_and(|live| self.based_on_revision == Some(live.revision))
-                && self.draft.validate_live().is_ok();
-            if ui.add_enabled(live_ready, egui::Button::new("Save + apply live")).clicked() {
-                let apply = SaveApply { generation: client.session_generation(), revision: self.based_on_revision.unwrap(), document: self.draft.clone() };
-                self.queue(IoOperation::Save, IoRequest::Save(project.to_path_buf(), apply.document.clone()));
-                if self.pending.is_some() { self.save_apply = Some(apply); }
-            }
-            if ui.add_enabled(self.live.is_some() && self.pending.is_none() && self.pending_live.is_none(), egui::Button::new("Load live layout (replace draft)")).clicked() {
-                self.load_live_draft();
-            }
-            if ui.add_enabled(self.pending.is_none(), egui::Button::new("Reload saved")).clicked() {
-                self.queue(IoOperation::Reload, IoRequest::Reload(project.to_path_buf()));
-            }
-            if self.load_blocked && ui.add_enabled(self.pending.is_none(), egui::Button::new("Reset to runtime source; allow replacement")).clicked() {
-                self.reset_after_load_failure();
-            }
-            if let Some(pending) = self.pending {
-                ui.small(match pending.kind { IoOperation::Save => "Saving…", IoOperation::Reload => "Loading…" });
-            }
-        });
-        if self.load_blocked {
+        // Keep conditional diagnostics from shifting numeric widget IDs.
+        ui.scope(|ui| {
+            ui.heading("Room layout");
             ui.colored_label(
-                egui::Color32::LIGHT_RED,
-                "Saving is locked because the saved room layout has not loaded successfully.",
+                egui::Color32::from_rgb(255, 191, 104),
+                "PIONEER · LIVE INTERIOR AUTHORING",
             );
-        }
-        if let Err(error) = self.draft.validate() {
-            ui.colored_label(egui::Color32::LIGHT_RED, error);
-        }
-        if let Err(error) = self.draft.validate_live() {
-            ui.small(format!("Draft can be saved; live apply requires: {error}"));
-        }
-        ui.label(if !self.explicit_reset && self.draft == self.saved {
-            "No unsaved room layout changes"
-        } else {
-            "Unsaved room layout changes"
+            ui.small("Save + apply live updates the shared Pioneer blueprint, its walls and walking collision after authority approval. Equipment and utilities keep their existing contracts.");
+            if let Some(live) = &self.live {
+                ui.label(format!(
+                    "Live revision {} · draft base {}",
+                    live.revision,
+                    self.based_on_revision
+                        .map_or_else(|| "unlinked".into(), |r| r.to_string())
+                ));
+                if self.based_on_revision != Some(live.revision) {
+                    ui.colored_label(egui::Color32::from_rgb(255, 191, 104), "This draft is not based on the latest live layout. Load live before editing/applying it.");
+                }
+            } else {
+                ui.small("Waiting for the authority's room-layout state…");
+            }
+            ui.small(format!(
+                "Source reference: {RUNTIME_SOURCE} · 2 decks · {:.0} × {:.0} m plan each",
+                PIONEER_INTERIOR_SIZE[0], PIONEER_INTERIOR_SIZE[1]
+            ));
+
+            ui.horizontal_wrapped(|ui| {
+                if ui.add_enabled(self.pending.is_none() && self.draft.rooms.len() < MAX_ROOMS, egui::Button::new("Add room")).clicked() {
+                    match self.draft.add_room() {
+                        Ok(id) => { self.selected = Some(id); self.message = "Added a candidate room; set its position, dimensions, and door opening.".into(); }
+                        Err(error) => self.message = error,
+                    }
+                }
+                if ui.add_enabled(self.can_save(), egui::Button::new("Save draft")).clicked() {
+                    self.queue(IoOperation::Save, IoRequest::Save(project.to_path_buf(), self.draft.clone()));
+                }
+                let live_ready = client.ready() && self.pending_live.is_none() && self.can_save()
+                    && self.live.as_ref().is_some_and(|live| self.based_on_revision == Some(live.revision))
+                    && self.draft.validate_live().is_ok();
+                if ui.add_enabled(live_ready, egui::Button::new("Save + apply live")).clicked() {
+                    let apply = SaveApply { generation: client.session_generation(), revision: self.based_on_revision.unwrap(), document: self.draft.clone() };
+                    self.queue(IoOperation::Save, IoRequest::Save(project.to_path_buf(), apply.document.clone()));
+                    if self.pending.is_some() { self.save_apply = Some(apply); }
+                }
+                if ui.add_enabled(self.live.is_some() && self.pending.is_none() && self.pending_live.is_none(), egui::Button::new("Load live layout (replace draft)")).clicked() {
+                    self.load_live_draft();
+                }
+                if ui.add_enabled(self.pending.is_none(), egui::Button::new("Reload saved")).clicked() {
+                    self.queue(IoOperation::Reload, IoRequest::Reload(project.to_path_buf()));
+                }
+                if self.load_blocked && ui.add_enabled(self.pending.is_none(), egui::Button::new("Reset to runtime source; allow replacement")).clicked() {
+                    self.reset_after_load_failure();
+                }
+                if let Some(pending) = self.pending {
+                    ui.small(match pending.kind { IoOperation::Save => "Saving…", IoOperation::Reload => "Loading…" });
+                }
+            });
+            if self.load_blocked {
+                ui.colored_label(
+                    egui::Color32::LIGHT_RED,
+                    "Saving is locked because the saved room layout has not loaded successfully.",
+                );
+            }
+            if let Err(error) = self.draft.validate() {
+                ui.colored_label(egui::Color32::LIGHT_RED, error);
+            }
+            if let Err(error) = self.draft.validate_live() {
+                ui.small(format!("Draft can be saved; live apply requires: {error}"));
+            }
+            ui.label(if !self.explicit_reset && self.draft == self.saved {
+                "No unsaved room layout changes"
+            } else {
+                "Unsaved room layout changes"
+            });
+            ui.separator();
+
         });
-        ui.separator();
 
         ui.strong("Candidate rooms · source IDs preserved where available");
         egui::ScrollArea::vertical()
@@ -493,66 +497,76 @@ impl Rooms {
                 .iter_mut()
                 .find(|room| room.id == room_id)
                 .unwrap();
-            ui.separator();
-            ui.strong(format!("Room #{}", room.id));
-            if let Some(source_id) = &room.source_room_id {
-                ui.small(format!(
-                    "Source room ID: {source_id} · source role: {} · runtime ID: {}",
-                    room.source_role.as_deref().unwrap_or("unknown"),
-                    room.runtime_room_id.as_deref().unwrap_or("not defined")
-                ));
-            } else {
-                ui.small("New candidate room · no current runtime room ID");
-            }
-            ui.horizontal_wrapped(|ui| {
-                ui.label("Name");
-                ui.text_edit_singleline(&mut room.name);
-                egui::ComboBox::from_id_salt(("room_deck", room.id))
-                    .selected_text(format!("Deck {}", room.deck))
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut room.deck, 1, "Deck 1");
-                        ui.selectable_value(&mut room.deck, 2, "Deck 2");
-                    });
-            });
-            ui.label("Deck-plan origin X / Z (m)");
-            ui.horizontal_wrapped(|ui| {
-                for (axis, value) in room.origin_xz_m.iter_mut().enumerate() {
-                    ui.label(if axis == 0 { "X" } else { "Z" });
-                    ui.add(
-                        egui::DragValue::new(value)
-                            .speed(0.1)
-                            .range(0.0..=if axis == 0 { 32.0 } else { 14.0 }),
-                    );
+            ui.push_id(("room_editor", room.id), |ui| {
+                ui.separator();
+                ui.strong(format!("Room #{}", room.id));
+                if let Some(source_id) = &room.source_room_id {
+                    ui.small(format!(
+                        "Source room ID: {source_id} · source role: {} · runtime ID: {}",
+                        room.source_role.as_deref().unwrap_or("unknown"),
+                        room.runtime_room_id.as_deref().unwrap_or("not defined")
+                    ));
+                } else {
+                    ui.small("New candidate room · no current runtime room ID");
+                }
+                ui.horizontal_wrapped(|ui| {
+                    ui.label("Name");
+                    ui.text_edit_singleline(&mut room.name);
+                    egui::ComboBox::from_id_salt(("room_deck", room.id))
+                        .selected_text(format!("Deck {}", room.deck))
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut room.deck, 1, "Deck 1");
+                            ui.selectable_value(&mut room.deck, 2, "Deck 2");
+                        });
+                });
+                ui.label("Deck-plan origin X / Z (m)");
+                ui.horizontal_wrapped(|ui| {
+                    for (axis, value) in room.origin_xz_m.iter_mut().enumerate() {
+                        ui.push_id(("origin_xz_m", axis), |ui| {
+                            ui.label(if axis == 0 { "X" } else { "Z" });
+                            ui.add(
+                                egui::DragValue::new(value)
+                                    .speed(0.1)
+                                    .range(0.0..=if axis == 0 { 32.0 } else { 14.0 }),
+                            );
+                        });
+                    }
+                });
+                ui.label("Clear size · length / depth / height (m)");
+                ui.horizontal_wrapped(|ui| {
+                    for (axis, value) in room.clear_lwh_m.iter_mut().enumerate() {
+                        ui.push_id(("clear_lwh_m", axis), |ui| {
+                            ui.label(["L", "W", "H"][axis]);
+                            ui.add(egui::DragValue::new(value).speed(0.1).range(0.01..=32.0));
+                        });
+                    }
+                });
+                ui.label("Door center X / Z and clear width / height (m)");
+                ui.horizontal_wrapped(|ui| {
+                    for (axis, value) in room.door_center_xz_m.iter_mut().enumerate() {
+                        ui.push_id(("door_center_xz_m", axis), |ui| {
+                            ui.label(if axis == 0 { "X" } else { "Z" });
+                            ui.add(egui::DragValue::new(value).speed(0.1).range(-1.0..=33.0));
+                        });
+                    }
+                    for (axis, value) in room.door_clear_wh_m.iter_mut().enumerate() {
+                        ui.push_id(("door_clear_wh_m", axis), |ui| {
+                            ui.label(if axis == 0 { "W" } else { "H" });
+                            ui.add(egui::DragValue::new(value).speed(0.1).range(0.01..=12.0));
+                        });
+                    }
+                });
+                ui.small("Live doorways face the access corridor. The connected airlock geometry stays fixed; other room walls and openings follow the accepted layout.");
+                if ui
+                    .add_enabled(
+                        self.pending.is_none(),
+                        egui::Button::new("Delete candidate room"),
+                    )
+                    .clicked()
+                {
+                    remove_room = true;
                 }
             });
-            ui.label("Clear size · length / depth / height (m)");
-            ui.horizontal_wrapped(|ui| {
-                for (axis, value) in room.clear_lwh_m.iter_mut().enumerate() {
-                    ui.label(["L", "W", "H"][axis]);
-                    ui.add(egui::DragValue::new(value).speed(0.1).range(0.01..=32.0));
-                }
-            });
-            ui.label("Door center X / Z and clear width / height (m)");
-            ui.horizontal_wrapped(|ui| {
-                for (axis, value) in room.door_center_xz_m.iter_mut().enumerate() {
-                    ui.label(if axis == 0 { "X" } else { "Z" });
-                    ui.add(egui::DragValue::new(value).speed(0.1).range(-1.0..=33.0));
-                }
-                for (axis, value) in room.door_clear_wh_m.iter_mut().enumerate() {
-                    ui.label(if axis == 0 { "W" } else { "H" });
-                    ui.add(egui::DragValue::new(value).speed(0.1).range(0.01..=12.0));
-                }
-            });
-            ui.small("Live doorways face the access corridor. The connected airlock geometry stays fixed; other room walls and openings follow the accepted layout.");
-            if ui
-                .add_enabled(
-                    self.pending.is_none(),
-                    egui::Button::new("Delete candidate room"),
-                )
-                .clicked()
-            {
-                remove_room = true;
-            }
         }
         if let Err(error) = self.draft.validate() {
             room_error = Some(error);
@@ -983,6 +997,188 @@ mod tests {
         assert!(panel.pending_live.is_none());
         assert!(panel.message.contains("outcome is unknown"));
         assert_eq!(panel.live_generation, 2);
+    }
+
+    #[test]
+    fn numeric_input_keeps_door_focus_across_validation_frames() {
+        use std::time::{Duration, Instant};
+        let project = Project::new();
+        let ctx = egui::Context::default();
+        let cc = eframe::CreationContext::_new_kittest(ctx.clone());
+        let mut client = EmbeddedClient::new(
+            &cc,
+            project.0.join(".arkline-studio"),
+            "RoomButtonPilot".into(),
+        );
+        let mut panel = Rooms::open(&project.0);
+        let deadline = Instant::now() + Duration::from_secs(8);
+        while Instant::now() < deadline {
+            client.poll();
+            panel.poll_live(&mut client);
+            if client.ready()
+                && panel.live.is_some()
+                && !panel.load_blocked
+                && panel.pending.is_none()
+            {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(client.ready() && panel.based_on_revision == Some(0));
+        let clock = client.snapshot().unwrap().server_time_ms;
+        panel.selected = Some(panel.draft.rooms[8].id);
+        let mut before = panel.draft.clone();
+        assert!((before.rooms[8].door_center_xz_m[0] - 18.0).abs() < 1e-9);
+        before.rooms[8].door_center_xz_m[0] = 18.0;
+        let frame = |panel: &mut Rooms, client: &mut EmbeddedClient, events| {
+            ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(1400.0, 950.0),
+                    )),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default()
+                        .show(ctx, |ui| panel.show(ui, &project.0, client));
+                },
+            )
+        };
+
+        let output = frame(&mut panel, &mut client, vec![]);
+        let heading = output
+            .shapes
+            .iter()
+            .find_map(|s| match &s.shape {
+                egui::Shape::Text(t) if t.galley.text().starts_with("Door center X") => {
+                    Some(t.pos.y + t.galley.size().y)
+                }
+                _ => None,
+            })
+            .unwrap();
+        let point = output
+            .shapes
+            .iter()
+            .filter_map(|s| match &s.shape {
+                egui::Shape::Text(t)
+                    if t.pos.y >= heading
+                        && t.pos.y < heading + 35.0
+                        && t.galley.text().parse::<f64>().is_ok() =>
+                {
+                    Some(t.pos + t.galley.size() * 0.5)
+                }
+                _ => None,
+            })
+            .min_by(|a, b| a.x.total_cmp(&b.x))
+            .unwrap();
+        for pressed in [true, false] {
+            frame(
+                &mut panel,
+                &mut client,
+                vec![
+                    egui::Event::PointerMoved(point),
+                    egui::Event::PointerButton {
+                        pos: point,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ],
+            );
+        }
+        frame(&mut panel, &mut client, vec![]);
+        let focused = ctx.memory(|m| m.focused()).expect("Door X is focused");
+        let key = |key, modifiers| egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers,
+        };
+        frame(
+            &mut panel,
+            &mut client,
+            vec![
+                key(egui::Key::A, egui::Modifiers::COMMAND),
+                egui::Event::Text("1".into()),
+            ],
+        );
+        assert_eq!(panel.draft.rooms[8].door_center_xz_m[0], 1.0);
+        assert!(panel.draft.validate().is_err());
+        frame(&mut panel, &mut client, vec![]);
+        assert_eq!(ctx.memory(|m| m.focused()), Some(focused));
+        frame(
+            &mut panel,
+            &mut client,
+            vec![
+                egui::Event::Text("8".into()),
+                key(egui::Key::Enter, egui::Modifiers::NONE),
+            ],
+        );
+        frame(&mut panel, &mut client, vec![]);
+        assert_eq!(
+            panel.draft, before,
+            "Door X must return to 18 without changing Length or another room field"
+        );
+        for pressed in [true, false] {
+            frame(
+                &mut panel,
+                &mut client,
+                vec![
+                    egui::Event::PointerMoved(point),
+                    egui::Event::PointerButton {
+                        pos: point,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ],
+            );
+        }
+        frame(&mut panel, &mut client, vec![]);
+
+        let focused = ctx.memory(|m| m.focused()).unwrap();
+        panel.load_blocked = true;
+        panel.based_on_revision = None;
+        frame(&mut panel, &mut client, vec![]);
+        assert_eq!(ctx.memory(|m| m.focused()), Some(focused));
+        frame(
+            &mut panel,
+            &mut client,
+            vec![
+                key(egui::Key::A, egui::Modifiers::COMMAND),
+                egui::Event::Text("20.5".into()),
+            ],
+        );
+        frame(&mut panel, &mut client, vec![]);
+        let mut decimal = before.clone();
+        decimal.rooms[8].door_center_xz_m[0] = 20.5;
+        assert_eq!(panel.draft, decimal);
+
+        panel.selected = Some(panel.draft.rooms[9].id);
+        frame(&mut panel, &mut client, vec![]);
+        frame(&mut panel, &mut client, vec![egui::Event::Text("9".into())]);
+        assert_eq!(
+            panel.draft, decimal,
+            "Room selection must not transfer the edit buffer"
+        );
+        assert_ne!(ctx.memory(|m| m.focused()), Some(focused));
+        panel.load_blocked = false;
+        client.poll();
+        assert_eq!(client.snapshot().unwrap().server_time_ms, clock);
+        assert_eq!(panel.live.as_ref().unwrap().revision, 0);
+        assert!(client.paused());
+        assert!(!project.0.join("Assets/Pioneer.rooms.json").exists());
+        client.on_exit();
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while Instant::now() < deadline
+            && client.status() != &arkline_client::EmbeddedStatus::Stopped
+        {
+            client.poll();
+            std::thread::sleep(Duration::from_millis(10));
+        }
     }
 
     #[test]
