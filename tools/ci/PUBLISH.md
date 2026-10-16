@@ -42,3 +42,8 @@ A publisher-only workflow update can publish an earlier successful release run:
 source identity is taken from that run's commit, not the publisher checkout's
 HEAD. All receipts, tracked source bytes and BUILD_VERSION are still checked
 against the selected release commit before any publication.
+
+The publisher requires exactly one `arkline-source` artifact from the same run,
+version and commit as all three native sets and the browser. Older per-target
+source layouts are rejected; prepare a new run rather than relabeling artifacts.
+Historical published assets are unchanged.

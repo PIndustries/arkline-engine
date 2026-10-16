@@ -27,7 +27,7 @@ receipt = {"build_version": version,
            "source_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip(),
            "uncommitted_source": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=root, text=True).strip()),
            "target": "wasm32-unknown-unknown",
-           "source_archive": f"Arkline-{version}-aarch64-apple-darwin-source.tar.gz"}
+           "source_archive": f"Arkline-{version}-source.tar.gz"}
 (dest / "RELEASE.json").write_text(json.dumps(receipt, sort_keys=True, indent=2) + "\n")
 lines = []
 for path in sorted(dest.rglob("*")):

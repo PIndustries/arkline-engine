@@ -17,6 +17,8 @@ jobs:
           persist-credentials: false
       - run: bash tools/ci/linux.sh build-image
       - run: bash tools/ci/linux.sh test
+      - name: Validate complete vendored source archive
+        run: bash tools/ci/linux.sh source "$RUNNER_TEMP/arkline-source-ci-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
       - name: Validate publication boundaries
         run: python3 tools/ci/test_publish_release.py
   macos:

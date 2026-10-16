@@ -23,12 +23,19 @@ publishing step. Linux builds use Ubuntu 22.04 and need the matching system
 window/audio libraries; these are not fully static binaries.
 
 Each platform produces separate `Arkline-VERSION-TARGET-client` and `-server`
-archives (`.zip` on Windows, `.tar.gz` elsewhere), a `-source.tar.gz`,
+archives (`.zip` on Windows, `.tar.gz` elsewhere),
 `RELEASE.json`, and `SHA256SUMS`. Client downloads include the local server. The
 standalone server download also includes the CLI and ledger verifier. Build
 identity comes only from `BUILD_VERSION`; `RELEASE.json` records its source
 revision, target and compiler. `--allow-dirty` is for local review only and marks
 uncommitted source explicitly; normal release builds require a clean checkout.
+
+CI creates one platform-neutral `Arkline-VERSION-source.tar.gz` in the
+`arkline-source` artifact. All native and browser receipts reference that name.
+`--source-only` prepares this archive without compiling native binaries;
+`--binaries-only` prepares native downloads that reference the separate source
+artifact. The default local command prepares both. The source job retains all
+locked target dependencies and notices; it is not filtered to the build host.
 
 The source archive contains the exact source snapshot used for compilation,
 Cargo.lock, toolchain/build scripts, original assets and all vendored dependency

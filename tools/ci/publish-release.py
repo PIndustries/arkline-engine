@@ -288,10 +288,12 @@ def publication_env(version):
            "ARKLINE_WORLD_AVAILABLE": "true", "ARKLINE_WORLD_ENVIRONMENT": "production",
            "ARKLINE_CHECKSUMS_URL": base + "/SHA256SUMS", "ARKLINE_LICENSE_URL": base + "/LICENSE"}
     for platform, target in TARGETS.items():
-        for kind in ["client", "server", "source"]:
+        for kind in ["client", "server"]:
             suffix = ".zip" if platform == "windows" and kind != "source" else ".tar.gz"
             env[f"ARKLINE_{kind.upper()}_{platform.upper()}_URL"] = f"{base}/Arkline-{version}-{target}-{kind}{suffix}"
-    env["ARKLINE_SOURCE_URL"] = env["ARKLINE_SOURCE_MACOS_URL"]
+    for platform in [*TARGETS, None]:
+        key = "ARKLINE_SOURCE" + ("_" + platform.upper() if platform else "") + "_URL"
+        env[key] = f"{base}/Arkline-{version}-source.tar.gz"
     return env
 
 
@@ -316,6 +318,50 @@ def patch_publication(desired):
         json.dump(patches, patch); patch.flush()
         kube("-n", "bastion", "patch", "deployment", "bastion", "--type=json", "--patch-file", patch.name)
     kube("-n", "bastion", "rollout", "status", "deployment/bastion", "--timeout=300s")
+
+
+def select_artifacts(artifacts):
+    needed = {f"arkline-downloads-{p}" for p in TARGETS} | {"arkline-browser", "arkline-source"}
+    selected = {name: [a for a in artifacts if a["name"] == name] for name in needed}
+    if any(len(v) != 1 or v[0]["expired"] for v in selected.values()):
+        raise ValueError("All three platform artifacts plus browser and shared source artifacts are required exactly once")
+    return selected
+
+
+def verify_release_artifacts(folders, version, commit, hashes):
+    source = folders["arkline-source"]
+    expected = f"Arkline-{version}-source.tar.gz"
+    record = receipt(source, version, commit, None)
+    neutral = {"build_version": version, "source_commit": commit,
+               "uncommitted_source": False, "artifact_kind": "source",
+               "source_archive": expected, "license": "AGPL-3.0-only"}
+    if record != neutral:
+        raise ValueError("Shared source receipt must be platform-neutral")
+    if {p.name for p in source.iterdir()} != {expected, "RELEASE.json", "SHA256SUMS"}:
+        raise ValueError("Unexpected shared source artifact set")
+    verify_source(source / expected, hashes, version)
+    verify_binary_receipt(source / expected, record)
+    for platform, target in TARGETS.items():
+        folder = folders[f"arkline-downloads-{platform}"]
+        record = receipt(folder, version, commit, target)
+        expected = f"Arkline-{version}-source.tar.gz"
+        if record.get("source_archive") != expected:
+            raise ValueError("Source offer mismatch")
+        suffix = ".zip" if platform == "windows" else ".tar.gz"
+        required = { f"Arkline-{version}-{target}-client{suffix}", f"Arkline-{version}-{target}-server{suffix}", "RELEASE.json", "SHA256SUMS"}
+        for kind in ["client", "server"]:
+            verify_binary_receipt(folder / f"Arkline-{version}-{target}-{kind}{suffix}", record)
+        if {p.name for p in folder.iterdir()} != required:
+            raise ValueError("Unexpected platform artifact set")
+    browser = folders["arkline-browser"]
+    record = receipt(browser, version, commit, "wasm32-unknown-unknown")
+    if record.get("source_archive") != f"Arkline-{version}-source.tar.gz":
+        raise ValueError("Browser source offer mismatch")
+    if (browser / "BUILD_VERSION").read_text().strip() != version or not (browser / "ThirdParty/dependencies.json").is_file():
+        raise ValueError("Browser version/notices missing")
+    for name in ["index.html", "bootstrap.js", "arkline-client.js", "arkline-client_bg.wasm", "LICENSE", "TRADEMARKS.md"]:
+        if not (browser / name).is_file():
+            raise ValueError("Browser payload incomplete")
 
 
 def main():
@@ -358,10 +404,7 @@ def main():
         if len(batch) < 100:
             break
         page += 1
-    needed = {f"arkline-downloads-{p}" for p in TARGETS} | {"arkline-browser"}
-    selected = {name: [a for a in artifacts if a["name"] == name] for name in needed}
-    if any(len(v) != 1 or v[0]["expired"] for v in selected.values()):
-        raise ValueError("All three platform artifacts and browser artifact are required exactly once")
+    selected = select_artifacts(artifacts)
     folders = {}
     for name, choices in selected.items():
         archive = out / (name + ".zip")
@@ -372,29 +415,8 @@ def main():
         unpack_artifact(archive, folder)
         verify_checksums(folder)
         folders[name] = folder
-    hashes = tracked_source(commit)
-    for platform, target in TARGETS.items():
-        folder = folders[f"arkline-downloads-{platform}"]
-        record = receipt(folder, args.version, commit, target)
-        expected = f"Arkline-{args.version}-{target}-source.tar.gz"
-        if record.get("source_archive") != expected:
-            raise ValueError("Source offer mismatch")
-        verify_source(folder / expected, hashes, args.version)
-        suffix = ".zip" if platform == "windows" else ".tar.gz"
-        required = {expected, f"Arkline-{args.version}-{target}-client{suffix}", f"Arkline-{args.version}-{target}-server{suffix}", "RELEASE.json", "SHA256SUMS"}
-        for kind in ["client", "server"]:
-            verify_binary_receipt(folder / f"Arkline-{args.version}-{target}-{kind}{suffix}", record)
-        if {p.name for p in folder.iterdir()} != required:
-            raise ValueError("Unexpected platform artifact set")
+    verify_release_artifacts(folders, args.version, commit, tracked_source(commit))
     browser = folders["arkline-browser"]
-    record = receipt(browser, args.version, commit, "wasm32-unknown-unknown")
-    if record.get("source_archive") != f"Arkline-{args.version}-aarch64-apple-darwin-source.tar.gz":
-        raise ValueError("Browser source offer mismatch")
-    if (browser / "BUILD_VERSION").read_text().strip() != args.version or not (browser / "ThirdParty/dependencies.json").is_file():
-        raise ValueError("Browser version/notices missing")
-    for name in ["index.html", "bootstrap.js", "arkline-client.js", "arkline-client_bg.wasm", "LICENSE", "TRADEMARKS.md"]:
-        if not (browser / name).is_file():
-            raise ValueError("Browser payload incomplete")
     plan = {"version": args.version, "source_commit": commit, "release_run": args.run_id,
             "artifacts": {k: v[0]["id"] for k, v in selected.items()},
             "upgrade_servers": args.upgrade_servers, "backup_reference": args.backup_reference,
@@ -435,6 +457,10 @@ def publish(args, out, folders, browser, commit, plan):
                 if path.name not in ["SHA256SUMS", "RELEASE.json"]:
                     shutil.copy2(path, dest / path.name)
             shutil.copy2(folder / "RELEASE.json", dest / f"RELEASE-{target}.json")
+        shared = folders["arkline-source"]
+        name = f"Arkline-{version}-source.tar.gz"
+        shutil.copy2(shared / name, dest / name)
+        shutil.copy2(shared / "RELEASE.json", dest / "RELEASE-source.json")
         wasm = dest / f"Arkline-{version}-wasm32-unknown-unknown-client.tar.gz"
         with tarfile.open(wasm, "w:gz") as archive:
             archive.add(browser, arcname=f"Arkline-{version}-wasm32-unknown-unknown-client")
