@@ -184,4 +184,122 @@ class PublicationSafety(unittest.TestCase):
         self.assertEqual(env['ARKLINE_SOURCE_URL'],env['ARKLINE_SOURCE_MACOS_URL'])
 
 
+
+class SharedSourceRelease(unittest.TestCase):
+    version = "26.10.16.1"
+    commit = "a" * 40
+
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name)
+        names = ["arkline-source", "arkline-browser"] + ["arkline-downloads-" + x for x in p.TARGETS]
+        self.folders = {name: self.root / name for name in names}
+        self.source_name = f"Arkline-{self.version}-source.tar.gz"
+        for folder in self.folders.values():
+            folder.mkdir()
+        record = dict(build_version=self.version, source_commit=self.commit,
+                      uncommitted_source=False, artifact_kind="source",
+                      source_archive=self.source_name, license="AGPL-3.0-only")
+        self.record(self.folders["arkline-source"], record)
+        self.archive(self.folders["arkline-source"] / self.source_name, record)
+        for platform, target in dict(p.TARGETS, browser="wasm32-unknown-unknown").items():
+            key = "arkline-browser" if platform == "browser" else "arkline-downloads-" + platform
+            folder = self.folders[key]
+            native = dict(record, target=target)
+            native.pop("artifact_kind")
+            self.record(folder, native)
+            if platform == "browser":
+                for name in ["BUILD_VERSION", "index.html", "bootstrap.js", "arkline-client.js", "arkline-client_bg.wasm", "LICENSE", "TRADEMARKS.md", "ThirdParty/dependencies.json"]:
+                    path = folder / name
+                    path.parent.mkdir(exist_ok=True)
+                    path.write_text(self.version if name == "BUILD_VERSION" else "fixture")
+            else:
+                for kind in ["client", "server"]:
+                    suffix = ".zip" if platform == "windows" else ".tar.gz"
+                    self.archive(folder / f"Arkline-{self.version}-{target}-{kind}{suffix}", native)
+        self.checksums()
+
+    def record(self, folder, record):
+        (folder / "RELEASE.json").write_text(json.dumps(record))
+
+    def archive(self, path, record, locked=b"locked"):
+        files = {"RELEASE.json": json.dumps(record).encode(),
+                 "BUILD_VERSION": self.version.encode(), "Cargo.lock": locked}
+        if path.suffix == ".zip":
+            with zipfile.ZipFile(path, "w") as archive:
+                for name, data in files.items():
+                    archive.writestr("bundle/" + name, data)
+        else:
+            with tarfile.open(path, "w:gz") as archive:
+                for name, data in files.items():
+                    info = tarfile.TarInfo("bundle/" + name)
+                    info.size = len(data)
+                    archive.addfile(info, io.BytesIO(data))
+
+    def checksums(self):
+        for folder in self.folders.values():
+            entries = [f"{p.digest(x)}  {x.relative_to(folder)}" for x in sorted(folder.rglob("*"))
+                       if x.is_file() and x.name != "SHA256SUMS"]
+            (folder / "SHA256SUMS").write_text("\n".join(entries) + "\n")
+
+    def verify(self):
+        for folder in self.folders.values():
+            p.verify_checksums(folder)
+        hashes = {"Cargo.lock": hashlib.sha256(b"locked").hexdigest()}
+        p.verify_release_artifacts(self.folders, self.version, self.commit, hashes)
+
+    def test_complete_set_and_source_urls(self):
+        self.verify()
+        env = p.publication_env(self.version)
+        for key, value in env.items():
+            if key.startswith("ARKLINE_SOURCE"):
+                self.assertEqual(value, f"https://downloads.arkline.network/{self.version}/{self.source_name}")
+
+    def test_missing_duplicate_and_expired_source(self):
+        items = [dict(name=x, expired=False) for x in self.folders]
+        self.assertEqual(len(p.select_artifacts(items)), 5)
+        source = items[0]
+        for bad in [items[1:], items + [source], [dict(source, expired=True)] + items[1:]]:
+            with self.subTest(artifacts=bad), self.assertRaises(ValueError):
+                p.select_artifacts(bad)
+
+    def test_mismatched_receipts_and_stale_source_names(self):
+        for key, folder in self.folders.items():
+            original = json.loads((folder / "RELEASE.json").read_text())
+            changes = dict(build_version="wrong", source_commit="b"*40,
+                           uncommitted_source=True, source_archive="Arkline-old-target-source.tar.gz")
+            if key == "arkline-source":
+                changes["target"] = "linux"
+            for field, value in changes.items():
+                with self.subTest(folder=key, field=field):
+                    self.record(folder, dict(original, **{field: value}))
+                    self.checksums()
+                    with self.assertRaises(ValueError):
+                        self.verify()
+                    self.record(folder, original)
+            self.checksums()
+
+    def test_source_checksum_tamper(self):
+        source = self.folders["arkline-source"] / self.source_name
+        source.write_bytes(source.read_bytes() + b"tampered")
+        with self.assertRaises(ValueError):
+            self.verify()
+
+    def test_source_bytes_tampered_with_fresh_checksum(self):
+        folder = self.folders["arkline-source"]
+        record = json.loads((folder / "RELEASE.json").read_text())
+        self.archive(folder / self.source_name, record, b"tampered lock")
+        self.checksums()
+        with self.assertRaises(ValueError):
+            self.verify()
+
+    def test_extra_platform_source_is_rejected(self):
+        folder = self.folders["arkline-downloads-linux"]
+        (folder / self.source_name).write_bytes(b"unexpected duplicate")
+        self.checksums()
+        with self.assertRaises(ValueError):
+            self.verify()
+
+
 if __name__ == "__main__": unittest.main()

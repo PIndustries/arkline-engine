@@ -14,7 +14,27 @@ concurrency:
   group: arkline-release-build
   cancel-in-progress: false
 jobs:
+  source:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Linux, X64, phx, fleet, org]
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Prepare shared vendored source
+        run: |
+          bash tools/ci/linux.sh build-image
+          bash tools/ci/linux.sh source "$RUNNER_TEMP/arkline-source-$GITHUB_RUN_ID"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arkline-source
+          path: ${{ runner.temp }}/arkline-source-${{ github.run_id }}/*
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30
   package:
+    needs: source
     if: github.ref == 'refs/heads/main'
     strategy:
       fail-fast: false
@@ -53,7 +73,7 @@ jobs:
             macos)
               cargo test --workspace --locked
               python3 tools/test_package_release.py
-              python3 tools/package-release.py "$destination" ;;
+              python3 tools/package-release.py "$destination" --binaries-only ;;
           esac
           echo "DOWNLOADS=$destination" >> "$GITHUB_ENV"
       - uses: actions/upload-artifact@v4
@@ -65,6 +85,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
   browser:
+    needs: source
     if: github.ref == 'refs/heads/main' && inputs.platform == 'all'
     runs-on: [self-hosted, Linux, X64, phx, fleet, org]
     timeout-minutes: 45

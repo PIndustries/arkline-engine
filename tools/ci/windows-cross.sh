@@ -16,7 +16,7 @@ if [[ "$mode" == package ]]; then
   output=$(cd "$2" && pwd)
   case "$output/" in "$repo/"*) echo 'Output must be outside repository' >&2; exit 2 ;; esac
   args+=(-v "$output:/out")
-  command=(python3 tools/package-release.py /out --windows-cross)
+  command=(python3 tools/package-release.py /out --windows-cross --binaries-only)
 else
   command=(cargo xwin test --workspace --locked --target x86_64-pc-windows-msvc)
 fi

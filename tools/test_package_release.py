@@ -17,6 +17,22 @@ spec.loader.exec_module(package)
 
 
 class PackagingTests(unittest.TestCase):
+    def test_shared_source_manifest_has_no_platform_fields(self):
+        record = package.source_manifest("26.10.16.1", "a" * 40, False)
+        self.assertEqual(record["source_archive"], "Arkline-26.10.16.1-source.tar.gz")
+        self.assertEqual(record["artifact_kind"], "source")
+        for field in ["target", "build_host", "rustc", "apple_signing", "validation_runtime"]:
+            self.assertNotIn(field, record)
+
+    def test_source_archive_is_reproducible(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); source = root / "Arkline-26.10.16.1-source"
+            source.mkdir(); file = source / "Cargo.lock"; file.write_text("locked")
+            package.archive_source(source, root / "one.tar.gz")
+            os.utime(file, (123, 123))
+            package.archive_source(source, root / "two.tar.gz")
+            self.assertEqual((root / "one.tar.gz").read_bytes(), (root / "two.tar.gz").read_bytes())
+
     def test_windows_cross_uses_target_artifacts_and_explicit_wine(self):
         target, windows, command, directory, runner = package.build_plan("x86_64-unknown-linux-gnu", "Linux", True)
         self.assertEqual(target, "x86_64-pc-windows-msvc")
@@ -103,6 +119,52 @@ class PackagingTests(unittest.TestCase):
             with patch.object(package, "run", return_value="data/world.sqlite\0"):
                 with self.assertRaisesRegex(RuntimeError, "runtime/build data"):
                     package.copy_source(Path(temporary))
+
+
+
+class SourceModeTests(unittest.TestCase):
+    def test_source_only_never_builds_native_binaries(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "repo"
+            root.mkdir()
+            (root / "BUILD_VERSION").write_text("26.10.16.1")
+            output = Path(temp) / "output"
+
+            def copy_source(destination):
+                (destination / "BUILD_VERSION").write_text("26.10.16.1")
+
+            def notices(source, destination):
+                destination.mkdir()
+                (destination / "dependencies.json").write_text("[]")
+
+            def run(*args, **kwargs):
+                if args[:2] == ("git", "status"):
+                    return ""
+                if args[:2] == ("git", "rev-parse"):
+                    return "a" * 40
+                if args == ("cargo", "vendor", "--locked", "vendor"):
+                    return '[source.vendored-sources]\ndirectory = "vendor"\n'
+                self.fail(f"Unexpected build command: {args}")
+
+            with patch.object(package, "ROOT", root), patch.object(package, "run", run), patch.object(package, "copy_source", copy_source), patch.object(package, "notices", notices), patch.object(sys, "argv", ["package", str(output), "--source-only"]):
+                package.main()
+            self.assertEqual({x.name for x in output.iterdir()}, {"Arkline-26.10.16.1-source.tar.gz", "RELEASE.json", "SHA256SUMS"})
+            self.assertNotIn("target", json.loads((output / "RELEASE.json").read_text()))
+
+    def test_source_modes_and_links(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "source"
+            root.mkdir()
+            script = root / "build.sh"
+            script.write_text("echo fixture")
+            script.chmod(0o700)
+            output = Path(temp) / "source.tar.gz"
+            package.archive_source(root, output)
+            with tarfile.open(output) as archive:
+                self.assertEqual(archive.getmember("source/build.sh").mode, 0o755)
+            (root / "link").symlink_to("build.sh")
+            with self.assertRaises(ValueError):
+                package.archive_source(root, output)
 
 
 if __name__ == "__main__":
