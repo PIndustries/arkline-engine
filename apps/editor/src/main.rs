@@ -9,6 +9,7 @@ mod engineering_document;
 mod equipment;
 mod event_graph;
 mod exterior;
+mod git_workflow;
 mod github;
 mod github_auth;
 mod import_document;
@@ -54,6 +55,7 @@ struct Editor {
     exterior: exterior::Exterior,
     session_panel: session_panel::SessionPanel,
     community: community::Community,
+    git_workspace: git_workflow::GitWorkspace,
     event_graph: event_graph::EventGraphPanel,
     events_open: bool,
     workspace: usize,
@@ -107,6 +109,7 @@ impl Editor {
             exterior: exterior::Exterior::open(&project),
             session_panel: session_panel::SessionPanel::default(),
             community: community::Community::open(&project),
+            git_workspace: git_workflow::GitWorkspace::open(&project),
             event_graph: event_graph::EventGraphPanel::open(&project),
             events_open: false,
             workspace: 0,
@@ -209,6 +212,7 @@ impl eframe::App for Editor {
         self.rooms.poll_live(&mut self.client);
         self.exterior.poll_live(&mut self.client);
         self.community.poll();
+        self.git_workspace.poll();
         let surface_revision = self.surface_materials.revision();
         self.client.set_spatial_material(surface_revision.clone());
         if let Some(gallery) = &mut self.asset_gallery {
@@ -362,6 +366,7 @@ impl eframe::App for Editor {
                     self.open_inspector(6);
                 }
                 ui.selectable_value(&mut self.workspace, 3, "Materials");
+                ui.selectable_value(&mut self.workspace, 6, "Git");
                 ui.menu_button("Systems", |ui| {
                     for (tab, label) in [(4, "Equipment"), (7, "Exterior"), (5, "Service paths")] {
                         if ui.button(label).clicked() {
@@ -476,6 +481,13 @@ impl eframe::App for Editor {
                 }
             });
         });
+        }
+        if self.workspace == 6 {
+            self.client.poll_hidden();
+            self.git_workspace.show(ctx, &self.project);
+            self.session_controls(ctx);
+            ctx.request_repaint_after(Duration::from_millis(50));
+            return;
         }
         if self.workspace == 4 {
             self.client.poll_hidden();
@@ -940,7 +952,7 @@ mod tests {
             "isolated test authority did not become ready; status={:?}",
             editor.client.status()
         );
-        for workspace in [0, 2, 0] {
+        for workspace in [0, 2, 6, 0] {
             editor.workspace = workspace;
             for _ in 0..3 {
                 let output = ctx.run(
