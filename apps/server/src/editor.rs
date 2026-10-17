@@ -112,13 +112,26 @@ pub struct EditorWorld {
 }
 impl EditorWorld {
     pub fn open(directory: impl AsRef<Path>) -> Result<Self> {
+        Self::open_with_creation_scene(directory, SceneLayoutRevision::OrbitalV1)
+    }
+
+    /// The requested revision is used only for a newly inserted world. Opening
+    /// an existing realm always retains its saved/defaulted legacy revision.
+    pub fn open_with_creation_scene(
+        directory: impl AsRef<Path>,
+        creation_scene: SceneLayoutRevision,
+    ) -> Result<Self> {
         let path = local_development::database_path(directory.as_ref())?;
         let room_layout_path = path
             .parent()
             .context("editor authority database has no directory")?
             .join("room_layout.json");
         let room_layout = load_room_layout(&room_layout_path)?;
-        let server = Server::open_editor_realm(&path, room_layout.document.clone())?;
+        let server = Server::open_editor_realm_with_scene(
+            &path,
+            room_layout.document.clone(),
+            creation_scene,
+        )?;
         server.validate_editor_room_layout(&room_layout.document)?;
         Ok(Self {
             server,
@@ -268,6 +281,7 @@ impl EditorWorld {
             .accounts
             .get(name)
             .is_some_and(|account| account.fleet_hangar);
+        let fleet_revision = world.scene_layout.definition().fleet_layout;
         let pilot = world.pilots.get_mut(name).context("editor pilot missing")?;
         ensure!(
             pilot.view.location == Location::Docked,
@@ -277,7 +291,7 @@ impl EditorWorld {
             EditorSceneState::Cockpit => None,
             EditorSceneState::StationHangar => {
                 let position = if fleet {
-                    fleet_berth(pilot.view.ship_class).1
+                    fleet_berth_pose(fleet_revision, pilot.view.ship_class).boarding_point
                 } else {
                     hangar_layout(pilot.view.ship_class).boarding_point
                 };
@@ -616,7 +630,8 @@ mod tests {
     #[test]
     fn exterior_apply_is_atomic_preserves_room_state_and_reopens_paused_without_replay() {
         let path = dir();
-        let mut w = EditorWorld::open(&path).unwrap();
+        let mut w =
+            EditorWorld::open_with_creation_scene(&path, SceneLayoutRevision::LegacyV1).unwrap();
         let initial_time = w.time();
         let mut session = None;
         let token = call(&mut w, &mut session, connect_interior()).resume_token;
@@ -679,7 +694,8 @@ mod tests {
         w.exterior_set_enabled(&mut session, false, 1).unwrap();
         let saved = snapshot(&mut w).exterior.unwrap();
         drop(w);
-        let mut w = EditorWorld::open(&path).unwrap();
+        let mut w =
+            EditorWorld::open_with_creation_scene(&path, SceneLayoutRevision::LegacyV1).unwrap();
         let mut session = None;
         call(&mut w, &mut session, connect(token));
         assert!(w.is_paused());
@@ -692,11 +708,12 @@ mod tests {
         std::env::temp_dir().join(format!("arkline-editor-clock-{}", rand::random::<u64>()))
     }
     fn connect(token: Option<String>) -> Request {
-        serde_json::from_value(serde_json::json!({"command":"connect","protocol_version":PROTOCOL_VERSION,"pilot":"EditorPilot","resume_token":token})).unwrap()
+        serde_json::from_value(serde_json::json!({"command":"connect","protocol_version":PROTOCOL_VERSION,"world_layout_version":WORLD_LAYOUT_SCHEMA_VERSION,"pilot":"EditorPilot","resume_token":token})).unwrap()
     }
     fn connect_interior() -> Request {
         Request::Connect {
             protocol_version: PROTOCOL_VERSION,
+            world_layout_version: WORLD_LAYOUT_SCHEMA_VERSION,
             pilot: "EditorPilot".into(),
             resume_token: None,
             supports_room_controls: true,
@@ -736,7 +753,8 @@ mod tests {
         }
     }
     fn assert_airlock_exit(path: &std::path::Path, layout: Option<RoomLayoutDocument>) {
-        let mut world = EditorWorld::open(path).unwrap();
+        let mut world =
+            EditorWorld::open_with_creation_scene(path, SceneLayoutRevision::LegacyV1).unwrap();
         if let Some(document) = layout {
             world.room_layout_replace(0, document).unwrap();
         }
@@ -842,7 +860,8 @@ mod tests {
     #[test]
     fn externally_replaced_layout_cannot_relocate_persisted_avatar_on_reopen() {
         let path = dir();
-        let mut world = EditorWorld::open(&path).unwrap();
+        let mut world =
+            EditorWorld::open_with_creation_scene(&path, SceneLayoutRevision::LegacyV1).unwrap();
         let mut session = None;
         call(&mut world, &mut session, connect_interior());
         call(&mut world, &mut session, Request::EnterInterior);
@@ -878,7 +897,9 @@ mod tests {
             serde_json::to_vec(&replacement).unwrap(),
         )
         .unwrap();
-        assert!(EditorWorld::open(&path).is_err());
+        assert!(
+            EditorWorld::open_with_creation_scene(&path, SceneLayoutRevision::LegacyV1).is_err()
+        );
 
         let db = rusqlite::Connection::open(&db_path).unwrap();
         let after: String = db
@@ -891,7 +912,8 @@ mod tests {
     #[test]
     fn paused_movement_and_mining_freeze_and_resume_only_explicit_ticks() {
         let path = dir();
-        let mut w = EditorWorld::open(&path).unwrap();
+        let mut w =
+            EditorWorld::open_with_creation_scene(&path, SceneLayoutRevision::LegacyV1).unwrap();
         let mut session = None;
         call(&mut w, &mut session, connect(None));
         call(&mut w, &mut session, Request::Undock);
@@ -964,7 +986,8 @@ mod tests {
     #[test]
     fn restart_preserves_clock_and_charge_and_cannot_open_as_network_world() {
         let path = dir();
-        let mut w = EditorWorld::open(&path).unwrap();
+        let mut w =
+            EditorWorld::open_with_creation_scene(&path, SceneLayoutRevision::LegacyV1).unwrap();
         let mut session = None;
         let token = call(&mut w, &mut session, connect(None))
             .resume_token
@@ -983,7 +1006,8 @@ mod tests {
         drop(w);
         std::thread::sleep(std::time::Duration::from_millis(80));
         assert!(Server::open_local_development(&path).is_err());
-        let mut w = EditorWorld::open(&path).unwrap();
+        let mut w =
+            EditorWorld::open_with_creation_scene(&path, SceneLayoutRevision::LegacyV1).unwrap();
         assert!(w.is_paused());
         assert_eq!(w.time(), time);
         let after = snapshot(&mut w);
@@ -1003,7 +1027,8 @@ mod tests {
     #[test]
     fn failed_clock_commit_rolls_back_world_and_pauses_without_backlog() {
         let path = dir();
-        let mut w = EditorWorld::open(&path).unwrap();
+        let mut w =
+            EditorWorld::open_with_creation_scene(&path, SceneLayoutRevision::LegacyV1).unwrap();
         let mut session = None;
         call(&mut w, &mut session, connect(None));
         call(&mut w, &mut session, Request::Undock);
@@ -1035,7 +1060,8 @@ mod tests {
         w.advance(50).unwrap();
         assert_eq!(w.time(), time + 50);
         drop(w);
-        let w = EditorWorld::open(&path).unwrap();
+        let w =
+            EditorWorld::open_with_creation_scene(&path, SceneLayoutRevision::LegacyV1).unwrap();
         assert_eq!(w.time(), time + 50);
         drop(w);
         std::fs::remove_dir_all(path).unwrap();
@@ -1044,7 +1070,8 @@ mod tests {
     #[test]
     fn live_layout_changes_drive_real_walk_collision_and_reject_trapping_or_stale_edits() {
         let path = dir();
-        let mut world = EditorWorld::open(&path).unwrap();
+        let mut world =
+            EditorWorld::open_with_creation_scene(&path, SceneLayoutRevision::LegacyV1).unwrap();
         let mut session = None;
         call(&mut world, &mut session, connect_interior());
         call(&mut world, &mut session, Request::EnterInterior);
@@ -1151,7 +1178,8 @@ mod tests {
         std::fs::remove_dir(&persisted_path).unwrap();
         std::fs::rename(&backup_path, &persisted_path).unwrap();
         drop(world);
-        let reopened = EditorWorld::open(&path).unwrap();
+        let reopened =
+            EditorWorld::open_with_creation_scene(&path, SceneLayoutRevision::LegacyV1).unwrap();
         assert_eq!(reopened.room_layout_state(), state);
         drop(reopened);
         std::fs::remove_dir_all(path).unwrap();
@@ -1160,7 +1188,8 @@ mod tests {
     #[test]
     fn safe_layout_replace_is_allowed_while_playing_and_is_in_snapshot_assets() {
         let path = dir();
-        let mut world = EditorWorld::open(&path).unwrap();
+        let mut world =
+            EditorWorld::open_with_creation_scene(&path, SceneLayoutRevision::LegacyV1).unwrap();
         let mut session = None;
         call(&mut world, &mut session, connect(None));
         world.play();
@@ -1192,7 +1221,8 @@ mod tests {
     #[test]
     fn scene_state_jumps_preserve_clock_systems_and_use_valid_landings() {
         let path = dir();
-        let mut world = EditorWorld::open(&path).unwrap();
+        let mut world =
+            EditorWorld::open_with_creation_scene(&path, SceneLayoutRevision::LegacyV1).unwrap();
         let mut session = None;
         call(&mut world, &mut session, connect_interior());
         world
@@ -1269,7 +1299,8 @@ mod tests {
             .set_scene_state(&session, EditorSceneState::InteriorDeck2)
             .unwrap();
         drop(world);
-        let reopened = EditorWorld::open(&path).unwrap();
+        let reopened =
+            EditorWorld::open_with_creation_scene(&path, SceneLayoutRevision::LegacyV1).unwrap();
         assert_eq!(reopened.time(), time);
         let after: World = serde_json::from_str(&persisted_world(&reopened)).unwrap();
         assert_eq!(
@@ -1288,7 +1319,8 @@ mod tests {
     #[test]
     fn scene_state_jump_keeps_authored_collision_and_airlock_door_enforced() {
         let path = dir();
-        let mut world = EditorWorld::open(&path).unwrap();
+        let mut world =
+            EditorWorld::open_with_creation_scene(&path, SceneLayoutRevision::LegacyV1).unwrap();
         world.room_layout_replace(0, short_p2_layout()).unwrap();
         let mut session = None;
         call(&mut world, &mut session, connect_interior());
@@ -1328,7 +1360,8 @@ mod tests {
     #[test]
     fn rejected_scene_state_jumps_do_not_mutate_or_dock_the_ship() {
         let path = dir();
-        let mut world = EditorWorld::open(&path).unwrap();
+        let mut world =
+            EditorWorld::open_with_creation_scene(&path, SceneLayoutRevision::LegacyV1).unwrap();
         let mut session = None;
         let mut request = connect_interior();
         if let Request::Connect {
@@ -1401,12 +1434,14 @@ mod graph_tests {
     ) -> (std::path::PathBuf, EditorWorld, Option<String>) {
         let path =
             std::env::temp_dir().join(format!("arkline-editor-graph-{}", rand::random::<u64>()));
-        let mut world = EditorWorld::open(&path).unwrap();
+        let mut world =
+            EditorWorld::open_with_creation_scene(&path, SceneLayoutRevision::LegacyV1).unwrap();
         let mut session = None;
         let r = world.handle(
             &mut session,
             Request::Connect {
                 protocol_version: PROTOCOL_VERSION,
+                world_layout_version: WORLD_LAYOUT_SCHEMA_VERSION,
                 pilot: "GraphPilot".into(),
                 resume_token: None,
                 supports_room_controls,
@@ -1512,7 +1547,8 @@ mod graph_tests {
         w.graph_step().unwrap();
         assert_eq!(w.graph_debug().pending, 0);
         drop(w);
-        let w = EditorWorld::open(&path).unwrap();
+        let w =
+            EditorWorld::open_with_creation_scene(&path, SceneLayoutRevision::LegacyV1).unwrap();
         assert!(w.is_paused());
         assert_eq!(w.time(), time + 50);
         assert_eq!(w.graph_debug().revision, 0);

@@ -460,6 +460,7 @@ fn legacy(name: &str, token: Option<String>) -> arkline_protocol::Request {
         resume_token: token,
         protocol_version: arkline_protocol::PROTOCOL_VERSION,
         supports_room_controls: true,
+        world_layout_version: 1,
         supports_fleet_hangar: true,
         supports_pioneer_interior: true,
     }
@@ -480,6 +481,7 @@ fn account(
         link_existing: link,
         protocol_version: arkline_protocol::PROTOCOL_VERSION,
         supports_room_controls: true,
+        world_layout_version: 1,
         supports_fleet_hangar: true,
         supports_pioneer_interior: true,
     }

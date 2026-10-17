@@ -22,6 +22,7 @@ fn jump_is_authoritative_bounded_and_cleared_on_disconnect_and_restart() {
         &mut pilot,
         Request::Connect {
             supports_room_controls: false,
+            world_layout_version: 1,
             supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
@@ -56,6 +57,7 @@ fn jump_is_authoritative_bounded_and_cleared_on_disconnect_and_restart() {
                 &mut pilot,
                 Request::Connect {
                     supports_room_controls: false,
+                    world_layout_version: 1,
                     supports_fleet_hangar: false,
                     supports_pioneer_interior: true,
                     protocol_version: PROTOCOL_VERSION,

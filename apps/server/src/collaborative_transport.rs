@@ -382,6 +382,7 @@ impl DevelopmentEditorClient {
             &WireRequest::Join {
                 secret: secret.to_owned(),
                 connect,
+                world_layout_version: arkline_protocol::WORLD_LAYOUT_SCHEMA_VERSION,
             },
         )?;
         let (role, response) = match reply {
@@ -519,6 +520,8 @@ enum WireRequest {
         secret: String,
         #[serde(default)]
         connect: Option<Request>,
+        #[serde(default)]
+        world_layout_version: u32,
     },
     Snapshot,
     Game {
@@ -598,6 +601,7 @@ enum ActorAction {
     Join {
         secret: String,
         connect: Option<Request>,
+        world_layout_version: u32,
     },
     Snapshot,
     Game(Request),
@@ -757,7 +761,11 @@ fn dispatch(
 ) -> std::result::Result<ActorOutput, String> {
     let result = (|| -> Result<ActorOutput> {
         match action {
-            ActorAction::Join { secret, connect } => {
+            ActorAction::Join {
+                secret,
+                connect,
+                world_layout_version,
+            } => {
                 let role = if constant_time_equal(secret.as_bytes(), secrets.editor.as_bytes()) {
                     CollaborationRole::Editor
                 } else if constant_time_equal(secret.as_bytes(), secrets.viewer.as_bytes()) {
@@ -774,7 +782,8 @@ fn dispatch(
                     }
                     _ => unreachable!(),
                 };
-                let (id, response) = authority.join(role, request)?;
+                let (id, response) =
+                    authority.join_with_layout_capability(role, request, world_layout_version)?;
                 Ok(ActorOutput::Joined(id, role, response))
             }
             ActorAction::Snapshot => {
@@ -947,7 +956,12 @@ fn serve_peer(mut stream: TcpStream, actor: SyncSender<ActorCommand>) -> Result<
     let first = read_line_deadline(&mut stream, Instant::now() + IO_DEADLINE)?
         .context("peer closed before join")?;
     let request: WireRequest = serde_json::from_slice(&first).context("invalid editor request")?;
-    let WireRequest::Join { secret, connect } = request else {
+    let WireRequest::Join {
+        secret,
+        connect,
+        world_layout_version,
+    } = request
+    else {
         write_line_deadline(
             &mut stream,
             &WireReply::Error {
@@ -957,7 +971,15 @@ fn serve_peer(mut stream: TcpStream, actor: SyncSender<ActorCommand>) -> Result<
         )?;
         return Ok(());
     };
-    let output = match actor_call(&actor, None, ActorAction::Join { secret, connect }) {
+    let output = match actor_call(
+        &actor,
+        None,
+        ActorAction::Join {
+            secret,
+            connect,
+            world_layout_version,
+        },
+    ) {
         Ok(output) => output,
         Err(error) => {
             write_line_deadline(
@@ -1279,9 +1301,51 @@ mod tests {
             pilot: pilot.into(),
             resume_token: None,
             supports_room_controls: true,
+            world_layout_version: 1,
             supports_fleet_hangar: true,
             supports_pioneer_interior: true,
         }
+    }
+
+    #[test]
+    fn old_wire_viewer_join_is_rejected_but_capable_viewer_joins_orbital_realm() {
+        let directory = root();
+        let secrets = DevelopmentEditorJoinSecrets::injected("layout-editor", "layout-viewer");
+        let host = DevelopmentEditorHost::bind(
+            DevelopmentEditorConfig::new(&directory, connect("LayoutTransportHost"))
+                .with_bind_addr(SocketAddr::from(([127, 0, 0, 1], 0)))
+                .with_join_secrets(secrets.clone()),
+        )
+        .unwrap();
+        let before = host.snapshot().unwrap();
+        for raw in [
+            r#"{"type":"join","secret":"layout-viewer","connect":null}"#,
+            r#"{"type":"join","secret":"layout-viewer","connect":null,"world_layout_version":2}"#,
+        ] {
+            let request: WireRequest = serde_json::from_str(raw).unwrap();
+            let mut stream = TcpStream::connect(host.local_addr()).unwrap();
+            let reply = client_exchange(&mut stream, &request).unwrap();
+            assert!(
+                matches!(reply, WireReply::Error { message } if message.contains("layout capability"))
+            );
+        }
+        let after = host.snapshot().unwrap();
+        assert_eq!(after.snapshot.pilots.len(), before.snapshot.pilots.len());
+        assert_eq!(
+            after.snapshot.ledger_sequence,
+            before.snapshot.ledger_sequence
+        );
+        assert_eq!(after.snapshot.ledger_hash, before.snapshot.ledger_hash);
+        let (mut viewer, response) =
+            DevelopmentEditorClient::connect(host.local_addr(), secrets.viewer_secret(), None)
+                .unwrap();
+        assert_eq!(viewer.role(), CollaborationRole::Viewer);
+        assert!(response.resume_token.is_none());
+        assert_eq!(viewer.snapshot().unwrap().snapshot.pilots.len(), 1);
+        viewer.leave().unwrap();
+        host.shutdown_and_wait_from_worker().unwrap();
+        drop(host);
+        std::fs::remove_dir_all(directory).unwrap();
     }
 
     #[test]
@@ -1559,6 +1623,7 @@ mod tests {
             .send(ActorCommand::Call {
                 session: None,
                 action: ActorAction::Join {
+                    world_layout_version: arkline_protocol::WORLD_LAYOUT_SCHEMA_VERSION,
                     secret: "editor-cancel".into(),
                     connect: Some(connect("CancelledPilot")),
                 },
@@ -1596,6 +1661,7 @@ mod tests {
             .send(ActorCommand::Call {
                 session: None,
                 action: ActorAction::Join {
+                    world_layout_version: arkline_protocol::WORLD_LAYOUT_SCHEMA_VERSION,
                     secret: "editor-cancel".into(),
                     connect: Some(connect("AbandonedPilot")),
                 },
@@ -1638,6 +1704,7 @@ mod tests {
                 &actor,
                 None,
                 ActorAction::Join {
+                    world_layout_version: arkline_protocol::WORLD_LAYOUT_SCHEMA_VERSION,
                     secret: "viewer-cancel".into(),
                     connect: None,
                 },
@@ -1652,6 +1719,7 @@ mod tests {
             &actor,
             None,
             ActorAction::Join {
+                world_layout_version: arkline_protocol::WORLD_LAYOUT_SCHEMA_VERSION,
                 secret: "viewer-cancel".into(),
                 connect: None,
             },

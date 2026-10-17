@@ -1,5 +1,6 @@
 //! Explicit isolated development realm. This does not weaken Connect authentication.
 use anyhow::{bail, ensure, Context, Result};
+use arkline_protocol::SceneLayoutRevision;
 use rusqlite::{Connection, OptionalExtension};
 use std::{
     net::SocketAddr,
@@ -90,7 +91,64 @@ pub(super) fn database_path(directory: &Path) -> Result<PathBuf> {
     }
     Ok(directory.join("world.sqlite"))
 }
-pub(super) fn establish_realm(db: &mut Connection, local: bool, existed: bool) -> Result<()> {
+const LEGACY_REALM: &str = "legacy";
+const LOCAL_LEGACY_REALM: &str = "local-development-v1";
+const LOCAL_ORBITAL_REALM: &str = "local-development-orbital-v1";
+
+fn marker_scene(marker: &str, local: bool) -> Result<SceneLayoutRevision> {
+    match (local, marker) {
+        (false, LEGACY_REALM) | (true, LOCAL_LEGACY_REALM) => Ok(SceneLayoutRevision::LegacyV1),
+        (true, LOCAL_ORBITAL_REALM) => Ok(SceneLayoutRevision::OrbitalV1),
+        _ => bail!("database identity realm does not match server mode"),
+    }
+}
+
+fn stored_scene(db: &Connection) -> Result<Option<SceneLayoutRevision>> {
+    let has_world: bool = db.query_row(
+        "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='world')",
+        [],
+        |row| row.get(0),
+    )?;
+    if !has_world {
+        return Ok(None);
+    }
+    let raw: Option<String> = db
+        .query_row("SELECT json FROM world WHERE id=1", [], |row| row.get(0))
+        .optional()?;
+    raw.map(|raw| -> Result<SceneLayoutRevision> {
+        let world: serde_json::Value = serde_json::from_str(&raw)?;
+        world
+            .get("scene_layout")
+            .map_or(Ok(SceneLayoutRevision::LegacyV1), |value| {
+                serde_json::from_value(value.clone()).map_err(Into::into)
+            })
+    })
+    .transpose()
+}
+
+pub(super) fn validate_realm_scene(
+    db: &Connection,
+    local: bool,
+    scene: SceneLayoutRevision,
+) -> Result<()> {
+    let marker: String =
+        db.query_row("SELECT realm FROM identity_realm WHERE id=1", [], |row| {
+            row.get(0)
+        })?;
+    ensure!(marker_scene(&marker, local)? == scene,
+        "database scene layout does not match its identity realm; no geometry migration was attempted");
+    Ok(())
+}
+
+/// The marker is an older-binary rollback guard as well as an identity boundary.
+/// Old readers reject LOCAL_ORBITAL_REALM before reading any world JSON. Never
+/// relabel an existing legacy realm: its missing scene field still means LegacyV1.
+pub(super) fn establish_realm(
+    db: &mut Connection,
+    local: bool,
+    existed: bool,
+    creation_scene: SceneLayoutRevision,
+) -> Result<SceneLayoutRevision> {
     let table: bool = db.query_row(
         "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='identity_realm')",
         [],
@@ -104,21 +162,31 @@ pub(super) fn establish_realm(db: &mut Connection, local: bool, existed: bool) -
     } else {
         None
     };
-    let wanted = if local {
-        "local-development-v1"
-    } else {
-        "legacy"
-    };
     if let Some(value) = value {
-        ensure!(
-            value == wanted,
-            "database identity realm does not match server mode"
-        );
-        return Ok(());
+        let scene = marker_scene(&value, local)?;
+        if let Some(stored) = stored_scene(db)? {
+            ensure!(stored == scene,
+                "database scene layout does not match its identity realm; no geometry migration was attempted");
+        }
+        return Ok(scene);
     }
     if local && existed {
         bail!("local development refuses an existing unmarked database; choose a new isolated directory");
     }
+    let scene = if local {
+        creation_scene
+    } else {
+        SceneLayoutRevision::LegacyV1
+    };
+    if let Some(stored) = stored_scene(db)? {
+        ensure!(stored == scene,
+            "unmarked database scene layout is incompatible; no identity or geometry migration was attempted");
+    }
+    let wanted = match (local, scene) {
+        (false, _) => LEGACY_REALM,
+        (true, SceneLayoutRevision::LegacyV1) => LOCAL_LEGACY_REALM,
+        (true, SceneLayoutRevision::OrbitalV1) => LOCAL_ORBITAL_REALM,
+    };
     let tx = db.transaction()?;
     tx.execute_batch("CREATE TABLE IF NOT EXISTS identity_realm(id INTEGER PRIMARY KEY CHECK(id=1),realm TEXT NOT NULL)")?;
     tx.execute(
@@ -126,11 +194,113 @@ pub(super) fn establish_realm(db: &mut Connection, local: bool, existed: bool) -
         [wanted],
     )?;
     tx.commit()?;
-    Ok(())
+    Ok(scene)
 }
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Frozen reader boundary from e156bcd33a70577d6267fc0766144bb1d7a7d5b5,
+    // apps/server/src/local_development.rs::establish_realm. This intentionally
+    // retains the pre-layout implementation rather than calling new helpers.
+    fn legacy_establish_realm(db: &mut Connection, local: bool, existed: bool) -> Result<()> {
+        let table: bool = db.query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='identity_realm')",
+            [], |row| row.get(0),
+        )?;
+        let value: Option<String> = if table {
+            db.query_row("SELECT realm FROM identity_realm WHERE id=1", [], |row| {
+                row.get(0)
+            })
+            .optional()?
+        } else {
+            None
+        };
+        let wanted = if local {
+            "local-development-v1"
+        } else {
+            "legacy"
+        };
+        if let Some(value) = value {
+            ensure!(
+                value == wanted,
+                "database identity realm does not match server mode"
+            );
+            return Ok(());
+        }
+        if local && existed {
+            bail!("local development refuses an existing unmarked database; choose a new isolated directory");
+        }
+        let tx = db.transaction()?;
+        tx.execute_batch("CREATE TABLE IF NOT EXISTS identity_realm(id INTEGER PRIMARY KEY CHECK(id=1),realm TEXT NOT NULL)")?;
+        tx.execute(
+            "INSERT INTO identity_realm(id,realm) VALUES(1,?1)",
+            [wanted],
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    #[test]
+    fn orbital_marker_blocks_frozen_legacy_reader_before_any_world_write() {
+        let mut db = Connection::open_in_memory().unwrap();
+        assert_eq!(
+            establish_realm(&mut db, true, false, SceneLayoutRevision::OrbitalV1).unwrap(),
+            SceneLayoutRevision::OrbitalV1
+        );
+        db.execute_batch("CREATE TABLE world(id INTEGER PRIMARY KEY,json TEXT NOT NULL); CREATE TABLE ledger(sequence INTEGER PRIMARY KEY,json TEXT NOT NULL);").unwrap();
+        let raw = r#"{"scene_layout":"orbital_v1","surface_props":[{"sentinel":"preserve"}]}"#;
+        db.execute("INSERT INTO world(id,json) VALUES(1,?1)", [raw])
+            .unwrap();
+        db.execute(
+            "INSERT INTO ledger(sequence,json) VALUES(1,'preserved ledger')",
+            [],
+        )
+        .unwrap();
+        let changes = db.total_changes();
+        for local in [true, false] {
+            assert!(legacy_establish_realm(&mut db, local, true).is_err());
+            assert_eq!(db.total_changes(), changes);
+            let after: String = db
+                .query_row("SELECT json FROM world WHERE id=1", [], |row| row.get(0))
+                .unwrap();
+            assert_eq!(after, raw);
+            let marker: String = db
+                .query_row("SELECT realm FROM identity_realm WHERE id=1", [], |row| {
+                    row.get(0)
+                })
+                .unwrap();
+            assert_eq!(marker, LOCAL_ORBITAL_REALM);
+        }
+        assert_eq!(
+            establish_realm(&mut db, true, true, SceneLayoutRevision::LegacyV1).unwrap(),
+            SceneLayoutRevision::OrbitalV1
+        );
+        validate_realm_scene(&db, true, SceneLayoutRevision::OrbitalV1).unwrap();
+        assert_eq!(db.total_changes(), changes);
+    }
+
+    #[test]
+    fn legacy_marker_and_missing_scene_remain_accepted_without_relabeling() {
+        let mut db = Connection::open_in_memory().unwrap();
+        establish_realm(&mut db, true, false, SceneLayoutRevision::LegacyV1).unwrap();
+        db.execute_batch("CREATE TABLE world(id INTEGER PRIMARY KEY,json TEXT NOT NULL); INSERT INTO world(id,json) VALUES(1,'{}');").unwrap();
+        let changes = db.total_changes();
+        legacy_establish_realm(&mut db, true, true).unwrap();
+        assert_eq!(
+            establish_realm(&mut db, true, true, SceneLayoutRevision::OrbitalV1).unwrap(),
+            SceneLayoutRevision::LegacyV1
+        );
+        validate_realm_scene(&db, true, SceneLayoutRevision::LegacyV1).unwrap();
+        assert_eq!(db.total_changes(), changes);
+        let marker: String = db
+            .query_row("SELECT realm FROM identity_realm WHERE id=1", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(marker, LOCAL_LEGACY_REALM);
+    }
+
     #[test]
     fn all_listeners_and_origins_are_loopback_fail_closed() {
         for address in [

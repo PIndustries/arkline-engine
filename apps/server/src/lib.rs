@@ -46,6 +46,10 @@ struct Pilot {
 }
 #[derive(Clone, Serialize, Deserialize)]
 struct World {
+    // Old JSON deliberately retains the exact original anchors. This is a
+    // creation choice for new realms, never an automatic coordinate migration.
+    #[serde(default, skip_serializing_if = "SceneLayoutRevision::is_legacy")]
+    scene_layout: SceneLayoutRevision,
     #[serde(default)]
     exterior_definition: ExteriorDefinitionState,
     #[serde(default)]
@@ -81,6 +85,7 @@ fn default_next_drone_id() -> u64 {
 impl Default for World {
     fn default() -> Self {
         Self {
+            scene_layout: SceneLayoutRevision::LegacyV1,
             exterior_definition: ExteriorDefinitionState::default(),
             remote_controls: BTreeMap::new(),
             fleet_links: BTreeMap::new(),
@@ -98,6 +103,11 @@ impl Default for World {
             asteroids: asteroid_catalog(INITIAL_BELT_ORE),
             spatial_version: 2,
         }
+    }
+}
+impl World {
+    fn planet(&self) -> PlanetDefinition {
+        self.scene_layout.definition().planets.remove(0)
     }
 }
 pub fn now_ms() -> u64 {
@@ -171,15 +181,22 @@ impl Server {
         local_development: bool,
         editor_mode: bool,
     ) -> Result<Self> {
-        Self::open_realm_with_layout(path, local_development, editor_mode, None)
+        Self::open_realm_with_layout(
+            path,
+            local_development,
+            editor_mode,
+            None,
+            SceneLayoutRevision::LegacyV1,
+        )
     }
 
-    pub(crate) fn open_editor_realm(
+    pub(crate) fn open_editor_realm_with_scene(
         path: impl AsRef<Path>,
         document: RoomLayoutDocument,
+        creation_scene: SceneLayoutRevision,
     ) -> Result<Self> {
         document.validate_live().map_err(anyhow::Error::msg)?;
-        Self::open_realm_with_layout(path, true, true, Some(document))
+        Self::open_realm_with_layout(path, true, true, Some(document), creation_scene)
     }
 
     fn open_realm_with_layout(
@@ -187,6 +204,7 @@ impl Server {
         local_development: bool,
         editor_mode: bool,
         editor_room_layout: Option<RoomLayoutDocument>,
+        creation_scene: SceneLayoutRevision,
     ) -> Result<Self> {
         let path = path.as_ref();
         if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
@@ -223,7 +241,12 @@ impl Server {
         };
         let existed = path.exists();
         let mut db = Connection::open(path)?;
-        local_development::establish_realm(&mut db, local_development, existed)?;
+        let realm_scene = local_development::establish_realm(
+            &mut db,
+            local_development,
+            existed,
+            creation_scene,
+        )?;
         #[cfg(unix)]
         if local_development {
             use std::os::unix::fs::PermissionsExt;
@@ -238,10 +261,14 @@ impl Server {
         db.execute_batch("CREATE TABLE IF NOT EXISTS identity_audit (pilot TEXT PRIMARY KEY, issuer TEXT NOT NULL, subject TEXT NOT NULL, linked_at_ms INTEGER NOT NULL);")?;
         db.execute(
             "INSERT OR IGNORE INTO world(id,json) VALUES(1,?1)",
-            [serde_json::to_string(&World::default())?],
+            [serde_json::to_string(&World {
+                scene_layout: realm_scene,
+                ..World::default()
+            })?],
         )?;
         let json: String = db.query_row("SELECT json FROM world WHERE id=1", [], |r| r.get(0))?;
         let mut world: World = serde_json::from_str(&json)?;
+        local_development::validate_realm_scene(&db, local_development, world.scene_layout)?;
         let editor_time = editor::open_clock(&mut db, editor_mode)?;
         let now = editor_time.unwrap_or_else(now_ms);
         flight::migrate_spatial(&mut world);
@@ -854,6 +881,7 @@ impl Server {
                 bail!("use authenticated transport admission")
             }
             Request::Connect {
+                world_layout_version,
                 supports_room_controls,
                 supports_fleet_hangar,
                 supports_pioneer_interior,
@@ -865,6 +893,15 @@ impl Server {
                     protocol_version == PROTOCOL_VERSION,
                     "unsupported protocol version"
                 );
+                ensure!(
+                    world_layout_version <= WORLD_LAYOUT_SCHEMA_VERSION,
+                    "unsupported world layout capability version"
+                );
+                ensure!(
+                    world_layout_version >= world.scene_layout.required_capability_version(),
+                    "this realm requires world layout support; update the client before connecting"
+                );
+                let fleet_revision = world.scene_layout.definition().fleet_layout;
                 ensure!(
                     !pilot.is_empty()
                         && pilot.len() <= 24
@@ -894,7 +931,8 @@ impl Server {
                             .is_some_and(|a| a.onboard_interior)
                         {
                             let point = if supports_fleet_hangar {
-                                fleet_berth(existing.view.ship_class).1
+                                fleet_berth_pose(fleet_revision, existing.view.ship_class)
+                                    .boarding_point
                             } else {
                                 hangar_layout(existing.view.ship_class).boarding_point
                             };
@@ -974,7 +1012,7 @@ impl Server {
                     if let Some(a) = &mut p.view.station_avatar {
                         if !a.onboard_interior {
                             a.position = if supports_fleet_hangar {
-                                fleet_berth(p.view.ship_class).1
+                                fleet_berth_pose(fleet_revision, p.view.ship_class).boarding_point
                             } else {
                                 hangar_layout(p.view.ship_class).boarding_point
                             };
@@ -1340,6 +1378,7 @@ impl Server {
             .or(transport_session.as_ref())
             .and_then(|name| assets::view(&world, name));
         let snapshot = Snapshot {
+            world_layout: Some(world.scene_layout.definition()),
             exterior: Some(exterior_effects::view(&world, now)),
             remote_controls: world
                 .remote_controls
@@ -1448,6 +1487,11 @@ fn add_cargo(current: u64, units: u64, capacity: u64) -> Result<u64> {
     Ok(next)
 }
 fn validate(world: &World, room_layout: Option<&RoomLayoutDocument>) -> Result<()> {
+    world
+        .scene_layout
+        .definition()
+        .validate()
+        .map_err(anyhow::Error::msg)?;
     station::validate(world, room_layout)?;
     remote_control::validate(world)?;
     resource_jobs::validate(world)?;
@@ -1501,6 +1545,7 @@ mod tests {
                 supports_fleet_hangar: false,
                 supports_pioneer_interior: true,
                 protocol_version: PROTOCOL_VERSION,
+                world_layout_version: WORLD_LAYOUT_SCHEMA_VERSION,
                 pilot: "Traveler".into(),
                 resume_token: None,
             },

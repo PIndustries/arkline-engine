@@ -307,6 +307,7 @@ mod tests {
             drone_camera: false,
             camera_drone: None,
             scene: std::sync::Arc::new(FrameScene {
+                world_layout: arkline_protocol::legacy_world_layout(),
                 traffic: vec![],
                 surface_props: vec![],
                 asteroids: vec![],

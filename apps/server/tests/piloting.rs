@@ -11,6 +11,7 @@ fn create(s: &mut Server) -> (Option<String>, String) {
         &mut p,
         Request::Connect {
             supports_room_controls: false,
+            world_layout_version: 1,
             supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
@@ -201,6 +202,7 @@ fn logout_and_restart_preserve_full_quaternion_and_do_not_resume_thrust() {
             &mut p,
             Request::Connect {
                 supports_room_controls: false,
+                world_layout_version: 1,
                 supports_fleet_hangar: false,
                 supports_pioneer_interior: true,
                 protocol_version: PROTOCOL_VERSION,

@@ -731,6 +731,7 @@ mod tests {
         LedgerExport {
             protocol_version: PROTOCOL_VERSION,
             snapshot: Snapshot {
+                world_layout: None,
                 exterior: None,
                 remote_controls: vec![],
                 fleet_links: vec![],

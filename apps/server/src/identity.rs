@@ -114,6 +114,7 @@ impl Server {
             legacy_resume_token,
             link_existing,
             protocol_version,
+            world_layout_version,
             supports_room_controls,
             supports_fleet_hangar,
             supports_pioneer_interior,
@@ -138,6 +139,7 @@ impl Server {
                 pilot,
                 Request::Connect {
                     protocol_version,
+                    world_layout_version,
                     pilot: name,
                     resume_token: legacy_resume_token,
                     supports_room_controls,

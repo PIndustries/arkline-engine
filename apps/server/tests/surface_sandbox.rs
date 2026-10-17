@@ -39,6 +39,7 @@ fn login(s: &mut Server, p: &mut Option<String>, name: &str) -> String {
         p,
         Request::Connect {
             supports_room_controls: false,
+            world_layout_version: 1,
             supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
@@ -149,6 +150,7 @@ fn continuous_descent_ground_contact_and_owned_props_persist_without_economy_cha
         &mut a,
         Request::Connect {
             supports_room_controls: false,
+            world_layout_version: 1,
             supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
@@ -191,6 +193,7 @@ fn old_hangar_gains_new_hulls_once_and_larger_cargo_replays() {
             &mut p,
             Request::Connect {
                 supports_room_controls: false,
+                world_layout_version: 1,
                 supports_fleet_hangar: false,
                 supports_pioneer_interior: true,
                 protocol_version: PROTOCOL_VERSION,
@@ -212,6 +215,7 @@ fn old_hangar_gains_new_hulls_once_and_larger_cargo_replays() {
         &mut p,
         Request::Connect {
             supports_room_controls: false,
+            world_layout_version: 1,
             supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,

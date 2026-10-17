@@ -73,6 +73,7 @@ impl Client {
     fn login(&mut self, pilot: &str, token: Option<String>) -> Response {
         self.ok(Request::Connect {
             supports_room_controls: false,
+            world_layout_version: 1,
             supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
@@ -182,6 +183,7 @@ fn two_pilots_trade_recover_and_export_consistent_history() {
         !attacker
             .send(Request::Connect {
                 supports_room_controls: false,
+                world_layout_version: 1,
                 supports_fleet_hangar: false,
                 supports_pioneer_interior: true,
                 protocol_version: PROTOCOL_VERSION,
@@ -349,6 +351,7 @@ fn transport_presence_counts_sessions_without_removing_persistent_ships() {
     second.login("PresencePilot", Some(token.clone()));
     let rejected = second.send(Request::Connect {
         supports_room_controls: false,
+        world_layout_version: 1,
         supports_fleet_hangar: false,
         supports_pioneer_interior: true,
         protocol_version: PROTOCOL_VERSION,

@@ -299,6 +299,7 @@ fn frame() -> Frame {
         drone_camera: false,
         camera_drone: None,
         scene: Arc::new(FrameScene {
+            world_layout: arkline_protocol::legacy_world_layout(),
             traffic: vec![],
             surface_props: vec![arkline_protocol::SurfaceProp {
                 id: 1,
@@ -622,6 +623,9 @@ impl AuthorityCaptureCamera {
             // Isolate the actual accepted pilot for model review. No diagnostic
             // props, invented equipment, traffic, rocks or extra pilots are added.
             scene: Arc::new(FrameScene {
+                world_layout: super::super::snapshot_world_layout(snapshot)
+                    .expect("authority snapshot has a supported world layout")
+                    .clone(),
                 traffic: vec![],
                 surface_props: vec![],
                 asteroids: vec![],
@@ -705,6 +709,7 @@ fn native_authority_pioneer_adoption_capture() {
             &mut session,
             Request::Connect {
                 supports_room_controls: true,
+                world_layout_version: 1,
                 supports_fleet_hangar: true,
                 supports_pioneer_interior: true,
                 protocol_version: arkline_protocol::PROTOCOL_VERSION,
