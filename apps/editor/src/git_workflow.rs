@@ -32,6 +32,7 @@ pub struct GitWorkspace {
     staged_diff: bool,
     handoff: Option<String>,
     worker: Option<Receiver<Result<Outcome, String>>>,
+    repaint_target: Option<(egui::Context, egui::ViewportId)>,
     cancellation: Option<Arc<AtomicBool>>,
     job: String,
     needs_refresh: bool,
@@ -62,6 +63,7 @@ impl GitWorkspace {
             staged_diff: false,
             handoff: None,
             worker: None,
+            repaint_target: None,
             cancellation: None,
             job: String::new(),
             needs_refresh: false,
@@ -138,6 +140,7 @@ impl GitWorkspace {
         let (tx, rx) = mpsc::sync_channel(1);
         let cancel = Arc::new(AtomicBool::new(false));
         let worker_cancel = cancel.clone();
+        let repaint_target = self.repaint_target.clone();
         match std::thread::Builder::new()
             .name("arkline-git-workflow".into())
             .spawn(move || {
@@ -145,7 +148,13 @@ impl GitWorkspace {
                     .unwrap_or_else(|_| {
                         Err("Git worker stopped unexpectedly. Refresh status.".into())
                     });
-                let _ = tx.send(result);
+                if tx.send(result).is_ok() {
+                    // A paused or idle editor must consume completion without another click.
+                    // Publish the result before waking its viewport so poll can receive it.
+                    if let Some((ctx, viewport)) = repaint_target {
+                        ctx.request_repaint_of(viewport);
+                    }
+                }
             }) {
             Ok(_) => {
                 self.worker = Some(rx);
@@ -237,6 +246,7 @@ impl GitWorkspace {
     }
 
     pub fn show(&mut self, ctx: &egui::Context, project: &Path) {
+        self.repaint_target = Some((ctx.clone(), ctx.viewport_id()));
         egui::TopBottomPanel::top("git_repository_controls").show(ctx, |ui| {
             ui.add_space(6.);
             ui.horizontal_wrapped(|ui| {
@@ -515,6 +525,46 @@ mod worker_tests {
         workspace.branch_job = branch_job;
         workspace.local_mutation_job = local_mutation_job;
         (tx, cancellation)
+    }
+
+    #[test]
+    fn worker_completion_wakes_idle_ui_before_the_next_poll() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let missing = std::env::temp_dir().join(format!(
+            "arkline-git-repaint-{}-{unique}",
+            std::process::id()
+        ));
+        assert!(!missing.exists());
+        let ctx = egui::Context::default();
+        let mut workspace = GitWorkspace::open(&missing);
+        let _ = ctx.run(Default::default(), |ctx| workspace.show(ctx, &missing));
+        // Let egui's initial frames settle before observing the worker's own wake-up.
+        for _ in 0..4 {
+            let _ = ctx.run(Default::default(), |_| {});
+        }
+        let (wake_tx, wake_rx) = mpsc::channel();
+        let ui_thread = std::thread::current().id();
+        ctx.set_request_repaint_callback(move |info| {
+            let _ = wake_tx.send((info, std::thread::current().id()));
+        });
+        workspace.start(Request::Inspect { path: missing }, "Inspecting while idle");
+        let (wake, worker_thread) = wake_rx
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .expect("Git completion must wake the UI without input or another frame");
+        assert_eq!(wake.viewport_id, egui::ViewportId::ROOT);
+        assert_eq!(wake.delay, std::time::Duration::ZERO);
+        assert_ne!(worker_thread, ui_thread);
+        assert!(
+            workspace.has_pending_job(),
+            "Only poll may consume the result"
+        );
+        workspace.poll();
+        assert!(!workspace.has_pending_job());
+        assert!(workspace.needs_refresh);
+        assert!(!workspace.message.starts_with("Inspecting while idle"));
     }
 
     #[test]
