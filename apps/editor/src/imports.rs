@@ -20,6 +20,7 @@ enum Kind {
 enum Work {
     Import(String),
     Selected(PathBuf),
+    SelectedBytes(Vec<u8>),
     Pick,
     Browse,
     Load,
@@ -124,10 +125,10 @@ impl Imports {
         s.queue(Work::Load, Kind::Load);
         s
     }
-    fn queue(&mut self, work: Work, kind: Kind) {
+    fn queue(&mut self, work: Work, kind: Kind) -> bool {
         if self.pending.is_some() {
             self.message = "An asset operation is already pending.".into();
-            return;
+            return false;
         }
         self.serial += 1;
         let id = self.serial;
@@ -151,8 +152,10 @@ impl Imports {
             } else {
                 self.message = "Checking project asset…".into();
             }
+            true
         } else {
             self.message="Asset worker is unavailable or still finishing a cancelled operation. Nothing was retried.".into();
+            false
         }
     }
     fn candidate_changed(&mut self, path_changed: bool) {
@@ -195,6 +198,26 @@ impl Imports {
         self.candidate_changed(true);
         self.candidate_label = file_label(&path);
         self.queue(Work::Selected(path), Kind::Import);
+    }
+    pub(super) fn selected_bytes(&mut self, label: String, bytes: Vec<u8>) -> bool {
+        self.poll();
+        if self.pending.is_some() {
+            self.message =
+                "Finish the pending asset operation, then preview the file again.".into();
+            return false;
+        }
+        if !self.queue(Work::SelectedBytes(bytes), Kind::Import) {
+            return false;
+        }
+        self.path.clear();
+        self.candidate += 1;
+        self.staged = None;
+        self.show_staged = false;
+        self.candidate_label = label;
+        if let Some(pending) = &mut self.pending {
+            pending.candidate = self.candidate;
+        }
+        true
     }
     fn picker_result(&mut self, picked: Option<(String, Verified)>) {
         if let Some((label, verified)) = picked {
@@ -512,6 +535,7 @@ fn run(root: &Path, work: Work) -> Result<Answer, String> {
     match work {
         Work::Import(path) => doc::import(root, &path).map(Answer::Imported),
         Work::Selected(path) => doc::import_selected(&path).map(Answer::Imported),
+        Work::SelectedBytes(bytes) => Verified::decode(bytes).map(Answer::Imported),
         Work::Browse => doc::catalog(root).map(Answer::Browsed),
         Work::Pick => {
             // RFD supports worker-thread dialogs in a windowed macOS app. Its
@@ -538,6 +562,89 @@ fn file_label(path: &Path) -> String {
     path.file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_else(|| "Selected GLB".into())
+}
+#[cfg(test)]
+mod byte_handoff_tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+    const MODEL: &[u8] = include_bytes!("../tests/fixtures/import/wedge.glb");
+
+    fn empty_loaded() -> Answer {
+        Answer::Loaded(Loaded {
+            index: AssetIndex::default(),
+            verified: None,
+            unavailable: None,
+        })
+    }
+
+    fn settle(panel: &mut Imports) {
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while panel.pending.is_some() {
+            panel.poll();
+            assert!(Instant::now() < deadline, "asset worker did not settle");
+            std::thread::yield_now();
+        }
+    }
+
+    #[test]
+    fn files_handoff_drains_initial_load_and_only_stages_verified_bytes() {
+        let mut panel = Imports::with_worker(|work| match work {
+            Work::Load => Ok(empty_loaded()),
+            Work::SelectedBytes(bytes) => Verified::decode(bytes).map(Answer::Imported),
+            _ => panic!("handoff must not accept or save an asset"),
+        });
+        assert!(panel.pending.as_ref().is_some_and(|p| p.kind == Kind::Load));
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while !panel.selected_bytes("fixture.glb".into(), MODEL.to_vec()) {
+            assert!(Instant::now() < deadline, "initial load was never drained");
+            std::thread::yield_now();
+        }
+        settle(&mut panel);
+        assert_eq!(panel.candidate_label, "fixture.glb");
+        assert!(panel.staged.is_some(), "{}", panel.message);
+        assert!(panel.accepted.is_none());
+        assert!(panel.index.asset.is_none());
+        assert!(panel.saved.as_ref().unwrap().asset.is_none());
+    }
+
+    #[test]
+    fn files_handoff_preserves_candidate_while_an_asset_save_is_pending() {
+        let (started, saving) = mpsc::sync_channel(1);
+        let (release, gate) = mpsc::sync_channel(1);
+        let mut panel = Imports::with_worker(move |work| match work {
+            Work::Load => Ok(empty_loaded()),
+            Work::Save(index, _) => {
+                started.send(()).unwrap();
+                gate.recv_timeout(Duration::from_secs(3)).unwrap();
+                Ok(Answer::Saved(*index))
+            }
+            _ => panic!("busy save must not be replaced by an import"),
+        });
+        settle(&mut panel);
+        panel.staged = Some(Verified::decode(MODEL.to_vec()).unwrap());
+        panel.candidate_label = "retained.glb".into();
+        panel.queue(Work::Save(Box::new(panel.index.clone()), None), Kind::Save);
+        saving.recv_timeout(Duration::from_secs(3)).unwrap();
+        assert!(!panel.selected_bytes("replacement.glb".into(), MODEL.to_vec()));
+        assert_eq!(panel.candidate_label, "retained.glb");
+        assert!(panel.staged.is_some());
+        assert!(panel.pending.as_ref().is_some_and(|p| p.kind == Kind::Save));
+        release.send(()).unwrap();
+        settle(&mut panel);
+    }
+
+    #[test]
+    fn unavailable_handoff_does_not_clear_the_previous_candidate() {
+        let mut panel = Imports::with_worker(|_| Ok(empty_loaded()));
+        settle(&mut panel);
+        panel.staged = Some(Verified::decode(MODEL.to_vec()).unwrap());
+        panel.candidate_label = "retained.glb".into();
+        panel.sender = None;
+        assert!(!panel.selected_bytes("replacement.glb".into(), MODEL.to_vec()));
+        assert_eq!(panel.candidate_label, "retained.glb");
+        assert!(panel.staged.is_some());
+        assert!(panel.pending.is_none());
+    }
 }
 #[cfg(test)]
 #[path = "import_tests.rs"]

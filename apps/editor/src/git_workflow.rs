@@ -36,6 +36,11 @@ pub struct GitWorkspace {
     job: String,
     needs_refresh: bool,
     push_review: bool,
+    source_guard: bool,
+    source_save_pending: bool,
+    authoring_root: Option<PathBuf>,
+    branch_job: bool,
+    local_mutation_job: bool,
 }
 
 impl GitWorkspace {
@@ -61,6 +66,11 @@ impl GitWorkspace {
             job: String::new(),
             needs_refresh: false,
             push_review: false,
+            source_guard: false,
+            source_save_pending: false,
+            authoring_root: project.canonicalize().ok(),
+            branch_job: false,
+            local_mutation_job: false,
         }
     }
 
@@ -68,9 +78,60 @@ impl GitWorkspace {
         self.worker.is_some()
     }
 
+    pub fn has_pending_job(&self) -> bool {
+        self.busy()
+    }
+
+    pub fn branch_change_pending(&self) -> bool {
+        self.busy() && self.branch_job
+    }
+
+    pub fn local_mutation_pending(&self) -> bool {
+        self.busy() && self.local_mutation_job
+    }
+
+    pub fn set_source_guard(&mut self, dirty_or_file_job: bool, save_pending: bool) {
+        self.source_guard = dirty_or_file_job;
+        self.source_save_pending = save_pending;
+    }
+
+    pub fn keep_open_for_job(&mut self) {
+        self.message = "Wait for the Git job, or cancel it and wait for its result, before closing the editor.".into();
+    }
+
+    fn overlaps_authoring_project(&self, repo: &Path) -> bool {
+        self.authoring_root
+            .as_ref()
+            .is_none_or(|root| root.starts_with(repo) || repo.starts_with(root))
+    }
+
     fn start(&mut self, request: Request, label: &str) {
         if self.busy() {
             return;
+        }
+        let branch_job = matches!(
+            &request,
+            Request::CreateBranch { .. } | Request::SwitchBranch { .. }
+        );
+        let local_mutation_job = branch_job
+            || matches!(
+                &request,
+                Request::Stage { .. } | Request::Unstage { .. } | Request::Commit { .. }
+            );
+        if branch_job && self.source_guard {
+            self.message = "Save source tabs and finish file jobs before changing branches.".into();
+            return;
+        }
+        if local_mutation_job && self.source_save_pending {
+            self.message =
+                "Wait for the source file Save to finish, then refresh Git status.".into();
+            return;
+        }
+        if let Request::SwitchBranch { snapshot, .. } = &request {
+            if self.overlaps_authoring_project(&snapshot.repo) {
+                self.message = "This checkout overlaps the active authoring project. Close the editor before switching its branch in your Git client.".into();
+                return;
+            }
         }
         self.handoff = None;
         self.push_review = false;
@@ -90,6 +151,8 @@ impl GitWorkspace {
                 self.worker = Some(rx);
                 self.cancellation = Some(cancel);
                 self.job = label.into();
+                self.branch_job = branch_job;
+                self.local_mutation_job = local_mutation_job;
                 self.message = format!("{label}…");
             }
             Err(_) => {
@@ -109,6 +172,8 @@ impl GitWorkspace {
         self.worker = None;
         self.cancellation = None;
         self.job.clear();
+        self.branch_job = false;
+        self.local_mutation_job = false;
         match result {
             Ok(outcome) => {
                 self.message = outcome.message;
@@ -307,31 +372,33 @@ impl GitWorkspace {
                 ui.add_enabled_ui(ready, |ui| {
                     ui.horizontal(|ui| {
                         ui.add(egui::TextEdit::singleline(&mut self.branch_name).hint_text("contribution/my-change").desired_width(260.));
-                        if ui.add_enabled(!self.branch_name.trim().is_empty(), egui::Button::new("Create branch")).clicked() {
+                        if ui.add_enabled(!self.source_guard && !self.branch_name.trim().is_empty(), egui::Button::new("Create branch")).clicked() {
                             self.start(Request::CreateBranch { snapshot: snapshot.clone(), name: self.branch_name.clone() }, "Creating contribution branch");
                         }
                         egui::ComboBox::from_id_salt("git_branch_choice").selected_text(&self.switch_branch).show_ui(ui, |ui| {
                             for branch in &snapshot.branches { ui.selectable_value(&mut self.switch_branch, branch.clone(), branch); }
                         });
-                        if ui.add_enabled(!self.switch_branch.is_empty() && self.switch_branch != snapshot.branch,
+                        if ui.add_enabled(!self.source_guard && !self.overlaps_authoring_project(&snapshot.repo) && !self.switch_branch.is_empty() && self.switch_branch != snapshot.branch,
                             egui::Button::new("Switch branch")).clicked() {
                             self.start(Request::SwitchBranch { snapshot: snapshot.clone(), name: self.switch_branch.clone() }, "Switching branch");
                         }
                     });
                     ui.small("Branch operations require a clean checkout. Authoring buffers remain in memory and are never reloaded.");
+                    if self.source_guard { ui.colored_label(egui::Color32::YELLOW, "Save source tabs and finish file jobs before changing branches."); }
+                    if self.overlaps_authoring_project(&snapshot.repo) { ui.small("Switching an existing branch is unavailable while this checkout overlaps the active authoring project. Close the editor before switching it in your Git client."); }
                     ui.separator();
                     ui.horizontal(|ui| {
-                        if ui.add_enabled(!self.selected.is_empty(), egui::Button::new("Stage selected files")).clicked() {
+                        if ui.add_enabled(!self.source_save_pending && !self.selected.is_empty(), egui::Button::new("Stage selected files")).clicked() {
                             self.start(Request::Stage { snapshot: snapshot.clone(), paths: self.paths() }, "Staging selected files");
                         }
-                        if ui.add_enabled(!self.selected.is_empty(), egui::Button::new("Unstage selected files")).clicked() {
+                        if ui.add_enabled(!self.source_save_pending && !self.selected.is_empty(), egui::Button::new("Unstage selected files")).clicked() {
                             self.start(Request::Unstage { snapshot: snapshot.clone(), paths: self.paths() }, "Unstaging selected files");
                         }
                     });
                     ui.add(egui::TextEdit::multiline(&mut self.commit_message).desired_rows(2)
                         .desired_width(f32::INFINITY).hint_text("Describe this contribution"));
                     ui.small("Commit includes only the reviewed selection. Other staged files or partial staging block the commit safely.");
-                    if ui.add_enabled(!self.selected.is_empty() && !self.commit_message.trim().is_empty(),
+                    if ui.add_enabled(!self.source_save_pending && !self.selected.is_empty() && !self.commit_message.trim().is_empty(),
                         egui::Button::new("Commit selected staged files")).clicked() {
                         self.start(Request::Commit { snapshot: snapshot.clone(), paths: self.paths(), message: self.commit_message.clone() }, "Committing selected staged files");
                     }
@@ -408,6 +475,296 @@ fn display_path(path: &str) -> String {
 #[cfg(test)]
 mod worker_tests {
     use super::*;
+
+    fn synthetic_snapshot(repo: PathBuf) -> Snapshot {
+        Snapshot {
+            repo,
+            branch: "contribution/native-git".into(),
+            head: "a".repeat(40),
+            entries: Vec::new(),
+            branches: vec!["main".into(), "contribution/native-git".into()],
+            remotes: Vec::new(),
+            fingerprint: "reviewed-fixture".into(),
+            index_digest: "reviewed-index".into(),
+        }
+    }
+
+    fn assert_not_started(workspace: &GitWorkspace, expected_message: &str) {
+        assert!(!workspace.has_pending_job());
+        assert!(!workspace.branch_change_pending());
+        assert!(!workspace.local_mutation_pending());
+        assert!(workspace.cancellation.is_none());
+        assert!(workspace.job.is_empty());
+        assert!(
+            workspace.message.contains(expected_message),
+            "{}",
+            workspace.message
+        );
+    }
+
+    fn fake_worker(
+        workspace: &mut GitWorkspace,
+        branch_job: bool,
+        local_mutation_job: bool,
+    ) -> (mpsc::SyncSender<Result<Outcome, String>>, Arc<AtomicBool>) {
+        let (tx, rx) = mpsc::sync_channel(1);
+        let cancellation = Arc::new(AtomicBool::new(false));
+        workspace.worker = Some(rx);
+        workspace.cancellation = Some(cancellation.clone());
+        workspace.job = "Fixture pending job".into();
+        workspace.branch_job = branch_job;
+        workspace.local_mutation_job = local_mutation_job;
+        (tx, cancellation)
+    }
+
+    #[test]
+    fn dirty_source_or_pending_file_work_blocks_both_branch_actions_before_spawn() {
+        let project = std::env::temp_dir().join("arkline-guard-authoring-project");
+        let repo = std::env::temp_dir().join("arkline-guard-separate-contribution");
+        for reason in ["dirty source buffer", "pending file operation"] {
+            for create in [true, false] {
+                let mut workspace = GitWorkspace::open(&project);
+                workspace.authoring_root = Some(project.clone());
+                workspace.set_source_guard(true, false);
+                let snapshot = synthetic_snapshot(repo.clone());
+                let request = if create {
+                    Request::CreateBranch {
+                        snapshot,
+                        name: "contribution/new".into(),
+                    }
+                } else {
+                    Request::SwitchBranch {
+                        snapshot,
+                        name: "main".into(),
+                    }
+                };
+                workspace.start(request, reason);
+                assert_not_started(&workspace, "Save source tabs and finish file jobs");
+            }
+        }
+    }
+
+    #[test]
+    fn pending_source_save_blocks_stage_unstage_commit_and_branch_mutations() {
+        let project = std::env::temp_dir().join("arkline-save-guard-project");
+        let snapshot = synthetic_snapshot(std::env::temp_dir().join("arkline-save-guard-repo"));
+        let requests = [
+            Request::Stage {
+                snapshot: snapshot.clone(),
+                paths: vec!["selected.rs".into()],
+            },
+            Request::Unstage {
+                snapshot: snapshot.clone(),
+                paths: vec!["selected.rs".into()],
+            },
+            Request::Commit {
+                snapshot: snapshot.clone(),
+                paths: vec!["selected.rs".into()],
+                message: "Selected change".into(),
+            },
+            Request::CreateBranch {
+                snapshot: snapshot.clone(),
+                name: "contribution/new".into(),
+            },
+            Request::SwitchBranch {
+                snapshot,
+                name: "main".into(),
+            },
+        ];
+        for request in requests {
+            let mut workspace = GitWorkspace::open(&project);
+            workspace.set_source_guard(false, true);
+            workspace.start(request, "Must wait for Save");
+            assert_not_started(&workspace, "Wait for the source file Save to finish");
+        }
+    }
+
+    #[test]
+    fn switching_overlapping_or_unknown_authoring_checkout_is_blocked() {
+        let parent = std::env::temp_dir().join("arkline-overlap-guard");
+        let project = parent.join("authoring");
+        for repo in [
+            parent.clone(),
+            project.clone(),
+            project.join("nested-checkout"),
+        ] {
+            let mut workspace = GitWorkspace::open(&project);
+            workspace.authoring_root = Some(project.clone());
+            workspace.start(
+                Request::SwitchBranch {
+                    snapshot: synthetic_snapshot(repo),
+                    name: "main".into(),
+                },
+                "Switch overlapping checkout",
+            );
+            assert_not_started(&workspace, "overlaps the active authoring project");
+        }
+        let mut workspace = GitWorkspace::open(&project);
+        workspace.authoring_root = None;
+        workspace.start(
+            Request::SwitchBranch {
+                snapshot: synthetic_snapshot(parent.join("other")),
+                name: "main".into(),
+            },
+            "Switch with unknown root",
+        );
+        assert_not_started(&workspace, "overlaps the active authoring project");
+        workspace.authoring_root = Some(project);
+        assert!(!workspace.overlaps_authoring_project(&parent.join("separate-checkout")));
+    }
+
+    #[test]
+    fn dirty_source_and_pending_save_still_allow_readonly_inspection() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let missing = std::env::temp_dir().join(format!(
+            "arkline-inspect-guard-{}-{unique}",
+            std::process::id()
+        ));
+        assert!(!missing.exists());
+        let mut workspace = GitWorkspace::open(&missing);
+        workspace.set_source_guard(true, true);
+        workspace.start(Request::Inspect { path: missing }, "Readonly inspection");
+        assert!(
+            workspace.has_pending_job(),
+            "The source guard must not reject inspection"
+        );
+        assert!(!workspace.branch_change_pending());
+        assert!(!workspace.local_mutation_pending());
+        assert_eq!(workspace.job, "Readonly inspection");
+        // The worker only attempts to canonicalize a nonexistent path; it runs no Git command.
+        // Dropping requests cancellation while the bounded worker returns its ordinary error.
+    }
+
+    #[test]
+    fn accepted_requests_expose_the_correct_save_and_branch_close_guards() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let parent =
+            std::env::temp_dir().join(format!("arkline-job-flags-{}-{unique}", std::process::id()));
+        assert!(!parent.exists());
+        let snapshot = synthetic_snapshot(parent.join("checkout"));
+        let requests = [
+            (
+                Request::CreateBranch {
+                    snapshot: snapshot.clone(),
+                    name: "contribution/new".into(),
+                },
+                true,
+                true,
+            ),
+            (
+                Request::SwitchBranch {
+                    snapshot: snapshot.clone(),
+                    name: "main".into(),
+                },
+                true,
+                true,
+            ),
+            (
+                Request::Stage {
+                    snapshot: snapshot.clone(),
+                    paths: vec!["source.rs".into()],
+                },
+                false,
+                true,
+            ),
+            (
+                Request::Unstage {
+                    snapshot: snapshot.clone(),
+                    paths: vec!["source.rs".into()],
+                },
+                false,
+                true,
+            ),
+            (
+                Request::Commit {
+                    snapshot: snapshot.clone(),
+                    paths: vec!["source.rs".into()],
+                    message: "Selected".into(),
+                },
+                false,
+                true,
+            ),
+            (
+                Request::Inspect {
+                    path: snapshot.repo,
+                },
+                false,
+                false,
+            ),
+        ];
+        for (request, branch_job, local_mutation_job) in requests {
+            let mut workspace = GitWorkspace::open(&parent.join("authoring"));
+            workspace.authoring_root = Some(parent.join("authoring"));
+            workspace.start(request, "Classified pending job");
+            assert!(workspace.has_pending_job());
+            assert_eq!(workspace.branch_change_pending(), branch_job);
+            assert_eq!(workspace.local_mutation_pending(), local_mutation_job);
+            // Every repository path is nonexistent. These workers fail canonicalization before
+            // invoking Git; no source or repository mutation is performed by this guard test.
+        }
+    }
+
+    #[test]
+    fn job_flags_remain_pending_through_cancel_until_success_or_error_result() {
+        for (branch_job, local_mutation_job) in [(true, true), (false, true), (false, false)] {
+            for success in [true, false] {
+                let mut workspace = GitWorkspace::open(Path::new("authoring-project"));
+                let (tx, cancellation) =
+                    fake_worker(&mut workspace, branch_job, local_mutation_job);
+                workspace.poll();
+                assert!(workspace.has_pending_job());
+                assert_eq!(workspace.branch_change_pending(), branch_job);
+                assert_eq!(workspace.local_mutation_pending(), local_mutation_job);
+                cancellation.store(true, Ordering::Relaxed);
+                workspace.keep_open_for_job();
+                workspace.poll();
+                assert!(
+                    workspace.has_pending_job(),
+                    "Cancel is a request, not a finished job"
+                );
+                assert_eq!(workspace.branch_change_pending(), branch_job);
+                assert_eq!(workspace.local_mutation_pending(), local_mutation_job);
+                assert!(workspace.message.contains("wait for its result"));
+                let result = if success {
+                    Ok(Outcome {
+                        message: "Fixture finished".into(),
+                        ..Outcome::default()
+                    })
+                } else {
+                    Err("Fixture cancelled; refresh".into())
+                };
+                tx.send(result).unwrap();
+                workspace.poll();
+                assert!(!workspace.has_pending_job());
+                assert!(!workspace.branch_change_pending());
+                assert!(!workspace.local_mutation_pending());
+                assert!(workspace.cancellation.is_none());
+                assert!(workspace.job.is_empty());
+                assert_eq!(workspace.needs_refresh, !success);
+            }
+        }
+    }
+
+    #[test]
+    fn disconnected_worker_clears_both_mutation_guards_and_requires_refresh() {
+        let mut workspace = GitWorkspace::open(Path::new("authoring-project"));
+        let (tx, _) = fake_worker(&mut workspace, true, true);
+        drop(tx);
+        workspace.poll();
+        assert!(!workspace.has_pending_job());
+        assert!(!workspace.branch_change_pending());
+        assert!(!workspace.local_mutation_pending());
+        assert!(workspace.needs_refresh);
+        assert!(workspace.message.contains("disconnected"));
+        assert!(workspace.cancellation.is_none());
+        assert!(workspace.job.is_empty());
+    }
 
     #[test]
     fn repeat_click_and_cancel_cannot_start_an_overlapping_git_job() {

@@ -40,10 +40,17 @@ client if an operation fails.
 
 Use **Create branch** for a new local contribution branch, or select an existing
 local branch and choose **Switch branch**. Both require a clean checkout, including
-no untracked files. Resolve saved work explicitly first; there is no automatic
-stash, reset or discard. Branch operations also block filtered/LFS targets and
+no untracked files, saved **Files** tabs and no pending file job. Resolve saved
+work explicitly first; there is no automatic stash, reset or discard. Branch
+operations also block filtered/LFS targets and
 index flags that could hide changes (`skip-worktree` or `assume-unchanged`). Remote
 branch checkout is not offered here.
+
+**Switch branch** is unavailable when the checkout contains, is contained by, or
+equals the active authoring project. It is also blocked if the authoring project's
+canonical path cannot be established. Close the editor before switching that
+checkout in your Git client. **Create branch** from the current HEAD remains
+available once the other guards pass; it does not check out different files.
 
 Select changed files, choose **Working diff** or **Staged diff**, then **Inspect
 selected diff**. The working diff compares saved files with the index; the staged
@@ -64,6 +71,10 @@ to your Git client.
   the selection blocks the commit. Select all intended staged files or reconcile
   staging in your Git client, then refresh. Unrelated unstaged/untracked files are
   not added to the commit.
+
+A pending **Files** Save blocks Stage, Unstage and Commit. Conversely, Save waits
+while one of those Git mutations or a branch operation is running. Unsaved buffer
+contents are never included merely because their path is selected in Git.
 
 Stage and Unstage hold Git's normal `index.lock` and work on a private copy of the
 reviewed index. They recheck the reviewed state before atomically publishing that
@@ -118,6 +129,10 @@ have a 20-second timeout; clone and network subprocesses have a 90-second timeou
 within a 120-second whole-job deadline. Output is bounded to 2 MiB per stream.
 Changed-file inspection is limited to
 32 MiB per file and 128 MiB in total.
+
+Closing the editor is blocked while any Git job runs, or while source tabs are
+dirty or a source Save is pending. Wait for the job, or cancel it and wait for its
+result, then save source edits and close explicitly.
 
 Status is a reviewed snapshot. Changes to HEAD, branch, index, Git configuration or
 changed-file contents invalidate it before a later operation. On a stale-state
