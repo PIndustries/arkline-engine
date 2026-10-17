@@ -1,0 +1,216 @@
+{
+  "title": "Arkline Editor workspace captures",
+  "captured_utc": "2026-10-17T06:31:13Z/2026-10-17T06:35:08Z",
+  "build_stamp": "26.10.16.10",
+  "source": {
+    "base": "2a678863d863e7eb3b1e305affec3053a317b051",
+    "main_rs_from_pr60": "c1764ee110e100687b0d557473b53a36f873694b",
+    "rooms_rs_from_pr59": "a82f9abaf32899fed1c7709c0dd185ca9b3e7067",
+    "composition": "Unmerged development snapshot before the three-column Rooms workspace"
+  },
+  "simulation": {
+    "state": "STOPPED",
+    "timestamp_ms": 1792162555607
+  },
+  "images": "Original JPEG bytes preserved; no re-encoding. Captures visually reviewed for exposed secrets.",
+  "files": [
+    {
+      "filename": "play-view-deck-two-stopped.jpg",
+      "mime_type": "image/jpeg",
+      "width": 1180,
+      "height": 812,
+      "bytes": 116065,
+      "sha256": "ceb4e55cda4a1f874dc00ea0a21179e9067cb4be1b36f946ca0e13283fce649b",
+      "caption": "Deck two in Play view, with the simulation stopped."
+    },
+    {
+      "filename": "glb-preview-empty.jpg",
+      "mime_type": "image/jpeg",
+      "width": 1180,
+      "height": 812,
+      "bytes": 75596,
+      "sha256": "0e8e22708d77926e1ef0cfff56a1ced451d45249a04dc593b35244497b026871",
+      "caption": "Project assets workspace before importing a GLB."
+    },
+    {
+      "filename": "engineering-candidate-empty.jpg",
+      "mime_type": "image/jpeg",
+      "width": 1180,
+      "height": 812,
+      "bytes": 101130,
+      "sha256": "841874294b485122009857dade69431898be62d5cee7bfbaf41f799e6debf5a9",
+      "caption": "Engineering workspace with an empty candidate design."
+    },
+    {
+      "filename": "rooms-layout.jpg",
+      "mime_type": "image/jpeg",
+      "width": 1180,
+      "height": 812,
+      "bytes": 128448,
+      "sha256": "a862e00eafa8486415a0714fe64b55bd528dabf836df147c152d327e35942efc",
+      "caption": "Rooms inspector with draft controls and the room list."
+    },
+    {
+      "filename": "room-properties.jpg",
+      "mime_type": "image/jpeg",
+      "width": 1180,
+      "height": 812,
+      "bytes": 127729,
+      "sha256": "03c8190aec9e14a3d8ab33ac6feb8be5d452586a968a2bb7528b4889b51b5f90",
+      "caption": "Airlock dimensions and the draft deck plan."
+    },
+    {
+      "filename": "fleet-finish.jpg",
+      "mime_type": "image/jpeg",
+      "width": 1180,
+      "height": 812,
+      "bytes": 101802,
+      "sha256": "4f30fc147e3a8ffc1431f7f0f7ac2f3fc8a631382265ed8cc853e52439b4f153",
+      "caption": "Fleet Finish graph and Pioneer material preview."
+    },
+    {
+      "filename": "hull-surface-gpu-disabled.jpg",
+      "mime_type": "image/jpeg",
+      "width": 1180,
+      "height": 812,
+      "bytes": 135858,
+      "sha256": "ad7d31b616b4939bd7e34ab9a6957ca4b32909b821cc31b227667f9a28a9269d",
+      "caption": "Hull Surface graph. GPU preview is disabled in this capture."
+    },
+    {
+      "filename": "equipment.jpg",
+      "mime_type": "image/jpeg",
+      "width": 1180,
+      "height": 812,
+      "bytes": 120731,
+      "sha256": "40610d4b47d2a0846d2327dee915f8d503a1ebabff78666f7d3e3e5304aa51a9",
+      "caption": "Corridor-door inspector showing its last confirmed state while stopped."
+    },
+    {
+      "filename": "exterior.jpg",
+      "mime_type": "image/jpeg",
+      "width": 1180,
+      "height": 812,
+      "bytes": 130768,
+      "sha256": "a5640eb127203f906bef47f66114a0cc8539484e71bc4ee80d7b534385e6e574",
+      "caption": "Exterior systems, draft controls and fixture list."
+    },
+    {
+      "filename": "exterior-fixture-fields.jpg",
+      "mime_type": "image/jpeg",
+      "width": 1180,
+      "height": 812,
+      "bytes": 131275,
+      "sha256": "40ec6f2dd9b5071aaf918cd932d11b66a765def20e0f94ba9d64daf6251d3ff3",
+      "caption": "Port navigation light position, colour and lighting settings."
+    },
+    {
+      "filename": "service-paths-empty.jpg",
+      "mime_type": "image/jpeg",
+      "width": 1180,
+      "height": 812,
+      "bytes": 110782,
+      "sha256": "573c194b8b4d651b9449cd3e8768cfc8511ab66484eeade9675873076137d77b",
+      "caption": "Service Paths workspace before adding a candidate path."
+    },
+    {
+      "filename": "cockpit-panels.jpg",
+      "mime_type": "image/jpeg",
+      "width": 1180,
+      "height": 812,
+      "bytes": 98208,
+      "sha256": "1e75090ffe9a784207576a706c50c7546eb88c733ee4acd4f645909e7bf8fac6",
+      "caption": "Cockpit panel editor with the main-light control selected."
+    },
+    {
+      "filename": "cockpit-bindings.jpg",
+      "mime_type": "image/jpeg",
+      "width": 1180,
+      "height": 812,
+      "bytes": 98542,
+      "sha256": "5a98a5b9b7c2b7a171001a892d96cfe80b3eb919b52a60f9d6fe01f4e9199844",
+      "caption": "Pressure-gauge binding and panel placement controls."
+    },
+    {
+      "filename": "event-flow-manual-node.jpg",
+      "mime_type": "image/jpeg",
+      "width": 1180,
+      "height": 812,
+      "bytes": 127404,
+      "sha256": "389c4277277c3cd54843d6917175d86a78d759fd81f9d3b5a393a8c81ea044a9",
+      "caption": "Event Flow draft connecting a Manual node to Trace."
+    },
+    {
+      "filename": "event-flow-trace.jpg",
+      "mime_type": "image/jpeg",
+      "width": 1180,
+      "height": 812,
+      "bytes": 123717,
+      "sha256": "75b1e8066b5d54f166a7969fe4ef26b85cdfd028df388cdbc70070351452ef66",
+      "caption": "Event connections, pending queue and causal trace."
+    },
+    {
+      "filename": "physics-lab.jpg",
+      "mime_type": "image/jpeg",
+      "width": 1180,
+      "height": 812,
+      "bytes": 99110,
+      "sha256": "d539d03ba40eb67756768c0336e3377672430edea62e0c5e60738f3434603bbc",
+      "caption": "Paused physics experiment with thrust, gravity and a seeded point cloud."
+    },
+    {
+      "filename": "render-debug.jpg",
+      "mime_type": "image/jpeg",
+      "width": 1180,
+      "height": 812,
+      "bytes": 127235,
+      "sha256": "c081d3daba72761f903b89a46373d2c86d4883590677ed647ae5d7d479cd138f",
+      "caption": "Render debug shows mesh counts and recent view transitions."
+    },
+    {
+      "filename": "community.jpg",
+      "mime_type": "image/jpeg",
+      "width": 1180,
+      "height": 812,
+      "bytes": 113827,
+      "sha256": "7d68593ad36867e34ea31fd91c5f926b70517aa894d13457a445ce873cb02e67",
+      "caption": "Community workspace with a failed refresh and stale-data warning."
+    },
+    {
+      "filename": "session-join-masked.jpg",
+      "mime_type": "image/jpeg",
+      "width": 1180,
+      "height": 812,
+      "bytes": 127345,
+      "sha256": "1a1739ea479b08e5e764cd346d72c1fdb7ab69537c105eed23724a5358942db4",
+      "caption": "Join a shared world through a loopback address; the editor secret is masked."
+    },
+    {
+      "filename": "session-local.jpg",
+      "mime_type": "image/jpeg",
+      "width": 1180,
+      "height": 812,
+      "bytes": 124724,
+      "sha256": "1a205e5aac5a965f15b78740e4711ebda766eafc1a29fdda52c026b083f28735",
+      "caption": "Local session controls return to the preserved project world."
+    },
+    {
+      "filename": "session-host.jpg",
+      "mime_type": "image/jpeg",
+      "width": 1180,
+      "height": 812,
+      "bytes": 124889,
+      "sha256": "a6f156af535972931b700d97ae1ebc0e7e1bc7da794adb8e92bab67fe8ec9aff",
+      "caption": "Host a shared world through the loopback address."
+    },
+    {
+      "filename": "project-drawer.jpg",
+      "mime_type": "image/jpeg",
+      "width": 1180,
+      "height": 812,
+      "bytes": 120428,
+      "sha256": "8ef4121af815f423a7639653a39927f9e63c9ac41bcd74b8e338eee106c59d4f",
+      "caption": "Project drawer showing the current relative project folder."
+    }
+  ]
+}
