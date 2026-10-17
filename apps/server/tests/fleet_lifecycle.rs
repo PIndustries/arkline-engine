@@ -23,6 +23,7 @@ fn restart_clears_deployed_fleet_without_reusing_ids_or_changing_economy() {
             &mut p,
             Request::Connect {
                 supports_room_controls: false,
+                world_layout_version: 1,
                 supports_fleet_hangar: false,
                 supports_pioneer_interior: true,
                 protocol_version: PROTOCOL_VERSION,
@@ -56,6 +57,7 @@ fn restart_clears_deployed_fleet_without_reusing_ids_or_changing_economy() {
             &mut p,
             Request::Connect {
                 supports_room_controls: false,
+                world_layout_version: 1,
                 supports_fleet_hangar: false,
                 supports_pioneer_interior: true,
                 protocol_version: PROTOCOL_VERSION,
@@ -110,6 +112,7 @@ fn legacy_singleton_schema_recovers_safely_once() {
             &mut p,
             Request::Connect {
                 supports_room_controls: false,
+                world_layout_version: 1,
                 supports_fleet_hangar: false,
                 supports_pioneer_interior: true,
                 protocol_version: PROTOCOL_VERSION,

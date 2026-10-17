@@ -267,6 +267,8 @@ fn run() -> Result<()> {
             &mut stream,
             &Request::Connect {
                 supports_room_controls: false,
+                // This command client does not validate or render new scene layouts.
+                world_layout_version: 0,
                 supports_fleet_hangar: false,
                 supports_pioneer_interior: false,
                 protocol_version: PROTOCOL_VERSION,

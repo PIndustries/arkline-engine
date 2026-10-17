@@ -59,6 +59,7 @@ fn walk_quarters_and_return_to_board_without_moving_ship_or_economy() {
             &mut pilot,
             Request::Connect {
                 supports_room_controls: false,
+                world_layout_version: 1,
                 supports_fleet_hangar: false,
                 supports_pioneer_interior: true,
                 protocol_version: PROTOCOL_VERSION,

@@ -218,6 +218,7 @@ pub(super) fn begin_warp(p: &mut Pilot, destination: Destination, now: u64) {
     f.updated_at_ms = now;
 }
 pub(super) fn advance(world: &mut World, now: u64) {
+    let planet = world.planet();
     for p in world.pilots.values_mut() {
         ensure_flight(p, now);
     }
@@ -227,7 +228,7 @@ pub(super) fn advance(world: &mut World, now: u64) {
         if matches!(p.view.flight.as_ref().unwrap().mode, NavigationMode::Manual)
             && universe::normal(p)
         {
-            advance_manual(p, now);
+            advance_manual(p, now, &planet);
             continue;
         }
         let f = p.view.flight.as_mut().unwrap();
@@ -364,7 +365,7 @@ pub(super) fn advance(world: &mut World, now: u64) {
             f.velocity = add(old, limit(sub(desired, old), applied * dt));
             f.acceleration = std::array::from_fn(|i| (f.velocity[i] - old[i]) / dt);
             f.position = add(f.position, mul(add(old, f.velocity), dt * 0.5));
-            super::surface::constrain(f, p.view.ship_class, p.view.system_id);
+            super::surface::constrain(f, p.view.ship_class, p.view.system_id, &planet);
             if let Some(point) = destination {
                 if distance(f.position, point) < 0.6 && length(f.velocity) < 12.0 {
                     f.position = point;
@@ -541,7 +542,7 @@ pub(super) fn controls(translation: [f64; 3], rotation: [f64; 3], now: u64) -> C
         expires_at_ms: now.saturating_add(PILOT_INPUT_LEASE_MS),
     }
 }
-fn advance_manual(p: &mut Pilot, now: u64) {
+fn advance_manual(p: &mut Pilot, now: u64, planet: &PlanetDefinition) {
     let acceleration = ship_acceleration(p.view.ship_class, p.view.ore);
     let input = p.controls.clone();
     let f = p.view.flight.as_mut().unwrap();
@@ -584,7 +585,7 @@ fn advance_manual(p: &mut Pilot, now: u64) {
         };
         f.acceleration = std::array::from_fn(|i| (f.velocity[i] - old[i]) / dt);
         f.position = add(f.position, mul(add(old, f.velocity), dt * 0.5));
-        super::surface::constrain(f, p.view.ship_class, p.view.system_id);
+        super::surface::constrain(f, p.view.ship_class, p.view.system_id, planet);
         for i in 0..3 {
             if f.position[i].abs() > SPACE_BOUND {
                 f.position[i] = f.position[i].clamp(-SPACE_BOUND, SPACE_BOUND);

@@ -19,6 +19,7 @@ fn connect(
         s,
         p,
         Request::Connect {
+            world_layout_version: 0,
             supports_room_controls: false,
             supports_fleet_hangar: fleet,
             supports_pioneer_interior: true,

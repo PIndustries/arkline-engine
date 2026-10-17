@@ -31,6 +31,21 @@ impl EmbeddedSessionMode {
         }
     }
 }
+/// Selects local world storage; a joined session always uses its host's layout.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum EmbeddedRealm {
+    #[default]
+    Project,
+    OrbitalPreview,
+}
+impl EmbeddedRealm {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Project => "Project world",
+            Self::OrbitalPreview => "Orbital station preview",
+        }
+    }
+}
 /// Runtime-only connection details. Credentials must never be logged or saved in project files.
 pub struct EmbeddedSessionInfo {
     pub label: String,
@@ -140,7 +155,9 @@ enum ClockCommand {
 }
 
 pub struct EmbeddedClient {
+    project_data_dir: PathBuf,
     data_dir: PathBuf,
+    realm: EmbeddedRealm,
     mode: EmbeddedSessionMode,
     session_info: Option<EmbeddedSessionInfo>,
     session_updates: Receiver<EmbeddedSessionInfo>,
@@ -197,7 +214,9 @@ impl EmbeddedClient {
         cockpit.commands = Some(connection.commands);
         cockpit.updates = Some(connection.updates);
         Self {
+            project_data_dir: data_dir.clone(),
             data_dir,
+            realm: EmbeddedRealm::Project,
             mode: EmbeddedSessionMode::Local,
             session_info: None,
             session_updates: connection.info,
@@ -660,6 +679,17 @@ impl EmbeddedClient {
     pub fn session_info(&self) -> Option<&EmbeddedSessionInfo> {
         self.session_info.as_ref()
     }
+    pub fn realm(&self) -> EmbeddedRealm {
+        self.realm
+    }
+    /// Confirmed authority layout, independent of the selected local storage.
+    pub fn scene_layout_revision(&self) -> Option<SceneLayoutRevision> {
+        self.cockpit
+            .snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot_world_layout(snapshot).ok())
+            .map(|layout| layout.revision)
+    }
     pub fn can_control_clock(&self) -> bool {
         !matches!(self.mode, EmbeddedSessionMode::Join { .. })
     }
@@ -668,6 +698,50 @@ impl EmbeddedClient {
         &mut self,
         mode: EmbeddedSessionMode,
         pilot: String,
+    ) -> Result<(), String> {
+        self.switch_session_to(mode, pilot, self.data_dir.clone(), self.realm)
+    }
+    /// Open a separate persistent realm without moving or replacing the project world.
+    pub fn switch_session_in_realm(
+        &mut self,
+        mode: EmbeddedSessionMode,
+        pilot: String,
+        realm: EmbeddedRealm,
+    ) -> Result<(), String> {
+        let data_dir = self.realm_directory(realm)?;
+        self.switch_session_to(mode, pilot, data_dir, realm)
+    }
+    fn realm_directory(&self, realm: EmbeddedRealm) -> Result<PathBuf, String> {
+        if self.project_data_dir.as_os_str().is_empty() {
+            return Err("The original project world directory is unavailable".into());
+        }
+        let mut path = self.project_data_dir.clone();
+        validate_realm_directory(&path)?;
+        if realm == EmbeddedRealm::OrbitalPreview {
+            for name in ["realms", "orbital-preview-v1"] {
+                path.push(name);
+                validate_realm_directory(&path)?;
+            }
+            if path.exists() {
+                let project = fs::canonicalize(&self.project_data_dir)
+                    .map_err(|error| format!("Cannot resolve project world directory: {error}"))?;
+                let preview = fs::canonicalize(&path)
+                    .map_err(|error| format!("Cannot resolve preview world directory: {error}"))?;
+                if preview == project || !preview.starts_with(&project) {
+                    return Err(
+                        "The preview world must stay inside its own project subfolder".into(),
+                    );
+                }
+            }
+        }
+        Ok(path)
+    }
+    fn switch_session_to(
+        &mut self,
+        mode: EmbeddedSessionMode,
+        pilot: String,
+        data_dir: PathBuf,
+        realm: EmbeddedRealm,
     ) -> Result<(), String> {
         mode.validate()?;
         let pilot = pilot.trim().to_owned();
@@ -717,7 +791,7 @@ impl EmbeddedClient {
         self.cockpit.selected_drone = None;
         self.cockpit.drone_attack_target = None;
         let connection = spawn_worker(
-            self.data_dir.clone(),
+            data_dir.clone(),
             pilot,
             mode.clone(),
             self.cockpit.controls.clone(),
@@ -740,6 +814,8 @@ impl EmbeddedClient {
         self.session_info = None;
         self.session_updates = connection.info;
         self.worker = Some(connection.worker);
+        self.data_dir = data_dir;
+        self.realm = realm;
         self.mode = mode;
         self.state = EmbeddedStatus::Loading;
         Ok(())
@@ -936,6 +1012,16 @@ impl EmbeddedClient {
     /// Existing session feedback, not a correlated command acknowledgement.
     pub fn command_notice(&self) -> &str {
         &self.cockpit.notice
+    }
+}
+fn validate_realm_directory(path: &std::path::Path) -> Result<(), String> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => {
+            Err("World directories must be folders, not symlinks or files".into())
+        }
+        Ok(_) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(format!("Cannot inspect world directory: {error}")),
     }
 }
 fn gameplay_input_allowed(pointer_in_viewport: bool, free_camera: bool) -> bool {
@@ -1517,6 +1603,339 @@ mod tests {
     }
 
     #[test]
+    fn realm_switch_round_trip_preserves_project_world_and_credentials() {
+        fn wait(client: &mut EmbeddedClient, predicate: impl Fn(&EmbeddedClient) -> bool) {
+            let deadline = Instant::now() + Duration::from_secs(8);
+            while Instant::now() < deadline {
+                client.poll();
+                if predicate(client) {
+                    return;
+                }
+                if let EmbeddedStatus::Error(error) = client.status() {
+                    panic!("realm worker failed: {error}");
+                }
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            panic!("realm worker did not reach the expected state");
+        }
+        let directory = std::env::temp_dir().join(format!(
+            "arkline-realm-switch-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let project = directory.join("project");
+        let pilot = "RealmPreservedPilot";
+        let mut world =
+            EditorWorld::open_with_creation_scene(&project, SceneLayoutRevision::LegacyV1).unwrap();
+        let mut session = None;
+        let response = world.handle(
+            &mut session,
+            WorkerIdentity::default()
+                .request("embedded-editor", pilot, None)
+                .unwrap(),
+        );
+        assert!(response.ok);
+        let token = response.resume_token.unwrap();
+        fs::create_dir_all(project.join("client")).unwrap();
+        let project_credential =
+            credentials_path(&project.join("client"), "embedded-editor", pilot);
+        save_token(&project_credential, &token).unwrap();
+        world.step(250).unwrap();
+        let original_time = world.time();
+        let original_pilot = world
+            .handle(&mut session, Request::Snapshot)
+            .snapshot
+            .unwrap()
+            .pilots
+            .into_iter()
+            .find(|view| view.name == pilot)
+            .unwrap();
+        drop(world);
+        fs::write(project.join("keep-project.txt"), b"preserved project data").unwrap();
+
+        let (mut client, _) = debug_fixture();
+        client.project_data_dir = project.clone();
+        client.data_dir = project.clone();
+        client
+            .switch_session_in_realm(
+                EmbeddedSessionMode::Local,
+                pilot.into(),
+                EmbeddedRealm::Project,
+            )
+            .unwrap();
+        wait(&mut client, |client| {
+            client.ready() && client.scene_layout_revision() == Some(SceneLayoutRevision::LegacyV1)
+        });
+        assert_eq!(client.snapshot().unwrap().server_time_ms, original_time);
+
+        client
+            .switch_session_in_realm(
+                EmbeddedSessionMode::Host {
+                    bind_addr: "127.0.0.1:0".parse().unwrap(),
+                },
+                pilot.into(),
+                EmbeddedRealm::OrbitalPreview,
+            )
+            .unwrap();
+        wait(&mut client, |client| {
+            client.ready()
+                && client.session_info().is_some()
+                && client.scene_layout_revision() == Some(SceneLayoutRevision::OrbitalV1)
+        });
+        let preview = project.join("realms/orbital-preview-v1");
+        assert_eq!(client.data_dir, preview);
+        assert_eq!(client.project_data_dir, project);
+        assert_eq!(client.realm(), EmbeddedRealm::OrbitalPreview);
+        let preview_credential =
+            credentials_path(&preview.join("client"), "embedded-editor", pilot);
+        let preview_token = fs::read_to_string(&preview_credential).unwrap();
+        assert_ne!(preview_token, token);
+        let preview_time = client.snapshot().unwrap().server_time_ms;
+        client.step();
+        wait(&mut client, |client| {
+            client.snapshot().unwrap().server_time_ms == preview_time + 50
+        });
+
+        // The original API continues using the current realm, rather than
+        // silently resetting callers to the project directory.
+        client
+            .switch_session(EmbeddedSessionMode::Local, pilot.into())
+            .unwrap();
+        wait(&mut client, |client| {
+            client.ready() && client.scene_layout_revision() == Some(SceneLayoutRevision::OrbitalV1)
+        });
+        assert_eq!(client.data_dir, preview);
+        assert_eq!(client.snapshot().unwrap().server_time_ms, preview_time + 50);
+
+        client
+            .switch_session_in_realm(
+                EmbeddedSessionMode::Local,
+                pilot.into(),
+                EmbeddedRealm::Project,
+            )
+            .unwrap();
+        wait(&mut client, |client| {
+            client.ready() && client.scene_layout_revision() == Some(SceneLayoutRevision::LegacyV1)
+        });
+        assert_eq!(client.data_dir, project);
+        assert_eq!(client.realm(), EmbeddedRealm::Project);
+        let restored = client.snapshot().unwrap();
+        assert_eq!(restored.server_time_ms, original_time);
+        assert_eq!(
+            restored.pilots.iter().find(|view| view.name == pilot),
+            Some(&original_pilot)
+        );
+        assert_eq!(fs::read_to_string(project_credential).unwrap(), token);
+        assert_eq!(
+            fs::read_to_string(preview_credential).unwrap(),
+            preview_token
+        );
+        assert_eq!(
+            fs::read(project.join("keep-project.txt")).unwrap(),
+            b"preserved project data"
+        );
+        let _ = client.clock.try_send(ClockCommand::Shutdown);
+        client.cockpit.updates = None;
+        client.worker.take().unwrap().join().unwrap();
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn rejected_realm_switch_keeps_path_realm_and_current_snapshot() {
+        let (mut client, _) = debug_fixture();
+        client.project_data_dir = std::env::temp_dir().join("arkline-realm-rejected-project");
+        client.data_dir = client.project_data_dir.clone();
+        let original_time = client.snapshot().unwrap().server_time_ms;
+        let (clock, commands) = mpsc::sync_channel(1);
+        client.clock = clock;
+        assert!(client.clock.try_send(ClockCommand::Play).is_ok());
+        for (mode, pilot) in [
+            (EmbeddedSessionMode::Local, "ValidPilot"),
+            (EmbeddedSessionMode::Local, "Invalid pilot"),
+            (
+                EmbeddedSessionMode::Host {
+                    bind_addr: "0.0.0.0:7779".parse().unwrap(),
+                },
+                "ValidPilot",
+            ),
+        ] {
+            assert!(client
+                .switch_session_in_realm(mode, pilot.into(), EmbeddedRealm::OrbitalPreview)
+                .is_err());
+            assert_eq!(client.data_dir, client.project_data_dir);
+            assert_eq!(client.realm(), EmbeddedRealm::Project);
+            assert_eq!(client.snapshot().unwrap().server_time_ms, original_time);
+        }
+        assert!(matches!(commands.try_recv().unwrap(), ClockCommand::Play));
+        assert!(commands.try_recv().is_err());
+    }
+
+    #[test]
+    fn failed_preview_open_can_return_to_preserved_project_world() {
+        fn wait(client: &mut EmbeddedClient, predicate: impl Fn(&EmbeddedClient) -> bool) {
+            let deadline = Instant::now() + Duration::from_secs(8);
+            while Instant::now() < deadline {
+                client.poll();
+                if predicate(client) {
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            panic!(
+                "realm recovery did not reach expected state: {:?}",
+                client.status()
+            );
+        }
+        let directory = std::env::temp_dir().join(format!(
+            "arkline-realm-recovery-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let project = directory.join("project");
+        let pilot = "RealmRecoveryPilot";
+        let mut world =
+            EditorWorld::open_with_creation_scene(&project, SceneLayoutRevision::LegacyV1).unwrap();
+        let mut session = None;
+        let response = world.handle(
+            &mut session,
+            WorkerIdentity::default()
+                .request("embedded-editor", pilot, None)
+                .unwrap(),
+        );
+        assert!(response.ok);
+        let token = response.resume_token.unwrap();
+        fs::create_dir_all(project.join("client")).unwrap();
+        let credential = credentials_path(&project.join("client"), "embedded-editor", pilot);
+        save_token(&credential, &token).unwrap();
+        world.step(150).unwrap();
+        let original_time = world.time();
+        let original_pilot = world
+            .handle(&mut session, Request::Snapshot)
+            .snapshot
+            .unwrap()
+            .pilots
+            .into_iter()
+            .find(|view| view.name == pilot)
+            .unwrap();
+        drop(world);
+        let sentinel = project.join("keep-project.txt");
+        fs::write(&sentinel, b"project recovery data").unwrap();
+        let preview = project.join("realms/orbital-preview-v1");
+        fs::create_dir_all(&preview).unwrap();
+        fs::write(
+            preview.join("world.sqlite"),
+            b"deliberately corrupt database",
+        )
+        .unwrap();
+
+        let (mut client, _) = debug_fixture();
+        client.project_data_dir = project.clone();
+        client.data_dir = project.clone();
+        client
+            .switch_session_in_realm(
+                EmbeddedSessionMode::Local,
+                pilot.into(),
+                EmbeddedRealm::Project,
+            )
+            .unwrap();
+        wait(&mut client, |client| {
+            client.ready() && client.scene_layout_revision() == Some(SceneLayoutRevision::LegacyV1)
+        });
+        client
+            .switch_session_in_realm(
+                EmbeddedSessionMode::Local,
+                pilot.into(),
+                EmbeddedRealm::OrbitalPreview,
+            )
+            .unwrap();
+        wait(&mut client, |client| {
+            matches!(client.status(), EmbeddedStatus::Error(_))
+        });
+        assert_eq!(client.realm(), EmbeddedRealm::OrbitalPreview);
+        assert_eq!(client.data_dir, preview);
+        assert!(!client.ready());
+        assert_eq!(client.scene_layout_revision(), None);
+        assert_eq!(fs::read_to_string(&credential).unwrap(), token);
+        assert_eq!(fs::read(&sentinel).unwrap(), b"project recovery data");
+
+        client
+            .switch_session_in_realm(
+                EmbeddedSessionMode::Local,
+                pilot.into(),
+                EmbeddedRealm::Project,
+            )
+            .unwrap();
+        wait(&mut client, |client| {
+            client.ready() && client.scene_layout_revision() == Some(SceneLayoutRevision::LegacyV1)
+        });
+        let restored = client.snapshot().unwrap();
+        assert_eq!(client.data_dir, project);
+        assert_eq!(client.realm(), EmbeddedRealm::Project);
+        assert_eq!(restored.server_time_ms, original_time);
+        assert_eq!(
+            restored.pilots.iter().find(|view| view.name == pilot),
+            Some(&original_pilot)
+        );
+        assert_eq!(fs::read_to_string(credential).unwrap(), token);
+        assert_eq!(fs::read(sentinel).unwrap(), b"project recovery data");
+        let _ = client.clock.try_send(ClockCommand::Shutdown);
+        client.cockpit.updates = None;
+        client.worker.take().unwrap().join().unwrap();
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn realm_directories_use_fixed_project_children_and_reject_unsafe_existing_paths() {
+        let directory = std::env::temp_dir().join(format!(
+            "arkline-realm-paths-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&directory).unwrap();
+        let (mut client, _) = debug_fixture();
+        client.project_data_dir = directory.clone();
+        assert_eq!(
+            client.realm_directory(EmbeddedRealm::Project).unwrap(),
+            directory
+        );
+        assert_eq!(
+            client
+                .realm_directory(EmbeddedRealm::OrbitalPreview)
+                .unwrap()
+                .strip_prefix(&directory)
+                .unwrap(),
+            std::path::Path::new("realms/orbital-preview-v1")
+        );
+        fs::write(directory.join("realms"), b"not a folder").unwrap();
+        assert!(client
+            .realm_directory(EmbeddedRealm::OrbitalPreview)
+            .is_err());
+        fs::remove_file(directory.join("realms")).unwrap();
+        #[cfg(unix)]
+        {
+            let outside = directory.with_extension("outside");
+            fs::create_dir(&outside).unwrap();
+            std::os::unix::fs::symlink(&outside, directory.join("realms")).unwrap();
+            assert!(client
+                .realm_directory(EmbeddedRealm::OrbitalPreview)
+                .is_err());
+            assert!(!outside.join("orbital-preview-v1").exists());
+            fs::remove_file(directory.join("realms")).unwrap();
+            fs::remove_dir(outside).unwrap();
+        }
+        fs::remove_dir(directory).unwrap();
+    }
+
+    #[test]
     fn embedded_host_join_switches_share_world_and_return_to_preserved_local_world() {
         let directory = std::env::temp_dir().join(format!(
             "arkline-session-switch-{}-{}",
@@ -2019,7 +2438,9 @@ mod tests {
         let (_, states) = mpsc::channel();
         (
             EmbeddedClient {
+                project_data_dir: PathBuf::new(),
                 data_dir: PathBuf::new(),
+                realm: EmbeddedRealm::Project,
                 mode: EmbeddedSessionMode::Local,
                 session_info: None,
                 session_updates: mpsc::channel().1,
@@ -2516,7 +2937,9 @@ mod tests {
         let (states, receiver) = mpsc::channel();
         states.send(EmbeddedStatus::Paused).unwrap();
         let mut client = EmbeddedClient {
+            project_data_dir: PathBuf::new(),
             data_dir: PathBuf::new(),
+            realm: EmbeddedRealm::Project,
             mode: EmbeddedSessionMode::Local,
             session_info: None,
             session_updates: mpsc::channel().1,

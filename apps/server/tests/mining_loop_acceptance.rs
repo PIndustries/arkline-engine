@@ -24,6 +24,7 @@ fn multi_trip_delivery_survives_takeover_disconnect_and_crash_without_economic_r
         &mut session,
         Request::Connect {
             supports_room_controls: false,
+            world_layout_version: 1,
             supports_fleet_hangar: false,
             supports_pioneer_interior: false,
             protocol_version: PROTOCOL_VERSION,
@@ -132,6 +133,7 @@ fn multi_trip_delivery_survives_takeover_disconnect_and_crash_without_economic_r
         &mut session,
         Request::Connect {
             supports_room_controls: false,
+            world_layout_version: 1,
             supports_fleet_hangar: false,
             supports_pioneer_interior: false,
             protocol_version: PROTOCOL_VERSION,
@@ -162,6 +164,7 @@ fn multi_trip_delivery_survives_takeover_disconnect_and_crash_without_economic_r
         &mut session,
         Request::Connect {
             supports_room_controls: false,
+            world_layout_version: 1,
             supports_fleet_hangar: false,
             supports_pioneer_interior: false,
             protocol_version: PROTOCOL_VERSION,
@@ -194,6 +197,7 @@ fn disconnect_during_active_extraction_stops_all_awards_and_resumes_owned_cargo(
         &mut session,
         Request::Connect {
             supports_room_controls: false,
+            world_layout_version: 1,
             supports_fleet_hangar: false,
             supports_pioneer_interior: false,
             protocol_version: PROTOCOL_VERSION,
@@ -243,6 +247,7 @@ fn disconnect_during_active_extraction_stops_all_awards_and_resumes_owned_cargo(
         &mut None,
         Request::Connect {
             supports_room_controls: false,
+            world_layout_version: 1,
             supports_fleet_hangar: false,
             supports_pioneer_interior: false,
             protocol_version: PROTOCOL_VERSION,
@@ -257,6 +262,7 @@ fn disconnect_during_active_extraction_stops_all_awards_and_resumes_owned_cargo(
         &mut session,
         Request::Connect {
             supports_room_controls: false,
+            world_layout_version: 1,
             supports_fleet_hangar: false,
             supports_pioneer_interior: false,
             protocol_version: PROTOCOL_VERSION,

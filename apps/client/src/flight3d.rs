@@ -11,8 +11,9 @@ use crate::spatial_material::{
 mod spatial_material_gpu_tests;
 use arkline_protocol::{
     gates, systems, Asteroid, Destination, Location, NavigationMode, NavigationTarget, PilotView,
-    ShipClass, Snapshot, Stargate, BELT_POSITION, HOME_SYSTEM_ID, JUMP_DURATION_MS, SPACE_BOUND,
-    STATION_CENTER_POSITION, STATION_DIAMETER_M, STATION_HEIGHT_M, STATION_POSITION,
+    ShipClass, Snapshot, Stargate, WorldLayoutDefinition, BELT_POSITION, HOME_SYSTEM_ID,
+    JUMP_DURATION_MS, SPACE_BOUND, STATION_CENTER_POSITION, STATION_DIAMETER_M, STATION_HEIGHT_M,
+    STATION_POSITION,
 };
 #[cfg(test)]
 use arkline_protocol::{WARP_DURATION_MS, WARP_WARMUP_MS};
@@ -449,6 +450,14 @@ impl FlightView {
         mode: super::ViewMode,
         layout: &mut super::layout::Layout,
     ) -> Option<ViewAction> {
+        let world_layout = match super::snapshot_world_layout(snapshot) {
+            Ok(layout) => layout,
+            Err(error) => {
+                self.input_surface = None;
+                ui.colored_label(egui::Color32::RED, error);
+                return None;
+            }
+        };
         let mut picked = None;
         let own_pilot = snapshot.pilots.iter().find(|p| p.name == pilot_name);
         let camera_length = own_pilot.map_or(72.0, |p| p.ship_class.spec().length_m) as f32 / 100.0;
@@ -654,10 +663,11 @@ impl FlightView {
             super::SelectedObject::Gate(id) => {
                 local_gates.iter().find(|g| g.id == *id).map(|g| g.position)
             }
-            super::SelectedObject::Planet(id) => arkline_protocol::planets()
+            super::SelectedObject::Planet(id) => world_layout
+                .planets
                 .iter()
-                .find(|p| p.id == *id)
-                .map(|_| arkline_protocol::PLANET_APPROACH_POSITION),
+                .find(|p| p.id == *id && p.system_id == system_id)
+                .map(|planet| planet.approach_position),
             super::SelectedObject::Prop(id) => snapshot
                 .surface_props
                 .iter()
@@ -803,6 +813,7 @@ impl FlightView {
                     drone_camera: false,
                     camera_drone: None,
                     scene: Arc::new(FrameScene {
+                        world_layout: world_layout.clone(),
                         traffic: snapshot
                             .traffic
                             .iter()
@@ -1045,11 +1056,9 @@ impl FlightView {
                             p.system_id == system_id
                                 && space.scene(p.position).distance(eye) < 1100.0
                         }) {
-                            targets.push((
-                                super::SelectedObject::Prop(prop.id),
-                                cube(),
-                                surface_prop_model(prop, space),
-                            ));
+                            if let Some(model) = surface_prop_model(prop, space, world_layout) {
+                                targets.push((super::SelectedObject::Prop(prop.id), cube(), model));
+                            }
                         }
                         for gate in local_gates
                             .iter()
@@ -1688,6 +1697,7 @@ struct Frame {
 }
 #[derive(Clone)]
 struct FrameScene {
+    world_layout: WorldLayoutDefinition,
     traffic: Vec<arkline_protocol::TrafficActor>,
     surface_props: Vec<arkline_protocol::SurfaceProp>,
     asteroids: Vec<Asteroid>,
@@ -2122,6 +2132,7 @@ impl Renderer {
             industrial_shell(),
         ];
         upload.extend(pioneer_asset()?.iter().map(|p| p.vertices.clone()));
+        upload.push(hangar::station_floor_vertices());
         let mut station_batches = Vec::new();
         for (vertices, color, emission) in station_batches_geometry() {
             station_batches.push((upload.len(), color, emission));
@@ -2553,6 +2564,9 @@ impl Renderer {
         }
     }
     unsafe fn paint(&mut self, frame: &Frame, callback_target: Option<glow::Framebuffer>) {
+        if frame.scene.world_layout.validate().is_err() {
+            return;
+        }
         self.prepare_spatial_material();
         #[cfg(not(target_arch = "wasm32"))]
         self.debug_metrics.set(Default::default());
@@ -2641,19 +2655,7 @@ impl Renderer {
             frame.eye.z,
         );
         let camera_world = frame.space.world(frame.eye);
-        let (density, up) = arkline_protocol::planets()
-            .iter()
-            .find(|p| p.system_id == frame.system_id)
-            .map_or((0.0, Vec3::Y), |p| {
-                let radial =
-                    glam::DVec3::from_array(std::array::from_fn(|i| camera_world[i] - p.center[i]));
-                (
-                    ((1.0 - (radial.length() - p.radius_m) / p.atmosphere_height_m).clamp(0.0, 1.0)
-                        as f32)
-                        .powi(2),
-                    radial.normalize().as_vec3(),
-                )
-            });
+        let (density, up) = atmosphere_at(&frame.scene.world_layout, frame.system_id, camera_world);
         gl.uniform_1_f32(self.uniforms.atmosphere.as_ref(), density);
         gl.uniform_3_f32(self.uniforms.planet_up.as_ref(), up.x, up.y, up.z);
         gl.draw_arrays(glow::TRIANGLES, 0, 3);
@@ -4757,6 +4759,9 @@ impl Parts {
     }
 }
 fn mesh_vertices(mesh: usize) -> Vec<Vertex> {
+    if mesh_index(mesh) == hangar::station_floor_mesh_index() {
+        return hangar::station_floor_vertices();
+    }
     if let Some(primitive) = embedded_primitive(mesh) {
         return primitive.vertices.clone();
     }
@@ -5074,6 +5079,7 @@ mod tests {
             drone_camera: false,
             camera_drone: None,
             scene: Arc::new(FrameScene {
+                world_layout: arkline_protocol::legacy_world_layout(),
                 traffic: vec![],
                 surface_props: vec![],
                 asteroids: vec![],
@@ -5094,9 +5100,15 @@ mod tests {
 
     #[test]
     fn camera_frame_clones_share_scene_and_keep_camera_overrides_local() {
-        let original = frame_for_scene_clone_test();
+        let mut original = frame_for_scene_clone_test();
+        Arc::get_mut(&mut original.scene).unwrap().world_layout =
+            arkline_protocol::SceneLayoutRevision::OrbitalV1.definition();
         let mut feed = original.clone();
         assert!(Arc::ptr_eq(&original.scene, &feed.scene));
+        assert_eq!(
+            feed.scene.world_layout,
+            arkline_protocol::SceneLayoutRevision::OrbitalV1.definition()
+        );
 
         feed.drone_camera = true;
         feed.camera_drone = Some(42);
@@ -5364,6 +5376,7 @@ mod tests {
                 drone_camera: true,
                 camera_drone: None,
                 scene: Arc::new(FrameScene {
+                    world_layout: arkline_protocol::legacy_world_layout(),
                     traffic: vec![],
                     surface_props: vec![],
                     asteroids: vec![],
@@ -6066,6 +6079,7 @@ mod tests {
             warp: None,
         });
         let snapshot = Snapshot {
+            world_layout: None,
             exterior: None,
             fleet_links: vec![],
             remote_controls: vec![],

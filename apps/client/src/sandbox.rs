@@ -4,14 +4,14 @@ impl Cockpit {
     pub(super) fn surface_status(&self, ui: &mut egui::Ui) {
         let Some(pilot) = self.own() else { return };
         if let Some(surface) = &pilot.surface {
-            let planet = planets().into_iter().find(|p| p.id == surface.planet_id);
-            let name = planet.as_ref().map_or("Planet", |p| p.name.as_str());
+            let planet = self
+                .scene_planets()
+                .iter()
+                .find(|p| p.id == surface.planet_id);
+            let name = planet.map_or("Planet", |p| p.name.as_str());
             let state = if surface.grounded {
                 "LANDED"
-            } else if planet
-                .as_ref()
-                .is_some_and(|p| surface.altitude_m <= p.atmosphere_height_m)
-            {
+            } else if planet.is_some_and(|p| surface.altitude_m <= p.atmosphere_height_m) {
                 "ATMOSPHERE"
             } else {
                 "ORBITAL SPACE"
@@ -37,7 +37,10 @@ impl Cockpit {
         let pilot = self.own()?;
         let flight = pilot.flight?;
         let surface = pilot.surface?;
-        let planet = planets().into_iter().find(|p| p.id == surface.planet_id)?;
+        let planet = self
+            .scene_planets()
+            .iter()
+            .find(|p| p.id == surface.planet_id)?;
         let offset = [
             flight.position[0] + self.prop_offset[0] - planet.center[0],
             flight.position[1] - planet.center[1],

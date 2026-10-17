@@ -49,6 +49,7 @@ fn full_formations_clear_every_hull_at_pitch_and_preserve_first_spawn_scale() {
             &mut p,
             Request::Connect {
                 supports_room_controls: false,
+                world_layout_version: 1,
                 supports_fleet_hangar: false,
                 supports_pioneer_interior: true,
                 protocol_version: PROTOCOL_VERSION,
@@ -112,6 +113,7 @@ fn recalled_middle_slot_is_reused_without_overlap_and_first_mirror_tracks_remova
         &mut p,
         Request::Connect {
             supports_room_controls: false,
+            world_layout_version: 1,
             supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,

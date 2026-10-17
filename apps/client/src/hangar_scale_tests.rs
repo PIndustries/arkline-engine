@@ -68,6 +68,7 @@ fn hangar_scale_actual_fleet_instances_keep_pioneer_size_in_mixed_hall() {
         vec![ShipClass::Pioneer, ShipClass::Monolith],
     ] {
         let fleet = FleetView {
+            layout_revision: arkline_protocol::FleetLayoutRevision::LinearV1,
             layout: fleet_hangar_layout(),
             berths: classes.into_iter().map(berth).collect(),
         };
@@ -91,6 +92,7 @@ fn hangar_scale_yaw_preserves_intrinsic_dimensions_and_uses_negative_heading() {
         let mut b = berth(ShipClass::Pioneer);
         b.yaw = yaw;
         let fleet = FleetView {
+            layout_revision: arkline_protocol::FleetLayoutRevision::LinearV1,
             layout: fleet_hangar_layout(),
             berths: vec![b.clone()],
         };
@@ -149,6 +151,7 @@ fn hangar_scale_export_cpu_evidence() {
     std::fs::create_dir(&dir).expect("output directory must not already exist");
     let private = body(&build_bay_parts(ShipClass::Pioneer));
     let fleet = FleetView {
+        layout_revision: arkline_protocol::FleetLayoutRevision::LinearV1,
         layout: fleet_hangar_layout(),
         berths: vec![berth(ShipClass::Pioneer), berth(ShipClass::Monolith)],
     };
@@ -222,5 +225,138 @@ fn hangar_scale_export_cpu_evidence() {
         svg.push_str("<text x='40' y='55'>1 m grid; green: 1.8 m reference and 1 m cube projection. No native acceptance.</text><text x='40' y='625'>Body only. Orthographic diagnostic; not a gameplay camera or GPU capture.</text></g></svg>");
         std::fs::write(dir.join(format!("{name}.svg")), svg).unwrap();
     }
+    export_circular_layout(&dir);
     println!("CPU scale evidence: {}", dir.display());
+}
+
+fn export_circular_layout(directory: &std::path::Path) {
+    use arkline_protocol::{
+        fleet_berth_pose, fleet_layout_geometry, FleetLayoutRevision, ALL_SHIP_CLASSES,
+    };
+    let revision = FleetLayoutRevision::CircularV1;
+    let geometry = fleet_layout_geometry(revision);
+    let mut measurements = Vec::new();
+    let scale = 430. / geometry.outer_radius_m;
+    let pixel = |x: f32, z: f32| {
+        (
+            600. + (x as f64 - geometry.center[0]) * scale,
+            500. + (z as f64 - geometry.center[2]) * scale,
+        )
+    };
+    let mut svg = String::from("<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='1040' viewBox='0 0 1200 1040'><rect width='1200' height='1040' fill='#102126'/><g fill='none' stroke='#667e87'>");
+    svg.push_str("<circle cx='600' cy='500' r='430' stroke-width='3'/>");
+    svg.push_str(&format!(
+        "<circle cx='600' cy='500' r='{:.3}' fill='#1a3438'/>",
+        geometry.concourse_radius_m * scale
+    ));
+    for class in ALL_SHIP_CLASSES {
+        let pose = fleet_berth_pose(revision, class);
+        let berth = HangarBerth {
+            id: format!("CPU-catalog-{class:?}"),
+            ship_class: class,
+            position: pose.position,
+            yaw: pose.yaw,
+            boarding_point: pose.boarding_point,
+            active: class == ShipClass::Pioneer,
+            can_board: false,
+        };
+        let body = fleet_hangar::hull_parts(&berth).collect::<Vec<_>>();
+        let mut complete = body.clone();
+        for yaw in 0..16 {
+            for pitch in [
+                -std::f32::consts::FRAC_PI_2,
+                -0.7,
+                0.,
+                0.7,
+                std::f32::consts::FRAC_PI_2,
+            ] {
+                let rotation = Quat::from_rotation_y(yaw as f32 * std::f32::consts::TAU / 16.)
+                    * Quat::from_rotation_z(pitch);
+                for slot in 0..2 {
+                    complete.extend(turret_parts(class, rotation, slot).into_iter().map(
+                        |(mesh, model, color, emission)| {
+                            (
+                                mesh,
+                                fleet_hangar::hull_transform(&berth) * model,
+                                color,
+                                emission,
+                            )
+                        },
+                    ));
+                }
+            }
+        }
+        let (body_min, body_max) = parts_bounds(&body);
+        let (full_min, full_max) = parts_bounds(&complete);
+        let full_points = points(&complete);
+        let radius = full_points
+            .iter()
+            .map(|p| (p.x - pose.position[0] as f32).hypot(p.z - pose.position[2] as f32))
+            .fold(0., f32::max);
+        measurements.push(serde_json::json!({
+            "ship_class":class, "pose":berth, "platform_radius_m":pose.platform_radius_m,
+            "body_world_min_m":body_min.to_array(), "body_world_max_m":body_max.to_array(),
+            "body_intrinsic_dimensions_m":[class.spec().length_m,class.spec().height_m,class.spec().width_m],
+            "complete_aim_sweep_min_m":full_min.to_array(), "complete_aim_sweep_max_m":full_max.to_array(),
+            "complete_aim_sweep_radial_extent_m":radius,
+            "platform_radial_clearance_m":pose.platform_radius_m - radius as f64,
+            "roof_clearance_m":geometry.ceiling_y - full_max.y as f64,
+            "aim_samples":{"yaw_count":16,"pitch_radians":[-std::f64::consts::FRAC_PI_2,-0.7,0.,0.7,std::f64::consts::FRAC_PI_2],"turret_slots":2}
+        }));
+        let (cx, cy) = pixel(pose.position[0] as f32, pose.position[2] as f32);
+        let (bx, by) = pixel(pose.boarding_point[0] as f32, pose.boarding_point[2] as f32);
+        svg.push_str(&format!("<path d='M600 500L{bx:.3} {by:.3}' stroke='#9da476' stroke-width='{:.3}'/><circle cx='{cx:.3}' cy='{cy:.3}' r='{:.3}' fill='#183035'/>", 2. * geometry.bridge_half_width_m * scale, pose.platform_radius_m * scale));
+        let outline = convex_xz(points(&body));
+        let polygon = outline
+            .iter()
+            .map(|p| {
+                let (x, y) = pixel(p[0], p[1]);
+                format!("{x:.3},{y:.3}")
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
+        svg.push_str(&format!("<polygon points='{polygon}' fill='#507b7b' stroke='#b9d9d3' stroke-width='1'/><circle cx='{bx:.3}' cy='{by:.3}' r='2' fill='#73e79e'/><text x='{:.3}' y='{:.3}' fill='#d8e6e4' stroke='none' font-family='monospace' font-size='12'>{}</text>",cx + 8.,cy - 6.,class.spec().name));
+    }
+    svg.push_str("</g><g fill='#e0ebe8' font-family='monospace' font-size='16'><text x='30' y='30'>Circular catalog: measured CPU hull footprints in metres</text><text x='30' y='56'>Diagnostic only. Not native pixels, GPU lighting, owned inventory or boarding acceptance.</text>");
+    svg.push_str(&format!("<text x='30' y='990'>Drum radius {:.2} m · roof {:.2} m · hover gap {:.2} m · 8 m bridges</text><text x='30' y='1018'>Actual rendered body vertices form each outline; JSON includes full articulated turret sweeps.</text></g></svg>",geometry.outer_radius_m,geometry.ceiling_y,geometry.hover_gap_m));
+    let report = serde_json::json!({
+        "evidence":"CPU geometry and sampled articulated bounds only; no native/GPU acceptance",
+        "layout_revision":revision, "center_m":geometry.center,
+        "concourse_radius_m":geometry.concourse_radius_m,"drum_radius_m":geometry.outer_radius_m,
+        "ceiling_y_m":geometry.ceiling_y,"hover_gap_m":geometry.hover_gap_m,
+        "bridge_half_width_m":geometry.bridge_half_width_m,"catalog_fixture_only":true,
+        "measurements":measurements
+    });
+    std::fs::write(
+        directory.join("circular-layout.json"),
+        serde_json::to_vec_pretty(&report).unwrap(),
+    )
+    .unwrap();
+    std::fs::write(directory.join("circular-layout.svg"), svg).unwrap();
+}
+
+fn convex_xz(points: Vec<Vec3>) -> Vec<[f32; 2]> {
+    let mut points: Vec<_> = points.into_iter().map(|p| [p.x, p.z]).collect();
+    points.sort_by(|a, b| a[0].total_cmp(&b[0]).then_with(|| a[1].total_cmp(&b[1])));
+    points.dedup();
+    let cross = |a: [f32; 2], b: [f32; 2], c: [f32; 2]| {
+        (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+    };
+    let mut hull = Vec::new();
+    for point in &points {
+        while hull.len() >= 2 && cross(hull[hull.len() - 2], hull[hull.len() - 1], *point) <= 0. {
+            hull.pop();
+        }
+        hull.push(*point);
+    }
+    let lower = hull.len();
+    for point in points.iter().rev().skip(1) {
+        while hull.len() > lower && cross(hull[hull.len() - 2], hull[hull.len() - 1], *point) <= 0.
+        {
+            hull.pop();
+        }
+        hull.push(*point);
+    }
+    hull.pop();
+    hull
 }

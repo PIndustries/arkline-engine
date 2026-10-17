@@ -2,6 +2,10 @@
 //! One JSON request/response per line over a local TCP connection.
 mod editor_scene;
 pub use editor_scene::*;
+mod world_layout;
+pub use world_layout::*;
+mod fleet_layout;
+pub use fleet_layout::*;
 mod editor_graph;
 pub use editor_graph::*;
 mod room_equipment;
@@ -572,6 +576,9 @@ pub enum Request {
         #[serde(default)]
         link_existing: bool,
         protocol_version: u32,
+        /// Highest independently versioned world layout this client can render.
+        #[serde(default)]
+        world_layout_version: u32,
         #[serde(default)]
         supports_room_controls: bool,
         #[serde(default)]
@@ -580,6 +587,9 @@ pub enum Request {
         supports_pioneer_interior: bool,
     },
     Connect {
+        /// Missing on older clients, which can only use legacy world geometry.
+        #[serde(default)]
+        world_layout_version: u32,
         #[serde(default)]
         supports_room_controls: bool,
         #[serde(default)]
@@ -1094,6 +1104,9 @@ pub struct AssetsView {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Snapshot {
+    /// The authority's immutable realm layout. Absence means exact legacy v1.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub world_layout: Option<WorldLayoutDefinition>,
     /// Presence advertises additive exterior schema support; older servers omit it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub exterior: Option<ExteriorWorldState>,
@@ -1281,6 +1294,39 @@ mod compatibility_tests {
         let snapshot: Snapshot = serde_json::from_value(json).unwrap();
         assert!(snapshot.online_pilots.is_empty());
         assert!(snapshot.exterior.is_none());
+        assert!(snapshot.world_layout.is_none());
+    }
+    #[test]
+    fn old_admission_and_fleet_snapshots_keep_legacy_layout_capabilities() {
+        let connect: Request = serde_json::from_value(serde_json::json!({
+            "command": "connect", "protocol_version": 1,
+            "pilot": "legacy", "resume_token": null
+        }))
+        .unwrap();
+        assert!(matches!(
+            connect,
+            Request::Connect {
+                world_layout_version: 0,
+                ..
+            }
+        ));
+        let account: Request = serde_json::from_value(serde_json::json!({
+            "command": "account_connect", "protocol_version": 1,
+            "pilot": "legacy", "access_token": "disposable-test-token"
+        }))
+        .unwrap();
+        assert!(matches!(
+            account,
+            Request::AccountConnect {
+                world_layout_version: 0,
+                ..
+            }
+        ));
+        let fleet: HangarView = serde_json::from_value(serde_json::json!({
+            "layout": fleet_hangar_layout(), "berths": []
+        }))
+        .unwrap();
+        assert_eq!(fleet.layout_revision, FleetLayoutRevision::LinearV1);
     }
     #[test]
     fn exterior_commands_require_revision_and_are_not_remotely_delegable() {
@@ -1625,6 +1671,9 @@ pub fn ship_braking_acceleration(class: ShipClass, ore: u64) -> f64 {
 /// Private, authoritative station inventory. Corporation vessels are not yet supported.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HangarView {
+    /// Missing on old snapshots; their fleet uses the original linear concourse.
+    #[serde(default)]
+    pub layout_revision: FleetLayoutRevision,
     pub layout: HangarLayout,
     pub berths: Vec<HangarBerth>,
 }

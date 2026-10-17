@@ -33,12 +33,19 @@ pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result
         bail!("open the Pioneer airlock before exiting the interior");
     }
     let fleet = w.accounts.get(name).is_some_and(|a| a.fleet_hangar);
+    let fleet_layout = w.scene_layout.definition().fleet_layout;
     let p = w.pilots.get_mut(name).context("pilot missing")?;
     ensure!(
         p.view.location == Location::Docked,
         "station walking requires docking"
     );
-    let layout = layout_for(p.view.ship_class, fleet);
+    let layout = layout_for(p.view.ship_class, fleet, fleet_layout);
+    let boarding_heading = if fleet && fleet_layout == FleetLayoutRevision::CircularV1 {
+        (fleet_berth_pose(fleet_layout, p.view.ship_class).yaw + std::f64::consts::FRAC_PI_2)
+            .rem_euclid(std::f64::consts::TAU)
+    } else {
+        0.0
+    };
     match r {
         Request::EnterInterior => {
             ensure!(
@@ -113,7 +120,7 @@ pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result
                 jump_started_ms: None,
                 seated: false,
                 position: layout.boarding_point,
-                heading: 0.0,
+                heading: boarding_heading,
                 moving: false,
                 updated_at_ms: now,
             });
@@ -128,7 +135,7 @@ pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result
                 jump_started_ms: None,
                 seated: false,
                 position: layout.boarding_point,
-                heading: 0.0,
+                heading: boarding_heading,
                 moving: false,
                 updated_at_ms: now,
             });
@@ -229,6 +236,7 @@ fn in_obstacle(position: [f64; 3], obstacle: &StationObstacle) -> bool {
 }
 /// Existing saves may place an avatar where new walls or furnishings now stand.
 pub(super) fn migrate(w: &mut World, room_layout: Option<&RoomLayoutDocument>) {
+    let fleet_layout = w.scene_layout.definition().fleet_layout;
     let doors: std::collections::BTreeMap<_, _> = w
         .pilots
         .keys()
@@ -251,7 +259,7 @@ pub(super) fn migrate(w: &mut World, room_layout: Option<&RoomLayoutDocument>) {
                 a.position = if a.onboard_interior {
                     PIONEER_INTERIOR_ENTRY
                 } else {
-                    layout_for(p.view.ship_class, fleet).boarding_point
+                    layout_for(p.view.ship_class, fleet, fleet_layout).boarding_point
                 };
                 a.seated = false;
                 a.moving = false;
@@ -263,6 +271,7 @@ pub(super) fn migrate(w: &mut World, room_layout: Option<&RoomLayoutDocument>) {
     }
 }
 pub(super) fn advance(w: &mut World, now: u64, room_layout: Option<&RoomLayoutDocument>) {
+    let fleet_layout = w.scene_layout.definition().fleet_layout;
     let doors: std::collections::BTreeMap<_, _> = w
         .pilots
         .keys()
@@ -299,7 +308,7 @@ pub(super) fn advance(w: &mut World, now: u64, room_layout: Option<&RoomLayoutDo
             .saturating_sub(a.updated_at_ms)
             .min(STATION_WALK_LEASE_MS) as f64
             / 1000.0;
-        let layout = layout_for(p.view.ship_class, fleet);
+        let layout = layout_for(p.view.ship_class, fleet, fleet_layout);
         let hull = p.view.ship_class.spec();
         let mut obstacles = obstacles_for(
             p.view.ship_class,
@@ -318,7 +327,11 @@ pub(super) fn advance(w: &mut World, now: u64, room_layout: Option<&RoomLayoutDo
                 -layout.half_length + 0.3,
                 layout.half_length - 0.3,
                 -layout.half_width + 0.3,
-                if fleet { 3.0 } else { layout.half_width - 0.3 },
+                if fleet && fleet_layout == FleetLayoutRevision::LinearV1 {
+                    3.0
+                } else {
+                    layout.half_width - 0.3
+                },
             )
         };
         let norm = input.forward.hypot(input.strafe).max(1.0);
@@ -338,6 +351,10 @@ pub(super) fn advance(w: &mut World, now: u64, room_layout: Option<&RoomLayoutDo
                     || fleet
                     || position[0].abs() >= hull.length_m / 2.0 + STATION_AVATAR_RADIUS_M
                     || position[2].abs() >= hull.width_m / 2.0 + STATION_AVATAR_RADIUS_M)
+                    && (a.onboard_interior
+                        || !fleet
+                        || fleet_layout == FleetLayoutRevision::LinearV1
+                        || fleet_walkable(fleet_layout, position))
                     && !obstacles.iter().any(|o| in_obstacle(position, o))
             };
             // Slide along boundaries instead of freezing diagonal movement.
@@ -385,10 +402,11 @@ pub(super) fn validate_room_layout(w: &World, document: &RoomLayoutDocument) -> 
 }
 
 pub(super) fn validate(w: &World, room_layout: Option<&RoomLayoutDocument>) -> Result<()> {
+    let fleet_layout = w.scene_layout.definition().fleet_layout;
     for (name, p) in &w.pilots {
         let fleet = w.accounts.get(name).is_some_and(|a| a.fleet_hangar);
         if let Some(a) = &p.view.station_avatar {
-            let l = layout_for(p.view.ship_class, fleet);
+            let l = layout_for(p.view.ship_class, fleet, fleet_layout);
             ensure!(
                 p.view.location == Location::Docked
                     && a.heading.is_finite()
@@ -400,7 +418,14 @@ pub(super) fn validate(w: &World, room_layout: Option<&RoomLayoutDocument>) -> R
                     && !(a.seated && a.jump_started_ms.is_some())
                     && a.position[0].abs() <= l.half_length
                     && a.position[2].abs() <= l.half_width
-                    && (!fleet || a.onboard_interior || a.position[2] <= 3.0)
+                    && (!fleet
+                        || a.onboard_interior
+                        || fleet_layout != FleetLayoutRevision::LinearV1
+                        || a.position[2] <= 3.0)
+                    && (!fleet
+                        || a.onboard_interior
+                        || fleet_layout == FleetLayoutRevision::LinearV1
+                        || fleet_walkable(fleet_layout, a.position))
                     && (!a.onboard_interior
                         || (p.view.ship_class == ShipClass::Pioneer
                             && (1..=2).contains(&a.interior_deck)
@@ -443,12 +468,12 @@ fn obstacles_for(
     }
 }
 
-fn layout_for(class: ShipClass, fleet: bool) -> HangarLayout {
+fn layout_for(class: ShipClass, fleet: bool, revision: FleetLayoutRevision) -> HangarLayout {
     if fleet {
-        let mut layout = fleet_hangar_layout();
-        let (center, boarding) = fleet_berth(class);
-        layout.ship_center = center;
-        layout.boarding_point = boarding;
+        let mut layout = fleet_hangar_layout_for(revision);
+        let pose = fleet_berth_pose(revision, class);
+        layout.ship_center = pose.position;
+        layout.boarding_point = pose.boarding_point;
         layout
     } else {
         hangar_layout(class)

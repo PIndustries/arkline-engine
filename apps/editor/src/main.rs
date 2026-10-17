@@ -9,6 +9,7 @@ mod engineering_document;
 mod equipment;
 mod event_graph;
 mod exterior;
+mod git_workflow;
 mod github;
 mod github_auth;
 mod import_document;
@@ -17,6 +18,7 @@ mod inspector;
 mod material_graph;
 mod materials;
 mod physics_lab;
+mod project_workspace;
 mod provenance;
 mod render_debug;
 mod rooms;
@@ -54,6 +56,9 @@ struct Editor {
     exterior: exterior::Exterior,
     session_panel: session_panel::SessionPanel,
     community: community::Community,
+    git_workspace: git_workflow::GitWorkspace,
+    project_workspace: project_workspace::ProjectWorkspace,
+    files_close_blocked: bool,
     event_graph: event_graph::EventGraphPanel,
     events_open: bool,
     workspace: usize,
@@ -107,6 +112,9 @@ impl Editor {
             exterior: exterior::Exterior::open(&project),
             session_panel: session_panel::SessionPanel::default(),
             community: community::Community::open(&project),
+            git_workspace: git_workflow::GitWorkspace::open(&project),
+            project_workspace: project_workspace::ProjectWorkspace::open(&project),
+            files_close_blocked: false,
             event_graph: event_graph::EventGraphPanel::open(&project),
             events_open: false,
             workspace: 0,
@@ -209,6 +217,38 @@ impl eframe::App for Editor {
         self.rooms.poll_live(&mut self.client);
         self.exterior.poll_live(&mut self.client);
         self.community.poll();
+        self.imports.poll();
+        self.project_workspace.poll();
+        let branch_was_pending = self.git_workspace.branch_change_pending();
+        self.git_workspace.poll();
+        if branch_was_pending && !self.git_workspace.branch_change_pending() {
+            self.project_workspace.notify_external_change();
+        }
+        self.git_workspace.set_source_guard(
+            self.project_workspace.has_dirty_buffers()
+                || self.project_workspace.has_pending_file_job(),
+            self.project_workspace.has_pending_save(),
+        );
+        self.project_workspace.set_git_activity(
+            self.git_workspace.branch_change_pending(),
+            self.git_workspace.local_mutation_pending(),
+        );
+        let source_close_guard =
+            self.project_workspace.has_dirty_buffers() || self.project_workspace.has_pending_save();
+        if !source_close_guard {
+            self.files_close_blocked = false;
+        }
+        if ctx.input(|input| input.viewport().close_requested()) {
+            if source_close_guard {
+                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                self.workspace = 7;
+                self.files_close_blocked = true;
+            } else if self.git_workspace.has_pending_job() {
+                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                self.workspace = 6;
+                self.git_workspace.keep_open_for_job();
+            }
+        }
         let surface_revision = self.surface_materials.revision();
         self.client.set_spatial_material(surface_revision.clone());
         if let Some(gallery) = &mut self.asset_gallery {
@@ -362,6 +402,8 @@ impl eframe::App for Editor {
                     self.open_inspector(6);
                 }
                 ui.selectable_value(&mut self.workspace, 3, "Materials");
+                ui.selectable_value(&mut self.workspace, 6, "Git");
+                ui.selectable_value(&mut self.workspace, 7, "Files");
                 ui.menu_button("Systems", |ui| {
                     for (tab, label) in [(4, "Equipment"), (7, "Exterior"), (5, "Service paths")] {
                         if ui.button(label).clicked() {
@@ -476,6 +518,33 @@ impl eframe::App for Editor {
                 }
             });
         });
+        }
+        if self.workspace == 6 {
+            self.client.poll_hidden();
+            self.git_workspace.show(ctx, &self.project);
+            self.session_controls(ctx);
+            ctx.request_repaint_after(Duration::from_millis(50));
+            return;
+        }
+        if self.workspace == 7 {
+            self.client.poll_hidden();
+            if self.files_close_blocked {
+                egui::TopBottomPanel::top("source_close_guard").show(ctx, |ui| {
+                    ui.colored_label(egui::Color32::YELLOW, "Source tabs have unsaved changes or a Save is pending. Save them before closing the editor.");
+                });
+            }
+            if let Some(project_workspace::PreviewRequest::Model { label, bytes }) =
+                self.project_workspace.show(ctx)
+            {
+                let queued = self.imports.selected_bytes(label, bytes);
+                self.project_workspace.preview_handoff_result(queued);
+                if queued {
+                    self.workspace = 5;
+                }
+            }
+            self.session_controls(ctx);
+            ctx.request_repaint_after(Duration::from_millis(50));
+            return;
         }
         if self.workspace == 4 {
             self.client.poll_hidden();
@@ -940,7 +1009,7 @@ mod tests {
             "isolated test authority did not become ready; status={:?}",
             editor.client.status()
         );
-        for workspace in [0, 2, 0] {
+        for workspace in [0, 2, 6, 7, 0] {
             editor.workspace = workspace;
             for _ in 0..3 {
                 let output = ctx.run(

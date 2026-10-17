@@ -1071,6 +1071,7 @@ mod tests {
             pioneer_room: None,
             pioneer_room_layout: None,
             hangar: Some(arkline_protocol::HangarView {
+                layout_revision: arkline_protocol::FleetLayoutRevision::LinearV1,
                 layout: arkline_protocol::fleet_hangar_layout(),
                 berths: vec![arkline_protocol::HangarBerth {
                     id: "owned-pioneer".into(),
@@ -1525,6 +1526,7 @@ mod tests {
             pioneer_room: None,
             pioneer_room_layout: None,
             hangar: Some(arkline_protocol::HangarView {
+                layout_revision: arkline_protocol::FleetLayoutRevision::LinearV1,
                 layout: arkline_protocol::fleet_hangar_layout(),
                 berths: vec![arkline_protocol::HangarBerth {
                     id: "owned-hull".into(),

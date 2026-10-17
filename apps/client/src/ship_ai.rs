@@ -812,6 +812,7 @@ mod tests {
                 &mut s,
                 Request::Connect {
                     supports_pioneer_interior: true,
+                    world_layout_version: 1,
                     supports_fleet_hangar: true,
                     supports_room_controls: true,
                     protocol_version: PROTOCOL_VERSION,
@@ -904,6 +905,7 @@ mod tests {
             &mut worker,
             Request::Connect {
                 supports_pioneer_interior: true,
+                world_layout_version: 1,
                 supports_fleet_hangar: true,
                 supports_room_controls: true,
                 protocol_version: PROTOCOL_VERSION,

@@ -55,6 +55,7 @@ fn setup(path: &std::path::Path) -> (Server, Option<String>, Option<String>) {
         &mut p,
         Request::Connect {
             supports_room_controls: false,
+            world_layout_version: 1,
             supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
@@ -113,6 +114,7 @@ fn sofa_requires_proximity_survives_reconnect_and_walking_stands_in_place() {
         &mut p,
         Request::Connect {
             supports_room_controls: false,
+            world_layout_version: 1,
             supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,

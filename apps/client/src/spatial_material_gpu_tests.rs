@@ -276,6 +276,7 @@ fn native_spatial_material_pioneer_section_and_paused_feeds() {
             drone_camera: true,
             camera_drone: None,
             scene: Arc::new(FrameScene {
+                world_layout: arkline_protocol::legacy_world_layout(),
                 traffic: vec![],
                 surface_props: vec![],
                 asteroids: vec![],

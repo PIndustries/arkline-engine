@@ -468,6 +468,7 @@ fn transfer(
 }
 
 pub(super) fn hangar_view(w: &World, name: &str) -> HangarView {
+    let layout_revision = w.scene_layout.definition().fleet_layout;
     let a = &w.accounts[name];
     let p = &w.pilots[name].view;
     let berths = a
@@ -483,13 +484,13 @@ pub(super) fn hangar_view(w: &World, name: &str) -> HangarView {
                     .any(|s| s.ship_class == *class && s.system_id == p.system_id)
             };
             here.then(|| {
-                let (position, boarding_point) = fleet_berth(*class);
+                let pose = fleet_berth_pose(layout_revision, *class);
                 HangarBerth {
                     id: id.clone(),
                     ship_class: *class,
-                    position,
-                    yaw: 0.0,
-                    boarding_point,
+                    position: pose.position,
+                    yaw: pose.yaw,
+                    boarding_point: pose.boarding_point,
                     active,
                     can_board: p.location == Location::Docked,
                 }
@@ -497,7 +498,8 @@ pub(super) fn hangar_view(w: &World, name: &str) -> HangarView {
         })
         .collect();
     HangarView {
-        layout: fleet_hangar_layout(),
+        layout_revision,
+        layout: fleet_hangar_layout_for(layout_revision),
         berths,
     }
 }

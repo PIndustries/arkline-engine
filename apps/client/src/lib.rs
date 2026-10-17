@@ -17,7 +17,7 @@ pub use spatial_material::{
 mod embedded;
 #[cfg(not(target_arch = "wasm32"))]
 pub use embedded::{
-    EmbeddedClient, EmbeddedEventAck, EmbeddedEventDebugState, EmbeddedSessionInfo,
+    EmbeddedClient, EmbeddedEventAck, EmbeddedEventDebugState, EmbeddedRealm, EmbeddedSessionInfo,
     EmbeddedSessionMode, EmbeddedStatus, EmbeddedView, EmbeddedViewState, ViewTransition,
 };
 // Native Arkline cockpit. Live world data is server-authoritative; ship layouts are labeled design references.
@@ -112,6 +112,65 @@ fn toggle_fullscreen(ctx: &egui::Context) {
 const TEAL: Color32 = Color32::from_rgb(70, 235, 133);
 const AMBER: Color32 = Color32::from_rgb(255, 192, 104);
 const MUTED: Color32 = Color32::from_rgb(138, 157, 180);
+
+/// Old snapshots retain their exact layout. A declared descriptor must validate;
+/// unsupported revisions are never replaced with guessed client coordinates.
+fn snapshot_world_layout(snapshot: &Snapshot) -> Result<&WorldLayoutDefinition, String> {
+    static LEGACY: std::sync::OnceLock<WorldLayoutDefinition> = std::sync::OnceLock::new();
+    let definition = snapshot
+        .world_layout
+        .as_ref()
+        .unwrap_or_else(|| LEGACY.get_or_init(legacy_world_layout));
+    definition.validate().map_err(|error| {
+        format!("Unsupported world layout: {error}. Reconnect with a compatible client/server.")
+    })?;
+    Ok(definition)
+}
+
+fn validate_snapshot_scene(snapshot: &Snapshot, assets: Option<&AssetsView>) -> Result<(), String> {
+    let layout = snapshot_world_layout(snapshot)?;
+    if assets
+        .and_then(|assets| assets.hangar.as_ref())
+        .is_some_and(|hangar| hangar.layout_revision != layout.fleet_layout)
+    {
+        return Err("Unsupported world layout: station hangar revision contradicts the snapshot descriptor. Reconnect with a compatible client/server.".into());
+    }
+    Ok(())
+}
+
+/// Admission and polling must reject unsupported geometry before credentials,
+/// Ready events or a response can escape the transport worker.
+fn validate_world_response(response: &Response) -> Result<(), String> {
+    if let Some(snapshot) = response.snapshot.as_ref() {
+        validate_snapshot_scene(snapshot, response.assets.as_ref())?;
+    }
+    if let Some(ledger) = response.ledger.as_ref() {
+        validate_snapshot_scene(&ledger.snapshot, response.assets.as_ref())?;
+        if let Some(snapshot) = response.snapshot.as_ref() {
+            if snapshot_world_layout(snapshot)? != snapshot_world_layout(&ledger.snapshot)? {
+                return Err("Unsupported world layout: response and ledger describe different realms. Reconnect with a compatible client/server.".into());
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_world_admission_response(response: &Response) -> Result<(), String> {
+    if response.ok && response.snapshot.is_none() {
+        return Err("Unsupported world layout: admission response omitted its authoritative world snapshot. Reconnect with a compatible client/server.".into());
+    }
+    validate_world_response(response)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn terminal_transport_protocol_error(error: &str) -> bool {
+    // These prefixes are emitted by our decoders. A new connection cannot make
+    // an unsupported reply safe; timeouts and interrupted connections can recover.
+    error.starts_with("Invalid server response:")
+        || error.starts_with("Invalid server reply:")
+        || error.starts_with("Server sent unsupported binary data")
+        || error.starts_with("Server response exceeded the size limit")
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ViewMode {
@@ -290,6 +349,7 @@ impl WorkerIdentity {
                 supports_pioneer_interior: true,
                 supports_fleet_hangar: true,
                 supports_room_controls: true,
+                world_layout_version: WORLD_LAYOUT_SCHEMA_VERSION,
             })
         } else {
             Ok(Request::Connect {
@@ -299,6 +359,7 @@ impl WorkerIdentity {
                 supports_pioneer_interior: true,
                 supports_fleet_hangar: true,
                 supports_room_controls: true,
+                world_layout_version: WORLD_LAYOUT_SCHEMA_VERSION,
             })
         }
     }
@@ -337,6 +398,7 @@ fn worker(
         if !response.ok {
             return Err(response.message);
         }
+        validate_world_admission_response(&response)?;
         if identity.account.is_some() && response.resume_token.is_some() {
             return Err("Account admission returned an unexpected legacy credential".into());
         }
@@ -383,6 +445,11 @@ fn worker(
             let response = match reader.exchange(&request) {
                 Ok(response) => response,
                 Err(error) => {
+                    if terminal_transport_protocol_error(&error) {
+                        controls.clear();
+                        reader.close();
+                        return Err(error);
+                    }
                     let uncertainty = if visible {
                         " Action outcome unknown; inspect refreshed state before retrying. The action will not be replayed."
                     } else {
@@ -417,14 +484,20 @@ fn worker(
                         }
                         let attempt = (|| {
                             let mut next = transport::Connection::connect(&server)?;
-                            let mut resumed = next.exchange(&identity.request(
-                                &server,
-                                &pilot,
-                                token.clone(),
-                            )?)?;
+                            let mut resumed = next
+                                .exchange(&identity.request(&server, &pilot, token.clone())?)
+                                .map_err(|error| {
+                                    if terminal_transport_protocol_error(&error) {
+                                        format!("Resume rejected: {error}")
+                                    } else {
+                                        error
+                                    }
+                                })?;
                             if !resumed.ok {
                                 return Err(format!("Resume rejected: {}", resumed.message));
                             }
+                            validate_world_admission_response(&resumed)
+                                .map_err(|error| format!("Resume rejected: {error}"))?;
                             if identity.account.is_some() && resumed.resume_token.is_some() {
                                 return Err(
                                     "Account admission returned an unexpected legacy credential"
@@ -468,6 +541,7 @@ fn worker(
                     continue;
                 }
             };
+            validate_world_response(&response)?;
             last_snapshot = Instant::now();
             updates
                 .send(Update::Response(Box::new(response), visible))
@@ -1134,6 +1208,11 @@ impl Cockpit {
                         self.request_pending = false;
                     }
                     if let Some(snapshot) = response.snapshot {
+                        if let Err(error) = validate_snapshot_scene(&snapshot, self.assets.as_ref())
+                        {
+                            self.reject_world_layout(error);
+                            continue;
+                        }
                         if self.connected && response.ok {
                             if let Some(previous) = &self.snapshot {
                                 self.effects.observe(
@@ -1192,6 +1271,28 @@ impl Cockpit {
             .iter()
             .find(|p| p.name == self.controlled_name())
             .cloned()
+    }
+    fn scene_planets(&self) -> &[PlanetDefinition] {
+        self.snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot_world_layout(snapshot).ok())
+            .map_or(&[], |layout| layout.planets.as_slice())
+    }
+    fn reject_world_layout(&mut self, error: String) {
+        self.invalidate_ai_session();
+        self.effects.clear();
+        self.motion.clear();
+        self.snapshot = None;
+        self.pilot_input.relinquish(&self.controls);
+        self.connected = false;
+        self.connecting = false;
+        self.request_pending = false;
+        self.commands = None;
+        if self.boot.visible {
+            self.boot.fail();
+        }
+        self.notice = error.clone();
+        self.log(error, true);
     }
     fn operation_status(&self) -> (String, String, Option<f32>, Color32) {
         if !self.connected {
@@ -2022,10 +2123,11 @@ impl Cockpit {
     }
     fn selected_position(&self) -> Option<[f64; 3]> {
         match &self.selected_object {
-            SelectedObject::Planet(id) => planets()
+            SelectedObject::Planet(id) => self
+                .scene_planets()
                 .iter()
                 .find(|p| p.id == *id && p.system_id == self.current_system())
-                .map(|_| PLANET_APPROACH_POSITION),
+                .map(|planet| planet.approach_position),
             SelectedObject::Prop(id) => self
                 .snapshot
                 .as_ref()?
@@ -2283,7 +2385,7 @@ impl Cockpit {
                 ui.small("Range is measured to the docking port");
             }
             SelectedObject::Planet(id) => {
-                if let Some(planet) = planets().iter().find(|p| p.id == id) {
+                if let Some(planet) = self.scene_planets().iter().find(|p| p.id == id) {
                     ui.heading(&planet.name);
                     ui.small("Approach in normal flight, then descend continuously through the atmosphere.");
                 }
@@ -2378,12 +2480,16 @@ impl Cockpit {
                 "Field",
                 Some(BELT_POSITION),
             ));
-            for planet in planets().into_iter().filter(|p| p.system_id == system) {
+            for planet in self
+                .scene_planets()
+                .iter()
+                .filter(|p| p.system_id == system)
+            {
                 rows.push((
                     SelectedObject::Planet(planet.id),
-                    planet.name,
+                    planet.name.clone(),
                     "Planet",
-                    Some(PLANET_APPROACH_POSITION),
+                    Some(planet.approach_position),
                 ));
             }
             for gate in gates().into_iter().filter(|g| g.system_id == system) {
@@ -2820,11 +2926,12 @@ impl Cockpit {
                 Color32::from_gray(50 + (i % 75) as u8),
             );
         }
-        for planet in planets()
-            .into_iter()
+        for planet in self
+            .scene_planets()
+            .iter()
             .filter(|p| p.system_id == self.current_system())
         {
-            let point = tactical_project(rect, PLANET_APPROACH_POSITION);
+            let point = tactical_project(rect, planet.approach_position);
             paint.circle_stroke(point, 18.0, Stroke::new(2.0, self.accent()));
             paint.text(
                 point + Vec2::new(0.0, 22.0),
@@ -3450,6 +3557,13 @@ impl eframe::App for Cockpit {
             }
         }
         self.poll();
+        if let Some(error) = self
+            .snapshot
+            .as_ref()
+            .and_then(|snapshot| validate_snapshot_scene(snapshot, self.assets.as_ref()).err())
+        {
+            self.reject_world_layout(error);
+        }
         if !self.connected {
             self.engineering_panel = None;
         }
@@ -4717,6 +4831,7 @@ mod tests {
         cockpit.connected = true;
         cockpit.pilot = "pilot".into();
         cockpit.snapshot = Some(Snapshot {
+            world_layout: None,
             exterior: None,
             resource_jobs: vec![],
             fleet_links: vec![],
@@ -5059,63 +5174,151 @@ mod tests {
     }
     #[test]
     fn selected_planet_uses_continuous_flight_entry_and_hulls_use_actual_cargo() {
+        for definition in [None, Some(SceneLayoutRevision::OrbitalV1.definition())] {
+            let ctx = egui::Context::default();
+            let mut cockpit = view_test_cockpit(&ctx);
+            cockpit.snapshot.as_mut().unwrap().world_layout = definition;
+            let approach = snapshot_world_layout(cockpit.snapshot.as_ref().unwrap())
+                .unwrap()
+                .planets[0]
+                .approach_position;
+            cockpit.selected_object = SelectedObject::Planet(1);
+            assert_eq!(cockpit.selected_position(), Some(approach));
+            assert!(cockpit.selected_target().is_none());
+            let (tx, rx) = mpsc::channel();
+            cockpit.commands = Some(tx);
+            let render = |c: &mut Cockpit, events| {
+                ctx.run(
+                    egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(
+                            Pos2::ZERO,
+                            Vec2::new(900.0, 650.0),
+                        )),
+                        events,
+                        ..Default::default()
+                    },
+                    |ctx| {
+                        egui::CentralPanel::default().show(ctx, |ui| c.navigation_controls(ui));
+                    },
+                )
+            };
+            let output = render(&mut cockpit, vec![]);
+            let point = output
+                .shapes
+                .iter()
+                .find_map(|s| {
+                    if let egui::Shape::Text(t) = &s.shape {
+                        (t.galley.job.text == "Approach planet")
+                            .then_some(t.pos + t.galley.rect.center().to_vec2())
+                    } else {
+                        None
+                    }
+                })
+                .unwrap();
+            for pressed in [true, false] {
+                render(
+                    &mut cockpit,
+                    vec![
+                        egui::Event::PointerMoved(point),
+                        egui::Event::PointerButton {
+                            pos: point,
+                            button: egui::PointerButton::Primary,
+                            pressed,
+                            modifiers: egui::Modifiers::NONE,
+                        },
+                    ],
+                );
+            }
+            assert!(
+                matches!(rx.try_recv().unwrap(),Request::Navigate{mode:NavigationMode::FlyTo{position}} if position==approach)
+            );
+            for (index, class) in MINING_SHIP_CLASSES.into_iter().enumerate() {
+                cockpit.snapshot.as_mut().unwrap().pilots[0].ship_class = class;
+                assert_eq!(class.spec().mining_tier, Some(index as u8 + 1));
+                assert_eq!(cockpit.own_cargo_capacity(), class.spec().cargo_capacity);
+            }
+        }
+    }
+    #[test]
+    fn world_layout_compatibility_is_exact_and_unsupported_snapshots_are_rejected() {
         let ctx = egui::Context::default();
         let mut cockpit = view_test_cockpit(&ctx);
-        cockpit.selected_object = SelectedObject::Planet(1);
-        assert_eq!(cockpit.selected_position(), Some(PLANET_APPROACH_POSITION));
-        assert!(cockpit.selected_target().is_none());
-        let (tx, rx) = mpsc::channel();
-        cockpit.commands = Some(tx);
-        let render = |c: &mut Cockpit, events| {
-            ctx.run(
-                egui::RawInput {
-                    screen_rect: Some(egui::Rect::from_min_size(
-                        Pos2::ZERO,
-                        Vec2::new(900.0, 650.0),
-                    )),
-                    events,
-                    ..Default::default()
-                },
-                |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| c.navigation_controls(ui));
-                },
-            )
-        };
-        let output = render(&mut cockpit, vec![]);
-        let point = output
-            .shapes
-            .iter()
-            .find_map(|s| {
-                if let egui::Shape::Text(t) = &s.shape {
-                    (t.galley.job.text == "Approach planet")
-                        .then_some(t.pos + t.galley.rect.center().to_vec2())
-                } else {
-                    None
-                }
-            })
-            .unwrap();
-        for pressed in [true, false] {
-            render(
-                &mut cockpit,
-                vec![
-                    egui::Event::PointerMoved(point),
-                    egui::Event::PointerButton {
-                        pos: point,
-                        button: egui::PointerButton::Primary,
-                        pressed,
-                        modifiers: egui::Modifiers::NONE,
-                    },
-                ],
-            );
-        }
-        assert!(
-            matches!(rx.try_recv().unwrap(),Request::Navigate{mode:NavigationMode::FlyTo{position}} if position==PLANET_APPROACH_POSITION)
+        let snapshot = cockpit.snapshot.as_ref().unwrap();
+        assert_eq!(
+            snapshot_world_layout(snapshot).unwrap(),
+            &legacy_world_layout()
         );
-        for (index, class) in MINING_SHIP_CLASSES.into_iter().enumerate() {
-            cockpit.snapshot.as_mut().unwrap().pilots[0].ship_class = class;
-            assert_eq!(class.spec().mining_tier, Some(index as u8 + 1));
-            assert_eq!(cockpit.own_cargo_capacity(), class.spec().cargo_capacity);
-        }
+        assert_eq!(
+            snapshot_world_layout(snapshot).unwrap().planets[0].approach_position,
+            PLANET_APPROACH_POSITION
+        );
+        let mut unsupported = snapshot.clone();
+        let mut layout = SceneLayoutRevision::OrbitalV1.definition();
+        layout.schema_version = WORLD_LAYOUT_SCHEMA_VERSION + 1;
+        unsupported.world_layout = Some(layout);
+        assert!(snapshot_world_layout(&unsupported)
+            .unwrap_err()
+            .contains("Unsupported world layout"));
+        let (commands, _requests) = mpsc::channel();
+        cockpit.commands = Some(commands);
+        let (updates, receiver) = mpsc::channel();
+        cockpit.updates = Some(receiver);
+        updates
+            .send(Update::Response(
+                Box::new(Response {
+                    auth: None,
+                    assets: None,
+                    ok: true,
+                    message: "fixture snapshot".into(),
+                    resume_token: None,
+                    snapshot: Some(unsupported),
+                    ledger: None,
+                }),
+                false,
+            ))
+            .unwrap();
+        cockpit.poll();
+        assert!(!cockpit.connected);
+        assert!(
+            cockpit.snapshot.is_none(),
+            "unsupported geometry must not be rendered over legacy data"
+        );
+        assert!(cockpit.commands.is_none());
+        assert!(cockpit.notice.contains("Unsupported world layout"));
+        assert!(!cockpit.can_operate());
+    }
+    #[test]
+    fn malformed_known_layout_is_not_silently_replaced_by_legacy_coordinates() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        let mut layout = SceneLayoutRevision::OrbitalV1.definition();
+        layout.planets[0].center = PLANET_CENTER_POSITION;
+        cockpit.snapshot.as_mut().unwrap().world_layout = Some(layout);
+        cockpit.selected_object = SelectedObject::Planet(1);
+        assert!(snapshot_world_layout(cockpit.snapshot.as_ref().unwrap()).is_err());
+        assert!(cockpit.selected_position().is_none());
+        assert!(cockpit.scene_planets().is_empty());
+    }
+    #[test]
+    fn station_hangar_and_snapshot_must_agree_on_layout_revision() {
+        let ctx = egui::Context::default();
+        let cockpit = view_test_cockpit(&ctx);
+        let mut snapshot = cockpit.snapshot.as_ref().unwrap().clone();
+        let mut assets = asset_test_fixture();
+        assets.hangar = Some(HangarView {
+            layout_revision: FleetLayoutRevision::LinearV1,
+            layout: hangar_layout(ShipClass::Pioneer),
+            berths: vec![],
+        });
+        assert!(validate_snapshot_scene(&snapshot, Some(&assets)).is_ok());
+        snapshot.world_layout = Some(SceneLayoutRevision::OrbitalV1.definition());
+        assert!(validate_snapshot_scene(&snapshot, Some(&assets))
+            .unwrap_err()
+            .contains("contradicts"));
+        assets.hangar.as_mut().unwrap().layout_revision = FleetLayoutRevision::CircularV1;
+        assert!(validate_snapshot_scene(&snapshot, Some(&assets)).is_ok());
+        snapshot.world_layout = None;
+        assert!(validate_snapshot_scene(&snapshot, Some(&assets)).is_err());
     }
     #[test]
     fn warp_waits_for_confirmed_capacitor_without_speculative_recharge() {
@@ -6214,6 +6417,7 @@ mod tests {
         cockpit.connected = true;
         cockpit.pilot = "pilot".into();
         cockpit.snapshot = Some(Snapshot {
+            world_layout: None,
             exterior: None,
             resource_jobs: vec![],
             fleet_links: vec![],
@@ -6543,11 +6747,13 @@ mod tests {
                         supports_pioneer_interior: _,
                         supports_fleet_hangar: _,
                         supports_room_controls: _,
+                        world_layout_version,
                         protocol_version,
                         pilot,
                         resume_token,
                     } => {
                         assert_eq!(protocol_version, PROTOCOL_VERSION);
+                        assert_eq!(world_layout_version, WORLD_LAYOUT_SCHEMA_VERSION);
                         assert_eq!(pilot, "test-pilot");
                         assert_eq!(
                             resume_token.as_deref(),
@@ -6562,7 +6768,14 @@ mod tests {
                     ok: true,
                     message: "Connected".into(),
                     resume_token: Some("fixture-resume-token".into()),
-                    snapshot: None,
+                    snapshot: Some(
+                        serde_json::from_value(serde_json::json!({
+                            "server_time_ms": 0, "pilots": [], "orders": [],
+                            "belt_ore": INITIAL_BELT_ORE, "ledger_sequence": 0,
+                            "ledger_hash": GENESIS_HASH
+                        }))
+                        .unwrap(),
+                    ),
                     ledger: None,
                 };
                 let mut bytes = serde_json::to_vec(&response).unwrap();

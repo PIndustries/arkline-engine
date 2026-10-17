@@ -84,6 +84,17 @@ impl CollaborativeEditorHost {
         role: CollaborationRole,
         request: Request,
     ) -> Result<(EditorSessionId, Response)> {
+        self.join_with_layout_capability(role, request, 0)
+    }
+
+    /// Viewers have no game Connect request, so they negotiate scene support
+    /// explicitly before a shared session is admitted. The legacy API opts out.
+    pub fn join_with_layout_capability(
+        &mut self,
+        role: CollaborationRole,
+        request: Request,
+        world_layout_version: u32,
+    ) -> Result<(EditorSessionId, Response)> {
         ensure!(
             self.sessions.len() < MAX_COLLABORATIVE_EDITOR_SESSIONS,
             "editor session limit reached"
@@ -106,15 +117,26 @@ impl CollaborativeEditorHost {
                 "viewer join requires an existing host and Snapshot"
             ),
         }
-        let id = next_session_id()?;
         let mut server_session = None;
         let response = self.world.handle(&mut server_session, request);
         ensure!(response.ok, "{}", response.message);
         if role == CollaborationRole::Viewer {
+            let layout = response
+                .snapshot
+                .as_ref()
+                .and_then(|snapshot| snapshot.world_layout.clone())
+                .unwrap_or_else(arkline_protocol::legacy_world_layout);
+            layout.validate().map_err(anyhow::Error::msg)?;
+            ensure!(
+                world_layout_version <= arkline_protocol::WORLD_LAYOUT_SCHEMA_VERSION
+                    && world_layout_version >= layout.revision.required_capability_version(),
+                "viewer world layout capability is incompatible; update the client before joining this realm"
+            );
             // Do not retain any session created by an unexpected request. The
             // request check above only allows Snapshot, which has no session.
             server_session = None;
         }
+        let id = next_session_id()?;
         self.sessions.insert(
             id,
             Session {
@@ -309,8 +331,55 @@ mod tests {
             pilot: pilot.to_owned(),
             resume_token: None,
             supports_room_controls: true,
+            world_layout_version: 1,
             supports_fleet_hangar: true,
             supports_pioneer_interior: true,
+        }
+    }
+
+    #[test]
+    fn viewers_negotiate_layout_without_creating_a_pilot_or_session_on_rejection() {
+        for revision in [
+            arkline_protocol::SceneLayoutRevision::LegacyV1,
+            arkline_protocol::SceneLayoutRevision::OrbitalV1,
+        ] {
+            let directory = path();
+            drop(EditorWorld::open_with_creation_scene(&directory, revision).unwrap());
+            let mut authority = CollaborativeEditorHost::open(&directory).unwrap();
+            let (host, _) = authority
+                .join(CollaborationRole::Host, connect("LayoutHost"))
+                .unwrap();
+            let before = serde_json::to_value(authority.snapshot(host).unwrap().snapshot).unwrap();
+            let legacy = authority.join(CollaborationRole::Viewer, Request::Snapshot);
+            assert_eq!(legacy.is_ok(), revision.is_legacy());
+            if let Ok((id, _)) = legacy {
+                authority.leave(id).unwrap();
+            }
+            assert!(authority
+                .join_with_layout_capability(
+                    CollaborationRole::Viewer,
+                    Request::Snapshot,
+                    arkline_protocol::WORLD_LAYOUT_SCHEMA_VERSION + 1
+                )
+                .is_err());
+            assert_eq!(authority.sessions.len(), 1);
+            assert_eq!(
+                serde_json::to_value(authority.snapshot(host).unwrap().snapshot).unwrap(),
+                before
+            );
+            let (viewer, response) = authority
+                .join_with_layout_capability(
+                    CollaborationRole::Viewer,
+                    Request::Snapshot,
+                    arkline_protocol::WORLD_LAYOUT_SCHEMA_VERSION,
+                )
+                .unwrap();
+            assert!(response.resume_token.is_none());
+            assert_eq!(response.snapshot.unwrap().pilots.len(), 1);
+            authority.leave(viewer).unwrap();
+            authority.leave(host).unwrap();
+            drop(authority);
+            std::fs::remove_dir_all(directory).unwrap();
         }
     }
 
@@ -325,7 +394,11 @@ mod tests {
             .join(CollaborationRole::Editor, connect("SceneEditor"))
             .unwrap();
         let (viewer, _) = authority
-            .join(CollaborationRole::Viewer, Request::Snapshot)
+            .join_with_layout_capability(
+                CollaborationRole::Viewer,
+                Request::Snapshot,
+                arkline_protocol::WORLD_LAYOUT_SCHEMA_VERSION,
+            )
             .unwrap();
         let before = authority.snapshot(viewer).unwrap();
         authority
@@ -446,7 +519,11 @@ mod tests {
             .join(CollaborationRole::Editor, connect("EditorPilot"))
             .unwrap();
         let (viewer, _) = host
-            .join(CollaborationRole::Viewer, Request::Snapshot)
+            .join_with_layout_capability(
+                CollaborationRole::Viewer,
+                Request::Snapshot,
+                arkline_protocol::WORLD_LAYOUT_SCHEMA_VERSION,
+            )
             .unwrap();
         assert_eq!(host.snapshot(viewer).unwrap().snapshot.pilots.len(), 2);
         assert!(host
@@ -524,7 +601,11 @@ mod tests {
             .unwrap();
         }
         assert!(host
-            .join(CollaborationRole::Viewer, Request::Snapshot)
+            .join_with_layout_capability(
+                CollaborationRole::Viewer,
+                Request::Snapshot,
+                arkline_protocol::WORLD_LAYOUT_SCHEMA_VERSION
+            )
             .is_err());
         drop(host);
         std::fs::remove_dir_all(path).unwrap();
