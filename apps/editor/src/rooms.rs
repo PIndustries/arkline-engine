@@ -1,7 +1,7 @@
 //! Local room authoring and explicit revision-checked application to the live ship.
 use arkline_client::EmbeddedClient;
 use arkline_protocol::{
-    PIONEER_INTERIOR_SIZE, RoomLayout, RoomLayoutDocument, RoomLayoutState, current_source_document,
+    current_source_document, RoomLayout, RoomLayoutDocument, RoomLayoutState, PIONEER_INTERIOR_SIZE,
 };
 use eframe::egui;
 use std::{

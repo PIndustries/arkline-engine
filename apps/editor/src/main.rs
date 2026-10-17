@@ -887,11 +887,9 @@ mod tests {
             );
         }
         for invalid in ["", "1", "3", "16", " 0", "NaN"] {
-            assert!(
-                super::editor_msaa(Some(OsStr::new(invalid)))
-                    .unwrap_err()
-                    .contains("ARKLINE_EDITOR_MSAA")
-            );
+            assert!(super::editor_msaa(Some(OsStr::new(invalid)))
+                .unwrap_err()
+                .contains("ARKLINE_EDITOR_MSAA"));
         }
     }
     use super::*;
@@ -1296,14 +1294,12 @@ mod tests {
             editor.client.scene_state(),
             Some(arkline_protocol::EditorSceneState::StationHangar)
         );
-        assert!(
-            editor
-                .client
-                .scene_state_ack()
-                .expect("scene acknowledgement should arrive before the deadline")
-                .result
-                .is_ok()
-        );
+        assert!(editor
+            .client
+            .scene_state_ack()
+            .expect("scene acknowledgement should arrive before the deadline")
+            .result
+            .is_ok());
         assert!(editor.client.paused());
         assert_eq!(editor.client.snapshot().unwrap().server_time_ms, time);
         editor.workspace = 3;
@@ -1558,12 +1554,10 @@ mod tests {
                 "{label} must close on first click"
             );
             let output = frame(&mut editor, vec![]);
-            assert!(
-                output
-                    .shapes
-                    .iter()
-                    .any(|s| matches!(&s.shape, egui::Shape::Text(t) if t.galley.text() == clock))
-            );
+            assert!(output
+                .shapes
+                .iter()
+                .any(|s| matches!(&s.shape, egui::Shape::Text(t) if t.galley.text() == clock)));
         }
         editor.client.on_exit();
         drop(editor);
