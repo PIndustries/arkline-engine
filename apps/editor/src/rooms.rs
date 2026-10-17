@@ -1,7 +1,7 @@
 //! Local room authoring and explicit revision-checked application to the live ship.
 use arkline_client::EmbeddedClient;
 use arkline_protocol::{
-    current_source_document, RoomLayout, RoomLayoutDocument, RoomLayoutState, PIONEER_INTERIOR_SIZE,
+    PIONEER_INTERIOR_SIZE, RoomLayout, RoomLayoutDocument, RoomLayoutState, current_source_document,
 };
 use eframe::egui;
 use std::{
@@ -379,12 +379,6 @@ impl Rooms {
         let frame_draft = self.draft.clone();
         // Keep conditional diagnostics from shifting numeric widget IDs.
         ui.scope(|ui| {
-            ui.heading("Room layout");
-            ui.colored_label(
-                egui::Color32::from_rgb(255, 191, 104),
-                "PIONEER · LIVE INTERIOR AUTHORING",
-            );
-            ui.small("Save + apply live updates the shared Pioneer blueprint, its walls and walking collision after authority approval. Equipment and utilities keep their existing contracts.");
             if let Some(live) = &self.live {
                 ui.label(format!(
                     "Live revision {} · draft base {}",
@@ -404,12 +398,6 @@ impl Rooms {
             ));
 
             ui.horizontal_wrapped(|ui| {
-                if ui.add_enabled(self.pending.is_none() && self.draft.rooms.len() < MAX_ROOMS, egui::Button::new("Add room")).clicked() {
-                    match self.draft.add_room() {
-                        Ok(id) => { self.selected = Some(id); self.message = "Added a candidate room; set its position, dimensions, and door opening.".into(); }
-                        Err(error) => self.message = error,
-                    }
-                }
                 if ui.add_enabled(self.can_save(), egui::Button::new("Save draft")).clicked() {
                     self.queue(IoOperation::Save, IoRequest::Save(project.to_path_buf(), self.draft.clone()));
                 }
@@ -446,6 +434,9 @@ impl Rooms {
             if let Err(error) = self.draft.validate_live() {
                 ui.small(format!("Draft can be saved; live apply requires: {error}"));
             }
+            if let Some(live) = &self.live {
+                ui.label(if self.draft == live.document { "Draft matches accepted live layout" } else { "Draft differs from live layout" });
+            }
             ui.label(if !self.explicit_reset && self.draft == self.saved {
                 "No unsaved room layout changes"
             } else {
@@ -455,34 +446,11 @@ impl Rooms {
 
         });
 
-        ui.strong("Candidate rooms · source IDs preserved where available");
-        egui::ScrollArea::vertical()
-            .id_salt("room_layout_entries")
-            .auto_shrink([false, true])
-            .max_height(112.0)
-            .show(ui, |ui| {
-                for room in &self.draft.rooms {
-                    ui.push_id(room.id, |ui| {
-                        let source = room.source_room_id.as_deref().unwrap_or("new");
-                        if ui
-                            .selectable_label(
-                                self.selected == Some(room.id),
-                                format!("D{} · {} · {}", room.deck, source, room.name),
-                            )
-                            .clicked()
-                        {
-                            self.selected = Some(room.id);
-                        }
-                    });
-                }
-            });
-
         let Some(room_id) = self
             .selected
             .filter(|id| self.draft.rooms.iter().any(|room| room.id == *id))
         else {
-            ui.label("Select a room to edit; existing source rooms remain listed above.");
-            self.draw_previews(ui, None);
+            ui.label("Select a room from the list to edit its properties.");
             ui.label(&self.message);
             self.record_draft_revision(&frame_draft);
             return;
@@ -509,16 +477,14 @@ impl Rooms {
                 } else {
                     ui.small("New candidate room · no current runtime room ID");
                 }
-                ui.horizontal_wrapped(|ui| {
                     ui.label("Name");
-                    ui.text_edit_singleline(&mut room.name);
+                    ui.add(egui::TextEdit::singleline(&mut room.name).desired_width(ui.available_width()));
                     egui::ComboBox::from_id_salt(("room_deck", room.id))
                         .selected_text(format!("Deck {}", room.deck))
                         .show_ui(ui, |ui| {
                             ui.selectable_value(&mut room.deck, 1, "Deck 1");
                             ui.selectable_value(&mut room.deck, 2, "Deck 2");
                         });
-                });
                 ui.label("Deck-plan origin X / Z (m)");
                 ui.horizontal_wrapped(|ui| {
                     for (axis, value) in room.origin_xz_m.iter_mut().enumerate() {
@@ -578,15 +544,67 @@ impl Rooms {
             self.draft.rooms.retain(|room| room.id != room_id);
             self.selected = None;
         }
-        self.draw_previews(ui, Some(room_id));
         ui.label(&self.message);
         self.record_draft_revision(&frame_draft);
+    }
+
+    pub fn navigation(&mut self, ui: &mut egui::Ui) {
+        let frame_draft = self.draft.clone();
+        ui.heading("Pioneer rooms");
+        ui.small("Draft layout");
+        if ui
+            .add_enabled(
+                self.pending.is_none() && self.draft.rooms.len() < MAX_ROOMS,
+                egui::Button::new("Add room"),
+            )
+            .clicked()
+        {
+            match self.draft.add_room() {
+                Ok(id) => {
+                    self.selected = Some(id);
+                    self.message =
+                        "Added a candidate room; set its position, dimensions, and door opening."
+                            .into();
+                }
+                Err(error) => self.message = error,
+            }
+        }
+        egui::ScrollArea::vertical()
+            .id_salt("room_layout_entries")
+            .auto_shrink([false, true])
+            .show(ui, |ui| {
+                for deck in [1, 2] {
+                    ui.strong(format!("Deck {deck}"));
+                    for room in self.draft.rooms.iter().filter(|r| r.deck == deck) {
+                        ui.push_id(room.id, |ui| {
+                            let source = room.source_room_id.as_deref().unwrap_or("new");
+                            if ui
+                                .selectable_label(
+                                    self.selected == Some(room.id),
+                                    format!("D{} · {} · {}", room.deck, source, room.name),
+                                )
+                                .clicked()
+                            {
+                                self.selected = Some(room.id);
+                            }
+                        });
+                    }
+                }
+            });
+
+        self.record_draft_revision(&frame_draft);
+    }
+
+    pub fn preview(&self, ui: &mut egui::Ui) {
+        ui.heading("Draft plan");
+        ui.small("Draft geometry. Live 3D changes after Save + apply live is accepted.");
+        self.draw_previews(ui, self.selected);
     }
 
     fn draw_previews(&self, ui: &mut egui::Ui, selected: Option<u64>) {
         ui.separator();
         ui.strong("Deck plan · X/Z meters · candidate boxes only");
-        let width = ui.available_width().clamp(120.0, 540.0);
+        let width = ui.available_width().clamp(120.0, 900.0);
         let height =
             (width * PIONEER_INTERIOR_SIZE[1] as f32 / PIONEER_INTERIOR_SIZE[0] as f32).max(64.0);
         let (rect, _) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
@@ -642,7 +660,7 @@ impl Rooms {
                 bounds.center(),
                 egui::Align2::CENTER_CENTER,
                 room.source_room_id.as_deref().unwrap_or("new"),
-                egui::FontId::monospace(7.0),
+                egui::FontId::monospace(11.0),
                 color,
             );
             let half = room.door_clear_wh_m[0] / 2.0;
@@ -660,7 +678,7 @@ impl Rooms {
             selected.and_then(|id| self.draft.rooms.iter().find(|room| room.id == id))
         {
             ui.strong(format!("Side view · {} · X/Y meters", room.name));
-            let side_width = ui.available_width().clamp(120.0, 540.0);
+            let side_width = ui.available_width().clamp(120.0, 900.0);
             let side_height = 68.0;
             let (side, _) =
                 ui.allocate_exact_size(egui::vec2(side_width, side_height), egui::Sense::hover());
@@ -700,7 +718,7 @@ impl Rooms {
                     "Clear height {:.2} m · door {:.2} × {:.2} m",
                     room.clear_lwh_m[2], room.door_clear_wh_m[0], room.door_clear_wh_m[1]
                 ),
-                egui::FontId::monospace(8.0),
+                egui::FontId::monospace(11.0),
                 egui::Color32::LIGHT_GRAY,
             );
         }

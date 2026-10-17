@@ -41,6 +41,7 @@ struct Editor {
     bottom_tab: usize,
     drawer_open: bool,
     show_world: bool,
+    room_plan: bool,
     show_inspector: bool,
     inspector_tab: usize,
     materials: materials::Materials,
@@ -127,6 +128,7 @@ impl Editor {
             bottom_tab: 0,
             drawer_open: false,
             show_world: true,
+            room_plan: true,
             show_inspector: true,
             inspector_tab: 0,
             scene_message: String::new(),
@@ -251,7 +253,12 @@ impl eframe::App for Editor {
             && ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::F5))
             && ready
         {
-            if active && self.workspace == 0 && self.inspector_tab != 2 && clock_control {
+            if active
+                && self.workspace == 0
+                && self.inspector_tab != 2
+                && !(self.inspector_tab == 6 && self.room_plan)
+                && clock_control
+            {
                 self.client.pause();
             } else {
                 self.play_game();
@@ -278,7 +285,8 @@ impl eframe::App for Editor {
                                 } else {
                                     self.client.status() == &EmbeddedStatus::Stopped
                                 } || self.workspace != 0
-                                    || self.inspector_tab == 2),
+                                    || self.inspector_tab == 2
+                                    || (self.inspector_tab == 6 && self.room_plan)),
                             egui::Button::new(if clock_control {
                                 "▶  Play"
                             } else {
@@ -436,7 +444,14 @@ impl eframe::App for Editor {
                     }
                     ui.separator();
                     ui.add_enabled_ui(self.workspace == 0, |ui| {
-                        ui.toggle_value(&mut self.show_world, "World");
+                        ui.toggle_value(
+                            &mut self.show_world,
+                            if self.workspace == 0 && self.inspector_tab == 6 {
+                                "Rooms list"
+                            } else {
+                                "World"
+                            },
+                        );
                         ui.toggle_value(&mut self.show_inspector, "Inspector");
                     });
                 });
@@ -589,8 +604,22 @@ impl eframe::App for Editor {
             ctx.request_repaint_after(Duration::from_millis(100));
             return;
         }
+        if self.inspector_tab == 6 {
+            egui::TopBottomPanel::top("room_view_bar").show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.selectable_value(&mut self.room_plan, true, "Draft plan");
+                    ui.selectable_value(&mut self.room_plan, false, "Live 3D");
+                    ui.small(if self.room_plan {
+                        "Editing draft geometry"
+                    } else {
+                        "Confirmed live geometry"
+                    });
+                });
+            });
+        }
         if self.show_world {
             egui::SidePanel::left("editor_outliner").resizable(true).default_width(200.).width_range(180. ..=260.).show(ctx, |ui| {
+            if self.inspector_tab == 6 { self.rooms.navigation(ui); return; }
             ui.add_space(10.); ui.heading("World outliner");
             if self.client.free_camera_active() {
                 ui.colored_label(GREEN, "FREE CAMERA · local view only");
@@ -639,11 +668,13 @@ impl eframe::App for Editor {
                 ui.heading(match self.inspector_tab {
                     2 => "Engineering candidate", 3 => "Render debug",
                     4 => "Room equipment", 5 => "Service paths",
-                    6 => "Room layout", 7 => "Exterior systems", _ => "Live state",
+                    6 => "Room properties", 7 => "Exterior systems", _ => "Live state",
                 });
+                if self.inspector_tab != 6 {
                 ui.label(RichText::new(&self.selected_pilot).color(MUTED));
                 if !active {
                     ui.colored_label(MUTED, "Captured state · simulation is not running");
+                }
                 }
                 ui.separator();
                 egui::ScrollArea::vertical()
@@ -713,6 +744,13 @@ impl eframe::App for Editor {
             self.client.poll_hidden();
             egui::CentralPanel::default().show(ctx, |ui| {
                 self.engineering.viewport(ui);
+            });
+        } else if self.inspector_tab == 6 && self.room_plan {
+            self.client.poll_hidden();
+            egui::CentralPanel::default().show(ctx, |ui| {
+                egui::ScrollArea::vertical()
+                    .id_salt("room_plan_scroll")
+                    .show(ui, |ui| self.rooms.preview(ui));
             });
         } else {
             if let Some(request) = self
@@ -849,9 +887,11 @@ mod tests {
             );
         }
         for invalid in ["", "1", "3", "16", " 0", "NaN"] {
-            assert!(super::editor_msaa(Some(OsStr::new(invalid)))
-                .unwrap_err()
-                .contains("ARKLINE_EDITOR_MSAA"));
+            assert!(
+                super::editor_msaa(Some(OsStr::new(invalid)))
+                    .unwrap_err()
+                    .contains("ARKLINE_EDITOR_MSAA")
+            );
         }
     }
     use super::*;
@@ -1043,13 +1083,9 @@ mod tests {
             );
             let pilot_field = pilot_field.unwrap();
             assert!(
-                pilot_field
-                    .1
-                    .labelled_by()
-                    .iter()
-                    .any(|label_id| nodes.get(label_id).is_some_and(|label| {
-                        label.value() == Some("Pilot")
-                    })),
+                pilot_field.1.labelled_by().iter().any(|label_id| nodes
+                    .get(label_id)
+                    .is_some_and(|label| { label.value() == Some("Pilot") })),
                 "workspace {workspace}: session pilot text field is not labelled by the Pilot control"
             );
         }
@@ -1260,12 +1296,14 @@ mod tests {
             editor.client.scene_state(),
             Some(arkline_protocol::EditorSceneState::StationHangar)
         );
-        assert!(editor
-            .client
-            .scene_state_ack()
-            .expect("scene acknowledgement should arrive before the deadline")
-            .result
-            .is_ok());
+        assert!(
+            editor
+                .client
+                .scene_state_ack()
+                .expect("scene acknowledgement should arrive before the deadline")
+                .result
+                .is_ok()
+        );
         assert!(editor.client.paused());
         assert_eq!(editor.client.snapshot().unwrap().server_time_ms, time);
         editor.workspace = 3;
@@ -1520,13 +1558,219 @@ mod tests {
                 "{label} must close on first click"
             );
             let output = frame(&mut editor, vec![]);
-            assert!(output
-                .shapes
-                .iter()
-                .any(|s| matches!(&s.shape, egui::Shape::Text(t) if t.galley.text() == clock)));
+            assert!(
+                output
+                    .shapes
+                    .iter()
+                    .any(|s| matches!(&s.shape, egui::Shape::Text(t) if t.galley.text() == clock))
+            );
         }
         editor.client.on_exit();
         drop(editor);
         let _ = std::fs::remove_dir_all(project);
+    }
+    #[test]
+    fn room_workspace_layout_at_normal_and_compact_sizes() {
+        for size in [egui::vec2(1180., 812.), egui::vec2(1080., 720.)] {
+            let ctx = egui::Context::default();
+            let cc = eframe::CreationContext::_new_kittest(ctx.clone());
+            let project = std::env::temp_dir().join(format!(
+                "arkline-editor-room-text-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            ));
+            std::fs::create_dir(&project).unwrap();
+            let mut editor = Editor::new(&cc, project.clone(), "RoomTextPilot".into());
+            let deadline = std::time::Instant::now() + Duration::from_secs(5);
+            while !editor.client.ready() && std::time::Instant::now() < deadline {
+                editor.client.poll();
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            assert!(
+                editor.client.ready(),
+                "isolated test authority did not become ready"
+            );
+            assert!(
+                editor.client.paused(),
+                "room text test requires a paused world"
+            );
+            let starting_time = editor.client.snapshot().unwrap().server_time_ms;
+            editor.inspector_tab = 6;
+
+            let frame = |editor: &mut Editor, events| {
+                ctx.run(
+                    egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
+                        events,
+                        ..Default::default()
+                    },
+                    |ctx| editor.update(ctx, &mut eframe::Frame::_new_kittest()),
+                )
+            };
+            let row = "D1 · D1-P1 · AIRLOCK / EVA";
+            let output = frame(&mut editor, vec![]);
+
+            for label in [
+                "Pioneer rooms",
+                "Room properties",
+                "Draft plan",
+                "Live 3D",
+                "Save draft",
+                "Save + apply live",
+            ] {
+                assert!(
+                    output.shapes.iter().any(|s| match &s.shape {
+                        egui::Shape::Text(t) =>
+                            t.galley.text() == label
+                                && s.clip_rect
+                                    .contains_rect(t.galley.rect.translate(t.pos.to_vec2())),
+                        _ => false,
+                    }),
+                    "missing visible {label} at {size:?}"
+                );
+            }
+            let row_point = output
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.text() == row => {
+                        let bounds = text.galley.rect.translate(text.pos.to_vec2());
+                        shape
+                            .clip_rect
+                            .contains_rect(bounds)
+                            .then_some(bounds.center())
+                    }
+                    _ => None,
+                })
+                .expect("room selector is visible in the Game workspace inspector");
+            for pressed in [true, false] {
+                frame(
+                    &mut editor,
+                    vec![
+                        egui::Event::PointerMoved(row_point),
+                        egui::Event::PointerButton {
+                            pos: row_point,
+                            button: egui::PointerButton::Primary,
+                            pressed,
+                            modifiers: egui::Modifiers::NONE,
+                        },
+                    ],
+                );
+            }
+
+            let output = frame(&mut editor, vec![]);
+            {
+                let label = "Deck 1";
+                assert!(
+                    output.shapes.iter().any(|s| match &s.shape {
+                        egui::Shape::Text(t) =>
+                            t.galley.text() == label
+                                && s.clip_rect
+                                    .contains_rect(t.galley.rect.translate(t.pos.to_vec2())),
+                        _ => false,
+                    }),
+                    "missing visible {label} at {size:?}"
+                );
+            }
+            let name_point = output
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.text() == "AIRLOCK / EVA" => {
+                        let bounds = text.galley.rect.translate(text.pos.to_vec2());
+                        shape
+                            .clip_rect
+                            .contains_rect(bounds)
+                            .then_some(egui::pos2(bounds.right() - 1., bounds.center().y))
+                    }
+                    _ => None,
+                })
+                .expect("selected room name field is visible");
+            for pressed in [true, false] {
+                frame(
+                    &mut editor,
+                    vec![
+                        egui::Event::PointerMoved(name_point),
+                        egui::Event::PointerButton {
+                            pos: name_point,
+                            button: egui::PointerButton::Primary,
+                            pressed,
+                            modifiers: egui::Modifiers::NONE,
+                        },
+                    ],
+                );
+            }
+            frame(&mut editor, vec![egui::Event::Text(" QA".into())]);
+
+            let room_name = editor
+                .rooms
+                .draft_room_name_by_source_id("D1-P1")
+                .expect("the selected source room remains in the draft");
+            assert!(
+                room_name.contains("QA"),
+                "room name did not receive the Text event: {room_name:?}"
+            );
+            let edited = editor
+                .rooms
+                .draft_room_name_by_source_id("D1-P1")
+                .unwrap()
+                .to_owned();
+            let scene = editor.client.scene_state();
+            let camera = editor.client.free_camera_active();
+            for label in ["Live 3D", "Draft plan"] {
+                let output = frame(&mut editor, vec![]);
+                let row_point = output
+                    .shapes
+                    .iter()
+                    .find_map(|shape| match &shape.shape {
+                        egui::Shape::Text(text) if text.galley.text() == label => {
+                            let bounds = text.galley.rect.translate(text.pos.to_vec2());
+                            shape
+                                .clip_rect
+                                .contains_rect(bounds)
+                                .then_some(bounds.center())
+                        }
+                        _ => None,
+                    })
+                    .expect("room selector is visible in the Game workspace inspector");
+                for pressed in [true, false] {
+                    frame(
+                        &mut editor,
+                        vec![
+                            egui::Event::PointerMoved(row_point),
+                            egui::Event::PointerButton {
+                                pos: row_point,
+                                button: egui::PointerButton::Primary,
+                                pressed,
+                                modifiers: egui::Modifiers::NONE,
+                            },
+                        ],
+                    );
+                }
+
+                assert_eq!(editor.room_plan, label == "Draft plan");
+                assert_eq!(editor.client.scene_state(), scene);
+                assert_eq!(editor.client.free_camera_active(), camera);
+            }
+            assert_eq!(
+                editor.rooms.draft_room_name_by_source_id("D1-P1"),
+                Some(edited.as_str())
+            );
+            assert!(
+                editor.client.paused(),
+                "editing a room name changed pause state"
+            );
+            assert_eq!(
+                editor.client.snapshot().unwrap().server_time_ms,
+                starting_time
+            );
+
+            editor.client.on_exit();
+            drop(editor);
+            let _ = std::fs::remove_dir_all(project);
+        }
     }
 }
