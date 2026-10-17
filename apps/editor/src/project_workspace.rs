@@ -126,11 +126,12 @@ pub struct ProjectWorkspace {
     disk_compare: Option<(String, String)>,
     disk_generation: u64,
     preview_ready: Option<PreviewRequest>,
+    initial_listing_pending: bool,
 }
 
 impl ProjectWorkspace {
     pub fn open(project: &Path) -> Self {
-        let mut workspace = Self {
+        Self {
             root: project.to_owned(),
             root_input: project.display().to_string(),
             directories: BTreeMap::new(),
@@ -142,16 +143,15 @@ impl ProjectWorkspace {
             tabs: Vec::new(),
             active: None,
             job: None,
-            message: "Loading the project folder…".into(),
+            message: "Open Files to browse the project folder.".into(),
             branch_change_pending: false,
             local_git_mutation_pending: false,
             close_warning: None,
             disk_compare: None,
             disk_generation: 0,
             preview_ready: None,
-        };
-        workspace.list(String::new());
-        workspace
+            initial_listing_pending: true,
+        }
     }
 
     pub fn has_dirty_buffers(&self) -> bool {
@@ -417,6 +417,7 @@ impl ProjectWorkspace {
         self.close_warning = None;
         self.disk_compare = None;
         self.preview_ready = None;
+        self.initial_listing_pending = false;
         self.list(String::new());
     }
 
@@ -484,6 +485,7 @@ impl ProjectWorkspace {
 
     fn refresh_tree(&mut self) {
         if self.job.is_none() {
+            self.initial_listing_pending = false;
             self.directories.clear();
             self.expanded = BTreeSet::from([String::new()]);
             self.search_results = None;
@@ -506,6 +508,13 @@ impl ProjectWorkspace {
     }
 
     pub fn show(&mut self, ctx: &egui::Context) -> Option<PreviewRequest> {
+        // Startup can remain hidden or suspended behind native app approval. Start the
+        // bounded filesystem job only when Files is actually rendered, and never
+        // auto-retry a failed/cancelled job or race an active branch operation.
+        if self.initial_listing_pending && self.job.is_none() && !self.branch_change_pending {
+            self.initial_listing_pending = false;
+            self.list(String::new());
+        }
         let preview = self.preview_ready.take();
         egui::TopBottomPanel::top("project_workspace_toolbar").show(ctx, |ui| {
             ui.add_space(5.);
@@ -1224,6 +1233,54 @@ mod ui_tests {
         fn drop(&mut self) {
             let _ = std::fs::remove_dir_all(&self.0);
         }
+    }
+
+    #[test]
+    fn initial_explorer_load_waits_for_visible_files_and_branch_completion() {
+        let fixture = Fixture::new();
+        let mut workspace = ProjectWorkspace::open(&fixture.0);
+        // The editor polls hidden workspaces during startup. That must not start I/O.
+        for _ in 0..3 {
+            workspace.poll();
+        }
+        assert!(workspace.job.is_none());
+        let ctx = egui::Context::default();
+        let frame = |workspace: &mut ProjectWorkspace| {
+            ctx.run(egui::RawInput::default(), |ctx| {
+                workspace.show(ctx);
+            })
+        };
+        workspace.set_git_activity(true, true);
+        let _ = frame(&mut workspace);
+        assert!(
+            workspace.job.is_none(),
+            "branch changes must defer the initial scan"
+        );
+        workspace.set_git_activity(false, false);
+        let _ = frame(&mut workspace);
+        assert!(
+            workspace.job.is_some(),
+            "first visible Files frame starts one scan"
+        );
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while workspace.job.is_some() {
+            workspace.poll();
+            assert!(
+                std::time::Instant::now() < deadline,
+                "{}",
+                workspace.message
+            );
+            std::thread::yield_now();
+        }
+        assert!(workspace.directories[""]
+            .entries
+            .iter()
+            .any(|entry| entry.relative == "source.rs"));
+        let _ = frame(&mut workspace);
+        assert!(
+            workspace.job.is_none(),
+            "rendering must not restart a completed scan"
+        );
     }
 
     #[test]
