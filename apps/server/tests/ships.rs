@@ -17,6 +17,7 @@ fn docked_hull_selection_persists_without_changing_economy_and_rejects_space() {
             &mut session,
             Request::Connect {
                 supports_room_controls: false,
+                world_layout_version: 1,
                 supports_fleet_hangar: false,
                 supports_pioneer_interior: true,
                 protocol_version: PROTOCOL_VERSION,
@@ -74,6 +75,7 @@ fn docked_hull_selection_persists_without_changing_economy_and_rejects_space() {
             &mut None,
             Request::Connect {
                 supports_room_controls: false,
+                world_layout_version: 1,
                 supports_fleet_hangar: false,
                 supports_pioneer_interior: true,
                 protocol_version: PROTOCOL_VERSION,

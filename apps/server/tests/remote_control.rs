@@ -12,6 +12,7 @@ fn login(s: &mut Server, name: &str) -> (Option<String>, String) {
         &mut p,
         Request::Connect {
             supports_room_controls: false,
+            world_layout_version: 1,
             supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
@@ -99,6 +100,7 @@ fn remote_gameplay_preserves_identity_private_assets_and_rejects_unsafe_wrappers
         wrap("Worker", Request::Undock),
         Request::Connect {
             supports_room_controls: false,
+            world_layout_version: 1,
             supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
@@ -277,6 +279,7 @@ fn switching_rejects_stale_target_input_and_revocation_and_reconnect_release() {
         &mut reconnected,
         Request::Connect {
             supports_room_controls: false,
+            world_layout_version: 1,
             supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
@@ -317,6 +320,7 @@ fn worker_logout_retains_remote_lease_until_last_controller_socket_closes() {
         &mut second,
         Request::Connect {
             supports_room_controls: false,
+            world_layout_version: 1,
             supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,

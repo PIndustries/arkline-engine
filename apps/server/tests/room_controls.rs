@@ -11,6 +11,7 @@ fn connect(s: &mut Server, p: &mut Option<String>, token: Option<String>, t: u64
         p,
         Request::Connect {
             supports_room_controls: true,
+            world_layout_version: 1,
             supports_fleet_hangar: true,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
@@ -318,6 +319,7 @@ fn equipment_stays_with_pioneer_and_other_pilots_cannot_address_it() {
         &mut other,
         Request::Connect {
             supports_room_controls: true,
+            world_layout_version: 1,
             supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
@@ -339,6 +341,7 @@ fn equipment_stays_with_pioneer_and_other_pilots_cannot_address_it() {
         &mut p,
         Request::Connect {
             supports_room_controls: true,
+            world_layout_version: 1,
             supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
@@ -413,6 +416,7 @@ fn legacy_recovery_requires_auth_and_mixed_sessions_cannot_reclose_invisible_doo
     assert_eq!(before.pressure_pa, 81000);
     let legacy = |token| Request::Connect {
         supports_room_controls: false,
+        world_layout_version: 1,
         supports_fleet_hangar: true,
         supports_pioneer_interior: true,
         protocol_version: PROTOCOL_VERSION,

@@ -17,6 +17,7 @@ fn connect(
         s,
         p,
         Request::Connect {
+            world_layout_version: 0,
             supports_room_controls: false,
             supports_fleet_hangar: fleet,
             supports_pioneer_interior: true,
@@ -219,6 +220,7 @@ fn old_client_recovery_is_authenticated_and_latched_until_all_sessions_close() {
     let bad = s.handle_at(
         &mut old,
         Request::Connect {
+            world_layout_version: 0,
             supports_room_controls: false,
             supports_fleet_hangar: false,
             supports_pioneer_interior: false,

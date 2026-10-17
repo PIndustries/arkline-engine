@@ -23,6 +23,7 @@ fn checkpoint_advances_only_after_full_verification() {
         protocol_version: PROTOCOL_VERSION,
         entries: vec![],
         snapshot: Snapshot {
+            world_layout: None,
             exterior: None,
             remote_controls: vec![],
             fleet_links: vec![],

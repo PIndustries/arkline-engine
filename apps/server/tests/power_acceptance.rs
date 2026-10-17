@@ -48,6 +48,7 @@ fn connect(s: &mut Server) -> Option<String> {
         &mut p,
         Request::Connect {
             supports_room_controls: false,
+            world_layout_version: 1,
             supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
@@ -212,6 +213,7 @@ fn attack_drone_draws_only_for_actual_shot_and_holds_when_empty() {
         &mut b,
         Request::Connect {
             supports_room_controls: false,
+            world_layout_version: 1,
             supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,

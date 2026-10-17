@@ -19,6 +19,7 @@ fn connect(server: &mut Server, name: &str) -> (Option<String>, String) {
         &mut session,
         Request::Connect {
             supports_room_controls: false,
+            world_layout_version: 1,
             supports_fleet_hangar: false,
             supports_pioneer_interior: true,
             protocol_version: PROTOCOL_VERSION,
@@ -83,6 +84,7 @@ fn unauthorized_and_failed_trade_leave_ledger_unchanged() {
                 &mut stranger,
                 Request::Connect {
                     supports_room_controls: false,
+                    world_layout_version: 1,
                     supports_fleet_hangar: false,
                     supports_pioneer_interior: true,
                     protocol_version: 1,
@@ -268,6 +270,7 @@ fn restart_preserves_auth_travel_and_completed_mining() {
             &mut session,
             Request::Connect {
                 supports_room_controls: false,
+                world_layout_version: 1,
                 supports_fleet_hangar: false,
                 supports_pioneer_interior: true,
                 protocol_version: 1,
@@ -296,6 +299,7 @@ fn restart_preserves_auth_travel_and_completed_mining() {
             &mut session,
             Request::Connect {
                 supports_room_controls: false,
+                world_layout_version: 1,
                 supports_fleet_hangar: false,
                 supports_pioneer_interior: true,
                 protocol_version: 1,

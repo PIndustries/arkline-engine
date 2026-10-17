@@ -1,9 +1,11 @@
 //! Switch the editor between its local world and a loopback session.
-use arkline_client::{EmbeddedClient, EmbeddedSessionMode};
+use arkline_client::{EmbeddedClient, EmbeddedRealm, EmbeddedSessionMode, EmbeddedStatus};
+use arkline_protocol::SceneLayoutRevision;
 use eframe::egui::{self, Color32};
 use std::net::SocketAddr;
 
 const LOOPBACK_DEFAULT: &str = "127.0.0.1:7779";
+const WORLD_OPEN_RECOVERY: &str = "The selected world could not open. Your project world is preserved; choose Local, Project world, then Use local world to return.";
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum Choice {
@@ -18,6 +20,7 @@ pub struct SessionPanel {
     pub open: bool,
     initialized: bool,
     choice: Choice,
+    realm: EmbeddedRealm,
     pilot: String,
     bind_address: String,
     join_address: String,
@@ -31,6 +34,7 @@ impl SessionPanel {
     pub fn show(&mut self, ctx: &egui::Context, client: &mut EmbeddedClient) {
         if !self.initialized {
             self.pilot = client.pilot().to_owned();
+            self.realm = client.realm();
             self.choice = match client.session_mode() {
                 EmbeddedSessionMode::Local => Choice::Local,
                 EmbeddedSessionMode::Host { .. } => Choice::Host,
@@ -53,6 +57,8 @@ impl SessionPanel {
             .collapsible(false)
             .resizable(false)
             .default_width(410.0)
+            .max_height((ctx.available_rect().height() - 40.0).max(100.0))
+            .vscroll(true)
             .show(ctx, |ui| self.contents(ui, client));
         self.open = open;
     }
@@ -80,6 +86,29 @@ impl SessionPanel {
                 "Host controls the clock"
             });
         });
+        ui.label(format!(
+            "Selected world: {}",
+            if matches!(client.session_mode(), EmbeddedSessionMode::Join { .. }) {
+                "Joined host world"
+            } else {
+                client.realm().label()
+            }
+        ));
+        ui.label(format!(
+            "Current layout: {}",
+            match client.scene_layout_revision() {
+                Some(SceneLayoutRevision::LegacyV1) =>
+                    "LegacyV1 · original planet and linear berths",
+                Some(SceneLayoutRevision::OrbitalV1) => {
+                    "OrbitalV1 · measured planet and circular berths"
+                }
+                None if matches!(client.status(), EmbeddedStatus::Error(_)) => {
+                    "Unavailable · selected world is not connected"
+                }
+                None => "Awaiting authority snapshot",
+            }
+        ));
+        show_session_error(ui, client.status());
 
         if let Some(info) = client.session_info() {
             ui.label(&info.label);
@@ -120,6 +149,7 @@ impl SessionPanel {
             ui.selectable_value(&mut self.choice, Choice::Host, "Host");
             ui.selectable_value(&mut self.choice, Choice::Join, "Join");
         });
+        self.realm_controls(ui);
 
         ui.horizontal(|ui| {
             let pilot_label = ui.label("Pilot");
@@ -133,7 +163,7 @@ impl SessionPanel {
 
         match self.choice {
             Choice::Local => {
-                ui.label("Returns to the preserved local .arkline-studio world.");
+                ui.label("Opens the selected preserved local world.");
                 if ui.button("Use local world").clicked() {
                     self.switch(client, EmbeddedSessionMode::Local);
                 }
@@ -143,7 +173,7 @@ impl SessionPanel {
                     ui.label("Loopback bind address");
                     ui.add(egui::TextEdit::singleline(&mut self.bind_address).desired_width(180.0));
                 });
-                ui.small("Hosting keeps this editor open and uses the preserved project .arkline-studio world.");
+                ui.small("Hosting keeps this editor open and shares the selected preserved world.");
                 if ui.button("Host shared world").clicked() {
                     match parse_loopback(&self.bind_address) {
                         Ok(bind_addr) => {
@@ -199,14 +229,44 @@ impl SessionPanel {
         }
     }
 
+    fn realm_controls(&mut self, ui: &mut egui::Ui) {
+        match self.choice {
+            Choice::Local | Choice::Host => {
+                ui.horizontal_wrapped(|ui| {
+                    ui.strong("World");
+                    for realm in [EmbeddedRealm::Project, EmbeddedRealm::OrbitalPreview] {
+                        ui.selectable_value(&mut self.realm, realm, realm.label());
+                    }
+                });
+                ui.small("Existing worlds keep their original planet and berths. Orbital station preview opens a separate persistent world; it does not convert the project world.");
+            }
+            Choice::Join => {
+                ui.small("The remote host chooses the world layout. Your preserved local worlds stay on this computer.");
+            }
+        }
+    }
+
     fn switch(&mut self, client: &mut EmbeddedClient, mode: EmbeddedSessionMode) {
-        self.error = match client.switch_session(mode, self.pilot.trim().to_owned()) {
+        let pilot = self.pilot.trim().to_owned();
+        let result = if matches!(mode, EmbeddedSessionMode::Join { .. }) {
+            client.switch_session(mode, pilot)
+        } else {
+            client.switch_session_in_realm(mode, pilot, self.realm)
+        };
+        self.error = match result {
             Ok(()) => {
                 self.reveal_editor_secret = false;
                 None
             }
             Err(error) => Some(error),
         };
+    }
+}
+
+fn show_session_error(ui: &mut egui::Ui, status: &EmbeddedStatus) {
+    if let EmbeddedStatus::Error(error) = status {
+        ui.colored_label(Color32::LIGHT_RED, error);
+        ui.colored_label(Color32::LIGHT_RED, WORLD_OPEN_RECOVERY);
     }
 }
 
@@ -221,4 +281,62 @@ fn parse_loopback(text: &str) -> Result<SocketAddr, String> {
         );
     }
     Ok(address)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn local_and_host_offer_realms_but_join_uses_the_remote_layout() {
+        for choice in [Choice::Local, Choice::Host, Choice::Join] {
+            let ctx = egui::Context::default();
+            let mut panel = SessionPanel {
+                choice,
+                ..Default::default()
+            };
+            let output = ctx.run(Default::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| panel.realm_controls(ui));
+            });
+            let labels: Vec<_> = output
+                .shapes
+                .iter()
+                .filter_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) => Some(text.galley.job.text.as_str()),
+                    _ => None,
+                })
+                .collect();
+            for label in ["Project world", "Orbital station preview"] {
+                assert_eq!(labels.contains(&label), choice != Choice::Join);
+            }
+            if choice == Choice::Join {
+                assert!(labels
+                    .iter()
+                    .any(|label| label.contains("remote host chooses")));
+            }
+        }
+    }
+
+    #[test]
+    fn asynchronous_open_error_shows_worker_reason_and_project_return_path() {
+        let ctx = egui::Context::default();
+        let output = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                show_session_error(
+                    ui,
+                    &EmbeddedStatus::Error("Cannot open world database".into()),
+                );
+            });
+        });
+        let labels: Vec<_> = output
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) => Some(text.galley.job.text.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert!(labels.contains(&"Cannot open world database"));
+        assert!(labels.contains(&WORLD_OPEN_RECOVERY));
+    }
 }

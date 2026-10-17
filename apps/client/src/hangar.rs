@@ -12,6 +12,14 @@ mod quarters;
 pub use quarters::HangarAction;
 #[path = "fleet_hangar.rs"]
 pub(super) mod fleet_hangar;
+
+// Renderer uploads this after the embedded hull meshes, preserving their indices.
+pub(super) fn station_floor_mesh_index() -> usize {
+    fleet_hangar::floor_mesh_index()
+}
+pub(super) fn station_floor_vertices() -> Vec<Vertex> {
+    fleet_hangar::floor_vertices()
+}
 #[cfg(test)]
 #[path = "hangar_scale_tests.rs"]
 mod hangar_scale_tests;
@@ -289,6 +297,8 @@ impl HangarView {
             } else {
                 quarters::camera_eye(pilot.ship_class, target, eye)
             };
+        } else if let Some(fleet) = fleet {
+            eye = fleet_hangar::orbit_camera(fleet, target, eye);
         }
         let player_first_person = walking && self.on_foot_view == OnFootView::FirstPerson;
         let first_person = player_first_person && !self.editor_free_camera_active;
@@ -384,6 +394,11 @@ impl HangarView {
                 parts.extend(avatar_parts(&visual_avatar, pose, self.follow));
             }
         }
+        let station_fixtures = if interior {
+            None
+        } else {
+            fleet.and_then(fleet_hangar::fixture_lights)
+        };
         if let Some(renderer) = &self.renderer {
             let renderer = renderer.clone();
             #[cfg(target_arch = "wasm32")]
@@ -393,7 +408,7 @@ impl HangarView {
                 callback: Arc::new(egui_glow::CallbackFn::new(move |_, _| {
                     if let Ok(mut renderer) = renderer.lock() {
                         unsafe {
-                            paint_with_lighting(
+                            paint_with_fixture_lighting(
                                 &mut renderer,
                                 vp,
                                 eye,
@@ -401,6 +416,7 @@ impl HangarView {
                                 &parts,
                                 true,
                                 &exterior_instances,
+                                station_fixtures.as_deref(),
                             );
                         }
                     }
@@ -864,6 +880,7 @@ unsafe fn paint_with_base(
 ) {
     paint_with_lighting(renderer, vp, eye, base, dynamic, true, &[]);
 }
+#[cfg(not(target_arch = "wasm32"))]
 unsafe fn paint_with_lighting(
     renderer: &mut Renderer,
     vp: Mat4,
@@ -872,6 +889,29 @@ unsafe fn paint_with_lighting(
     dynamic: &[ModelPart],
     station_lighting: bool,
     exterior: &[exterior_visuals::Instance],
+) {
+    paint_with_fixture_lighting(
+        renderer,
+        vp,
+        eye,
+        base,
+        dynamic,
+        station_lighting,
+        exterior,
+        None,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+unsafe fn paint_with_fixture_lighting(
+    renderer: &mut Renderer,
+    vp: Mat4,
+    eye: Vec3,
+    base: Option<&[ModelPart]>,
+    dynamic: &[ModelPart],
+    station_lighting: bool,
+    exterior: &[exterior_visuals::Instance],
+    station_fixtures: Option<&[local_lighting::Light]>,
 ) {
     renderer.prepare_spatial_material();
     #[cfg(not(target_arch = "wasm32"))]
@@ -909,17 +949,24 @@ unsafe fn paint_with_lighting(
             .total_cmp(&b.0.distance_squared(eye))
     });
     lights.truncate(8);
-    if exterior.is_empty() {
+    if exterior.is_empty() && station_fixtures.is_none() {
         renderer.local_lights.upload_station(gl, &lights);
     } else {
-        let mut combined: Vec<_> = lights
+        let source: Vec<_> = if let Some(fixtures) = station_fixtures {
+            fixtures.to_vec()
+        } else {
+            lights
+                .into_iter()
+                .map(|(position, color)| local_lighting::Light {
+                    position,
+                    range: 30.,
+                    color,
+                    power: 2.5,
+                })
+                .collect()
+        };
+        let mut combined: Vec<_> = source
             .into_iter()
-            .map(|(position, color)| local_lighting::Light {
-                position,
-                range: 30.,
-                color,
-                power: 2.5,
-            })
             .chain(
                 exterior
                     .iter()
@@ -1177,6 +1224,7 @@ mod tests {
         }))
         .unwrap();
         let fleet = arkline_protocol::HangarView {
+            layout_revision: arkline_protocol::FleetLayoutRevision::LinearV1,
             layout: arkline_protocol::fleet_hangar_layout(),
             berths: vec![],
         };
@@ -1444,6 +1492,7 @@ mod tests {
                 gl.bind_framebuffer(glow::FRAMEBUFFER, Some(capture.framebuffer));
                 gl.viewport(0, 0, 1280, 720);
                 let fleet = arkline_protocol::HangarView {
+                    layout_revision: arkline_protocol::FleetLayoutRevision::LinearV1,
                     layout: arkline_protocol::fleet_hangar_layout(),
                     berths: arkline_protocol::ALL_SHIP_CLASSES
                         .iter()

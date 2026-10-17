@@ -116,6 +116,13 @@ pub(super) fn paint_cockpit_maps(
     selected: &super::super::SelectedObject,
     range: &mut f64,
 ) -> Option<ViewAction> {
+    let world_layout = match super::super::snapshot_world_layout(snapshot) {
+        Ok(layout) => layout,
+        Err(error) => {
+            ui.colored_label(egui::Color32::RED, error);
+            return None;
+        }
+    };
     let origin = display_position(own, now);
     let rotation = ship_orientation_at(own, now);
     let mut contacts = Vec::new();
@@ -156,14 +163,15 @@ pub(super) fn paint_cockpit_maps(
             gate.name,
         ));
     }
-    for planet in arkline_protocol::planets()
-        .into_iter()
+    for planet in world_layout
+        .planets
+        .iter()
         .filter(|p| p.system_id == own.system_id)
     {
         contacts.push((
             super::super::SelectedObject::Planet(planet.id),
-            arkline_protocol::PLANET_APPROACH_POSITION,
-            planet.name,
+            planet.approach_position,
+            planet.name.clone(),
         ));
     }
     for prop in snapshot
@@ -398,6 +406,7 @@ pub(super) fn remote_ship_frame(
     feed.camera_drone = None;
     feed.docking = None;
     feed.scene = std::sync::Arc::new(super::FrameScene {
+        world_layout: main.scene.world_layout.clone(),
         traffic: snapshot
             .traffic
             .iter()
@@ -460,6 +469,7 @@ mod remote_tests {
             drone_camera: false,
             camera_drone: None,
             scene: std::sync::Arc::new(super::FrameScene {
+                world_layout: arkline_protocol::legacy_world_layout(),
                 traffic: vec![],
                 surface_props: vec![],
                 asteroids: vec![],
@@ -502,9 +512,13 @@ mod remote_tests {
                 stop_reason: None,
             });
         let worker = &s.pilots[1];
-        let main = main_frame();
+        let mut main = main_frame();
+        std::sync::Arc::get_mut(&mut main.scene)
+            .unwrap()
+            .world_layout = arkline_protocol::SceneLayoutRevision::OrbitalV1.definition();
         let feed = remote_ship_frame(&main, &s, worker, 1.5);
         assert!(!std::sync::Arc::ptr_eq(&feed.scene, &main.scene));
+        assert_eq!(feed.scene.world_layout, main.scene.world_layout);
         assert_eq!(feed.space.origin, worker.flight.as_ref().unwrap().position);
         assert_eq!(feed.system_id, 2);
         assert_eq!(feed.own, "Worker");
