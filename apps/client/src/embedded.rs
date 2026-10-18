@@ -2206,6 +2206,312 @@ mod tests {
     }
 
     #[test]
+    fn shared_rejoin_and_host_restart_preserve_accepted_rooms_credentials_and_single_authority() {
+        #[track_caller]
+        fn wait(client: &mut EmbeddedClient, predicate: impl Fn(&EmbeddedClient) -> bool) {
+            let deadline = Instant::now() + Duration::from_secs(8);
+            while Instant::now() < deadline {
+                client.poll();
+                if predicate(client) {
+                    return;
+                }
+                assert!(
+                    !matches!(client.status(), EmbeddedStatus::Error(_)),
+                    "unexpected session failure: {:?}",
+                    client.status()
+                );
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            panic!(
+                "shared recovery did not reach expected state: {:?}, time {:?}, room {:?}, ack {:?}",
+                client.status(),
+                client.snapshot().map(|s| s.server_time_ms),
+                client.assets().and_then(|a| a.pioneer_room_layout).map(|r| r.revision),
+                client.room_layout_ack(),
+            );
+        }
+        fn finish(client: &mut EmbeddedClient) {
+            client.clock.try_send(ClockCommand::Shutdown).unwrap();
+            client.cockpit.updates = None;
+            wait(client, |client| {
+                client.worker.as_ref().unwrap().is_finished()
+            });
+            client.worker.take().unwrap().join().unwrap();
+        }
+        fn room(client: &EmbeddedClient) -> arkline_protocol::RoomLayoutState {
+            client.assets().unwrap().pioneer_room_layout.unwrap()
+        }
+        fn identities(client: &EmbeddedClient) {
+            let snapshot = client.snapshot().unwrap();
+            let mut names = snapshot
+                .pilots
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>();
+            names.sort_unstable();
+            assert_eq!(names, ["RecoveryGuest", "RecoveryHost"]);
+            let mut online = snapshot.online_pilots.clone();
+            online.sort_unstable();
+            assert_eq!(online, ["RecoveryGuest", "RecoveryHost"]);
+        }
+        struct TestClient(EmbeddedClient);
+        impl std::ops::Deref for TestClient {
+            type Target = EmbeddedClient;
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+        impl std::ops::DerefMut for TestClient {
+            fn deref_mut(&mut self) -> &mut Self::Target {
+                &mut self.0
+            }
+        }
+        impl Drop for TestClient {
+            fn drop(&mut self) {
+                let (closed, _) = mpsc::sync_channel(1);
+                drop(std::mem::replace(&mut self.0.clock, closed));
+                self.0.cockpit.updates = None;
+                if let Some(worker) = self.0.worker.take() {
+                    let _ = worker.join();
+                }
+            }
+        }
+        struct Directory(PathBuf);
+        impl Drop for Directory {
+            fn drop(&mut self) {
+                let _ = fs::remove_dir_all(&self.0);
+            }
+        }
+        let directory = Directory(std::env::temp_dir().join(format!(
+            "arkline-shared-recovery-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        )));
+        let host_dir = directory.0.join("host");
+        let guest_dir = directory.0.join("guest");
+        let (host, _) = debug_fixture();
+        let mut host = TestClient(host);
+        host.data_dir = host_dir.clone();
+        host.switch_session(
+            EmbeddedSessionMode::Host {
+                bind_addr: "127.0.0.1:0".parse().unwrap(),
+            },
+            "RecoveryHost".into(),
+        )
+        .unwrap();
+        wait(&mut host, |c| {
+            c.ready() && c.session_info().is_some() && c.assets().is_some()
+        });
+        let info = host.session_info().unwrap();
+        let address = info.address.unwrap();
+        let old_secret = info.editor_secret.clone().unwrap();
+        let (guest, _) = debug_fixture();
+        let mut guest = TestClient(guest);
+        guest.data_dir = guest_dir.clone();
+        guest
+            .switch_session(
+                EmbeddedSessionMode::Join {
+                    address,
+                    secret: old_secret.clone(),
+                },
+                "RecoveryGuest".into(),
+            )
+            .unwrap();
+        wait(&mut guest, |c| c.ready() && c.assets().is_some());
+        let mut accepted = room(&guest).document;
+        accepted.rooms[0].name = "Accepted before restart".into();
+        let id = guest.room_layout_replace(0, accepted).unwrap();
+        wait(&mut guest, |c| {
+            c.room_layout_ack().is_some_and(|a| a.id == id) && room(c).revision == 1
+        });
+        assert!(guest.room_layout_ack().unwrap().result.is_ok());
+        let accepted = room(&guest);
+        let stepped_time = guest.snapshot().unwrap().server_time_ms + 50;
+        host.step();
+        wait(&mut host, |c| {
+            c.snapshot()
+                .is_some_and(|s| s.server_time_ms == stepped_time)
+        });
+        wait(&mut guest, |c| {
+            c.snapshot()
+                .is_some_and(|s| s.server_time_ms == stepped_time)
+        });
+        identities(&host);
+        identities(&guest);
+        let accepted_assets = serde_json::to_value(guest.assets().unwrap()).unwrap();
+        let ledger = guest.snapshot().unwrap().ledger_hash.clone();
+        let host_credential =
+            credentials_path(&host_dir.join("client"), "embedded-editor", "RecoveryHost");
+        let guest_domain = format!("shared-editor:{address}");
+        let guest_credential =
+            credentials_path(&guest_dir.join("client"), &guest_domain, "RecoveryGuest");
+        let host_token = fs::read(&host_credential).unwrap();
+        let guest_token = fs::read(&guest_credential).unwrap();
+        let mut drafts = Vec::new();
+        for project in [&host_dir, &guest_dir] {
+            fs::create_dir_all(project.join("Assets")).unwrap();
+            let path = project.join("Assets/Pioneer.rooms.json");
+            let mut draft = accepted.document.clone();
+            draft.rooms[0].name = "Saved draft, not applied".into();
+            let bytes = serde_json::to_vec_pretty(&draft).unwrap();
+            fs::write(&path, &bytes).unwrap();
+            drafts.push((path, bytes));
+        }
+        let preserved = || {
+            assert!(
+                fs::read(&host_credential).unwrap() == host_token,
+                "host credential changed"
+            );
+            assert!(
+                fs::read(&guest_credential).unwrap() == guest_token,
+                "guest credential changed"
+            );
+            for (path, bytes) in &drafts {
+                assert!(fs::read(path).unwrap() == *bytes, "saved draft changed");
+            }
+        };
+
+        // A real Leave and a fresh worker must reuse the existing pilot claim.
+        finish(&mut guest);
+        wait(&mut host, |c| {
+            c.snapshot()
+                .is_some_and(|s| s.online_pilots == ["RecoveryHost"])
+        });
+        guest
+            .switch_session(
+                EmbeddedSessionMode::Join {
+                    address,
+                    secret: old_secret.clone(),
+                },
+                "RecoveryGuest".into(),
+            )
+            .unwrap();
+        wait(&mut guest, |c| c.ready() && c.assets().is_some());
+        identities(&guest);
+        assert_eq!(room(&guest), accepted);
+        assert_eq!(
+            serde_json::to_value(guest.assets().unwrap()).unwrap(),
+            accepted_assets
+        );
+        preserved();
+
+        // Stop the actual host authority while the guest is still attached.
+        finish(&mut host);
+        wait(&mut guest, |c| {
+            matches!(c.status(), EmbeddedStatus::Error(_))
+        });
+        assert!(!guest.ready() && !guest.can_control_clock());
+        let mut unsubmitted = accepted.document.clone();
+        unsubmitted.rooms[0].name = "Must never be replayed".into();
+        assert!(guest.room_layout_replace(1, unsubmitted).is_err());
+        preserved();
+        // Shutdown waits for database release; the detached acceptor may need
+        // one more scheduling turn to release the same endpoint. Retry only
+        // that bounded listener-startup failure, never a world/auth failure.
+        let reopen_deadline = Instant::now() + Duration::from_secs(8);
+        loop {
+            host.switch_session(
+                EmbeddedSessionMode::Host { bind_addr: address },
+                "RecoveryHost".into(),
+            )
+            .unwrap();
+            wait(&mut host, |c| {
+                matches!(c.status(), EmbeddedStatus::Error(_))
+                    || (c.ready() && c.session_info().is_some() && c.assets().is_some())
+            });
+            if host.ready() {
+                break;
+            }
+            let EmbeddedStatus::Error(error) = host.status() else {
+                unreachable!()
+            };
+            assert!(error.contains("bind editor loopback listener"), "{error}");
+            assert!(
+                Instant::now() < reopen_deadline,
+                "listener did not release the endpoint"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(host.paused());
+        assert_eq!(host.session_info().unwrap().address, Some(address));
+        assert_eq!(host.snapshot().unwrap().server_time_ms, stepped_time);
+        assert_eq!(room(&host), accepted);
+        let secret = host.session_info().unwrap().editor_secret.clone().unwrap();
+        let connect = || {
+            WorkerIdentity::default()
+                .request(&guest_domain, "RecoveryGuest", None)
+                .unwrap()
+        };
+        use arkline_server::collaborative_transport::DevelopmentEditorClient;
+        let resumed = WorkerIdentity::default()
+            .request(
+                &guest_domain,
+                "RecoveryGuest",
+                Some(String::from_utf8(guest_token.clone()).unwrap()),
+            )
+            .unwrap();
+        let Err(old_secret_error) =
+            DevelopmentEditorClient::connect(address, &old_secret, Some(resumed))
+        else {
+            panic!("old host secret must not admit a valid saved pilot credential");
+        };
+        assert!(old_secret_error
+            .to_string()
+            .contains("invalid editor join secret"));
+        let Err(duplicate_error) =
+            DevelopmentEditorClient::connect(address, &secret, Some(connect()))
+        else {
+            panic!("existing pilot requires its saved credential");
+        };
+        assert!(duplicate_error
+            .to_string()
+            .contains("resume token required"));
+        let competing = EditorWorld::open(&host_dir)
+            .err()
+            .expect("host must retain exclusive world ownership");
+        assert!(competing.to_string().contains("already owned"));
+        guest
+            .switch_session(
+                EmbeddedSessionMode::Join { address, secret },
+                "RecoveryGuest".into(),
+            )
+            .unwrap();
+        wait(&mut guest, |c| c.ready() && c.assets().is_some());
+        wait(&mut host, |c| {
+            c.snapshot().is_some_and(|s| s.online_pilots.len() == 2)
+        });
+        identities(&guest);
+        identities(&host);
+        assert_eq!(room(&guest), accepted);
+        assert_eq!(
+            serde_json::to_value(guest.assets().unwrap()).unwrap(),
+            accepted_assets
+        );
+        assert_eq!(guest.snapshot().unwrap().server_time_ms, stepped_time);
+        assert_eq!(guest.snapshot().unwrap().ledger_hash, ledger);
+        assert!(guest.paused() && !guest.can_control_clock());
+        assert!(guest.room_pending.is_none() && guest.room_layout_ack().is_none());
+        preserved();
+        host.step();
+        wait(&mut host, |c| {
+            c.snapshot()
+                .is_some_and(|s| s.server_time_ms == stepped_time + 50)
+        });
+        wait(&mut guest, |c| {
+            c.snapshot()
+                .is_some_and(|s| s.server_time_ms == stepped_time + 50)
+        });
+        assert_eq!(room(&guest), accepted);
+        finish(&mut guest);
+        finish(&mut host);
+        assert!(
+            EditorWorld::open(&host_dir).is_ok(),
+            "final shutdown releases authority"
+        );
+        preserved();
+    }
+
+    #[test]
     fn embedded_scene_state_local_and_shared_workers_ack_confirmed_placement() {
         fn wait(client: &mut EmbeddedClient, predicate: impl Fn(&EmbeddedClient) -> bool) {
             let deadline = Instant::now() + Duration::from_secs(8);
