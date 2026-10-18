@@ -29,6 +29,13 @@ Filtered/LFS repositories may be cloned without checking out files when safe
 checkout is unavailable.
 
 Git must be available on `PATH`; safe branch switching requires Git 2.43 or newer.
+This includes Linux: Ubuntu 22.04's default Git 2.34 is too old. The editor uses
+`git check-attr --source` to inspect the target branch before checkout, so it can
+refuse clean/smudge filters and LFS without running them. An older Git blocks the
+branch operation and preserves the checkout; install a supported Git or use your
+normal Git client. The Linux CI image builds checksum-pinned upstream Git 2.56.0
+on Ubuntu 22.04, retaining the public binary's glibc 2.35 baseline. CI logs the
+container's Git version and checks this capability before running Rust validation.
 Existing credential helpers and SSH configuration
 provide transport authentication; the Community panel's GitHub API login is a
 separate identity. The workspace does not request broader grants, install helpers,
