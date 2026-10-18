@@ -286,7 +286,9 @@ fn kill_owned(child: &mut std::process::Child) {
     #[cfg(unix)]
     {
         let _ = Command::new("/bin/kill")
-            .args(["-KILL", &format!("-{}", child.id())])
+            // End option parsing before the negative PGID. Older procps can
+            // misparse it as an option and signal our own process group.
+            .args(["-KILL", "--", &format!("-{}", child.id())])
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
