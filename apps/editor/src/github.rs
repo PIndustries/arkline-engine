@@ -92,6 +92,13 @@ impl GitHubWorkspace {
         &self.state
     }
     pub fn request_refresh(&mut self, repository: &str) -> Result<(), String> {
+        self.request_refresh_with(repository, load)
+    }
+    fn request_refresh_with(
+        &mut self,
+        repository: &str,
+        loader: impl FnOnce(&str, Option<&str>, &AtomicBool) -> WorkspaceState + Send + 'static,
+    ) -> Result<(), String> {
         let repository = validate_repository(repository)?;
         self.cancel.store(true, Ordering::Relaxed);
         self.cancel = Arc::new(AtomicBool::new(false));
@@ -111,7 +118,7 @@ impl GitHubWorkspace {
         self.state.stale = true;
         self.pending = Some(rx);
         std::thread::spawn(move || {
-            let mut state = load(&repository, token.as_deref(), &cancel);
+            let mut state = loader(&repository, token.as_deref(), &cancel);
             retain_failed_sections(&mut state, previous.as_ref());
             if !cancel.load(Ordering::Relaxed) {
                 let _ = tx.send(state);
@@ -272,20 +279,39 @@ fn api(
     decode_response(response.status().as_u16(), response, cancel)
 }
 fn load(repository: &str, token: Option<&str>, cancel: &AtomicBool) -> WorkspaceState {
+    let client = match api_client() {
+        Ok(client) => client,
+        Err(error) => {
+            return WorkspaceState {
+                repository: repository.into(),
+                error: Some(error),
+                stale: true,
+                ..Default::default()
+            };
+        }
+    };
+    load_sections(
+        repository,
+        token,
+        cancel,
+        |path, query, token| api(&client, path, query, token, cancel),
+        || wiki(cancel),
+    )
+}
+fn load_sections(
+    repository: &str,
+    token: Option<&str>,
+    cancel: &AtomicBool,
+    mut request: impl FnMut(&str, Option<Value>, Option<&str>) -> Result<Value, String>,
+    mut load_wiki: impl FnMut() -> Result<Vec<WikiPage>, String>,
+) -> WorkspaceState {
     let mut state = WorkspaceState {
         repository: repository.into(),
         ..Default::default()
     };
-    let client = match api_client() {
-        Ok(client) => client,
-        Err(error) => {
-            state.error = Some(error);
-            return state;
-        }
-    };
     let mut verified_token = None;
     if let Some(token) = token {
-        match api(&client, "user", None, Some(token), cancel) {
+        match request("user", None, Some(token)) {
             Ok(user) if user["login"].as_str().is_some_and(|s| !s.is_empty()) => {
                 state.authenticated = true;
                 state.login = user["login"].as_str().map(str::to_owned);
@@ -303,12 +329,10 @@ fn load(repository: &str, token: Option<&str>, cancel: &AtomicBool) -> Workspace
             if cancel.load(Ordering::Relaxed) {
                 return state;
             }
-            match api(
-                &client,
+            match request(
                 &format!("repos/{repository}/{endpoint}"),
                 None,
                 verified_token,
-                cancel,
             ) {
                 Ok(v) if v.is_array() => {
                     let result = entries(v, section == "Issues");
@@ -327,12 +351,10 @@ fn load(repository: &str, token: Option<&str>, cancel: &AtomicBool) -> Workspace
         let (owner, name) = repository.split_once('/').unwrap();
         let query = "query($owner:String!,$name:String!){repository(owner:$owner,name:$name){projectsV2(first:10){nodes{title url shortDescription items(first:50){nodes{content{... on Issue{title number url body} ... on PullRequest{title number url body}} fieldValues(first:10){nodes{... on ProjectV2ItemFieldSingleSelectValue{name field{... on ProjectV2SingleSelectField{name}}}}}}}}}}}";
         let projects = if verified_token.is_some() {
-            api(
-                &client,
+            request(
                 "graphql",
                 Some(serde_json::json!({"query":query,"variables":{"owner":owner,"name":name}})),
                 verified_token,
-                cancel,
             )
         } else {
             Err("Sign-in required".into())
@@ -351,7 +373,7 @@ fn load(repository: &str, token: Option<&str>, cancel: &AtomicBool) -> Workspace
     }
     }
     if !cancel.load(Ordering::Relaxed) {
-        match wiki(cancel) {
+        match load_wiki() {
             Ok(pages) => state.wiki = pages,
             Err(error) => state.warnings.push(format!("Official wiki: {error}")),
         }
@@ -364,6 +386,7 @@ fn load(repository: &str, token: Option<&str>, cancel: &AtomicBool) -> Workspace
     state
 }
 fn retain_failed_sections(state: &mut WorkspaceState, previous: Option<&WorkspaceState>) {
+    state.stale |= state.error.is_some() || !state.warnings.is_empty();
     let Some(previous) = previous else {
         return;
     };
@@ -377,7 +400,14 @@ fn retain_failed_sections(state: &mut WorkspaceState, previous: Option<&Workspac
     if !same_identity || state.repository != previous.repository {
         return;
     }
-    let failed = |name: &str| state.warnings.iter().any(|w| w.starts_with(name));
+    // A client-startup failure precedes every section, so there are no section
+    // warnings yet. Keep only the already identity/repository-checked cache.
+    let failed_before_sections = state.error.is_some() && state.refreshed_at_ms.is_none();
+    if failed_before_sections {
+        state.refreshed_at_ms = previous.refreshed_at_ms;
+    }
+    let failed =
+        |name: &str| failed_before_sections || state.warnings.iter().any(|w| w.starts_with(name));
     if failed("Issues:") {
         state.issues = previous.issues.clone();
     }
@@ -390,11 +420,7 @@ fn retain_failed_sections(state: &mut WorkspaceState, previous: Option<&Workspac
     if failed("Projects") {
         state.projects = previous.projects.clone();
     }
-    if state
-        .warnings
-        .iter()
-        .any(|w| w.starts_with("Official wiki:"))
-    {
+    if failed("Official wiki:") {
         state.wiki = previous.wiki.clone();
     }
 }
@@ -558,6 +584,166 @@ fn wiki(cancel: &AtomicBool) -> Result<Vec<WikiPage>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn cached_workspace() -> GitHubWorkspace {
+        GitHubWorkspace {
+            state: WorkspaceState {
+                repository: OFFICIAL_REPOSITORY.into(),
+                refreshed_at_ms: Some(1),
+                issues: vec![Entry {
+                    title: "Saved issue".into(),
+                    ..Default::default()
+                }],
+                pulls: vec![Entry {
+                    title: "Saved pull request".into(),
+                    ..Default::default()
+                }],
+                milestones: vec![Entry {
+                    title: "Saved milestone".into(),
+                    ..Default::default()
+                }],
+                projects: vec![Project {
+                    title: "Saved project".into(),
+                    ..Default::default()
+                }],
+                wiki: vec![WikiPage {
+                    title: "Home".into(),
+                    body: "Saved wiki".into(),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            },
+            pending: None,
+            token: None,
+            cancel: Arc::new(AtomicBool::new(false)),
+        }
+    }
+    fn finish_refresh(workspace: &mut GitHubWorkspace) {
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while workspace.state.loading {
+            workspace.poll();
+            assert!(Instant::now() < deadline, "refresh worker did not complete");
+            std::thread::sleep(Duration::from_millis(1));
+        }
+    }
+    #[test]
+    fn refresh_timeout_retains_cached_sections_and_can_retry_without_blocking_poll() {
+        struct TimedOut;
+        impl Read for TimedOut {
+            fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+                Err(std::io::ErrorKind::TimedOut.into())
+            }
+        }
+        let mut workspace = cached_workspace();
+        let (release, waiting) = mpsc::channel();
+        workspace
+            .request_refresh_with(OFFICIAL_REPOSITORY, move |repository, token, cancel| {
+                waiting.recv_timeout(Duration::from_secs(2)).unwrap();
+                load_sections(
+                    repository,
+                    token,
+                    cancel,
+                    |_, _, token| {
+                        assert!(token.is_none());
+                        decode_response(200, TimedOut, cancel)
+                    },
+                    || Err("Wiki retrieval timed out; refresh to retry.".into()),
+                )
+            })
+            .unwrap();
+        let started = Instant::now();
+        workspace.poll();
+        assert!(started.elapsed() < Duration::from_millis(500));
+        assert!(workspace.state.loading && workspace.state.stale);
+        assert_eq!(workspace.state.issues[0].title, "Saved issue");
+        release.send(()).unwrap();
+        finish_refresh(&mut workspace);
+        assert!(workspace.state.stale);
+        assert!(workspace.state.warnings[0].contains("before the deadline"));
+        assert_eq!(workspace.state.issues[0].title, "Saved issue");
+        assert_eq!(workspace.state.pulls[0].title, "Saved pull request");
+        assert_eq!(workspace.state.milestones[0].title, "Saved milestone");
+        assert_eq!(workspace.state.projects[0].title, "Saved project");
+        assert_eq!(workspace.state.wiki[0].body, "Saved wiki");
+        workspace
+            .request_refresh_with(OFFICIAL_REPOSITORY, |repository, _, _| WorkspaceState {
+                repository: repository.into(),
+                refreshed_at_ms: Some(2),
+                issues: vec![Entry {
+                    title: "Fresh issue".into(),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            })
+            .unwrap();
+        finish_refresh(&mut workspace);
+        assert!(!workspace.state.stale);
+        assert!(workspace.state.error.is_none() && workspace.state.warnings.is_empty());
+        assert_eq!(workspace.state.issues[0].title, "Fresh issue");
+        assert!(workspace.state.pulls.is_empty());
+    }
+    #[test]
+    fn stalled_http_body_reports_a_bounded_failure_without_displaying_response_bytes() {
+        use std::{io::Write, net::TcpListener};
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let (release, waiting) = mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            assert!(stream.read(&mut [0; 4096]).unwrap() > 0);
+            stream
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 1024\r\nConnection: close\r\n\r\nprivate diagnostic")
+                .unwrap();
+            let _ = waiting.recv_timeout(Duration::from_secs(2));
+        });
+        let client = api_client().unwrap();
+        let started = Instant::now();
+        let response = client
+            .get(format!("http://{address}/"))
+            .timeout(Duration::from_millis(500))
+            .send()
+            .unwrap();
+        let error = decode_response(200, response, &AtomicBool::new(false)).unwrap_err();
+        release.send(()).unwrap();
+        worker.join().unwrap();
+        assert!(started.elapsed() < Duration::from_secs(2));
+        assert!(error.contains("before the deadline"), "{error}");
+        assert!(!error.contains("private diagnostic"));
+    }
+    #[test]
+    fn early_refresh_failure_preserves_public_cache_but_not_unverified_private_data() {
+        for (authenticated, same_repository) in [(false, true), (false, false), (true, true)] {
+            let mut workspace = cached_workspace();
+            workspace.state.authenticated = authenticated;
+            workspace.state.login = authenticated.then(|| "previous-account".into());
+            workspace
+                .request_refresh_with(
+                    if same_repository {
+                        OFFICIAL_REPOSITORY
+                    } else {
+                        "another/repository"
+                    },
+                    |repository, _, _| WorkspaceState {
+                        repository: repository.into(),
+                        error: Some("GitHub HTTP client unavailable.".into()),
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+            finish_refresh(&mut workspace);
+            let discard = authenticated || !same_repository;
+            assert_eq!(workspace.state.issues.is_empty(), discard);
+            assert_eq!(workspace.state.pulls.is_empty(), discard);
+            assert_eq!(workspace.state.milestones.is_empty(), discard);
+            assert_eq!(workspace.state.projects.is_empty(), discard);
+            assert_eq!(workspace.state.wiki.is_empty(), discard);
+            assert_eq!(workspace.state.refreshed_at_ms, (!discard).then_some(1));
+            assert!(workspace.state.stale, "failed refresh cannot be current");
+            assert!(workspace.state.error.is_some());
+        }
+    }
     #[test]
     fn wiki_links_are_same_repository_flat_decoded_and_bounded() {
         for valid in [
