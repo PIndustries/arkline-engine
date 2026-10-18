@@ -1774,6 +1774,199 @@ mod tests {
     }
 
     #[test]
+    fn held_world_lock_failure_can_retry_without_losing_state_or_authority() {
+        fn wait(client: &mut EmbeddedClient, predicate: impl Fn(&EmbeddedClient) -> bool) {
+            let deadline = Instant::now() + Duration::from_secs(8);
+            while Instant::now() < deadline {
+                client.poll();
+                if predicate(client) {
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            panic!(
+                "lock recovery did not reach expected state: {:?}",
+                client.status()
+            );
+        }
+
+        struct Directory(PathBuf);
+        impl Drop for Directory {
+            fn drop(&mut self) {
+                let _ = fs::remove_dir_all(&self.0);
+            }
+        }
+        let directory = Directory(std::env::temp_dir().join(format!(
+            "arkline-held-lock-recovery-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        )));
+        let project = directory.0.join("project");
+        let pilot = "LockRecoveryPilot";
+        let mut owner =
+            EditorWorld::open_with_creation_scene(&project, SceneLayoutRevision::LegacyV1).unwrap();
+        let mut session = None;
+        let connected = owner.handle(
+            &mut session,
+            WorkerIdentity::default()
+                .request("embedded-editor", pilot, None)
+                .unwrap(),
+        );
+        assert!(connected.ok);
+        let token = connected.resume_token.unwrap();
+        fs::create_dir_all(project.join("client")).unwrap();
+        let credential = credentials_path(&project.join("client"), "embedded-editor", pilot);
+        save_token(&credential, &token).unwrap();
+        let credential_bytes = fs::read(&credential).unwrap();
+        assert!(
+            owner
+                .handle(
+                    &mut session,
+                    Request::CreateCorporation {
+                        name: "LockRecoveryCorp".into(),
+                    }
+                )
+                .ok
+        );
+        owner.step(150).unwrap();
+        let baseline = owner.handle(&mut session, Request::Snapshot);
+        let snapshot = serde_json::to_value(baseline.snapshot.as_ref().unwrap()).unwrap();
+        let assets = serde_json::to_value(baseline.assets.as_ref().unwrap()).unwrap();
+        assert!(baseline.assets.unwrap().corporation.is_some());
+        let original_time = owner.time();
+        let sentinel = project.join("keep-project.rs");
+        fs::write(&sentinel, b"saved project source\n").unwrap();
+        let lock = project.join("world.sqlite.lock");
+        assert!(lock.exists());
+
+        let (mut client, _) = debug_fixture();
+        client.project_data_dir = project.clone();
+        client.data_dir = project.clone();
+        for generation in 1..=2 {
+            client
+                .switch_session_in_realm(
+                    EmbeddedSessionMode::Local,
+                    pilot.into(),
+                    EmbeddedRealm::Project,
+                )
+                .unwrap();
+            assert_eq!(client.status(), &EmbeddedStatus::Loading);
+            assert!(client
+                .switch_session(EmbeddedSessionMode::Local, pilot.into())
+                .is_err());
+            assert_eq!(client.session_generation(), generation);
+            wait(&mut client, |client| {
+                matches!(client.status(), EmbeddedStatus::Error(_))
+            });
+            let EmbeddedStatus::Error(error) = client.status() else {
+                unreachable!()
+            };
+            assert!(error.contains("already owned"), "{error}");
+            assert!(!client.ready());
+            assert!(client.snapshot().is_none());
+            assert!(client.assets().is_none());
+            assert!(!client.equipment_controls_ready());
+            assert!(client.graph_clear().is_err());
+            assert!(client
+                .set_scene_state(EditorSceneState::InteriorDeck1)
+                .is_err());
+            assert_eq!(client.realm(), EmbeddedRealm::Project);
+            assert_eq!(client.data_dir, project);
+            assert_eq!(fs::read(&credential).unwrap(), credential_bytes);
+            assert_eq!(fs::read(&sentinel).unwrap(), b"saved project source\n");
+            let unchanged = owner.handle(&mut session, Request::Snapshot);
+            assert_eq!(
+                serde_json::to_value(unchanged.snapshot.unwrap()).unwrap(),
+                snapshot
+            );
+            assert_eq!(
+                serde_json::to_value(unchanged.assets.unwrap()).unwrap(),
+                assets
+            );
+        }
+
+        drop(owner);
+        // The sidecar is deliberately retained. Recovery uses the OS lifetime
+        // lock rather than deleting a file or creating a replacement authority.
+        assert!(lock.exists());
+        client
+            .switch_session_in_realm(
+                EmbeddedSessionMode::Local,
+                pilot.into(),
+                EmbeddedRealm::Project,
+            )
+            .unwrap();
+        wait(&mut client, |client| {
+            client.ready() && client.snapshot().is_some() && client.assets().is_some()
+        });
+        assert!(client.paused());
+        assert_eq!(client.session_generation(), 3);
+        assert_eq!(
+            client.scene_layout_revision(),
+            Some(SceneLayoutRevision::LegacyV1)
+        );
+        assert_eq!(
+            serde_json::to_value(client.snapshot().unwrap()).unwrap(),
+            snapshot
+        );
+        assert_eq!(
+            serde_json::to_value(client.assets().unwrap()).unwrap(),
+            assets
+        );
+        assert_eq!(fs::read(&credential).unwrap(), credential_bytes);
+        let competing = EditorWorld::open(&project)
+            .err()
+            .expect("recovered worker must own the world exclusively");
+        assert!(competing.to_string().contains("already owned"));
+
+        client.step();
+        wait(&mut client, |client| {
+            client
+                .snapshot()
+                .is_some_and(|s| s.server_time_ms == original_time + 50)
+        });
+        let stepped = client.snapshot().unwrap();
+        assert_eq!(stepped.pilots.len(), 1);
+        assert_eq!(stepped.online_pilots, vec![pilot.to_owned()]);
+        let stepped = serde_json::to_value(stepped).unwrap();
+        let stepped_assets = serde_json::to_value(client.assets().unwrap()).unwrap();
+        client.clock.try_send(ClockCommand::Shutdown).unwrap();
+        client.cockpit.updates = None;
+        wait(&mut client, |client| {
+            client.worker.as_ref().unwrap().is_finished()
+        });
+        client.worker.take().unwrap().join().unwrap();
+
+        let mut reopened = EditorWorld::open(&project).expect("worker shutdown releases ownership");
+        let mut session = None;
+        assert!(
+            reopened
+                .handle(
+                    &mut session,
+                    WorkerIdentity::default()
+                        .request("embedded-editor", pilot, Some(token))
+                        .unwrap()
+                )
+                .ok
+        );
+        let persisted = reopened.handle(&mut session, Request::Snapshot);
+        assert_eq!(
+            serde_json::to_value(persisted.snapshot.unwrap()).unwrap(),
+            stepped
+        );
+        assert_eq!(
+            serde_json::to_value(persisted.assets.unwrap()).unwrap(),
+            stepped_assets
+        );
+        assert_eq!(fs::read(&credential).unwrap(), credential_bytes);
+        assert_eq!(fs::read(&sentinel).unwrap(), b"saved project source\n");
+        assert!(lock.exists());
+    }
+
+    #[test]
     fn failed_preview_open_can_return_to_preserved_project_world() {
         fn wait(client: &mut EmbeddedClient, predicate: impl Fn(&EmbeddedClient) -> bool) {
             let deadline = Instant::now() + Duration::from_secs(8);
