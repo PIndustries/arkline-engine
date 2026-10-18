@@ -85,6 +85,7 @@ impl Tab {
 
 enum JobKind {
     List,
+    OpenRoot(PathBuf),
     Search,
     Open,
     Check,
@@ -288,6 +289,12 @@ impl ProjectWorkspace {
         let Some(job) = self.job.take() else {
             return;
         };
+        // A successful listing can already be queued when Cancel is clicked.
+        if matches!(&job.kind, JobKind::OpenRoot(_)) && job.cancellation.load(Ordering::Relaxed) {
+            self.message =
+                "Folder opening cancelled. The current folder and tabs remain open.".into();
+            return;
+        }
         if job.disk_generation != self.disk_generation
             && matches!(&result, Ok(JobResult::Files(_)))
             && !matches!(&result, Ok(JobResult::Files(Outcome::Saved { .. })))
@@ -297,7 +304,13 @@ impl ProjectWorkspace {
             return;
         }
         match result {
-            Err(error) => self.message = error,
+            Err(error) => {
+                self.message = if matches!(&job.kind, JobKind::OpenRoot(_)) {
+                    format!("{error} The current folder and tabs remain open.")
+                } else {
+                    error
+                };
+            }
             Ok(JobResult::Folder(Some(path))) => {
                 self.root_input = path.display().to_string();
                 self.message = "Folder selected. Open folder changes only this workspace, after all edits are saved.".into();
@@ -314,6 +327,29 @@ impl ProjectWorkspace {
                 entries,
                 truncated,
             } => {
+                if let JobKind::OpenRoot(root) = kind {
+                    // Editing remains available while the candidate is checked.
+                    // Recheck before discarding any current workspace state.
+                    if !relative.is_empty()
+                        || self.has_dirty_buffers()
+                        || self.branch_change_pending
+                        || PathBuf::from(&self.root_input) != root
+                    {
+                        self.message = "Folder opening stopped because the current workspace changed. Save any edits, then open the folder again.".into();
+                        return;
+                    }
+                    self.root = root;
+                    self.disk_generation = self.disk_generation.wrapping_add(1);
+                    self.directories.clear();
+                    self.expanded = BTreeSet::from([String::new()]);
+                    self.search_results = None;
+                    self.tabs.clear();
+                    self.active = None;
+                    self.close_warning = None;
+                    self.disk_compare = None;
+                    self.preview_ready = None;
+                    self.initial_listing_pending = false;
+                }
                 const MAX_CACHED_DIRECTORIES: usize = 24;
                 if !self.directories.contains_key(&relative)
                     && self.directories.len() >= MAX_CACHED_DIRECTORIES
@@ -407,18 +443,17 @@ impl ProjectWorkspace {
             self.message = "Choose a project folder first.".into();
             return;
         }
-        self.root = PathBuf::from(&self.root_input);
-        self.disk_generation = self.disk_generation.wrapping_add(1);
-        self.directories.clear();
-        self.expanded = BTreeSet::from([String::new()]);
-        self.search_results = None;
-        self.tabs.clear();
-        self.active = None;
-        self.close_warning = None;
-        self.disk_compare = None;
-        self.preview_ready = None;
-        self.initial_listing_pending = false;
-        self.list(String::new());
+        let root = PathBuf::from(&self.root_input);
+        self.start(
+            Request::List {
+                root: root.clone(),
+                relative: String::new(),
+                show_hidden: self.show_hidden,
+                show_ignored: self.show_ignored,
+            },
+            JobKind::OpenRoot(root),
+            "Opening project folder",
+        );
     }
 
     fn open_file(&mut self, relative: String) {
@@ -1235,6 +1270,51 @@ mod ui_tests {
         }
     }
 
+    fn finish_file_job(workspace: &mut ProjectWorkspace) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while workspace.job.is_some() {
+            workspace.poll();
+            assert!(
+                std::time::Instant::now() < deadline,
+                "{}",
+                workspace.message
+            );
+            std::thread::yield_now();
+        }
+    }
+
+    fn source_workspace(fixture: &Fixture) -> ProjectWorkspace {
+        let mut workspace = ProjectWorkspace::open(&fixture.0);
+        workspace.accept(Outcome::Opened(fixture.read()), JobKind::Open);
+        workspace.list(String::new());
+        finish_file_job(&mut workspace);
+        workspace
+    }
+
+    fn pending_folder_open(
+        workspace: &mut ProjectWorkspace,
+        candidate: &Path,
+    ) -> mpsc::SyncSender<Result<JobResult, String>> {
+        let (sender, receiver) = mpsc::sync_channel(1);
+        workspace.root_input = candidate.display().to_string();
+        workspace.job = Some(Job {
+            receiver,
+            cancellation: Arc::new(AtomicBool::new(false)),
+            kind: JobKind::OpenRoot(candidate.to_owned()),
+            label: "Opening project folder".into(),
+            disk_generation: workspace.disk_generation,
+        });
+        sender
+    }
+
+    fn empty_root_listing() -> JobResult {
+        JobResult::Files(Outcome::Listed {
+            relative: String::new(),
+            entries: Vec::new(),
+            truncated: false,
+        })
+    }
+
     #[test]
     fn initial_explorer_load_waits_for_visible_files_and_branch_completion() {
         let fixture = Fixture::new();
@@ -1340,6 +1420,152 @@ mod ui_tests {
         workspace.open_root();
         assert_eq!(workspace.root, fixture.0);
         assert_eq!(workspace.tabs[0].text, "unsaved editor text\n");
+    }
+
+    #[test]
+    fn failed_folder_open_preserves_the_current_workspace() {
+        let fixture = Fixture::new();
+        let mut workspace = source_workspace(&fixture);
+        let empty = fixture.0.join("empty-folder");
+        std::fs::create_dir(&empty).unwrap();
+        let credentials = fixture.0.join(".ssh");
+        std::fs::create_dir(&credentials).unwrap();
+        let candidates = vec![
+            fixture.0.join("missing-folder"),
+            fixture.0.join("source.rs"),
+            credentials,
+            fixture.0.join("missing-folder"),
+        ];
+        #[cfg(unix)]
+        let candidates = {
+            let mut candidates = candidates;
+            let linked = fixture.0.join("linked-folder");
+            std::os::unix::fs::symlink(&empty, &linked).unwrap();
+            candidates.push(linked);
+            candidates
+        };
+        workspace.preview_ready = Some(PreviewRequest::Model {
+            label: "retained-preview.glb".into(),
+            bytes: vec![1, 2, 3],
+        });
+        for candidate in candidates {
+            workspace.root_input = candidate.display().to_string();
+            workspace.open_root();
+            finish_file_job(&mut workspace);
+
+            assert_eq!(workspace.root, fixture.0, "failed open changed the root");
+            assert_eq!(workspace.active, Some(0));
+            assert_eq!(workspace.tabs.len(), 1);
+            assert_eq!(workspace.tabs[0].relative, "source.rs");
+            assert_eq!(workspace.tabs[0].text, "original\n");
+            assert!(!workspace.tabs[0].dirty());
+            assert!(workspace.directories[""]
+                .entries
+                .iter()
+                .any(|entry| entry.relative == "source.rs"));
+            assert!(matches!(workspace.preview_ready.as_ref(),
+                Some(PreviewRequest::Model { label, bytes })
+                if label == "retained-preview.glb" && bytes == &[1, 2, 3]));
+            assert_eq!(
+                std::fs::read_to_string(fixture.0.join("source.rs")).unwrap(),
+                "original\n"
+            );
+        }
+        // A failed candidate does not prevent a subsequent valid open, including
+        // reopening the same empty folder without a duplicate background scan.
+        for _ in 0..2 {
+            workspace.root_input = empty.display().to_string();
+            workspace.open_root();
+            finish_file_job(&mut workspace);
+            assert_eq!(workspace.root, empty);
+            assert!(workspace.tabs.is_empty());
+            assert!(workspace.active.is_none());
+            assert!(workspace.preview_ready.is_none());
+            assert_eq!(workspace.directories.len(), 1);
+            assert!(workspace.directories[""].entries.is_empty());
+            assert!(!workspace.initial_listing_pending);
+        }
+    }
+
+    #[test]
+    fn successful_folder_check_keeps_edits_and_can_retry_after_save() {
+        let fixture = Fixture::new();
+        let candidate = Fixture::new();
+        let mut workspace = source_workspace(&fixture);
+        let sender = pending_folder_open(&mut workspace, &candidate.0);
+        sender.send(Ok(empty_root_listing())).unwrap();
+        workspace.tabs[0].text = "typed while checking the folder\n".into();
+        workspace.poll();
+        assert_eq!(workspace.root, fixture.0);
+        assert_eq!(workspace.tabs[0].text, "typed while checking the folder\n");
+        assert!(workspace.tabs[0].dirty());
+
+        workspace.save(0);
+        finish_file_job(&mut workspace);
+        assert_eq!(
+            std::fs::read_to_string(fixture.0.join("source.rs")).unwrap(),
+            "typed while checking the folder\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(candidate.0.join("source.rs")).unwrap(),
+            "original\n"
+        );
+        workspace.open_root();
+        finish_file_job(&mut workspace);
+        assert_eq!(workspace.root, candidate.0);
+        assert!(workspace.tabs.is_empty());
+        assert!(workspace.directories[""]
+            .entries
+            .iter()
+            .any(|entry| entry.relative == "source.rs"));
+    }
+
+    #[test]
+    fn cancelled_or_disconnected_folder_check_keeps_the_current_workspace() {
+        let fixture = Fixture::new();
+        let candidate = Fixture::new();
+        for cancel_after_success in [true, false] {
+            let mut workspace = source_workspace(&fixture);
+            let sender = pending_folder_open(&mut workspace, &candidate.0);
+            if cancel_after_success {
+                sender.send(Ok(empty_root_listing())).unwrap();
+                workspace
+                    .job
+                    .as_ref()
+                    .unwrap()
+                    .cancellation
+                    .store(true, Ordering::Relaxed);
+            }
+            drop(sender);
+            workspace.poll();
+            assert_eq!(workspace.root, fixture.0);
+            assert_eq!(workspace.tabs[0].text, "original\n");
+            assert_eq!(workspace.active, Some(0));
+            assert!(workspace.directories.contains_key(""));
+            assert!(workspace.job.is_none());
+        }
+    }
+
+    #[test]
+    fn changed_workspace_invalidates_a_successful_folder_check() {
+        let fixture = Fixture::new();
+        let candidate = Fixture::new();
+        for change in ["folder choice", "branch", "repository"] {
+            let mut workspace = source_workspace(&fixture);
+            let sender = pending_folder_open(&mut workspace, &candidate.0);
+            sender.send(Ok(empty_root_listing())).unwrap();
+            match change {
+                "folder choice" => workspace.root_input = fixture.0.display().to_string(),
+                "branch" => workspace.set_git_activity(true, true),
+                "repository" => workspace.notify_external_change(),
+                _ => unreachable!(),
+            }
+            workspace.poll();
+            finish_file_job(&mut workspace);
+            assert_eq!(workspace.root, fixture.0, "{change}");
+            assert_eq!(workspace.tabs[0].text, "original\n", "{change}");
+            assert_eq!(workspace.active, Some(0), "{change}");
+        }
     }
 
     #[test]
