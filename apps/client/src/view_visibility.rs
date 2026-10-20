@@ -71,6 +71,43 @@ mod native {
         pub gpu_elapsed_ns: Option<u64>,
         pub gpu_frame: Option<u64>,
     }
+    // glow0.16 selects GetQueryObjectuivEXT using an unrelated GL4.4
+    // loader flag. macOS4.1 exposes the core query functions, not that EXT
+    // spelling. Use the framework's core ABI without changing dependencies.
+    #[cfg(target_os = "macos")]
+    #[link(name = "OpenGL", kind = "framework")]
+    unsafe extern "C" {
+        fn glGetQueryObjectuiv(id: u32, pname: u32, params: *mut u32);
+        fn glGetQueryObjectui64v(id: u32, pname: u32, params: *mut u64);
+    }
+    unsafe fn query_available(gl: &glow::Context, query: glow::Query) -> bool {
+        #[cfg(target_os = "macos")]
+        {
+            let _ = gl;
+            let mut available = 0u32;
+            glGetQueryObjectuiv(query.0.get(), glow::QUERY_RESULT_AVAILABLE, &mut available);
+            available != 0
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            gl.get_query_parameter_u32(query, glow::QUERY_RESULT_AVAILABLE) != 0
+        }
+    }
+    unsafe fn completed_query_ns(gl: &glow::Context, query: glow::Query) -> Option<u64> {
+        #[cfg(target_os = "macos")]
+        {
+            let _ = gl;
+            let mut elapsed = 0u64;
+            glGetQueryObjectui64v(query.0.get(), glow::QUERY_RESULT, &mut elapsed);
+            Some(elapsed)
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let elapsed = gl.get_query_parameter_u32(query, glow::QUERY_RESULT);
+            (elapsed != u32::MAX).then_some(elapsed as u64)
+        }
+    }
+
     pub(crate) struct ViewProfileStart {
         key: String,
         frame: u64,
@@ -92,9 +129,14 @@ mod native {
         pub(crate) fn new(gl: &glow::Context) -> Self {
             let version = gl.version();
             // WebGL/disjoint timing requires a different API. Do not invent a result.
-            let supported = !version.is_embedded
+            let timer_supported = !version.is_embedded
                 && ((version.major, version.minor) >= (3, 3)
                     || gl.supported_extensions().contains("GL_ARB_timer_query"));
+            // Other desktop backends use glow's safe loaded path only when
+            // GL4.5 guarantees the unrelated query-buffer entry point it tests.
+            let reader_supported =
+                cfg!(target_os = "macos") || (version.major, version.minor) >= (4, 5);
+            let supported = timer_supported && reader_supported;
             Self {
                 samples: BTreeMap::new(),
                 pending: VecDeque::new(),
@@ -110,16 +152,15 @@ mod native {
             let mut index = 0;
             while index < self.pending.len() {
                 let pending = &self.pending[index];
-                if gl.get_query_parameter_u32(pending.query, glow::QUERY_RESULT_AVAILABLE) == 0 {
+                if !query_available(gl, pending.query) {
                     index += 1;
                     continue;
                 }
                 let pending = self.pending.remove(index).unwrap();
-                let elapsed = gl.get_query_parameter_u32(pending.query, glow::QUERY_RESULT);
+                let elapsed = completed_query_ns(gl, pending.query);
                 gl.delete_query(pending.query);
                 if let Some(sample) = self.samples.get_mut(&pending.key) {
-                    // The exposed GL API returns u32. Saturated samples are unavailable.
-                    sample.gpu_elapsed_ns = (elapsed != u32::MAX).then_some(elapsed as u64);
+                    sample.gpu_elapsed_ns = elapsed;
                     sample.gpu_frame = sample.gpu_elapsed_ns.map(|_| pending.frame);
                 }
             }

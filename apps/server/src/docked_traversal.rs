@@ -319,9 +319,9 @@ pub(super) fn execute(
         "end remote control before leaving the pilot seat"
     );
     ensure!(
-        !w.resource_jobs
+        w.resource_jobs
             .get(name)
-            .is_some_and(|job| !job.view.phase.is_terminal()),
+            .is_none_or(|job| job.view.phase.is_terminal()),
         "stop automated vessel work before docked traversal"
     );
     let expected = binding(w, name, document)?;

@@ -466,6 +466,9 @@ fn native_pioneer_registered_docked_scene_displays_continuity_and_visibility() {
             arkline_protocol::DockedSupport::Connector,
         );
         inner.feet_m = anchors.inner_inside_station_m;
+        let inner_center = body_to_station(pose, anchors.inner_bounds.center_m);
+        inner.heading =
+            (inner_center[2] - inner.feet_m[2]).atan2(inner_center[0] - inner.feet_m[0]);
         checkpoints.push(("inner-hatch-closed", pilot(Some(inner.clone())), 2300));
         inner.actuators.inner_hatch_open = true;
         checkpoints.push(("inner-hatch-open", pilot(Some(inner.clone())), 2300));
@@ -476,6 +479,10 @@ fn native_pioneer_registered_docked_scene_displays_continuity_and_visibility() {
             arkline_protocol::DockedSupport::Connector,
         );
         outer.feet_m = anchors.outer_inside_station_m;
+        let outer_center = body_to_station(pose, anchors.outer_bounds.center_m);
+        outer.heading =
+            (outer_center[2] - outer.feet_m[2]).atan2(outer_center[0] - outer.feet_m[0]);
+        checkpoints.push(("outer-hatch-closed", pilot(Some(outer.clone())), 2500));
         outer.actuators.outer_hatch_open = true;
         checkpoints.push(("outer-hatch-open", pilot(Some(outer.clone())), 2500));
         let lift = arkline_protocol::lift_geometry(pose);
@@ -490,13 +497,40 @@ fn native_pioneer_registered_docked_scene_displays_continuity_and_visibility() {
         outer.actuators.lift.floor_station_m = 0.0;
         outer.feet_m[1] = 0.0;
         checkpoints.push(("lift-station", pilot(Some(outer.clone())), 2800));
-        outer.feet_m = arkline_protocol::lift_call_anchors(pose).station_station_m;
-        outer.heading = pose.yaw + std::f64::consts::PI;
+        // The legacy concourse joins the narrow proved approach at n16.
+        // Look back from there, rather than taking a screenshot under the hull.
+        outer.feet_m = body_to_station(
+            pose,
+            [
+                32.985 + 16. * 0.61271035,
+                -pose.origin_m[1],
+                -9.815 - 16. * 0.79030755,
+            ],
+        );
+        outer.heading =
+            (outer_center[2] - outer.feet_m[2]).atan2(outer_center[0] - outer.feet_m[0]);
         outer.support = arkline_protocol::DockedSupport::Station;
         checkpoints.push(("station-lookback", pilot(Some(outer)), 2900));
+        let mut closed_hatches = std::collections::BTreeMap::new();
+        let mut hatch_changed_pixels = std::collections::BTreeMap::new();
         for (name, pilot, now) in checkpoints {
             let source = serde_json::to_vec(&pilot).unwrap();
             let shot = harness.settle(&pilot, now);
+            if let Some(prefix) = name.strip_suffix("-hatch-closed") {
+                closed_hatches.insert(prefix, shot.rgba.clone());
+            }
+            if let Some(prefix) = name.strip_suffix("-hatch-open") {
+                let before = closed_hatches
+                    .get(prefix)
+                    .expect("closed hatch evidence precedes open");
+                let changed = before
+                    .chunks_exact(4)
+                    .zip(shot.rgba.chunks_exact(4))
+                    .filter(|(a, b)| a != b)
+                    .count();
+                assert!(changed>10000,"{prefix} hatch must be visibly closed/open in this camera; changed {changed} pixels");
+                hatch_changed_pixels.insert(prefix, changed);
+            }
             assert!(
                 shot.occupied > 100,
                 "{name}: actual scene must remain visible"
@@ -551,7 +585,7 @@ fn native_pioneer_registered_docked_scene_displays_continuity_and_visibility() {
         );
         assert_eq!(original, source_gpu_hash(&gl, &renderer.lock().unwrap()));
         if let Some(directory) = &directory {
-            std::fs::write(directory.join("receipt.json"),serde_json::to_vec_pretty(&serde_json::json!({"schema_version":1,"scope":"Actual HangarView::ui registered docked callback and physical instrument surfaces in private macOS CGL; no desktop window","source_glb_sha256":arkline_protocol::PIONEER_DOCKED_SOURCE_SHA256,"registration_revision":arkline_protocol::PIONEER_DOCKED_REGISTRATION_REVISION,"captures":captures,"visibility_comparisons":comparisons,"source_gpu_payload_sha256":original,"canonical_gpu_payload_unchanged":true,"all_buffer_identities_retained":true,"physical_computer_face_roundtrip":true,"actual_instrument_pixels_on_backing":instrument_pixels,"headlook_preserves_eye_and_authority":true,"limitations":["Checkpoint snapshots exercise rendering; authority collision, hatch interlocks and continuous walking are verified by separate server tests","Both deck checkpoints use one registered scene but do not alone prove the complete stair walk","Each view retains an independent conservative frustum decision; this does not establish portal occlusion or LOD","CPU submit and optional delayed GPU timings are samples, not a performance guarantee or a vsync FPS measurement","No OS focus, desktop input, packaged app launch or engineering approval is established"]})).unwrap()).unwrap();
+            std::fs::write(directory.join("receipt.json"),serde_json::to_vec_pretty(&serde_json::json!({"schema_version":1,"scope":"Actual HangarView::ui registered docked callback and physical instrument surfaces in private macOS CGL; no desktop window","source_glb_sha256":arkline_protocol::PIONEER_DOCKED_SOURCE_SHA256,"registration_revision":arkline_protocol::PIONEER_DOCKED_REGISTRATION_REVISION,"captures":captures,"visibility_comparisons":comparisons,"source_gpu_payload_sha256":original,"canonical_gpu_payload_unchanged":true,"all_buffer_identities_retained":true,"physical_computer_face_roundtrip":true,"actual_instrument_pixels_on_backing":instrument_pixels,"visible_hatch_changed_pixels":hatch_changed_pixels,"headlook_preserves_eye_and_authority":true,"limitations":["Checkpoint snapshots exercise rendering; authority collision, hatch interlocks and continuous walking are verified by separate server tests","Both deck checkpoints use one registered scene but do not alone prove the complete stair walk","Each view retains an independent conservative frustum decision; this does not establish portal occlusion or LOD","CPU submit and optional delayed GPU timings are samples, not a performance guarantee or a vsync FPS measurement","No OS focus, desktop input, packaged app launch or engineering approval is established"]})).unwrap()).unwrap();
         }
         drop(harness);
         assert_eq!(gl.get_error(), glow::NO_ERROR);
