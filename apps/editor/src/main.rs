@@ -481,6 +481,7 @@ impl eframe::App for Editor {
                 }
                 if ui.button("Sound").clicked() {
                     self.workspace = 0;
+                    self.inspector_tab = 0;
                     self.flight_focus = true;
                     self.client.open_sound_panel();
                 }
