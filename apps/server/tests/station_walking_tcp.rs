@@ -86,6 +86,7 @@ fn real_socket_walk_expiry_and_boarding_preserve_ship_economy() {
     let initial = client.request(Request::DisembarkShip).snapshot.unwrap();
     let spawn = initial.pilots[0].station_avatar.as_ref().unwrap().position;
     client.request(Request::StationWalk {
+        sprint: false,
         forward: 1.,
         strafe: 0.,
         turn: 0.,

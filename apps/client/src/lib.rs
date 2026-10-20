@@ -1370,7 +1370,7 @@ impl Cockpit {
         {
             return (
                 format!("ON FOOT / {}", station_ui::docked_state_label(state)),
-                "Walk through the ship; use hatch controls and the boarding lift to reach the station.".into(),
+                station_ui::docked_exit_guidance(state).into(),
                 None,
                 self.accent(),
             );
@@ -4984,6 +4984,7 @@ mod tests {
         cockpit.connected = true;
         cockpit.pilot = "pilot".into();
         cockpit.snapshot = Some(Snapshot {
+            walk_sprint_v1: false,
             docked_traversal_capability: None,
             world_layout: None,
             exterior: None,
@@ -6455,6 +6456,7 @@ mod tests {
         cockpit.connected = true;
         cockpit.pilot = "pilot".into();
         cockpit.snapshot = Some(Snapshot {
+            walk_sprint_v1: false,
             docked_traversal_capability: None,
             world_layout: None,
             exterior: None,

@@ -4,6 +4,10 @@ pub(super) enum Material {
     Rock,
     Ore,
     PaintedHull,
+    CoatedPanel,
+    GripDeck,
+    Composite,
+    FixtureDiffuser,
     BareMetal,
     Glass,
 }
@@ -14,6 +18,10 @@ impl Material {
             Self::Rock => [0.92, 0.0, 0.0, 0.0],
             Self::Ore => [0.90, 0.0, 1.0, 0.0],
             Self::PaintedHull => [0.46, 0.0, 0.0, 0.0],
+            Self::CoatedPanel => [0.62, 0.0, 0.0, 0.0],
+            Self::GripDeck => [0.90, 0.0, 0.0, 0.0],
+            Self::Composite => [0.82, 0.0, 0.0, 0.0],
+            Self::FixtureDiffuser => [0.65, 0.0, 0.0, 0.0],
             Self::BareMetal => [0.30, 1.0, 0.0, 0.0],
             Self::Glass => [0.12, 0.0, 0.0, 1.0],
         }
@@ -28,6 +36,10 @@ mod tests {
             Material::Rock,
             Material::Ore,
             Material::PaintedHull,
+            Material::CoatedPanel,
+            Material::GripDeck,
+            Material::Composite,
+            Material::FixtureDiffuser,
             Material::BareMetal,
             Material::Glass,
         ] {

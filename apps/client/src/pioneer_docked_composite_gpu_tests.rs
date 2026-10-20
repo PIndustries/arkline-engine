@@ -671,6 +671,7 @@ fn native_pioneer_docked_composite_computer_pixels_input_and_focus() {
         let seat = arkline_protocol::seat_anchors(pose);
         let now = 1000 + (harness.time * 1000.0) as u64;
         let state = DockedTraversalState {
+            sprinting: false,
             version: DOCKED_TRAVERSAL_VERSION,
             binding: binding.clone(),
             feet_m: seat.root_station_m,
@@ -696,6 +697,7 @@ fn native_pioneer_docked_composite_computer_pixels_input_and_focus() {
             },
         };
         harness.cockpit.snapshot.as_mut().unwrap().pilots[0].station_avatar = Some(StationAvatar {
+            sprinting: false,
             docked_traversal: Some(state),
             onboard_interior: false,
             interior_deck: 1,

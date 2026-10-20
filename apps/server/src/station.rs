@@ -5,6 +5,8 @@ pub(super) struct WalkInput {
     pub(super) forward: f64,
     pub(super) strafe: f64,
     pub(super) turn: f64,
+    #[serde(default)]
+    pub(super) sprint: bool,
     pub(super) accepted_ms: u64,
 }
 pub(super) fn stop(p: &mut Pilot) {
@@ -12,6 +14,7 @@ pub(super) fn stop(p: &mut Pilot) {
     p.walk_input = None;
     if let Some(a) = &mut p.view.station_avatar {
         a.moving = false;
+        a.sprinting = false;
         a.jump_started_ms = None;
         a.position[1] = 0.0;
     }
@@ -71,6 +74,7 @@ pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result
             }
             p.walk_input = None;
             p.view.station_avatar = Some(StationAvatar {
+                sprinting: false,
                 docked_traversal: None,
                 onboard_interior: true,
                 interior_deck: 1,
@@ -105,6 +109,7 @@ pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result
             a.interior_deck = deck;
             a.position = PIONEER_LIFT_POINT;
             a.moving = false;
+            a.sprinting = false;
             a.updated_at_ms = now;
             p.walk_input = None;
         }
@@ -124,6 +129,7 @@ pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result
             );
             p.walk_input = None;
             p.view.station_avatar = Some(StationAvatar {
+                sprinting: false,
                 docked_traversal: None,
                 onboard_interior: false,
                 interior_deck: 1,
@@ -140,6 +146,7 @@ pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result
             ensure!(p.view.station_avatar.is_none(), "already on foot");
             p.controls = None;
             p.view.station_avatar = Some(StationAvatar {
+                sprinting: false,
                 docked_traversal: None,
                 onboard_interior: false,
                 interior_deck: 1,
@@ -192,6 +199,7 @@ pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result
             }
             a.seated = seated;
             a.moving = false;
+            a.sprinting = false;
             a.updated_at_ms = a.updated_at_ms.max(now);
             p.walk_input = None;
         }
@@ -210,6 +218,7 @@ pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result
             forward,
             strafe,
             turn,
+            sprint,
         } => {
             ensure!(
                 [forward, strafe, turn]
@@ -227,10 +236,12 @@ pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result
             }
             a.updated_at_ms = a.updated_at_ms.max(now);
             a.moving = forward != 0.0 || strafe != 0.0 || turn != 0.0;
+            a.sprinting = sprint && (forward != 0.0 || strafe != 0.0);
             p.walk_input = Some(WalkInput {
                 forward,
                 strafe,
                 turn,
+                sprint: a.sprinting,
                 accepted_ms: now,
             });
         }
@@ -277,6 +288,7 @@ pub(super) fn migrate(w: &mut World, room_layout: Option<&RoomLayoutDocument>) {
                 };
                 a.seated = false;
                 a.moving = false;
+                a.sprinting = false;
                 a.jump_started_ms = None;
                 a.position[1] = 0.0;
                 p.walk_input = None;
@@ -316,6 +328,7 @@ pub(super) fn advance(w: &mut World, now: u64, room_layout: Option<&RoomLayoutDo
         }
         let Some(input) = &p.walk_input else {
             a.moving = false;
+            a.sprinting = false;
             a.updated_at_ms = a.updated_at_ms.max(now);
             continue;
         };
@@ -352,16 +365,21 @@ pub(super) fn advance(w: &mut World, now: u64, room_layout: Option<&RoomLayoutDo
             )
         };
         let norm = input.forward.hypot(input.strafe).max(1.0);
+        let speed = if input.sprint {
+            SPRINT_SPEED_MPS
+        } else {
+            WALK_SPEED_MPS
+        };
         while remaining > 0.0 {
             let dt = remaining.min(0.025);
             remaining -= dt;
             a.heading = (a.heading + input.turn * 2.0 * dt).rem_euclid(std::f64::consts::TAU);
             let (sin, cos) = a.heading.sin_cos();
             let x = (a.position[0]
-                + (cos * input.forward - sin * input.strafe) / norm * WALK_SPEED_MPS * dt)
+                + (cos * input.forward - sin * input.strafe) / norm * speed * dt)
                 .clamp(min_x, max_x);
             let z = (a.position[2]
-                + (sin * input.forward + cos * input.strafe) / norm * WALK_SPEED_MPS * dt)
+                + (sin * input.forward + cos * input.strafe) / norm * speed * dt)
                 .clamp(min_z, max_z);
             let clear = |position: [f64; 3]| {
                 (a.onboard_interior
@@ -385,6 +403,7 @@ pub(super) fn advance(w: &mut World, now: u64, room_layout: Option<&RoomLayoutDo
         a.updated_at_ms = a.updated_at_ms.max(now);
         a.moving =
             now < expires && (input.forward != 0.0 || input.strafe != 0.0 || input.turn != 0.0);
+        a.sprinting = a.moving && input.sprint && (input.forward != 0.0 || input.strafe != 0.0);
         if now >= expires {
             p.walk_input = None;
         }
@@ -434,6 +453,7 @@ pub(super) fn validate(w: &World, room_layout: Option<&RoomLayoutDocument>) -> R
                         <= STATION_JUMP_SPEED_MPS.powi(2) / (2.0 * STATION_GRAVITY_MPS2)
                     && (a.jump_started_ms.is_some() || a.position[1] == 0.0)
                     && !(a.seated && a.jump_started_ms.is_some())
+                    && (!a.sprinting || (a.moving && !a.seated))
                     && a.position[0].abs() <= l.half_length
                     && a.position[2].abs() <= l.half_width
                     && (!fleet

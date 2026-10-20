@@ -50,7 +50,7 @@ impl Mailbox {
             remote,
         });
     }
-    pub fn publish_station(&self, forward: f64, strafe: f64, turn: f64) {
+    pub fn publish_station(&self, forward: f64, strafe: f64, turn: f64, sprint: bool) {
         let mut state = self.0.lock().unwrap();
         state.generation = state.generation.wrapping_add(1);
         state.pending = Some(PendingControl {
@@ -59,6 +59,7 @@ impl Mailbox {
                 forward,
                 strafe,
                 turn,
+                sprint,
             },
             remote: None,
         });
@@ -70,6 +71,7 @@ impl Mailbox {
         forward: f64,
         strafe: f64,
         turn: f64,
+        sprint: bool,
     ) {
         let mut state = self.0.lock().unwrap();
         state.generation = state.generation.wrapping_add(1);
@@ -81,6 +83,7 @@ impl Mailbox {
                     forward,
                     strafe,
                     turn,
+                    sprint,
                 },
             },
             remote: None,
@@ -449,7 +452,7 @@ mod tests {
     #[test]
     fn flight_release_preserves_queued_station_stop_but_clears_thrust() {
         let mailbox = Mailbox::default();
-        mailbox.publish_station(0.0, 0.0, 0.0);
+        mailbox.publish_station(0.0, 0.0, 0.0, false);
         mailbox.clear_flight();
         mailbox.clear_flight();
         assert!(matches!(
@@ -457,7 +460,8 @@ mod tests {
             Some(Request::StationWalk {
                 forward: 0.0,
                 strafe: 0.0,
-                turn: 0.0
+                turn: 0.0,
+                sprint: false,
             })
         ));
         mailbox.publish(Controls {

@@ -247,6 +247,7 @@ fn authority_legacy_bypasses_and_invalid_bound_commands_roll_back_exactly() {
             &mut server,
             &mut session,
             DockedTraversalRequest::Walk {
+                sprint: false,
                 binding: bound,
                 forward: 1.0,
                 strafe: 0.0,
@@ -266,6 +267,7 @@ fn authority_legacy_bypasses_and_invalid_bound_commands_roll_back_exactly() {
             &mut server,
             &mut session,
             DockedTraversalRequest::Walk {
+                sprint: false,
                 binding: binding(),
                 forward,
                 strafe,
@@ -290,6 +292,7 @@ fn authority_walk_lease_expires_after_five_hundred_ms_without_hidden_drift() {
         &mut server,
         &mut session,
         DockedTraversalRequest::Walk {
+            sprint: false,
             binding: binding(),
             forward: 0.0,
             strafe: 1.0,
@@ -335,6 +338,7 @@ fn authority_restart_retains_canonical_feet_but_clears_active_movement() {
         &mut server,
         &mut session,
         DockedTraversalRequest::Walk {
+            sprint: false,
             binding: binding(),
             forward: 0.0,
             strafe: 1.0,
@@ -474,6 +478,7 @@ fn walk_tick_toward(
         server,
         session,
         DockedTraversalRequest::Walk {
+            sprint: false,
             binding: binding(),
             forward: (cos * dx + sin * dz) / scale,
             strafe: (-sin * dx + cos * dz) / scale,
@@ -489,6 +494,7 @@ fn stop_walking(server: &mut Server, session: &mut Option<String>, now: u64) -> 
         server,
         session,
         DockedTraversalRequest::Walk {
+            sprint: false,
             binding: binding(),
             forward: 0.0,
             strafe: 0.0,
@@ -1279,6 +1285,7 @@ fn authority_walks_from_pilot_seat_down_both_core_stairs_and_back_without_telepo
         &mut server,
         &mut session,
         DockedTraversalRequest::Walk {
+            sprint: false,
             binding: binding(),
             forward: 0.25,
             strafe: 0.0,
@@ -1555,4 +1562,151 @@ fn authority_reverses_lift_within_hatch_tolerance_without_stopping_short() {
         DockedHatch::Outer,
         false,
     ));
+}
+
+#[test]
+fn canonical_sprint_uses_normalized_six_meters_per_second_and_same_lease_and_stop() {
+    let mut server = Server::open(":memory:").unwrap();
+    let mut session = None;
+    connected(&mut server, &mut session);
+    leave_and_stand(&mut server, &mut session, LEFT_AT);
+    let saved: World = serde_json::from_str(&durable(&server)).unwrap();
+    for (sprint, strafe, speed) in [
+        (false, 0.0, WALK_SPEED_MPS),
+        (true, 0.0, SPRINT_SPEED_MPS),
+        (true, 1.0, SPRINT_SPEED_MPS),
+    ] {
+        // Disposable authority fixture on the existing clear station floor.
+        // Canonical support/capsule validation still applies before every run.
+        let mut world = saved.clone();
+        let state = world
+            .pilots
+            .get_mut("Walker")
+            .unwrap()
+            .view
+            .station_avatar
+            .as_mut()
+            .unwrap()
+            .docked_traversal
+            .as_mut()
+            .unwrap();
+        state.feet_m = hangar_layout(ShipClass::Pioneer).boarding_point;
+        state.heading = 0.0;
+        state.support = DockedSupport::Station;
+        state.surface_id = "station.floor".into();
+        let origin = state.feet_m;
+        validate(&world, None).unwrap();
+        let now = STANDING_AT;
+        docked_traversal::execute(
+            &mut world,
+            "Walker",
+            DockedTraversalRequest::Walk {
+                binding: binding(),
+                forward: 1.0,
+                strafe,
+                turn: 0.0,
+                sprint,
+            },
+            now,
+            None,
+        )
+        .unwrap();
+        docked_traversal::advance(&mut world, now + 250, None).unwrap();
+        let state = world.pilots["Walker"]
+            .view
+            .station_avatar
+            .as_ref()
+            .unwrap()
+            .docked_traversal
+            .as_ref()
+            .unwrap();
+        let distance = (state.feet_m[0] - origin[0]).hypot(state.feet_m[2] - origin[2]);
+        assert!((distance - speed * 0.25).abs() < 1.0e-9);
+        assert_eq!(state.sprinting, sprint);
+        assert!(
+            !world.pilots["Walker"]
+                .view
+                .station_avatar
+                .as_ref()
+                .unwrap()
+                .sprinting
+        );
+        docked_traversal::advance(&mut world, now + STATION_WALK_LEASE_MS, None).unwrap();
+        let state = world.pilots["Walker"]
+            .view
+            .station_avatar
+            .as_ref()
+            .unwrap()
+            .docked_traversal
+            .as_ref()
+            .unwrap();
+        let endpoint = state.feet_m;
+        assert!(!state.moving && !state.sprinting);
+        let distance = (endpoint[0] - origin[0]).hypot(endpoint[2] - origin[2]);
+        assert!((distance - speed * 0.5).abs() < 1.0e-9);
+        docked_traversal::advance(&mut world, now + 1000, None).unwrap();
+        assert_eq!(
+            world.pilots["Walker"]
+                .view
+                .station_avatar
+                .as_ref()
+                .unwrap()
+                .docked_traversal
+                .as_ref()
+                .unwrap()
+                .feet_m,
+            endpoint
+        );
+        docked_traversal::execute(
+            &mut world,
+            "Walker",
+            DockedTraversalRequest::Walk {
+                binding: binding(),
+                forward: 0.0,
+                strafe: 0.0,
+                turn: 1.0,
+                sprint: true,
+            },
+            now + 1000,
+            None,
+        )
+        .unwrap();
+        assert!(
+            !world.pilots["Walker"]
+                .view
+                .station_avatar
+                .as_ref()
+                .unwrap()
+                .docked_traversal
+                .as_ref()
+                .unwrap()
+                .sprinting
+        );
+        docked_traversal::execute(
+            &mut world,
+            "Walker",
+            DockedTraversalRequest::Walk {
+                binding: binding(),
+                forward: -1.0,
+                strafe: 0.0,
+                turn: 0.0,
+                sprint: true,
+            },
+            now + 1000,
+            None,
+        )
+        .unwrap();
+        station::stop(world.pilots.get_mut("Walker").unwrap());
+        let stopped = world.pilots["Walker"]
+            .view
+            .station_avatar
+            .as_ref()
+            .unwrap()
+            .docked_traversal
+            .as_ref()
+            .unwrap();
+        assert!(!stopped.moving && !stopped.sprinting);
+        assert!(world.pilots["Walker"].walk_input.is_none());
+        validate(&world, None).unwrap();
+    }
 }

@@ -113,6 +113,7 @@ fn populated_response_fixture() -> Response {
         fleet_hangar: true,
     };
     let state = DockedTraversalState {
+        sprinting: false,
         version: DOCKED_TRAVERSAL_VERSION,
         binding: binding.clone(),
         feet_m: [123.25, 0.0, -64.5],

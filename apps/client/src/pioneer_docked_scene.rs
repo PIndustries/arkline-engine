@@ -130,6 +130,19 @@ fn surface(material: PioneerDockedMaterial) -> (Vec3, f32) {
         PioneerDockedMaterial::Glass => (Vec3::new(0.012, 0.055, 0.075), 0.0),
     }
 }
+/// Semantic protocol materials retain one explicit response in every view.
+fn panel_surface_role(material: PioneerDockedMaterial) -> surface_roles::SurfaceRole {
+    use surface_roles::SurfaceRole;
+    match material {
+        PioneerDockedMaterial::Graphite => SurfaceRole::CoatedPanel,
+        PioneerDockedMaterial::Titanium => SurfaceRole::ExposedAlloy,
+        PioneerDockedMaterial::Carbon => SurfaceRole::Composite,
+        PioneerDockedMaterial::Emerald => SurfaceRole::EnamelTrim,
+        PioneerDockedMaterial::WorkingLight => SurfaceRole::FixtureDiffuser,
+        PioneerDockedMaterial::Amber => SurfaceRole::EnamelTrim,
+        PioneerDockedMaterial::Glass => SurfaceRole::InstrumentGlass,
+    }
+}
 fn panel_parts(
     geometry: &PioneerDockedGeometry,
     frame: Mat4,
@@ -141,7 +154,12 @@ fn panel_parts(
         .filter(move |panel| !skip_rooms || panel.kind != PioneerDockedPanelKind::RoomObstacle)
         .map(move |panel| {
             let (color, emission) = surface(panel.material);
-            (0, frame * box_matrix(&panel.bounds), color, emission)
+            (
+                panel_surface_role(panel.material).cube(),
+                frame * box_matrix(&panel.bounds),
+                color,
+                emission,
+            )
         })
 }
 
@@ -390,7 +408,7 @@ unsafe fn paint_scene(
         if keep {
             selected.push(*part);
         }
-        if part.0 == 0 && part.3 >= 0.7 && part.2.min_element() > 0.25 {
+        if mesh_index(part.0) == 0 && part.3 >= 0.7 && part.2.min_element() > 0.25 {
             lights.push(local_lighting::Light {
                 position: part.1.w_axis.truncate(),
                 range: 30.0,
@@ -505,7 +523,7 @@ pub(super) fn show(
         );
         return None;
     }
-    let joints = pilot_joints(standing(state, now));
+    let mut joints = pilot_joints(standing(state, now));
     let feet = state.map_or_else(
         || vector(body_to_station(pose, joints.root_m)),
         |state| vector(state.feet_m),
@@ -522,6 +540,7 @@ pub(super) fn show(
         view.follow = Some(feet);
         view.follow_heading = Some(heading);
         view.head_look = [0.0; 2];
+        view.gait = Default::default();
     }
     view.walking = state.is_some();
     let focused = ui.input(|input| input.focused);
@@ -557,7 +576,7 @@ pub(super) fn show(
     if allowed {
         let (held, axes) = ui.input(|input| {
             (
-                input.modifiers.shift,
+                state.is_none() && input.modifiers.shift,
                 [
                     (input.key_down(egui::Key::ArrowLeft) as i32
                         - input.key_down(egui::Key::ArrowRight) as i32) as f32,
@@ -578,6 +597,16 @@ pub(super) fn show(
     view.follow = Some(smooth);
     view.follow_heading = Some(avatar_follow::heading(view.follow_heading, heading, dt));
     let body_heading = view.follow_heading.unwrap();
+    let gait = view.gait.update(
+        now,
+        smooth,
+        body_heading,
+        live && state.is_some_and(|state| state.moving && state.grounded) && !transition,
+        transition,
+    );
+    if state.is_some_and(|state| state.grounded) && !transition {
+        gait.apply_registered(&mut joints);
+    }
     let target = eye_at(&joints, smooth, body_heading);
     let act = actuator_pose(state, pose, room, now);
     let dynamic = match dynamic_geometry(pose, act) {
@@ -647,7 +676,7 @@ pub(super) fn show(
             return None;
         }
     };
-    if !first_person {
+    if should_render_avatar(first_person, view.editor_free_camera_active, eye, smooth) {
         parts.extend(pilot_parts(&joints, smooth, body_heading));
     }
     if !view.editor_free_camera_active {
@@ -693,7 +722,7 @@ pub(super) fn show(
         if state.is_none() {
             "PIONEER · PILOT SEAT · Shift + arrows: look"
         } else if live {
-            "PIONEER · DOCKED · Shift + arrows: look"
+            "PIONEER · DOCKED · W/S move · RMB turn"
         } else {
             "PIONEER · OFFLINE · movement paused"
         },
@@ -727,6 +756,7 @@ mod tests {
     fn pilot(state: Option<arkline_protocol::DockedTraversalState>) -> PilotView {
         let mut pilot:PilotView=serde_json::from_value(serde_json::json!({"name":"DockedCameraQA","credits":0,"ore":0,"location":Location::Docked})).unwrap();
         pilot.station_avatar = state.map(|state| StationAvatar {
+            sprinting: false,
             docked_traversal: Some(state),
             onboard_interior: false,
             interior_deck: 1,
@@ -749,6 +779,7 @@ mod tests {
             false,
         );
         arkline_protocol::DockedTraversalState {
+            sprinting: false,
             version: arkline_protocol::DOCKED_TRAVERSAL_VERSION,
             binding: binding.clone(),
             feet_m: arkline_protocol::seat_anchors(pose).root_station_m,

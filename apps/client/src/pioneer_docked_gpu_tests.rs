@@ -266,6 +266,7 @@ fn state_at(
         false,
     );
     arkline_protocol::DockedTraversalState {
+        sprinting: false,
         version: arkline_protocol::DOCKED_TRAVERSAL_VERSION,
         binding: binding.clone(),
         feet_m: body_to_station(pose, body),
@@ -410,6 +411,7 @@ fn supported_state_at(
 fn pilot(state: Option<arkline_protocol::DockedTraversalState>) -> PilotView {
     let mut pilot:PilotView=serde_json::from_value(serde_json::json!({"name":"NativeDockedPioneer","credits":0,"ore":0,"location":Location::Docked})).unwrap();
     pilot.station_avatar = state.map(|state| StationAvatar {
+        sprinting: false,
         docked_traversal: Some(state),
         onboard_interior: false,
         interior_deck: 1,

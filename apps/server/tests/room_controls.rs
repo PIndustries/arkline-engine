@@ -190,6 +190,7 @@ fn authoritative_door_collision_access_and_non_remote_commands() {
             &mut s,
             &mut p,
             Request::StationWalk {
+                sprint: false,
                 forward: 1.,
                 strafe: 0.,
                 turn: 0.,
@@ -217,6 +218,7 @@ fn authoritative_door_collision_access_and_non_remote_commands() {
         &mut s,
         &mut p,
         Request::StationWalk {
+            sprint: false,
             forward: 1.,
             strafe: 0.,
             turn: 0.,

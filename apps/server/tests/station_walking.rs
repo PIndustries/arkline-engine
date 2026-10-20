@@ -63,6 +63,7 @@ fn walking_is_authoritative_bounded_and_stops_on_expiry_logout_and_restart() {
             !s.handle_at(
                 &mut p,
                 Request::StationWalk {
+                    sprint: false,
                     forward: bad,
                     strafe: 0.,
                     turn: 0.
@@ -76,6 +77,7 @@ fn walking_is_authoritative_bounded_and_stops_on_expiry_logout_and_restart() {
         &mut s,
         &mut p,
         Request::StationWalk {
+            sprint: false,
             forward: 1.,
             strafe: 0.,
             turn: 0.,
@@ -91,6 +93,7 @@ fn walking_is_authoritative_bounded_and_stops_on_expiry_logout_and_restart() {
         &mut s,
         &mut p,
         Request::StationWalk {
+            sprint: false,
             forward: 1.,
             strafe: 0.,
             turn: 0.,
@@ -103,6 +106,7 @@ fn walking_is_authoritative_bounded_and_stops_on_expiry_logout_and_restart() {
         &mut s,
         &mut p,
         Request::StationWalk {
+            sprint: false,
             forward: -1.,
             strafe: 0.,
             turn: 0.,
@@ -119,6 +123,7 @@ fn walking_is_authoritative_bounded_and_stops_on_expiry_logout_and_restart() {
         &mut s,
         &mut p,
         Request::StationWalk {
+            sprint: false,
             forward: 0.,
             strafe: -1.,
             turn: 0.,
@@ -130,6 +135,7 @@ fn walking_is_authoritative_bounded_and_stops_on_expiry_logout_and_restart() {
         &mut s,
         &mut p,
         Request::StationWalk {
+            sprint: false,
             forward: 0.,
             strafe: -1.,
             turn: 0.,
@@ -144,6 +150,7 @@ fn walking_is_authoritative_bounded_and_stops_on_expiry_logout_and_restart() {
         &mut s,
         &mut p,
         Request::StationWalk {
+            sprint: false,
             forward: 1.,
             strafe: 0.,
             turn: 1.,
@@ -275,4 +282,156 @@ fn walking_cannot_impersonate_worker_and_disembarking_releases_remote_control() 
         )
         .ok
     );
+}
+
+#[test]
+fn sprint_speed_is_normalized_and_neutral_expiry_and_disconnect_stop_it() {
+    for (sprint, strafe, speed) in [
+        (false, 0.0, WALK_SPEED_MPS),
+        (true, 0.0, SPRINT_SPEED_MPS),
+        (true, 1.0, SPRINT_SPEED_MPS),
+    ] {
+        let mut server = Server::open(":memory:").unwrap();
+        let mut session = None;
+        let connected = ok(
+            &mut server,
+            &mut session,
+            Request::Connect {
+                supports_room_controls: false,
+                world_layout_version: 1,
+                supports_fleet_hangar: false,
+                supports_pioneer_interior: true,
+                supports_docked_traversal_v2: false,
+                protocol_version: PROTOCOL_VERSION,
+                pilot: "Sprinter".into(),
+                resume_token: None,
+            },
+            0,
+        );
+        assert!(connected.snapshot.unwrap().walk_sprint_v1);
+        ok(&mut server, &mut session, Request::DisembarkShip, 0);
+        let origin = avatar(&mut server, 0).position;
+        let accepted = ok(
+            &mut server,
+            &mut session,
+            Request::StationWalk {
+                forward: 1.0,
+                strafe,
+                turn: 0.0,
+                sprint,
+            },
+            0,
+        );
+        assert_eq!(
+            accepted.snapshot.unwrap().pilots[0]
+                .station_avatar
+                .as_ref()
+                .unwrap()
+                .sprinting,
+            sprint
+        );
+        let sample = avatar(&mut server, 250);
+        let distance = (sample.position[0] - origin[0]).hypot(sample.position[2] - origin[2]);
+        assert!((distance - speed * 0.25).abs() < 1.0e-9, "{sample:?}");
+        assert_eq!(sample.sprinting, sprint);
+        let expired = avatar(&mut server, STATION_WALK_LEASE_MS);
+        assert!(!expired.moving && !expired.sprinting);
+        let distance = (expired.position[0] - origin[0]).hypot(expired.position[2] - origin[2]);
+        assert!((distance - speed * 0.5).abs() < 1.0e-9);
+        assert_eq!(avatar(&mut server, 1000).position, expired.position);
+        ok(
+            &mut server,
+            &mut session,
+            Request::StationWalk {
+                forward: -1.0,
+                strafe: 0.0,
+                turn: 0.0,
+                sprint: true,
+            },
+            1000,
+        );
+        let stopped = ok(
+            &mut server,
+            &mut session,
+            Request::StationWalk {
+                forward: 0.0,
+                strafe: 0.0,
+                turn: 0.0,
+                sprint: true,
+            },
+            1100,
+        )
+        .snapshot
+        .unwrap()
+        .pilots[0]
+            .station_avatar
+            .clone()
+            .unwrap();
+        assert!(!stopped.moving && !stopped.sprinting);
+        assert_eq!(avatar(&mut server, 1800).position, stopped.position);
+        let turning = ok(
+            &mut server,
+            &mut session,
+            Request::StationWalk {
+                forward: 0.0,
+                strafe: 0.0,
+                turn: 1.0,
+                sprint: true,
+            },
+            1800,
+        )
+        .snapshot
+        .unwrap()
+        .pilots[0]
+            .station_avatar
+            .clone()
+            .unwrap();
+        assert!(turning.moving && !turning.sprinting);
+        ok(
+            &mut server,
+            &mut session,
+            Request::StationWalk {
+                forward: 1.0,
+                strafe: 0.0,
+                turn: 0.0,
+                sprint: true,
+            },
+            1800,
+        );
+        server.disconnect(&mut session);
+        let disconnected = avatar(&mut server, 1800);
+        assert!(!disconnected.moving && !disconnected.sprinting);
+    }
+}
+
+#[test]
+fn sprint_cannot_cross_the_existing_hull_collision_boundary() {
+    let mut server = Server::open(":memory:").unwrap();
+    let mut session = None;
+    let request: Request = serde_json::from_value(serde_json::json!({
+        "command": "connect", "protocol_version": PROTOCOL_VERSION,
+        "world_layout_version": 1, "pilot": "Collision", "resume_token": null
+    }))
+    .unwrap();
+    ok(&mut server, &mut session, request, 0);
+    ok(&mut server, &mut session, Request::DisembarkShip, 0);
+    for now in [0, 500, 1000] {
+        ok(
+            &mut server,
+            &mut session,
+            Request::StationWalk {
+                forward: 0.0,
+                strafe: -1.0,
+                turn: 0.0,
+                sprint: true,
+            },
+            now,
+        );
+        let bounded = avatar(&mut server, now + STATION_WALK_LEASE_MS);
+        assert!(
+            bounded.position[2]
+                >= ShipClass::Pioneer.spec().width_m * 0.5 + STATION_AVATAR_RADIUS_M - 1.0e-9
+        );
+        assert!(!bounded.moving && !bounded.sprinting);
+    }
 }

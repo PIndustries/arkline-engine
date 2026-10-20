@@ -1,12 +1,25 @@
 //! Docked Pioneer decks, rendered from the server's shared collision plan.
+use super::super::surface_roles::SurfaceRole;
 use super::*;
 use arkline_protocol::{
     RoomLayoutDocument, RoomLayoutState, StationObstacleKind, PIONEER_INTERIOR_ENTRY,
 };
 use std::sync::Arc;
+
+#[cfg(test)]
 fn block(p: &mut Parts, min: Vec3, max: Vec3, color: Vec3, emission: f32) {
+    surface_block(p, min, max, color, emission, SurfaceRole::CoatedPanel);
+}
+fn surface_block(
+    p: &mut Parts,
+    min: Vec3,
+    max: Vec3,
+    color: Vec3,
+    emission: f32,
+    role: SurfaceRole,
+) {
     p.draw(
-        0,
+        role.cube(),
         transform((min + max) * 0.5, (max - min) * 0.5, Quat::IDENTITY),
         color,
         emission,
@@ -64,19 +77,21 @@ impl LayoutPartsCache {
 fn build_parts(deck: u8, document: &RoomLayoutDocument) -> Vec<ModelPart> {
     let mut p = Parts(Vec::new());
     let steel = Vec3::new(0.045, 0.065, 0.072);
-    block(
+    surface_block(
         &mut p,
         Vec3::new(0.0, -0.1, 0.0),
         Vec3::new(32.0, 0.0, 14.0),
         steel,
         0.0,
+        SurfaceRole::GripDeck,
     );
-    block(
+    surface_block(
         &mut p,
         Vec3::new(0.0, 3.2, 0.0),
         Vec3::new(32.0, 3.3, 14.0),
         steel,
         0.0,
+        SurfaceRole::Composite,
     );
     for obstacle in document.obstacles(deck) {
         p.0.extend(obstacle_model_parts(obstacle));
@@ -86,44 +101,49 @@ fn build_parts(deck: u8, document: &RoomLayoutDocument) -> Vec<ModelPart> {
     }
     // Raised ceiling ribs and recessed light strips make the access path readable.
     for x in (2..32).step_by(3) {
-        block(
+        surface_block(
             &mut p,
             Vec3::new(x as f32, 3.05, 5.9),
             Vec3::new(x as f32 + 0.10, 3.2, 8.1),
             Vec3::new(0.10, 0.14, 0.15),
             0.0,
+            SurfaceRole::ExposedAlloy,
         );
-        block(
+        surface_block(
             &mut p,
             Vec3::new(x as f32 + 0.15, 3.17, 6.4),
             Vec3::new(x as f32 + 1.4, 3.19, 7.6),
             Vec3::new(0.40, 0.55, 0.45),
             0.6,
+            SurfaceRole::FixtureDiffuser,
         );
-        block(
+        surface_block(
             &mut p,
             Vec3::new(x as f32, 0.001, 5.9),
             Vec3::new(x as f32 + 0.015, 0.003, 8.1),
             Vec3::new(0.015, 0.025, 0.03),
             0.0,
+            SurfaceRole::Composite,
         );
     }
     for x in (1..32).step_by(2) {
-        block(
+        surface_block(
             &mut p,
             Vec3::new(x as f32, 0.008, 6.95),
             Vec3::new(x as f32 + 0.7, 0.012, 7.05),
             Vec3::new(0.02, 0.38, 0.15),
             0.35,
+            SurfaceRole::EnamelTrim,
         );
     }
     let lift = Vec3::from_array(arkline_protocol::PIONEER_LIFT_POINT.map(|v| v as f32));
-    block(
+    surface_block(
         &mut p,
         lift + Vec3::new(-0.9, 0.005, -0.9),
         lift + Vec3::new(0.9, 0.01, 0.9),
         Vec3::new(0.30, 0.23, 0.05),
         0.3,
+        SurfaceRole::EnamelTrim,
     );
     let entry = if deck == 1 {
         PIONEER_INTERIOR_ENTRY
@@ -131,12 +151,13 @@ fn build_parts(deck: u8, document: &RoomLayoutDocument) -> Vec<ModelPart> {
         arkline_protocol::PIONEER_LIFT_POINT
     };
     let e = Vec3::from_array(entry.map(|v| v as f32));
-    block(
+    surface_block(
         &mut p,
         e + Vec3::new(-0.6, 0.01, -0.6),
         e + Vec3::new(0.6, 0.02, 0.6),
         Vec3::new(0.15, 0.5, 0.25),
         0.3,
+        SurfaceRole::EnamelTrim,
     );
     if deck == arkline_protocol::PIONEER_CONNECTED_ROOM.deck {
         p.0.extend(connected_room_static_parts());
@@ -151,7 +172,7 @@ fn obstacle_model_parts(o: arkline_protocol::StationObstacle) -> Vec<ModelPart> 
     let min = Vec3::from_array(o.min.map(|v| v as f32));
     let max = Vec3::from_array(o.max.map(|v| v as f32));
     let fixture = matches!(o.kind, StationObstacleKind::Storage);
-    block(
+    surface_block(
         &mut p,
         min,
         max,
@@ -161,14 +182,20 @@ fn obstacle_model_parts(o: arkline_protocol::StationObstacle) -> Vec<ModelPart> 
             steel
         },
         0.0,
+        if fixture {
+            SurfaceRole::Composite
+        } else {
+            SurfaceRole::CoatedPanel
+        },
     );
     if fixture {
-        block(
+        surface_block(
             &mut p,
             Vec3::new(min.x + 0.1, max.y - 0.5, max.z + 0.005),
             Vec3::new(max.x - 0.1, max.y - 0.05, max.z + 0.02),
             Vec3::new(0.015, 0.25, 0.1),
             0.4,
+            SurfaceRole::InstrumentGlass,
         );
     }
     p.0
@@ -184,22 +211,24 @@ fn room_decoration_parts(room: &arkline_protocol::RoomLayout) -> Vec<ModelPart> 
     let face = room.door_wall_z() as f32;
     for side in [-1.0, 1.0] {
         let jamb_x = door + side * door_width * 0.5;
-        block(
+        surface_block(
             &mut p,
             Vec3::new(jamb_x - 0.025, 0.0, face - 0.01),
             Vec3::new(jamb_x + 0.025, door_height, face + 0.17),
             Vec3::new(0.025, 0.35, 0.14),
             0.5,
+            SurfaceRole::EnamelTrim,
         );
     }
-    block(
+    surface_block(
         &mut p,
         Vec3::new(door - door_width * 0.5, door_height - 0.04, face - 0.01),
         Vec3::new(door + door_width * 0.5, door_height, face + 0.17),
         Vec3::new(0.025, 0.35, 0.14),
         0.5,
+        SurfaceRole::EnamelTrim,
     );
-    block(
+    surface_block(
         &mut p,
         Vec3::new(x + 0.6, (height - 0.05).min(3.15), z + depth * 0.35),
         Vec3::new(
@@ -209,6 +238,7 @@ fn room_decoration_parts(room: &arkline_protocol::RoomLayout) -> Vec<ModelPart> 
         ),
         Vec3::new(0.5, 0.65, 0.55),
         0.7,
+        SurfaceRole::FixtureDiffuser,
     );
     p.0
 }
@@ -217,19 +247,21 @@ fn room_decoration_parts(room: &arkline_protocol::RoomLayout) -> Vec<ModelPart> 
 fn connected_room_static_parts() -> Vec<ModelPart> {
     let mut p = Parts(Vec::new());
     p.0.extend(equipment_static_parts("pioneer.deck1.airlock.breaker"));
-    block(
+    surface_block(
         &mut p,
         Vec3::new(4.28, 2.9, 0.3),
         Vec3::new(4.32, 2.94, 5.3),
         Vec3::new(0.1, 0.14, 0.12),
         0.,
+        SurfaceRole::ExposedAlloy,
     );
-    block(
+    surface_block(
         &mut p,
         Vec3::new(4.3, 2.9, 0.28),
         Vec3::new(10.8, 2.94, 0.32),
         Vec3::new(0.1, 0.14, 0.12),
         0.,
+        SurfaceRole::ExposedAlloy,
     );
     p.0.extend(equipment_static_parts("pioneer.deck1.airlock.vent"));
     p.0
@@ -280,40 +312,44 @@ fn equipment_static_parts(id: &str) -> Vec<ModelPart> {
     if id == "pioneer.deck1.airlock.breaker" {
         // Wall-flush service panel and ceiling conduit do not change walkable clearance.
         let panel = Vec3::from_array(d.breaker_position.map(|v| v as f32));
-        block(
+        surface_block(
             &mut p,
             panel - Vec3::new(0.04, 0.5, 0.35),
             panel + Vec3::new(-0.01, 0.5, 0.35),
             steel * 1.8,
             0.,
+            SurfaceRole::ExposedAlloy,
         );
         for z in [2.72, 2.9, 3.08, 3.26] {
-            block(
+            surface_block(
                 &mut p,
                 Vec3::new(4.241, 1.15, z),
                 Vec3::new(4.245, 1.65, z + 0.025),
                 steel * 0.3,
                 0.,
+                SurfaceRole::Composite,
             );
         }
     }
     if id == "pioneer.deck1.airlock.vent" {
         let vent = Vec3::from_array(d.vent_position.map(|v| v as f32));
-        block(
+        surface_block(
             &mut p,
             vent - Vec3::new(0.42, 0.25, 0.04),
             vent + Vec3::new(0.42, 0.25, 0.04),
             steel * 1.5,
             0.,
+            SurfaceRole::ExposedAlloy,
         );
         for i in 0..6 {
             let x = vent.x - 0.35 + i as f32 * 0.13;
-            block(
+            surface_block(
                 &mut p,
                 Vec3::new(x, vent.y - 0.2, vent.z + 0.04),
                 Vec3::new(x + 0.045, vent.y + 0.2, vent.z + 0.06),
                 steel * 0.3,
                 0.,
+                SurfaceRole::Composite,
             );
         }
     }
@@ -364,21 +400,23 @@ pub(super) fn parts_with_room(
         ),
     ] {
         let center = Vec3::from_array(point.map(|v| v as f32));
-        block(
+        surface_block(
             &mut p,
             center - half,
             center + half,
             if on { color } else { Vec3::splat(0.025) },
             if on { 0.8 } else { 0. },
+            SurfaceRole::FixtureDiffuser,
         );
     }
     if !s.door_open {
-        block(
+        surface_block(
             &mut p,
             Vec3::from_array(d.door_min.map(|v| v as f32)),
             Vec3::from_array(d.door_max.map(|v| v as f32)),
             Vec3::new(0.10, 0.14, 0.15),
             0.,
+            SurfaceRole::CoatedPanel,
         );
     }
     p.0
@@ -437,21 +475,23 @@ fn equipment_output_parts(id: &str, state: &arkline_protocol::PioneerRoomState) 
     };
     if let Some((point, half, color, on)) = fixture {
         let center = Vec3::from_array(point.map(|v| v as f32));
-        block(
+        surface_block(
             &mut p,
             center - half,
             center + half,
             if on { color } else { Vec3::splat(0.025) },
             if on { 0.8 } else { 0. },
+            SurfaceRole::FixtureDiffuser,
         );
     }
     if id == "pioneer.deck1.airlock.door" && !state.door_open {
-        block(
+        surface_block(
             &mut p,
             Vec3::from_array(d.door_min.map(|v| v as f32)),
             Vec3::from_array(d.door_max.map(|v| v as f32)),
             Vec3::new(0.10, 0.14, 0.15),
             0.,
+            SurfaceRole::CoatedPanel,
         );
     }
     p.0

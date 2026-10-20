@@ -152,6 +152,8 @@ pub struct DockedTraversalState {
     pub support: DockedSupport,
     pub surface_id: String,
     pub moving: bool,
+    #[serde(default)]
+    pub sprinting: bool,
     pub grounded: bool,
     pub vertical_velocity_mps: f64,
     pub updated_at_ms: u64,
@@ -199,6 +201,8 @@ pub enum DockedTraversalRequest {
         forward: f64,
         strafe: f64,
         turn: f64,
+        #[serde(default)]
+        sprint: bool,
     },
     Jump {
         binding: DockedTraversalBinding,
@@ -266,9 +270,44 @@ mod tests {
         )
         .unwrap();
         assert!(avatar.docked_traversal.is_none());
+        assert!(!avatar.sprinting);
         let snapshot: crate::Snapshot = serde_json::from_value(serde_json::json!({"server_time_ms":0,"pilots":[],"orders":[],"belt_ore":100000,"ledger_sequence":0,"ledger_hash":crate::GENESIS_HASH})).unwrap();
         assert!(snapshot.docked_traversal_capability.is_none());
+        assert!(!snapshot.walk_sprint_v1);
     }
+    #[test]
+    fn sprint_is_additive_and_missing_flags_mean_ordinary_walking() {
+        let legacy: crate::Request = serde_json::from_value(serde_json::json!({
+            "command": "station_walk", "forward": 1.0, "strafe": 0.0, "turn": 0.0
+        }))
+        .unwrap();
+        assert!(matches!(
+            legacy,
+            crate::Request::StationWalk { sprint: false, .. }
+        ));
+        let binding = docked_traversal_binding(
+            "v1:Walker:Pioneer".into(),
+            &crate::default_pioneer_room_layout(),
+            FleetLayoutRevision::LinearV1,
+            false,
+        );
+        let old_walk = serde_json::json!({"action": "walk", "binding": binding,
+            "forward": 1.0, "strafe": 1.0, "turn": 0.0});
+        let ordinary: DockedTraversalRequest = serde_json::from_value(old_walk.clone()).unwrap();
+        assert!(matches!(
+            ordinary,
+            DockedTraversalRequest::Walk { sprint: false, .. }
+        ));
+        let mut sprint_walk = old_walk;
+        sprint_walk["sprint"] = serde_json::json!(true);
+        let sprint: DockedTraversalRequest = serde_json::from_value(sprint_walk).unwrap();
+        assert!(matches!(
+            sprint,
+            DockedTraversalRequest::Walk { sprint: true, .. }
+        ));
+        assert_eq!(serde_json::to_value(sprint).unwrap()["sprint"], true);
+    }
+
     #[test]
     fn seat_joint_phases_are_bounded_and_docked_commands_never_delegate() {
         let phase = DockedSeatTransition {

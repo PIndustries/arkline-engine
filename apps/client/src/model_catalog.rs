@@ -437,7 +437,7 @@ fn draws(parts: impl IntoIterator<Item = ModelPart>, material: Material) -> Vec<
         .into_iter()
         .map(|part| InspectionDraw {
             part,
-            material,
+            material: surface_roles::material(part.0).unwrap_or(material),
             range: None,
         })
         .collect()
@@ -775,10 +775,9 @@ mod tests {
                 model.parts.iter().map(|draw| draw.part).collect::<Vec<_>>(),
                 expected
             );
-            assert!(model
-                .parts
-                .iter()
-                .all(|draw| draw.range.is_none() && draw.material == Material::PaintedHull));
+            assert!(model.parts.iter().all(|draw| draw.range.is_none()
+                && draw.material
+                    == surface_roles::material(draw.part.0).unwrap_or(Material::PaintedHull)));
             assert_eq!(model.info.min_m, model.min.to_array());
             assert_eq!(model.info.max_m, model.max.to_array());
         }

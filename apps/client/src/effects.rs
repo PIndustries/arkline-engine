@@ -152,6 +152,7 @@ mod tests {
     use arkline_protocol::*;
     fn snapshot(ore: u64, remaining: u64) -> Snapshot {
         Snapshot {
+            walk_sprint_v1: false,
             docked_traversal_capability: None,
             world_layout: None,
             exterior: None,

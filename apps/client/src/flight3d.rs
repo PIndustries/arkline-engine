@@ -2312,6 +2312,8 @@ fn hull() -> Vec<Vertex> {
 }
 #[path = "materials.rs"]
 mod materials;
+#[path = "surface_roles.rs"]
+mod surface_roles;
 use materials::Material;
 
 struct Mesh {
@@ -4799,6 +4801,7 @@ fn pioneer_asset() -> Result<&'static Vec<ship_asset::Primitive>, String> {
         .map_err(Clone::clone)
 }
 // Ship-only role tags preserve shared primitive geometry without tinting station parts.
+const PAINT_ROLE_MASK: usize = 0x0f00_0000;
 const HULL_ROLE: usize = 1 << 24;
 const TRIM_ROLE: usize = 2 << 24;
 const EMISSION_ROLE: usize = 3 << 24;
@@ -4819,7 +4822,7 @@ fn triangle_draw_range(vertex_count: i32, range: Option<(usize, usize)>) -> Opti
     Some((i32::try_from(first).ok()?, i32::try_from(count).ok()?))
 }
 fn paint_role(mesh: usize) -> usize {
-    match mesh & !0x00ff_ffff {
+    match mesh & PAINT_ROLE_MASK {
         HULL_ROLE => HULL_ROLE,
         TRIM_ROLE => TRIM_ROLE,
         _ => match embedded_primitive(mesh).map(|p| p.material_name.as_str()) {
@@ -4846,7 +4849,8 @@ fn preview_material(
         TRIM_ROLE => Vec3::from_array(preview.trim_rgb),
         _ => color,
     };
-    let emission = if embedded_primitive(mesh).is_some() || mesh & !0x00ff_ffff == EMISSION_ROLE {
+    let emission = if embedded_primitive(mesh).is_some() || mesh & PAINT_ROLE_MASK == EMISSION_ROLE
+    {
         emission * preview.emissive_strength
     } else {
         emission
@@ -4878,7 +4882,11 @@ fn docked_pioneer_parts() -> Result<Arc<Vec<ModelPart>>, String> {
 /// locally clipped source meshes. Every canonical view uses the same resolver.
 fn resolved_material_parameters(mesh: usize, fallback: Material) -> [f32; 4] {
     embedded_primitive(mesh).map_or_else(
-        || fallback.parameters(),
+        || {
+            surface_roles::material(mesh)
+                .unwrap_or(fallback)
+                .parameters()
+        },
         |primitive| [primitive.roughness, primitive.metallic, 0.0, 0.0],
     )
 }
@@ -7228,6 +7236,7 @@ mod tests {
             warp: None,
         });
         let snapshot = Snapshot {
+            walk_sprint_v1: false,
             docked_traversal_capability: None,
             world_layout: None,
             exterior: None,

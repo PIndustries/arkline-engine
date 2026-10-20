@@ -23,6 +23,7 @@ fn walk_to(s: &mut Server, pilot: &mut Option<String>, now: &mut u64, target: [f
                 s,
                 pilot,
                 Request::StationWalk {
+                    sprint: false,
                     forward: 0.,
                     strafe: 0.,
                     turn: 0.,
@@ -37,6 +38,7 @@ fn walk_to(s: &mut Server, pilot: &mut Option<String>, now: &mut u64, target: [f
             s,
             pilot,
             Request::StationWalk {
+                sprint: false,
                 forward: ((dx * cos + dz * sin) / (WALK_SPEED_MPS * 0.1)).clamp(-1., 1.),
                 strafe: ((-dx * sin + dz * cos) / (WALK_SPEED_MPS * 0.1)).clamp(-1., 1.),
                 turn: 0.,
@@ -114,6 +116,7 @@ fn walk_quarters_and_return_to_board_without_moving_ship_or_economy() {
             &mut s,
             &mut pilot,
             Request::StationWalk {
+                sprint: false,
                 forward: 0.,
                 strafe: 0.,
                 turn: 0.,

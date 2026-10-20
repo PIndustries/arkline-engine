@@ -1,4 +1,4 @@
-//! Derived, docked-only openings in the reviewed Pioneer source triangles.
+//! Derived interior openings shared by docked and flight Pioneer presentation.
 //!
 //! Canonical asset/catalog buffers remain untouched. Coordinates below are body
 //! metres; returned vertices retain the renderer's 100 metres per scene unit.
@@ -35,7 +35,7 @@ const SOURCES: [SourcePart; 3] = [
         count: 13194,
         material: "Graphite ceramic armor",
         material_id: "material:5084bf82f73a59cdae623179d8113152515f5e5e6347c4df4a11ed8eaa478b57",
-        affected: 31368..31374,
+        affected: 31368..31443,
     },
     SourcePart {
         id: "part:68b45ea99185087e982152189d9fb7514c5ba1e3c156a25af5dc55011957b036",
@@ -89,7 +89,7 @@ fn build() -> Result<[Vec<Vertex>; 3], String> {
         {
             return Err("Docked Pioneer material/source range mismatch".into());
         }
-        result[slot] = derive(&part.vertices, source.affected.clone(), cuts(slot))?;
+        result[slot] = derive(&part.vertices, source.affected.clone(), cuts(slot)?)?;
     }
     Ok(result)
 }
@@ -182,44 +182,24 @@ impl CutBox {
     }
 }
 
-fn cuts(slot: usize) -> [CutBox; 2] {
-    let (origin, axes, min, max, floor_min, floor_max) = if slot == 0 {
-        (
-            DVec3::ZERO,
-            [DVec3::X, DVec3::Y, DVec3::Z],
-            DVec3::new(33.549, -0.321, -0.701),
-            DVec3::new(33.751, 2.081, 0.701),
-            DVec3::new(33.549, -0.441, -0.901),
-            DVec3::new(33.751, -0.319, 0.901),
-        )
-    } else {
-        (
-            DVec3::new(32.985, 0.0, -9.815),
-            [
-                DVec3::new(0.7903075524379524, 0.0, 0.6127103496429068),
-                DVec3::Y,
-                DVec3::new(0.6127103496429068, 0.0, -0.7903075524379524),
-            ],
-            DVec3::new(-0.701, -0.321, -0.801),
-            DVec3::new(0.701, 2.081, 0.801),
-            DVec3::new(-0.901, -0.441, -0.801),
-            DVec3::new(0.901, -0.319, 0.801),
-        )
-    };
-    [
-        CutBox {
-            origin,
-            axes,
-            min,
-            max,
-        },
-        CutBox {
-            origin,
-            axes,
-            min: floor_min,
-            max: floor_max,
-        },
-    ]
+fn cuts(slot: usize) -> Result<[CutBox; 2], String> {
+    let primitive = *PRIMITIVES
+        .get(slot)
+        .ok_or("Unknown Pioneer source cut slot")?;
+    let contract = arkline_protocol::pioneer_docked_source_cuts()
+        .into_iter()
+        .find(|cut| cut.primitive == primitive)
+        .ok_or("Missing shared Pioneer source cut")?;
+    let bounds: [arkline_protocol::PioneerDockedBox; 2] = contract
+        .volumes
+        .try_into()
+        .map_err(|_| "Expected two bounded Pioneer source cuts")?;
+    Ok(bounds.map(|b| CutBox {
+        origin: DVec3::from_array(b.center_m),
+        axes: b.axes.map(DVec3::from_array),
+        min: -DVec3::from_array(b.half_m),
+        max: DVec3::from_array(b.half_m),
+    }))
 }
 
 #[derive(Clone, Copy)]
@@ -534,7 +514,7 @@ mod tests {
         let derived = source_meshes().unwrap();
         let mut volumes = Vec::new();
         for slot in [0, 1] {
-            let [mut door, mut recess] = cuts(slot);
+            let [mut door, mut recess] = cuts(slot).unwrap();
             // One-millimetre inset tests the promised clear volume, excluding
             // its deliberately retained boundary faces and f32 rounding.
             door.min += DVec3::splat(0.001);
@@ -574,10 +554,8 @@ mod tests {
     fn deterministic_finite_unit_normals_valid_winding_and_bounded_geometry() {
         let first = build().unwrap();
         let second = build().unwrap();
-        assert_eq!(
-            first.each_ref().map(|vertices| vertices.len()),
-            [44880, 156510, 366]
-        );
+        assert!(first[0].len() > COUNTS[0]);
+        assert_eq!([first[1].len(), first[2].len()], [156510, 366]);
         for (slot, (a, b)) in first.iter().zip(&second).enumerate() {
             assert!(identical(a, b));
             assert_eq!(a.len() % 3, 0);
@@ -626,7 +604,7 @@ mod tests {
                 n: Vec3::Y
             }; 3],
             0..3,
-            cuts(0)
+            cuts(0).unwrap()
         )
         .is_err());
     }

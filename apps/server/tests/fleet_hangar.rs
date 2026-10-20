@@ -128,6 +128,7 @@ fn walk_board_restart_identity_and_ownership() {
             &mut s,
             &mut p,
             Request::StationWalk {
+                sprint: false,
                 forward: 1.0,
                 strafe: 0.0,
                 turn: 0.0,

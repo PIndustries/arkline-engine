@@ -469,6 +469,8 @@ pub enum Request {
         forward: f64,
         strafe: f64,
         turn: f64,
+        #[serde(default)]
+        sprint: bool,
     },
     OrbitDrone {
         id: u64,
@@ -960,6 +962,7 @@ pub struct PilotView {
 
 pub const AVATAR_HEIGHT_M: f64 = 1.8;
 pub const WALK_SPEED_MPS: f64 = 4.0;
+pub const SPRINT_SPEED_MPS: f64 = 6.0;
 pub const STATION_JUMP_SPEED_MPS: f64 = 4.5;
 pub const STATION_GRAVITY_MPS2: f64 = 9.81;
 pub const STATION_WALK_LEASE_MS: u64 = 500;
@@ -985,6 +988,8 @@ pub struct StationAvatar {
     /// Radians; zero faces +X, positive turns toward +Z.
     pub heading: f64,
     pub moving: bool,
+    #[serde(default)]
+    pub sprinting: bool,
     pub updated_at_ms: u64,
 }
 fn default_interior_deck() -> u8 {
@@ -1118,6 +1123,9 @@ pub struct AssetsView {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Snapshot {
+    /// Authority supports the additive sprint flag on both walking routes.
+    #[serde(default)]
+    pub walk_sprint_v1: bool,
     /// Absent on authorities without this exact additive registration.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub docked_traversal_capability: Option<DockedTraversalCapability>,

@@ -1052,7 +1052,7 @@ unsafe fn paint_with_fixture_lighting(
         .flatten()
         .chain(dynamic.iter())
         .filter(|(mesh, _, color, emission)| {
-            *mesh == 0 && *emission >= 0.7 && color.min_element() > 0.25
+            mesh_index(*mesh) == 0 && *emission >= 0.7 && color.min_element() > 0.25
         })
         .map(|(_, m, c, _)| (m.w_axis.truncate(), *c))
         .collect();
@@ -1166,7 +1166,7 @@ pub(super) unsafe fn paint_inspection(
         .iter()
         .filter_map(|draw| {
             let (mesh, transform, color, emission) = draw.part;
-            (mesh == 0 && emission >= 0.7 && color.min_element() > 0.25)
+            (mesh_index(mesh) == 0 && emission >= 0.7 && color.min_element() > 0.25)
                 .then_some(((display * transform).w_axis.truncate(), color))
         })
         .take(8)
@@ -1497,6 +1497,7 @@ mod tests {
     #[test]
     fn avatar_has_human_scale_and_walk_articulation() {
         let mut avatar = StationAvatar {
+            sprinting: false,
             docked_traversal: None,
             onboard_interior: false,
             interior_deck: 1,
@@ -1688,6 +1689,7 @@ mod tests {
                     let mut parts = pioneer_interior::parts(deck);
                     if deck == 2 {
                         let avatar = StationAvatar {
+                            sprinting: false,
                             docked_traversal: None,
                             onboard_interior: true,
                             interior_deck: 2,
@@ -1867,6 +1869,7 @@ mod tests {
                 gl.bind_framebuffer(glow::FRAMEBUFFER, Some(capture.framebuffer));
                 gl.viewport(0, 0, tile as i32, tile as i32);
                 let avatar = StationAvatar {
+                    sprinting: false,
                     docked_traversal: None,
                     onboard_interior: false,
                     interior_deck: 1,

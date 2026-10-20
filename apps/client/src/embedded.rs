@@ -3086,6 +3086,7 @@ mod tests {
         client.state = EmbeddedStatus::Running;
         let pilot = &mut client.cockpit.snapshot.as_mut().unwrap().pilots[0];
         pilot.station_avatar = Some(StationAvatar {
+            sprinting: false,
             docked_traversal: None,
             onboard_interior: false,
             interior_deck: 1,
@@ -3835,6 +3836,7 @@ mod tests {
         );
         let pose = arkline_protocol::docked_binding_pose(&binding).unwrap();
         let state = arkline_protocol::DockedTraversalState {
+            sprinting: false,
             version: arkline_protocol::DOCKED_TRAVERSAL_VERSION,
             binding: binding.clone(),
             feet_m: arkline_protocol::body_to_station(pose, [0.0, -3.0, 0.0]),
@@ -3862,6 +3864,7 @@ mod tests {
         let pilot = &mut client.cockpit.snapshot.as_mut().unwrap().pilots[0];
         pilot.location = Location::Docked;
         pilot.station_avatar = Some(StationAvatar {
+            sprinting: false,
             docked_traversal: Some(state),
             position: [0.0; 3],
             heading: 0.0,
@@ -3956,6 +3959,7 @@ mod tests {
         assert!(client.set_debug_view(EmbeddedView::Cockpit).is_err());
         client.cockpit.embedded = true;
         client.cockpit.snapshot.as_mut().unwrap().pilots[0].station_avatar = Some(StationAvatar {
+            sprinting: false,
             docked_traversal: None,
             position: arkline_protocol::PIONEER_LIFT_POINT,
             heading: 0.0,

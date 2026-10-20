@@ -20,6 +20,7 @@ fn walk(s: &mut Server, session: &mut Option<String>, clock: &mut u64, target: [
         let r = s.handle_at(
             session,
             Request::StationWalk {
+                sprint: false,
                 forward: dz / norm * scale,
                 strafe: -dx / norm * scale,
                 turn: 0.0,
@@ -143,6 +144,7 @@ fn interior_rooms_doors_restart_and_boarding_lifecycle() {
             s.handle_at(
                 &mut session,
                 Request::StationWalk {
+                    sprint: false,
                     forward: -1.0,
                     strafe: 0.0,
                     turn: 0.0

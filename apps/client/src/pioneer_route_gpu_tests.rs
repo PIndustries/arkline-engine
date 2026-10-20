@@ -280,6 +280,7 @@ impl Harness {
             if distance < 0.015 {
                 self.command(Request::DockedTraversal {
                     request: DockedTraversalRequest::Walk {
+                        sprint: false,
                         binding: state.binding,
                         forward: 0.0,
                         strafe: 0.0,
@@ -292,6 +293,7 @@ impl Harness {
             let (sin, cos) = state.heading.sin_cos();
             self.command(Request::DockedTraversal {
                 request: DockedTraversalRequest::Walk {
+                    sprint: false,
                     binding: state.binding,
                     forward: (dx * cos + dz * sin) / distance * amount,
                     strafe: (-dx * sin + dz * cos) / distance * amount,
@@ -320,6 +322,7 @@ impl Harness {
             };
             self.command(Request::DockedTraversal {
                 request: DockedTraversalRequest::Walk {
+                    sprint: false,
                     binding: state.binding,
                     forward: 0.0,
                     strafe: 0.0,

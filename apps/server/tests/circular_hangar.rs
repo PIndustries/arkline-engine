@@ -23,6 +23,7 @@ impl Fixture {
             .unwrap();
         let mut world: Value = serde_json::from_str(&raw).unwrap();
         world["pilots"]["Walker"]["view"]["station_avatar"] = serde_json::to_value(StationAvatar {
+            sprinting: false,
             docked_traversal: None,
             onboard_interior: false,
             interior_deck: 1,
@@ -92,6 +93,7 @@ fn walk(world: &mut EditorWorld, session: &mut Option<String>, steps: usize) {
             world,
             session,
             Request::StationWalk {
+                sprint: false,
                 forward: 1.0,
                 strafe: 0.0,
                 turn: 0.0,

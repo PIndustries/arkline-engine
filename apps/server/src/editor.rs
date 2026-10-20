@@ -321,6 +321,7 @@ impl EditorWorld {
                         hangar_layout(pilot.view.ship_class).boarding_point
                     };
                     Some(StationAvatar {
+                        sprinting: false,
                         docked_traversal: None,
                         onboard_interior: false,
                         interior_deck: 1,
@@ -343,6 +344,7 @@ impl EditorWorld {
                         2
                     };
                     Some(StationAvatar {
+                        sprinting: false,
                         docked_traversal: None,
                         onboard_interior: true,
                         interior_deck: deck,
@@ -770,6 +772,7 @@ mod tests {
             world,
             session,
             Request::StationWalk {
+                sprint: false,
                 forward,
                 strafe,
                 turn: 0.0,
@@ -1298,6 +1301,7 @@ mod tests {
                 &mut session,
                 Request::DockedTraversal {
                     request: DockedTraversalRequest::Walk {
+                        sprint: false,
                         binding: binding.clone(),
                         forward: 1.0,
                         strafe: 0.0,
@@ -1621,6 +1625,7 @@ mod tests {
             &mut world,
             &mut session,
             Request::StationWalk {
+                sprint: false,
                 forward: 1.0,
                 strafe: 0.0,
                 turn: 0.0,

@@ -40,6 +40,18 @@ pub(super) fn docked_state_label(state: &DockedTraversalState) -> String {
     }
 }
 
+pub(super) fn docked_exit_guidance(state: &DockedTraversalState) -> &'static str {
+    match state.support {
+        DockedSupport::Station => "Station hangar: the boarding lift returns to your ship.",
+        DockedSupport::BoardingLift => "Exit to hangar: close both hatches, then select Lift to station.",
+        DockedSupport::Deck1 => "Exit to hangar: use the access stairs to Deck 2, then the port boarding vestibule beside the cockpit.",
+        DockedSupport::CoreStairs if arkline_protocol::docked_traversal_deck(state) == Ok(Some(1)) =>
+            "Exit to hangar: continue up to Deck 2, then the port boarding vestibule beside the cockpit.",
+        DockedSupport::Connector => "Exit to hangar: close the inner hatch, open the outer hatch and step onto the lift. Close the outer hatch before Lift to station.",
+        _ => "Exit to hangar: follow the cockpit's port boarding vestibule, then use the inner hatch, outer hatch and boarding lift.",
+    }
+}
+
 fn station_distance(a: [f64; 3], b: [f64; 3]) -> f64 {
     a.iter()
         .zip(b)
@@ -196,6 +208,8 @@ impl Cockpit {
                     ui.small("Pilot seat transition");
                 } else if state.actuators.lift.moving {
                     ui.small("Lift moving");
+                } else if state.sprinting {
+                    ui.small("Sprinting");
                 }
             });
             if let Some(room) = self.docked_room_name(state) {
@@ -316,8 +330,17 @@ impl Cockpit {
                     }
                 }
             });
+            ui.small(docked_exit_guidance(state));
             ui.small(
-                "W/S move · A/D turn · Q/E strafe · RMB turn · Shift + arrows look · Space jump",
+                if self
+                    .snapshot
+                    .as_ref()
+                    .is_some_and(|snapshot| snapshot.walk_sprint_v1)
+                {
+                    "W/S or arrows move/turn · Q/E strafe · RMB turn · Shift sprint · Space jump"
+                } else {
+                    "W/S or arrows move/turn · Q/E strafe · RMB turn · Space jump"
+                },
             );
             if !state.actuators.service_power_available {
                 ui.small("Docking service power unavailable · lift held in place.");
@@ -343,7 +366,7 @@ impl Cockpit {
                 }
                 self.view_selector(ui);
             });
-            ui.small("Walk through the ship to the airlock and boarding lift. Shift + arrows look around.");
+            ui.small("Exit to hangar: leave the seat and walk to the port boarding vestibule, then use the hatches and lift. Shift + arrows look around while seated.");
         }
         true
     }
@@ -354,9 +377,9 @@ impl Cockpit {
         }
         if self.connected {
             if let Some(binding) = self.docked_walk_binding.take() {
-                self.controls.publish_docked(binding, 0.0, 0.0, 0.0);
+                self.controls.publish_docked(binding, 0.0, 0.0, 0.0, false);
             } else {
-                self.controls.publish_station(0.0, 0.0, 0.0);
+                self.controls.publish_station(0.0, 0.0, 0.0, false);
             }
         } else {
             self.controls.clear();
@@ -1287,8 +1310,9 @@ impl Cockpit {
         }
         let (forward, strafe, turn) = if allowed {
             ctx.input(|i| {
-                let arrows = state.is_none() || !i.modifiers.shift;
-                let down = |key, arrow| i.key_down(key) || arrows && i.key_down(arrow);
+                // Shift changes walking speed on foot; arrow controls remain
+                // movement. Seated head-look is sampled by the cockpit view.
+                let down = |key, arrow| i.key_down(key) || i.key_down(arrow);
                 let forward = f64::from(down(egui::Key::W, egui::Key::ArrowUp))
                     - f64::from(down(egui::Key::S, egui::Key::ArrowDown));
                 let strafe =
@@ -1343,14 +1367,21 @@ impl Cockpit {
                 self.send(Request::StationJump);
             }
         }
+        let sprint = allowed
+            && (forward != 0.0 || strafe != 0.0)
+            && self
+                .snapshot
+                .as_ref()
+                .is_some_and(|snapshot| snapshot.walk_sprint_v1)
+            && ctx.input(|input| input.modifiers.shift);
         let active = forward != 0.0 || strafe != 0.0 || turn != 0.0;
         if active {
             if let Some(binding) = binding {
                 self.controls
-                    .publish_docked(binding.clone(), forward, strafe, turn);
+                    .publish_docked(binding.clone(), forward, strafe, turn, sprint);
                 self.docked_walk_binding = Some(binding);
             } else {
-                self.controls.publish_station(forward, strafe, turn);
+                self.controls.publish_station(forward, strafe, turn, sprint);
                 self.docked_walk_binding = None;
             }
         } else if self.station_walk_active {
@@ -1369,6 +1400,7 @@ mod tests {
         cockpit.embedded = true;
         let snapshot = cockpit.snapshot.as_mut().unwrap();
         snapshot.docked_traversal_capability = Some(docked_traversal_capability());
+        snapshot.walk_sprint_v1 = true;
         snapshot.pilots[0].location = Location::Docked;
         snapshot.pilots[0].station_avatar = None;
         cockpit.assets = Some(AssetsView {
@@ -1387,6 +1419,7 @@ mod tests {
             let pose = docked_binding_pose(&binding).unwrap();
             let seats = seat_anchors(pose);
             let state = DockedTraversalState {
+                sprinting: false,
                 version: DOCKED_TRAVERSAL_VERSION,
                 binding: binding.clone(),
                 feet_m: seats.root_station_m,
@@ -1412,6 +1445,7 @@ mod tests {
                 },
             };
             cockpit.snapshot.as_mut().unwrap().pilots[0].station_avatar = Some(StationAvatar {
+                sprinting: false,
                 docked_traversal: Some(state),
                 onboard_interior: false,
                 interior_deck: 1,
@@ -1711,20 +1745,189 @@ mod tests {
         cockpit.controls.clear_flight();
         cockpit.controls.clear_flight();
         assert!(
-            matches!(cockpit.controls.take(), Some(Request::DockedTraversal { request: DockedTraversalRequest::Walk {binding: actual, forward:0.0,strafe:0.0,turn:0.0} }) if actual == binding)
+            matches!(cockpit.controls.take(), Some(Request::DockedTraversal { request: DockedTraversalRequest::Walk {
+                sprint: false,binding: actual, forward:0.0,strafe:0.0,turn:0.0} }) if actual == binding)
         );
         docked_walk_frame(&ctx, &mut cockpit, false, vec![], egui::Modifiers::NONE);
         assert!(cockpit.controls.take().is_none());
     }
 
     #[test]
-    fn docked_shift_arrows_do_not_send_walk_or_turn_authority() {
+    fn on_foot_shift_preserves_arrows_and_sprints_only_translation_when_advertised() {
+        for canonical in [false, true] {
+            for supported in [false, true] {
+                for (key, expected) in [
+                    (egui::Key::W, (1.0, 0.0, 0.0, supported)),
+                    (egui::Key::ArrowUp, (1.0, 0.0, 0.0, supported)),
+                    (egui::Key::Q, (0.0, -1.0, 0.0, supported)),
+                    (egui::Key::ArrowRight, (0.0, 0.0, 1.0, false)),
+                ] {
+                    let ctx = egui::Context::default();
+                    let mut cockpit = docked_fixture(&ctx, true);
+                    cockpit.snapshot.as_mut().unwrap().walk_sprint_v1 = supported;
+                    if !canonical {
+                        cockpit.snapshot.as_mut().unwrap().pilots[0]
+                            .station_avatar
+                            .as_mut()
+                            .unwrap()
+                            .docked_traversal = None;
+                    }
+                    docked_walk_frame(&ctx, &mut cockpit, true, vec![], egui::Modifiers::NONE);
+                    let look = cockpit.hangar_view.head_look_angles();
+                    docked_walk_frame(
+                        &ctx,
+                        &mut cockpit,
+                        true,
+                        vec![
+                            egui::Event::PointerMoved(Pos2::new(450.0, 325.0)),
+                            egui::Event::Key {
+                                key,
+                                physical_key: None,
+                                pressed: true,
+                                repeat: false,
+                                modifiers: egui::Modifiers::SHIFT,
+                            },
+                        ],
+                        egui::Modifiers::SHIFT,
+                    );
+                    let actual = match cockpit.controls.take().unwrap() {
+                        Request::StationWalk {
+                            forward,
+                            strafe,
+                            turn,
+                            sprint,
+                        } if !canonical => (forward, strafe, turn, sprint),
+                        Request::DockedTraversal {
+                            request:
+                                DockedTraversalRequest::Walk {
+                                    forward,
+                                    strafe,
+                                    turn,
+                                    sprint,
+                                    ..
+                                },
+                        } if canonical => (forward, strafe, turn, sprint),
+                        other => panic!("Unexpected on-foot input route: {other:?}"),
+                    };
+                    assert_eq!(
+                        actual, expected,
+                        "canonical={canonical}, supported={supported}, key={key:?}"
+                    );
+                    assert_eq!(
+                        cockpit.hangar_view.head_look_angles(),
+                        look,
+                        "On-foot Shift arrows must not also change the head-look pose"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sprint_releases_to_bound_neutral_on_focus_loss() {
         let ctx = egui::Context::default();
         let mut cockpit = docked_fixture(&ctx, true);
-        let modifiers = egui::Modifiers {
-            shift: true,
-            ..Default::default()
-        };
+        let binding = cockpit.verified_docked_binding().unwrap();
+        docked_walk_frame(&ctx, &mut cockpit, true, vec![], egui::Modifiers::NONE);
+        docked_walk_frame(
+            &ctx,
+            &mut cockpit,
+            true,
+            vec![
+                egui::Event::PointerMoved(Pos2::new(450.0, 325.0)),
+                egui::Event::Key {
+                    key: egui::Key::W,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: egui::Modifiers::SHIFT,
+                },
+            ],
+            egui::Modifiers::SHIFT,
+        );
+        assert!(matches!(
+            cockpit.controls.take(),
+            Some(Request::DockedTraversal {
+                request: DockedTraversalRequest::Walk { sprint: true, .. }
+            })
+        ));
+        docked_walk_frame(&ctx, &mut cockpit, false, vec![], egui::Modifiers::SHIFT);
+        cockpit.controls.clear_flight();
+        assert!(
+            matches!(cockpit.controls.take(), Some(Request::DockedTraversal {
+            request: DockedTraversalRequest::Walk {binding: actual, forward: 0.0,
+                strafe: 0.0, turn: 0.0, sprint: false} }) if actual == binding)
+        );
+        docked_walk_frame(&ctx, &mut cockpit, false, vec![], egui::Modifiers::SHIFT);
+        assert!(cockpit.controls.take().is_none());
+    }
+
+    #[test]
+    fn actual_text_editor_ownership_stops_sprint_on_the_original_binding() {
+        let ctx = egui::Context::default();
+        let mut cockpit = docked_fixture(&ctx, true);
+        let binding = cockpit.verified_docked_binding().unwrap();
+        docked_walk_frame(&ctx, &mut cockpit, true, vec![], egui::Modifiers::NONE);
+        docked_walk_frame(
+            &ctx,
+            &mut cockpit,
+            true,
+            vec![
+                egui::Event::PointerMoved(Pos2::new(450.0, 325.0)),
+                egui::Event::Key {
+                    key: egui::Key::W,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: egui::Modifiers::SHIFT,
+                },
+            ],
+            egui::Modifiers::SHIFT,
+        );
+        assert!(matches!(
+            cockpit.controls.take(),
+            Some(Request::DockedTraversal {
+                request: DockedTraversalRequest::Walk { sprint: true, .. }
+            })
+        ));
+        let mut text = String::from("Room label");
+        let _ = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    Pos2::ZERO,
+                    Vec2::new(900.0, 650.0),
+                )),
+                focused: true,
+                modifiers: egui::Modifiers::SHIFT,
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    ui.add(egui::TextEdit::singleline(&mut text))
+                        .request_focus();
+                    assert!(ctx.wants_keyboard_input());
+                    cockpit.sample_station_walk(ctx, true);
+                });
+            },
+        );
+        assert!(
+            matches!(cockpit.controls.take(), Some(Request::DockedTraversal {
+            request: DockedTraversalRequest::Walk {binding: actual, forward: 0.0,
+                strafe: 0.0, turn: 0.0, sprint: false} }) if actual == binding)
+        );
+    }
+
+    #[test]
+    fn seated_shift_arrows_keep_look_without_walking() {
+        let ctx = egui::Context::default();
+        let mut cockpit = docked_fixture(&ctx, false);
+        docked_walk_frame(
+            &ctx,
+            &mut cockpit,
+            true,
+            vec![egui::Event::PointerMoved(Pos2::new(450.0, 325.0))],
+            egui::Modifiers::NONE,
+        );
         docked_walk_frame(
             &ctx,
             &mut cockpit,
@@ -1736,15 +1939,13 @@ mod tests {
                     physical_key: None,
                     pressed: true,
                     repeat: false,
-                    modifiers,
+                    modifiers: egui::Modifiers::SHIFT,
                 },
             ],
-            modifiers,
+            egui::Modifiers::SHIFT,
         );
-        assert!(
-            cockpit.controls.take().is_none(),
-            "Shift+arrow owns head look only"
-        );
+        assert_ne!(cockpit.hangar_view.head_look_angles(), [0.0; 2]);
+        assert!(cockpit.controls.take().is_none());
     }
 
     #[test]
@@ -1758,7 +1959,7 @@ mod tests {
         cockpit.station_walk_active = true;
         cockpit
             .controls
-            .publish_docked(binding.clone(), 1.0, 0.0, 0.0);
+            .publish_docked(binding.clone(), 1.0, 0.0, 0.0, false);
         cockpit.send(Request::DockedTraversal {
             request: DockedTraversalRequest::SetHatch {
                 binding: binding.clone(),
@@ -1773,7 +1974,8 @@ mod tests {
             }
         ));
         assert!(
-            matches!(cockpit.controls.take(), Some(Request::DockedTraversal {request: DockedTraversalRequest::Walk {binding: actual,forward:0.0,strafe:0.0,turn:0.0}}) if actual == binding)
+            matches!(cockpit.controls.take(), Some(Request::DockedTraversal {request: DockedTraversalRequest::Walk {
+                sprint: false,binding: actual,forward:0.0,strafe:0.0,turn:0.0}}) if actual == binding)
         );
     }
 
@@ -1791,7 +1993,8 @@ mod tests {
             .docked_traversal_capability = None;
         docked_walk_frame(&ctx, &mut cockpit, true, vec![], egui::Modifiers::NONE);
         assert!(
-            matches!(cockpit.controls.take(), Some(Request::DockedTraversal {request: DockedTraversalRequest::Walk {binding: actual,forward:0.0,strafe:0.0,turn:0.0}}) if actual == binding)
+            matches!(cockpit.controls.take(), Some(Request::DockedTraversal {request: DockedTraversalRequest::Walk {
+                sprint: false,binding: actual,forward:0.0,strafe:0.0,turn:0.0}}) if actual == binding)
         );
         assert!(!cockpit.station_walk_active);
     }
@@ -1919,6 +2122,7 @@ mod tests {
         pilot.ship_class = ShipClass::Pioneer;
         pilot.location = Location::Docked;
         pilot.station_avatar = Some(StationAvatar {
+            sprinting: false,
             docked_traversal: None,
             onboard_interior: false,
             interior_deck: 1,
@@ -2098,6 +2302,7 @@ mod tests {
         let mut cockpit = crate::tests::view_test_cockpit(&ctx);
         cockpit.embedded = true;
         let avatar = StationAvatar {
+            sprinting: false,
             docked_traversal: None,
             onboard_interior: true,
             interior_deck: 1,
@@ -2240,6 +2445,7 @@ mod tests {
         let pilot = &mut cockpit.snapshot.as_mut().unwrap().pilots[0];
         pilot.location = Location::Docked;
         pilot.station_avatar = Some(StationAvatar {
+            sprinting: false,
             docked_traversal: None,
             onboard_interior: true,
             interior_deck: 1,
@@ -2572,6 +2778,7 @@ mod tests {
             );
             c.request_pending = false;
             c.snapshot.as_mut().unwrap().pilots[0].station_avatar = Some(StationAvatar {
+                sprinting: false,
                 docked_traversal: None,
                 onboard_interior: true,
                 interior_deck: 1,
@@ -2631,6 +2838,7 @@ mod tests {
             let p = &mut cockpit.snapshot.as_mut().unwrap().pilots[0];
             p.location = Location::Docked;
             p.station_avatar = Some(StationAvatar {
+                sprinting: false,
                 docked_traversal: None,
                 onboard_interior: false,
                 interior_deck: 1,
@@ -2683,6 +2891,7 @@ mod tests {
             let pilot = &mut cockpit.snapshot.as_mut().unwrap().pilots[0];
             pilot.location = Location::Docked;
             pilot.station_avatar = Some(StationAvatar {
+                sprinting: false,
                 docked_traversal: None,
                 onboard_interior: false,
                 interior_deck: 1,
@@ -2724,6 +2933,7 @@ mod tests {
         ] {
             let actual = match sample(key) {
                 Request::StationWalk {
+                    sprint: false,
                     forward,
                     strafe,
                     turn,
@@ -2741,6 +2951,7 @@ mod tests {
         let p = &mut cockpit.snapshot.as_mut().unwrap().pilots[0];
         p.location = Location::Docked;
         p.station_avatar = Some(StationAvatar {
+            sprinting: false,
             docked_traversal: None,
             onboard_interior: false,
             interior_deck: 1,
@@ -2778,6 +2989,7 @@ mod tests {
         assert!(matches!(
             cockpit.controls.take(),
             Some(Request::StationWalk {
+                sprint: false,
                 forward: 0.,
                 strafe: 0.,
                 turn: 0.
@@ -2799,6 +3011,7 @@ mod tests {
         let p = &mut cockpit.snapshot.as_mut().unwrap().pilots[0];
         p.location = Location::Docked;
         p.station_avatar = Some(StationAvatar {
+            sprinting: false,
             docked_traversal: None,
             onboard_interior: false,
             interior_deck: 1,
@@ -2829,6 +3042,7 @@ mod tests {
         assert!(matches!(
             cockpit.controls.take(),
             Some(Request::StationWalk {
+                sprint: false,
                 forward: 0.,
                 strafe: 0.,
                 turn: 0.
@@ -2876,6 +3090,7 @@ mod tests {
             "editor camera changes preserve the cockpit scene"
         );
         cockpit.snapshot.as_mut().unwrap().pilots[0].station_avatar = Some(StationAvatar {
+            sprinting: false,
             docked_traversal: None,
             onboard_interior: true,
             interior_deck: 2,
@@ -2915,6 +3130,7 @@ mod tests {
         let p = &mut cockpit.snapshot.as_mut().unwrap().pilots[0];
         p.location = Location::Docked;
         p.station_avatar = Some(StationAvatar {
+            sprinting: false,
             docked_traversal: None,
             onboard_interior: false,
             interior_deck: 1,
@@ -2938,6 +3154,7 @@ mod tests {
         let p = &mut cockpit.snapshot.as_mut().unwrap().pilots[0];
         p.location = Location::Docked;
         p.station_avatar = Some(StationAvatar {
+            sprinting: false,
             docked_traversal: None,
             onboard_interior: false,
             interior_deck: 1,
@@ -2961,7 +3178,7 @@ mod tests {
         }
         let (tx, rx) = mpsc::channel();
         cockpit.commands = Some(tx);
-        cockpit.controls.publish_station(1., 0., 0.);
+        cockpit.controls.publish_station(1., 0., 0., false);
         cockpit.station_walk_active = true;
         cockpit.activate_quarters_terminal(HangarAction::Sit);
         assert!(cockpit.controls.take().is_none());

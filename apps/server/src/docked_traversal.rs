@@ -69,6 +69,7 @@ fn projection(state: DockedTraversalState, now: u64) -> StationAvatar {
         hangar_layout(ShipClass::Pioneer).boarding_point
     };
     StationAvatar {
+        sprinting: false,
         docked_traversal: Some(state),
         onboard_interior: false,
         interior_deck: 1,
@@ -225,6 +226,7 @@ pub(super) fn editor_place(
         EditorSceneState::Cockpit => unreachable!(),
     };
     let mut state = DockedTraversalState {
+        sprinting: false,
         version: DOCKED_TRAVERSAL_VERSION,
         binding: expected.clone(),
         feet_m,
@@ -281,6 +283,7 @@ pub(super) fn stop(pilot: &mut Pilot) {
         .and_then(|avatar| avatar.docked_traversal.as_mut())
     {
         state.moving = false;
+        state.sprinting = false;
         state.vertical_velocity_mps = 0.0;
         // A disconnected pilot remains at exactly the same feet position. Gravity
         // can settle an airborne capsule on a later authoritative tick.
@@ -327,6 +330,7 @@ pub(super) fn legacy_recovery(w: &mut World, name: &str, now: u64) {
         return;
     };
     state.moving = false;
+    state.sprinting = false;
     pilot.view.station_avatar = Some(projection(state, now));
     pilot.view.station_avatar.as_mut().unwrap().docked_traversal = None;
     pilot.walk_input = None;
@@ -570,6 +574,7 @@ pub(super) fn execute(
         );
         let anchor = geometry::seat_anchors(pose);
         let state = DockedTraversalState {
+            sprinting: false,
             version: DOCKED_TRAVERSAL_VERSION,
             binding: expected.clone(),
             feet_m: anchor.root_station_m,
@@ -603,6 +608,7 @@ pub(super) fn execute(
             forward,
             strafe,
             turn,
+            sprint,
             ..
         } = &request
         {
@@ -618,11 +624,13 @@ pub(super) fn execute(
                 "finish the pilot-seat transition before walking"
             );
             state.moving = moving;
+            state.sprinting = *sprint && (*forward != 0.0 || *strafe != 0.0);
             let pilot = w.pilots.get_mut(name).unwrap();
             pilot.walk_input = moving.then_some(station::WalkInput {
                 forward: *forward,
                 strafe: *strafe,
                 turn: *turn,
+                sprint: state.sprinting,
                 accepted_ms: now,
             });
         } else {
@@ -630,6 +638,7 @@ pub(super) fn execute(
             ensure!(state.grounded, "land before operating docked equipment");
             w.pilots.get_mut(name).unwrap().walk_input = None;
             state.moving = false;
+            state.sprinting = false;
             match request {
                 DockedTraversalRequest::TakeSeat { .. } => {
                     ensure!(
@@ -832,6 +841,7 @@ fn advance_actor(
                 }
             }
             state.moving = false;
+            state.sprinting = false;
             if next >= transition.ends_at_ms {
                 if transition.phase == DockedSeatPhase::Entering {
                     if !near(
@@ -858,9 +868,16 @@ fn advance_actor(
             state.heading = (state.heading + turn * 2.0 * dt).rem_euclid(std::f64::consts::TAU);
             let (sin, cos) = state.heading.sin_cos();
             let norm = forward.hypot(strafe).max(1.0);
+            let sprinting =
+                active.is_some_and(|input| input.sprint) && (forward != 0.0 || strafe != 0.0);
+            let speed = if sprinting {
+                SPRINT_SPEED_MPS
+            } else {
+                WALK_SPEED_MPS
+            };
             let delta = [
-                (cos * forward - sin * strafe) / norm * WALK_SPEED_MPS * dt,
-                (sin * forward + cos * strafe) / norm * WALK_SPEED_MPS * dt,
+                (cos * forward - sin * strafe) / norm * speed * dt,
+                (sin * forward + cos * strafe) / norm * speed * dt,
             ];
             for (axis, distance) in [(0, delta[0]), (2, delta[1])] {
                 if distance == 0.0 {
@@ -940,12 +957,14 @@ fn advance_actor(
                 }
             }
             state.moving = active.is_some() && (forward != 0.0 || strafe != 0.0 || turn != 0.0);
+            state.sprinting = sprinting;
         }
         cursor = next;
     }
     state.updated_at_ms = now;
     if input.is_none_or(|input| now >= input.accepted_ms.saturating_add(STATION_WALK_LEASE_MS)) {
         state.moving = false;
+        state.sprinting = false;
     }
     actuator.lift.updated_at_ms = now;
     state.actuators = actuator.clone();
@@ -1006,6 +1025,7 @@ pub(super) fn advance(
             actuator.binding = expected.clone();
             w.pilots.get_mut(&name).unwrap().walk_input = None;
             state.moving = false;
+            state.sprinting = false;
         }
         let input = w.pilots[&name].walk_input.clone();
         let completed_seat = advance_actor(
@@ -1126,6 +1146,7 @@ pub(super) fn validate(w: &World, document: Option<&RoomLayoutDocument>) -> Resu
                     && pilot.view.ship_class == ShipClass::Pioneer
                     && state.feet_m.iter().all(|v| v.is_finite())
                     && state.heading.is_finite()
+                    && (!state.sprinting || state.moving)
                     && state.vertical_velocity_mps.is_finite()
                     && state.vertical_velocity_mps.abs() <= 100.0
                     && state.feet_m[1] >= -EPSILON_M

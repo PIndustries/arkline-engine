@@ -43,6 +43,14 @@ impl Gait {
             .map(|p| position - p)
             .unwrap_or(Vec3::ZERO);
         self.last_position = Some(position);
+        // A scene placement is not a stride. Clear the old pose immediately
+        // rather than carrying bent limbs across a confirmed relocation.
+        if delta.length() >= 4.0 {
+            self.phase = 0.0;
+            self.weight = 0.0;
+            self.speed = 0.0;
+            self.direction = Vec3::X;
+        }
         let speed = if dt > 0.0 {
             Vec3::new(delta.x, 0.0, delta.z).length() / dt
         } else {
@@ -76,7 +84,7 @@ impl Gait {
             self.direction = Vec3::X;
         }
         if self.weight > 0.001 {
-            self.phase = (self.phase + dt * (self.speed.min(4.0) / 2.0).max(0.65)).rem_euclid(1.0);
+            self.phase = (self.phase + dt * (self.speed.min(6.0) / 2.0).max(0.65)).rem_euclid(1.0);
         } else {
             self.weight = 0.0;
         }
@@ -92,6 +100,26 @@ impl Gait {
     }
 }
 impl Pose {
+    /// Presentation-only limb offsets preserve the registered support root,
+    /// camera eye and seat-transition geometry exactly.
+    pub fn apply_registered(self, joints: &mut arkline_protocol::PioneerDockedPilotJoints) {
+        if self.weight == 0.0 {
+            return;
+        }
+        let neutral = Self::default();
+        for (index, side) in [-1.0, 1.0].into_iter().enumerate() {
+            let foot = (self.foot(side) - neutral.foot(side)).as_dvec3().to_array();
+            let knee = (self.knee(side) - neutral.knee(side)).as_dvec3().to_array();
+            let hand = (self.hand(side) - neutral.hand(side)).as_dvec3().to_array();
+            for axis in 0..3 {
+                joints.feet_m[index][axis] += foot[axis];
+                joints.knees_m[index][axis] += knee[axis];
+                joints.hands_m[index][axis] += hand[axis];
+                joints.elbows_m[index][axis] += hand[axis] * 0.55;
+            }
+        }
+    }
+
     /// A stance half-cycle travels backward on the floor; swing returns with foot lift.
     pub fn foot(self, side: f32) -> Vec3 {
         let t = (self.phase + if side > 0.0 { 0.5 } else { 0.0 }).rem_euclid(1.0);
@@ -122,6 +150,56 @@ impl Pose {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn registered_gait_moves_limbs_without_changing_support_or_eye() {
+        let original = arkline_protocol::pilot_joints(1.0);
+        let mut neutral = original;
+        Pose::default().apply_registered(&mut neutral);
+        assert_eq!(neutral, original);
+        let mut moving = original;
+        Pose {
+            phase: 0.125,
+            weight: 1.0,
+            direction: Vec3::X,
+        }
+        .apply_registered(&mut moving);
+        assert_eq!(moving.root_m, original.root_m);
+        assert_eq!(moving.eye_m, original.eye_m);
+        assert_eq!(moving.head_m, original.head_m);
+        assert_eq!(moving.neck_m, original.neck_m);
+        assert_eq!(moving.hips_m, original.hips_m);
+        assert_eq!(moving.shoulders_m, original.shoulders_m);
+        assert_ne!(moving.feet_m, original.feet_m);
+        assert_ne!(moving.knees_m, original.knees_m);
+        assert_ne!(moving.hands_m, original.hands_m);
+        assert_ne!(moving.elbows_m, original.elbows_m);
+    }
+
+    #[test]
+    fn confirmed_sprint_travel_has_faster_cadence_and_relocation_clears_pose() {
+        let mut walk = Gait::default();
+        let mut sprint = Gait::default();
+        let mut walk_cycles = 0;
+        let mut sprint_cycles = 0;
+        let mut prior = [0.0; 2];
+        for frame in 0..240 {
+            let now = frame * 16;
+            let seconds = now as f32 / 1000.0;
+            let a = walk.update(now, Vec3::X * seconds * 4.0, 0.0, true, false);
+            let b = sprint.update(now, Vec3::X * seconds * 6.0, 0.0, true, false);
+            walk_cycles += usize::from(a.phase < prior[0]);
+            sprint_cycles += usize::from(b.phase < prior[1]);
+            prior = [a.phase, b.phase];
+        }
+        assert!(sprint_cycles > walk_cycles);
+        let moved = sprint.update(240 * 16, Vec3::X * 100.0, 0.0, true, false);
+        assert_eq!(
+            moved.weight, 0.0,
+            "A confirmed placement must not preserve a running pose"
+        );
+        assert_eq!(moved.phase, 0.0);
+    }
+
     #[test]
     fn sparse_network_samples_keep_a_full_cycle_in_motion() {
         let mut gait = Gait::default();

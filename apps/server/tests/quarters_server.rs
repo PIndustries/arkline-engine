@@ -27,6 +27,7 @@ fn walk(
             s,
             p,
             Request::StationWalk {
+                sprint: false,
                 forward,
                 strafe,
                 turn: 0.,
@@ -40,6 +41,7 @@ fn walk(
         s,
         p,
         Request::StationWalk {
+            sprint: false,
             forward: 0.,
             strafe: 0.,
             turn: 0.,
@@ -130,6 +132,7 @@ fn sofa_requires_proximity_survives_reconnect_and_walking_stands_in_place() {
         &mut s,
         &mut p,
         Request::StationWalk {
+            sprint: false,
             forward: 0.,
             strafe: 1.,
             turn: 0.,

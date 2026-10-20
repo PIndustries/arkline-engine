@@ -1460,6 +1460,7 @@ impl Server {
             .or(transport_session.as_ref())
             .and_then(|name| assets::view(&world, name));
         let snapshot = Snapshot {
+            walk_sprint_v1: true,
             docked_traversal_capability: Some(docked_traversal_capability()),
             world_layout: Some(world.scene_layout.definition()),
             exterior: Some(exterior_effects::view(&world, now)),

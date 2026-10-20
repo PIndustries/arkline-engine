@@ -231,6 +231,7 @@ mod tests {
             protocol_version: PROTOCOL_VERSION,
             entries: vec![],
             snapshot: Snapshot {
+                walk_sprint_v1: false,
                 docked_traversal_capability: None,
                 world_layout: None,
                 exterior: None,
