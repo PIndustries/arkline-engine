@@ -463,8 +463,15 @@ impl Cockpit {
                 }
             });
         }
+        let feed_label = if self.remote_ship.is_some() {
+            "Selected drone feeds · worker screen active"
+        } else if !self.drone_camera {
+            "Selected drone feeds · screen off"
+        } else {
+            "Drone screen"
+        };
         ui.small(format!(
-            "On screen: {}",
+            "{feed_label}: {}",
             feeds
                 .iter()
                 .map(|id| format!("#{id}"))
@@ -479,7 +486,14 @@ impl Cockpit {
             }
         }
         if drone.signal_strength <= 0.0 {
-            ui.colored_label(AMBER, "Signal lost · recall available");
+            ui.colored_label(
+                AMBER,
+                if available {
+                    "Signal lost · recall available"
+                } else {
+                    "Signal lost · recall controls currently unavailable"
+                },
+            );
         }
         ui.small(
             "10 km control radius · mining needs a confirmed lock · attacks damage drones only",

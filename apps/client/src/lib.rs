@@ -1959,6 +1959,24 @@ impl Cockpit {
                 }
             }
             self.cockpit_actions(ui);
+            let display_state = if !self.connected {
+                "Disconnected · last received state · controls locked"
+            } else if self.snapshot.is_none() {
+                "Synchronizing · waiting for world data"
+            } else if self.embedded_paused {
+                "Paused · display held · controls locked"
+            } else if self.snapshot.as_ref().is_some_and(|snapshot| {
+                self.presentation_time().saturating_sub(snapshot.server_time_ms) > 1500
+            }) {
+                "Stale world data · values may be out of date"
+            } else if self.ship_observation {
+                "Observation only · pilot remains on foot · controls locked"
+            } else if !input_allowed {
+                "Live state · console input inactive"
+            } else {
+                "Live state"
+            };
+            ui.label(display_state);
             if self.cockpit_console_detail {
                 if ui.small_button("Flight view").clicked() {
                     self.cockpit_console_detail = false;
@@ -3957,7 +3975,7 @@ impl eframe::App for Cockpit {
                 .constrain_to(bounds)
                 .show(ctx, |ui| {
                     self.overlay_frame(ctx).show(ui, |ui| {
-                        ui.set_max_width(490.0);
+                        ui.set_max_width((bounds.width() - 24.0).clamp(1.0, 490.0));
                         if self.embedded {
                             ui.horizontal_wrapped(|ui| {
                                 ui.strong(system_name(self.current_system()));
