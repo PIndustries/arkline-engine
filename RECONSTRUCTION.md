@@ -1,6 +1,6 @@
 # Cockpit reconstruction and native build
 
-The current editor runs locally as build **26.10.20.2**, with shared runtime drone models and a native inspection viewer. See [the current delivery](DRONE-MODEL-VALIDATION-20261020.md). The earlier reconstruction checkpoint below describes build26.10.19.2 on a disposable project. Its physical cockpit, live instruments and video pass the explicit Mac GPU journeys. This is new integration work over surviving source; the missing combined builds46/47 were not fully recovered.
+The prepared physical Pioneer build is **26.10.20.7**; see [the current validation](PIONEER-DOCKED-VALIDATION-20261020.md). Its local checks pass, while native OS handoff remains pending and the existing 26.10.20.4 editor stays open. The historical reconstruction below describes build 26.10.19.2. This is new integration over surviving source; missing combined builds46/47 were not fully recovered.
 
 ## Source and preservation
 

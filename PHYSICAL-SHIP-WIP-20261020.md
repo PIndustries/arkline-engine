@@ -1,5 +1,7 @@
 # Physical Pioneer — unvalidated local WIP recovery checkpoint
 
+This is the historical WIP record. The later prepared build and validation are in [Pioneer docked validation](PIONEER-DOCKED-VALIDATION-20261020.md).
+
 Status: implemented locally; not accepted, packaged, launched or published. This checkpoint preserves work before remaining geometry, authority and native GPU acceptance. Active file owners froze at coherent written boundaries before the commit.
 
 The validated component package remains build 26.10.20.5, production source 2e2e6fc, recovery checkpoint 1c57505. Its signed app and verified bundle are retained in `.build/packages/pioneer-components-20261020`. The existing 26.10.20.4 app remains untouched; fresh saved-work confirmation is pending for a later handoff.

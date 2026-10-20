@@ -1,0 +1,3267 @@
+{
+  "schema_version": 1,
+  "at_utc": "2026-10-20T09:59:23.060893+00:00",
+  "status": "LOCAL_CHECKS_PASS_PREPARED_APP_NATIVE_OS_HANDOFF_PENDING",
+  "build": "26.10.20.7",
+  "source_head": "cbf48c5cd09a97389d0260c79a09fbac63089f48",
+  "source": {
+    "baseline": "c4222513b4985918141e5447978f2c816c5a91e9",
+    "retained_recovery": "3e500c9449dee3f7390c1cde2b2fdd0b53a2c07c",
+    "component_recovery": "1c57505e7fcf694df00c6fd0b105f6f4eed4efa3",
+    "physical_wip": "170de45cdf230fd30c45f14be2ffb916e3f71ebb",
+    "physical_checkpoints": [
+      "170de45",
+      "9c1e92d",
+      "ee9c903",
+      "371e64e",
+      "4297c13",
+      "f196e2b",
+      "98b95dc",
+      "cbf48c5"
+    ],
+    "canonical_glb_sha256": "8125644f007537437942d34169e527c08ddd2dfaed575c874e2263ff2b7cb123",
+    "original_gpu_payload_sha256": "70685dcbd8cafbe14ff9a89ad6e42cb384b04d24213906ebbca6d956949104d7",
+    "original_gpu_buffers": 9,
+    "original_triangles": 103466,
+    "derived_buffer_vertices": [
+      44880,
+      156510,
+      366
+    ],
+    "no_remotes": true
+  },
+  "supplemental_route_evidence": {
+    "at_utc": "2026-10-20T09:57:53.827688+00:00",
+    "runtime_source_head": "cbf48c5cd09a97389d0260c79a09fbac63089f48",
+    "test_fixture_source_head": "2efe7dee2f5d6f31fbc5ae3bebb9470276aa693f",
+    "changed_paths_since_runtime": [
+      "apps/client/src/pioneer_docked_gpu_tests.rs"
+    ],
+    "production_source_unchanged": true,
+    "package_executable_sha256": "e850b42158fae7c67c6d0884ee4c5f4d5ef5329a6f57ba981a75abafa25d5ec3",
+    "source_clean_before": true,
+    "results": [
+      {
+        "name": "fmt",
+        "command": [
+          "cargo",
+          "fmt",
+          "--all",
+          "--",
+          "--check"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 1.06,
+        "guard": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T095753876285Z.log",
+        "tail": [
+          "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T095753876285Z.log"
+        ]
+      },
+      {
+        "name": "native-all-target-clippy",
+        "command": [
+          "cargo",
+          "clippy",
+          "--offline",
+          "--workspace",
+          "--all-targets",
+          "--locked",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 5.06,
+        "guard": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T095754946400Z.log",
+        "tail": [
+          "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T095754946400Z.log",
+          "    Checking arkline-client v0.1.0 (/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/apps/client)",
+          "    Finished `dev` profile [unoptimized] target(s) in 4.55s"
+        ]
+      },
+      {
+        "name": "supplemental-native-scene",
+        "command": [
+          "/usr/bin/env",
+          "ARKLINE_PIONEER_DOCKED_EVIDENCE=/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-docked-fixed-20261020/physical-scene-route-views",
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "arkline-client",
+          "native_pioneer_registered_docked_scene_displays_continuity_and_visibility",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 32.19,
+        "guard": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T095800026528Z.log",
+        "tail": [
+          "running 1 test",
+          "test flight3d::hangar::pioneer_docked_scene::native_tests::native_pioneer_registered_docked_scene_displays_continuity_and_visibility ... UNSUPPORTED (log once): POSSIBLE ISSUE: unit 0 GLD_TEXTURE_INDEX_2D is unloadable and bound to sampler type (Float) - using zero texture because texture unloadable",
+          "ok",
+          "",
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 404 filtered out; finished in 20.96s",
+          "",
+          "     Running unittests src/main.rs (.build/target/debug/deps/arkline_client-5734ab2189c149c6)",
+          "",
+          "running 0 tests",
+          "",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "",
+          "     Running tests/spatial_material_contract.rs (.build/target/debug/deps/spatial_material_contract-4b7540281e7dfb14)",
+          "",
+          "running 0 tests",
+          "",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s",
+          ""
+        ]
+      }
+    ],
+    "evidence_directory": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-docked-fixed-20261020/physical-scene-route-views",
+    "source_clean_after": true,
+    "test_fixture_head_after": "2efe7dee2f5d6f31fbc5ae3bebb9470276aa693f",
+    "complete": true,
+    "scene": {
+      "actual_instrument_pixels_on_backing": 28615,
+      "all_buffer_identities_retained": true,
+      "canonical_gpu_payload_unchanged": true,
+      "captures": [
+        {
+          "camera_eye_station_m": [
+            34.220001220703125,
+            10.0,
+            3.0
+          ],
+          "camera_yaw_pitch": [
+            0.0,
+            0.0
+          ],
+          "candidate_draws": 405,
+          "candidate_triangles": 213202,
+          "cpu_prepare_ns": 2372751,
+          "cpu_submit_ns": 156708,
+          "gpu_elapsed_ns": 2453750,
+          "gpu_frame": 1000,
+          "height": 720,
+          "occupied_depth_pixels": 421851,
+          "orientation": "top-left RGBA8",
+          "png": "pilot-seat.png",
+          "rgba_sha256": "a3ecba00006fbb76b6ed2d3450c5b74951f4491df54191814c24a1ff997fd053",
+          "submitted_draws": 19,
+          "submitted_triangles": 78016,
+          "width": 1280
+        },
+        {
+          "camera_eye_station_m": [
+            34.220001220703125,
+            10.0,
+            3.0
+          ],
+          "camera_yaw_pitch": [
+            -0.5599995851516724,
+            0.0
+          ],
+          "candidate_draws": 405,
+          "candidate_triangles": 213202,
+          "cpu_prepare_ns": 2343083,
+          "cpu_submit_ns": 160125,
+          "gpu_elapsed_ns": 1333000,
+          "gpu_frame": 1000,
+          "height": 720,
+          "occupied_depth_pixels": 441633,
+          "orientation": "top-left RGBA8",
+          "png": "pilot-headlook.png",
+          "rgba_sha256": "f2e22f23b424ee44f4b1530ba61ab21b1d2809d4a3e365f26224d3b3b0456894",
+          "submitted_draws": 18,
+          "submitted_triangles": 95580,
+          "width": 1280
+        },
+        {
+          "camera_eye_station_m": [
+            34.220001220703125,
+            10.0,
+            3.0
+          ],
+          "camera_yaw_pitch": [
+            0.0,
+            0.0
+          ],
+          "candidate_draws": 405,
+          "candidate_triangles": 213202,
+          "cpu_prepare_ns": 2367125,
+          "cpu_submit_ns": 117583,
+          "gpu_elapsed_ns": 1099875,
+          "gpu_frame": 1225,
+          "height": 720,
+          "occupied_depth_pixels": 421851,
+          "orientation": "top-left RGBA8",
+          "png": "seat-folding.png",
+          "rgba_sha256": "504c4c65accf861bb7218bdd6689bb4412c4737f93ca19bbd4bdd2b9c68d14cb",
+          "submitted_draws": 19,
+          "submitted_triangles": 78016,
+          "width": 1280
+        },
+        {
+          "camera_eye_station_m": [
+            34.220001220703125,
+            10.0,
+            3.0
+          ],
+          "camera_yaw_pitch": [
+            0.0,
+            0.0
+          ],
+          "candidate_draws": 405,
+          "candidate_triangles": 213202,
+          "cpu_prepare_ns": 2331833,
+          "cpu_submit_ns": 158792,
+          "gpu_elapsed_ns": 1085791,
+          "gpu_frame": 1450,
+          "height": 720,
+          "occupied_depth_pixels": 421851,
+          "orientation": "top-left RGBA8",
+          "png": "seat-folded.png",
+          "rgba_sha256": "504c4c65accf861bb7218bdd6689bb4412c4737f93ca19bbd4bdd2b9c68d14cb",
+          "submitted_draws": 19,
+          "submitted_triangles": 78016,
+          "width": 1280
+        },
+        {
+          "camera_eye_station_m": [
+            34.540000915527344,
+            10.329999923706055,
+            3.0
+          ],
+          "camera_yaw_pitch": [
+            0.0,
+            0.0
+          ],
+          "candidate_draws": 405,
+          "candidate_triangles": 213202,
+          "cpu_prepare_ns": 2201584,
+          "cpu_submit_ns": 164708,
+          "gpu_elapsed_ns": 1417875,
+          "gpu_frame": 1900,
+          "height": 720,
+          "occupied_depth_pixels": 83067,
+          "orientation": "top-left RGBA8",
+          "png": "pilot-standing.png",
+          "rgba_sha256": "15cae467a254b95e9c3634acf35e7a2f73189d8bc48e7457b7a29fef4a527a9f",
+          "submitted_draws": 10,
+          "submitted_triangles": 77908,
+          "width": 1280
+        },
+        {
+          "camera_eye_station_m": [
+            34.36000061035156,
+            10.329999923706055,
+            2.7640791699923284e-07
+          ],
+          "camera_yaw_pitch": [
+            0.0,
+            0.0
+          ],
+          "candidate_draws": 405,
+          "candidate_triangles": 213202,
+          "cpu_prepare_ns": 2287833,
+          "cpu_submit_ns": 154916,
+          "gpu_elapsed_ns": 1518500,
+          "gpu_frame": 2000,
+          "height": 720,
+          "occupied_depth_pixels": 247256,
+          "orientation": "top-left RGBA8",
+          "png": "bridge-clear.png",
+          "rgba_sha256": "0d59d04191830e48e1428d71c84c08999e4cdc9aa26d42b54305c566fcbed834",
+          "submitted_draws": 7,
+          "submitted_triangles": 77872,
+          "width": 1280
+        },
+        {
+          "camera_eye_station_m": [
+            18.000001907348633,
+            10.329999923706055,
+            2.546710943258229e-14
+          ],
+          "camera_yaw_pitch": [
+            0.0,
+            0.0
+          ],
+          "candidate_draws": 405,
+          "candidate_triangles": 213202,
+          "cpu_prepare_ns": 2241167,
+          "cpu_submit_ns": 263375,
+          "gpu_elapsed_ns": 983624,
+          "gpu_frame": 2100,
+          "height": 720,
+          "occupied_depth_pixels": 885602,
+          "orientation": "top-left RGBA8",
+          "png": "registered-upper-deck.png",
+          "rgba_sha256": "23f591dcbc13f646e103d120d82d267c891df4a24756bab944b0f8998eb7c70c",
+          "submitted_draws": 70,
+          "submitted_triangles": 103248,
+          "width": 1280
+        },
+        {
+          "camera_eye_station_m": [
+            18.0,
+            6.53000020980835,
+            2.3464367480001778e-21
+          ],
+          "camera_yaw_pitch": [
+            0.0,
+            0.0
+          ],
+          "candidate_draws": 405,
+          "candidate_triangles": 213202,
+          "cpu_prepare_ns": 2308750,
+          "cpu_submit_ns": 243792,
+          "gpu_elapsed_ns": 662375,
+          "gpu_frame": 2200,
+          "height": 720,
+          "occupied_depth_pixels": 889856,
+          "orientation": "top-left RGBA8",
+          "png": "registered-lower-deck.png",
+          "rgba_sha256": "e3c2ef9fb564aa5b4af4154709782600b65c74bf8a4bca0a02f0cac4561fa390",
+          "submitted_draws": 68,
+          "submitted_triangles": 103224,
+          "width": 1280
+        },
+        {
+          "camera_eye_station_m": [
+            34.099998474121094,
+            10.330000877380371,
+            -7.799999237060547
+          ],
+          "camera_yaw_pitch": [
+            -2.4304940700531006,
+            0.0
+          ],
+          "candidate_draws": 405,
+          "candidate_triangles": 213202,
+          "cpu_prepare_ns": 2323583,
+          "cpu_submit_ns": 232667,
+          "gpu_elapsed_ns": 776374,
+          "gpu_frame": 2300,
+          "height": 720,
+          "occupied_depth_pixels": 889856,
+          "orientation": "top-left RGBA8",
+          "png": "inner-hatch-closed.png",
+          "rgba_sha256": "c5daa7475ebbe1e4b5d16c8c499f09baca99321b34ba6139ab3e316163c09889",
+          "submitted_draws": 76,
+          "submitted_triangles": 104372,
+          "width": 1280
+        },
+        {
+          "camera_eye_station_m": [
+            34.099998474121094,
+            10.330000877380371,
+            -7.800000190734863
+          ],
+          "camera_yaw_pitch": [
+            -2.430494546890259,
+            0.0
+          ],
+          "candidate_draws": 404,
+          "candidate_triangles": 213190,
+          "cpu_prepare_ns": 2304166,
+          "cpu_submit_ns": 204208,
+          "gpu_elapsed_ns": 814501,
+          "gpu_frame": 2300,
+          "height": 720,
+          "occupied_depth_pixels": 889856,
+          "orientation": "top-left RGBA8",
+          "png": "inner-hatch-open.png",
+          "rgba_sha256": "b6461c7a07bde5ea2bd347d30e31f07fb8af8f8789be3a96a34b3101b47dfb16",
+          "submitted_draws": 75,
+          "submitted_triangles": 104360,
+          "width": 1280
+        },
+        {
+          "camera_eye_station_m": [
+            32.963531494140625,
+            10.330000877380371,
+            -8.778998374938965
+          ],
+          "camera_yaw_pitch": [
+            -2.430494546890259,
+            0.0
+          ],
+          "candidate_draws": 404,
+          "candidate_triangles": 213190,
+          "cpu_prepare_ns": 2306125,
+          "cpu_submit_ns": 219166,
+          "gpu_elapsed_ns": 1212500,
+          "gpu_frame": 2400,
+          "height": 720,
+          "occupied_depth_pixels": 883220,
+          "orientation": "top-left RGBA8",
+          "png": "vestibule.png",
+          "rgba_sha256": "7efa57e6a5d7a0b570fb9ea9a956a7cdfbc08e8475e4e3985f1d73894f957e0f",
+          "submitted_draws": 43,
+          "submitted_triangles": 103976,
+          "width": 1280
+        },
+        {
+          "camera_eye_station_m": [
+            32.58673858642578,
+            10.329999923706055,
+            -9.301300048828125
+          ],
+          "camera_yaw_pitch": [
+            -0.9113120436668396,
+            0.0
+          ],
+          "candidate_draws": 405,
+          "candidate_triangles": 213202,
+          "cpu_prepare_ns": 2365166,
+          "cpu_submit_ns": 158500,
+          "gpu_elapsed_ns": 601334,
+          "gpu_frame": 2500,
+          "height": 720,
+          "occupied_depth_pixels": 889856,
+          "orientation": "top-left RGBA8",
+          "png": "outer-hatch-closed.png",
+          "rgba_sha256": "cee399689e6a5a6527f7a35d5632fa3ab1e66b28e1ab6e9a90030b6700750718",
+          "submitted_draws": 27,
+          "submitted_triangles": 78112,
+          "width": 1280
+        },
+        {
+          "camera_eye_station_m": [
+            32.58673858642578,
+            10.329999923706055,
+            -9.301300048828125
+          ],
+          "camera_yaw_pitch": [
+            -0.9113120436668396,
+            0.0
+          ],
+          "candidate_draws": 404,
+          "candidate_triangles": 213190,
+          "cpu_prepare_ns": 2296084,
+          "cpu_submit_ns": 169500,
+          "gpu_elapsed_ns": 685542,
+          "gpu_frame": 2500,
+          "height": 720,
+          "occupied_depth_pixels": 178697,
+          "orientation": "top-left RGBA8",
+          "png": "outer-hatch-open.png",
+          "rgba_sha256": "ccebbdcfa95c1dde2995d7ad1b5842b197dbe81e96f63c8f0fb78adbf86bf633",
+          "submitted_draws": 26,
+          "submitted_triangles": 78100,
+          "width": 1280
+        },
+        {
+          "camera_eye_station_m": [
+            34.45550537109375,
+            10.329999923706055,
+            -11.711738586425781
+          ],
+          "camera_yaw_pitch": [
+            -0.9113120436668396,
+            0.0
+          ],
+          "candidate_draws": 404,
+          "candidate_triangles": 213190,
+          "cpu_prepare_ns": 2290875,
+          "cpu_submit_ns": 160417,
+          "gpu_elapsed_ns": 688875,
+          "gpu_frame": 2600,
+          "height": 720,
+          "occupied_depth_pixels": 132180,
+          "orientation": "top-left RGBA8",
+          "png": "lift-ship.png",
+          "rgba_sha256": "72cbb46f8730b6ff0b50ea697656bca1f716a314230e05179ddea90d2307ed52",
+          "submitted_draws": 11,
+          "submitted_triangles": 77810,
+          "width": 1280
+        },
+        {
+          "camera_eye_station_m": [
+            34.45550537109375,
+            5.9900007247924805,
+            -11.711738586425781
+          ],
+          "camera_yaw_pitch": [
+            -0.9113120436668396,
+            0.0
+          ],
+          "candidate_draws": 406,
+          "candidate_triangles": 213214,
+          "cpu_prepare_ns": 2317042,
+          "cpu_submit_ns": 136083,
+          "gpu_elapsed_ns": 376417,
+          "gpu_frame": 2700,
+          "height": 720,
+          "occupied_depth_pixels": 270914,
+          "orientation": "top-left RGBA8",
+          "png": "lift-mid.png",
+          "rgba_sha256": "a3945292cec7dc2714a8336b2968c04f035265537cbc95258bfb546cf0622c70",
+          "submitted_draws": 11,
+          "submitted_triangles": 77810,
+          "width": 1280
+        },
+        {
+          "camera_eye_station_m": [
+            34.45550537109375,
+            1.6500004529953003,
+            -11.711738586425781
+          ],
+          "camera_yaw_pitch": [
+            -0.9113120436668396,
+            0.0
+          ],
+          "candidate_draws": 405,
+          "candidate_triangles": 213202,
+          "cpu_prepare_ns": 2155126,
+          "cpu_submit_ns": 166458,
+          "gpu_elapsed_ns": 335750,
+          "gpu_frame": 2800,
+          "height": 720,
+          "occupied_depth_pixels": 419438,
+          "orientation": "top-left RGBA8",
+          "png": "lift-station.png",
+          "rgba_sha256": "8bf3eb76a2c60a333a3cf80dce759d4882b2ec12a73eae5dece7b570d94b62ff",
+          "submitted_draws": 9,
+          "submitted_triangles": 67214,
+          "width": 1280
+        },
+        {
+          "camera_eye_station_m": [
+            42.78836441040039,
+            1.6500002145767212,
+            -22.45992088317871
+          ],
+          "camera_yaw_pitch": [
+            2.230280637741089,
+            0.0
+          ],
+          "candidate_draws": 405,
+          "candidate_triangles": 213202,
+          "cpu_prepare_ns": 2330749,
+          "cpu_submit_ns": 559709,
+          "gpu_elapsed_ns": 1143167,
+          "gpu_frame": 2900,
+          "height": 720,
+          "occupied_depth_pixels": 765857,
+          "orientation": "top-left RGBA8",
+          "png": "station-lookback.png",
+          "rgba_sha256": "81e9438433fa95f7a25ba16c84c25db2b32bc03c9ad77894963a1d779d13ea1c",
+          "submitted_draws": 365,
+          "submitted_triangles": 212722,
+          "width": 1280
+        },
+        {
+          "camera_eye_station_m": [
+            -7.199995517730713,
+            10.329999923706055,
+            -2.0693664737336803e-06
+          ],
+          "camera_yaw_pitch": [
+            0.0,
+            -0.14999979734420776
+          ],
+          "candidate_draws": 405,
+          "candidate_triangles": 213202,
+          "cpu_prepare_ns": 2306458,
+          "cpu_submit_ns": 374584,
+          "gpu_elapsed_ns": 1921833,
+          "gpu_frame": 3300,
+          "height": 720,
+          "occupied_depth_pixels": 889224,
+          "orientation": "top-left RGBA8",
+          "png": "upper-deck-corridor.png",
+          "rgba_sha256": "11cef7b77c89fe2e4bcb277fffd8fbc08b2065cfc07bafe0c69aaa5362edd666",
+          "submitted_draws": 209,
+          "submitted_triangles": 105508,
+          "width": 1280
+        },
+        {
+          "camera_eye_station_m": [
+            -7.199999809265137,
+            6.53000020980835,
+            -1.906631048789048e-13
+          ],
+          "camera_yaw_pitch": [
+            0.0,
+            -0.15000025928020477
+          ],
+          "candidate_draws": 405,
+          "candidate_triangles": 213202,
+          "cpu_prepare_ns": 2202001,
+          "cpu_submit_ns": 401125,
+          "gpu_elapsed_ns": 865500,
+          "gpu_frame": 3300,
+          "height": 720,
+          "occupied_depth_pixels": 889856,
+          "orientation": "top-left RGBA8",
+          "png": "lower-deck-corridor.png",
+          "rgba_sha256": "908cc29377a7e1cd15a0ce6a1e350fb790e5520c434c0a907028ce9761e31165",
+          "submitted_draws": 198,
+          "submitted_triangles": 105376,
+          "width": 1280
+        },
+        {
+          "camera_eye_station_m": [
+            -11.09999942779541,
+            6.53000020980835,
+            -1.1999999284744263
+          ],
+          "camera_yaw_pitch": [
+            -1.5707963705062866,
+            -0.3500000834465027
+          ],
+          "candidate_draws": 405,
+          "candidate_triangles": 213202,
+          "cpu_prepare_ns": 2337334,
+          "cpu_submit_ns": 178375,
+          "gpu_elapsed_ns": 829126,
+          "gpu_frame": 3300,
+          "height": 720,
+          "occupied_depth_pixels": 889856,
+          "orientation": "top-left RGBA8",
+          "png": "lower-core-stairs.png",
+          "rgba_sha256": "868c654d50e7a80c623175abdfd1a92ff5cce2e5c4aa98e99057e145a3b911c6",
+          "submitted_draws": 43,
+          "submitted_triangles": 102814,
+          "width": 1280
+        },
+        {
+          "camera_eye_station_m": [
+            -8.899999618530273,
+            10.329999923706055,
+            -2.5999996662139893
+          ],
+          "camera_yaw_pitch": [
+            -1.5707963705062866,
+            -0.6500001549720764
+          ],
+          "candidate_draws": 405,
+          "candidate_triangles": 213202,
+          "cpu_prepare_ns": 2290542,
+          "cpu_submit_ns": 235625,
+          "gpu_elapsed_ns": 798000,
+          "gpu_frame": 3300,
+          "height": 720,
+          "occupied_depth_pixels": 889856,
+          "orientation": "top-left RGBA8",
+          "png": "upper-core-stairs.png",
+          "rgba_sha256": "6db46b0a96853813482847e60a0d59a08fdf921d51b0c966879c3d7bff521e99",
+          "submitted_draws": 71,
+          "submitted_triangles": 103742,
+          "width": 1280
+        },
+        {
+          "camera_eye_station_m": [
+            34.220001220703125,
+            10.0,
+            3.0
+          ],
+          "camera_yaw_pitch": [
+            0.0,
+            0.0
+          ],
+          "candidate_draws": 405,
+          "candidate_triangles": 213202,
+          "cpu_prepare_ns": 2363625,
+          "cpu_submit_ns": 183833,
+          "gpu_elapsed_ns": 1172124,
+          "gpu_frame": 3200,
+          "height": 720,
+          "occupied_depth_pixels": 421851,
+          "orientation": "top-left RGBA8",
+          "png": "return-pilot-seat.png",
+          "rgba_sha256": "a3ecba00006fbb76b6ed2d3450c5b74951f4491df54191814c24a1ff997fd053",
+          "submitted_draws": 19,
+          "submitted_triangles": 78016,
+          "width": 1280
+        }
+      ],
+      "headlook_preserves_eye_and_authority": true,
+      "limitations": [
+        "Checkpoint snapshots exercise rendering; authority collision, hatch interlocks and continuous walking are verified by separate server tests",
+        "Original x=18 deck checkpoints honestly face the forward bulkhead; supplemental grounded corridor/stair views separately verify visible actual floor/tread landmarks",
+        "Both deck checkpoints and supplemental views use one registered scene but do not alone prove the complete stair walk",
+        "Each view retains an independent conservative frustum decision; this does not establish portal occlusion or LOD",
+        "CPU submit and optional delayed GPU timings are samples, not a performance guarantee or a vsync FPS measurement",
+        "No OS focus, desktop input, packaged app launch or engineering approval is established"
+      ],
+      "physical_computer_face_roundtrip": true,
+      "registration_revision": 1,
+      "retained_original_forward_bulkhead_views": [
+        "registered-upper-deck",
+        "registered-lower-deck"
+      ],
+      "schema_version": 2,
+      "scope": "Actual HangarView::ui registered docked callback and physical instrument surfaces in private macOS CGL; no desktop window",
+      "source_glb_sha256": "8125644f007537437942d34169e527c08ddd2dfaed575c874e2263ff2b7cb123",
+      "source_gpu_payload_sha256": "70685dcbd8cafbe14ff9a89ad6e42cb384b04d24213906ebbca6d956949104d7",
+      "supplemental_grounded_useful_views": [
+        {
+          "feet_body_m": [
+            -7.2,
+            -0.32,
+            0.0
+          ],
+          "grounded_and_capsule_clear": true,
+          "surface_id": "deck2/floor/3",
+          "view": "upper-deck-corridor",
+          "visibility": {
+            "depth_p10_m": 2.348536252975464,
+            "depth_p90_m": 10.336430549621582,
+            "depth_spread_m": 7.987894058227539,
+            "landmark_tolerance_m": 0.15,
+            "quantized_color_bins": 232,
+            "visible_actual_landmarks": [
+              {
+                "body_m": [
+                  -3.0,
+                  -0.32,
+                  0.0
+                ],
+                "gpu_depth_world_error_m": 0.004896761383861303
+              },
+              {
+                "body_m": [
+                  2.0,
+                  -0.32,
+                  0.0
+                ],
+                "gpu_depth_world_error_m": 0.008956868201494217
+              },
+              {
+                "body_m": [
+                  7.0,
+                  -0.32,
+                  0.0
+                ],
+                "gpu_depth_world_error_m": 0.053059473633766174
+              }
+            ]
+          }
+        },
+        {
+          "feet_body_m": [
+            -7.2,
+            -4.12,
+            0.0
+          ],
+          "grounded_and_capsule_clear": true,
+          "surface_id": "deck1/floor/0",
+          "view": "lower-deck-corridor",
+          "visibility": {
+            "depth_p10_m": 2.3485474586486816,
+            "depth_p90_m": 10.361007690429688,
+            "depth_spread_m": 8.012460708618164,
+            "landmark_tolerance_m": 0.15,
+            "quantized_color_bins": 315,
+            "visible_actual_landmarks": [
+              {
+                "body_m": [
+                  -3.0,
+                  -4.12,
+                  0.0
+                ],
+                "gpu_depth_world_error_m": 0.004922997206449509
+              },
+              {
+                "body_m": [
+                  2.0,
+                  -4.12,
+                  0.0
+                ],
+                "gpu_depth_world_error_m": 0.008941158652305603
+              },
+              {
+                "body_m": [
+                  7.0,
+                  -4.12,
+                  0.0
+                ],
+                "gpu_depth_world_error_m": 0.053053587675094604
+              }
+            ]
+          }
+        },
+        {
+          "feet_body_m": [
+            -11.1,
+            -4.12,
+            -1.2
+          ],
+          "grounded_and_capsule_clear": true,
+          "surface_id": "deck1/floor/0",
+          "view": "lower-core-stairs",
+          "visibility": {
+            "depth_p10_m": 1.567660927772522,
+            "depth_p90_m": 5.068606376647949,
+            "depth_spread_m": 3.500945568084717,
+            "landmark_tolerance_m": 0.15,
+            "quantized_color_bins": 112,
+            "visible_actual_landmarks": [
+              {
+                "body_m": [
+                  -11.1,
+                  -3.55,
+                  -2.6
+                ],
+                "gpu_depth_world_error_m": 0.0012727936264127493
+              },
+              {
+                "body_m": [
+                  -11.1,
+                  -3.17,
+                  -3.24
+                ],
+                "gpu_depth_world_error_m": 0.0037465698551386595
+              },
+              {
+                "body_m": [
+                  -11.1,
+                  -2.79,
+                  -3.88
+                ],
+                "gpu_depth_world_error_m": 0.011336438357830048
+              }
+            ]
+          }
+        },
+        {
+          "feet_body_m": [
+            -8.9,
+            -0.32,
+            -2.6
+          ],
+          "grounded_and_capsule_clear": true,
+          "surface_id": "deck2/floor/5",
+          "view": "upper-core-stairs",
+          "visibility": {
+            "depth_p10_m": 1.8755522966384888,
+            "depth_p90_m": 5.161604881286621,
+            "depth_spread_m": 3.286052703857422,
+            "landmark_tolerance_m": 0.15,
+            "quantized_color_bins": 151,
+            "visible_actual_landmarks": [
+              {
+                "body_m": [
+                  -8.9,
+                  -0.89,
+                  -3.88
+                ],
+                "gpu_depth_world_error_m": 0.0022365134209394455
+              },
+              {
+                "body_m": [
+                  -8.9,
+                  -1.27,
+                  -4.52
+                ],
+                "gpu_depth_world_error_m": 0.003153142286464572
+              },
+              {
+                "body_m": [
+                  -8.9,
+                  -1.65,
+                  -5.16
+                ],
+                "gpu_depth_world_error_m": 0.010487665422260761
+              }
+            ]
+          }
+        }
+      ],
+      "visibility_comparisons": [
+        {
+          "culled": {
+            "camera_eye_station_m": [
+              34.220001220703125,
+              10.0,
+              3.0
+            ],
+            "camera_yaw_pitch": [
+              0.0,
+              0.0
+            ],
+            "candidate_draws": 405,
+            "candidate_triangles": 213202,
+            "cpu_prepare_ns": 2343291,
+            "cpu_submit_ns": 155000,
+            "gpu_elapsed_ns": 1562709,
+            "gpu_frame": 3100,
+            "height": 720,
+            "occupied_depth_pixels": 421851,
+            "orientation": "top-left RGBA8",
+            "png": "seated-culled.png",
+            "rgba_sha256": "a3ecba00006fbb76b6ed2d3450c5b74951f4491df54191814c24a1ff997fd053",
+            "submitted_draws": 19,
+            "submitted_triangles": 78016,
+            "width": 1280
+          },
+          "exact_pixels_match": true,
+          "full": {
+            "camera_eye_station_m": [
+              34.220001220703125,
+              10.0,
+              3.0
+            ],
+            "camera_yaw_pitch": [
+              0.0,
+              0.0
+            ],
+            "candidate_draws": 405,
+            "candidate_triangles": 213202,
+            "cpu_prepare_ns": 1617250,
+            "cpu_submit_ns": 842416,
+            "gpu_elapsed_ns": 1688500,
+            "gpu_frame": 3100,
+            "height": 720,
+            "occupied_depth_pixels": 421851,
+            "orientation": "top-left RGBA8",
+            "png": "seated-unculled.png",
+            "rgba_sha256": "a3ecba00006fbb76b6ed2d3450c5b74951f4491df54191814c24a1ff997fd053",
+            "submitted_draws": 405,
+            "submitted_triangles": 213202,
+            "width": 1280
+          },
+          "view": "seated"
+        },
+        {
+          "culled": {
+            "camera_eye_station_m": [
+              18.0,
+              10.329999923706055,
+              4.568991940345768e-08
+            ],
+            "camera_yaw_pitch": [
+              0.0,
+              0.0
+            ],
+            "candidate_draws": 405,
+            "candidate_triangles": 213202,
+            "cpu_prepare_ns": 2396083,
+            "cpu_submit_ns": 256208,
+            "gpu_elapsed_ns": 1072625,
+            "gpu_frame": 3100,
+            "height": 720,
+            "occupied_depth_pixels": 885602,
+            "orientation": "top-left RGBA8",
+            "png": "upper-deck-culled.png",
+            "rgba_sha256": "d81ac7763580db3a443b265ca92c32d8359cbc530279644f7373dad819c534db",
+            "submitted_draws": 70,
+            "submitted_triangles": 103248,
+            "width": 1280
+          },
+          "exact_pixels_match": true,
+          "full": {
+            "camera_eye_station_m": [
+              18.0,
+              10.329999923706055,
+              4.568991940345768e-08
+            ],
+            "camera_yaw_pitch": [
+              0.0,
+              0.0
+            ],
+            "candidate_draws": 405,
+            "candidate_triangles": 213202,
+            "cpu_prepare_ns": 1544959,
+            "cpu_submit_ns": 627667,
+            "gpu_elapsed_ns": 611416,
+            "gpu_frame": 3100,
+            "height": 720,
+            "occupied_depth_pixels": 885602,
+            "orientation": "top-left RGBA8",
+            "png": "upper-deck-unculled.png",
+            "rgba_sha256": "d81ac7763580db3a443b265ca92c32d8359cbc530279644f7373dad819c534db",
+            "submitted_draws": 405,
+            "submitted_triangles": 213202,
+            "width": 1280
+          },
+          "view": "upper-deck"
+        },
+        {
+          "culled": {
+            "camera_eye_station_m": [
+              -7.199999809265137,
+              10.329999923706055,
+              6.958561479546881e-16
+            ],
+            "camera_yaw_pitch": [
+              0.0,
+              0.0
+            ],
+            "candidate_draws": 405,
+            "candidate_triangles": 213202,
+            "cpu_prepare_ns": 2401042,
+            "cpu_submit_ns": 397166,
+            "gpu_elapsed_ns": 1252874,
+            "gpu_frame": 3100,
+            "height": 720,
+            "occupied_depth_pixels": 889242,
+            "orientation": "top-left RGBA8",
+            "png": "supplemental-upper-corridor-culled.png",
+            "rgba_sha256": "94cb10edf789e7e28794c9ea670b8131862f36c562777b46936b2c353923cbc1",
+            "submitted_draws": 205,
+            "submitted_triangles": 105460,
+            "width": 1280
+          },
+          "exact_pixels_match": true,
+          "full": {
+            "camera_eye_station_m": [
+              -7.199999809265137,
+              10.329999923706055,
+              6.958561479546881e-16
+            ],
+            "camera_yaw_pitch": [
+              0.0,
+              0.0
+            ],
+            "candidate_draws": 405,
+            "candidate_triangles": 213202,
+            "cpu_prepare_ns": 1606292,
+            "cpu_submit_ns": 746166,
+            "gpu_elapsed_ns": 2279000,
+            "gpu_frame": 3100,
+            "height": 720,
+            "occupied_depth_pixels": 889242,
+            "orientation": "top-left RGBA8",
+            "png": "supplemental-upper-corridor-unculled.png",
+            "rgba_sha256": "94cb10edf789e7e28794c9ea670b8131862f36c562777b46936b2c353923cbc1",
+            "submitted_draws": 405,
+            "submitted_triangles": 213202,
+            "width": 1280
+          },
+          "view": "supplemental-upper-corridor"
+        }
+      ],
+      "visible_hatch_changed_pixels": {
+        "inner": 816434,
+        "outer": 857907
+      }
+    }
+  },
+  "workspace_summary": {
+    "top_level_suites": 55,
+    "passed": 964,
+    "failed": 0,
+    "ignored": 35
+  },
+  "checks": {
+    "source_head": "cbf48c5cd09a97389d0260c79a09fbac63089f48",
+    "source_status_before": "",
+    "started_utc": "2026-10-20T09:42:49.806560+00:00",
+    "results": [
+      {
+        "name": "fmt",
+        "command": [
+          "cargo",
+          "fmt",
+          "--all",
+          "--",
+          "--check"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 1.05,
+        "guard": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T094249840626Z.log",
+        "test_summaries": [],
+        "tail": [
+          "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T094249840626Z.log"
+        ]
+      },
+      {
+        "name": "native-clippy",
+        "command": [
+          "cargo",
+          "clippy",
+          "--offline",
+          "--workspace",
+          "--all-targets",
+          "--locked",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 17.14,
+        "guard": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T094250927737Z.log",
+        "test_summaries": [],
+        "tail": [
+          "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T094250927737Z.log",
+          "    Checking arkline-protocol v0.1.0 (/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/crates/arkline-protocol)",
+          "    Checking arkline-verifier v0.1.0 (/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/apps/verifier)",
+          "    Checking arkline-server v0.1.0 (/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/apps/server)",
+          "    Checking arkline-client v0.1.0 (/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/apps/client)",
+          "    Checking arkline-editor v0.1.0 (/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/apps/editor)",
+          "    Checking arkline-cli v0.1.0 (/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/apps/cli)",
+          "    Finished `dev` profile [unoptimized] target(s) in 16.79s"
+        ]
+      },
+      {
+        "name": "wasm-ci-clippy",
+        "command": [
+          "cargo",
+          "clippy",
+          "--offline",
+          "--locked",
+          "-p",
+          "arkline-client",
+          "--target",
+          "wasm32-unknown-unknown",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 4.08,
+        "guard": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T094308109770Z.log",
+        "test_summaries": [],
+        "tail": [
+          "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T094308109770Z.log",
+          "    Checking arkline-protocol v0.1.0 (/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/crates/arkline-protocol)",
+          "    Checking arkline-client v0.1.0 (/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/apps/client)",
+          "    Finished `dev` profile [unoptimized] target(s) in 3.33s"
+        ]
+      },
+      {
+        "name": "workspace-tests",
+        "command": [
+          "cargo",
+          "test",
+          "--offline",
+          "--workspace",
+          "--locked"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 241.09,
+        "guard": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T094312211568Z.log",
+        "test_summaries": [
+          {
+            "outcome": "ok",
+            "passed": 6,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 372,
+            "failed": 0,
+            "ignored": 33
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 8,
+            "failed": 0,
+            "ignored": 1
+          },
+          {
+            "outcome": "ok",
+            "passed": 296,
+            "failed": 0,
+            "ignored": 1
+          },
+          {
+            "outcome": "ok",
+            "passed": 52,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 66,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 4,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 17,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 4,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 3,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 5,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 4,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 2,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 3,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 2,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 2,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 2,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 3,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 4,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 5,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 2,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 7,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 2,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 6,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 6,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 2,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 5,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 3,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 4,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 3,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 7,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 5,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 2,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 2,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 2,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 2,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 6,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 2,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 4,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 12,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 13,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          }
+        ],
+        "tail": [
+          "   Doc-tests arkline_protocol",
+          "",
+          "running 0 tests",
+          "",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "",
+          "   Doc-tests arkline_server",
+          "",
+          "running 0 tests",
+          "",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "",
+          "   Doc-tests arkline_verifier",
+          "",
+          "running 0 tests",
+          "",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          ""
+        ]
+      },
+      {
+        "name": "packaging",
+        "command": [
+          "/opt/homebrew/bin/python3",
+          "-S",
+          "tools/test_package_release.py"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 1.07,
+        "guard": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T094713354758Z.log",
+        "test_summaries": [],
+        "tail": [
+          "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T094713354758Z.log",
+          "........",
+          "----------------------------------------------------------------------",
+          "Ran 8 tests in 0.008s",
+          "",
+          "OK"
+        ]
+      },
+      {
+        "name": "publication-boundaries",
+        "command": [
+          "/opt/homebrew/bin/python3",
+          "-S",
+          "tools/ci/test_publish_release.py"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 1.06,
+        "guard": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T094714448012Z.log",
+        "test_summaries": [],
+        "tail": [
+          "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T094714448012Z.log",
+          "...............",
+          "----------------------------------------------------------------------",
+          "Ran 15 tests in 0.008s",
+          "",
+          "OK"
+        ]
+      },
+      {
+        "name": "swift-bridge",
+        "command": [
+          "/usr/bin/swiftc",
+          "-target",
+          "arm64-apple-macos14.0",
+          "-swift-version",
+          "5",
+          "-warnings-as-errors",
+          "tools/arkline-speech.swift",
+          "-o",
+          "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-docked-fixed-20261020/arkline-speech-ci"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 1.06,
+        "guard": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T094715533716Z.log",
+        "test_summaries": [],
+        "tail": [
+          "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T094715533716Z.log"
+        ]
+      }
+    ],
+    "source_status_after": "",
+    "source_head_after": "cbf48c5cd09a97389d0260c79a09fbac63089f48",
+    "complete": true
+  },
+  "native": {
+    "source_head": "cbf48c5cd09a97389d0260c79a09fbac63089f48",
+    "build": "26.10.20.7",
+    "source_status_before": "",
+    "started_utc": "2026-10-20T09:47:28.726538+00:00",
+    "results": [
+      {
+        "test": "native_source_components_exact_ranges_context_controls_and_buffer_invariance",
+        "command": [
+          "/usr/bin/env",
+          "ARKLINE_MODEL_COMPONENT_EVIDENCE=/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-docked-fixed-20261020/components-gpu-final",
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "arkline-client",
+          "native_source_components_exact_ranges_context_controls_and_buffer_invariance",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 55.29,
+        "guard": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T094728759980Z.log",
+        "test_summaries": [
+          {
+            "outcome": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          }
+        ],
+        "tail": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 404 filtered out; finished in 39.06s",
+          "",
+          "     Running unittests src/main.rs (.build/target/debug/deps/arkline_client-5734ab2189c149c6)",
+          "",
+          "running 0 tests",
+          "",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "",
+          "     Running tests/spatial_material_contract.rs (.build/target/debug/deps/spatial_material_contract-4b7540281e7dfb14)",
+          "",
+          "running 0 tests",
+          "",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s",
+          ""
+        ]
+      },
+      {
+        "test": "native_shared_model_preview_catalog_import_materials_controls_and_clear",
+        "command": [
+          "/usr/bin/env",
+          "ARKLINE_MODEL_PREVIEW_EVIDENCE=/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-docked-fixed-20261020/shared-preview-gpu",
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "arkline-client",
+          "native_shared_model_preview_catalog_import_materials_controls_and_clear",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 76.41,
+        "guard": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T094824097261Z.log",
+        "test_summaries": [
+          {
+            "outcome": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          }
+        ],
+        "tail": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 404 filtered out; finished in 75.40s",
+          "",
+          "     Running unittests src/main.rs (.build/target/debug/deps/arkline_client-5734ab2189c149c6)",
+          "",
+          "running 0 tests",
+          "",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "",
+          "     Running tests/spatial_material_contract.rs (.build/target/debug/deps/spatial_material_contract-4b7540281e7dfb14)",
+          "",
+          "running 0 tests",
+          "",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s",
+          ""
+        ]
+      },
+      {
+        "test": "native_shared_model_preview_actual_repository_glbs_and_preview_normals",
+        "command": [
+          "/usr/bin/env",
+          "ARKLINE_REPOSITORY_GLB_EVIDENCE=/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-docked-fixed-20261020/repository-glbs-gpu",
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "arkline-client",
+          "native_shared_model_preview_actual_repository_glbs_and_preview_normals",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 4.07,
+        "guard": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T094940538991Z.log",
+        "test_summaries": [
+          {
+            "outcome": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          }
+        ],
+        "tail": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 404 filtered out; finished in 3.62s",
+          "",
+          "     Running unittests src/main.rs (.build/target/debug/deps/arkline_client-5734ab2189c149c6)",
+          "",
+          "running 0 tests",
+          "",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "",
+          "     Running tests/spatial_material_contract.rs (.build/target/debug/deps/spatial_material_contract-4b7540281e7dfb14)",
+          "",
+          "running 0 tests",
+          "",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s",
+          ""
+        ]
+      },
+      {
+        "test": "native_drone_gallery_all_classes_orbit_zoom_reset_share_runtime_geometry",
+        "command": [
+          "/usr/bin/env",
+          "ARKLINE_DRONE_MODEL_EVIDENCE=/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-docked-fixed-20261020/drone-regression",
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "arkline-client",
+          "native_drone_gallery_all_classes_orbit_zoom_reset_share_runtime_geometry",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 6.07,
+        "guard": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T094944638296Z.log",
+        "test_summaries": [
+          {
+            "outcome": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          }
+        ],
+        "tail": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 404 filtered out; finished in 5.56s",
+          "",
+          "     Running unittests src/main.rs (.build/target/debug/deps/arkline_client-5734ab2189c149c6)",
+          "",
+          "running 0 tests",
+          "",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "",
+          "     Running tests/spatial_material_contract.rs (.build/target/debug/deps/spatial_material_contract-4b7540281e7dfb14)",
+          "",
+          "running 0 tests",
+          "",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s",
+          ""
+        ]
+      },
+      {
+        "test": "native_cockpit_depth_query_uses_draw_framebuffer_without_rebinding",
+        "command": [
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "arkline-client",
+          "native_cockpit_depth_query_uses_draw_framebuffer_without_rebinding",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 1.06,
+        "guard": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T094950743281Z.log",
+        "test_summaries": [
+          {
+            "outcome": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          }
+        ],
+        "tail": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 404 filtered out; finished in 0.05s",
+          "",
+          "     Running unittests src/main.rs (.build/target/debug/deps/arkline_client-5734ab2189c149c6)",
+          "",
+          "running 0 tests",
+          "",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "",
+          "     Running tests/spatial_material_contract.rs (.build/target/debug/deps/spatial_material_contract-4b7540281e7dfb14)",
+          "",
+          "running 0 tests",
+          "",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s",
+          ""
+        ]
+      },
+      {
+        "test": "native_cockpit_display_preserves_depth_perspective_and_state",
+        "command": [
+          "/usr/bin/env",
+          "ARKLINE_COCKPIT_QA_DIR=/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-docked-fixed-20261020/display-depth",
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "arkline-client",
+          "native_cockpit_display_preserves_depth_perspective_and_state",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 1.06,
+        "guard": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T094951829917Z.log",
+        "test_summaries": [
+          {
+            "outcome": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          }
+        ],
+        "tail": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 404 filtered out; finished in 0.07s",
+          "",
+          "     Running unittests src/main.rs (.build/target/debug/deps/arkline_client-5734ab2189c149c6)",
+          "",
+          "running 0 tests",
+          "",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "",
+          "     Running tests/spatial_material_contract.rs (.build/target/debug/deps/spatial_material_contract-4b7540281e7dfb14)",
+          "",
+          "running 0 tests",
+          "",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s",
+          ""
+        ]
+      },
+      {
+        "test": "native_pioneer_cockpit_enclosure_matches_source_and_keeps_window_apertures",
+        "command": [
+          "/usr/bin/env",
+          "ARKLINE_COCKPIT_QA_DIR=/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-docked-fixed-20261020/enclosure",
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "arkline-client",
+          "native_pioneer_cockpit_enclosure_matches_source_and_keeps_window_apertures",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 12.11,
+        "guard": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T094952921429Z.log",
+        "test_summaries": [
+          {
+            "outcome": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          }
+        ],
+        "tail": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 404 filtered out; finished in 10.97s",
+          "",
+          "     Running unittests src/main.rs (.build/target/debug/deps/arkline_client-5734ab2189c149c6)",
+          "",
+          "running 0 tests",
+          "",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "",
+          "     Running tests/spatial_material_contract.rs (.build/target/debug/deps/spatial_material_contract-4b7540281e7dfb14)",
+          "",
+          "running 0 tests",
+          "",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s",
+          ""
+        ]
+      },
+      {
+        "test": "native_cockpit_cached_feed_tracks_physical_quad_under_head_look_and_roll",
+        "command": [
+          "/usr/bin/env",
+          "ARKLINE_COCKPIT_FEED_QA_DIR=/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-docked-fixed-20261020/physical-feed",
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "arkline-client",
+          "native_cockpit_cached_feed_tracks_physical_quad_under_head_look_and_roll",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 2.06,
+        "guard": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T095005061078Z.log",
+        "test_summaries": [
+          {
+            "outcome": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          }
+        ],
+        "tail": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 404 filtered out; finished in 1.12s",
+          "",
+          "     Running unittests src/main.rs (.build/target/debug/deps/arkline_client-5734ab2189c149c6)",
+          "",
+          "running 0 tests",
+          "",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "",
+          "     Running tests/spatial_material_contract.rs (.build/target/debug/deps/spatial_material_contract-4b7540281e7dfb14)",
+          "",
+          "running 0 tests",
+          "",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s",
+          ""
+        ]
+      },
+      {
+        "test": "native_cockpit_shift_keeps_both_instrument_layers_and_live_feed_updating",
+        "command": [
+          "/usr/bin/env",
+          "ARKLINE_COCKPIT_SHIFT_QA_DIR=/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-docked-fixed-20261020/shift-live-feed",
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "arkline-client",
+          "native_cockpit_shift_keeps_both_instrument_layers_and_live_feed_updating",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 7.08,
+        "guard": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T095007156909Z.log",
+        "test_summaries": [
+          {
+            "outcome": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          }
+        ],
+        "tail": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 404 filtered out; finished in 6.41s",
+          "",
+          "     Running unittests src/main.rs (.build/target/debug/deps/arkline_client-5734ab2189c149c6)",
+          "",
+          "running 0 tests",
+          "",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "",
+          "     Running tests/spatial_material_contract.rs (.build/target/debug/deps/spatial_material_contract-4b7540281e7dfb14)",
+          "",
+          "running 0 tests",
+          "",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s",
+          ""
+        ]
+      },
+      {
+        "test": "native_gallery_two_instances_render_and_preview_without_mutating_source",
+        "command": [
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "arkline-client",
+          "native_gallery_two_instances_render_and_preview_without_mutating_source",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 1.05,
+        "guard": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T095014269514Z.log",
+        "test_summaries": [
+          {
+            "outcome": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          }
+        ],
+        "tail": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 404 filtered out; finished in 0.76s",
+          "",
+          "     Running unittests src/main.rs (.build/target/debug/deps/arkline_client-5734ab2189c149c6)",
+          "",
+          "running 0 tests",
+          "",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "",
+          "     Running tests/spatial_material_contract.rs (.build/target/debug/deps/spatial_material_contract-4b7540281e7dfb14)",
+          "",
+          "running 0 tests",
+          "",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s",
+          ""
+        ]
+      },
+      {
+        "test": "native_camera_cache_composites_and_restores_state",
+        "command": [
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "arkline-client",
+          "native_camera_cache_composites_and_restores_state",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 1.05,
+        "guard": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T095015330289Z.log",
+        "test_summaries": [
+          {
+            "outcome": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          }
+        ],
+        "tail": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 404 filtered out; finished in 0.62s",
+          "",
+          "     Running unittests src/main.rs (.build/target/debug/deps/arkline_client-5734ab2189c149c6)",
+          "",
+          "running 0 tests",
+          "",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "",
+          "     Running tests/spatial_material_contract.rs (.build/target/debug/deps/spatial_material_contract-4b7540281e7dfb14)",
+          "",
+          "running 0 tests",
+          "",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s",
+          ""
+        ]
+      },
+      {
+        "test": "native_spatial_material_pioneer_section_and_paused_feeds",
+        "command": [
+          "/usr/bin/env",
+          "ARKLINE_SPATIAL_MATERIAL_EVIDENCE=/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-docked-fixed-20261020/spatial-material",
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "arkline-client",
+          "native_spatial_material_pioneer_section_and_paused_feeds",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 3.06,
+        "guard": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T095016413829Z.log",
+        "test_summaries": [
+          {
+            "outcome": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          }
+        ],
+        "tail": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 404 filtered out; finished in 2.77s",
+          "",
+          "     Running unittests src/main.rs (.build/target/debug/deps/arkline_client-5734ab2189c149c6)",
+          "",
+          "running 0 tests",
+          "",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "",
+          "     Running tests/spatial_material_contract.rs (.build/target/debug/deps/spatial_material_contract-4b7540281e7dfb14)",
+          "",
+          "running 0 tests",
+          "",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s",
+          ""
+        ]
+      },
+      {
+        "test": "native_pioneer_registered_docked_scene_displays_continuity_and_visibility",
+        "command": [
+          "/usr/bin/env",
+          "ARKLINE_PIONEER_DOCKED_EVIDENCE=/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-docked-fixed-20261020/physical-scene",
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "arkline-client",
+          "native_pioneer_registered_docked_scene_displays_continuity_and_visibility",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 17.12,
+        "guard": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T095019486217Z.log",
+        "test_summaries": [
+          {
+            "outcome": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          }
+        ],
+        "tail": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 404 filtered out; finished in 16.64s",
+          "",
+          "     Running unittests src/main.rs (.build/target/debug/deps/arkline_client-5734ab2189c149c6)",
+          "",
+          "running 0 tests",
+          "",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "",
+          "     Running tests/spatial_material_contract.rs (.build/target/debug/deps/spatial_material_contract-4b7540281e7dfb14)",
+          "",
+          "running 0 tests",
+          "",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s",
+          ""
+        ]
+      },
+      {
+        "test": "native_pioneer_docked_composite_computer_pixels_input_and_focus",
+        "command": [
+          "/usr/bin/env",
+          "ARKLINE_PIONEER_DOCKED_COMPOSITE_EVIDENCE=/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-docked-fixed-20261020/physical-composite",
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "arkline-client",
+          "native_pioneer_docked_composite_computer_pixels_input_and_focus",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 14.12,
+        "guard": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T095036649465Z.log",
+        "test_summaries": [
+          {
+            "outcome": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 0
+          }
+        ],
+        "tail": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 404 filtered out; finished in 13.37s",
+          "",
+          "     Running unittests src/main.rs (.build/target/debug/deps/arkline_client-5734ab2189c149c6)",
+          "",
+          "running 0 tests",
+          "",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "",
+          "     Running tests/spatial_material_contract.rs (.build/target/debug/deps/spatial_material_contract-4b7540281e7dfb14)",
+          "",
+          "running 0 tests",
+          "",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s",
+          ""
+        ]
+      }
+    ],
+    "source_status_after": "",
+    "source_head_after": "cbf48c5cd09a97389d0260c79a09fbac63089f48",
+    "complete": true
+  },
+  "physical_scene": {
+    "actual_instrument_pixels_on_backing": 28615,
+    "all_buffer_identities_retained": true,
+    "canonical_gpu_payload_unchanged": true,
+    "captures": [
+      {
+        "camera_eye_station_m": [
+          34.220001220703125,
+          10.0,
+          3.0
+        ],
+        "camera_yaw_pitch": [
+          0.0,
+          0.0
+        ],
+        "candidate_draws": 405,
+        "candidate_triangles": 213202,
+        "cpu_prepare_ns": 2400208,
+        "cpu_submit_ns": 148958,
+        "gpu_elapsed_ns": 1062625,
+        "gpu_frame": 1000,
+        "height": 720,
+        "occupied_depth_pixels": 421851,
+        "orientation": "top-left RGBA8",
+        "png": "pilot-seat.png",
+        "rgba_sha256": "a3ecba00006fbb76b6ed2d3450c5b74951f4491df54191814c24a1ff997fd053",
+        "submitted_draws": 19,
+        "submitted_triangles": 78016,
+        "width": 1280
+      },
+      {
+        "camera_eye_station_m": [
+          34.220001220703125,
+          10.0,
+          3.0
+        ],
+        "camera_yaw_pitch": [
+          -0.5599995851516724,
+          0.0
+        ],
+        "candidate_draws": 405,
+        "candidate_triangles": 213202,
+        "cpu_prepare_ns": 2397376,
+        "cpu_submit_ns": 199375,
+        "gpu_elapsed_ns": 1400000,
+        "gpu_frame": 1000,
+        "height": 720,
+        "occupied_depth_pixels": 441633,
+        "orientation": "top-left RGBA8",
+        "png": "pilot-headlook.png",
+        "rgba_sha256": "f2e22f23b424ee44f4b1530ba61ab21b1d2809d4a3e365f26224d3b3b0456894",
+        "submitted_draws": 18,
+        "submitted_triangles": 95580,
+        "width": 1280
+      },
+      {
+        "camera_eye_station_m": [
+          34.220001220703125,
+          10.0,
+          3.0
+        ],
+        "camera_yaw_pitch": [
+          0.0,
+          0.0
+        ],
+        "candidate_draws": 405,
+        "candidate_triangles": 213202,
+        "cpu_prepare_ns": 2374708,
+        "cpu_submit_ns": 140166,
+        "gpu_elapsed_ns": 1164500,
+        "gpu_frame": 1225,
+        "height": 720,
+        "occupied_depth_pixels": 421851,
+        "orientation": "top-left RGBA8",
+        "png": "seat-folding.png",
+        "rgba_sha256": "504c4c65accf861bb7218bdd6689bb4412c4737f93ca19bbd4bdd2b9c68d14cb",
+        "submitted_draws": 19,
+        "submitted_triangles": 78016,
+        "width": 1280
+      },
+      {
+        "camera_eye_station_m": [
+          34.220001220703125,
+          10.0,
+          3.0
+        ],
+        "camera_yaw_pitch": [
+          0.0,
+          0.0
+        ],
+        "candidate_draws": 405,
+        "candidate_triangles": 213202,
+        "cpu_prepare_ns": 2414541,
+        "cpu_submit_ns": 152375,
+        "gpu_elapsed_ns": 1107667,
+        "gpu_frame": 1450,
+        "height": 720,
+        "occupied_depth_pixels": 421851,
+        "orientation": "top-left RGBA8",
+        "png": "seat-folded.png",
+        "rgba_sha256": "504c4c65accf861bb7218bdd6689bb4412c4737f93ca19bbd4bdd2b9c68d14cb",
+        "submitted_draws": 19,
+        "submitted_triangles": 78016,
+        "width": 1280
+      },
+      {
+        "camera_eye_station_m": [
+          34.540000915527344,
+          10.329999923706055,
+          3.0
+        ],
+        "camera_yaw_pitch": [
+          0.0,
+          0.0
+        ],
+        "candidate_draws": 405,
+        "candidate_triangles": 213202,
+        "cpu_prepare_ns": 2353542,
+        "cpu_submit_ns": 108625,
+        "gpu_elapsed_ns": 1269708,
+        "gpu_frame": 1900,
+        "height": 720,
+        "occupied_depth_pixels": 83067,
+        "orientation": "top-left RGBA8",
+        "png": "pilot-standing.png",
+        "rgba_sha256": "15cae467a254b95e9c3634acf35e7a2f73189d8bc48e7457b7a29fef4a527a9f",
+        "submitted_draws": 10,
+        "submitted_triangles": 77908,
+        "width": 1280
+      },
+      {
+        "camera_eye_station_m": [
+          34.36000061035156,
+          10.329999923706055,
+          2.7640791699923284e-07
+        ],
+        "camera_yaw_pitch": [
+          0.0,
+          0.0
+        ],
+        "candidate_draws": 405,
+        "candidate_triangles": 213202,
+        "cpu_prepare_ns": 2345666,
+        "cpu_submit_ns": 127375,
+        "gpu_elapsed_ns": 1083001,
+        "gpu_frame": 2000,
+        "height": 720,
+        "occupied_depth_pixels": 247256,
+        "orientation": "top-left RGBA8",
+        "png": "bridge-clear.png",
+        "rgba_sha256": "0d59d04191830e48e1428d71c84c08999e4cdc9aa26d42b54305c566fcbed834",
+        "submitted_draws": 7,
+        "submitted_triangles": 77872,
+        "width": 1280
+      },
+      {
+        "camera_eye_station_m": [
+          18.000001907348633,
+          10.329999923706055,
+          2.546710943258229e-14
+        ],
+        "camera_yaw_pitch": [
+          0.0,
+          0.0
+        ],
+        "candidate_draws": 405,
+        "candidate_triangles": 213202,
+        "cpu_prepare_ns": 2318542,
+        "cpu_submit_ns": 216666,
+        "gpu_elapsed_ns": 1334751,
+        "gpu_frame": 2100,
+        "height": 720,
+        "occupied_depth_pixels": 885602,
+        "orientation": "top-left RGBA8",
+        "png": "registered-upper-deck.png",
+        "rgba_sha256": "23f591dcbc13f646e103d120d82d267c891df4a24756bab944b0f8998eb7c70c",
+        "submitted_draws": 70,
+        "submitted_triangles": 103248,
+        "width": 1280
+      },
+      {
+        "camera_eye_station_m": [
+          18.0,
+          6.53000020980835,
+          2.3464367480001778e-21
+        ],
+        "camera_yaw_pitch": [
+          0.0,
+          0.0
+        ],
+        "candidate_draws": 405,
+        "candidate_triangles": 213202,
+        "cpu_prepare_ns": 2413417,
+        "cpu_submit_ns": 242208,
+        "gpu_elapsed_ns": 896001,
+        "gpu_frame": 2200,
+        "height": 720,
+        "occupied_depth_pixels": 889856,
+        "orientation": "top-left RGBA8",
+        "png": "registered-lower-deck.png",
+        "rgba_sha256": "e3c2ef9fb564aa5b4af4154709782600b65c74bf8a4bca0a02f0cac4561fa390",
+        "submitted_draws": 68,
+        "submitted_triangles": 103224,
+        "width": 1280
+      },
+      {
+        "camera_eye_station_m": [
+          34.099998474121094,
+          10.330000877380371,
+          -7.799999237060547
+        ],
+        "camera_yaw_pitch": [
+          -2.4304940700531006,
+          0.0
+        ],
+        "candidate_draws": 405,
+        "candidate_triangles": 213202,
+        "cpu_prepare_ns": 2252375,
+        "cpu_submit_ns": 347625,
+        "gpu_elapsed_ns": 2945959,
+        "gpu_frame": 2300,
+        "height": 720,
+        "occupied_depth_pixels": 889856,
+        "orientation": "top-left RGBA8",
+        "png": "inner-hatch-closed.png",
+        "rgba_sha256": "c5daa7475ebbe1e4b5d16c8c499f09baca99321b34ba6139ab3e316163c09889",
+        "submitted_draws": 76,
+        "submitted_triangles": 104372,
+        "width": 1280
+      },
+      {
+        "camera_eye_station_m": [
+          34.099998474121094,
+          10.330000877380371,
+          -7.800000190734863
+        ],
+        "camera_yaw_pitch": [
+          -2.430494546890259,
+          0.0
+        ],
+        "candidate_draws": 404,
+        "candidate_triangles": 213190,
+        "cpu_prepare_ns": 2351084,
+        "cpu_submit_ns": 208125,
+        "gpu_elapsed_ns": 889459,
+        "gpu_frame": 2300,
+        "height": 720,
+        "occupied_depth_pixels": 889856,
+        "orientation": "top-left RGBA8",
+        "png": "inner-hatch-open.png",
+        "rgba_sha256": "b6461c7a07bde5ea2bd347d30e31f07fb8af8f8789be3a96a34b3101b47dfb16",
+        "submitted_draws": 75,
+        "submitted_triangles": 104360,
+        "width": 1280
+      },
+      {
+        "camera_eye_station_m": [
+          32.963531494140625,
+          10.330000877380371,
+          -8.778998374938965
+        ],
+        "camera_yaw_pitch": [
+          -2.430494546890259,
+          0.0
+        ],
+        "candidate_draws": 404,
+        "candidate_triangles": 213190,
+        "cpu_prepare_ns": 2356375,
+        "cpu_submit_ns": 153208,
+        "gpu_elapsed_ns": 1199625,
+        "gpu_frame": 2400,
+        "height": 720,
+        "occupied_depth_pixels": 883220,
+        "orientation": "top-left RGBA8",
+        "png": "vestibule.png",
+        "rgba_sha256": "7efa57e6a5d7a0b570fb9ea9a956a7cdfbc08e8475e4e3985f1d73894f957e0f",
+        "submitted_draws": 43,
+        "submitted_triangles": 103976,
+        "width": 1280
+      },
+      {
+        "camera_eye_station_m": [
+          32.58673858642578,
+          10.329999923706055,
+          -9.301300048828125
+        ],
+        "camera_yaw_pitch": [
+          -0.9113120436668396,
+          0.0
+        ],
+        "candidate_draws": 405,
+        "candidate_triangles": 213202,
+        "cpu_prepare_ns": 2404375,
+        "cpu_submit_ns": 179750,
+        "gpu_elapsed_ns": 1046459,
+        "gpu_frame": 2500,
+        "height": 720,
+        "occupied_depth_pixels": 889856,
+        "orientation": "top-left RGBA8",
+        "png": "outer-hatch-closed.png",
+        "rgba_sha256": "cee399689e6a5a6527f7a35d5632fa3ab1e66b28e1ab6e9a90030b6700750718",
+        "submitted_draws": 27,
+        "submitted_triangles": 78112,
+        "width": 1280
+      },
+      {
+        "camera_eye_station_m": [
+          32.58673858642578,
+          10.329999923706055,
+          -9.301300048828125
+        ],
+        "camera_yaw_pitch": [
+          -0.9113120436668396,
+          0.0
+        ],
+        "candidate_draws": 404,
+        "candidate_triangles": 213190,
+        "cpu_prepare_ns": 2372625,
+        "cpu_submit_ns": 156000,
+        "gpu_elapsed_ns": 213250,
+        "gpu_frame": 2500,
+        "height": 720,
+        "occupied_depth_pixels": 178697,
+        "orientation": "top-left RGBA8",
+        "png": "outer-hatch-open.png",
+        "rgba_sha256": "ccebbdcfa95c1dde2995d7ad1b5842b197dbe81e96f63c8f0fb78adbf86bf633",
+        "submitted_draws": 26,
+        "submitted_triangles": 78100,
+        "width": 1280
+      },
+      {
+        "camera_eye_station_m": [
+          34.45550537109375,
+          10.329999923706055,
+          -11.711738586425781
+        ],
+        "camera_yaw_pitch": [
+          -0.9113120436668396,
+          0.0
+        ],
+        "candidate_draws": 404,
+        "candidate_triangles": 213190,
+        "cpu_prepare_ns": 2342333,
+        "cpu_submit_ns": 110375,
+        "gpu_elapsed_ns": 228250,
+        "gpu_frame": 2600,
+        "height": 720,
+        "occupied_depth_pixels": 132180,
+        "orientation": "top-left RGBA8",
+        "png": "lift-ship.png",
+        "rgba_sha256": "72cbb46f8730b6ff0b50ea697656bca1f716a314230e05179ddea90d2307ed52",
+        "submitted_draws": 11,
+        "submitted_triangles": 77810,
+        "width": 1280
+      },
+      {
+        "camera_eye_station_m": [
+          34.45550537109375,
+          5.9900007247924805,
+          -11.711738586425781
+        ],
+        "camera_yaw_pitch": [
+          -0.9113120436668396,
+          0.0
+        ],
+        "candidate_draws": 406,
+        "candidate_triangles": 213214,
+        "cpu_prepare_ns": 2394250,
+        "cpu_submit_ns": 118250,
+        "gpu_elapsed_ns": 349750,
+        "gpu_frame": 2700,
+        "height": 720,
+        "occupied_depth_pixels": 270914,
+        "orientation": "top-left RGBA8",
+        "png": "lift-mid.png",
+        "rgba_sha256": "a3945292cec7dc2714a8336b2968c04f035265537cbc95258bfb546cf0622c70",
+        "submitted_draws": 11,
+        "submitted_triangles": 77810,
+        "width": 1280
+      },
+      {
+        "camera_eye_station_m": [
+          34.45550537109375,
+          1.6500004529953003,
+          -11.711738586425781
+        ],
+        "camera_yaw_pitch": [
+          -0.9113120436668396,
+          0.0
+        ],
+        "candidate_draws": 405,
+        "candidate_triangles": 213202,
+        "cpu_prepare_ns": 2365042,
+        "cpu_submit_ns": 128250,
+        "gpu_elapsed_ns": 355375,
+        "gpu_frame": 2800,
+        "height": 720,
+        "occupied_depth_pixels": 419438,
+        "orientation": "top-left RGBA8",
+        "png": "lift-station.png",
+        "rgba_sha256": "8bf3eb76a2c60a333a3cf80dce759d4882b2ec12a73eae5dece7b570d94b62ff",
+        "submitted_draws": 9,
+        "submitted_triangles": 67214,
+        "width": 1280
+      },
+      {
+        "camera_eye_station_m": [
+          42.78836441040039,
+          1.6500002145767212,
+          -22.45992088317871
+        ],
+        "camera_yaw_pitch": [
+          2.230280637741089,
+          0.0
+        ],
+        "candidate_draws": 405,
+        "candidate_triangles": 213202,
+        "cpu_prepare_ns": 2364042,
+        "cpu_submit_ns": 620542,
+        "gpu_elapsed_ns": 1125083,
+        "gpu_frame": 2900,
+        "height": 720,
+        "occupied_depth_pixels": 765857,
+        "orientation": "top-left RGBA8",
+        "png": "station-lookback.png",
+        "rgba_sha256": "81e9438433fa95f7a25ba16c84c25db2b32bc03c9ad77894963a1d779d13ea1c",
+        "submitted_draws": 365,
+        "submitted_triangles": 212722,
+        "width": 1280
+      },
+      {
+        "camera_eye_station_m": [
+          34.220001220703125,
+          10.0,
+          3.0
+        ],
+        "camera_yaw_pitch": [
+          0.0,
+          0.0
+        ],
+        "candidate_draws": 405,
+        "candidate_triangles": 213202,
+        "cpu_prepare_ns": 2317417,
+        "cpu_submit_ns": 173417,
+        "gpu_elapsed_ns": 1064500,
+        "gpu_frame": 3200,
+        "height": 720,
+        "occupied_depth_pixels": 421851,
+        "orientation": "top-left RGBA8",
+        "png": "return-pilot-seat.png",
+        "rgba_sha256": "a3ecba00006fbb76b6ed2d3450c5b74951f4491df54191814c24a1ff997fd053",
+        "submitted_draws": 19,
+        "submitted_triangles": 78016,
+        "width": 1280
+      }
+    ],
+    "headlook_preserves_eye_and_authority": true,
+    "limitations": [
+      "Checkpoint snapshots exercise rendering; authority collision, hatch interlocks and continuous walking are verified by separate server tests",
+      "Both deck checkpoints use one registered scene but do not alone prove the complete stair walk",
+      "Each view retains an independent conservative frustum decision; this does not establish portal occlusion or LOD",
+      "CPU submit and optional delayed GPU timings are samples, not a performance guarantee or a vsync FPS measurement",
+      "No OS focus, desktop input, packaged app launch or engineering approval is established"
+    ],
+    "physical_computer_face_roundtrip": true,
+    "registration_revision": 1,
+    "schema_version": 1,
+    "scope": "Actual HangarView::ui registered docked callback and physical instrument surfaces in private macOS CGL; no desktop window",
+    "source_glb_sha256": "8125644f007537437942d34169e527c08ddd2dfaed575c874e2263ff2b7cb123",
+    "source_gpu_payload_sha256": "70685dcbd8cafbe14ff9a89ad6e42cb384b04d24213906ebbca6d956949104d7",
+    "visibility_comparisons": [
+      {
+        "culled": {
+          "camera_eye_station_m": [
+            34.220001220703125,
+            10.0,
+            3.0
+          ],
+          "camera_yaw_pitch": [
+            0.0,
+            0.0
+          ],
+          "candidate_draws": 405,
+          "candidate_triangles": 213202,
+          "cpu_prepare_ns": 2340042,
+          "cpu_submit_ns": 138292,
+          "gpu_elapsed_ns": 2613458,
+          "gpu_frame": 3100,
+          "height": 720,
+          "occupied_depth_pixels": 421851,
+          "orientation": "top-left RGBA8",
+          "png": "seated-culled.png",
+          "rgba_sha256": "a3ecba00006fbb76b6ed2d3450c5b74951f4491df54191814c24a1ff997fd053",
+          "submitted_draws": 19,
+          "submitted_triangles": 78016,
+          "width": 1280
+        },
+        "exact_pixels_match": true,
+        "full": {
+          "camera_eye_station_m": [
+            34.220001220703125,
+            10.0,
+            3.0
+          ],
+          "camera_yaw_pitch": [
+            0.0,
+            0.0
+          ],
+          "candidate_draws": 405,
+          "candidate_triangles": 213202,
+          "cpu_prepare_ns": 1638625,
+          "cpu_submit_ns": 735167,
+          "gpu_elapsed_ns": 1093416,
+          "gpu_frame": 3100,
+          "height": 720,
+          "occupied_depth_pixels": 421851,
+          "orientation": "top-left RGBA8",
+          "png": "seated-unculled.png",
+          "rgba_sha256": "a3ecba00006fbb76b6ed2d3450c5b74951f4491df54191814c24a1ff997fd053",
+          "submitted_draws": 405,
+          "submitted_triangles": 213202,
+          "width": 1280
+        },
+        "view": "seated"
+      },
+      {
+        "culled": {
+          "camera_eye_station_m": [
+            18.0,
+            10.329999923706055,
+            4.568991940345768e-08
+          ],
+          "camera_yaw_pitch": [
+            0.0,
+            0.0
+          ],
+          "candidate_draws": 405,
+          "candidate_triangles": 213202,
+          "cpu_prepare_ns": 2388584,
+          "cpu_submit_ns": 227125,
+          "gpu_elapsed_ns": 1214584,
+          "gpu_frame": 3100,
+          "height": 720,
+          "occupied_depth_pixels": 885602,
+          "orientation": "top-left RGBA8",
+          "png": "upper-deck-culled.png",
+          "rgba_sha256": "d81ac7763580db3a443b265ca92c32d8359cbc530279644f7373dad819c534db",
+          "submitted_draws": 70,
+          "submitted_triangles": 103248,
+          "width": 1280
+        },
+        "exact_pixels_match": true,
+        "full": {
+          "camera_eye_station_m": [
+            18.0,
+            10.329999923706055,
+            4.568991940345768e-08
+          ],
+          "camera_yaw_pitch": [
+            0.0,
+            0.0
+          ],
+          "candidate_draws": 405,
+          "candidate_triangles": 213202,
+          "cpu_prepare_ns": 1650625,
+          "cpu_submit_ns": 816375,
+          "gpu_elapsed_ns": 753458,
+          "gpu_frame": 3100,
+          "height": 720,
+          "occupied_depth_pixels": 885602,
+          "orientation": "top-left RGBA8",
+          "png": "upper-deck-unculled.png",
+          "rgba_sha256": "d81ac7763580db3a443b265ca92c32d8359cbc530279644f7373dad819c534db",
+          "submitted_draws": 405,
+          "submitted_triangles": 213202,
+          "width": 1280
+        },
+        "view": "upper-deck"
+      }
+    ],
+    "visible_hatch_changed_pixels": {
+      "inner": 816434,
+      "outer": 857907
+    }
+  },
+  "physical_composite": {
+    "actual_first_third_person_selection_persists": true,
+    "captures": [
+      {
+        "computer_canonical_vertices": 1648,
+        "computer_lit_samples": 311,
+        "head_look_rad": [
+          0.0,
+          0.0
+        ],
+        "height": 960,
+        "occupied_depth_pixels": 626129,
+        "orientation": "top-left RGBA8",
+        "physical_computer_present": true,
+        "png": "composed-pilot-seat.png",
+        "rgba_sha256": "7e52703061303f1174cfae0483b89ac92d3ffb2d19764d90196840023de63bdf",
+        "width": 1500
+      },
+      {
+        "computer_canonical_vertices": 1688,
+        "computer_lit_samples": 311,
+        "head_look_rad": [
+          0.0,
+          0.0
+        ],
+        "height": 960,
+        "occupied_depth_pixels": 626129,
+        "orientation": "top-left RGBA8",
+        "physical_computer_present": true,
+        "png": "computer-undock-hover.png",
+        "rgba_sha256": "3f8d18f32283f40da5138926f0a157ee7b1397cc5079acac96c354ca815fce20",
+        "width": 1500
+      },
+      {
+        "computer_canonical_vertices": 1688,
+        "computer_lit_samples": 311,
+        "head_look_rad": [
+          0.0,
+          0.0
+        ],
+        "height": 960,
+        "occupied_depth_pixels": 626129,
+        "orientation": "top-left RGBA8",
+        "physical_computer_present": true,
+        "png": "computer-undock-pressed.png",
+        "rgba_sha256": "32928c09675028d3d247a0753200b9b09c0099b89acc0fbeddccf69940e90187",
+        "width": 1500
+      },
+      {
+        "computer_canonical_vertices": 1692,
+        "computer_lit_samples": 311,
+        "head_look_rad": [
+          0.0,
+          0.0
+        ],
+        "height": 960,
+        "occupied_depth_pixels": 626129,
+        "orientation": "top-left RGBA8",
+        "physical_computer_present": true,
+        "png": "computer-undock-released.png",
+        "rgba_sha256": "a66d833dcd05522195a1977caa3bced175a53b825b40ff527051848ac3978a27",
+        "width": 1500
+      },
+      {
+        "computer_canonical_vertices": 1720,
+        "computer_lit_samples": 327,
+        "head_look_rad": [
+          0.0,
+          0.0
+        ],
+        "height": 960,
+        "occupied_depth_pixels": 626129,
+        "orientation": "top-left RGBA8",
+        "physical_computer_present": true,
+        "png": "physical-computer-typing.png",
+        "rgba_sha256": "41103639dc0e7550daddbca8c7e2e4730d5d199c0043ffc31703d02566ec31eb",
+        "width": 1500
+      },
+      {
+        "computer_canonical_vertices": 1716,
+        "computer_lit_samples": 325,
+        "head_look_rad": [
+          0.0,
+          0.0
+        ],
+        "height": 960,
+        "occupied_depth_pixels": 626129,
+        "orientation": "top-left RGBA8",
+        "physical_computer_present": true,
+        "png": "computer-text-blocks-headlook.png",
+        "rgba_sha256": "efc3140451977f22faf55ec74d261512997a086331f21d92784e01829ce18d40",
+        "width": 1500
+      },
+      {
+        "computer_canonical_vertices": 1656,
+        "computer_lit_samples": 321,
+        "head_look_rad": [
+          0.0,
+          0.0
+        ],
+        "height": 960,
+        "occupied_depth_pixels": 626129,
+        "orientation": "top-left RGBA8",
+        "physical_computer_present": true,
+        "png": "window-focus-lost.png",
+        "rgba_sha256": "6d5bbe9f632d2397b58e1425c5cb682a1dd44fd7f05d5849e2c5a7b93646aa40",
+        "width": 1500
+      },
+      {
+        "computer_canonical_vertices": 1656,
+        "computer_lit_samples": 321,
+        "head_look_rad": [
+          0.0,
+          0.0
+        ],
+        "height": 960,
+        "occupied_depth_pixels": 626129,
+        "orientation": "top-left RGBA8",
+        "physical_computer_present": true,
+        "png": "parent-text-focus.png",
+        "rgba_sha256": "30577601e86f818f9c311e6137ca630c085b85a27260a46ac489d4692f2771fe",
+        "width": 1500
+      },
+      {
+        "computer_canonical_vertices": 1656,
+        "computer_lit_samples": 314,
+        "head_look_rad": [
+          0.21000000834465027,
+          0.0
+        ],
+        "height": 960,
+        "occupied_depth_pixels": 530629,
+        "orientation": "top-left RGBA8",
+        "physical_computer_present": true,
+        "png": "composed-headlook.png",
+        "rgba_sha256": "9dccf56a78ced784bc3a586da707c8f2f4e3c045559ba35ad5972629e19cbf40",
+        "width": 1500
+      },
+      {
+        "computer_canonical_vertices": 1660,
+        "computer_lit_samples": 320,
+        "head_look_rad": [
+          0.0,
+          0.0
+        ],
+        "height": 960,
+        "occupied_depth_pixels": 626129,
+        "orientation": "top-left RGBA8",
+        "physical_computer_present": true,
+        "png": "visible-bound-leave-seat.png",
+        "rgba_sha256": "8eb226761a058f5dbdba295c3940bc56f8f3f399a6ddc667c1135b7abc1e3826",
+        "width": 1500
+      },
+      {
+        "computer_canonical_vertices": 1696,
+        "computer_lit_samples": 321,
+        "head_look_rad": [
+          0.0,
+          0.0
+        ],
+        "height": 960,
+        "occupied_depth_pixels": 626129,
+        "orientation": "top-left RGBA8",
+        "physical_computer_present": true,
+        "png": "computer-press-before-onfoot.png",
+        "rgba_sha256": "40a7f23d86374bb8b7f7124822bdb2911fc623f739ea08752da7861292e3cc1b",
+        "width": 1500
+      },
+      {
+        "computer_canonical_vertices": 1288,
+        "computer_lit_samples": null,
+        "head_look_rad": [
+          0.0,
+          0.0
+        ],
+        "height": 960,
+        "occupied_depth_pixels": 124111,
+        "orientation": "top-left RGBA8",
+        "physical_computer_present": false,
+        "png": "stale-release-after-onfoot.png",
+        "rgba_sha256": "7645046cb6106e5e6043eec36f4256030c14d91fb117e7954e43f037e9ae03e9",
+        "width": 1500
+      },
+      {
+        "computer_canonical_vertices": 1288,
+        "computer_lit_samples": null,
+        "head_look_rad": [
+          0.0,
+          0.0
+        ],
+        "height": 960,
+        "occupied_depth_pixels": 120959,
+        "orientation": "top-left RGBA8",
+        "physical_computer_present": false,
+        "png": "composed-onfoot-cockpit.png",
+        "rgba_sha256": "02caae4ff57a15f2790e24cbed3c8d50561efe04e649d199060623b7b99b5f7f",
+        "width": 1500
+      },
+      {
+        "computer_canonical_vertices": 1288,
+        "computer_lit_samples": 0,
+        "head_look_rad": [
+          0.0,
+          0.0
+        ],
+        "height": 960,
+        "occupied_depth_pixels": 1314000,
+        "orientation": "top-left RGBA8",
+        "physical_computer_present": true,
+        "png": "composed-onfoot-third-person.png",
+        "rgba_sha256": "c6858712da14012a041f4721606ad63317483d2e9a77d4ddf3052a899c08cd49",
+        "width": 1500
+      }
+    ],
+    "center_computer_canonical_vertices": 1648,
+    "center_computer_lit_samples": 311,
+    "computer_typing": "Native cockpit text",
+    "gl_version": "4.1 Metal - 91.7",
+    "host_vessel_id": "native-composite-owned-pioneer",
+    "layout_sha256": "17b93e86765dfe1f0d29a21e59e74821ac140295279bb4ff8ebbffeea215f87e",
+    "limitations": [
+      "Undock and the bound LeaveSeat request were captured in an isolated in-memory command channel and were never executed",
+      "On-foot state is a deterministic compatible snapshot fixture; full authority walking/interlock journeys remain separate",
+      "Native offscreen composition proves neither OS focus/input delivery nor a packaged app launch",
+      "No network, local authority, audio device, project or canonical source asset was opened or modified"
+    ],
+    "missing_surface_clears_active_labels_keyboard_and_hit_guard": true,
+    "onfoot_cached_canonical_vertices": 1288,
+    "parent_text_owns_keyboard_and_headlook": true,
+    "physical_button_request": "Undock",
+    "physical_hover_and_press_send_nothing": true,
+    "physical_release_sends_exactly_one_actual_ui_request": true,
+    "positive_owned_headlook": true,
+    "received_snapshot_unchanged_by_input": true,
+    "registration_revision": 1,
+    "renderer": "Apple M4 Max",
+    "schema_version": 2,
+    "scope": "Actual Cockpit::update + negotiated HangarView + render_cockpit_computer secondary context + physical GPU display/depth/layer input in private macOS CGL; no desktop window",
+    "seated_press_onfoot_release_sends_nothing": true,
+    "secondary_text_owns_headlook": true,
+    "source_glb_sha256": "8125644f007537437942d34169e527c08ddd2dfaed575c874e2263ff2b7cb123",
+    "vendor": "Apple",
+    "viewport_px": [
+      1500,
+      960
+    ],
+    "visible_parent_leave_seat_sends_exact_bound_request": true,
+    "window_focus_loss_cancels_computer_input": true
+  },
+  "package": {
+    "build_version": "26.10.20.7",
+    "cf_bundle_version": "2485.0.7",
+    "source_head_before_version_commit": "cbf48c5cd09a97389d0260c79a09fbac63089f48",
+    "binary_sha256_before_signing": "2597961079ded1cdc92a54537b7c9bccae5f4fadbae6eeee28cf7a1ae12a00f3",
+    "packaged_executable_sha256": "e850b42158fae7c67c6d0884ee4c5f4d5ef5329a6f57ba981a75abafa25d5ec3",
+    "app": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-docked-fixed-20261020/Arkline Editor Reconstructed.app",
+    "signature": "local ad-hoc; verified deep strict",
+    "profile": "debug; debug information disabled; incremental disabled",
+    "source_head_at_packaging": "cbf48c5cd09a97389d0260c79a09fbac63089f48",
+    "legacy_source_field_note": "The helper legacy field named before_version_commit records actual HEAD at packaging; this candidate was already stamped before packaging."
+  },
+  "handoff": {
+    "pending": true,
+    "candidate_launched": false,
+    "current_build": "26.10.20.4",
+    "last_verified_pid": 96422,
+    "reason": "Preserve a potentially unsaved authoring session. No particular dirty draft has been established; the editor close guard does not cover all authoring state. Parent has already asked the user.",
+    "close_guard_source": "apps/editor/src/main.rs:251",
+    "ready_source_receipt": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-docked-fixed-20261020/source-checkpoint.json"
+  },
+  "limitations": [
+    "Prepared app has not been launched; the existing 26.10.20.4 session remains untouched pending fresh saved-work readiness.",
+    "Private CGL captures prove actual macOS GPU rendering and egui input composition, not OS focus/event delivery or a packaged app launch.",
+    "Native scene views use deterministic checkpoints in the private station pose. Continuous stairs, hatches, lift and reseating are proved separately through real authority commands; rotated/circular fleet native UI journeys are not claimed.",
+    "Conservative per-view frustum selection is implemented. Room portal occlusion, LOD and a measured frame-rate improvement are not claimed; simulation is never culled.",
+    "GPU elapsed samples are delayed, optional observations, not a paired performance benchmark. Existing Apple zero-texture warnings remain in full logs; explicit image/state assertions and GL error checks pass.",
+    "Browser coverage is the exact CI Wasm Clippy command; browser GPU execution and Linux CI are not claimed.",
+    "This debug-profile build is new reconstruction over retained source, not exact recovery of the missing combined builds46/47.",
+    "No push, publication, PR/issue/project mutation, merge, deployment, external-drive operation or user-project modification occurred."
+  ],
+  "supplemental_evidence_source_head": "2efe7dee2f5d6f31fbc5ae3bebb9470276aa693f",
+  "independent_png_receipt_audit": {
+    "original_scene_pngs": 22,
+    "composite_pngs": 14,
+    "supplemental_scene_pngs": 28,
+    "decoded_rgba_hashes_and_dimensions_match": true,
+    "supplemental_landmarks_matched_per_view": [
+      3,
+      3,
+      3,
+      3
+    ],
+    "worst_landmark_error_m": 0.05306,
+    "worst_stair_landmark_error_m": 0.01134,
+    "grounded_supports": [
+      "deck2/floor/3",
+      "deck1/floor/0",
+      "deck1/floor/0",
+      "deck2/floor/5"
+    ]
+  }
+}
