@@ -76,7 +76,7 @@ enum LoadState {
 }
 enum Work {
     Scan,
-    Load { entry: Entry },
+    Load { entry: Box<Entry> },
 }
 enum Answer {
     Scanned(sources::SourceCatalog),
@@ -135,7 +135,7 @@ impl ModelBrowser {
         let repository = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets");
         Self::with_worker(runtime_model_catalog(), move |work| match work {
             Work::Scan => sources::scan(&project, &repository).map(Answer::Scanned),
-            Work::Load { entry, .. } => match entry.model {
+            Work::Load { entry } => match entry.model {
                 Source::Runtime(id) => load_runtime_model(&id).map(LoadedModel::Runtime),
                 Source::File(file) => file.load().map(LoadedModel::Imported),
                 Source::Verified(verified) => Ok(LoadedModel::Imported(verified)),
@@ -298,7 +298,12 @@ impl ModelBrowser {
                 epoch,
                 id: entry.id.clone(),
             };
-            (Work::Load { entry }, kind)
+            (
+                Work::Load {
+                    entry: Box::new(entry),
+                },
+                kind,
+            )
         } else if self.refresh_requested {
             self.refresh_requested = false;
             (Work::Scan, ActiveKind::Scan)
