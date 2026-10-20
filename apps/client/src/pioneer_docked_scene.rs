@@ -139,7 +139,7 @@ fn panel_surface_role(material: PioneerDockedMaterial) -> surface_roles::Surface
     match material {
         PioneerDockedMaterial::WallPanel => SurfaceRole::CoatedPanel,
         PioneerDockedMaterial::GripDeck => SurfaceRole::GripDeck,
-        PioneerDockedMaterial::ServiceCeiling => SurfaceRole::Composite,
+        PioneerDockedMaterial::ServiceCeiling => SurfaceRole::ServiceCeiling,
         PioneerDockedMaterial::Graphite => SurfaceRole::CoatedPanel,
         PioneerDockedMaterial::Titanium => SurfaceRole::ExposedAlloy,
         PioneerDockedMaterial::Carbon => SurfaceRole::Composite,

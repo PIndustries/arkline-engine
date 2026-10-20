@@ -5914,7 +5914,9 @@ if(material_kind==1 || material_kind==2){
         vec3 meters=local_position*vec3(length(model[0].xyz),length(model[1].xyz),length(model[2].xyz))*max(scene_meter_scale,1.0);
         vec3 face=abs(local_position);
         vec2 uv=face.x>=face.y && face.x>=face.z ? meters.yz : (face.y>=face.z ? meters.xz : meters.xy);
-        ark_interior_surface(uv,material_params.z,albedo,roughness);
+        float relief_m=ark_interior_surface(uv,material_params.z,albedo,roughness);
+        // Shading relief uses the same metre conversion in station and flight.
+        n=ark_relief_normal(world,n,relief_m/max(scene_meter_scale,1.0));
     }
     if(hull_surface>0.5){ark_hull_surface(local_position*100.0,albedo,roughness,metallic);}
     // Existing screen panels use a dark dielectric backing; no canopy transmission is invented.

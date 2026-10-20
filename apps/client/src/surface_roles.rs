@@ -15,6 +15,7 @@ pub(super) enum SurfaceRole {
     EnamelTrim = 5,
     InstrumentGlass = 6,
     FixtureDiffuser = 7,
+    ServiceCeiling = 8,
 }
 impl SurfaceRole {
     /// A tagged instance of the existing cube upload, never a new mesh slot.
@@ -26,6 +27,7 @@ impl SurfaceRole {
             Self::CoatedPanel => Material::CoatedPanel,
             Self::GripDeck => Material::GripDeck,
             Self::Composite => Material::Composite,
+            Self::ServiceCeiling => Material::ServiceCeiling,
             Self::ExposedAlloy => Material::BareMetal,
             Self::EnamelTrim => Material::PaintedHull,
             Self::InstrumentGlass => Material::Glass,
@@ -47,6 +49,7 @@ pub(super) fn material(mesh: usize) -> Option<Material> {
         5 => SurfaceRole::EnamelTrim,
         6 => SurfaceRole::InstrumentGlass,
         7 => SurfaceRole::FixtureDiffuser,
+        8 => SurfaceRole::ServiceCeiling,
         _ => return None,
     };
     Some(role.material())
@@ -68,6 +71,7 @@ mod tests {
             SurfaceRole::CoatedPanel,
             SurfaceRole::GripDeck,
             SurfaceRole::Composite,
+            SurfaceRole::ServiceCeiling,
             SurfaceRole::ExposedAlloy,
             SurfaceRole::EnamelTrim,
             SurfaceRole::InstrumentGlass,

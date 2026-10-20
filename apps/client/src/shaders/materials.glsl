@@ -62,24 +62,43 @@ void ark_hull_surface(vec3 meters,inout vec3 albedo,inout float roughness,float 
     roughness=clamp(roughness+broad*0.07+grain*mix(0.035,0.08,metallic),0.08,1.0);
 }
 
-// Metric construction details, antialiased with actual fragment footprint.
-// No random grunge or light is added; normals/geometry remain authored.
-void ark_interior_surface(vec2 meters,float role,inout vec3 albedo,inout float roughness){
+// Metric construction finish. Relief modifies BRDF normals only: it cannot
+// change a depth sample, collision, silhouette, or the authored aperture.
+vec3 ark_relief_normal(vec3 position,vec3 normal,float height){
+    vec3 dx=dFdx(position),dy=dFdy(position);
+    vec3 r1=cross(dy,normal),r2=cross(normal,dx);
+    float determinant=dot(dx,r1);
+    if(abs(determinant)<1e-20) return normal;
+    vec3 gradient=(dFdx(height)*r1+dFdy(height)*r2)/determinant;
+    return normalize(normal-gradient);
+}
+float ark_interior_surface(vec2 meters,float role,inout vec3 albedo,inout float roughness){
     float footprint=max(length(fwidth(meters)),0.0001);
+    float relief_resolved=1.0-smoothstep(0.006,0.025,footprint);
     if(role<2.5){
         vec2 seam=abs(fract(meters/vec2(1.2,0.8)+0.5)-0.5)*vec2(1.2,0.8);
-        float joint=1.0-smoothstep(0.004,0.004+footprint,min(seam.x,seam.y));
-        albedo*=mix(1.0,0.28,joint);roughness=mix(roughness,0.86,joint);
-        // Protective lower-band cladding is modelled separately, not inferred here.
+        float edge=min(seam.x,seam.y);
+        float joint=1.0-smoothstep(0.003,0.003+footprint,edge);
+        float bevel=1.0-smoothstep(0.003,0.011+footprint,edge);
+        albedo*=mix(1.0,0.52,joint);roughness=mix(roughness,0.86,joint);
+        return -0.0016*bevel*relief_resolved;
     }else if(role<3.5){
         float resolved=1.0-smoothstep(0.02,0.07,footprint);
         vec2 q=meters*vec2(25.0,25.0);
         float grip=1.0-smoothstep(0.08,0.18,abs(fract(q.x+q.y)-0.5));
         vec2 seam=abs(fract(meters/0.8+0.5)-0.5)*0.8;
         float joint=1.0-smoothstep(0.004,0.004+footprint,min(seam.x,seam.y));
-        albedo*=mix(1.0,1.22,grip*resolved)*mix(1.0,0.3,joint);roughness=0.9;
+        albedo*=mix(1.0,1.08,grip*resolved)*mix(1.0,0.55,joint);
+        roughness=mix(0.86,0.94,max(grip*resolved,joint));
+        return (0.0007*grip*resolved-0.0015*joint)*relief_resolved;
+    }else if(role<4.5){
+        // Carbon equipment housings are a continuous matte laminate, not vents.
+        roughness=max(roughness,0.84);
+        return 0.0;
     }else{
+        // Only explicitly tagged service cassettes receive vent slots.
         float slots=1.0-smoothstep(0.003,0.003+footprint,abs(fract(meters.x/0.10+0.5)-0.5)*0.10);
-        albedo*=mix(1.0,0.5,slots);roughness=0.82;
+        albedo*=mix(1.0,0.55,slots);roughness=0.88;
+        return -0.0008*slots*relief_resolved;
     }
 }

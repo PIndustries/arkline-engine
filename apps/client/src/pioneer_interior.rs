@@ -87,10 +87,20 @@ fn build_parts(deck: u8, document: &RoomLayoutDocument) -> Vec<ModelPart> {
         Vec3::new(32.0, 3.3, 14.0),
         steel,
         0.0,
-        SurfaceRole::Composite,
+        SurfaceRole::ServiceCeiling,
     );
     for obstacle in document.obstacles(deck) {
-        p.0.extend(obstacle_model_parts(obstacle));
+        // Wall thickness extends outside the room's clear interior. Bind the
+        // finish to its authored obstacle identity, not a centre-point guess.
+        let room = document.rooms.iter().find(|room| {
+            room.deck == deck
+                && room.obstacles().iter().any(|candidate| {
+                    candidate.kind == obstacle.kind
+                        && candidate.min == obstacle.min
+                        && candidate.max == obstacle.max
+                })
+        });
+        p.0.extend(obstacle_model_parts(obstacle, room));
     }
     for room in document.rooms.iter().filter(|room| room.deck == deck) {
         p.0.extend(room_decoration_parts(room));
@@ -162,7 +172,21 @@ fn build_parts(deck: u8, document: &RoomLayoutDocument) -> Vec<ModelPart> {
 }
 
 /// The exact installed wall/storage draw recipe for one protocol obstacle.
-fn obstacle_model_parts(o: arkline_protocol::StationObstacle) -> Vec<ModelPart> {
+fn wall_finish(room: Option<&arkline_protocol::RoomLayout>) -> Vec3 {
+    match room {
+        // Source roles describe intent only; this changes finish, not equipment authority.
+        Some(room) if room.source_role.as_deref() == Some("CREW / GALLEY") => {
+            Vec3::new(0.46, 0.39, 0.27)
+        }
+        Some(room) if room.deck == 1 => Vec3::new(0.23, 0.29, 0.30),
+        _ => Vec3::new(0.36, 0.34, 0.28),
+    }
+}
+
+fn obstacle_model_parts(
+    o: arkline_protocol::StationObstacle,
+    room: Option<&arkline_protocol::RoomLayout>,
+) -> Vec<ModelPart> {
     let mut p = Parts(Vec::new());
 
     let min = Vec3::from_array(o.min.map(|v| v as f32));
@@ -265,7 +289,7 @@ fn obstacle_model_parts(o: arkline_protocol::StationObstacle) -> Vec<ModelPart> 
         if fixture {
             Vec3::new(0.09, 0.13, 0.14)
         } else {
-            Vec3::new(0.36, 0.34, 0.28)
+            wall_finish(room)
         },
         0.0,
         if fixture {
@@ -360,7 +384,7 @@ pub(super) fn room_shell_parts(room: &arkline_protocol::RoomLayout) -> Vec<Model
     let mut parts: Vec<ModelPart> = room
         .obstacles()
         .into_iter()
-        .flat_map(obstacle_model_parts)
+        .flat_map(|obstacle| obstacle_model_parts(obstacle, Some(room)))
         .collect();
     parts.extend(room_decoration_parts(room));
     parts
@@ -964,13 +988,14 @@ mod room_inspection_tests {
             0.0,
             SurfaceRole::Composite,
         );
-        shared
-            .0
-            .extend(obstacle_model_parts(arkline_protocol::StationObstacle {
+        shared.0.extend(obstacle_model_parts(
+            arkline_protocol::StationObstacle {
                 kind: StationObstacleKind::Storage,
                 min: [0.7, 0.0, 6.45],
                 max: [1.0, 1.3, 7.55],
-            }));
+            },
+            None,
+        ));
         for room in arkline_protocol::default_pioneer().rooms {
             let inspected = inspection_room_parts(room.source_room_id.as_deref().unwrap()).unwrap();
             assert!(shared.0.iter().all(|part| !inspected.contains(part)));
