@@ -604,6 +604,13 @@ impl Cockpit {
             })
     }
     pub(super) fn in_station_hangar(&self) -> bool {
+        if self.ship_observation
+            && self
+                .own()
+                .is_some_and(|pilot| pilot.station_avatar.is_some())
+        {
+            return false;
+        }
         self.manual_remote.is_none()
             && self.own().is_some_and(|p| {
                 if p.location != Location::Docked {

@@ -609,6 +609,7 @@ struct Cockpit {
     embedded_paused: bool,
     embedded_input: bool,
     workspace_input_waiting_release: bool,
+    ship_observation: bool,
     logo: egui::TextureHandle,
     boot: boot::Boot,
     server: String,
@@ -735,6 +736,7 @@ impl Cockpit {
             embedded_paused: false,
             embedded_input: true,
             workspace_input_waiting_release: false,
+            ship_observation: false,
             logo,
             #[cfg(not(target_arch = "wasm32"))]
             account_login: account_login::Login::default(),
@@ -1021,6 +1023,7 @@ impl Cockpit {
         self.pilot = self.pilot.trim().to_string();
         self.snapshot = None;
         self.assets = None;
+        self.ship_observation = false;
         self.corporation_name.clear();
         self.invite_pilot.clear();
         let (tx, rx) = mpsc::channel();
@@ -1591,29 +1594,7 @@ impl Cockpit {
         }
     }
     fn view_selector(&mut self, ui: &mut egui::Ui) {
-        if self.own().is_some_and(|p| p.station_avatar.is_some()) {
-            self.on_foot_view_selector(ui);
-            return;
-        }
-        ui.selectable_value(&mut self.view_mode, ViewMode::Tactical, "2D Tactical");
-        ui.selectable_value(&mut self.view_mode, ViewMode::Tactical3d, "3D Tactical");
-        ui.selectable_value(&mut self.view_mode, ViewMode::External, "3D External");
-        ui.selectable_value(&mut self.view_mode, ViewMode::Cockpit, "Cockpit");
-        if self.view_mode == ViewMode::Tactical {
-            let previous = self.tactical_system;
-            ui.selectable_value(&mut self.tactical_system, false, "Local");
-            ui.selectable_value(&mut self.tactical_system, true, "System");
-            if previous != self.tactical_system || ui.button("Reset map").clicked() {
-                self.tactical_pan = [0.0; 2];
-                self.tactical_zoom = 1.0;
-            }
-            if ui.button("Focus my ship").clicked() {
-                self.tactical_system = false;
-                self.tactical_pan = [0.0; 2];
-                self.tactical_zoom = 1.0;
-            }
-            ui.small("Wheel: zoom at cursor · drag empty space: pan");
-        }
+        self.flight_workspace_view_selector(ui);
     }
     fn mining_status(&self) -> (String, Option<f32>) {
         let Some(pilot) = self.own() else {
@@ -1919,7 +1900,8 @@ impl Cockpit {
         let active = self.connected
             && (docked
                 || !in_hangar && self.flight_view.cockpit_presentation_active(self.view_mode));
-        let input_allowed = !self.services_open
+        let input_allowed = !self.ship_observation
+            && !self.services_open
             && self.service_tab != ServiceTab::Layouts
             && !self.workspace_input_waiting_release
             && self.embedded_input
@@ -3790,7 +3772,8 @@ impl eframe::App for Cockpit {
         // a world switch or a hidden/free-camera presentation.
         self.flight_view.clear_cockpit_presentation();
         self.hangar_view.clear_cockpit_presentation();
-        let computer_active = self.connected
+        let computer_active = !self.ship_observation
+            && self.connected
             && !self.services_open
             && self.service_tab != ServiceTab::Layouts
             && !self.boot.visible
@@ -3941,7 +3924,12 @@ impl eframe::App for Cockpit {
         }
         let in_hangar = self.in_station_hangar();
         // Reserve persistent bottom chrome before placing any task/identity window.
-        if in_hangar || self.space_walk_available() {
+        if in_hangar
+            || self.space_walk_available()
+            || self
+                .own()
+                .is_some_and(|pilot| pilot.station_avatar.is_some())
+        {
             self.station_overlay(ctx);
         }
         egui::TopBottomPanel::bottom("flight_authority_status")
@@ -4229,6 +4217,7 @@ impl eframe::App for Cockpit {
                                     snapshot,
                                     now,
                                     self.connected,
+                                    self.embedded_paused,
                                 );
                             }
                         }

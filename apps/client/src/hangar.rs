@@ -69,6 +69,7 @@ pub struct HangarView {
     head_look: [f32; 2],
     computer_keyboard_owned: bool,
     docked_surfaces: [Option<CockpitSurface>; 6],
+    passive_console: Option<CockpitSurface>,
     docked_layer: Option<egui::LayerId>,
     docked_display_renderer: Option<Arc<Mutex<CockpitDisplayRenderer>>>,
 }
@@ -116,6 +117,7 @@ impl HangarView {
             head_look: [0.0; 2],
             computer_keyboard_owned: false,
             docked_surfaces: std::array::from_fn(|_| None),
+            passive_console: None,
             docked_layer: None,
             docked_display_renderer,
         }
@@ -189,6 +191,7 @@ impl HangarView {
     }
     pub(crate) fn clear_cockpit_presentation(&mut self) {
         self.docked_surfaces = std::array::from_fn(|_| None);
+        self.passive_console = None;
         self.docked_layer = None;
     }
     pub(crate) fn computer_hit_tester(
@@ -216,11 +219,12 @@ impl HangarView {
     }
     pub(crate) fn paint_docked_instruments(
         &self,
-        ui: &egui::Ui,
+        ui: &mut egui::Ui,
         pilot: &PilotView,
         snapshot: &Snapshot,
         now: u64,
         connected: bool,
+        paused: bool,
     ) {
         paint_instruments(
             ui,
@@ -229,8 +233,65 @@ impl HangarView {
             snapshot,
             None,
             now,
-            connected,
+            connected && !paused,
+            Some(if !connected {
+                "DISCONNECTED"
+            } else if paused {
+                "PAUSED"
+            } else if now.saturating_sub(snapshot.server_time_ms) > 1500 {
+                "STALE"
+            } else {
+                "LIVE"
+            }),
         );
+        let mut range = 1_000_000.0;
+        if let Some(surface) = &self.docked_surfaces[4] {
+            // Same contact/map painter as the seated flight view. Disabled UI
+            // suppresses map input; no returned action reaches gameplay.
+            ui.add_enabled_ui(false, |ui| {
+                let _ = paint_cockpit_maps(
+                    ui,
+                    surface,
+                    pilot,
+                    snapshot,
+                    now,
+                    connected && !paused,
+                    &super::super::SelectedObject::Station,
+                    &mut range,
+                );
+            });
+        }
+        if let Some(surface) = &self.docked_surfaces[5] {
+            cockpit_radar::paint(
+                ui,
+                surface,
+                pilot,
+                snapshot,
+                now,
+                connected && !paused,
+                range,
+            );
+        }
+        if let Some(surface) = &self.passive_console {
+            paint_passive_flight_console(ui, surface, pilot, snapshot, now, connected, paused);
+        }
+        for surface in self.docked_surfaces.iter().flatten() {
+            paint_passive_authority(ui, surface, snapshot, now, connected, paused);
+        }
+        if self.passive_console.is_some() {
+            if let Some(surface) = &self.docked_surfaces[1] {
+                surface.paint(ui, |painter| {
+                    let rect = surface.canvas_rect().shrink(6.0);
+                    painter.text(
+                        rect.center_bottom(),
+                        egui::Align2::CENTER_BOTTOM,
+                        "CAMERA VIEW AT PILOT SEAT",
+                        egui::FontId::monospace(10.0),
+                        super::super::AMBER,
+                    );
+                });
+            }
+        }
     }
     pub(crate) fn set_space_snapshot(&mut self, snapshot: Option<Arc<Snapshot>>) {
         self.space_snapshot = snapshot;

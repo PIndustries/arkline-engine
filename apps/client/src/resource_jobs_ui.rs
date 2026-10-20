@@ -39,14 +39,14 @@ impl Cockpit {
     }
     pub(super) fn resource_start_reason(&self) -> Option<&'static str> {
         if self.embedded && self.embedded_paused {
-            return Some("Press Play in the editor toolbar to operate the mining routine.");
+            return Some("Choose Resume simulation to operate the routine. The Play workspace only changes the interface.");
         }
         if self
             .own()
             .is_some_and(|pilot| pilot.station_avatar.is_some())
         {
             return Some(
-                "Enter your ship to operate the mining routine. Status remains visible on foot.",
+                "Return to the pilot seat to assign a mining routine. Status remains visible on foot.",
             );
         }
         if self.manual_remote.is_some() {
@@ -71,7 +71,7 @@ impl Cockpit {
             return Some("A job is already running. Cancel it first.");
         }
         if p.station_avatar.is_some() {
-            return Some("Enter the selected ship before assigning a gathering job.");
+            return Some("The selected ship's pilot must return to their seat before assigning a gathering job.");
         }
         if matches!(p.location, Location::Jumping { .. }) {
             return Some("Wait for gate transit to finish before assigning a haul.");

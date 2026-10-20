@@ -1636,6 +1636,7 @@ impl FlightView {
                             selected_distance,
                             now,
                             connected,
+                            None,
                         );
                         let feed_count = camera_feeds.len();
                         if let Some(surface) = &drone_surface {
@@ -4573,6 +4574,7 @@ fn instrument_rows(
     ]
 }
 
+#[allow(clippy::too_many_arguments)]
 fn paint_instruments(
     ui: &egui::Ui,
     surfaces: &[Option<CockpitSurface>; 6],
@@ -4581,8 +4583,14 @@ fn paint_instruments(
     target_distance: Option<f64>,
     now: u64,
     connected: bool,
+    authority: Option<&str>,
 ) {
-    let rows = instrument_rows(own, snapshot, target_distance, now, connected);
+    let mut rows = instrument_rows(own, snapshot, target_distance, now, connected);
+    if let Some(status) = authority {
+        rows[0][0] = format!("{} / {status}", own.ship_class.spec().name.to_uppercase());
+        rows[1][0] = format!("NAV / {status}");
+        rows[2][0] = format!("POWER / {status}");
+    }
     let connected = connected && now.saturating_sub(snapshot.server_time_ms) <= 1500;
     let color = if connected { super::TEAL } else { super::AMBER };
     for index in 0..3 {
@@ -4633,6 +4641,117 @@ fn paint_instruments(
             );
         }
     }
+}
+
+fn passive_authority(snapshot: &Snapshot, now: u64, connected: bool, paused: bool) -> &'static str {
+    if !connected {
+        "DISCONNECTED / LAST STATE"
+    } else if paused {
+        "PAUSED / SNAPSHOT HELD"
+    } else if now.saturating_sub(snapshot.server_time_ms) > 1500 {
+        "STALE TELEMETRY"
+    } else {
+        "LIVE TELEMETRY"
+    }
+}
+
+fn paint_passive_authority(
+    ui: &egui::Ui,
+    surface: &CockpitSurface,
+    snapshot: &Snapshot,
+    now: u64,
+    connected: bool,
+    paused: bool,
+) {
+    let status = passive_authority(snapshot, now, connected, paused);
+    surface.paint(ui, |painter| {
+        let rect = surface.canvas_rect().shrink(4.0);
+        let badge = egui::Rect::from_min_size(
+            rect.right_top() - egui::vec2(151.0, 0.0),
+            egui::vec2(151.0, 13.0),
+        );
+        painter.rect_filled(badge, 0.0, egui::Color32::from_rgb(1, 9, 7));
+        painter.text(
+            badge.right_top() - egui::vec2(2.0, -1.0),
+            egui::Align2::RIGHT_TOP,
+            status,
+            egui::FontId::monospace(8.0),
+            if status == "LIVE TELEMETRY" {
+                super::TEAL
+            } else {
+                super::AMBER
+            },
+        );
+    });
+}
+
+fn paint_passive_flight_console(
+    ui: &egui::Ui,
+    surface: &CockpitSurface,
+    pilot: &PilotView,
+    snapshot: &Snapshot,
+    now: u64,
+    connected: bool,
+    paused: bool,
+) {
+    surface.paint(ui, |painter| {
+        let rect = surface.canvas_rect().shrink(14.0);
+        painter.rect_filled(
+            surface.canvas_rect(),
+            0.0,
+            egui::Color32::from_rgb(2, 14, 10),
+        );
+        let mut rows = vec![
+            "FLIGHT STATUS / READ ONLY".to_owned(),
+            passive_authority(snapshot, now, connected, paused).to_owned(),
+            format!(
+                "{} / SYSTEM {}",
+                pilot.ship_class.spec().name,
+                pilot.system_id
+            ),
+            format!(
+                "HOLD {} / {}",
+                pilot.ore,
+                arkline_protocol::cargo_capacity(pilot.ship_class)
+            ),
+        ];
+        rows.push(
+            pilot
+                .power
+                .as_ref()
+                .map_or("POWER DATA UNAVAILABLE".into(), |power| {
+                    format!("CAPACITOR {} / {} J", power.charge_j, power.capacity_j)
+                }),
+        );
+        if let Some(job) = snapshot
+            .resource_jobs
+            .iter()
+            .find(|job| job.pilot == pilot.name)
+        {
+            rows.push(format!("MINING {:?}", job.phase));
+            rows.push(format!(
+                "STORED {} / {}",
+                job.stored_units, job.target_units
+            ));
+        } else {
+            rows.push("NO MINING ROUTINE".into());
+        }
+        rows.push("PILOT CONTROLS REQUIRE THE PHYSICAL SEAT".into());
+        let line_height = rect.height() / 10.0;
+        for (index, text) in rows.iter().enumerate() {
+            painter.text(
+                rect.left_top() + egui::vec2(0.0, index as f32 * line_height),
+                egui::Align2::LEFT_TOP,
+                text,
+                egui::FontId::monospace(15.0),
+                if index < 2 {
+                    super::TEAL
+                } else {
+                    egui::Color32::from_rgb(185, 226, 208)
+                },
+            );
+        }
+    });
 }
 
 fn module_instrument(pilot: &PilotView, module_id: u8, now: u64) -> String {

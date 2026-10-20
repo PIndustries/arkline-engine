@@ -45,7 +45,9 @@ impl Cockpit {
         ui.horizontal_wrapped(|ui| {
             if ui.button("← Back to Flight").clicked() {
                 self.services_open = false;
+                self.overview_open = false;
                 self.service_tab = ServiceTab::Navigation;
+                self.release_workspace_input();
             }
             ui.separator();
             for (index, label, default) in [
@@ -96,12 +98,12 @@ impl Cockpit {
             if !self.connected {
                 ui.colored_label(
                     AMBER,
-                    "Disconnected · showing last received authority state; commands unavailable",
+                    "Disconnected · showing last received state; controls unavailable",
                 );
             } else if self.embedded && self.embedded_paused {
                 ui.colored_label(
                     MUTED,
-                    "Simulation paused · values are frozen at the authority clock",
+                    "Simulation paused · choose Resume simulation to operate ship controls",
                 );
             } else if self.snapshot.as_ref().is_none_or(|snapshot| {
                 self.presentation_time()
@@ -110,14 +112,14 @@ impl Cockpit {
             }) {
                 ui.colored_label(
                     AMBER,
-                    "Waiting for a current authority snapshot · shown values may be stale",
+                    "Waiting for a world update · shown values may be out of date",
                 );
             }
             if self.request_pending {
-                ui.colored_label(AMBER, "Command pending · awaiting server acknowledgement");
+                ui.colored_label(AMBER, "Command pending · awaiting confirmation");
             }
             if !self.notice.is_empty() {
-                ui.small(format!("Last authority response: {}", self.notice));
+                ui.small(format!("Last response: {}", self.notice));
             }
         }
         ui.separator();

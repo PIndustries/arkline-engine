@@ -3,26 +3,93 @@
 use super::*;
 
 impl Cockpit {
-    pub(super) fn flight_workspace_navigation(&mut self, ui: &mut egui::Ui) {
+    /// Camera presentation is independent of physical seat/body authority.
+    /// Ship cameras observe snapshots while on foot; they never grant controls.
+    pub(super) fn flight_workspace_view_selector(&mut self, ui: &mut egui::Ui) {
+        use flight3d::hangar::OnFootView;
         let previous = self.view_mode;
         let previous_foot = self.hangar_view.on_foot_view;
+        let previous_observation = self.ship_observation;
+        let owned = self.own().is_some();
+        let on_foot = self
+            .own()
+            .is_some_and(|pilot| pilot.station_avatar.is_some());
+        if on_foot {
+            for (view, label) in [
+                (OnFootView::FirstPerson, "First person"),
+                (OnFootView::ThirdPerson, "Third person"),
+            ] {
+                if ui
+                    .selectable_label(
+                        !self.ship_observation && self.hangar_view.on_foot_view == view,
+                        label,
+                    )
+                    .clicked()
+                {
+                    self.hangar_view.on_foot_view = view;
+                    self.ship_observation = false;
+                }
+            }
+            ui.separator();
+        }
+        ui.add_enabled_ui(owned, |ui| {
+            for (mode, label) in [
+                (ViewMode::Tactical, "2D Tactical"),
+                (ViewMode::Tactical3d, "3D Tactical"),
+                (ViewMode::External, "3D External"),
+                (ViewMode::Cockpit, "Cockpit"),
+            ] {
+                if ui
+                    .selectable_label(
+                        (!on_foot || self.ship_observation) && self.view_mode == mode,
+                        label,
+                    )
+                    .clicked()
+                {
+                    self.view_mode = mode;
+                    self.ship_observation = on_foot;
+                }
+            }
+        });
+        if on_foot && self.ship_observation {
+            if ui.button("Return to body").clicked() {
+                self.ship_observation = false;
+            }
+            ui.small("Ship camera · on foot · controls locked")
+                .on_hover_text("Camera observation only. Your body remains in place. Return to body to walk or physically reseat for manual flight.");
+        }
+        if (!on_foot || self.ship_observation) && self.view_mode == ViewMode::Tactical {
+            let previous_scope = self.tactical_system;
+            ui.selectable_value(&mut self.tactical_system, false, "Local");
+            ui.selectable_value(&mut self.tactical_system, true, "System");
+            if previous_scope != self.tactical_system || ui.button("Reset map").clicked() {
+                self.tactical_pan = [0.0; 2];
+                self.tactical_zoom = 1.0;
+            }
+            if ui.button("Focus my ship").clicked() {
+                self.tactical_system = false;
+                self.tactical_pan = [0.0; 2];
+                self.tactical_zoom = 1.0;
+            }
+            ui.small("Wheel: zoom at cursor · drag empty space: pan");
+        }
+        if self.view_mode != previous
+            || self.hangar_view.on_foot_view != previous_foot
+            || self.ship_observation != previous_observation
+        {
+            self.release_workspace_input();
+        }
+    }
+
+    pub(super) fn flight_workspace_navigation(&mut self, ui: &mut egui::Ui) {
         ui.horizontal_wrapped(|ui| {
             ui.label(egui::RichText::new("VIEW").small().color(MUTED));
-            // Reuse the canonical selector so Local/System map scope, reset,
-            // ship focus and on-foot first/third-person controls stay reachable.
-            self.view_selector(ui);
-            if self.own().is_some_and(|pilot| pilot.station_avatar.is_some()) {
-                ui.small("On foot · return to pilot seat for ship cameras")
-                    .on_hover_text("Walk to the physical pilot chair and choose Return to pilot seat to use 2D, 3D and Cockpit ship views.");
-            }
+            self.flight_workspace_view_selector(ui);
             if !self.embedded {
                 ui.separator();
                 self.flight_workspace_shortcuts(ui);
             }
         });
-        if self.view_mode != previous || self.hangar_view.on_foot_view != previous_foot {
-            self.release_workspace_input();
-        }
     }
 
     pub(super) fn flight_workspace_shortcuts(&mut self, ui: &mut egui::Ui) {
@@ -56,7 +123,7 @@ impl Cockpit {
             let (authority, color) = if !self.connected {
                 ("Disconnected · last known state".to_owned(), AMBER)
             } else if self.embedded_paused {
-                ("Paused · simulation held".to_owned(), AMBER)
+                ("Paused · resume simulation to continue".to_owned(), AMBER)
             } else if age > 1500 {
                 (
                     format!("Stale · {:.1}s since world update", age as f64 / 1000.0),

@@ -281,6 +281,14 @@ impl EmbeddedClient {
         if self.cockpit.services_open || self.cockpit.service_tab == ServiceTab::Layouts {
             return self.cockpit.operations_route();
         }
+        if self
+            .cockpit
+            .own()
+            .is_some_and(|pilot| pilot.station_avatar.is_some())
+            && !self.cockpit.ship_observation
+        {
+            return "Flight";
+        }
         match self.cockpit.view_mode {
             ViewMode::Tactical | ViewMode::Tactical3d => "Map",
             _ => "Flight",
@@ -1073,6 +1081,20 @@ impl EmbeddedClient {
         if !self.ready() || !self.cockpit.connected {
             return vec![];
         }
+        if self
+            .cockpit
+            .own()
+            .is_some_and(|pilot| pilot.station_avatar.is_some())
+        {
+            return vec![
+                EmbeddedView::FirstPerson,
+                EmbeddedView::ThirdPerson,
+                EmbeddedView::Cockpit,
+                EmbeddedView::External,
+                EmbeddedView::Tactical,
+                EmbeddedView::Tactical3d,
+            ];
+        }
         match self.current_view() {
             None => vec![],
             Some(EmbeddedView::Hangar) => vec![EmbeddedView::Hangar],
@@ -1128,6 +1150,10 @@ impl EmbeddedClient {
                 Some(_) => "Station · on foot".into(),
                 None => "Station · aboard docked ship".into(),
             },
+            Some(p) if self.cockpit.ship_observation && p.station_avatar.is_some() => format!(
+                "Ship camera · pilot remains on foot · {}",
+                location_label(&p.location)
+            ),
             Some(p) => format!("System {} · {:?}", p.system_id, p.location),
         };
         EmbeddedViewState {
@@ -1147,6 +1173,17 @@ impl EmbeddedClient {
         if self.current_view() != Some(view) {
             self.release_cockpit_input();
         }
+        self.cockpit.ship_observation = self
+            .cockpit
+            .own()
+            .is_some_and(|pilot| pilot.station_avatar.is_some())
+            && matches!(
+                view,
+                EmbeddedView::Cockpit
+                    | EmbeddedView::External
+                    | EmbeddedView::Tactical
+                    | EmbeddedView::Tactical3d
+            );
         match view {
             EmbeddedView::Cockpit => self.cockpit.view_mode = ViewMode::Cockpit,
             EmbeddedView::External => self.cockpit.view_mode = ViewMode::External,
@@ -4137,7 +4174,14 @@ mod tests {
         assert_eq!(client.scene_state(), Some(EditorSceneState::InteriorDeck2));
         assert_eq!(
             client.debug_view_state().available,
-            vec![EmbeddedView::FirstPerson, EmbeddedView::ThirdPerson]
+            vec![
+                EmbeddedView::FirstPerson,
+                EmbeddedView::ThirdPerson,
+                EmbeddedView::Cockpit,
+                EmbeddedView::External,
+                EmbeddedView::Tactical,
+                EmbeddedView::Tactical3d
+            ]
         );
         client.set_debug_view(EmbeddedView::FirstPerson).unwrap();
         assert_eq!(
@@ -4145,8 +4189,28 @@ mod tests {
             flight3d::hangar::OnFootView::FirstPerson
         );
         assert!(client.debug_view_state().scene.contains("deck 2"));
-        assert!(client.set_debug_view(EmbeddedView::External).is_err());
+        let authority = serde_json::to_value(client.snapshot().unwrap()).unwrap();
+        for view in [
+            EmbeddedView::External,
+            EmbeddedView::Tactical,
+            EmbeddedView::Tactical3d,
+            EmbeddedView::Cockpit,
+        ] {
+            client.set_debug_view(view).unwrap();
+            assert_eq!(client.current_view(), Some(view));
+            assert!(client.cockpit.ship_observation);
+            assert!(!client.cockpit.can_fly());
+            assert_eq!(
+                serde_json::to_value(client.snapshot().unwrap()).unwrap(),
+                authority
+            );
+        }
         client.set_debug_view(EmbeddedView::ThirdPerson).unwrap();
+        assert!(!client.cockpit.ship_observation);
+        assert_eq!(
+            serde_json::to_value(client.snapshot().unwrap()).unwrap(),
+            authority
+        );
         client.cockpit.connected = false;
         assert!(client.debug_view_state().available.is_empty());
         assert!(client.set_debug_view(EmbeddedView::FirstPerson).is_err());

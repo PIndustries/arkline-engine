@@ -1,8 +1,36 @@
 //! Private station, inventory and corporation views from authenticated server assets.
 use super::*;
 impl Cockpit {
+    fn service_authority_ready(&self) -> bool {
+        self.can_operate()
+            && self.snapshot.as_ref().is_some_and(|snapshot| {
+                self.presentation_time()
+                    .saturating_sub(snapshot.server_time_ms)
+                    <= 1500
+            })
+    }
+
+    fn transfer_block_reason(&self, pilot: &PilotView) -> Option<&'static str> {
+        if !self.connected {
+            Some("Disconnected · reconnect before transferring ore.")
+        } else if self.embedded && self.embedded_paused {
+            Some("Choose Resume simulation to transfer ore. The Play workspace does not advance time.")
+        } else if self.request_pending {
+            Some("Awaiting authority · wait for the previous command before transferring ore.")
+        } else if !self.service_authority_ready() {
+            Some("Inventory may be stale · wait for a fresh authority snapshot before transferring ore.")
+        } else if pilot.location != Location::Docked {
+            Some("Dock at this station to transfer ore.")
+        } else {
+            None
+        }
+    }
     pub(super) fn station_panel(&mut self, ui: &mut egui::Ui) {
-        let Some(pilot) = self.own() else { return };
+        let Some(pilot) = self.own() else {
+            ui.heading("Station services");
+            ui.label("Waiting for the owned ship and its current system.");
+            return;
+        };
         ui.heading(format!(
             "{} · Arkline Station",
             system_name(pilot.system_id)
@@ -49,9 +77,13 @@ impl Cockpit {
         ui.small("Inventory stays accessible in flight. Stored ships and ore remain at their named stations.");
     }
     pub(super) fn hangar_panel(&mut self, ui: &mut egui::Ui) {
-        let Some(pilot) = self.own() else { return };
+        let Some(pilot) = self.own() else {
+            ui.heading("Owned ship hangar");
+            ui.label("Waiting for the owned vessel and authenticated hangar inventory.");
+            return;
+        };
         ui.heading("Owned ship hangar");
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             ui.strong(pilot.ship_class.spec().name);
             ui.colored_label(self.accent(), "ACTIVE");
             ui.small(format!("{} ore aboard", pilot.ore));
@@ -94,7 +126,7 @@ impl Cockpit {
                     system_name(ship.system_id),
                     ship.ore
                 ));
-                let enabled = self.can_operate()
+                let enabled = self.service_authority_ready()
                     && pilot.location == Location::Docked
                     && pilot.system_id == ship.system_id
                     && pilot.station_avatar.is_none();
@@ -162,7 +194,11 @@ impl Cockpit {
         );
     }
     pub(super) fn cargo_panel(&mut self, ui: &mut egui::Ui) {
-        let Some(pilot) = self.own() else { return };
+        let Some(pilot) = self.own() else {
+            ui.heading("Cargo & storage");
+            ui.label("Waiting for owned ship inventory. No cargo quantity is inferred.");
+            return;
+        };
         ui.heading("Cargo & storage");
         ui.label("Confirmed holdings · shared with ship instruments and the mining routine");
         let capacity = cargo_capacity(pilot.ship_class);
@@ -249,7 +285,7 @@ impl Cockpit {
                     .saturating_sub(snapshot.server_time_ms)
                     <= 1500
             });
-        let docked = self.can_operate() && fresh && pilot.location == Location::Docked;
+        let docked = self.service_authority_ready() && fresh && pilot.location == Location::Docked;
         if !fresh {
             ui.colored_label(
                 AMBER,
@@ -291,13 +327,16 @@ impl Cockpit {
                 });
             }
         });
-        if !docked {
-            ui.small("Dock at this station to transfer. Board a stored ship to access its cargo.");
+        if let Some(reason) = self.transfer_block_reason(&pilot) {
+            ui.small(reason);
         }
     }
     pub(super) fn corporation_panel(&mut self, ui: &mut egui::Ui) {
         ui.heading("Corporation");
-        let Some(pilot) = self.own() else { return };
+        let Some(pilot) = self.own() else {
+            ui.label("Waiting for the authenticated pilot and corporation membership.");
+            return;
+        };
         let Some(assets) = self.assets.clone() else {
             ui.colored_label(AMBER, "Waiting for authenticated corporation information…");
             return;
@@ -323,7 +362,7 @@ impl Cockpit {
                     );
                     if ui
                         .add_enabled(
-                            self.can_operate() && !self.invite_pilot.trim().is_empty(),
+                            self.service_authority_ready() && !self.invite_pilot.trim().is_empty(),
                             egui::Button::new("Invite pilot"),
                         )
                         .clicked()
@@ -351,7 +390,7 @@ impl Cockpit {
                 .iter()
                 .find(|s| s.system_id == pilot.system_id)
                 .map_or(0, |s| s.ore);
-            let docked = self.can_operate() && pilot.location == Location::Docked;
+            let docked = self.service_authority_ready() && pilot.location == Location::Docked;
             ui.small(format!(
                 "{} station · Members deposit; owner withdraws into active cargo.",
                 system_name(pilot.system_id)
@@ -389,8 +428,8 @@ impl Cockpit {
                     });
                 }
             });
-            if !docked {
-                ui.small("Dock at the station to transfer corporation ore.");
+            if let Some(reason) = self.transfer_block_reason(&pilot) {
+                ui.small(reason);
             }
         } else {
             ui.label("You are not a member of a corporation.");
@@ -401,7 +440,7 @@ impl Cockpit {
                 );
                 if ui
                     .add_enabled(
-                        self.can_operate() && !self.corporation_name.trim().is_empty(),
+                        self.service_authority_ready() && !self.corporation_name.trim().is_empty(),
                         egui::Button::new("Create corporation"),
                     )
                     .clicked()
@@ -417,10 +456,13 @@ impl Cockpit {
                 ui.label("No pending invitations.");
             }
             for name in assets.invitations {
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     ui.label(&name);
                     if ui
-                        .add_enabled(self.can_operate(), egui::Button::new("Accept invitation"))
+                        .add_enabled(
+                            self.service_authority_ready(),
+                            egui::Button::new("Accept invitation"),
+                        )
                         .clicked()
                     {
                         self.send(Request::AcceptCorporation { corporation: name });

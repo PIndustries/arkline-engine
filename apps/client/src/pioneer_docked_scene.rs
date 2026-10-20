@@ -722,7 +722,9 @@ pub(super) fn show(
         // Leaving the pilot station revokes its active computer surface even
         // when the new lower console happens to remain in the walking view.
         if state.is_some() {
-            view.docked_surfaces[3] = None;
+            // Retain a paint-only face without exposing any computer input,
+            // hit-testing or command surface to a walking avatar.
+            view.passive_console = view.docked_surfaces[3].take();
         }
         view.docked_layer = Some(ui.layer_id());
     }

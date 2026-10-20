@@ -36,6 +36,23 @@ impl Cockpit {
         let Some(p) = self.own() else { return };
         let confirmed = Self::confirmed_locks(&p);
         let pending = Self::pending_locks(&p);
+        let fresh = self.connected
+            && self.snapshot.as_ref().is_some_and(|snapshot| {
+                self.presentation_time()
+                    .saturating_sub(snapshot.server_time_ms)
+                    <= 1500
+            });
+        let commands_ready = self.can_operate() && fresh;
+        if !confirmed.is_empty() || !pending.is_empty() {
+            if !fresh {
+                ui.colored_label(
+                    AMBER,
+                    "Target rack is last received state · waiting for authority",
+                );
+            }
+        } else {
+            ui.small("No confirmed target locks");
+        }
         ui.small(format!(
             "TARGET RACK · {}/{}",
             confirmed.len() + pending.len(),
@@ -55,7 +72,7 @@ impl Cockpit {
                         self.selected_object = SelectedObject::Asteroid(id);
                     }
                     if ui
-                        .add_enabled(self.can_operate(), egui::Button::new("Unlock").small())
+                        .add_enabled(commands_ready, egui::Button::new("Unlock").small())
                         .clicked()
                     {
                         self.send(Request::UnlockAsteroid { id });
@@ -75,7 +92,7 @@ impl Cockpit {
                             / 1000.0
                     ));
                     if ui
-                        .add_enabled(self.can_operate(), egui::Button::new("Cancel").small())
+                        .add_enabled(commands_ready, egui::Button::new("Cancel").small())
                         .clicked()
                     {
                         self.send(Request::UnlockAsteroid {
@@ -155,7 +172,28 @@ impl Cockpit {
             ui.colored_label(AMBER, "Fleet telemetry stale · waiting for authority");
         }
         if self.embedded && self.embedded_paused {
-            ui.colored_label(MUTED, "Simulation paused · telemetry is frozen");
+            ui.colored_label(
+                MUTED,
+                "Simulation paused · choose Resume simulation to issue orders",
+            );
+        } else if p.station_avatar.is_some() {
+            ui.colored_label(MUTED, "On foot · return to the pilot seat for manual drone orders. Fleet and cameras remain viewable.");
+        } else if p.location == Location::Docked {
+            ui.colored_label(
+                MUTED,
+                "Docked · undock before deploying or directing drones",
+            );
+        } else if matches!(
+            p.location,
+            Location::InTransit { .. } | Location::Jumping { .. }
+        ) {
+            ui.colored_label(
+                MUTED,
+                "Transit in progress · wait for authority before issuing drone orders",
+            );
+        }
+        if p.flight.is_none() && p.station_avatar.is_none() && p.location != Location::Docked {
+            ui.colored_label(MUTED, "Ship flight telemetry unavailable · waiting for authority before issuing drone orders");
         }
         if self.request_pending {
             ui.colored_label(AMBER, "Awaiting authority · previous command pending");
@@ -231,7 +269,12 @@ impl Cockpit {
                 }
             });
         let Some(drone) = self.selected_drone_view(&p) else {
-            ui.small("No deployed drones. Launch a class above.");
+            ui.label("No deployed drones reported for this ship.");
+            if available {
+                ui.small("Choose a drone class above to request deployment.");
+            } else {
+                ui.small("Deployment controls are unavailable in the current state; the reason is shown above.");
+            }
             return;
         };
         let id = drone.id;
@@ -256,14 +299,16 @@ impl Cockpit {
                     ui.end_row();
                 }
             });
-        ui.small(format!(
-            "Selected #{id} · {} from ship",
-            format_distance(
-                p.flight
-                    .as_ref()
-                    .map_or(0.0, |f| distance_m(f.position, drone.position))
-            )
-        ));
+        if let Some(flight) = &p.flight {
+            ui.small(format!(
+                "Selected #{id} · {} from ship",
+                format_distance(distance_m(flight.position, drone.position))
+            ));
+        } else {
+            ui.small(format!(
+                "Selected #{id} · distance unavailable without the ship's flight position"
+            ));
+        }
         ui.horizontal_wrapped(|ui| {
             if ui
                 .add_enabled(available, egui::Button::new("Recall drone").small())
