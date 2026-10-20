@@ -647,7 +647,7 @@ pub(super) fn show(
         if state.is_none() {
             "PIONEER · PILOT SEAT · Shift + arrows: look"
         } else if live {
-            "PIONEER · REGISTERED DOCKED SCENE · Shift + arrows: look"
+            "PIONEER · DOCKED · Shift + arrows: look"
         } else {
             "PIONEER · OFFLINE · movement paused"
         },

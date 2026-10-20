@@ -122,6 +122,9 @@ mod cockpit_fit;
 mod cockpit_occlusion_geometry;
 #[path = "cockpit_radar.rs"]
 mod cockpit_radar;
+#[cfg(all(test, target_os = "macos"))]
+#[path = "pioneer_docked_composite_gpu_tests.rs"]
+mod pioneer_docked_composite_gpu_tests;
 #[path = "sun_shadows.rs"]
 mod sun_shadows;
 #[path = "world_visuals.rs"]

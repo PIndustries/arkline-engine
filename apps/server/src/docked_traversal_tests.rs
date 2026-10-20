@@ -976,3 +976,392 @@ fn authority_reseat_approaches_continuously_before_removing_avatar() {
         .station_avatar
         .is_none());
 }
+
+#[test]
+fn authority_editor_layout_install_blocks_active_traversal_then_rebinds_after_reseating() {
+    use crate::editor::EditorWorld;
+    let directory = std::env::temp_dir().join(format!(
+        "arkline-docked-layout-install-{}-{}",
+        std::process::id(),
+        rand::random::<u64>()
+    ));
+    let mut world =
+        EditorWorld::open_with_creation_scene(&directory, SceneLayoutRevision::LegacyV1).unwrap();
+    let mut session = None;
+    ok(world.handle(&mut session, connect_request(true, None)));
+    let original = world.room_layout_state();
+    assert_eq!(original.revision, 0);
+    assert_eq!(original.document, default_pioneer_room_layout());
+    ok(world.handle(
+        &mut session,
+        Request::DockedTraversal {
+            request: DockedTraversalRequest::LeaveSeat { binding: binding() },
+        },
+    ));
+    for _ in 0..DOCKED_SEAT_TRANSITION_MS / 100 {
+        world.step(100).unwrap();
+    }
+    let before = ok(world.handle(&mut session, Request::Snapshot));
+    let before_state = traversal(&before).clone();
+    assert!(before_state.seat_transition.is_none());
+    let fixed_clock = world.time();
+    let before_public = serde_json::to_value((&before.snapshot, &before.assets)).unwrap();
+    let layout_path = directory.join("room_layout.json");
+    let before_saved = std::fs::read(&layout_path).ok();
+    let original_hash = docked_layout_sha256(&original.document);
+    assert_eq!(before_state.binding.layout_sha256, original_hash);
+    let mut metadata_candidate = original.document.clone();
+    metadata_candidate
+        .rooms
+        .iter_mut()
+        .find(|room| room.source_room_id.as_deref() == Some("D1-P2"))
+        .unwrap()
+        .name
+        .push_str(" layout install candidate");
+    metadata_candidate.validate_live().unwrap();
+    let mut geometry_candidate = metadata_candidate.clone();
+    geometry_candidate
+        .rooms
+        .iter_mut()
+        .find(|room| room.source_room_id.as_deref() == Some("D1-P2"))
+        .unwrap()
+        .clear_lwh_m[0] -= 0.2;
+    geometry_candidate.validate_live().unwrap();
+    assert_ne!(docked_layout_sha256(&metadata_candidate), original_hash);
+    assert_ne!(docked_layout_sha256(&geometry_candidate), original_hash);
+    for candidate in [&metadata_candidate, &geometry_candidate] {
+        assert!(
+            world
+                .room_layout_replace(original.revision, candidate.clone())
+                .is_err(),
+            "active canonical traversal must block metadata and geometry installation"
+        );
+        assert_eq!(world.room_layout_state(), original);
+        assert_eq!(std::fs::read(&layout_path).ok(), before_saved);
+        assert_eq!(world.time(), fixed_clock);
+        let unchanged = ok(world.handle(&mut session, Request::Snapshot));
+        assert_eq!(
+            serde_json::to_value((&unchanged.snapshot, &unchanged.assets)).unwrap(),
+            before_public
+        );
+        assert_eq!(traversal(&unchanged).feet_m, before_state.feet_m);
+        assert_eq!(traversal(&unchanged).binding.layout_sha256, original_hash);
+    }
+    ok(world.handle(
+        &mut session,
+        Request::DockedTraversal {
+            request: DockedTraversalRequest::TakeSeat { binding: binding() },
+        },
+    ));
+    for _ in 0..DOCKED_SEAT_TRANSITION_MS / 100 {
+        world.step(100).unwrap();
+    }
+    assert!(pilot(&ok(world.handle(&mut session, Request::Snapshot)))
+        .station_avatar
+        .is_none());
+    let installed = world
+        .room_layout_replace(original.revision, geometry_candidate.clone())
+        .unwrap();
+    assert_eq!(installed.revision, original.revision + 1);
+    assert_eq!(installed.document, geometry_candidate);
+    assert_eq!(world.room_layout_state(), installed);
+    let persisted: RoomLayoutState =
+        serde_json::from_slice(&std::fs::read(&layout_path).unwrap()).unwrap();
+    assert_eq!(persisted, installed);
+    let next_binding = docked_traversal_binding(
+        "v1:Walker:Pioneer".into(),
+        &installed.document,
+        FleetLayoutRevision::LinearV1,
+        false,
+    );
+    assert_ne!(next_binding.layout_sha256, original_hash);
+    assert!(
+        !world
+            .handle(
+                &mut session,
+                Request::DockedTraversal {
+                    request: DockedTraversalRequest::LeaveSeat { binding: binding() },
+                }
+            )
+            .ok,
+        "the previous document binding must not activate the installed layout"
+    );
+    let next = ok(world.handle(
+        &mut session,
+        Request::DockedTraversal {
+            request: DockedTraversalRequest::LeaveSeat {
+                binding: next_binding.clone(),
+            },
+        },
+    ));
+    assert_eq!(traversal(&next).binding, next_binding);
+    assert_eq!(
+        traversal(&next).feet_m,
+        geometry::seat_anchors(PioneerDockedPose::private()).root_station_m
+    );
+    assert_eq!(
+        next.assets.as_ref().unwrap().pioneer_room_layout.as_ref(),
+        Some(&installed)
+    );
+}
+
+#[test]
+fn authority_walks_from_pilot_seat_down_both_core_stairs_and_back_without_teleports() {
+    fn walk_xz(
+        server: &mut Server,
+        session: &mut Option<String>,
+        now: &mut u64,
+        path: &[[f64; 2]],
+        trace: &mut Vec<DockedTraversalState>,
+    ) -> Response {
+        let pose = docked_binding_pose(&binding()).unwrap();
+        let document = server.editor_room_layout.as_ref().unwrap();
+        let registered = geometry::registered_geometry(document).unwrap();
+        let mut response = snapshot(server, session, *now);
+        let actuator = &traversal(&response).actuators;
+        let dynamic = geometry::dynamic_geometry(
+            pose,
+            PioneerDockedActuators {
+                room_door_open: false,
+                inner_hatch_open: actuator.inner_hatch_open,
+                outer_hatch_open: actuator.outer_hatch_open,
+                lift_floor_station_m: actuator.lift.floor_station_m,
+                chair_fold: 1.0,
+            },
+        )
+        .unwrap();
+        let joints = geometry::pilot_joints(1.0);
+        let eye = |state: &DockedTraversalState| -> [f64; 3] {
+            std::array::from_fn(|axis| {
+                state.feet_m[axis] + joints.eye_m[axis] - joints.root_m[axis]
+            })
+        };
+        let stride = WALK_SPEED_MPS * WALK_TICK_MS as f64 / 1_000.0;
+        for &[x, z] in path {
+            let target = geometry::body_to_station(pose, [x, -0.32, z]);
+            let wall_deadline = std::time::Instant::now() + std::time::Duration::from_secs(12);
+            let mut stalled = 0;
+            let mut reached = false;
+            for _ in 0..400 {
+                let before = traversal(&response).clone();
+                let remaining = xz_distance(before.feet_m, target);
+                if remaining <= WAYPOINT_TOLERANCE_M {
+                    response = stop_walking(server, session, *now);
+                    reached = true;
+                    break;
+                }
+                assert!(std::time::Instant::now() < wall_deadline);
+                response = walk_tick_toward(server, session, now, &before, target);
+                let after = traversal(&response);
+                assert!(after.grounded && after.seat_transition.is_none());
+                assert_eq!(after.binding, binding());
+                assert_eq!(after.heading, before.heading);
+                assert_eq!(after.vertical_velocity_mps, 0.0);
+                assert_eq!(after.updated_at_ms, *now);
+                assert!(xz_distance(before.feet_m, after.feet_m) <= stride + 1.0e-7);
+                assert!(
+                    (after.feet_m[1] - before.feet_m[1]).abs() <= 0.24 + 1.0e-7,
+                    "stair step remapped canonical height: {:?} -> {:?}",
+                    before.feet_m,
+                    after.feet_m
+                );
+                assert!(
+                    flight::distance(eye(&before), eye(after)) <= stride.hypot(0.24) + 1.0e-7,
+                    "standing head root jumped between registered supports"
+                );
+                let hit = geometry::support_at_station(
+                    &registered,
+                    &dynamic,
+                    pose,
+                    after.feet_m,
+                    Some(after.support),
+                    0.0,
+                )
+                .unwrap();
+                assert_eq!(hit.support, after.support);
+                assert_eq!(hit.surface_id, after.surface_id);
+                assert!((hit.height_m - after.feet_m[1]).abs() < 1.0e-8);
+                assert!(
+                    geometry::capsule_clear_station(&registered, &dynamic, pose, after.feet_m),
+                    "authority crossed a cabinet, stair rail, ceiling, or hull-side solid"
+                );
+                assert_stopped_legacy_marker(&response);
+                if xz_distance(after.feet_m, target) >= remaining - 1.0e-7 {
+                    stalled += 1;
+                } else {
+                    stalled = 0;
+                }
+                assert!(
+                    stalled < 12,
+                    "authority stair route stalled at {:?} ({:?}, {}) toward {target:?}",
+                    after.feet_m,
+                    after.support,
+                    after.surface_id
+                );
+                trace.push(after.clone());
+            }
+            assert!(
+                reached,
+                "authority route exceeded 400 ticks toward {target:?}"
+            );
+        }
+        response
+    }
+
+    let mut server = Server::open(":memory:").unwrap();
+    let source = default_pioneer_room_layout();
+    let source_bytes = serde_json::to_vec(&source).unwrap();
+    let source_geometry = geometry::registered_geometry(&source).unwrap();
+    let cabinet = source_geometry
+        .panels
+        .iter()
+        .find(|panel| panel.id == "deck1/access-cabinet")
+        .unwrap()
+        .clone();
+    assert!((0..3).all(|axis| {
+        (cabinet.bounds.center_m[axis] - [-11.15, -3.47, 0.0][axis]).abs() < 1.0e-8
+    }));
+    assert!((cabinet.bounds.half_m[0] - 0.15).abs() < 1.0e-8);
+    assert!((cabinet.bounds.half_m[1] - 0.65).abs() < 1.0e-8);
+    assert!((cabinet.bounds.half_m[2] - 0.55).abs() < 1.0e-8);
+    server.set_editor_room_layout(source);
+    let mut session = None;
+    connected(&mut server, &mut session);
+    let standing = leave_and_stand(&mut server, &mut session, LEFT_AT);
+    let mut trace = vec![traversal(&standing).clone()];
+    let mut now = STANDING_AT;
+    let pose = PioneerDockedPose::private();
+    let deck2_y = pose.origin_m[1] + geometry::deck_floor_y(2).unwrap();
+    let deck1_y = pose.origin_m[1] + geometry::deck_floor_y(1).unwrap();
+    // Seat egress, the actual bridge opening, connector, and deck-two corridor.
+    let approach = [
+        [34.36, 3.0],
+        [34.36, 0.0],
+        [33.4, 0.0],
+        [20.0, 0.0],
+        [10.0, 0.0],
+        [0.0, 0.0],
+        [-7.2, 0.0],
+    ];
+    let upper = walk_xz(&mut server, &mut session, &mut now, &approach, &mut trace);
+    assert_eq!(traversal(&upper).support, DockedSupport::Deck2);
+    assert!((traversal(&upper).feet_m[1] - deck2_y).abs() < 1.0e-8);
+    // Exact proven lower-to-upper geometry route, in deck-plan coordinates.
+    // Reverse it for descent; the x=2 detour preserves the access cabinet.
+    let ascent = [
+        [2.0, 7.0],
+        [2.0, 5.8],
+        [0.9, 5.8],
+        [0.9, 1.0],
+        [3.1, 1.0],
+        [3.1, 5.8],
+        [2.0, 5.8],
+        [2.0, 7.0],
+        [4.8, 7.0],
+    ];
+    let descent: Vec<_> = ascent
+        .into_iter()
+        .rev()
+        .skip(1)
+        .chain(std::iter::once([4.8, 7.0]))
+        .map(|[x, z]| [x - 12.0, z - 7.0])
+        .collect();
+    let descent_start = trace.len();
+    let lower = walk_xz(&mut server, &mut session, &mut now, &descent, &mut trace);
+    assert_eq!(traversal(&lower).support, DockedSupport::Deck1);
+    assert!((traversal(&lower).feet_m[1] - deck1_y).abs() < 1.0e-8);
+    assert!(trace[descent_start..]
+        .windows(2)
+        .all(|pair| pair[1].feet_m[1] <= pair[0].feet_m[1] + 1.0e-8));
+    // A lost release on the real lower deck still expires at the 500ms lease.
+    let lease_start = traversal(&lower).feet_m;
+    ok(command(
+        &mut server,
+        &mut session,
+        DockedTraversalRequest::Walk {
+            binding: binding(),
+            forward: 0.25,
+            strafe: 0.0,
+            turn: 0.0,
+        },
+        now,
+    ));
+    now += STATION_WALK_LEASE_MS;
+    let expired = snapshot(&mut server, &mut session, now);
+    let lease_end = traversal(&expired).feet_m;
+    assert!(!traversal(&expired).moving);
+    assert!((xz_distance(lease_start, lease_end) - 0.5).abs() < 1.0e-7);
+    assert!((lease_end[1] - deck1_y).abs() < 1.0e-8);
+    now += STATION_WALK_LEASE_MS + WALK_TICK_MS;
+    let held = snapshot(&mut server, &mut session, now);
+    assert_eq!(traversal(&held).feet_m, lease_end);
+    assert!(!traversal(&held).moving);
+    walk_xz(
+        &mut server,
+        &mut session,
+        &mut now,
+        &[[-7.2, 0.0]],
+        &mut trace,
+    );
+    let ascent_start = trace.len();
+    let ascent_body = ascent.map(|[x, z]| [x - 12.0, z - 7.0]);
+    let upper = walk_xz(
+        &mut server,
+        &mut session,
+        &mut now,
+        &ascent_body,
+        &mut trace,
+    );
+    assert_eq!(traversal(&upper).support, DockedSupport::Deck2);
+    assert!((traversal(&upper).feet_m[1] - deck2_y).abs() < 1.0e-8);
+    assert!(trace[ascent_start..]
+        .windows(2)
+        .all(|pair| pair[1].feet_m[1] >= pair[0].feet_m[1] - 1.0e-8));
+    for section in [&trace[descent_start..ascent_start], &trace[ascent_start..]] {
+        let surfaces: std::collections::BTreeSet<_> = section
+            .iter()
+            .map(|state| state.surface_id.as_str())
+            .collect();
+        assert!((1..=11).all(|step| surfaces.contains(format!("stairs/a/{step}").as_str())));
+        assert!((1..=7).all(|step| surfaces.contains(format!("stairs/b/{step}").as_str())));
+        assert!(surfaces.contains("stairs/midlanding"));
+    }
+    let return_path: Vec<_> = approach.into_iter().rev().skip(1).collect();
+    walk_xz(
+        &mut server,
+        &mut session,
+        &mut now,
+        &return_path,
+        &mut trace,
+    );
+    let returned = walk_xz(
+        &mut server,
+        &mut session,
+        &mut now,
+        &[[34.54, 3.0]],
+        &mut trace,
+    );
+    assert!(
+        flight::distance(
+            traversal(&returned).feet_m,
+            geometry::seat_anchors(pose).root_station_m
+        ) <= WAYPOINT_TOLERANCE_M
+    );
+    ok(command(
+        &mut server,
+        &mut session,
+        DockedTraversalRequest::TakeSeat { binding: binding() },
+        now,
+    ));
+    let seated = snapshot(&mut server, &mut session, now + DOCKED_SEAT_TRANSITION_MS);
+    assert!(pilot(&seated).station_avatar.is_none());
+    assert_eq!(pilot(&seated).location, Location::Docked);
+    assert_eq!(
+        serde_json::to_vec(server.editor_room_layout.as_ref().unwrap()).unwrap(),
+        source_bytes
+    );
+    assert_eq!(
+        geometry::registered_geometry(server.editor_room_layout.as_ref().unwrap()).unwrap(),
+        source_geometry
+    );
+}

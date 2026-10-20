@@ -266,6 +266,7 @@ fn run() -> Result<()> {
         let response = exchange(
             &mut stream,
             &Request::Connect {
+                supports_docked_traversal_v2: false,
                 supports_room_controls: false,
                 // This command client does not validate or render new scene layouts.
                 world_layout_version: 0,
