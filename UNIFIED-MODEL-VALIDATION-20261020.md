@@ -1,5 +1,7 @@
 # Unified native model browser
 
+This is the retained 26.10.20.4 validation record. The later component build is documented in [Pioneer components validation](PIONEER-COMPONENTS-VALIDATION-20261020.md).
+
 Build **26.10.20.4** is packaged and validated at **ce8080b0be0fe66e7ccbd8961635a9b032840bc7**. It is **running as PID 96422** after the user authorized discarding the previous unsaved session. The earlier **26.10.20.3** app, PID **7924**, closed normally and is absent. The saved ReconstructionQA project was preserved.
 
 [Prepared app](<.build/packages/unified-all-models-20261020/Arkline Editor Reconstructed.app>) · [Evidence and hashes](UNIFIED-MODEL-VALIDATION-20261020.json)

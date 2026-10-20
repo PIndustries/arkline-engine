@@ -1,0 +1,236 @@
+{
+  "schema_version": 2,
+  "updated_at_utc": "2026-10-20T08:32:17.769927+00:00",
+  "build": "26.10.20.5",
+  "production_code_head": "2e2e6fcd8d5528275f63b6a7fae2ec6aa47ed798",
+  "incremental_commits": {
+    "source_parts": "8558dd76ba8ad5c4b7006f331d631d750011b3bc",
+    "focus_and_import_cache": "80689ba854fd0aa0c9e01dd907e469aef3f6f0bb",
+    "stamp": "2e2e6fcd8d5528275f63b6a7fae2ec6aa47ed798"
+  },
+  "package": {
+    "build_version": "26.10.20.5",
+    "cf_bundle_version": "2485.0.5",
+    "source_head_before_version_commit": "80689ba854fd0aa0c9e01dd907e469aef3f6f0bb",
+    "binary_sha256_before_signing": "6fd2a35298772d7667b12bf4dabe36896ced200ad677204da039122ecfdcf71d",
+    "packaged_executable_sha256": "807429dea97342f44274e6e6e7b4e4a84a3749a74db811d8b3c9337784ff94fb",
+    "app": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-components-20261020/Arkline Editor Reconstructed.app",
+    "signature": "local ad-hoc; verified deep strict",
+    "profile": "debug; debug information disabled; incremental disabled"
+  },
+  "catalog": {
+    "runtime_entries": 797,
+    "available_geometry_entries": 794,
+    "logical_unavailable_entries": 3,
+    "pioneer_source_objects": 686,
+    "pioneer_source_triangles": 103466,
+    "pioneer_material_primitives": 9,
+    "project_and_repository_files": "Additional guarded source rows depend on the open project; unsupported formats remain visible as unavailable."
+  },
+  "navigation": [
+    "Models workspace tab",
+    "Ships > Pioneer > Source parts > name-based family > exact source object name",
+    "Isolate selected (default) or Highlight in ship when source coordinates are verified",
+    "In ship context: Focus piece enlarges the selected source bounds; Fit ship returns to the whole-ship frame",
+    "Left drag orbits; right/middle drag pans; wheel zooms; Fit model / Reset view remain available"
+  ],
+  "final_head_checks": {
+    "at_utc": "2026-10-20T08:26:12.267269+00:00",
+    "build": "26.10.20.5",
+    "source_head_before": "2e2e6fcd8d5528275f63b6a7fae2ec6aa47ed798",
+    "source_head_after": "2e2e6fcd8d5528275f63b6a7fae2ec6aa47ed798",
+    "status_before": "",
+    "status_after": "",
+    "checks": [
+      {
+        "command": [
+          "cargo",
+          "fmt",
+          "--all",
+          "--",
+          "--check"
+        ],
+        "exit_code": 0,
+        "guard_log": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T082143929250Z.log"
+      },
+      {
+        "command": [
+          "cargo",
+          "clippy",
+          "--offline",
+          "--workspace",
+          "--all-targets",
+          "--locked",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "exit_code": 0,
+        "guard_log": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T082146009472Z.log"
+      },
+      {
+        "command": [
+          "cargo",
+          "clippy",
+          "--offline",
+          "--locked",
+          "-p",
+          "arkline-client",
+          "--target",
+          "wasm32-unknown-unknown",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "exit_code": 0,
+        "guard_log": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T082207176195Z.log"
+      },
+      {
+        "command": [
+          "cargo",
+          "test",
+          "--offline",
+          "--workspace",
+          "--locked",
+          "--no-fail-fast"
+        ],
+        "exit_code": 0,
+        "guard_log": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T082211253760Z.log",
+        "top_level_suites": 55,
+        "passed": 920,
+        "failed": 0,
+        "ignored": 33
+      }
+    ]
+  },
+  "native_checks": {
+    "source_head": "2e2e6fcd8d5528275f63b6a7fae2ec6aa47ed798",
+    "passed": 10,
+    "failed": 0,
+    "results": [
+      {
+        "test": "native_source_components_exact_ranges_context_controls_and_buffer_invariance",
+        "exit_code": 0,
+        "guard_log": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T082659535761Z.log"
+      },
+      {
+        "test": "native_shared_model_preview_catalog_import_materials_controls_and_clear",
+        "exit_code": 0,
+        "guard_log": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T082756841458Z.log"
+      },
+      {
+        "test": "native_shared_model_preview_actual_repository_glbs_and_preview_normals",
+        "exit_code": 0,
+        "guard_log": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T082916242321Z.log"
+      },
+      {
+        "test": "native_drone_gallery_all_classes_orbit_zoom_reset_share_runtime_geometry",
+        "exit_code": 0,
+        "guard_log": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T082920327973Z.log"
+      },
+      {
+        "test": "native_cockpit_depth_query_uses_draw_framebuffer_without_rebinding",
+        "exit_code": 0,
+        "guard_log": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T082926407984Z.log"
+      },
+      {
+        "test": "native_cockpit_display_preserves_depth_perspective_and_state",
+        "exit_code": 0,
+        "guard_log": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T082927467406Z.log"
+      },
+      {
+        "test": "native_pioneer_cockpit_enclosure_matches_source_and_keeps_window_apertures",
+        "exit_code": 0,
+        "guard_log": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T082928533622Z.log"
+      },
+      {
+        "test": "native_cockpit_cached_feed_tracks_physical_quad_under_head_look_and_roll",
+        "exit_code": 0,
+        "guard_log": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T082940656017Z.log"
+      },
+      {
+        "test": "native_cockpit_shift_keeps_both_instrument_layers_and_live_feed_updating",
+        "exit_code": 0,
+        "guard_log": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T082942744584Z.log"
+      },
+      {
+        "test": "native_gallery_two_instances_render_and_preview_without_mutating_source",
+        "exit_code": 0,
+        "guard_log": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T082949825011Z.log"
+      }
+    ]
+  },
+  "component_scope": {
+    "cpu_source_objects": 686,
+    "gpu_representatives": 11,
+    "gpu_material_classes": 9,
+    "source_triangles": 103466,
+    "source_batches": 9,
+    "capture_count": 60,
+    "gpu_payloads_unchanged": true,
+    "limits": [
+      "Every exported source object has one primitive/material; the nine-primitive assembly is context, not a fabricated multi-primitive object",
+      "Representative GPU journeys cover 11 exact objects; independent CPU tests cover all 686 receipt rows and the full 103466-triangle partition",
+      "Wireframe context and green selection outline are inspection overlays; original source geometry, scalar materials and bytes are unchanged",
+      "Tiny objects may occupy only a few pixels in whole-ship context; Focus piece is required to inspect their actual geometry at useful size, and Fit ship restores the full context",
+      "Context mode retains all nine ship source batches; this acceptance does not establish lower hidden-geometry cost or frame-time improvements",
+      "This offscreen acceptance does not establish OS input, app focus, gameplay or engineering approval"
+    ]
+  },
+  "receipt_files": [
+    {
+      "path": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-components-20261020/package-receipt.json",
+      "sha256": "d01de3713e02019c27edbb58267570f7fbdd259e5a341932fa6e3217c077eca4"
+    },
+    {
+      "path": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-components-20261020/artifact-build-check.json",
+      "sha256": "3e6f66655cd3e42a757e48b1e53b5a98e8ace9874a091accf1f27b03c92f8d1d"
+    },
+    {
+      "path": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-components-20261020/focus-cache-checks.json",
+      "sha256": "beb30f52f104db252ef7969bdb7ee1e0e8b1bbd995af1929d739d0d802940b2c"
+    },
+    {
+      "path": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-components-20261020/final-head-checks.json",
+      "sha256": "b38dcc13884cd7d68373fba393eb7c9b19f4c05aa9c34ebf00322522730c3cf2"
+    },
+    {
+      "path": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-components-20261020/native-final-batch.json",
+      "sha256": "a0cc4b1da0d8299a9bd843bae1bce2e46abc75836513817f41b68c39d0431524"
+    },
+    {
+      "path": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-components-20261020/components-gpu-final/receipt.json",
+      "sha256": "debf148db4461b293bb631b1681307546413bc7a2dd3e266f4752ff40574972f"
+    },
+    {
+      "path": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-components-20261020/shared-preview-gpu/receipt.json",
+      "sha256": "b76f58a689523896f84c23cb8c74b8d1e3893f92a3bfa1e57ee8003154e6de00"
+    },
+    {
+      "path": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-components-20261020/repository-glbs-gpu/receipt.json",
+      "sha256": "1257b76e83fd0073af04f4f35b0d9d43b17e32cc91a1bb1c804c9727a43ee614"
+    }
+  ],
+  "running_app": {
+    "build": "26.10.20.4",
+    "pid": 96422,
+    "new_build_launched": false,
+    "fresh_handoff_readiness_question_pending": true
+  },
+  "remaining_acceptance": [
+    "Preserve current authoring work and safely close/reopen after fresh readiness",
+    "Actual editor hierarchy/context selection and large-catalog scrolling",
+    "Actual disk Reload recovery; unit regressions cover the browser snapshot boundary"
+  ],
+  "physical_pioneer_work": {
+    "production_implementation_started": false,
+    "measured_planning_available": true,
+    "reference_files": [
+      "assets/ships/pioneer/pioneer-hull.png",
+      "docs/ships/pioneer/plan.svg",
+      "docs/ships/pioneer/specification.json"
+    ],
+    "performance_improvement_claimed": false
+  },
+  "source_recovery": "Verified complete-history bundle and SHA-256 are recorded in the package source-checkpoint.json"
+}
