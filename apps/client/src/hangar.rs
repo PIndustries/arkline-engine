@@ -12,6 +12,9 @@ mod avatar_follow;
 pub(super) mod pioneer_docked_scene;
 #[path = "pioneer_interior.rs"]
 mod pioneer_interior;
+#[cfg(all(test, target_os = "macos"))]
+#[path = "pioneer_route_gpu_tests.rs"]
+mod pioneer_route_gpu_tests;
 #[path = "quarters.rs"]
 mod quarters;
 pub use quarters::HangarAction;

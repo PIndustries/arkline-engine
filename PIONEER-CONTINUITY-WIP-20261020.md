@@ -23,3 +23,9 @@ The next coherent stage covers a physically fitted wider cockpit/whole pilot sta
 A separate read-only flagship review is reading the actual [Pioneer wiki](https://github.com/PIndustries/arkline-engine/wiki/Ship-Pioneer) and viewing its v05 images, plans and actual Study05 renders. The measured shallow bridge and flat material response are confirmed gaps. Illustration labels are design proposals, not engineering measurements; saved room programs and the distinct upper boarding route must not be silently moved or renamed.
 
 No push, upload, GitHub mutation, merge, release, deployment, external-drive write or file moving/deletion occurred. `.7` remains the running app until a later candidate is built and checked; this WIP is not its runtime source.
+
+## Follow-up checkpoint
+
+WIP b4ff6f5 compiled across all workspace targets (15.14 s; log `.build/logs/20261020T133314622082Z.log`). All 20 filtered editor/collaborative-editor authority tests passed, including the three new canonical regressions (`.build/logs/20261020T133444878481Z.log`). These results do not validate later edits automatically.
+
+The next checkpoint adds independent per-camera filtering and metrics for canonical space-cockpit color submission, while preserving the full depth/input scene, and registers a new whole-Cockpit native route test using actual disposable EditorWorld responses and both renderers. That new native test is not yet compiled or executed at this commit. Actual .7 Undock and camera selection were reproduced; camera-only switches preserved paused authority. Actual Dock return was exercised separately in the baseline app.

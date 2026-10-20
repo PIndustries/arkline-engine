@@ -3584,7 +3584,7 @@ impl Renderer {
             self.paint_warp_tunnel(frame);
         }
         if frame.cockpit {
-            self.paint_cockpit(frame);
+            self.paint_cockpit(frame, &mut visibility);
         }
         gl.disable(glow::DEPTH_TEST);
         gl.depth_mask(false);
@@ -3653,7 +3653,7 @@ impl Renderer {
         self.gl.depth_mask(true);
         self.gl.disable(glow::BLEND);
     }
-    unsafe fn paint_cockpit(&self, frame: &Frame) {
+    unsafe fn paint_cockpit(&self, frame: &Frame, visibility: &mut ViewVisibility) {
         self.gl.depth_mask(true);
         self.gl.clear_depth_f32(1.0);
         self.gl.clear(glow::DEPTH_BUFFER_BIT);
@@ -3672,20 +3672,23 @@ impl Renderer {
         if frame.ship_class == ShipClass::Pioneer {
             if let Some(parts) = frame.canonical_pioneer_parts() {
                 let mount = frame.pioneer_body_mount();
+                // Cull only this camera's colour submission. The canonical
+                // payload and its full depth/input scene stay unchanged, so a
+                // head turn or another feed independently sees the same ship.
                 for &(mesh, model, color, emission) in parts.iter() {
-                    if docked_source_primitive(mesh) != Some(6) {
-                        self.draw_material(
-                            mesh,
-                            mount * model,
-                            color,
-                            emission,
-                            Material::BareMetal,
-                        );
+                    let part = (mesh, mount * model, color, emission);
+                    if docked_source_primitive(mesh) != Some(6)
+                        && self.visible_part(frame.cockpit_vp, &part, visibility)
+                    {
+                        self.draw_material(mesh, part.1, color, emission, Material::BareMetal);
                     }
                 }
                 for &(mesh, model, color, emission) in parts.iter() {
-                    if docked_source_primitive(mesh) == Some(6) {
-                        self.draw_registered_glass(&(mesh, mount * model, color, emission));
+                    let part = (mesh, mount * model, color, emission);
+                    if docked_source_primitive(mesh) == Some(6)
+                        && self.visible_part(frame.cockpit_vp, &part, visibility)
+                    {
+                        self.draw_registered_glass(&part);
                     }
                 }
             }
