@@ -67,6 +67,8 @@ const HEIGHT: usize = 720;
 struct Capture {
     rgba: Vec<u8>,
     occupied: usize,
+    depth: Vec<f32>,
+    viewport: egui::Rect,
     eye: Vec3,
     direction: (f32, f32),
     metrics: ViewRenderMetrics,
@@ -184,14 +186,15 @@ impl Harness {
             glow::PixelPackData::Slice(Some(&mut depths)),
         );
         assert_eq!(self.gl.get_error(), glow::NO_ERROR);
-        let occupied = depths
+        let depth = depths
             .chunks_exact(4)
-            .filter(|bytes| {
-                let depth = f32::from_ne_bytes((*bytes).try_into().unwrap());
-                assert!(depth.is_finite() && (0.0..=1.0).contains(&depth));
-                depth < 1.0 - 1e-7
+            .map(|bytes| {
+                let value = f32::from_ne_bytes(bytes.try_into().unwrap());
+                assert!(value.is_finite() && (0.0..=1.0).contains(&value));
+                value
             })
-            .count();
+            .collect::<Vec<_>>();
+        let occupied = depth.iter().filter(|value| **value < 1.0 - 1e-7).count();
         let (eye, yaw, pitch) = self.view.editor_camera_pose().unwrap();
         let metrics = self
             .view
@@ -202,6 +205,8 @@ impl Harness {
         Capture {
             rgba,
             occupied,
+            depth,
+            viewport: self.view.surface.expect("actual registered canvas").0,
             eye,
             direction: (yaw, pitch),
             metrics,
@@ -286,6 +291,122 @@ fn state_at(
         },
     }
 }
+/// These are real floor/tread positions, not markers added to the scene.
+/// Match the depth readback against their world-space positions so a nearby
+/// bulkhead cannot pass merely by filling the framebuffer with opaque pixels.
+fn useful_registered_view(shot: &Capture, landmarks_body: &[[f64; 3]]) -> serde_json::Value {
+    let (yaw, pitch) = shot.direction;
+    let vp = view_projection(
+        shot.eye,
+        shot.eye + editor_camera_direction(yaw, pitch),
+        shot.viewport.aspect_ratio(),
+    );
+    let inverse = vp.inverse();
+    let mut visible = Vec::new();
+    for body in landmarks_body {
+        let point = vector(body_to_station(PioneerDockedPose::private(), *body));
+        let clip = vp * point.extend(1.0);
+        if clip.w <= 0.0 {
+            continue;
+        }
+        let ndc = clip.truncate() / clip.w;
+        if ndc.abs().max_element() >= 1.0 {
+            continue;
+        }
+        let x = shot.viewport.min.x + (ndc.x + 1.0) * 0.5 * shot.viewport.width();
+        let y = shot.viewport.min.y + (1.0 - ndc.y) * 0.5 * shot.viewport.height();
+        let mut best = f32::INFINITY;
+        // Permit pixel quantization at an actual surface, not an unrelated
+        // depth at the same projected coordinate.
+        for dy in -1..=1 {
+            for dx in -1..=1 {
+                let px = x.floor() as i32 + dx;
+                let py = y.floor() as i32 + dy;
+                if px < 0 || py < 0 || px >= WIDTH as i32 || py >= HEIGHT as i32 {
+                    continue;
+                }
+                let depth = shot.depth[(HEIGHT - 1 - py as usize) * WIDTH + px as usize];
+                if depth >= 1.0 - 1e-7 {
+                    continue;
+                }
+                let pixel_ndc = Vec3::new(
+                    ((px as f32 + 0.5 - shot.viewport.min.x) / shot.viewport.width()) * 2.0 - 1.0,
+                    1.0 - ((py as f32 + 0.5 - shot.viewport.min.y) / shot.viewport.height()) * 2.0,
+                    depth * 2.0 - 1.0,
+                );
+                let world = inverse * pixel_ndc.extend(1.0);
+                best = best.min((world.truncate() / world.w).distance(point));
+            }
+        }
+        if best < 0.15 {
+            visible.push(serde_json::json!({"body_m":body,"gpu_depth_world_error_m":best}));
+        }
+    }
+    assert!(
+        visible.len() >= 2,
+        "At least two actual floor/tread landmarks must be visible; got {visible:?}"
+    );
+    let mut distances = Vec::new();
+    let mut colors = std::collections::BTreeSet::new();
+    for py in (HEIGHT / 5..HEIGHT * 4 / 5).step_by(3) {
+        for px in (WIDTH / 5..WIDTH * 4 / 5).step_by(3) {
+            let index = py * WIDTH + px;
+            let depth = shot.depth[index];
+            if depth < 1.0 - 1e-7 {
+                // The actual projection uses OpenGL depth, near .08 / far 30000.
+                distances.push(
+                    (2.0 * 0.08 * 30000.0)
+                        / (30000.0 + 0.08 - (depth * 2.0 - 1.0) * (30000.0 - 0.08)),
+                );
+                let c = &shot.rgba[index * 4..index * 4 + 3];
+                colors.insert([c[0] / 4, c[1] / 4, c[2] / 4]);
+            }
+        }
+    }
+    assert!(distances.len() > 100);
+    distances.sort_by(f32::total_cmp);
+    let near = distances[distances.len() / 10];
+    let far = distances[distances.len() * 9 / 10];
+    assert!(
+        far - near > 0.5,
+        "Actual view must contain spatial depth structure: p10={near}, p90={far}"
+    );
+    assert!(
+        colors.len() >= 8,
+        "Actual useful view needs spatial color detail beyond an opaque surface"
+    );
+    serde_json::json!({"visible_actual_landmarks":visible,"landmark_tolerance_m":0.15,"depth_p10_m":near,"depth_p90_m":far,"depth_spread_m":far-near,"quantized_color_bins":colors.len()})
+}
+
+fn supported_state_at(
+    body: [f64; 3],
+    heading: f64,
+    support: arkline_protocol::DockedSupport,
+) -> arkline_protocol::DockedTraversalState {
+    let mut state = state_at(body, support);
+    let pose = PioneerDockedPose::private();
+    let registered = registered_geometry(&arkline_protocol::default_pioneer()).unwrap();
+    let dynamic = dynamic_geometry(pose, actuator_pose(Some(&state), pose, None, 3300)).unwrap();
+    let hit = arkline_protocol::support_at_station(
+        &registered,
+        &dynamic,
+        pose,
+        state.feet_m,
+        Some(support),
+        0.0,
+    )
+    .expect("Supplemental camera must be grounded on actual registered support");
+    assert_eq!(hit.support, support);
+    assert!((hit.height_m - state.feet_m[1]).abs() < 1e-8);
+    assert!(
+        arkline_protocol::capsule_clear_station(&registered, &dynamic, pose, state.feet_m),
+        "Supplemental feet {body:?} must clear the actual collision geometry"
+    );
+    state.surface_id = hit.surface_id;
+    state.heading = heading;
+    state
+}
+
 fn pilot(state: Option<arkline_protocol::DockedTraversalState>) -> PilotView {
     let mut pilot:PilotView=serde_json::from_value(serde_json::json!({"name":"NativeDockedPioneer","credits":0,"ore":0,"location":Location::Docked})).unwrap();
     pilot.station_avatar = state.map(|state| StationAvatar {
@@ -539,13 +660,79 @@ fn native_pioneer_registered_docked_scene_displays_continuity_and_visibility() {
             assert_eq!(serde_json::to_vec(&pilot).unwrap(), source);
             captures.push(capture(directory.as_deref(), name, &shot));
         }
+        // Preserve the original x=18 forward-bulkhead views above. These
+        // supplemental poses are on the already proved authority stair route,
+        // with actual grounded support/capsule checks rather than guessed eyes.
+        let mut useful_views = Vec::new();
+        let mut corridor = None;
+        for (name, body, heading, pitch, support, landmarks) in [
+            (
+                "upper-deck-corridor",
+                [-7.2, -0.32, 0.0],
+                0.0,
+                0.15,
+                arkline_protocol::DockedSupport::Deck2,
+                vec![[-3.0, -0.32, 0.0], [2.0, -0.32, 0.0], [7.0, -0.32, 0.0]],
+            ),
+            (
+                "lower-deck-corridor",
+                [-7.2, -4.12, 0.0],
+                0.0,
+                0.15,
+                arkline_protocol::DockedSupport::Deck1,
+                vec![[-3.0, -4.12, 0.0], [2.0, -4.12, 0.0], [7.0, -4.12, 0.0]],
+            ),
+            (
+                "lower-core-stairs",
+                [-11.1, -4.12, -1.2],
+                -std::f64::consts::FRAC_PI_2,
+                0.35,
+                arkline_protocol::DockedSupport::Deck1,
+                vec![
+                    [-11.1, -3.55, -2.60],
+                    [-11.1, -3.17, -3.24],
+                    [-11.1, -2.79, -3.88],
+                ],
+            ),
+            (
+                "upper-core-stairs",
+                [-8.9, -0.32, -2.6],
+                -std::f64::consts::FRAC_PI_2,
+                0.65,
+                arkline_protocol::DockedSupport::Deck2,
+                vec![
+                    [-8.9, -0.89, -3.88],
+                    [-8.9, -1.27, -4.52],
+                    [-8.9, -1.65, -5.16],
+                ],
+            ),
+        ] {
+            let state = supported_state_at(body, heading, support);
+            let surface_id = state.surface_id.clone();
+            let pilot = pilot(Some(state));
+            let unchanged = serde_json::to_vec(&pilot).unwrap();
+            harness.view.pitch = pitch;
+            let shot = harness.settle(&pilot, 3300);
+            let details = useful_registered_view(&shot, &landmarks);
+            assert_eq!(serde_json::to_vec(&pilot).unwrap(), unchanged);
+            useful_views.push(serde_json::json!({"view":name,"feet_body_m":body,"surface_id":surface_id,"grounded_and_capsule_clear":true,"visibility":details}));
+            captures.push(capture(directory.as_deref(), name, &shot));
+            if name == "upper-deck-corridor" {
+                corridor = Some(pilot);
+            }
+        }
+        harness.view.pitch = 0.0;
         let standing = pilot(Some(state_at(
             [18.0, -0.32, 0.0],
             arkline_protocol::DockedSupport::Deck2,
         )));
         harness.settle(&standing, 3000);
         let mut comparisons = Vec::new();
-        for (name, pilot) in [("seated", seated.clone()), ("upper-deck", standing)] {
+        for (name, pilot) in [
+            ("seated", seated.clone()),
+            ("upper-deck", standing),
+            ("supplemental-upper-corridor", corridor.unwrap()),
+        ] {
             harness.settle(&pilot, 3100);
             let follow = harness.view.follow;
             let heading = harness.view.follow_heading;
@@ -585,7 +772,7 @@ fn native_pioneer_registered_docked_scene_displays_continuity_and_visibility() {
         );
         assert_eq!(original, source_gpu_hash(&gl, &renderer.lock().unwrap()));
         if let Some(directory) = &directory {
-            std::fs::write(directory.join("receipt.json"),serde_json::to_vec_pretty(&serde_json::json!({"schema_version":1,"scope":"Actual HangarView::ui registered docked callback and physical instrument surfaces in private macOS CGL; no desktop window","source_glb_sha256":arkline_protocol::PIONEER_DOCKED_SOURCE_SHA256,"registration_revision":arkline_protocol::PIONEER_DOCKED_REGISTRATION_REVISION,"captures":captures,"visibility_comparisons":comparisons,"source_gpu_payload_sha256":original,"canonical_gpu_payload_unchanged":true,"all_buffer_identities_retained":true,"physical_computer_face_roundtrip":true,"actual_instrument_pixels_on_backing":instrument_pixels,"visible_hatch_changed_pixels":hatch_changed_pixels,"headlook_preserves_eye_and_authority":true,"limitations":["Checkpoint snapshots exercise rendering; authority collision, hatch interlocks and continuous walking are verified by separate server tests","Both deck checkpoints use one registered scene but do not alone prove the complete stair walk","Each view retains an independent conservative frustum decision; this does not establish portal occlusion or LOD","CPU submit and optional delayed GPU timings are samples, not a performance guarantee or a vsync FPS measurement","No OS focus, desktop input, packaged app launch or engineering approval is established"]})).unwrap()).unwrap();
+            std::fs::write(directory.join("receipt.json"),serde_json::to_vec_pretty(&serde_json::json!({"schema_version":2,"scope":"Actual HangarView::ui registered docked callback and physical instrument surfaces in private macOS CGL; no desktop window","source_glb_sha256":arkline_protocol::PIONEER_DOCKED_SOURCE_SHA256,"registration_revision":arkline_protocol::PIONEER_DOCKED_REGISTRATION_REVISION,"captures":captures,"supplemental_grounded_useful_views":useful_views,"retained_original_forward_bulkhead_views":["registered-upper-deck","registered-lower-deck"],"visibility_comparisons":comparisons,"source_gpu_payload_sha256":original,"canonical_gpu_payload_unchanged":true,"all_buffer_identities_retained":true,"physical_computer_face_roundtrip":true,"actual_instrument_pixels_on_backing":instrument_pixels,"visible_hatch_changed_pixels":hatch_changed_pixels,"headlook_preserves_eye_and_authority":true,"limitations":["Checkpoint snapshots exercise rendering; authority collision, hatch interlocks and continuous walking are verified by separate server tests","Original x=18 deck checkpoints honestly face the forward bulkhead; supplemental grounded corridor/stair views separately verify visible actual floor/tread landmarks", "Both deck checkpoints and supplemental views use one registered scene but do not alone prove the complete stair walk","Each view retains an independent conservative frustum decision; this does not establish portal occlusion or LOD","CPU submit and optional delayed GPU timings are samples, not a performance guarantee or a vsync FPS measurement","No OS focus, desktop input, packaged app launch or engineering approval is established"]})).unwrap()).unwrap();
         }
         drop(harness);
         assert_eq!(gl.get_error(), glow::NO_ERROR);
