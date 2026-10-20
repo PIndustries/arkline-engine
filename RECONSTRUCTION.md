@@ -1,6 +1,6 @@
 # Cockpit reconstruction and native build
 
-The reconstructed editor runs locally as build **26.10.19.2** on a disposable project. Its physical cockpit, live instruments and video pass the explicit Mac GPU journeys. This is new integration work over surviving source; the missing combined builds46/47 were not fully recovered.
+The current editor runs locally as build **26.10.20.2**, with shared runtime drone models and a native inspection viewer. See [the current delivery](DRONE-MODEL-VALIDATION-20261020.md). The earlier reconstruction checkpoint below describes build26.10.19.2 on a disposable project. Its physical cockpit, live instruments and video pass the explicit Mac GPU journeys. This is new integration work over surviving source; the missing combined builds46/47 were not fully recovered.
 
 ## Source and preservation
 
@@ -14,7 +14,7 @@ The actual service UI renders in a persistent secondary context onto a ship-moun
 
 Fixed nested egui input locking on glass clicks, duplicate/replayed platform commands and the editor head-look ownership bypass. A child-process click regression has a deadline and guaranteed termination/reaping. Native testing then found that legacy `DEPTH_BITS` queries raised `INVALID_ENUM` on macOS core OpenGL. All three physical rendering passes now query the current draw attachment without rebinding it. Real tests cover color-only, depth and default targets, plus separate read/draw bindings. The Shift fixture now renders a real parent TextEdit and positively exercises scene input as well as blocked text input.
 
-## Validation
+## Validation at the reconstruction checkpoint
 
 | Local check | Result |
 | --- | --- |
@@ -32,10 +32,10 @@ All builds used installed Rust 1.89.0, one internal `.build/target`, one compile
 
 Detailed commands, logs, hashes, source composition and limits are in [RECONSTRUCTION-VALIDATION.json](RECONSTRUCTION-VALIDATION.json). These are local checks; no published exact-head CI run is implied.
 
-## App and acceptance limits
+## App and acceptance limits at the26.10.19.2 checkpoint
 
 The app is `.build/packages/reconstruction-native-fixed-20261020/Arkline Editor Reconstructed.app`. Its local ad-hoc signature verifies. The packaged executable was built from runtime commit `dac820668fdd17bfef2f0bdba32e2663b993be1c` with BUILD_VERSION set to 26.10.19.2. The sole later code change is a wasm cfg guard on the native editor setter; native code is unchanged, and native/browser Clippy both pass afterward. Build counters are local to this new reconstruction checkout and use the repository's America/Chicago date policy.
 
-No prior editor was running. LaunchServices returned -10810; directly launching `Contents/MacOS/arkline-editor` with explicit `--project` and `--pilot ReconstructionQA` succeeded. The owned process26743 created its disposable world and remains running without startup stderr. The launch receipt records its exact command.
+No prior editor was running. LaunchServices returned -10810; directly launching `Contents/MacOS/arkline-editor` with explicit `--project` and `--pilot ReconstructionQA` succeeded. The owned process26743 created its disposable world and ran without startup stderr; it has since been closed normally and superseded by the current delivery. The launch receipt records its exact command.
 
 The original pre-UI checkpoint did not establish OS input acceptance. Subsequent OS tests and remaining limits are recorded in [NATIVE-OS-ACCEPTANCE-20261020.md](NATIVE-OS-ACCEPTANCE-20261020.md); browser GPU execution remains unverified. Native rendered PNGs and JSON receipts are under that package directory. Telemetry/drone changes in the GPU tests are deterministic fixtures, not live authority measurements. Existing user projects were not opened. No push, PR, merge, deployment, external-drive write or storage migration occurred.

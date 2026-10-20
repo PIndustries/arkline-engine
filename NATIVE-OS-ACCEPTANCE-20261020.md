@@ -1,6 +1,6 @@
 # Native OS acceptance and bundle-version checkpoint
 
-Build **26.10.19.2** is still running as PID26743 on the disposable ReconstructionQA project. This record describes real macOS mouse/key events and owned-window captures separately from the earlier automated CGL tests.
+At this historical checkpoint, build **26.10.19.2** was running as PID26743 on the disposable ReconstructionQA project. This record describes real macOS mouse/key events and owned-window captures separately from the earlier automated CGL tests.
 
 | Journey | Result |
 | --- | --- |
@@ -28,3 +28,5 @@ Both old and corrected bundles are recognized by CoreFoundation. Its legacy `CFB
 The build was stamped at04:40UTC on October20, still October19 in the repository's **America/Chicago** build-date policy. This new checkout allocated local sequence1, then2 after the GL fix. It is a new reconstruction, not recovered original build46.
 
 Evidence files, exact event logs, hashes and individual limitations are in [NATIVE-OS-ACCEPTANCE-20261020.json](NATIVE-OS-ACCEPTANCE-20261020.json). Captures are under `.build/packages/reconstruction-native-fixed-20261020/os-ui-acceptance-20261020/`. No existing user project, security/quarantine setting, remote repository or external drive was changed.
+
+The current running build, normal app swaps and later model-viewer OS acceptance are recorded in [DRONE-MODEL-VALIDATION-20261020.md](DRONE-MODEL-VALIDATION-20261020.md). The earlier running PID has been closed normally.

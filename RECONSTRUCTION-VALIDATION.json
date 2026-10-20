@@ -669,5 +669,6 @@
     "tools/guarded-local-build.py": "602c1ecc18b9e85b0a8c0f07d5b6bf29a9683e09da7df50862c19f5f790c4924",
     "tools/test_guarded_local_build.py": "d5f056c8aed44112c92d59181e42c4bdd21d242c1dba31d67a6e8348ac3c869f"
   },
-  "cargo_lock_sha256": "245d3a3e5dde50ef6c6e93b103192ff4bd5c23cf8005454a90bbee5e31e3ec2c"
+  "cargo_lock_sha256": "245d3a3e5dde50ef6c6e93b103192ff4bd5c23cf8005454a90bbee5e31e3ec2c",
+  "superseded_by_delivery": "DRONE-MODEL-VALIDATION-20261020.json"
 }

@@ -126,5 +126,6 @@
     "play-physical-click-events.json": "cdfd5c55afca4b3ae575ac32dd2eea4c9eec028a732c17c0e953de965211ec4c",
     "os-physical-corp-tab.png": "049a8d72cf4043dd8cedb4fe0347ae35ea7cbe296f7adf2113db292d7aa8a2b7",
     "os-undock-click.png": "a2bcc827c3a1ba793af0ece351d53bf297d7a6e500a70f9797122344be763fd5"
-  }
+  },
+  "superseded_by_delivery": "DRONE-MODEL-VALIDATION-20261020.json"
 }
