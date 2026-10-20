@@ -464,7 +464,7 @@ ship-mounted turrets currently mine rather than fire combat weapons.
 
 ### Ship computer and delegated resource jobs
 
-The cockpit **AI** tab can perform one server-controlled mining haul on your own
+The editor **Mining** button and cockpit **Mining** tab open the server-controlled repeat mining routine on your own
 ship or an existing worker that explicitly granted fleet control. It uses both
 turrets and up to five mining drones, recalls them before return, then deposits
 confirmed ore into that worker's station storage. Watch a permitted worker on the

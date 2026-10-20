@@ -1,0 +1,11 @@
+# Mining access recovery checkpoint — 2026-10-20
+
+The server-controlled repeat routine survived recovery. Its visible Mining entry did not: recovered code exposed it as AI / Ship computer and hid it on foot. Restored the Mining editor header, service launcher and standalone panel using the existing StartResourceJob and CancelResourceJob authority. Opening controls never starts Play or submits a job. Status remains readable on foot; Start explains the boarding/Play requirements. Assigned goal and the next editable goal are distinct; the initial goal is the existing Pioneer cargo capacity, not a new capacity setting.
+
+Validation: `.build/logs/20261020T164704460262Z.log` has 12 passing server tests (multi-trip full hold, both mining turrets and drones, recall/return/deposit, interruption, ledger conservation and atomic rollback). `.build/logs/20261020T164831948385Z.log` has 385 passing client tests, 0 failures, 35 ignored. Editor header pointer check is running at this checkpoint: `.build/logs/20261020T165945025977Z.log`.
+
+Historical original UI patch recovered through supported task history: `/tmp/arkline-recovered-mining-ui-history.json`. Original server pause/resume scripts and controls tests: `/tmp/arkline-recovered-mining-runtime-history.json` (SHA256 5e84a3723d61fb4ac34801047b0bfdea012166d6d37abc8be18aed4e3669522d). These are evidence, not commands executed here. True job Pause/Resume, pinned cancellation, later cargo accounting and return-energy reserve patches are not restored by this bounded access change. No unsupported controls are shown.
+
+Audio cues exist, but embedded startup does not call SoundEngine::start; original audio recovery remains required. No audible acceptance is claimed.
+
+Actual running desktop remains 26.10.20.9, PID 31290, registration3 fresh QA `/tmp/arkline-registration3-candidate9-osqa-20261020`, from packaged source 9a47ca7. This Mining restoration and material commit de7c4b3 are source-only until a new validated package is launched. Desktop sprint comparison and full traversal/hatch acceptance remain inconclusive; mixed inputs and intermittent CUA timeouts prevent a controlled speed comparison. No world/build registrations were changed or reset.

@@ -38,6 +38,17 @@ impl Cockpit {
             .find(|j| j.pilot == self.resource_name())
     }
     pub(super) fn resource_start_reason(&self) -> Option<&'static str> {
+        if self.embedded && self.embedded_paused {
+            return Some("Press Play in the editor toolbar to operate the mining routine.");
+        }
+        if self
+            .own()
+            .is_some_and(|pilot| pilot.station_avatar.is_some())
+        {
+            return Some(
+                "Enter your ship to operate the mining routine. Status remains visible on foot.",
+            );
+        }
         if self.manual_remote.is_some() {
             return Some("Return to your own ship before assigning AI jobs.");
         }
@@ -238,7 +249,8 @@ impl Cockpit {
         }
     }
     pub(super) fn resource_job_panel(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Ship computer");
+        ui.heading("Mining routine");
+        ui.small("Travel → lock → mine → recall → return → unload → repeat");
         let old = self.resource_pilot.clone();
         let workers: Vec<String> = self
             .snapshot
@@ -298,12 +310,20 @@ impl Cockpit {
             }
             ui.small("Watch = camera only. Take manual control stops that ship's AI job.");
         });
-        ui.small("From dock or space → belt → mine → return → station storage.");
+        ui.label("Deposit: Automatic · nearest available local asteroid");
+        ui.small("Depleted asteroids are replaced automatically. Return: starting-system station → personal storage.");
         let capacity = self
             .resource_ship()
             .map_or(1, |p| cargo_capacity(p.ship_class));
         ui.horizontal_wrapped(|ui| {
-            ui.label("Total ore goal");
+            let active = self
+                .own_resource_job()
+                .is_some_and(|job| !job.phase.is_terminal());
+            ui.label(if active {
+                "Next goal"
+            } else {
+                "Total ore goal"
+            });
             ui.add(
                 egui::DragValue::new(&mut self.resource_goal)
                     .range(1..=arkline_protocol::MAX_RESOURCE_JOB_UNITS)
@@ -312,7 +332,7 @@ impl Cockpit {
             if ui
                 .add_enabled(
                     self.can_operate() && self.resource_start_reason().is_none(),
-                    egui::Button::new("Start gathering"),
+                    egui::Button::new("Start mining routine"),
                 )
                 .clicked()
             {
@@ -325,6 +345,14 @@ impl Cockpit {
         });
         if let Some(reason) = self.resource_start_reason() {
             ui.colored_label(MUTED, reason);
+        }
+        if self
+            .own_resource_job()
+            .is_some_and(|job| !job.phase.is_terminal())
+        {
+            ui.small(
+                "Next goal applies only to a new routine. The assigned goal below stays unchanged.",
+            );
         }
         ui.small(format!(
             "{} ore per hold · approximately {} trips · repeats until stored",
@@ -350,7 +378,7 @@ impl Cockpit {
                         self.can_operate()
                             && self.resource_authorized()
                             && !job.phase.is_terminal(),
-                        egui::Button::new("Cancel job"),
+                        egui::Button::new("Cancel routine"),
                     )
                     .clicked()
                 {
@@ -365,7 +393,7 @@ impl Cockpit {
             }
             ui.label(&job.message);
             ui.small(format!(
-                "Goal {} · confirmed mined {} · stored {}",
+                "Assigned goal {} · confirmed mined {} · stored {}",
                 job.target_units, job.mined_units, job.stored_units
             ));
             ui.add(

@@ -238,6 +238,12 @@ pub struct EmbeddedClient {
     editor_input: EditorInputGate,
 }
 impl EmbeddedClient {
+    /// Opens deterministic mining controls without starting the clock or a job.
+    pub fn open_mining_panel(&mut self) {
+        self.cockpit.service_tab = ServiceTab::ShipComputer;
+        self.cockpit.services_open = true;
+    }
+
     pub fn new(cc: &eframe::CreationContext<'_>, data_dir: PathBuf, pilot: String) -> Self {
         let mut cockpit = Cockpit::new(
             cc,
@@ -3328,6 +3334,19 @@ mod tests {
             "positive horizontal mouse delta should turn right"
         );
         assert!(pitch > 0.0, "upward mouse delta should pitch upward");
+    }
+
+    #[test]
+    fn opening_mining_panel_preserves_paused_world_and_sends_no_request() {
+        let (mut client, requests) = debug_fixture();
+        let before = serde_json::to_value(client.snapshot()).unwrap();
+        let state = client.state.clone();
+        client.open_mining_panel();
+        assert!(client.cockpit.service_tab == ServiceTab::ShipComputer);
+        assert!(client.cockpit.services_open);
+        assert_eq!(client.state, state);
+        assert_eq!(serde_json::to_value(client.snapshot()).unwrap(), before);
+        assert!(requests.try_recv().is_err());
     }
 
     fn debug_fixture() -> (EmbeddedClient, Receiver<Request>) {

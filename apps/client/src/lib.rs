@@ -793,7 +793,7 @@ impl Cockpit {
             drone_attack_target: None,
             prop_kind: SurfacePropKind::Crate,
             prop_offset: [20.0, 0.0, 0.0],
-            resource_goal: 100,
+            resource_goal: cargo_capacity(ShipClass::Pioneer),
             resource_pilot: None,
             fleet_controller: String::new(),
             remote_ship: None,
@@ -1995,7 +1995,6 @@ impl Cockpit {
                     | ServiceTab::Hangar
                     | ServiceTab::Modules
                     | ServiceTab::Drones
-                    | ServiceTab::ShipComputer
                     | ServiceTab::Sandbox
             )
     }
@@ -2022,8 +2021,8 @@ impl Cockpit {
                     (ServiceTab::Drones, "Drones", "Drone fleet and cameras"),
                     (
                         ServiceTab::ShipComputer,
-                        "AI",
-                        "Ship computer and resource jobs",
+                        "Mining",
+                        "Repeat mining and station delivery routine",
                     ),
                     (ServiceTab::Cargo, "Inventory", "Cargo and station storage"),
                     (ServiceTab::Station, "Station", "Station services"),
@@ -2070,7 +2069,6 @@ impl Cockpit {
                 ServiceTab::Navigation
                     | ServiceTab::Modules
                     | ServiceTab::Drones
-                    | ServiceTab::ShipComputer
                     | ServiceTab::Sandbox
                     | ServiceTab::Hangar
                     | ServiceTab::Station
@@ -4057,7 +4055,7 @@ impl eframe::App for Cockpit {
                             (ServiceTab::Cargo, "▣", "Inventory"),
                             (ServiceTab::Modules, "M", "Mining modules"),
                             (ServiceTab::Drones, "D", "Drone fleet"),
-                            (ServiceTab::ShipComputer, "AI", "Ship computer"),
+                            (ServiceTab::ShipComputer, "Mining", "Mining routine"),
                             (ServiceTab::Corporation, "C", "Corporation"),
                             (ServiceTab::Exchange, "⇄", "Exchange"),
                             (ServiceTab::Activity, "≡", "Activity"),
@@ -4199,7 +4197,9 @@ impl eframe::App for Cockpit {
         }
         if self.services_open
             && self.service_tab != ServiceTab::Layouts
-            && (self.view_mode != ViewMode::Cockpit || in_hangar)
+            && (self.view_mode != ViewMode::Cockpit
+                || in_hangar
+                || self.service_tab == ServiceTab::ShipComputer)
         {
             let mut open = true;
             let (panel_pos, panel_size) = self.layout.position(
@@ -4211,42 +4211,50 @@ impl eframe::App for Cockpit {
                 } else {
                     Vec2::new(64.0, 164.0)
                 },
-                Vec2::new(if in_hangar { 350.0 } else { 620.0 }, 310.0),
+                Vec2::new(
+                    if in_hangar { 350.0 } else { 620.0 },
+                    if self.service_tab == ServiceTab::ShipComputer {
+                        (bounds.height() - 64.0).clamp(310.0, 600.0)
+                    } else {
+                        310.0
+                    },
+                ),
             );
             let mut content_size = None;
-            let panel_response = egui::Window::new(
-                if self.own().is_some_and(|p| p.location == Location::Docked) {
+            let panel_response =
+                egui::Window::new(if self.service_tab == ServiceTab::ShipComputer {
+                    "Mining routine"
+                } else if self.own().is_some_and(|p| p.location == Location::Docked) {
                     "Station services"
                 } else {
                     "Personal services"
-                },
-            )
-            .id(egui::Id::new("cockpit_services_overlay").with(self.layout.generation))
-            .open(&mut open)
-            .current_pos(panel_pos)
-            .default_size(panel_size)
-            .max_width(bounds.width() - 20.0)
-            .resize(|resize| {
-                if self.layout.reflow {
-                    resize.min_size(panel_size).max_size(panel_size)
-                } else {
-                    resize
-                }
-            })
-            .min_width(if in_hangar { 280.0 } else { 400.0 })
-            .max_height(bounds.height() - 30.0)
-            .resizable(!self.layout.pinned)
-            .movable(!self.layout.pinned)
-            .collapsible(true)
-            .constrain_to(bounds)
-            .frame(self.overlay_frame(ctx))
-            .vscroll(true)
-            .show(ctx, |ui| {
-                content_size = Some(ui.max_rect().size());
-                self.service_tabs(ui);
-                ui.separator();
-                self.service_content(ui);
-            });
+                })
+                .id(egui::Id::new("cockpit_services_overlay").with(self.layout.generation))
+                .open(&mut open)
+                .current_pos(panel_pos)
+                .default_size(panel_size)
+                .max_width(bounds.width() - 20.0)
+                .resize(|resize| {
+                    if self.layout.reflow {
+                        resize.min_size(panel_size).max_size(panel_size)
+                    } else {
+                        resize
+                    }
+                })
+                .min_width(if in_hangar { 280.0 } else { 400.0 })
+                .max_height(bounds.height() - 30.0)
+                .resizable(!self.layout.pinned)
+                .movable(!self.layout.pinned)
+                .collapsible(true)
+                .constrain_to(bounds)
+                .frame(self.overlay_frame(ctx))
+                .vscroll(true)
+                .show(ctx, |ui| {
+                    content_size = Some(ui.max_rect().size());
+                    self.service_tabs(ui);
+                    ui.separator();
+                    self.service_content(ui);
+                });
             if let Some(response) = panel_response {
                 self.layout.record(
                     "services",
@@ -4776,6 +4784,86 @@ mod tests {
     }
 
     #[test]
+    fn mining_panel_is_readable_on_foot_and_start_remains_disabled() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        cockpit.service_tab = ServiceTab::ShipComputer;
+        let pilot = &mut cockpit.snapshot.as_mut().unwrap().pilots[0];
+        pilot.location = Location::Docked;
+        pilot.station_avatar = Some(StationAvatar {
+            sprinting: false,
+            docked_traversal: None,
+            onboard_interior: false,
+            interior_deck: 1,
+            jump_started_ms: None,
+            seated: false,
+            position: hangar_layout(pilot.ship_class).boarding_point,
+            heading: 0.,
+            moving: false,
+            updated_at_ms: 0,
+        });
+        assert!(cockpit.service_visible(ServiceTab::ShipComputer));
+        assert!(cockpit.resource_start_reason().unwrap().contains("Enter"));
+        let before = serde_json::to_value(&cockpit.snapshot).unwrap();
+        let (tx, rx) = mpsc::channel();
+        cockpit.commands = Some(tx);
+        let mut target = None;
+        let mut labels = Vec::new();
+        for pass in 0..4 {
+            let events = match (pass, target) {
+                (2, Some(pos)) => vec![
+                    egui::Event::PointerMoved(pos),
+                    egui::Event::PointerButton {
+                        pos,
+                        button: egui::PointerButton::Primary,
+                        pressed: true,
+                        modifiers: Default::default(),
+                    },
+                ],
+                (3, Some(pos)) => vec![egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: false,
+                    modifiers: Default::default(),
+                }],
+                _ => vec![],
+            };
+            let output = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        Pos2::ZERO,
+                        egui::vec2(900., 1200.),
+                    )),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| cockpit.service_content(ui));
+                },
+            );
+            labels.clear();
+            for shape in output.shapes {
+                if let egui::Shape::Text(text) = shape.shape {
+                    labels.push(text.galley.text().to_owned());
+                    if text.galley.text() == "Start mining routine" {
+                        target = Some(text.pos + text.galley.size() * 0.5);
+                    }
+                }
+            }
+        }
+        assert!(target.is_some());
+        assert!(labels.iter().any(|text| text == "Mining routine"));
+        assert!(labels
+            .iter()
+            .any(|text| text.contains("Status remains visible on foot")));
+        assert!(
+            rx.try_recv().is_err(),
+            "Disabled Start must not send a request"
+        );
+        assert_eq!(serde_json::to_value(&cockpit.snapshot).unwrap(), before);
+    }
+
+    #[test]
     fn resource_job_requires_explicit_worker_permission_and_ready_ship() {
         let ctx = egui::Context::default();
         let mut cockpit = view_test_cockpit(&ctx);
@@ -4844,6 +4932,7 @@ mod tests {
         let (tx, rx) = mpsc::channel();
         cockpit.commands = Some(tx);
         let mut target = None;
+        assert!(rx.try_recv().is_err());
         for pass in 0..4 {
             let events = match (pass, target) {
                 (2, Some(pos)) => vec![
@@ -4878,14 +4967,14 @@ mod tests {
             );
             for shape in output.shapes {
                 if let egui::Shape::Text(text) = shape.shape {
-                    if text.galley.text() == "Start gathering" {
+                    if text.galley.text() == "Start mining routine" {
                         target = Some(text.pos + text.galley.size() * 0.5);
                     }
                 }
             }
         }
         assert!(
-            matches!(rx.try_recv().unwrap(),Request::StartResourceJob {target_units:100,pilot:Some(name)} if name=="worker")
+            matches!(rx.try_recv().unwrap(),Request::StartResourceJob {target_units,pilot:Some(name)} if name=="worker" && target_units == cargo_capacity(ShipClass::Pioneer))
         );
         cockpit.ai_pin = Some(("worker".into(), cockpit.connection_generation));
         cockpit.resource_pilot = None;
