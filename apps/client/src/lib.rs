@@ -2100,10 +2100,7 @@ impl Cockpit {
         if self.own().is_some_and(|p| p.station_avatar.is_some())
             && matches!(
                 self.service_tab,
-                ServiceTab::Navigation
-                    | ServiceTab::Modules
-                    | ServiceTab::Sandbox
-                    | ServiceTab::Station
+                ServiceTab::Navigation | ServiceTab::Modules | ServiceTab::Sandbox
             )
         {
             self.station_actions(ui);
