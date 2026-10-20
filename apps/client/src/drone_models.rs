@@ -389,10 +389,11 @@ fn attack(b: &mut Builder, p: &Primitives) {
         Vec3::new(0.017, 0.0059, 0.011),
         q,
     );
+    // Recess beneath the identification strip; coplanar color batches flicker.
     b.part(
         &p.armor,
         ARMOR,
-        Vec3::new(-0.005, 0.0066, 0.0),
+        Vec3::new(-0.005, 0.0064, 0.0),
         Vec3::new(0.013, 0.0024, 0.004),
         q,
     );
@@ -432,11 +433,12 @@ fn attack(b: &mut Builder, p: &Primitives) {
             Vec3::new(0.0003, 0.0013, 0.0013),
             q,
         );
+        // Keep the retaining bands proud of the pod skin on both side faces.
         b.part(
             &p.shell,
             RECESS,
             Vec3::new(-0.005, -0.0005, side * 0.025),
-            Vec3::new(0.015, 0.0045, 0.005),
+            Vec3::new(0.015, 0.0045, 0.0048),
             q,
         );
         b.part(
