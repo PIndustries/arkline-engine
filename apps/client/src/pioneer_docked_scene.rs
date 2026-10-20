@@ -151,6 +151,145 @@ fn panel_surface_role(material: PioneerDockedMaterial) -> surface_roles::Surface
         PioneerDockedMaterial::Glass => SurfaceRole::InstrumentGlass,
     }
 }
+/// Fitted skins stay inside the authoritative boxes. Leaf-local details inherit
+/// the received actuator transform in station, walking and flight views alike.
+fn airlock_finish(id: &str, bounds: &PioneerDockedBox, frame: Mat4) -> Vec<ModelPart> {
+    use surface_roles::SurfaceRole;
+    let mut parts = Vec::new();
+    // Hatch axes are left-handed. Symmetric box bounds allow reversing local
+    // X without changing the occupied envelope; fitted cube faces then retain
+    // their outward winding and normals instead of exposing their back faces.
+    let handedness = vector(bounds.axes[0])
+        .cross(vector(bounds.axes[1]))
+        .dot(vector(bounds.axes[2]))
+        .signum();
+    let mount = frame
+        * box_matrix(bounds)
+        * Mat4::from_scale(vector(bounds.half_m).recip())
+        * Mat4::from_scale(Vec3::new(handedness, 1.0, 1.0));
+    let h = vector(bounds.half_m);
+    let graphite = Vec3::new(0.035, 0.052, 0.056);
+    let alloy = Vec3::new(0.30, 0.36, 0.36);
+    let accent = if id.contains("inner") {
+        Vec3::new(0.035, 0.25, 0.15)
+    } else {
+        Vec3::new(0.48, 0.31, 0.08)
+    };
+    let mut block = |center: Vec3, half: Vec3, color: Vec3, role: SurfaceRole| {
+        parts.push((
+            role.cube(),
+            mount * Mat4::from_scale_rotation_translation(half, Quat::IDENTITY, center),
+            color,
+            0.0,
+        ));
+    };
+    block(
+        Vec3::ZERO,
+        Vec3::new(h.x - 0.0005, h.y - 0.0005, 0.020),
+        graphite,
+        SurfaceRole::Composite,
+    );
+    if id.contains("-leaf/") {
+        // Both faces are finished, with deep panel joints rather than painted glow.
+        for face in [-1.0, 1.0] {
+            let z = face * (h.z - 0.020);
+            for (y, height) in [(-0.43, 0.67), (0.73, 0.36)] {
+                block(
+                    Vec3::new(0.0, y, z),
+                    Vec3::new(h.x - 0.027, height, 0.009),
+                    alloy,
+                    SurfaceRole::ExposedAlloy,
+                );
+            }
+            block(
+                Vec3::new(0.0, 0.245, face * (h.z - 0.007)),
+                Vec3::new(h.x - 0.04, 0.045, 0.005),
+                accent,
+                SurfaceRole::EnamelTrim,
+            );
+            // Flush vertical stiffeners and recessed latch plate follow each leaf.
+            for side in [-1.0, 1.0] {
+                block(
+                    Vec3::new(side * (h.x - 0.058), -0.42, face * (h.z - 0.006)),
+                    Vec3::new(0.012, 0.58, 0.004),
+                    alloy,
+                    SurfaceRole::ExposedAlloy,
+                );
+            }
+            block(
+                Vec3::new(0.0, -0.10, face * (h.z - 0.006)),
+                Vec3::new(0.045, 0.15, 0.004),
+                graphite,
+                SurfaceRole::CoatedPanel,
+            );
+            block(
+                Vec3::new(0.0, 0.74, face * (h.z - 0.006)),
+                Vec3::new(0.21, 0.075, 0.002),
+                graphite,
+                SurfaceRole::CoatedPanel,
+            );
+            // Small durable stencilled side identifiers, not simulated indicators.
+            let word = if id.contains("inner") {
+                "CABIN"
+            } else {
+                "LIFT"
+            };
+            let cell = 0.018;
+            let width = (word.len() * 4 - 1) as f32 * cell;
+            for (letter, ch) in word.chars().enumerate() {
+                let rows = match ch {
+                    'C' => [7, 4, 4, 4, 7],
+                    'A' => [2, 5, 7, 5, 5],
+                    'B' => [6, 5, 6, 5, 6],
+                    'I' => [7, 2, 2, 2, 7],
+                    'N' => [5, 7, 7, 7, 5],
+                    'L' => [4, 4, 4, 4, 7],
+                    'F' => [7, 4, 6, 4, 4],
+                    'T' => [7, 2, 2, 2, 2],
+                    _ => [0; 5],
+                };
+                for (row, bits) in rows.into_iter().enumerate() {
+                    for col in 0..3 {
+                        if bits & (1 << (2 - col)) != 0 {
+                            let x = -width * 0.5 + (letter * 4 + col) as f32 * cell + cell * 0.5;
+                            block(
+                                Vec3::new(
+                                    face * x,
+                                    0.74 + (2.0 - row as f32) * cell,
+                                    face * (h.z - 0.0015),
+                                ),
+                                Vec3::new(cell * 0.43, cell * 0.43, 0.001),
+                                Vec3::new(0.72, 0.76, 0.69),
+                                SurfaceRole::EnamelTrim,
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        // Frame caps and inset seals never narrow the doorway or create a sill.
+        let face_half = Vec3::new((h.x - 0.008).max(0.008), (h.y - 0.008).max(0.008), 0.006);
+        for face in [-1.0, 1.0] {
+            block(
+                Vec3::new(0.0, 0.0, face * (h.z - 0.008)),
+                face_half,
+                alloy,
+                SurfaceRole::ExposedAlloy,
+            );
+            if id.contains("/jamb/") {
+                block(
+                    Vec3::new(0.0, 0.36, face * (h.z - 0.0015)),
+                    Vec3::new(h.x - 0.012, 0.22, 0.001),
+                    accent,
+                    SurfaceRole::EnamelTrim,
+                );
+            }
+        }
+    }
+    parts
+}
+
 fn panel_parts(
     geometry: &PioneerDockedGeometry,
     frame: Mat4,
@@ -164,7 +303,15 @@ fn panel_parts(
                 && (!skip_rooms || panel.kind != PioneerDockedPanelKind::RoomObstacle)
         })
         .flat_map(move |panel| {
-            if panel.material == PioneerDockedMaterial::FittedBulkhead {
+            if panel.id.starts_with("boarding/inner-leaf/")
+                || panel.id.starts_with("boarding/outer-leaf/")
+                || panel.id.starts_with("boarding/inner/jamb/")
+                || panel.id.starts_with("boarding/outer/jamb/")
+                || panel.id == "boarding/inner/header"
+                || panel.id == "boarding/outer/header"
+            {
+                airlock_finish(&panel.id, &panel.bounds, frame)
+            } else if panel.material == PioneerDockedMaterial::FittedBulkhead {
                 let center = vector(panel.bounds.center_m);
                 let half = vector(panel.bounds.half_m);
                 pioneer_interior::architectural_bulkhead_parts(
@@ -800,6 +947,64 @@ pub(super) fn show(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn airlock_finish_stays_inside_authoritative_frame_and_moving_leaf_boxes() {
+        let cache = SceneCache::new(arkline_protocol::default_pioneer()).unwrap();
+        let mut boxes = cache
+            .geometry
+            .panels
+            .iter()
+            .filter(|p| p.id.starts_with("boarding/inner/") || p.id.starts_with("boarding/outer/"))
+            .map(|p| (p.id.clone(), p.bounds.clone()))
+            .collect::<Vec<_>>();
+        for hatch in [
+            arkline_protocol::PioneerDockedHatch::Inner,
+            arkline_protocol::PioneerDockedHatch::Outer,
+        ] {
+            for step in 0..=20 {
+                for (leaf, bounds) in arkline_protocol::hatch_leaf_bounds(hatch, step as f64 / 20.0)
+                    .unwrap()
+                    .into_iter()
+                    .enumerate()
+                {
+                    boxes.push((
+                        format!(
+                            "boarding/{}-leaf/{leaf}",
+                            if hatch == arkline_protocol::PioneerDockedHatch::Inner {
+                                "inner"
+                            } else {
+                                "outer"
+                            }
+                        ),
+                        bounds,
+                    ));
+                }
+            }
+        }
+        assert!(boxes.len() >= 90);
+        for (id, bounds) in boxes {
+            let inverse = box_matrix(&bounds).inverse();
+            for (_, model, _, emission) in airlock_finish(&id, &bounds, Mat4::IDENTITY) {
+                assert!(
+                    model.determinant() > 0.0,
+                    "{id}: fitted faces must keep outward winding"
+                );
+                assert_eq!(
+                    emission, 0.0,
+                    "Static finish must not fabricate powered telemetry"
+                );
+                for x in [-1.0, 1.0] {
+                    for y in [-1.0, 1.0] {
+                        for z in [-1.0, 1.0] {
+                            let local = (inverse * model).transform_point3(Vec3::new(x, y, z));
+                            assert!(local.abs().max_element() <= 1.0001, "{id}: finish protrudes beyond canonical collision/sweep envelope: {local:?}");
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     fn frame(view: &mut HangarView, ctx: &egui::Context, pilot: &PilotView, now: u64, time: f64) {
         let _ = ctx.run(
             egui::RawInput {
