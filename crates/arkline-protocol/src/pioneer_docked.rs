@@ -2179,6 +2179,39 @@ fn pane_box(min: [f64; 3], max: [f64; 3]) -> PioneerDockedBox {
 mod tests {
     use super::*;
 
+    #[test]
+    fn boarding_lift_station_edge_remains_blocked_by_closed_safety_gate() {
+        let document = crate::default_pioneer_room_layout();
+        let binding = crate::docked_traversal_binding(
+            "regression-pioneer".into(),
+            &document,
+            crate::FleetLayoutRevision::CircularV1,
+            true,
+        );
+        let pose = crate::docked_binding_pose(&binding).unwrap();
+        let geometry = registered_geometry(&document).unwrap();
+        let feet = [35.21121219213874, 0.0, 12.87997700947309];
+        let mut actuator = state(pose);
+        actuator.hatch_fractions = Some([0.0, 0.0]);
+        actuator.inner_hatch_open = false;
+        actuator.outer_hatch_open = false;
+        actuator.lift_floor_station_m = 0.0;
+        let at_station = dynamic_geometry(pose, actuator).unwrap();
+        assert!(capsule_clear_station(&geometry, &at_station, pose, feet));
+        for height in [0.005, 0.01, 0.025, 0.05] {
+            actuator.lift_floor_station_m = height;
+            let dynamic = dynamic_geometry(pose, actuator).unwrap();
+            let riding = [feet[0], height, feet[2]];
+            let blocked = blockers(&geometry, &dynamic, station_to_body(pose, riding));
+            eprintln!("lift floor {height}: capsule blockers {blocked:?}");
+            if height < 0.01 {
+                assert!(blocked.is_empty());
+            } else {
+                assert_eq!(blocked, vec!["boarding/lift-gate/station"]);
+            }
+        }
+    }
+
     fn state(pose: PioneerDockedPose) -> PioneerDockedActuators {
         PioneerDockedActuators {
             hatch_fractions: None,

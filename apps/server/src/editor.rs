@@ -1243,6 +1243,138 @@ mod tests {
         std::fs::remove_dir_all(path).unwrap();
     }
 
+    #[test]
+    #[ignore = "Explicit preserved-copy regression for a saved blocked boarding lift"]
+    fn saved_boarding_lift_gate_copy_recovers_without_relocation() {
+        let directory = PathBuf::from(
+            std::env::var_os("ARKLINE_LIFT_RECOVERY_COPY").expect("explicit disposable copy"),
+        );
+        assert!(directory.starts_with(std::env::temp_dir()) || directory.starts_with("/tmp"));
+        assert!(directory
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .starts_with("arkline-lift-recovery-copy-"));
+        let path = directory.join(".arkline-studio/world.sqlite");
+        let db = rusqlite::Connection::open(&path).unwrap();
+        let json: String = db
+            .query_row("select json from world", [], |r| r.get(0))
+            .unwrap();
+        let before: World = serde_json::from_str(&json).unwrap();
+        let clock: String = db
+            .query_row("select time_ms from editor_clock", [], |r| r.get(0))
+            .unwrap();
+        let now: u64 = clock.parse().unwrap();
+        let ledger = |db: &rusqlite::Connection| -> Vec<(i64, String)> {
+            db.prepare("select sequence,json from ledger order by sequence")
+                .unwrap()
+                .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+                .unwrap()
+                .map(Result::unwrap)
+                .collect()
+        };
+        let original_ledger = ledger(&db);
+        drop(db);
+        let name = "PioneerFinish11QA";
+        let get_state = |w: &World| {
+            w.pilots[name]
+                .view
+                .station_avatar
+                .as_ref()
+                .unwrap()
+                .docked_traversal
+                .clone()
+                .unwrap()
+        };
+        let original = get_state(&before);
+        let document = default_pioneer_room_layout();
+        let geometry = arkline_protocol::pioneer_docked::registered_geometry(&document).unwrap();
+        let mut held = before.clone();
+        docked_traversal::advance(&mut held, now + 50, Some(&document)).unwrap();
+        docked_traversal::validate_room_layout(&held, &document).unwrap();
+        let after_hold = get_state(&held);
+        assert_eq!(after_hold.feet_m, original.feet_m);
+        assert_eq!(
+            after_hold.actuators.lift.floor_station_m,
+            original.actuators.lift.floor_station_m
+        );
+        assert!(
+            !after_hold.actuators.lift.moving,
+            "Unsafe departure must hold instead of killing the world tick"
+        );
+        let held_json = serde_json::to_value(&held).unwrap();
+        let error = docked_traversal::execute(
+            &mut held,
+            name,
+            DockedTraversalRequest::CallLift {
+                binding: original.binding.clone(),
+                stop: DockedLiftStop::Ship,
+            },
+            now + 50,
+            Some(&document),
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("platform centre"));
+        assert_eq!(serde_json::to_value(&held).unwrap(), held_json);
+        // A separate in-memory centred rider must still travel normally. This
+        // is a fixture, never a recovery transformation of the saved avatar.
+        let mut centred = held.clone();
+        let pose = docked_binding_pose(&original.binding).unwrap();
+        let lift = arkline_protocol::pioneer_docked::lift_geometry(pose);
+        centred
+            .pilots
+            .get_mut(name)
+            .unwrap()
+            .view
+            .station_avatar
+            .as_mut()
+            .unwrap()
+            .docked_traversal
+            .as_mut()
+            .unwrap()
+            .feet_m = lift.center_station_m;
+        docked_traversal::execute(
+            &mut centred,
+            name,
+            DockedTraversalRequest::CallLift {
+                binding: original.binding.clone(),
+                stop: DockedLiftStop::Ship,
+            },
+            now + 50,
+            Some(&document),
+        )
+        .unwrap();
+        for step in 2..=650 {
+            docked_traversal::advance(&mut centred, now + step * 50, Some(&document)).unwrap();
+        }
+        let arrived = get_state(&centred);
+        assert!((arrived.actuators.lift.floor_station_m - lift.ship_floor_m).abs() < 1e-8);
+        assert!((arrived.feet_m[1] - lift.ship_floor_m).abs() < 1e-8);
+        assert!(!arrived.actuators.lift.moving);
+        assert_eq!(
+            arkline_protocol::pioneer_docked::registered_geometry(&document).unwrap(),
+            geometry
+        );
+        let mut reopened = EditorWorld::open(directory.join(".arkline-studio")).unwrap();
+        let reopened_world: World = serde_json::from_str(&persisted_world(&reopened)).unwrap();
+        let loaded = get_state(&reopened_world);
+        assert_eq!(loaded.feet_m, original.feet_m);
+        assert_eq!(loaded.heading, original.heading);
+        assert_eq!(loaded.binding, original.binding);
+        assert_eq!(
+            serde_json::to_value(&reopened_world.resource_jobs).unwrap(),
+            serde_json::to_value(&before.resource_jobs).unwrap()
+        );
+        assert_eq!(ledger(&reopened.server.db), original_ledger);
+        reopened.play();
+        reopened.advance(50).unwrap();
+        assert!(!reopened.is_paused());
+        let after: World = serde_json::from_str(&persisted_world(&reopened)).unwrap();
+        assert_eq!(get_state(&after).feet_m, original.feet_m);
+        assert_eq!(ledger(&reopened.server.db), original_ledger);
+        eprintln!("saved-world copy: edge departure held; retry rejected without mutation; centred fixture arrived; reopen and live tick passed; avatar/job/ledger/geometry preserved");
+    }
+
     fn persisted_world(world: &EditorWorld) -> String {
         world
             .server

@@ -500,6 +500,28 @@ fn clear(
         station_clear(&state.binding, feet)
     }
 }
+/// Check the carried capsule against the actual geometry of the proposed lift
+/// step, including endpoint gates that become solid when the platform departs.
+fn lift_step_clear(
+    static_geometry: &PioneerDockedGeometry,
+    pose: PioneerDockedPose,
+    state: &DockedTraversalState,
+    actuator: &DockedVesselActuators,
+    room_open: bool,
+    next_floor: f64,
+    now: u64,
+) -> Result<bool> {
+    let mut proposed = actuator.clone();
+    proposed.lift.floor_station_m = next_floor;
+    let next_geometry = geometry::dynamic_geometry(pose, dynamic(&proposed, room_open, state, now))
+        .map_err(anyhow::Error::msg)?;
+    let mut feet = state.feet_m;
+    if state.grounded && state.support == DockedSupport::BoardingLift {
+        feet[1] += next_floor - actuator.lift.floor_station_m;
+    }
+    Ok(clear(static_geometry, &next_geometry, pose, state, feet))
+}
+
 pub(super) fn can_undock(w: &World, name: &str) -> Result<()> {
     if let Some(account) = w.accounts.get(name) {
         if let Some(host) = account.vessel_id(ShipClass::Pioneer) {
@@ -818,6 +840,16 @@ pub(super) fn execute(
                     // a hatch/control tolerance; no command snaps the platform.
                     actuator.lift.moving =
                         (actuator.lift.floor_station_m - target).abs() > LIFT_TARGET_EPSILON_M;
+                    if actuator.lift.moving {
+                        let first_floor = actuator.lift.floor_station_m
+                            + (target - actuator.lift.floor_station_m)
+                                .clamp(-LIFT_SPEED_MPS * 0.025, LIFT_SPEED_MPS * 0.025);
+                        ensure!(
+                            lift_step_clear(&static_geometry, pose, &state, &actuator,
+                                room_open(w, name), first_floor, now)?,
+                            "boarding lift gate blocked; move toward the platform centre before calling the lift"
+                        );
+                    }
                 }
                 DockedTraversalRequest::LeaveSeat { .. } | DockedTraversalRequest::Walk { .. } => {
                     unreachable!()
@@ -868,9 +900,24 @@ fn advance_actor(
                     DockedLiftStop::Station => lift_geometry.station_floor_m,
                 };
                 let delta = (target - old_floor).clamp(-LIFT_SPEED_MPS * dt, LIFT_SPEED_MPS * dt);
-                actuator.lift.floor_station_m += delta;
-                if (target - actuator.lift.floor_station_m).abs() <= LIFT_TARGET_EPSILON_M {
-                    actuator.lift.floor_station_m = target;
+                let next_floor = old_floor + delta;
+                if lift_step_clear(
+                    static_geometry,
+                    pose,
+                    state,
+                    actuator,
+                    room_open,
+                    next_floor,
+                    next,
+                )? {
+                    actuator.lift.floor_station_m = next_floor;
+                    if (target - next_floor).abs() <= LIFT_TARGET_EPSILON_M {
+                        actuator.lift.floor_station_m = target;
+                        actuator.lift.moving = false;
+                    }
+                } else {
+                    // Hold the last valid platform/capsule pose. A blocked gate
+                    // is an interlock, not a fatal invalid-world transaction.
                     actuator.lift.moving = false;
                 }
             }
