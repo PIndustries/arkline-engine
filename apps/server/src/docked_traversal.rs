@@ -1046,11 +1046,14 @@ fn advance_hatches(w: &mut World, now: u64) -> Result<()> {
                 let target = f64::from(hatch.target_open);
                 let step =
                     now.saturating_sub(hatch.updated_at_ms) as f64 / DOCKED_HATCH_TRAVEL_MS as f64;
-                let next = if hatch.target_open {
+                let mut next = if hatch.target_open {
                     (hatch.fraction + step).min(target)
                 } else {
                     (hatch.fraction - step).max(target)
                 };
+                // Fixed ticks can sum to 0.9999999999999999. Snap only the
+                // sub-nanometre endpoint residue so open/closed interlocks settle.
+                if (next-target).abs() < 1.0e-9 { next=target; }
                 let which = if index == 0 {
                     geometry::PioneerDockedHatch::Inner
                 } else {

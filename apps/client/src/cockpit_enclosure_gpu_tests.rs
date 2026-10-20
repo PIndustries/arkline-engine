@@ -217,32 +217,18 @@ fn frame(case: ViewCase, width: usize, height: usize) -> Frame {
     }
 }
 
-/// Raycast the actual retained source triangles, not a surrogate enclosure box.
+/// Raycast the same retained source-derived and installed construction triangles
+/// as the current runtime. The uncut historical rear wall is not a live surface.
 fn canonical_hit(frame: &Frame, pointer: egui::Pos2, viewport: egui::Rect) -> Option<f32> {
-    let (origin, direction) = screen_ray(frame.cockpit_vp, viewport, pointer).unwrap();
-    let ship = Mat4::from_quat(frame.rotation);
-    pioneer_asset()
-        .unwrap()
-        .iter()
-        .enumerate()
-        .filter_map(|(index, primitive)| {
-            if let Some(ranges) = cockpit_fit::canopy_ranges(10 + index) {
-                ranges
-                    .iter()
-                    .filter_map(|range| {
-                        ray_mesh_hit(
-                            origin,
-                            direction,
-                            ship,
-                            &primitive.vertices[range.start as usize..range.end as usize],
-                        )
-                    })
-                    .min_by(f32::total_cmp)
-            } else {
-                ray_mesh_hit(origin, direction, ship, &primitive.vertices)
-            }
-        })
-        .min_by(f32::total_cmp)
+    let (origin,direction)=screen_ray(frame.cockpit_vp,viewport,pointer).unwrap();
+    let geometry=flight_geometry().unwrap();
+    let mount=frame.pioneer_body_mount();
+    let parts=frame.canonical_pioneer_parts().expect("Current canonical Pioneer recipe");
+    parts.iter().filter(|part| docked_source_primitive(part.0)!=Some(6))
+        .filter_map(|part| {
+            let vertices=&geometry.catalog.uploads()[mesh_index(part.0)];
+            ray_mesh_hit(origin,direction,mount*part.1,vertices)
+        }).min_by(f32::total_cmp)
 }
 
 unsafe fn render(
@@ -395,7 +381,7 @@ fn native_pioneer_cockpit_enclosure_matches_source_and_keeps_window_apertures() 
                 assert_eq!(
                     expected.is_none(),
                     case.open_window,
-                    "{}: source triangle ray must agree with the aperture expectation",
+                    "{}: canonical runtime triangle ray must agree with the aperture expectation",
                     case.name
                 );
                 let actual_depth = depth[y * width + x];
@@ -417,7 +403,7 @@ fn native_pioneer_cockpit_enclosure_matches_source_and_keeps_window_apertures() 
                     let actual = actual_distance.expect("actual source enclosure must write depth");
                     assert!(
                         (actual - expected).abs() * 100. < 0.03,
-                        "{}: GPU surface must match actual source triangles within 3cm; actual {}m, source {}m",
+                        "{}: GPU surface must match actual canonical triangles within 3cm; actual {}m, source {}m",
                         case.name,
                         actual * 100.,
                         expected * 100.
@@ -434,7 +420,7 @@ fn native_pioneer_cockpit_enclosure_matches_source_and_keeps_window_apertures() 
                     "yaw_rad":case.yaw,"pitch_rad":case.pitch,"ship_roll_rad":case.roll,
                     "open_window":case.open_window,"eye_scene":frame.eye.to_array(),
                     "view_projection":frame.cockpit_vp.to_cols_array(),
-                    "central_surface_fraction":fraction,"source_ray_distance_m":expected.map(|value|value*100.),
+                    "central_surface_fraction":fraction,"canonical_runtime_ray_distance_m":expected.map(|value|value*100.),
                     "actual_depth_distance_m":actual_distance.map(|value|value*100.),
                     "whole_frame_surface_pixels":depth.iter().filter(|value|near_surface(**value)).count(),
                     "capture":png
