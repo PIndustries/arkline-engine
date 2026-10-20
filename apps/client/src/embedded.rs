@@ -660,6 +660,10 @@ impl EmbeddedClient {
         self.cockpit.flight_view.clear_cockpit_presentation();
         self.cockpit.hangar_view.clear_cockpit_presentation();
         self.poll();
+        // Audio follows confirmed simulation even when a non-viewport workspace
+        // owns the editor. Pausing/stale snapshots must also silence old loops.
+        self.cockpit.poll_voice();
+        self.cockpit.update_sound();
         self.cockpit.frame_intervals.clear();
         self.cockpit.frame_observed = Instant::now();
     }
@@ -3420,6 +3424,28 @@ mod tests {
             callbacks,
             client.cockpit.sound.status()
         );
+    }
+
+    #[test]
+    fn hidden_workspace_audio_tracks_running_pause_and_stale_state_without_device() {
+        let (mut client, requests) = debug_fixture();
+        client.state = EmbeddedStatus::Running;
+        let time = client.cockpit.snapshot.as_ref().unwrap().server_time_ms;
+        client.cockpit.timeline_origin = Some(time);
+        client.cockpit.observed = Instant::now();
+        client.poll_hidden();
+        assert!(client.cockpit.sound.test_output_state().2.active);
+        client.state = EmbeddedStatus::Paused;
+        client.poll_hidden();
+        assert!(!client.cockpit.sound.test_output_state().2.active);
+        client.state = EmbeddedStatus::Running;
+        client.cockpit.observed = Instant::now() - Duration::from_secs(3);
+        client.poll_hidden();
+        let (requested, callbacks, mix) = client.cockpit.sound.test_output_state();
+        assert!(!mix.active && !requested && callbacks == 0);
+        assert!(requests.try_recv().is_err());
+        client.open_sound_panel();
+        assert!(client.cockpit.services_open && client.cockpit.service_tab == ServiceTab::Settings);
     }
 
     #[test]
