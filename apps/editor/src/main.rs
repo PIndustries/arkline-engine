@@ -4,6 +4,8 @@ mod cockpit;
 mod cockpit_document;
 mod community;
 mod component_view;
+#[cfg(test)]
+mod drone_gallery_tests;
 mod engineering;
 mod engineering_document;
 mod equipment;
@@ -27,7 +29,7 @@ mod session_panel;
 #[cfg(test)]
 mod shift_embedded_tests;
 mod surface_materials;
-use arkline_client::{EmbeddedAssetGallery, EmbeddedClient, EmbeddedStatus};
+use arkline_client::{EmbeddedAssetGallery, EmbeddedClient, EmbeddedDroneGallery, EmbeddedStatus};
 use eframe::egui::{self, Color32, RichText};
 use std::{collections::VecDeque, path::PathBuf, time::Duration};
 const BUILD: &str = include_str!("../../../BUILD_VERSION");
@@ -66,6 +68,7 @@ struct Editor {
     workspace: usize,
     wireframe: bool,
     asset_gallery: Option<EmbeddedAssetGallery>,
+    drone_gallery: Option<EmbeddedDroneGallery>,
     graphics: Option<std::sync::Arc<eframe::glow::Context>>,
     render_debug: render_debug::RenderDebug,
     physics_lab: physics_lab::PhysicsLab,
@@ -122,6 +125,7 @@ impl Editor {
             workspace: 0,
             wireframe: false,
             asset_gallery: None,
+            drone_gallery: None,
             graphics: cc.gl.clone(),
             render_debug: render_debug::RenderDebug::default(),
             physics_lab: physics_lab::PhysicsLab::default(),
@@ -398,6 +402,10 @@ impl eframe::App for Editor {
         egui::TopBottomPanel::top("workspace_tabs").show(ctx, |ui| {
             ui.horizontal_wrapped(|ui| {
                 ui.menu_button("Model", |ui| {
+                    if ui.button("Drone models").clicked() {
+                        self.workspace = 8;
+                        ui.close_menu();
+                    }
                     if ui.button("GLB preview").clicked() {
                         self.workspace = 5;
                         ui.close_menu();
@@ -566,6 +574,17 @@ impl eframe::App for Editor {
             {
                 self.client.send_command(request);
             }
+            self.session_controls(ctx);
+            ctx.request_repaint_after(Duration::from_millis(33));
+            return;
+        }
+        if self.workspace == 8 {
+            self.client.poll_hidden();
+            egui::CentralPanel::default().show(ctx, |ui| {
+                self.drone_gallery
+                    .get_or_insert_with(|| EmbeddedDroneGallery::new(self.graphics.as_ref()))
+                    .show(ui);
+            });
             self.session_controls(ctx);
             ctx.request_repaint_after(Duration::from_millis(33));
             return;
@@ -856,6 +875,9 @@ impl eframe::App for Editor {
         if let Some(gallery) = &mut self.asset_gallery {
             gallery.destroy();
         }
+        if let Some(gallery) = &mut self.drone_gallery {
+            gallery.destroy();
+        }
     }
 }
 fn project_path(
@@ -1038,7 +1060,7 @@ mod tests {
             "isolated test authority did not become ready; status={:?}",
             editor.client.status()
         );
-        for workspace in [0, 2, 6, 7, 0] {
+        for workspace in [0, 2, 6, 7, 8, 0] {
             editor.workspace = workspace;
             for _ in 0..3 {
                 let output = ctx.run(
@@ -1127,7 +1149,7 @@ mod tests {
             editor.client.status()
         );
 
-        for workspace in [0, 3] {
+        for workspace in [0, 3, 8] {
             editor.workspace = workspace;
             editor.session_panel.open = true;
             let output = ctx.run(

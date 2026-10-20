@@ -19,10 +19,11 @@ pub(super) fn build(
     frame: &Frame,
     catalog: &DepthMeshCatalog,
     station_batches: &[(usize, Vec3, f32)],
+    drone_parts: &[Arc<Vec<ModelPart>>; 3],
     turrets: &HashMap<(String, u8), TurretState>,
 ) -> Option<(Vec<DepthDraw>, Vec<DepthDraw>)> {
     Some((
-        external_draws(frame, catalog, station_batches, turrets)?,
+        external_draws(frame, catalog, station_batches, drone_parts, turrets)?,
         own_cockpit_draws(frame, catalog)?,
     ))
 }
@@ -86,6 +87,7 @@ fn external_draws(
     frame: &Frame,
     catalog: &DepthMeshCatalog,
     station_batches: &[(usize, Vec3, f32)],
+    drone_parts: &[Arc<Vec<ModelPart>>; 3],
     turrets: &HashMap<(String, u8), TurretState>,
 ) -> Option<Vec<DepthDraw>> {
     let mut out = Collector::new(catalog);
@@ -176,24 +178,9 @@ fn external_draws(
             if frame.camera_drone == Some(drone.id) && pilot.name == frame.own {
                 continue;
             }
-            let base = transform(
-                space.scene(drone_present_position(drone, frame.now)),
-                Vec3::ONE,
-                orientation(drone.heading).unwrap_or(Quat::IDENTITY),
-            );
-            out.push(
-                0,
-                base * transform(Vec3::ZERO, Vec3::new(0.025, 0.009, 0.017), Quat::IDENTITY),
-            )?;
-            for side in [-1.0, 1.0] {
-                out.push(
-                    0,
-                    base * transform(
-                        Vec3::new(0.0, 0.0, side * 0.023),
-                        Vec3::new(0.012, 0.004, 0.007),
-                        Quat::IDENTITY,
-                    ),
-                )?;
+            let base = drone_model_transform(space, drone, frame.now);
+            for &(mesh, local, _, _) in drone_parts[drone_models::class_index(drone.class)].iter() {
+                out.push(mesh, base * local)?;
             }
         }
     }

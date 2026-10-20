@@ -63,6 +63,11 @@ unsafe fn draw_framebuffer_depth_bits(gl: &glow::Context) -> i32 {
 #[path = "imported_asset.rs"]
 pub mod imported_asset;
 
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "drone_gallery.rs"]
+pub mod drone_gallery;
+#[path = "drone_models.rs"]
+mod drone_models;
 #[path = "ship_asset.rs"]
 mod ship_asset;
 
@@ -1032,6 +1037,7 @@ impl FlightView {
                         &frame,
                         &catalog,
                         &renderer.station_batches,
+                        &renderer.drone_parts,
                         &renderer.turrets,
                     )?;
                     CockpitOcclusion::new(class, catalog, external, own).map(Arc::new)
@@ -1043,6 +1049,7 @@ impl FlightView {
                         &frame,
                         &geometry.catalog,
                         &geometry.station_batches,
+                        &geometry.drone_parts,
                         &self.headless_turrets,
                     )?;
                     CockpitOcclusion::new(class, geometry.catalog.clone(), external, own)
@@ -2395,6 +2402,7 @@ fn prepare_turrets(
 struct FlightGeometry {
     catalog: Arc<DepthMeshCatalog>,
     station_batches: Vec<(usize, Vec3, f32)>,
+    drone_parts: [Arc<Vec<ModelPart>>; 3],
 }
 fn flight_geometry() -> Result<Arc<FlightGeometry>, String> {
     static GEOMETRY: std::sync::OnceLock<Result<Arc<FlightGeometry>, String>> =
@@ -2420,14 +2428,50 @@ fn flight_geometry() -> Result<Arc<FlightGeometry>, String> {
                 station_batches.push((upload.len(), color, emission));
                 upload.push(vertices);
             }
+            // Append after all existing uploads so ship, floor and station mesh
+            // indices stay stable. Flight, inspection, depth and pointer rays
+            // retain these exact same baked vertices and material tuples.
+            let drone_parts = drone_models::CLASSES.map(|class| {
+                Arc::new(
+                    drone_models::model(class)
+                        .batches
+                        .iter()
+                        .map(|batch| {
+                            let mesh = upload.len();
+                            upload.push(batch.vertices.clone());
+                            (mesh, Mat4::IDENTITY, batch.color, batch.emission)
+                        })
+                        .collect(),
+                )
+            });
             Ok(Arc::new(FlightGeometry {
                 catalog: Arc::new(DepthMeshCatalog::new(
                     upload.into_iter().map(Arc::from).collect(),
                 )),
                 station_batches,
+                drone_parts,
             }))
         })
         .clone()
+}
+
+#[cfg(any(not(target_arch = "wasm32"), test))]
+fn cached_drone_parts(class: arkline_protocol::DroneClass) -> Result<Arc<Vec<ModelPart>>, String> {
+    Ok(flight_geometry()?.drone_parts[drone_models::class_index(class)].clone())
+}
+
+#[cfg(any(not(target_arch = "wasm32"), test))]
+fn drone_model_bounds(class: arkline_protocol::DroneClass) -> (Vec3, Vec3) {
+    let model = drone_models::model(class);
+    (model.min, model.max)
+}
+
+fn drone_model_transform(space: Space, drone: &arkline_protocol::DroneView, now: u64) -> Mat4 {
+    transform(
+        space.scene(drone_present_position(drone, now)),
+        Vec3::ONE,
+        orientation(drone.heading).unwrap_or(Quat::IDENTITY),
+    )
 }
 
 struct Renderer {
@@ -2451,6 +2495,7 @@ struct Renderer {
     uniforms: Uniforms,
     local_lights: local_lighting::Uniforms,
     station_batches: Vec<(usize, Vec3, f32)>,
+    drone_parts: [Arc<Vec<ModelPart>>; 3],
     feed_cache: Vec<CachedFeed>,
     destroyed: bool,
     sun_shadows: Vec<sun_shadows::SunShadows>,
@@ -2519,6 +2564,7 @@ impl Renderer {
             uniforms,
             local_lights,
             station_batches,
+            drone_parts: geometry.drone_parts.clone(),
             feed_cache: Vec::new(),
             destroyed: false,
             material_preview: None,
@@ -3160,32 +3206,11 @@ impl Renderer {
                 if frame.camera_drone == Some(drone.id) && pilot.name == frame.own {
                     continue;
                 }
-                let base = transform(
-                    space.scene(drone_present_position(drone, frame.now)),
-                    Vec3::ONE,
-                    orientation(drone.heading).unwrap_or(Quat::IDENTITY),
-                );
-                self.draw(
-                    0,
-                    base * transform(Vec3::ZERO, Vec3::new(0.025, 0.009, 0.017), Quat::IDENTITY),
-                    match drone.class {
-                        arkline_protocol::DroneClass::Recon => Vec3::new(0.12, 0.25, 0.20),
-                        arkline_protocol::DroneClass::Mining => Vec3::new(0.50, 0.34, 0.09),
-                        arkline_protocol::DroneClass::Attack => Vec3::new(0.48, 0.12, 0.09),
-                    },
-                    0.1,
-                );
-                for side in [-1.0, 1.0] {
-                    self.draw(
-                        0,
-                        base * transform(
-                            Vec3::new(0.0, 0.0, side * 0.023),
-                            Vec3::new(0.012, 0.004, 0.007),
-                            Quat::IDENTITY,
-                        ),
-                        Vec3::new(0.05, 0.7, 0.4),
-                        0.8,
-                    );
+                let base = drone_model_transform(space, drone, frame.now);
+                for &(mesh, local, color, emission) in
+                    self.drone_parts[drone_models::class_index(drone.class)].iter()
+                {
+                    self.draw(mesh, base * local, color, emission);
                 }
             }
         }
@@ -5719,6 +5744,100 @@ mod tests {
             .all(|(a, b)| a.p == b.p && a.n == b.n));
     }
     use super::*;
+    #[test]
+    fn drone_runtime_and_cockpit_depth_share_exact_uploaded_geometry() {
+        let geometry = flight_geometry().unwrap();
+        let source = flight_geometry().unwrap();
+        assert!(Arc::ptr_eq(&geometry, &source));
+        let first_drone_mesh = geometry.drone_parts[0][0].0;
+        assert!(geometry
+            .station_batches
+            .iter()
+            .all(|batch| batch.0 < first_drone_mesh));
+        let mut frame = frame_for_scene_clone_test();
+        frame.space = Space {
+            origin: [1000., 2000., 3000.],
+        };
+        frame.now = 1200;
+        let drones: Vec<arkline_protocol::DroneView> = drone_models::CLASSES
+            .into_iter()
+            .enumerate()
+            .map(|(i, class)| {
+                serde_json::from_value(serde_json::json!({
+                    "id": i + 1, "class": class, "position": [1025.,2025.,3025.],
+                    "velocity": [10.,0.,0.], "heading": [0.,0.,1.],
+                    "mode": {"kind":"hold"}, "updated_at_ms":1000
+                }))
+                .unwrap()
+            })
+            .collect();
+        let pilot: PilotView = serde_json::from_value(serde_json::json!({
+            "name":"fixture", "credits":0, "ore":0, "location":{"kind":"station"},
+            "drones":drones
+        }))
+        .unwrap();
+        Arc::get_mut(&mut frame.scene).unwrap().pilots.push(pilot);
+        let turrets = std::collections::HashMap::new();
+        let collect = |frame: &Frame| {
+            cockpit_occlusion_geometry::build(
+                frame,
+                &geometry.catalog,
+                &geometry.station_batches,
+                &geometry.drone_parts,
+                &turrets,
+            )
+            .unwrap()
+            .0
+            .into_iter()
+            .filter(|draw| draw.mesh >= first_drone_mesh)
+            .collect::<Vec<_>>()
+        };
+        let draws = collect(&frame);
+        let pilot = &frame.scene.pilots[0];
+        let expected_count: usize = pilot
+            .drones
+            .iter()
+            .map(|drone| geometry.drone_parts[drone_models::class_index(drone.class)].len())
+            .sum();
+        assert_eq!(draws.len(), expected_count);
+        let mut draw_index = 0;
+        for drone in &pilot.drones {
+            let cached = cached_drone_parts(drone.class).unwrap();
+            assert!(Arc::ptr_eq(
+                &cached,
+                &geometry.drone_parts[drone_models::class_index(drone.class)]
+            ));
+            let model = drone_models::model(drone.class);
+            let base = drone_model_transform(frame.space, drone, frame.now);
+            assert!(base
+                .transform_point3(Vec3::ZERO)
+                .abs_diff_eq(Vec3::new(0.27, 0.25, 0.25), 1e-6));
+            assert!(base.transform_vector3(Vec3::X).abs_diff_eq(Vec3::Z, 1e-5));
+            for (&(mesh, local, color, emission), batch) in cached.iter().zip(&model.batches) {
+                assert_eq!(color, batch.color);
+                assert_eq!(emission, batch.emission);
+                let vertices = &geometry.catalog.uploads()[mesh];
+                assert_eq!(vertices.len(), batch.vertices.len());
+                for (actual, authored) in vertices.iter().zip(&batch.vertices) {
+                    assert_eq!(actual.p, authored.p);
+                    assert_eq!(actual.n, authored.n);
+                }
+                assert_eq!(draws[draw_index].mesh, mesh);
+                assert_eq!(draws[draw_index].vertices, 0..vertices.len());
+                assert!(draws[draw_index].model.abs_diff_eq(base * local, 1e-6));
+                draw_index += 1;
+            }
+        }
+        // Preserve the actual camera-drone body exclusion, without hiding peers.
+        frame.camera_drone = Some(2);
+        assert_eq!(
+            collect(&frame).len(),
+            expected_count - geometry.drone_parts[1].len()
+        );
+        frame.own = "another pilot".into();
+        assert_eq!(collect(&frame).len(), expected_count);
+    }
+
     #[test]
     fn drone_feed_budget_and_tiles_are_bounded() {
         assert_eq!(feed_resolution(1920, 1080), (384, 216));

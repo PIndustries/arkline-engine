@@ -1,6 +1,8 @@
 #[cfg(not(target_arch = "wasm32"))]
 pub use flight3d::asset_gallery::EmbeddedAssetGallery;
 #[cfg(not(target_arch = "wasm32"))]
+pub use flight3d::drone_gallery::EmbeddedDroneGallery;
+#[cfg(not(target_arch = "wasm32"))]
 pub use flight3d::imported_asset::ImportedAssetPreview;
 pub use flight3d::imported_asset::{ImportReport, ImportedGeometry};
 #[cfg(not(target_arch = "wasm32"))]
