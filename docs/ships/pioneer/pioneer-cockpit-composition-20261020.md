@@ -21,3 +21,20 @@ Next: finish/poll current guarded workspace session, format/compile and validate
 User's new`.12` PNG was independently retrieved/viewed. The lower/default composition is now further constrained: central management is optional, default is compact flight status, all essential faces are below the primary forward region, and instrument footprint/clear rectangle are asserted in the actual native mining frame. Flight focus in the existing editor hides authoring chrome by default; Editor restores it and all existing tools. See `docs/editor-ui-priorities-20261020.md` for critical scope and later work. Client393/0, protocol55/0, server73/0 (1 ignored), editor298/0 (1 ignored) passed. Native final compact pass pending in `20261020T193121553398Z`; previous matrix6passed/1failed exposed a real seat-to-foot active-surface issue, now fixed by revoking console surface ownership on foot rather than weakening the stale-input assertion.
 
 Copied stowed user world validation passed (`20261020T191605213238Z`), exact5000 completion, accounts preserved except binding and standard restart timestamps,343 ledger rows identical. Raw-byte backups were taken before copy validation. New actual user jobs have since started in`.12`; latest observed job4 target10000 was still mining/stored2000. Preserve it; no real-world migration/restart is permitted while active. No new package is yet launched at this checkpoint.
+
+## Bounded development handoff checkpoint
+
+Final compact native matrix `20261020T193121553398Z` completed **7 passed, 0 failed** in232.44s. It covers five-drone split feeds, all five display faces, enclosure/source brace refit, shared docked/flight geometry, rear-chair/boarding path, and focused physical input. Instrument faces occupy17.4% of the native viewport; the primary forward rectangle is clear. Independent composition lane viewed the1500x960 mining capture and found all faces/housings inside view and the diagonal obstruction absent. This is native evidence; packaged desktop acceptance remains pending.
+
+Parallel UI lane fixed Sound-from-Rooms retaining the old inspector tab (`368cafe`), which otherwise immediately restored editor clutter. Build lane is ready with the unique version allocator and signature/source-archive packaging. User requested build-first delivery: no further broad workspace runs. A newly authorized gameplay lane is adding interior walking while an owned automated mining routine controls the ship, with external boarding controls prohibited in space and manual ship commands gated away from the seat.
+
+Fresh read-only original-world observation: job4 target10000 is **cancelled**, message `Manual command took control`, mined5402/stored5000; pilot is stopped at the belt with852 cargo. This was observed, not changed by this task. Original5000 completion/ledger preservation remains separately backed up. Recheck immediately before any restart; no active work may be discarded.
+
+### Integrated real-play acceptance ledger
+
+- Native: clear forward world, complete instrument edges, default management closed, five-drone feeds — passed. Actual packaged user-size viewport/chrome — pending.
+- Native: shared docked/space geometry, rear-chair path, hatches, composite input focus/stale-surface revocation — passed. Desktop view transitions/input/sprint/Mining access — pending quick sanity.
+- Gameplay: mining-autopilot interior walk/reseat without routine cancellation — new focused implementation/check pending; do not infer it from prior docked tests.
+- Audio: .12 PCM/conversion/device signal evidence retained; actual hearing remains unconfirmed.
+- World: immutable original backup and copied-world compatibility/ledger proof saved; real-world restart/migration is not yet performed.
+- Global UI: default clutter and explicit management focus are scoped changes; broader typography/navigation/panel consistency remains open. Whole experience acceptance is not claimed.
