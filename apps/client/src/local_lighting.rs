@@ -1,4 +1,4 @@
-//! Presentation lights from fresh confirmed simulation activity. No idle glow.
+//! Presentation lights from fresh confirmed activity and authored emitting fixtures.
 use super::*;
 
 pub(super) const MAX_LIGHTS: usize = 8;
@@ -71,6 +71,38 @@ fn impact_light(
         power: 5.0,
     })
 }
+/// The canonical body-metre geometry is shared with the docked renderer. A
+/// fixture tag alone never creates light: it must also carry emitted output.
+/// Keep its existing docked 30-metre range and power after the flight unit change.
+fn offer_pioneer_fixtures(frame: &Frame, lights: &mut Lights, budget: usize) {
+    if frame.ship_class != ShipClass::Pioneer {
+        return;
+    }
+    let Some(parts) = frame.pioneer_parts.as_ref() else {
+        return;
+    };
+    let mount = frame.pioneer_body_mount();
+    for &(mesh, model, color, emission) in parts.iter() {
+        if surface_roles::material(mesh) != Some(Material::FixtureDiffuser)
+            || !emission.is_finite()
+            || emission < 0.7
+            || color.min_element() <= 0.25
+        {
+            continue;
+        }
+        lights.offer(
+            Light {
+                position: mount.transform_point3(model.w_axis.truncate()),
+                range: 30.0 / 100.0,
+                color,
+                power: 2.5,
+            },
+            frame.eye,
+            budget,
+        );
+    }
+}
+
 fn collect(
     frame: &Frame,
     turrets: &std::collections::HashMap<(String, u8), TurretState>,
@@ -81,6 +113,7 @@ fn collect(
         return lights;
     }
     let budget = budget.min(if frame.drone_camera { 2 } else { MAX_LIGHTS });
+    offer_pioneer_fixtures(frame, &mut lights, budget);
     for pilot in &frame.scene.pilots {
         if pilot.system_id != frame.system_id
             || !matches!(pilot.location, Location::Station | Location::Belt)
@@ -369,6 +402,70 @@ mod tests {
         }
         assert_eq!(invalid.len, 0);
     }
+    #[test]
+    fn canonical_fixture_output_preserves_body_mount_metres_and_freshness() {
+        let mut f = frame();
+        scene_mut(&mut f).pilots.push(pilot());
+        f.rotation = Quat::from_rotation_y(0.5);
+        let body_position = Vec3::new(4.0, 2.8, 1.0);
+        let fixture = (
+            surface_roles::SurfaceRole::FixtureDiffuser.cube(),
+            Mat4::from_translation(body_position),
+            Vec3::new(0.5, 0.65, 0.55),
+            0.7,
+        );
+        let mut off = fixture;
+        off.3 = 0.0;
+        let mut screen = fixture;
+        screen.0 = surface_roles::SurfaceRole::InstrumentGlass.cube();
+        f.pioneer_parts = Some(Arc::new(vec![fixture, off, screen]));
+        let turrets = std::collections::HashMap::new();
+        let lights = collect(&f, &turrets, 4);
+        assert_eq!(lights.len, 1);
+        let expected = f.pioneer_body_mount().transform_point3(body_position);
+        assert!(lights.entries[0].position.distance(expected) < 1e-6);
+        assert!((lights.entries[0].range * 100.0 - 30.0).abs() < 1e-5);
+        f.now = 2600;
+        assert_eq!(collect(&f, &turrets, 4).len, 0);
+        f.now = 1000;
+        f.connected = false;
+        assert_eq!(collect(&f, &turrets, 4).len, 0);
+
+        // Opt-in diagnostic only: collector CPU time, not GPU cost or frame rate.
+        if std::env::var_os("ARKLINE_MEASURE_FIXTURE_LIGHTS").is_some() {
+            let parts = hangar::pioneer_docked_scene::default_body_parts()
+                .expect("canonical Pioneer geometry");
+            f.connected = true;
+            let mut measure = |parts: Option<Arc<Vec<ModelPart>>>| {
+                f.pioneer_parts = parts;
+                let count = collect(&f, &turrets, 8).len;
+                let mut samples = [0.0_f64; 7];
+                for sample in &mut samples {
+                    let start = std::time::Instant::now();
+                    for _ in 0..256 {
+                        std::hint::black_box(collect(
+                            std::hint::black_box(&f),
+                            std::hint::black_box(&turrets),
+                            8,
+                        ));
+                    }
+                    *sample = start.elapsed().as_secs_f64() * 1_000_000.0 / 256.0;
+                }
+                samples.sort_by(f64::total_cmp);
+                (samples[3], count)
+            };
+            let (baseline_us, baseline_count) = measure(None);
+            let (fixture_us, fixture_count) = measure(Some(parts.clone()));
+            eprintln!(
+                "fixture collector CPU only: median of 7 batches x 256 calls; \
+                 baseline={baseline_us:.3} us/call ({baseline_count} lights), \
+                 canonical={fixture_us:.3} us/call ({fixture_count} lights, {} parts); \
+                 GPU/FPS cost unmeasured",
+                parts.len()
+            );
+        }
+    }
+
     #[test]
     fn coasting_stale_disconnected_and_docked_cannot_emit_thruster_light() {
         let mut f = frame();

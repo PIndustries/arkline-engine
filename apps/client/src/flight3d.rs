@@ -706,6 +706,7 @@ impl FlightView {
         };
         let mut picked = None;
         let own_pilot = snapshot.pilots.iter().find(|p| p.name == pilot_name);
+        let observing_on_foot = own_pilot.is_some_and(|pilot| pilot.station_avatar.is_some());
         let camera_length = own_pilot.map_or(72.0, |p| p.ship_class.spec().length_m) as f32 / 100.0;
         let ship_distance = (camera_length * 2.5).max(1.8);
         if own_pilot.map(|p| p.ship_class) != self.camera_ship_class {
@@ -782,11 +783,17 @@ impl FlightView {
                     return;
                 }
                 if cockpit {
-                    ui.label("Pilot seat · full six-axis flight");
-                    ui.small("W/S: thrust · A/D: strafe · Space/C: vertical");
-                    ui.small("Q/E: roll · Arrows: aim · RMB + mouse: aim");
-                    ui.small("Hold Shift + arrows: look around · release: recenter");
-                    ui.small("Left-click: select · Release controls: neutral");
+                    if observing_on_foot {
+                        ui.label("Cockpit observation · pilot remains on foot");
+                        ui.small("Manual flight locked · return to the physical pilot seat to fly");
+                        ui.small("Left-click: select · camera changes do not move your avatar");
+                    } else {
+                        ui.label("Pilot seat · full six-axis flight");
+                        ui.small("W/S: thrust · A/D: strafe · Space/C: vertical");
+                        ui.small("Q/E: roll · Arrows: aim · RMB + mouse: aim");
+                        ui.small("Hold Shift + arrows: look around · release: recenter");
+                        ui.small("Left-click: select · Release controls: neutral");
+                    }
                     camera_content = Some(ui.max_rect().size());
                     return;
                 }
@@ -799,7 +806,11 @@ impl FlightView {
                         self.distance = 350.0;
                     }
                     ui.small("Drag: orbit · Scroll: zoom · Distances in meters/km");
-                    ui.small("Double-click space: fly · Right-click: actions");
+                    ui.small(if observing_on_foot {
+                        "Observation only · pilot remains on foot · manual flight locked · click to select"
+                    } else {
+                        "Double-click space: fly · Right-click: actions"
+                    });
                     camera_content = Some(ui.max_rect().size());
                     return;
                 }
@@ -830,7 +841,11 @@ impl FlightView {
                     }
                 });
                 ui.small("Drag: orbit · Scroll: zoom");
-                ui.small("Double-click space: fly · Right-click: actions");
+                ui.small(if observing_on_foot {
+                        "Observation only · pilot remains on foot · manual flight locked · click to select"
+                    } else {
+                        "Double-click space: fly · Right-click: actions"
+                    });
                 camera_content = Some(ui.max_rect().size());
             });
         if let Some(response) = camera_response {
