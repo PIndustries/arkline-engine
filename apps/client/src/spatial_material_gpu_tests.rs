@@ -269,6 +269,7 @@ fn native_spatial_material_pioneer_section_and_paused_feeds() {
             exterior: None,
             lighting_quality: Default::default(),
             cockpit_vp: flight_vp,
+            cockpit_occlusion: None,
             snapshot_time: 1000,
             planet_vp: flight_vp,
             system_id: 3,

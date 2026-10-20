@@ -1,5 +1,444 @@
-//! Body-relative instruments rendered into the same physical screen faces as the cockpit.
+//! Navigation, radar and camera feeds on the cockpit's physical display mounts.
+use super::cockpit_displays::{CockpitDisplayRenderer, DisplayBatch, DisplayVertex};
+use super::cockpit_occlusion::CockpitOcclusion;
 use super::*;
+
+pub(super) const NAV_CANVAS_SIZE: egui::Vec2 = egui::vec2(256.0, 128.0);
+
+/// The exact display-face plane used by the cockpit renderer. The caller passes
+/// its actual mount matrix; this helper never attaches a mount to the camera.
+#[derive(Clone)]
+pub(crate) struct CockpitSurface {
+    viewport: egui::Rect,
+    canvas: egui::Rect,
+    local_to_clip: Mat4,
+    plane_x: f32,
+    center: Vec3,
+    half: Vec3,
+    bounds: egui::Rect,
+    index: usize,
+    renderer: Option<Arc<Mutex<CockpitDisplayRenderer>>>,
+    occlusion: Option<(Arc<CockpitOcclusion>, Mat4, Mat4)>,
+}
+
+#[derive(Clone, Copy)]
+struct SurfaceVertex {
+    clip: glam::Vec4,
+    uv: egui::Pos2,
+    color: egui::Color32,
+}
+
+impl SurfaceVertex {
+    fn lerp(self, other: Self, t: f32) -> Self {
+        let a = self.color.to_array();
+        let b = other.color.to_array();
+        let color: [u8; 4] = std::array::from_fn(|i| {
+            (f32::from(a[i]) + (f32::from(b[i]) - f32::from(a[i])) * t).round() as u8
+        });
+        Self {
+            clip: self.clip.lerp(other.clip, t),
+            uv: self.uv.lerp(other.uv, t),
+            color: egui::Color32::from_rgba_premultiplied(color[0], color[1], color[2], color[3]),
+        }
+    }
+}
+
+fn clip_surface_polygon(
+    input: Vec<SurfaceVertex>,
+    distance: impl Fn(SurfaceVertex) -> f32,
+) -> Vec<SurfaceVertex> {
+    let Some(mut previous) = input.last().copied() else {
+        return input;
+    };
+    let mut output = Vec::with_capacity(input.len() + 1);
+    let mut before = distance(previous);
+    for current in input {
+        let after = distance(current);
+        if (before >= 0.0) != (after >= 0.0) {
+            output.push(previous.lerp(current, before / (before - after)));
+        }
+        if after >= 0.0 {
+            output.push(current);
+        }
+        previous = current;
+        before = after;
+    }
+    output
+}
+
+fn clip_surface_frustum(mut polygon: Vec<SurfaceVertex>) -> Vec<SurfaceVertex> {
+    for plane in 0..7 {
+        polygon = clip_surface_polygon(polygon, |v| match plane {
+            0 => v.clip.w - 1e-6,
+            1 => v.clip.x + v.clip.w,
+            2 => v.clip.w - v.clip.x,
+            3 => v.clip.y + v.clip.w,
+            4 => v.clip.w - v.clip.y,
+            5 => v.clip.z + v.clip.w,
+            _ => v.clip.w - v.clip.z,
+        });
+        if polygon.is_empty() {
+            break;
+        }
+    }
+    polygon
+}
+
+impl CockpitSurface {
+    pub(super) fn new(
+        viewport: egui::Rect,
+        local_to_clip: Mat4,
+        class: ShipClass,
+        index: usize,
+        canvas_size: egui::Vec2,
+    ) -> Option<Self> {
+        if !viewport.is_finite()
+            || viewport.width() <= 0.0
+            || viewport.height() <= 0.0
+            || !local_to_clip.is_finite()
+            || !canvas_size.is_finite()
+            || canvas_size.min_elem() <= 0.0
+        {
+            return None;
+        }
+        let (center, size) = *cockpit_screens(class).get(index)?;
+        // Exact front bias shared with DisplayFace. It separates emitted pixels
+        // from the dielectric backing while retaining real scene depth.
+        let plane_x = center.x - 0.025 - 0.006 - 0.0001;
+        // A perspective projection maps its camera center to (0,0,z,0).
+        // Recover it in mount-local coordinates to reject the display's back.
+        let camera = local_to_clip.inverse() * glam::Vec4::new(0.0, 0.0, 1.0, 0.0);
+        if !camera.is_finite() || camera.w.abs() < 1e-8 || camera.x / camera.w >= plane_x {
+            return None;
+        }
+        let mut result = Self {
+            viewport,
+            canvas: egui::Rect::from_min_size(egui::Pos2::ZERO, canvas_size),
+            local_to_clip,
+            plane_x,
+            center,
+            half: Vec3::new(0.0, size.y - 0.008, size.z - 0.008),
+            bounds: egui::Rect::NOTHING,
+            index,
+            renderer: None,
+            occlusion: None,
+        };
+        let corners = [
+            result.canvas.left_top(),
+            result.canvas.right_top(),
+            result.canvas.right_bottom(),
+            result.canvas.left_bottom(),
+        ];
+        let polygon = clip_surface_frustum(
+            corners
+                .into_iter()
+                .map(|p| result.vertex(p, egui::Pos2::ZERO, egui::Color32::WHITE))
+                .collect(),
+        );
+        for vertex in polygon {
+            result
+                .bounds
+                .extend_with(result.screen_position(vertex.clip)?);
+        }
+        if !result.bounds.is_finite() || result.bounds.width() < 1.0 || result.bounds.height() < 1.0
+        {
+            return None;
+        }
+        Some(result)
+    }
+
+    pub(super) fn canvas_rect(&self) -> egui::Rect {
+        self.canvas
+    }
+    pub(super) fn bounds(&self) -> egui::Rect {
+        self.bounds
+    }
+    pub(super) fn contains(&self, point: egui::Pos2) -> bool {
+        self.unproject(point).is_some()
+    }
+    pub(super) fn with_renderer(mut self, renderer: Arc<Mutex<CockpitDisplayRenderer>>) -> Self {
+        self.renderer = Some(renderer);
+        self
+    }
+    pub(super) fn with_occlusion(
+        mut self,
+        scene: Arc<CockpitOcclusion>,
+        vp: Mat4,
+        mount: Mat4,
+    ) -> Self {
+        self.occlusion = Some((scene, vp, mount));
+        self
+    }
+    /// Exact glass-plane geometry for a cached video tile. Coordinates are
+    /// display-local; the caller's GPU shader applies the same mount MVP.
+    pub(super) fn feed_geometry(&self, tile: egui::Rect) -> Option<(Mat4, Vec3, Vec3)> {
+        if !tile.is_finite() || tile.width() <= 0.0 || tile.height() <= 0.0 {
+            return None;
+        }
+        let tile = tile.intersect(self.canvas);
+        if tile.width() <= 0.0 || tile.height() <= 0.0 {
+            return None;
+        }
+        Some((
+            self.local_to_clip,
+            self.local_point(tile.left_top()),
+            self.local_point(tile.right_bottom()),
+        ))
+    }
+    /// Platform-only projection for IME/caret placement; drawing uses 3D vertices.
+    pub(crate) fn project(&self, point: egui::Pos2) -> Option<egui::Pos2> {
+        if !self.canvas.contains(point) {
+            return None;
+        }
+        let clip = self
+            .vertex(point, egui::Pos2::ZERO, egui::Color32::WHITE)
+            .clip;
+        if clip.w <= 1e-6 || clip.x.abs() > clip.w || clip.y.abs() > clip.w || clip.z.abs() > clip.w
+        {
+            return None;
+        }
+        self.screen_position(clip)
+    }
+
+    pub(super) fn unproject(&self, point: egui::Pos2) -> Option<egui::Pos2> {
+        if let Some((scene, vp, mount)) = &self.occlusion {
+            return scene.hit_surface(*vp, self.viewport, point, self.index, *mount, self.canvas);
+        }
+        let (origin, direction) = screen_ray(self.local_to_clip, self.viewport, point)?;
+        if direction.x.abs() < 1e-7 {
+            return None;
+        }
+        let t = (self.plane_x - origin.x) / direction.x;
+        if !t.is_finite() || t < 0.0 {
+            return None;
+        }
+        let hit = origin + direction * t;
+        let clip = self.local_to_clip * hit.extend(1.0);
+        if !clip.is_finite() || clip.w <= 0.0 || clip.z < -clip.w || clip.z > clip.w {
+            return None;
+        }
+        let u = (hit.z - self.center.z) / (2.0 * self.half.z) + 0.5;
+        let v = 0.5 - (hit.y - self.center.y) / (2.0 * self.half.y);
+        if !(-1e-5..=1.0 + 1e-5).contains(&u) || !(-1e-5..=1.0 + 1e-5).contains(&v) {
+            return None;
+        }
+        Some(
+            self.canvas.min
+                + egui::vec2(
+                    u.clamp(0.0, 1.0) * self.canvas.width(),
+                    v.clamp(0.0, 1.0) * self.canvas.height(),
+                ),
+        )
+    }
+
+    fn local_point(&self, point: egui::Pos2) -> Vec3 {
+        let u = (point.x - self.canvas.left()) / self.canvas.width();
+        let v = (point.y - self.canvas.top()) / self.canvas.height();
+        Vec3::new(
+            self.plane_x,
+            self.center.y + (0.5 - v) * self.half.y * 2.0,
+            self.center.z + (u - 0.5) * self.half.z * 2.0,
+        )
+    }
+
+    fn vertex(&self, point: egui::Pos2, uv: egui::Pos2, color: egui::Color32) -> SurfaceVertex {
+        SurfaceVertex {
+            clip: self.local_to_clip * self.local_point(point).extend(1.0),
+            uv,
+            color,
+        }
+    }
+
+    fn screen_position(&self, clip: glam::Vec4) -> Option<egui::Pos2> {
+        if !clip.is_finite() || clip.w <= 1e-7 {
+            return None;
+        }
+        Some(
+            self.viewport.center()
+                + egui::vec2(
+                    clip.x / clip.w * self.viewport.width() * 0.5,
+                    -clip.y / clip.w * self.viewport.height() * 0.5,
+                ),
+        )
+    }
+
+    fn mesh_geometry(
+        &self,
+        mesh: &egui::epaint::Mesh,
+        local_clip: egui::Rect,
+    ) -> Vec<DisplayVertex> {
+        let clip = local_clip.intersect(self.canvas);
+        let mut output = Vec::new();
+        if !clip.is_finite() || !clip.is_positive() || !mesh.is_valid() {
+            return output;
+        }
+        for triangle in mesh.indices.chunks_exact(3) {
+            // Clip local content first, including glyphs that cross the bezel.
+            let mut polygon: Vec<_> = triangle
+                .iter()
+                .map(|i| {
+                    let v = mesh.vertices[*i as usize];
+                    SurfaceVertex {
+                        clip: glam::Vec4::new(v.pos.x, v.pos.y, 0.0, 1.0),
+                        uv: v.uv,
+                        color: v.color,
+                    }
+                })
+                .collect();
+            if polygon
+                .iter()
+                .any(|vertex| !vertex.clip.is_finite() || !vertex.uv.is_finite())
+            {
+                continue;
+            }
+            for edge in 0..4 {
+                polygon = clip_surface_polygon(polygon, |v| match edge {
+                    0 => v.clip.x - clip.left(),
+                    1 => clip.right() - v.clip.x,
+                    2 => v.clip.y - clip.top(),
+                    _ => clip.bottom() - v.clip.y,
+                });
+            }
+            for index in 1..polygon.len().saturating_sub(1) {
+                for vertex in [polygon[0], polygon[index], polygon[index + 1]] {
+                    output.push(DisplayVertex {
+                        position: self.local_point(egui::pos2(vertex.clip.x, vertex.clip.y)),
+                        uv: vertex.uv,
+                        color: vertex.color,
+                    });
+                }
+            }
+        }
+        output
+    }
+
+    fn geometry(&self, primitives: &[egui::ClippedPrimitive]) -> Vec<DisplayBatch> {
+        primitives
+            .iter()
+            .filter_map(|primitive| {
+                let egui::epaint::Primitive::Mesh(mesh) = &primitive.primitive else {
+                    return None;
+                };
+                let vertices = self.mesh_geometry(mesh, primitive.clip_rect);
+                (!vertices.is_empty()).then_some(DisplayBatch {
+                    texture: mesh.texture_id,
+                    vertices,
+                })
+            })
+            .collect()
+    }
+
+    /// Submit canonical UI meshes to a full-viewport GL callback. The GPU applies
+    /// homogeneous clipping, perspective interpolation, and retained scene depth.
+    pub(crate) fn submit(
+        &self,
+        ctx: &egui::Context,
+        layer: egui::LayerId,
+        primitives: Vec<egui::ClippedPrimitive>,
+    ) {
+        let Some(renderer) = self.renderer.clone() else {
+            return;
+        };
+        let batches = self.geometry(&primitives);
+        if batches.is_empty() {
+            return;
+        }
+        let matrix = self.local_to_clip;
+        #[cfg(target_arch = "wasm32")]
+        let renderer = send_wrapper::SendWrapper::new(renderer);
+        egui::Painter::new(ctx.clone(), layer, self.viewport).add(egui::PaintCallback {
+            rect: self.viewport,
+            callback: Arc::new(egui_glow::CallbackFn::new(move |info, painter| {
+                if let Ok(mut renderer) = renderer.lock() {
+                    unsafe {
+                        renderer.paint(info, painter, matrix, &batches);
+                    }
+                }
+            })),
+        });
+    }
+
+    fn submit_shapes(
+        &self,
+        ctx: &egui::Context,
+        layer: egui::LayerId,
+        shapes: Vec<egui::epaint::ClippedShape>,
+        pixels_per_point: f32,
+    ) {
+        let Some(renderer) = self.renderer.clone() else {
+            return;
+        };
+        let surface = self.clone();
+        let context = ctx.clone();
+        #[cfg(target_arch = "wasm32")]
+        let renderer = send_wrapper::SendWrapper::new(renderer);
+        #[cfg(target_arch = "wasm32")]
+        let surface = send_wrapper::SendWrapper::new(surface);
+        egui::Painter::new(ctx.clone(), layer, self.viewport).add(egui::PaintCallback {
+            rect: self.viewport,
+            callback: Arc::new(egui_glow::CallbackFn::new(move |info, painter| {
+                // All parent glyph layout and texture uploads have completed.
+                // Tessellation now sees the final atlas dimensions for this pass.
+                let primitives = context.tessellate(shapes.clone(), pixels_per_point);
+                let batches = surface.geometry(&primitives);
+                if let Ok(mut renderer) = renderer.lock() {
+                    unsafe {
+                        renderer.paint(info, painter, surface.local_to_clip, &batches);
+                    }
+                }
+            })),
+        });
+    }
+
+    /// Collect ordinary egui shapes in display-local coordinates. The guard
+    /// drains them into the same real 3D display pipeline as interactive controls.
+    pub(super) fn begin_paint(&self, ui: &egui::Ui) -> SurfacePaint {
+        let layer = egui::LayerId::new(
+            egui::Order::Background,
+            egui::Id::new(("cockpit_surface_canvas", self.index)),
+        );
+        SurfacePaint {
+            surface: self.clone(),
+            output_layer: ui.layer_id(),
+            painter: egui::Painter::new(ui.ctx().clone(), layer, self.canvas),
+            layer,
+        }
+    }
+
+    pub(super) fn paint(&self, ui: &egui::Ui, draw: impl FnOnce(&egui::Painter)) {
+        let paint = self.begin_paint(ui);
+        draw(paint.painter());
+    }
+}
+
+pub(super) struct SurfacePaint {
+    surface: CockpitSurface,
+    output_layer: egui::LayerId,
+    painter: egui::Painter,
+    layer: egui::LayerId,
+}
+impl SurfacePaint {
+    pub(super) fn painter(&self) -> &egui::Painter {
+        &self.painter
+    }
+}
+impl Drop for SurfacePaint {
+    fn drop(&mut self) {
+        let context = self.painter.ctx();
+        let shapes = context.graphics_mut(|graphics| {
+            let list = graphics.entry(self.layer);
+            let shapes: Vec<_> = list.all_entries().cloned().collect();
+            *list = Default::default();
+            shapes
+        });
+        self.surface.submit_shapes(
+            context,
+            self.output_layer,
+            shapes,
+            context.pixels_per_point(),
+        );
+    }
+}
 
 pub(super) fn fleet(pilot: &PilotView) -> Vec<&arkline_protocol::DroneView> {
     if pilot.drones.is_empty() {
@@ -108,7 +547,7 @@ fn map_offset(
 #[allow(clippy::too_many_arguments)]
 pub(super) fn paint_cockpit_maps(
     ui: &mut egui::Ui,
-    viewport: egui::Rect,
+    surface: &CockpitSurface,
     own: &PilotView,
     snapshot: &Snapshot,
     now: u64,
@@ -119,7 +558,15 @@ pub(super) fn paint_cockpit_maps(
     let world_layout = match super::super::snapshot_world_layout(snapshot) {
         Ok(layout) => layout,
         Err(error) => {
-            ui.colored_label(egui::Color32::RED, error);
+            surface.paint(ui, |painter| {
+                painter.text(
+                    surface.canvas_rect().center(),
+                    egui::Align2::CENTER_CENTER,
+                    error,
+                    egui::FontId::monospace(10.0),
+                    egui::Color32::RED,
+                );
+            });
             return None;
         }
     };
@@ -186,10 +633,11 @@ pub(super) fn paint_cockpit_maps(
         ));
     }
     let mut picked = None;
-    for (index, tactical) in [(4, false), (5, true)] {
-        let (center, size) = cockpit_screens(own.ship_class)[index];
-        let rect = instrument_rect(viewport, center, size).shrink(3.0);
-        let painter = ui.painter_at(rect);
+    let (index, tactical) = (4, false);
+    {
+        let rect = surface.canvas_rect().shrink(3.0);
+        let paint = surface.begin_paint(ui);
+        let painter = paint.painter();
         painter.rect_filled(
             rect,
             0.0,
@@ -211,12 +659,19 @@ pub(super) fn paint_cockpit_maps(
             egui::FontId::monospace(10.0),
             color,
         );
+        let physical_pointer = ui
+            .input(|i| i.pointer.hover_pos())
+            .and_then(|p| surface.unproject(p));
         let response = ui.interact(
-            rect,
+            if physical_pointer.is_some() {
+                surface.bounds()
+            } else {
+                egui::Rect::NOTHING
+            },
             egui::Id::new(("cockpit_map", index)),
             egui::Sense::click(),
         );
-        if response.hovered() {
+        if physical_pointer.is_some() && response.hovered() {
             let scroll = ui.input(|i| i.smooth_scroll_delta.y);
             if scroll != 0.0 {
                 *range = (*range * (-scroll as f64 * 0.008).exp())
@@ -301,7 +756,10 @@ pub(super) fn paint_cockpit_maps(
                     color,
                 );
             }
-            if let Some(pointer) = response.interact_pointer_pos() {
+            if let Some(pointer) = response
+                .interact_pointer_pos()
+                .and_then(|p| surface.unproject(p))
+            {
                 let distance = pointer.distance(point);
                 if distance < 10.0 && nearest.as_ref().is_none_or(|(d, _)| distance < *d) {
                     nearest = Some((distance, object.clone()));
@@ -443,11 +901,288 @@ pub(super) fn remote_ship_frame(
 }
 
 #[cfg(test)]
+mod surface_tests {
+    use super::*;
+
+    fn viewport() -> egui::Rect {
+        egui::Rect::from_min_size(egui::pos2(70.0, 40.0), egui::vec2(900.0, 650.0))
+    }
+    fn matrix(eye: Vec3, look: Quat) -> Mat4 {
+        Mat4::perspective_rh_gl(COCKPIT_FOV, viewport().aspect_ratio(), 0.01, 100.0)
+            * Mat4::look_at_rh(eye, eye + look * Vec3::X, look * Vec3::Y)
+    }
+
+    #[test]
+    fn cockpit_surface_tracks_real_mount_camera_headlook_and_roll() {
+        let neutral = CockpitSurface::new(
+            viewport(),
+            matrix(Vec3::ZERO, Quat::IDENTITY),
+            ShipClass::Pioneer,
+            5,
+            NAV_CANVAS_SIZE,
+        )
+        .unwrap();
+        let mut centers = Vec::new();
+        for look in [
+            Quat::IDENTITY,
+            Quat::from_rotation_y(-0.25),
+            Quat::from_rotation_x(0.4) * Quat::from_rotation_y(-0.2),
+        ] {
+            let surface = CockpitSurface::new(
+                viewport(),
+                matrix(Vec3::ZERO, look),
+                ShipClass::Pioneer,
+                5,
+                NAV_CANVAS_SIZE,
+            )
+            .unwrap();
+            let center = surface.project(surface.canvas.center()).unwrap();
+            assert!(surface.contains(center));
+            assert!(
+                surface
+                    .unproject(center)
+                    .unwrap()
+                    .distance(surface.canvas.center())
+                    < 0.001
+            );
+            centers.push(center);
+        }
+        assert!(centers[0].distance(centers[1]) > 20.0);
+        let mount = Mat4::from_scale_rotation_translation(
+            Vec3::splat(0.7),
+            Quat::IDENTITY,
+            Vec3::new(0.3, 0.0, 0.0),
+        );
+        let mounted = CockpitSurface::new(
+            viewport(),
+            matrix(Vec3::ZERO, Quat::IDENTITY) * mount,
+            ShipClass::Pioneer,
+            5,
+            NAV_CANVAS_SIZE,
+        )
+        .unwrap();
+        assert!(
+            neutral
+                .bounds()
+                .center()
+                .distance(mounted.bounds().center())
+                > 10.0
+        );
+    }
+
+    #[test]
+    fn cockpit_surface_feed_geometry_matches_exact_projected_glass_and_clamps_tiles() {
+        let surface = CockpitSurface::new(
+            viewport(),
+            matrix(Vec3::ZERO, Quat::from_rotation_y(-0.2)),
+            ShipClass::Pioneer,
+            1,
+            NAV_CANVAS_SIZE,
+        )
+        .unwrap();
+        let tile = egui::Rect::from_min_max(egui::pos2(-20.0, 30.0), egui::pos2(180.0, 110.0));
+        let clipped = tile.intersect(surface.canvas);
+        let (mvp, top_left, bottom_right) = surface.feed_geometry(tile).unwrap();
+        assert_eq!(mvp, surface.local_to_clip);
+        assert!(
+            (mvp * top_left.extend(1.0)
+                - surface
+                    .vertex(clipped.left_top(), egui::Pos2::ZERO, egui::Color32::WHITE)
+                    .clip)
+                .length()
+                < 1e-6
+        );
+        assert!(
+            (mvp * bottom_right.extend(1.0)
+                - surface
+                    .vertex(
+                        clipped.right_bottom(),
+                        egui::Pos2::ZERO,
+                        egui::Color32::WHITE
+                    )
+                    .clip)
+                .length()
+                < 1e-6
+        );
+        assert_eq!(top_left.x, bottom_right.x);
+        assert!(top_left.y > bottom_right.y && top_left.z < bottom_right.z);
+        assert!(surface
+            .feed_geometry(egui::Rect::from_min_size(
+                egui::pos2(400.0, 200.0),
+                egui::vec2(20.0, 20.0)
+            ))
+            .is_none());
+        assert!(surface
+            .feed_geometry(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::Vec2::ZERO
+            ))
+            .is_none());
+        assert!(surface
+            .feed_geometry(egui::Rect::from_min_size(
+                egui::pos2(f32::NAN, 0.0),
+                egui::vec2(20.0, 20.0)
+            ))
+            .is_none());
+    }
+
+    #[test]
+    fn cockpit_surface_inverse_hit_rejects_bounding_box_outside_actual_quad() {
+        let look = Quat::from_rotation_x(0.5) * Quat::from_rotation_y(-0.2);
+        let surface = CockpitSurface::new(
+            viewport(),
+            matrix(Vec3::ZERO, look),
+            ShipClass::Pioneer,
+            5,
+            NAV_CANVAS_SIZE,
+        )
+        .unwrap();
+        let bounds = surface.bounds();
+        let outside = [
+            bounds.left_top(),
+            bounds.right_top(),
+            bounds.left_bottom(),
+            bounds.right_bottom(),
+        ]
+        .into_iter()
+        .any(|point| !surface.contains(point));
+        assert!(
+            outside,
+            "A tilted display is a quad, not its axis-aligned bounding box"
+        );
+        for local in [egui::pos2(32.0, 25.0), egui::pos2(220.0, 100.0)] {
+            let point = surface.project(local).unwrap();
+            assert!(surface.unproject(point).unwrap().distance(local) < 0.001);
+        }
+    }
+
+    #[test]
+    fn cockpit_surface_local_clip_retains_3d_vertices_for_gpu_frustum_and_depth() {
+        let look = Quat::from_rotation_y(0.3);
+        let surface = CockpitSurface::new(
+            viewport(),
+            matrix(Vec3::ZERO, look),
+            ShipClass::Pioneer,
+            5,
+            NAV_CANVAS_SIZE,
+        )
+        .unwrap();
+        assert!((surface.bounds().right() - viewport().right()).abs() < 0.01);
+        let mut mesh = egui::epaint::Mesh::default();
+        mesh.add_colored_rect(surface.canvas.expand(50.0), egui::Color32::WHITE);
+        let vertices = surface.mesh_geometry(&mesh, surface.canvas);
+        assert!(!vertices.is_empty());
+        assert_eq!(vertices.len() % 3, 0);
+        assert!(vertices.iter().all(|v| {
+            (v.position.x - surface.plane_x).abs() < 1e-6
+                && (v.position.y - surface.center.y).abs() <= surface.half.y + 1e-6
+                && (v.position.z - surface.center.z).abs() <= surface.half.z + 1e-6
+        }));
+        // The CPU clips only the canonical bezel. Geometry outside the visible
+        // frustum remains homogeneous input to the GPU rather than flattened UI.
+        assert!(vertices.iter().any(|v| {
+            let clip = surface.local_to_clip * v.position.extend(1.0);
+            clip.x.abs() > clip.w || clip.y.abs() > clip.w
+        }));
+        let depths: Vec<_> = vertices
+            .iter()
+            .map(|v| (surface.local_to_clip * v.position.extend(1.0)).w)
+            .collect();
+        assert!(depths.iter().any(|w| (w - depths[0]).abs() > 0.001));
+    }
+
+    #[test]
+    fn cockpit_surface_naturally_rejects_backface_offscreen_and_near_clipped_mounts() {
+        let canvas = NAV_CANVAS_SIZE;
+        assert!(CockpitSurface::new(
+            viewport(),
+            matrix(
+                Vec3::new(2.0, 0.0, 0.0),
+                Quat::from_rotation_y(std::f32::consts::PI)
+            ),
+            ShipClass::Pioneer,
+            5,
+            canvas
+        )
+        .is_none());
+        assert!(CockpitSurface::new(
+            viewport(),
+            matrix(Vec3::ZERO, Quat::from_rotation_y(std::f32::consts::PI)),
+            ShipClass::Pioneer,
+            5,
+            canvas
+        )
+        .is_none());
+        let behind_near =
+            Mat4::perspective_rh_gl(COCKPIT_FOV, viewport().aspect_ratio(), 1.0, 100.0)
+                * Mat4::look_at_rh(Vec3::ZERO, Vec3::X, Vec3::Y);
+        assert!(
+            CockpitSurface::new(viewport(), behind_near, ShipClass::Pioneer, 5, canvas).is_none()
+        );
+    }
+
+    #[test]
+    fn cockpit_surface_text_and_shapes_remain_canonical_3d_without_2d_fallback() {
+        let surface = CockpitSurface::new(
+            viewport(),
+            matrix(Vec3::ZERO, Quat::from_rotation_y(-0.2)),
+            ShipClass::Pioneer,
+            5,
+            NAV_CANVAS_SIZE,
+        )
+        .unwrap();
+        let context = egui::Context::default();
+        let mut canonical_shapes = Vec::new();
+        let output = context.run(
+            egui::RawInput {
+                screen_rect: Some(viewport()),
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let paint = surface.begin_paint(ui);
+                    {
+                        let painter = paint.painter();
+                        painter.rect_filled(surface.canvas, 0.0, egui::Color32::BLACK);
+                        painter.text(
+                            egui::pos2(-20.0, 40.0),
+                            egui::Align2::LEFT_TOP,
+                            "RADAR TEXT CROSSES BEZEL",
+                            egui::FontId::monospace(12.0),
+                            egui::Color32::WHITE,
+                        );
+                    }
+                    canonical_shapes = context.graphics_mut(|graphics| {
+                        graphics.entry(paint.layer).all_entries().cloned().collect()
+                    });
+                });
+            },
+        );
+        assert!(!output
+            .shapes
+            .iter()
+            .any(|s| matches!(&s.shape, egui::Shape::Text(_))));
+        assert!(!output
+            .shapes
+            .iter()
+            .any(|s| matches!(&s.shape, egui::Shape::Mesh(_))));
+        let primitives = context.tessellate(canonical_shapes, output.pixels_per_point);
+        let batches = surface.geometry(&primitives);
+        assert!(!batches.is_empty());
+        assert!(batches.iter().flat_map(|batch| &batch.vertices).all(|v| {
+            (v.position.x - surface.plane_x).abs() < 1e-6
+                && (v.position.y - surface.center.y).abs() <= surface.half.y + 1e-6
+                && (v.position.z - surface.center.z).abs() <= surface.half.z + 1e-6
+        }));
+    }
+}
+
+#[cfg(test)]
 mod remote_tests {
     use super::*;
     fn snapshot() -> Snapshot {
         serde_json::from_value(serde_json::json!({
-            "server_time_ms":1000,"pilots":[
+            "observer_schema_version":2,"server_time_ms":1000,"pilots":[
                 {"name":"Controller","credits":1000,"ore":0,"location":Location::Station,"system_id":1},
                 {"name":"Worker","credits":1000,"ore":0,"location":Location::Belt,"system_id":2,
                  "flight":{"position":[299195741400.0,2000.0,3000.0],"velocity":[0.0,0.0,0.0],"heading":[1.0,0.0,0.0],"mode":NavigationMode::Stop,"updated_at_ms":1000}}
@@ -462,6 +1197,7 @@ mod remote_tests {
             exterior: None,
             lighting_quality: Default::default(),
             cockpit_vp: Mat4::IDENTITY,
+            cockpit_occlusion: None,
             snapshot_time: 1000,
             planet_vp: Mat4::IDENTITY,
             system_id: 1,

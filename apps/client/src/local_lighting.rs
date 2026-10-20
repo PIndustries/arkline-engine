@@ -300,6 +300,7 @@ mod tests {
             exterior: None,
             lighting_quality: Default::default(),
             cockpit_vp: Mat4::IDENTITY,
+            cockpit_occlusion: None,
             snapshot_time: 1000,
             planet_vp: Mat4::IDENTITY,
             system_id: 1,
