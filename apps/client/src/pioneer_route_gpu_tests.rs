@@ -1197,7 +1197,12 @@ fn native_pioneer_animated_hatches_boarding_and_return() {
         let a = arkline_protocol::hatch_anchors(pose);
         let lift = arkline_protocol::lift_geometry(pose);
         let body = |point| arkline_protocol::station_to_body(pose, point);
-        let facing = (a.inner_bounds.axes[2][2]).atan2(a.inner_bounds.axes[2][0]);
+        // Frame the complete opening from a supported cockpit approach, then
+        // use the same ordinary walking path through the control anchor.
+        h.walk_to_body([34.1, -0.32, -6.2]);
+        let location = body(h.traversal().feet_m);
+        let facing = (a.inner_bounds.center_m[2] - location[2])
+            .atan2(a.inner_bounds.center_m[0] - location[0]);
         h.heading(facing);
         let mut captures = vec![capture(Some(&directory), "inner-closed", &h.settle())];
         let mut motion = Vec::new();
@@ -1224,6 +1229,7 @@ fn native_pioneer_animated_hatches_boarding_and_return() {
             ));
         }
         assert!(h.traversal().actuators.inner_hatch_open);
+        h.walk_to_body(body(a.inner_inside_station_m));
         h.walk_to_body(body(a.inner_outside_station_m));
         set(&mut h, arkline_protocol::DockedHatch::Inner, false);
         h.advance_time(1500);
