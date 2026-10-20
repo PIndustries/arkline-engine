@@ -48,6 +48,7 @@ struct Editor {
     bottom_tab: usize,
     drawer_open: bool,
     show_world: bool,
+    flight_focus: bool,
     room_plan: bool,
     show_inspector: bool,
     inspector_tab: usize,
@@ -83,6 +84,7 @@ impl Editor {
     }
 
     fn open_inspector(&mut self, tab: usize) {
+        self.flight_focus = false;
         self.workspace = 0;
         self.inspector_tab = tab;
         self.show_inspector = true;
@@ -143,6 +145,7 @@ impl Editor {
             bottom_tab: 0,
             drawer_open: false,
             show_world: true,
+            flight_focus: true,
             room_plan: true,
             show_inspector: true,
             inspector_tab: 0,
@@ -322,7 +325,7 @@ impl eframe::App for Editor {
             }
         }
         egui::TopBottomPanel::top("editor_toolbar")
-            .exact_height(58.0)
+            .exact_height(if self.flight_focus { 44.0 } else { 58.0 })
             .show(ctx, |ui| {
                 ui.horizontal_centered(|ui| {
                     ui.add_space(10.0);
@@ -332,7 +335,15 @@ impl eframe::App for Editor {
                             .strong()
                             .size(19.0),
                     );
-                    ui.label(RichText::new("EDITOR").color(MUTED).size(11.0));
+                    ui.label(
+                        RichText::new(if self.flight_focus {
+                            "FLIGHT"
+                        } else {
+                            "EDITOR"
+                        })
+                        .color(MUTED)
+                        .size(11.0),
+                    );
                     ui.separator();
                     if ui
                         .add_enabled(
@@ -402,42 +413,61 @@ impl eframe::App for Editor {
             });
         egui::TopBottomPanel::top("workspace_tabs").show(ctx, |ui| {
             ui.horizontal_wrapped(|ui| {
-                ui.selectable_value(&mut self.workspace, 8, "Models");
                 if ui
-                    .selectable_label(self.workspace == 0 && self.inspector_tab == 6, "Rooms")
+                    .selectable_label(self.flight_focus && self.workspace == 0, "Flight")
                     .clicked()
                 {
-                    self.open_inspector(6);
+                    self.workspace = 0;
+                    self.inspector_tab = 0;
+                    self.flight_focus = true;
+                    self.client.set_free_camera(false);
                 }
-                ui.selectable_value(&mut self.workspace, 3, "Materials");
-                ui.selectable_value(&mut self.workspace, 6, "Git");
-                ui.selectable_value(&mut self.workspace, 7, "Files");
-                ui.menu_button("Systems", |ui| {
-                    for (tab, label) in [
-                        (2, "Engineering candidate"),
-                        (4, "Equipment"),
-                        (7, "Exterior"),
-                        (5, "Service paths"),
-                    ] {
-                        if ui.button(label).clicked() {
-                            self.open_inspector(tab);
-                            ui.close_menu();
-                        }
-                    }
-                    ui.selectable_value(&mut self.workspace, 4, "Cockpit panels");
+                if ui.selectable_label(!self.flight_focus, "Editor").clicked() {
+                    self.workspace = 0;
+                    self.flight_focus = false;
+                }
+                ui.separator();
+                ui.selectable_value(&mut self.workspace, 8, "Models");
+                if !self.flight_focus {
                     if ui
-                        .toggle_value(&mut self.events_open, "Event flow")
+                        .selectable_label(self.workspace == 0 && self.inspector_tab == 6, "Rooms")
                         .clicked()
-                        && self.events_open
                     {
-                        self.workspace = 0;
+                        self.open_inspector(6);
                     }
-                });
-                if ui
-                    .selectable_label(self.workspace == 0 && self.inspector_tab == 0, "Play view")
-                    .clicked()
-                {
-                    self.open_inspector(0);
+                    ui.selectable_value(&mut self.workspace, 3, "Materials");
+                    ui.selectable_value(&mut self.workspace, 6, "Git");
+                    ui.selectable_value(&mut self.workspace, 7, "Files");
+                    ui.menu_button("Systems", |ui| {
+                        for (tab, label) in [
+                            (2, "Engineering candidate"),
+                            (4, "Equipment"),
+                            (7, "Exterior"),
+                            (5, "Service paths"),
+                        ] {
+                            if ui.button(label).clicked() {
+                                self.open_inspector(tab);
+                                ui.close_menu();
+                            }
+                        }
+                        ui.selectable_value(&mut self.workspace, 4, "Cockpit panels");
+                        if ui
+                            .toggle_value(&mut self.events_open, "Event flow")
+                            .clicked()
+                            && self.events_open
+                        {
+                            self.workspace = 0;
+                        }
+                    });
+                    if ui
+                        .selectable_label(
+                            self.workspace == 0 && self.inspector_tab == 0,
+                            "Play view",
+                        )
+                        .clicked()
+                    {
+                        self.open_inspector(0);
+                    }
                 }
                 if ui
                     .button("Mining")
@@ -446,25 +476,29 @@ impl eframe::App for Editor {
                 {
                     self.workspace = 0;
                     self.inspector_tab = 0;
+                    self.flight_focus = true;
                     self.client.open_mining_panel();
                 }
                 if ui.button("Sound").clicked() {
                     self.workspace = 0;
+                    self.flight_focus = true;
                     self.client.open_sound_panel();
                 }
-                ui.menu_button("Tools", |ui| {
-                    ui.selectable_value(&mut self.workspace, 2, "Physics lab");
-                    if ui.button("Render debug").clicked() {
-                        self.open_inspector(3);
-                        ui.close_menu();
-                    }
-                    if ui
-                        .selectable_value(&mut self.workspace, 1, "Community")
-                        .clicked()
-                    {
-                        self.community.ensure_loaded();
-                    }
-                });
+                if !self.flight_focus {
+                    ui.menu_button("Tools", |ui| {
+                        ui.selectable_value(&mut self.workspace, 2, "Physics lab");
+                        if ui.button("Render debug").clicked() {
+                            self.open_inspector(3);
+                            ui.close_menu();
+                        }
+                        if ui
+                            .selectable_value(&mut self.workspace, 1, "Community")
+                            .clicked()
+                        {
+                            self.community.ensure_loaded();
+                        }
+                    });
+                }
                 if ui.button("Session").clicked() {
                     self.session_panel.open = true;
                 }
@@ -478,7 +512,10 @@ impl eframe::App for Editor {
                 );
             });
         });
-        if self.workspace == 0 {
+        if self.workspace != 0 || self.inspector_tab != 0 {
+            self.flight_focus = false;
+        }
+        if self.workspace == 0 && !self.flight_focus {
             self.scene_controls(ctx);
         }
         if self.workspace == 3 {
@@ -509,6 +546,12 @@ impl eframe::App for Editor {
                     }
                     ui.separator();
                     ui.add_enabled_ui(self.workspace == 0, |ui| {
+                        if self.flight_focus {
+                            if ui.button("World / inspector").clicked() {
+                                self.flight_focus = false;
+                            }
+                            return;
+                        }
                         ui.toggle_value(
                             &mut self.show_world,
                             if self.workspace == 0 && self.inspector_tab == 6 {
@@ -734,7 +777,7 @@ impl eframe::App for Editor {
                 });
             });
         }
-        if self.show_world {
+        if self.show_world && !self.flight_focus {
             egui::SidePanel::left("editor_outliner").resizable(true).default_width(200.).width_range(180. ..=260.).show(ctx, |ui| {
             if self.inspector_tab == 6 { self.rooms.navigation(ui); return; }
             ui.add_space(10.); ui.heading("World outliner");
@@ -775,7 +818,7 @@ impl eframe::App for Editor {
             });
         });
         }
-        if self.show_inspector {
+        if self.show_inspector && !self.flight_focus {
             egui::SidePanel::right("editor_inspector")
             .resizable(true)
             .default_width(280.)
@@ -1370,6 +1413,7 @@ mod tests {
                 .as_nanos()
         ));
         let mut editor = Editor::new(&cc, project.clone(), "SceneToolbarPilot".into());
+        editor.flight_focus = false;
         let deadline = std::time::Instant::now() + Duration::from_secs(5);
         while !editor.client.ready() && std::time::Instant::now() < deadline {
             editor.client.poll();
@@ -1968,5 +2012,94 @@ mod tests {
             drop(editor);
             let _ = std::fs::remove_dir_all(project);
         }
+    }
+    #[test]
+    fn flight_editor_focus_keeps_tools_accessible_and_preserves_paused_world() {
+        let ctx = egui::Context::default();
+        let cc = eframe::CreationContext::_new_kittest(ctx.clone());
+        let project = std::env::temp_dir().join(format!(
+            "arkline-flight-focus-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let mut editor = Editor::new(&cc, project, "FlightFocusQA".into());
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while !editor.client.ready() && std::time::Instant::now() < deadline {
+            editor.client.poll();
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(editor.client.paused());
+        let before = serde_json::to_value(editor.client.snapshot().unwrap()).unwrap();
+        let frame = |editor: &mut Editor, events| {
+            ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(1500., 960.),
+                    )),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| editor.update(ctx, &mut eframe::Frame::_new_kittest()),
+            )
+        };
+        let has = |output: &egui::FullOutput, label: &str| {
+            output.shapes.iter().any(
+                |shape| matches!(&shape.shape,egui::Shape::Text(text) if text.galley.text()==label),
+            )
+        };
+        frame(&mut editor, vec![]);
+        let output = frame(&mut editor, vec![]);
+        assert!(editor.flight_focus);
+        assert!(!has(&output, "World outliner") && !has(&output, "Inspector"));
+        for label in ["Editor", "Models", "Mining", "Sound"] {
+            visible_point(&output, label);
+        }
+        let point = visible_point(&output, "Editor");
+        for pressed in [true, false] {
+            frame(
+                &mut editor,
+                vec![
+                    egui::Event::PointerMoved(point),
+                    egui::Event::PointerButton {
+                        pos: point,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ],
+            );
+        }
+        frame(&mut editor, vec![]);
+        let output = frame(&mut editor, vec![]);
+        assert!(!editor.flight_focus);
+        assert!(has(&output, "World outliner") && has(&output, "Inspector"));
+        let point = visible_point(&output, "Flight");
+        for pressed in [true, false] {
+            frame(
+                &mut editor,
+                vec![
+                    egui::Event::PointerMoved(point),
+                    egui::Event::PointerButton {
+                        pos: point,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ],
+            );
+        }
+        frame(&mut editor, vec![]);
+        let output = frame(&mut editor, vec![]);
+        assert!(editor.flight_focus);
+        assert!(!has(&output, "World outliner") && !has(&output, "Inspector"));
+        assert_eq!(
+            serde_json::to_value(editor.client.snapshot().unwrap()).unwrap(),
+            before
+        );
+        editor.client.on_exit();
     }
 }

@@ -1548,6 +1548,33 @@ fn native_pioneer_cockpit_mining_composition() {
         );
         let mining_snapshot = h.cockpit.snapshot.clone().unwrap();
         let mining = h.settle();
+        assert!(!h.cockpit.cockpit_console_detail && !h.cockpit.services_open);
+        assert!(mining
+            .computer_labels
+            .iter()
+            .any(|(text, _)| text == "FLIGHT CONSOLE"));
+        assert!(!mining
+            .computer_labels
+            .iter()
+            .any(|(text, _)| text == "Mining routine"));
+        computer_evidence(&mining);
+        let viewport = mining.viewport.unwrap();
+        let clear = egui::Rect::from_min_max(
+            viewport.min + viewport.size() * egui::vec2(0.33, 0.12),
+            viewport.min + viewport.size() * egui::vec2(0.67, 0.70),
+        );
+        let instruments = &h.cockpit.flight_view.instrument_surfaces;
+        assert_eq!(instruments.len(), 5);
+        let instrument_fraction =
+            instruments.iter().map(|s| s.bounds().area()).sum::<f32>() / viewport.area();
+        assert!(
+            instrument_fraction < 0.26,
+            "Actual instrument faces must not bury the world: {instrument_fraction}"
+        );
+        assert!(
+            instruments.iter().all(|s| !s.bounds().intersects(clear)),
+            "Primary forward target region must remain clear"
+        );
         captures.push(capture(Some(&directory), "belt-mining-forward", &mining));
         assert!(!mining.registered_route);
         same_seated_view(&docked, &mining);
@@ -1590,6 +1617,6 @@ fn native_pioneer_cockpit_mining_composition() {
                 same_seated_view(&mining, &shot);
             }
         }
-        std::fs::write(directory.join("receipt.json"),serde_json::to_vec_pretty(&serde_json::json!({"scope":"Actual Cockpit and native renderers; ordinary disposable 5000-ore authority job; no desktop/user-world mutation","captures":captures,"pilot":mining_snapshot.pilots.iter().find(|p|p.name==PILOT),"job":mining_snapshot.resource_jobs,"body_rays":rays})).unwrap()).unwrap();
+        std::fs::write(directory.join("receipt.json"),serde_json::to_vec_pretty(&serde_json::json!({"scope":"Actual Cockpit and native renderers; ordinary disposable 5000-ore authority job; no desktop/user-world mutation","captures":captures,"pilot":mining_snapshot.pilots.iter().find(|p|p.name==PILOT),"job":mining_snapshot.resource_jobs,"body_rays":rays,"instrument_face_fraction":instrument_fraction,"clear_forward_viewport_normalized":[0.33,0.12,0.67,0.70],"default_detailed_management_visible":false})).unwrap()).unwrap();
     }
 }

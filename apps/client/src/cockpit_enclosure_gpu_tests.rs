@@ -927,6 +927,7 @@ fn native_cockpit_shift_keeps_both_instrument_layers_and_live_feed_updating() {
         cockpit.embedded_input = true;
         cockpit.view_mode = crate::ViewMode::Cockpit;
         cockpit.service_tab = crate::ServiceTab::Navigation;
+        cockpit.cockpit_console_detail = true; // Explicit console interaction fixture.
         cockpit.services_open = false;
         cockpit.overview_open = false;
         cockpit.drone_camera = true;

@@ -135,6 +135,7 @@ impl Harness {
         cockpit.overview_open = false;
         cockpit.drone_camera = false;
         cockpit.service_tab = crate::ServiceTab::Corporation;
+        cockpit.cockpit_console_detail = true; // Explicit focused typing fixture.
         cockpit.sound_settings.muted = true;
         let snapshot = cockpit.snapshot.as_mut().unwrap();
         snapshot.docked_traversal_capability =
@@ -718,7 +719,10 @@ fn native_pioneer_docked_composite_computer_pixels_input_and_focus() {
         assert!(requests.try_recv().is_err(),"A physical press from the seated frame must not activate on release after the surface disappears");
         let onfoot = harness.settle();
         assert!(onfoot.depth_pixels > 1000);
-        assert!(onfoot.surface.is_none(),"This upright first-person fixture looks above the actual low computer; old surface must be cleared");
+        assert!(
+            onfoot.surface.is_none(),
+            "Leaving the pilot station must revoke its active computer surface"
+        );
         assert!(onfoot.labels.is_empty(),"Cached canonical vertices must not expose active computer labels without a physical surface");
         assert!(!harness.cockpit.cockpit_computer.wants_keyboard_input());
         assert!(harness

@@ -646,6 +646,7 @@ struct Cockpit {
     timeline_origin: Option<u64>,
     flight_view: flight3d::FlightView,
     cockpit_computer: flight3d::cockpit_computer::CockpitComputer,
+    cockpit_console_detail: bool,
     #[cfg(test)]
     computer_ui_labels: Vec<(String, Pos2)>,
     hangar_view: flight3d::hangar::HangarView,
@@ -774,6 +775,7 @@ impl Cockpit {
                 view
             },
             cockpit_computer: Default::default(),
+            cockpit_console_detail: false,
             #[cfg(test)]
             computer_ui_labels: Vec::new(),
             hangar_view: flight3d::hangar::HangarView::new(cc.gl.as_ref()),
@@ -1813,9 +1815,15 @@ impl Cockpit {
             if ui
                 .add_enabled(
                     enabled,
-                    egui::Button::new(egui::RichText::new(label).strong().size(16.0))
-                        .min_size(Vec2::new(108.0, 32.0))
-                        .fill(self.accent().gamma_multiply(0.26)),
+                    egui::Button::new(egui::RichText::new(label).strong().size(
+                        if self.cockpit_console_detail {
+                            16.0
+                        } else {
+                            24.0
+                        },
+                    ))
+                    .min_size(Vec2::new(108.0, 32.0))
+                    .fill(self.accent().gamma_multiply(0.26)),
                 )
                 .clicked()
             {
@@ -1824,7 +1832,14 @@ impl Cockpit {
             if ui
                 .add_enabled(
                     self.can_fly(),
-                    egui::Button::new("STOP").min_size(Vec2::new(76.0, 32.0)),
+                    egui::Button::new(egui::RichText::new("STOP").size(
+                        if self.cockpit_console_detail {
+                            14.0
+                        } else {
+                            22.0
+                        },
+                    ))
+                    .min_size(Vec2::new(76.0, 32.0)),
                 )
                 .clicked()
             {
@@ -1945,17 +1960,61 @@ impl Cockpit {
         let mut labels = None;
         let output = computer.run(ctx, surface.as_ref(), permission, hit, |ui| {
             ui.spacing_mut().item_spacing = Vec2::new(4.0, 3.0);
+            if !self.cockpit_console_detail {
+                for font in ui.style_mut().text_styles.values_mut() {
+                    font.size = font.size.max(22.0);
+                }
+            }
             self.cockpit_actions(ui);
-            self.power_gauge(ui);
-            self.service_tabs(ui);
-            ui.separator();
-            egui::ScrollArea::vertical()
-                .auto_shrink([false, false])
-                .min_scrolled_height(0.0)
-                .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
-                .id_salt("cockpit_console_content")
-                .max_height(ui.available_height().max(0.0))
-                .show(ui, |ui| self.service_content(ui));
+            if self.cockpit_console_detail {
+                if ui.small_button("Flight view").clicked() {
+                    self.cockpit_console_detail = false;
+                }
+                self.power_gauge(ui);
+                self.service_tabs(ui);
+                ui.separator();
+                egui::ScrollArea::vertical()
+                    .auto_shrink([false, false])
+                    .min_scrolled_height(0.0)
+                    .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
+                    .id_salt("cockpit_console_content")
+                    .max_height(ui.available_height().max(0.0))
+                    .show(ui, |ui| self.service_content(ui));
+            } else {
+                ui.heading("FLIGHT CONSOLE");
+                if let Some(pilot) = self.own() {
+                    ui.label(format!(
+                        "Hold {} / {}",
+                        pilot.ore,
+                        cargo_capacity(pilot.ship_class)
+                    ));
+                    if let Some(job) = self
+                        .snapshot
+                        .as_ref()
+                        .and_then(|s| s.resource_jobs.iter().find(|j| j.pilot == pilot.name))
+                    {
+                        ui.label(format!(
+                            "{:?} · stored {} / {}",
+                            job.phase, job.stored_units, job.target_units
+                        ));
+                    }
+                }
+                ui.horizontal(|ui| {
+                    for (label, tab) in [
+                        ("Flight", ServiceTab::Navigation),
+                        ("Drones", ServiceTab::Drones),
+                        ("Mining", ServiceTab::ShipComputer),
+                    ] {
+                        if ui.button(label).clicked() {
+                            self.service_tab = tab;
+                            self.services_open = true;
+                        }
+                    }
+                    if ui.button("Console pages").clicked() {
+                        self.cockpit_console_detail = true;
+                    }
+                });
+            }
             #[cfg(test)]
             {
                 // Observe the actual secondary-context widgets for CPU input

@@ -1242,23 +1242,43 @@ pub(super) fn migrate_stowed_cockpit_v3(w: &mut World) -> Result<()> {
     }
     let mut ready = Vec::new();
     for (name, account) in &w.accounts {
-        if w.resource_jobs.get(name).is_some_and(|j| !j.view.phase.is_terminal()) {continue;}
+        if w.resource_jobs
+            .get(name)
+            .is_some_and(|j| !j.view.phase.is_terminal())
+        {
+            continue;
+        }
         for (host, actuator) in &account.docked_actuators {
-            if actuator.binding.registration_revision != 3 {continue;}
+            if actuator.binding.registration_revision != 3 {
+                continue;
+            }
             let mut upgraded = actuator.binding.clone();
             upgraded.registration_revision = 4;
             let pose = docked_binding_pose(&upgraded).map_err(anyhow::Error::msg)?;
-            if actuator.hatches_closed() && !actuator.lift.moving
+            if actuator.hatches_closed()
+                && !actuator.lift.moving
                 && actuator.lift.target == DockedLiftStop::Ship
-                && (actuator.lift.floor_station_m - geometry::lift_geometry(pose).ship_floor_m).abs() <= EPSILON_M
-                && actuator.hatches.as_ref().is_none_or(|states| states.iter().all(|h| !h.moving && !h.target_open && h.fraction == 0.0))
+                && (actuator.lift.floor_station_m - geometry::lift_geometry(pose).ship_floor_m)
+                    .abs()
+                    <= EPSILON_M
+                && actuator.hatches.as_ref().is_none_or(|states| {
+                    states
+                        .iter()
+                        .all(|h| !h.moving && !h.target_open && h.fraction == 0.0)
+                })
             {
-                ready.push((name.clone(),host.clone(),upgraded));
+                ready.push((name.clone(), host.clone(), upgraded));
             }
         }
     }
-    for (name,host,binding) in ready {
-        w.accounts.get_mut(&name).unwrap().docked_actuators.get_mut(&host).unwrap().binding = binding;
+    for (name, host, binding) in ready {
+        w.accounts
+            .get_mut(&name)
+            .unwrap()
+            .docked_actuators
+            .get_mut(&host)
+            .unwrap()
+            .binding = binding;
     }
     Ok(())
 }

@@ -1901,37 +1901,180 @@ fn hatch_motion_is_timed_reversible_paused_and_holds_on_power_loss() {
 
 #[test]
 fn stowed_v3_cockpit_rebinds_only_identity_and_occupied_or_open_worlds_stay_untouched() {
-    let mut server=Server::open(":memory:").unwrap();
-    let mut session=None;
-    connected(&mut server,&mut session);
-    leave_and_stand(&mut server,&mut session,LEFT_AT);
-    ok(command(&mut server,&mut session,DockedTraversalRequest::TakeSeat{binding:binding()},STANDING_AT+1));
-    let response=snapshot(&mut server,&mut session,STANDING_AT+1+DOCKED_SEAT_TRANSITION_MS);
+    let mut server = Server::open(":memory:").unwrap();
+    let mut session = None;
+    connected(&mut server, &mut session);
+    leave_and_stand(&mut server, &mut session, LEFT_AT);
+    ok(command(
+        &mut server,
+        &mut session,
+        DockedTraversalRequest::TakeSeat { binding: binding() },
+        STANDING_AT + 1,
+    ));
+    let response = snapshot(
+        &mut server,
+        &mut session,
+        STANDING_AT + 1 + DOCKED_SEAT_TRANSITION_MS,
+    );
     assert!(pilot(&response).station_avatar.is_none());
-    let mut old:World=serde_json::from_str(&durable(&server)).unwrap();
-    for actuator in old.accounts.get_mut("Walker").unwrap().docked_actuators.values_mut() {
-        actuator.binding.registration_revision=3;
+    let mut old: World = serde_json::from_str(&durable(&server)).unwrap();
+    for actuator in old
+        .accounts
+        .get_mut("Walker")
+        .unwrap()
+        .docked_actuators
+        .values_mut()
+    {
+        actuator.binding.registration_revision = 3;
     }
-    let mut expected=old.clone();
-    for actuator in expected.accounts.get_mut("Walker").unwrap().docked_actuators.values_mut() {
-        actuator.binding.registration_revision=4;
+    let mut expected = old.clone();
+    for actuator in expected
+        .accounts
+        .get_mut("Walker")
+        .unwrap()
+        .docked_actuators
+        .values_mut()
+    {
+        actuator.binding.registration_revision = 4;
     }
-    let mut migrated=old.clone();
+    let mut migrated = old.clone();
     docked_traversal::migrate_stowed_cockpit_v3(&mut migrated).unwrap();
-    assert_eq!(serde_json::to_value(&migrated).unwrap(),serde_json::to_value(&expected).unwrap(),"Only registration binding may change, preserving all economic/physical state");
-    validate(&migrated,None).unwrap();
-    for open in [false,true] {
-        let mut blocked=old.clone();
+    assert_eq!(
+        serde_json::to_value(&migrated).unwrap(),
+        serde_json::to_value(&expected).unwrap(),
+        "Only registration binding may change, preserving all economic/physical state"
+    );
+    validate(&migrated, None).unwrap();
+    for open in [false, true] {
+        let mut blocked = old.clone();
         if open {
-            blocked.accounts.get_mut("Walker").unwrap().docked_actuators.values_mut().next().unwrap().inner_hatch_open=true;
+            blocked
+                .accounts
+                .get_mut("Walker")
+                .unwrap()
+                .docked_actuators
+                .values_mut()
+                .next()
+                .unwrap()
+                .inner_hatch_open = true;
         } else {
-            let avatar=StationAvatar {docked_traversal:None,onboard_interior:true,
-                interior_deck:2,jump_started_ms:None,seated:false,position:[0.;3],
-                heading:0.,moving:false,sprinting:false,updated_at_ms:0};
-            blocked.pilots.get_mut("Walker").unwrap().view.station_avatar=Some(avatar);
+            let avatar = StationAvatar {
+                docked_traversal: None,
+                onboard_interior: true,
+                interior_deck: 2,
+                jump_started_ms: None,
+                seated: false,
+                position: [0.; 3],
+                heading: 0.,
+                moving: false,
+                sprinting: false,
+                updated_at_ms: 0,
+            };
+            blocked
+                .pilots
+                .get_mut("Walker")
+                .unwrap()
+                .view
+                .station_avatar = Some(avatar);
         }
-        let before=serde_json::to_value(&blocked).unwrap();
+        let before = serde_json::to_value(&blocked).unwrap();
         docked_traversal::migrate_stowed_cockpit_v3(&mut blocked).unwrap();
-        assert_eq!(serde_json::to_value(&blocked).unwrap(),before);
+        assert_eq!(serde_json::to_value(&blocked).unwrap(), before);
     }
+}
+
+#[test]
+#[ignore = "Explicit operator-supplied copied user world only; never opens original world"]
+fn cockpit_v4_reopens_copied_completed_world_without_economic_changes() {
+    use sha2::{Digest, Sha256};
+    let directory = std::path::PathBuf::from(
+        std::env::var_os("ARKLINE_COCKPIT_COMPAT_COPY").expect("Explicit copied-world directory"),
+    );
+    assert!(directory
+        .to_string_lossy()
+        .starts_with("/tmp/arkline-cockpit-compat-copy-"));
+    let path = directory.join("world.sqlite");
+    assert!(path.is_file());
+    let read = || {
+        let db = rusqlite::Connection::open_with_flags(
+            &path,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+        )
+        .unwrap();
+        let raw: String = db
+            .query_row("SELECT json FROM world WHERE id=1", [], |r| r.get(0))
+            .unwrap();
+        let ledger = db
+            .prepare("SELECT json FROM ledger ORDER BY sequence")
+            .unwrap()
+            .query_map([], |r| r.get::<_, String>(0))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        (serde_json::from_str::<World>(&raw).unwrap(), ledger)
+    };
+    let (before, ledger) = read();
+    let job = &before.resource_jobs["PioneerFinish11QA"].view;
+    assert_eq!(
+        (job.target_units, job.mined_units, job.stored_units),
+        (5000, 5000, 5000)
+    );
+    assert_eq!(job.phase, ResourceJobPhase::Completed);
+    let before_jobs = serde_json::to_value(&before.resource_jobs).unwrap();
+    let mut expected_accounts = before.accounts.clone();
+    for account in expected_accounts.values_mut() {
+        for a in account.docked_actuators.values_mut() {
+            assert_eq!(a.binding.registration_revision, 3);
+            a.binding.registration_revision = 4;
+        }
+    }
+    let world = crate::editor::EditorWorld::open(&directory)
+        .expect("Copied stowed v3 world must safely open in v4");
+    assert!(world.is_paused());
+    let reopened_at = world.time();
+    drop(world);
+    // Normal restart already timestamps stationary boarding equipment. Permit
+    // exactly those timestamps in addition to the proved identity-only rebind.
+    for account in expected_accounts.values_mut() {
+        for a in account.docked_actuators.values_mut() {
+            a.lift.updated_at_ms = reopened_at;
+            if let Some(hatches) = &mut a.hatches {
+                for h in hatches {
+                    h.updated_at_ms = reopened_at;
+                }
+            }
+        }
+    }
+    let (after, after_ledger) = read();
+    assert_eq!(
+        ledger, after_ledger,
+        "No economic event may be added, removed or rewritten"
+    );
+    assert_eq!(
+        before_jobs,
+        serde_json::to_value(&after.resource_jobs).unwrap()
+    );
+    assert_eq!(
+        serde_json::to_value(&expected_accounts).unwrap(),
+        serde_json::to_value(&after.accounts).unwrap(),
+        "Only stowed binding and standard restart timestamps may change in accounts"
+    );
+    for (name, pilot) in &before.pilots {
+        let actual = &after.pilots[name].view;
+        assert_eq!(
+            (pilot.view.ore, pilot.view.credits, &pilot.view.location),
+            (actual.ore, actual.credits, &actual.location)
+        );
+        assert_eq!(pilot.view.station_avatar, actual.station_avatar);
+    }
+    let receipt = serde_json::json!({"scope":"Candidate compatibility test on an independently backed-up COPY only","directory":directory,"old_registration":3,"new_registration":4,"job":after.resource_jobs["PioneerFinish11QA"].view,"ledger_rows":ledger.len(),"ledger_sha256":hex::encode(Sha256::digest(serde_json::to_vec(&ledger).unwrap())),"accounts_unchanged_except_binding_and_standard_restart_timestamps":true,"cargo_credits_locations_avatars_unchanged":true});
+    std::fs::write(
+        directory.join("compatibility-receipt.json"),
+        serde_json::to_vec_pretty(&receipt).unwrap(),
+    )
+    .unwrap();
+    eprintln!(
+        "Copied user world: 5000 mined/stored preserved; {} ledger rows unchanged",
+        ledger.len()
+    );
 }

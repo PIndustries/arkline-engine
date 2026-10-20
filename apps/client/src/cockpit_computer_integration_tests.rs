@@ -25,6 +25,12 @@ impl Journey {
             journey.step(vec![]);
         }
         assert!(journey.cockpit.flight_view.computer_surface().is_some());
+        let focus = journey.require_label("Console pages");
+        journey.click(focus);
+        for _ in 0..4 {
+            journey.step(vec![]);
+        }
+        assert!(journey.cockpit.cockpit_console_detail);
         journey
     }
 

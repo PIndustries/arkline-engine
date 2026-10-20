@@ -1507,14 +1507,14 @@ fn add_cockpit_furniture(g: &mut PioneerDockedGeometry) {
     for (id, min, max, material) in [
         (
             "console/worktop",
-            [33.88, 0.90, 2.25],
-            [34.44, 0.97, 3.75],
+            [33.88, 0.82, 2.25],
+            [34.44, 0.89, 3.75],
             Carbon,
         ),
         (
             "console/front-support",
             [34.36, FLOOR, 2.25],
-            [34.44, 0.90, 3.75],
+            [34.44, 0.82, 3.75],
             Graphite,
         ),
         (
@@ -1525,20 +1525,20 @@ fn add_cockpit_furniture(g: &mut PioneerDockedGeometry) {
         ),
         (
             "console/center-mount",
-            [34.06, 0.97, 2.82],
-            [34.12, 1.12, 3.18],
+            [34.06, 0.89, 2.82],
+            [34.12, 1.00, 3.18],
             Titanium,
         ),
         (
             "console/port-mount",
-            [34.38, 0.97, 2.35],
-            [34.43, 1.37, 2.65],
+            [34.38, 0.89, 2.35],
+            [34.43, 1.25, 2.65],
             Titanium,
         ),
         (
             "console/starboard-mount",
-            [34.38, 0.97, 3.35],
-            [34.43, 1.37, 3.65],
+            [34.38, 0.89, 3.35],
+            [34.43, 1.25, 3.65],
             Titanium,
         ),
         // The inner canopy perimeter joins the existing roof and front floor;
@@ -1625,11 +1625,11 @@ pub fn cockpit_screen(index: usize) -> Option<([f64; 3], [f64; 3])> {
     // with the central interactive display below the forward sightline.
     let (center, half) = match index {
         0 => ([34.94, 1.112, 3.0], [0.020, 0.075, 0.18]),
-        1 => ([35.36, 0.77, 2.49], [0.012, 0.13, 0.17]),
-        2 => ([35.36, 0.77, 3.51], [0.012, 0.13, 0.17]),
-        3 => ([35.05, 0.80, 3.0], [0.020, 0.140, 0.210]),
-        4 => ([35.36, 1.02, 2.49], [0.012, 0.085, 0.17]),
-        5 => ([35.36, 1.02, 3.51], [0.012, 0.085, 0.17]),
+        1 => ([35.36, 0.65, 2.49], [0.012, 0.10, 0.17]),
+        2 => ([35.36, 0.65, 3.51], [0.012, 0.10, 0.17]),
+        3 => ([35.05, 0.72, 3.0], [0.020, 0.100, 0.210]),
+        4 => ([35.36, 0.90, 2.49], [0.012, 0.085, 0.17]),
+        5 => ([35.36, 0.90, 3.51], [0.012, 0.085, 0.17]),
         _ => return None,
     };
     Some((workstation_point(center), half))
@@ -2541,10 +2541,12 @@ mod tests {
         }
         assert_eq!(pilot_joints(0.0).eye_m, [33.22, 1.35, 3.0]);
         assert_eq!(pilot_joints(1.0).eye_m, [33.54, 1.33, 3.0]);
-        assert_eq!(
-            cockpit_screen(3),
-            Some(([34.05, 1.15, 3.0], [0.020, 0.140, 0.210]))
-        );
+        let (center, half) = cockpit_screen(3).unwrap();
+        assert!(center
+            .iter()
+            .zip([34.05, 1.07, 3.0])
+            .all(|(a, b)| (a - b).abs() < EPS));
+        assert_eq!(half, [0.020, 0.100, 0.210]);
         assert!(cockpit_screen(6).is_none());
     }
 
