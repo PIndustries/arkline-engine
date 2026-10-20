@@ -668,30 +668,7 @@ impl Cockpit {
                 );
                 if !primary_promoted {
                     self.interior_exit_action(ui, avatar, interior_available, distance);
-                    let lift_distance = avatar
-                        .position
-                        .iter()
-                        .zip(PIONEER_LIFT_POINT)
-                        .map(|(a, b)| (a - b).powi(2))
-                        .sum::<f64>()
-                        .sqrt();
-                    let next_deck = if avatar.interior_deck == 1 { 2 } else { 1 };
-                    if ui
-                        .add_enabled(
-                            self.can_operate()
-                                && self
-                                    .assets
-                                    .as_ref()
-                                    .is_some_and(|a| a.pioneer_interior_decks >= 2)
-                                && lift_distance <= PIONEER_LIFT_RANGE
-                                && avatar.jump_started_ms.is_none(),
-                            egui::Button::new(format!("Use lift to deck {next_deck}")),
-                        )
-                        .clicked()
-                    {
-                        self.send(Request::InteriorLift { deck: next_deck });
-                    }
-                    ui.small(format!("Access-core lift · {:.1} m", lift_distance));
+                    self.legacy_interior_lift_controls(ui, avatar);
                     if avatar.interior_deck == 1 {
                         ui.small(format!("Return to airlock · {:.1} m", distance));
                     } else {
@@ -942,6 +919,61 @@ impl Cockpit {
         }
     }
 
+    /// Retained legacy interiors use the existing authoritative deck-lift request.
+    /// Never present this route to a registered continuous-traversal avatar.
+    fn legacy_interior_lift_controls(&mut self, ui: &mut egui::Ui, avatar: &StationAvatar) {
+        if !avatar.onboard_interior || avatar.docked_traversal.is_some() {
+            return;
+        }
+        let distance = avatar
+            .position
+            .iter()
+            .zip(PIONEER_LIFT_POINT)
+            .map(|(a, b)| (a - b).powi(2))
+            .sum::<f64>()
+            .sqrt();
+        let supported = self.assets.as_ref().is_some_and(|assets| {
+            assets.pioneer_interior_available && assets.pioneer_interior_decks >= 2
+        });
+        let blocked = if !self.connected {
+            Some("Reconnect to use the interior lift")
+        } else if self.embedded_paused {
+            Some("Resume simulation to use the interior lift")
+        } else if self.request_pending {
+            Some("Waiting for command confirmation")
+        } else if !supported {
+            Some("Two-deck interior lift unavailable on this server")
+        } else if self.own().is_none_or(|pilot| {
+            pilot.location != Location::Docked || pilot.ship_class != ShipClass::Pioneer
+        }) {
+            Some("Dock the Pioneer to use this interior lift")
+        } else if avatar.seated {
+            Some("Stand up before using the interior lift")
+        } else if avatar.jump_started_ms.is_some() {
+            Some("Land on the access-core lift landing first")
+        } else if !distance.is_finite() || distance > PIONEER_LIFT_RANGE {
+            Some("Move onto the marked access-core lift landing")
+        } else if !(1..=2).contains(&avatar.interior_deck) {
+            Some("Interior deck state unavailable")
+        } else {
+            None
+        };
+        let next_deck = if avatar.interior_deck == 1 { 2 } else { 1 };
+        if ui
+            .add_enabled(
+                blocked.is_none(),
+                egui::Button::new(format!("Use lift to deck {next_deck}")),
+            )
+            .clicked()
+        {
+            self.send(Request::InteriorLift { deck: next_deck });
+        }
+        ui.small(format!("Access-core lift · {distance:.1} m"));
+        if let Some(reason) = blocked {
+            ui.small(reason);
+        }
+    }
+
     fn interior_exit_prompt(&mut self, ui: &mut egui::Ui, avatar: &StationAvatar) {
         let distance = avatar
             .position
@@ -961,29 +993,8 @@ impl Cockpit {
             .is_some_and(crate::room_controls::panel_access);
         ui.horizontal_wrapped(|ui| {
             ui.strong(format!("AIRLOCK · DECK {}", avatar.interior_deck));
-            if avatar.interior_deck != 1 {
-                let lift_distance = avatar
-                    .position
-                    .iter()
-                    .zip(PIONEER_LIFT_POINT)
-                    .map(|(a, b)| (a - b).powi(2))
-                    .sum::<f64>()
-                    .sqrt();
-                let lift_enabled = self.can_operate()
-                    && self
-                        .assets
-                        .as_ref()
-                        .is_some_and(|assets| assets.pioneer_interior_decks >= 2)
-                    && lift_distance <= PIONEER_LIFT_RANGE
-                    && avatar.jump_started_ms.is_none();
-                if ui
-                    .add_enabled(lift_enabled, egui::Button::new("Lift to deck 1").small())
-                    .clicked()
-                {
-                    self.send(Request::InteriorLift { deck: 1 });
-                }
-                ui.small(format!("Lift · {lift_distance:.1} m"));
-            } else {
+            self.legacy_interior_lift_controls(ui, avatar);
+            if avatar.interior_deck == 1 {
                 if door_open {
                     let exit_enabled = self.can_operate()
                         && interior_available
@@ -1703,6 +1714,118 @@ mod tests {
             });
         }
         cockpit
+    }
+
+    #[test]
+    fn legacy_interior_compact_and_full_lift_share_both_directions_and_interlocks() {
+        for compact in [true, false] {
+            for deck in [1, 2] {
+                for (blocked, explanation) in [
+                    ("", ""),
+                    ("paused", "Resume simulation"),
+                    ("distant", "marked access-core lift landing"),
+                    ("jumping", "Land on"),
+                    ("seated", "Stand up"),
+                    ("unsupported", "unavailable on this server"),
+                    ("offline", "Reconnect"),
+                ] {
+                    let ctx = egui::Context::default();
+                    let mut c = docked_fixture(&ctx, false);
+                    c.embedded_paused = blocked == "paused";
+                    c.connected = blocked != "offline";
+                    if blocked == "unsupported" {
+                        c.assets.as_mut().unwrap().pioneer_interior_decks = 1;
+                    }
+                    let avatar = StationAvatar {
+                        sprinting: false,
+                        docked_traversal: None,
+                        onboard_interior: true,
+                        interior_deck: deck,
+                        jump_started_ms: (blocked == "jumping").then_some(1000),
+                        seated: blocked == "seated",
+                        position: if blocked == "distant" {
+                            [1000.0, 0.0, 1000.0]
+                        } else {
+                            PIONEER_LIFT_POINT
+                        },
+                        heading: 0.0,
+                        moving: false,
+                        updated_at_ms: 1000,
+                    };
+                    c.snapshot.as_mut().unwrap().pilots[0].station_avatar = Some(avatar.clone());
+                    let before = serde_json::to_value(&c.snapshot).unwrap();
+                    let (tx, rx) = mpsc::channel();
+                    c.commands = Some(tx);
+                    let destination = if deck == 1 { 2 } else { 1 };
+                    let label = format!("Use lift to deck {destination}");
+                    let mut target = None;
+                    let mut explanation_seen = false;
+                    for pass in 0..4 {
+                        let events = match (pass, target) {
+                            (2, Some(pos)) => vec![
+                                egui::Event::PointerMoved(pos),
+                                egui::Event::PointerButton {
+                                    pos,
+                                    button: egui::PointerButton::Primary,
+                                    pressed: true,
+                                    modifiers: egui::Modifiers::NONE,
+                                },
+                            ],
+                            (3, Some(pos)) => vec![egui::Event::PointerButton {
+                                pos,
+                                button: egui::PointerButton::Primary,
+                                pressed: false,
+                                modifiers: egui::Modifiers::NONE,
+                            }],
+                            _ => vec![],
+                        };
+                        let output = ctx.run(
+                            egui::RawInput {
+                                screen_rect: Some(egui::Rect::from_min_size(
+                                    Pos2::ZERO,
+                                    Vec2::new(900.0, 650.0),
+                                )),
+                                events,
+                                ..Default::default()
+                            },
+                            |ctx| {
+                                egui::CentralPanel::default().show(ctx, |ui| {
+                                    if compact {
+                                        c.interior_exit_prompt(ui, &avatar);
+                                    } else {
+                                        c.station_actions(ui);
+                                    }
+                                });
+                            },
+                        );
+                        for shape in output.shapes {
+                            if let egui::Shape::Text(text) = shape.shape {
+                                if text.galley.text() == label {
+                                    let center = text.pos + text.galley.rect.center().to_vec2();
+                                    assert!(shape.clip_rect.contains(center));
+                                    target = Some(center);
+                                }
+                                explanation_seen |= !explanation.is_empty()
+                                    && text.galley.text().contains(explanation);
+                            }
+                        }
+                    }
+                    assert!(
+                        target.is_some(),
+                        "deck {deck}, compact {compact}: action missing"
+                    );
+                    if blocked.is_empty() {
+                        assert!(
+                            matches!(rx.try_recv(), Ok(Request::InteriorLift {deck}) if deck == destination)
+                        );
+                    } else {
+                        assert!(explanation_seen, "Missing explanation for {blocked}");
+                        assert!(rx.try_recv().is_err(), "{blocked} must not send travel");
+                    }
+                    assert_eq!(serde_json::to_value(&c.snapshot).unwrap(), before);
+                }
+            }
+        }
     }
 
     #[test]
