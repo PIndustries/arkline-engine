@@ -29,6 +29,23 @@ class BuildGuardTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 guard.check_workspace(root)
 
+    def test_disposable_project_does_not_discover_parent_repository(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name).resolve()
+            subprocess.run(["/usr/bin/git", "init", "-q", str(root)], check=True)
+            fixture = root / ".build/tmp/disposable-project"
+            fixture.mkdir(parents=True)
+            inherited = subprocess.run(
+                ["/usr/bin/git", "-C", str(fixture), "rev-parse", "--show-toplevel"],
+                capture_output=True, text=True,
+            )
+            self.assertEqual(inherited.returncode, 0)
+            isolated = subprocess.run(
+                ["/usr/bin/git", "-C", str(fixture), "rev-parse", "--show-toplevel"],
+                env=guard.child_environment(root), capture_output=True, text=True,
+            )
+            self.assertNotEqual(isolated.returncode, 0)
+
     def test_guard_stops_its_owned_process_group(self):
         child = subprocess.Popen(
             [sys.executable, "-c", "import time; time.sleep(30)"],

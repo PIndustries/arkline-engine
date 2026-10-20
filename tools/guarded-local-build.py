@@ -42,6 +42,8 @@ def child_environment(root):
         "CARGO_PROFILE_DEV_DEBUG": "0",
         "CARGO_PROFILE_TEST_DEBUG": "0",
         "TMPDIR": str(root / ".build" / "tmp"),
+        # Disposable projects must not inherit this checkout's ignore rules.
+        "GIT_CEILING_DIRECTORIES": str(root / ".build" / "tmp"),
         "PATH": str(TOOLCHAIN) + os.pathsep + env.get("PATH", ""),
         "RUSTUP_TOOLCHAIN": "1.89.0",
     })
