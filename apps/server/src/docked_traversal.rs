@@ -7,6 +7,7 @@ const CONTROL_RANGE_M: f64 = 3.0;
 const SEAT_RANGE_M: f64 = 1.0;
 const STEP_M: f64 = 0.24;
 const LIFT_SPEED_MPS: f64 = 1.0;
+const LIFT_TARGET_EPSILON_M: f64 = 1.0e-8;
 const EPSILON_M: f64 = 0.015;
 
 type CachedGeometry = Option<(String, Arc<PioneerDockedGeometry>)>;
@@ -536,8 +537,10 @@ pub(super) fn execute(
                         DockedLiftStop::Ship => lift.ship_floor_m,
                         DockedLiftStop::Station => lift.station_floor_m,
                     };
+                    // Complete the physical approach even when already within
+                    // a hatch/control tolerance; no command snaps the platform.
                     actuator.lift.moving =
-                        (actuator.lift.floor_station_m - target).abs() > EPSILON_M;
+                        (actuator.lift.floor_station_m - target).abs() > LIFT_TARGET_EPSILON_M;
                 }
                 DockedTraversalRequest::LeaveSeat { .. } | DockedTraversalRequest::Walk { .. } => {
                     unreachable!()
@@ -592,7 +595,7 @@ fn advance_actor(
                 };
                 let delta = (target - old_floor).clamp(-LIFT_SPEED_MPS * dt, LIFT_SPEED_MPS * dt);
                 actuator.lift.floor_station_m += delta;
-                if (target - actuator.lift.floor_station_m).abs() <= 1.0e-8 {
+                if (target - actuator.lift.floor_station_m).abs() <= LIFT_TARGET_EPSILON_M {
                     actuator.lift.floor_station_m = target;
                     actuator.lift.moving = false;
                 }

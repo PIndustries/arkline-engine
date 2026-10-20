@@ -1365,3 +1365,194 @@ fn authority_walks_from_pilot_seat_down_both_core_stairs_and_back_without_telepo
         source_geometry
     );
 }
+
+#[test]
+fn authority_reverses_lift_within_hatch_tolerance_without_stopping_short() {
+    let mut server = Server::open(":memory:").unwrap();
+    let mut session = None;
+    connected(&mut server, &mut session);
+    leave_and_stand(&mut server, &mut session, LEFT_AT);
+    let mut now = STANDING_AT;
+    let pose = PioneerDockedPose::private();
+    let hatches = geometry::hatch_anchors(pose);
+    let lift = geometry::lift_geometry(pose);
+    for point in ship_route(pose) {
+        walk_to(&mut server, &mut session, &mut now, point);
+    }
+    ok(set_hatch(
+        &mut server,
+        &mut session,
+        now,
+        DockedHatch::Inner,
+        true,
+    ));
+    walk_to(
+        &mut server,
+        &mut session,
+        &mut now,
+        hatches.inner_outside_station_m,
+    );
+    walk_to(
+        &mut server,
+        &mut session,
+        &mut now,
+        hatches.outer_inside_station_m,
+    );
+    ok(set_hatch(
+        &mut server,
+        &mut session,
+        now,
+        DockedHatch::Inner,
+        false,
+    ));
+    ok(set_hatch(
+        &mut server,
+        &mut session,
+        now,
+        DockedHatch::Outer,
+        true,
+    ));
+    walk_to(
+        &mut server,
+        &mut session,
+        &mut now,
+        hatches.outer_outside_station_m,
+    );
+    ok(set_hatch(
+        &mut server,
+        &mut session,
+        now,
+        DockedHatch::Outer,
+        false,
+    ));
+    let platform = [
+        lift.center_station_m[0],
+        lift.ship_floor_m,
+        lift.center_station_m[2],
+    ];
+    let aboard_lift = walk_to(&mut server, &mut session, &mut now, platform);
+    assert_eq!(traversal(&aboard_lift).support, DockedSupport::BoardingLift);
+    assert_eq!(
+        traversal(&aboard_lift).actuators.lift.floor_station_m,
+        lift.ship_floor_m
+    );
+    ok(command(
+        &mut server,
+        &mut session,
+        DockedTraversalRequest::CallLift {
+            binding: binding(),
+            stop: DockedLiftStop::Station,
+        },
+        now,
+    ));
+    now += 13;
+    let lowered = snapshot(&mut server, &mut session, now);
+    let lowered_state = traversal(&lowered);
+    let lowered_floor = lowered_state.actuators.lift.floor_station_m;
+    assert!((lift.ship_floor_m - lowered_floor - 0.013).abs() < 1.0e-8);
+    assert_eq!(lowered_state.support, DockedSupport::BoardingLift);
+    assert!(lowered_state.grounded && lowered_state.actuators.lift.moving);
+    assert!((lowered_state.feet_m[1] - lowered_floor).abs() < 1.0e-8);
+    let dynamic = |state: &DockedTraversalState| {
+        geometry::dynamic_geometry(
+            pose,
+            PioneerDockedActuators {
+                room_door_open: true,
+                inner_hatch_open: state.actuators.inner_hatch_open,
+                outer_hatch_open: state.actuators.outer_hatch_open,
+                lift_floor_station_m: state.actuators.lift.floor_station_m,
+                chair_fold: 1.0,
+            },
+        )
+        .unwrap()
+    };
+    assert!(dynamic(lowered_state)
+        .panels
+        .iter()
+        .any(|panel| panel.id == "boarding/lift-gate/ship"));
+    let reversed = ok(command(
+        &mut server,
+        &mut session,
+        DockedTraversalRequest::CallLift {
+            binding: binding(),
+            stop: DockedLiftStop::Ship,
+        },
+        now,
+    ));
+    let reversed_state = traversal(&reversed);
+    assert_eq!(reversed_state.actuators.lift.target, DockedLiftStop::Ship);
+    assert!(
+        reversed_state.actuators.lift.moving,
+        "13mm remaining must finish under powered integration"
+    );
+    assert_eq!(reversed_state.actuators.lift.floor_station_m, lowered_floor);
+    assert_eq!(
+        reversed_state.feet_m, lowered_state.feet_m,
+        "a call must not snap the platform or rider to its target"
+    );
+    now += 5;
+    let approaching = snapshot(&mut server, &mut session, now);
+    let approaching_state = traversal(&approaching);
+    assert!(approaching_state.actuators.lift.moving);
+    assert!(
+        (approaching_state.actuators.lift.floor_station_m - lowered_floor - 0.005).abs() < 1.0e-8
+    );
+    assert!((approaching_state.feet_m[1] - lowered_state.feet_m[1] - 0.005).abs() < 1.0e-8);
+    assert_eq!(
+        [approaching_state.feet_m[0], approaching_state.feet_m[2]],
+        [lowered_state.feet_m[0], lowered_state.feet_m[2]]
+    );
+    now += 8;
+    let docked = snapshot(&mut server, &mut session, now);
+    let docked_state = traversal(&docked);
+    assert!(!docked_state.actuators.lift.moving);
+    assert_eq!(
+        docked_state.actuators.lift.floor_station_m,
+        lift.ship_floor_m
+    );
+    assert!((docked_state.feet_m[1] - lift.ship_floor_m).abs() < 1.0e-8);
+    assert_eq!(docked_state.support, DockedSupport::BoardingLift);
+    assert!(!dynamic(docked_state)
+        .panels
+        .iter()
+        .any(|panel| panel.id == "boarding/lift-gate/ship"));
+    // Cross the actual lowered gate and outer hatch into the ship, using only
+    // accepted walking commands after the platform has physically docked.
+    walk_to(
+        &mut server,
+        &mut session,
+        &mut now,
+        hatches.outer_outside_station_m,
+    );
+    ok(set_hatch(
+        &mut server,
+        &mut session,
+        now,
+        DockedHatch::Outer,
+        true,
+    ));
+    let inside = walk_to(
+        &mut server,
+        &mut session,
+        &mut now,
+        hatches.outer_inside_station_m,
+    );
+    let inside_state = traversal(&inside);
+    assert!(inside_state.grounded && !inside_state.moving);
+    assert_ne!(inside_state.support, DockedSupport::BoardingLift);
+    assert!((inside_state.feet_m[1] - lift.ship_floor_m).abs() < 1.0e-8);
+    assert!(geometry::capsule_clear_station(
+        &geometry::registered_geometry(&default_pioneer_room_layout()).unwrap(),
+        &dynamic(inside_state),
+        pose,
+        inside_state.feet_m
+    ));
+    assert_stopped_legacy_marker(&inside);
+    ok(set_hatch(
+        &mut server,
+        &mut session,
+        now,
+        DockedHatch::Outer,
+        false,
+    ));
+}
