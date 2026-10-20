@@ -109,3 +109,62 @@ fn explicit_stage_bridge_preserves_different_staged_work_and_never_accepts_or_sa
     assert_eq!(imports.index, before.0);
     assert_eq!(imports.saved, before.1);
 }
+
+#[test]
+fn generated_normal_preview_is_rejected_before_import_state_changes() {
+    let mut imports = imports();
+    let accepted = wedge();
+    let staged = spire();
+    imports.index = imports
+        .index
+        .accept(&accepted, "Original source".into(), "License".into())
+        .unwrap();
+    imports.accepted = Some(accepted.clone());
+    imports.staged = Some(staged.clone());
+    imports.path = "Existing/candidate.glb".into();
+    imports.candidate_label = "Existing candidate".into();
+    imports.source = "Unsaved source reference".into();
+    imports.license = "Unsaved license reference".into();
+    imports.message = "Existing status".into();
+    let before = (
+        imports.index.clone(),
+        imports.saved.clone(),
+        imports.edit,
+        imports.candidate,
+        imports.path.clone(),
+        imports.candidate_label.clone(),
+        imports.source.clone(),
+        imports.license.clone(),
+        imports.show_staged,
+        imports.message.clone(),
+    );
+    let generated = Verified::decode_preview(
+        include_bytes!("../../../assets/examples/calibration-cube.glb").to_vec(),
+    )
+    .unwrap();
+    assert!(generated.geometry.uses_generated_normals());
+    assert_eq!(
+        imports
+            .stage_browser_preview("Calibration".into(), generated)
+            .err()
+            .as_deref(),
+        Some(doc::PREVIEW_ONLY_REASON)
+    );
+    assert_eq!(
+        (
+            imports.index.clone(),
+            imports.saved.clone(),
+            imports.edit,
+            imports.candidate,
+            imports.path.clone(),
+            imports.candidate_label.clone(),
+            imports.source.clone(),
+            imports.license.clone(),
+            imports.show_staged,
+            imports.message.clone(),
+        ),
+        before
+    );
+    assert_eq!(imports.accepted.as_ref().unwrap().sha256, accepted.sha256);
+    assert_eq!(imports.staged.as_ref().unwrap().sha256, staged.sha256);
+}

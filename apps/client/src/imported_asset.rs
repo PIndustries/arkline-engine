@@ -17,6 +17,7 @@ pub struct ImportReport {
 }
 pub struct ImportedGeometry {
     parts: Vec<ship_asset::Primitive>,
+    generated_normals: bool,
     pub report: ImportReport,
 }
 impl ImportedGeometry {
@@ -28,6 +29,20 @@ impl ImportedGeometry {
     }
 
     pub fn decode(bytes: &[u8]) -> Result<Self, String> {
+        Self::decode_with_mode(bytes, false)
+    }
+
+    /// Preview-only repair for absent NORMAL attributes. Original bytes remain
+    /// unchanged; authoring import, acceptance and saving must use strict data.
+    pub fn decode_preview(bytes: &[u8]) -> Result<Self, String> {
+        Self::decode_with_mode(bytes, true)
+    }
+
+    pub fn uses_generated_normals(&self) -> bool {
+        self.generated_normals
+    }
+
+    fn decode_with_mode(bytes: &[u8], preview: bool) -> Result<Self, String> {
         if bytes.len() > 16 * 1024 * 1024 {
             return Err("GLB exceeds 16 MiB".into());
         }
@@ -41,7 +56,11 @@ impl ImportedGeometry {
         }
         // Bound names before the shared decoder copies them into draw batches.
         // All existing embedded-asset geometry/feature limits remain enforced.
-        let parts = ship_asset::decode(bytes)?;
+        let (parts, generated_normals) = if preview {
+            ship_asset::decode_preview(bytes)?
+        } else {
+            (ship_asset::decode(bytes)?, false)
+        };
         if doc.cameras().len() != 0 {
             return Err("Cameras/lights are unsupported in project geometry".into());
         }
@@ -67,6 +86,9 @@ impl ImportedGeometry {
             "No textures, animation, skins, morphs, external resources or physical properties"
                 .into(),
         ];
+        if generated_normals {
+            notes.push("Preview only: missing NORMAL attributes were replaced with generated flat face normals. Original asset bytes are unchanged; this geometry cannot be staged, accepted or saved.".into());
+        }
         if doc.meshes().flat_map(|m| m.primitives()).any(|p| {
             p.attributes()
                 .any(|(s, _)| !matches!(s, gltf::Semantic::Positions | gltf::Semantic::Normals))
@@ -100,6 +122,7 @@ impl ImportedGeometry {
                 notes,
             },
             parts,
+            generated_normals,
         })
     }
 }
@@ -763,6 +786,55 @@ mod tests {
             )(display, surface);
             sym!("eglTerminate", unsafe extern "C" fn(*mut c_void) -> u32)(display);
             dlclose(lib);
+        }
+    }
+
+    #[test]
+    fn preview_missing_normals_reports_measured_calibration_and_preserves_original_asset() {
+        use sha2::{Digest, Sha256};
+        let bytes = include_bytes!("../../../assets/examples/calibration-cube.glb").to_vec();
+        let original = bytes.clone();
+        let hash = Sha256::digest(&bytes);
+        assert_eq!(
+            ImportedGeometry::decode(&bytes).err().unwrap(),
+            "Missing ship normals"
+        );
+        let geometry = ImportedGeometry::decode_preview(&bytes).unwrap();
+        assert!(geometry.uses_generated_normals());
+        assert_eq!(geometry.report.version, 1);
+        assert_eq!(geometry.report.triangles, 12);
+        assert_eq!(geometry.report.primitives, 1);
+        assert_eq!(geometry.report.min_m, [0.0; 3]);
+        assert_eq!(geometry.report.max_m, [1.0; 3]);
+        assert!(geometry
+            .report
+            .notes
+            .iter()
+            .any(|note| note.contains("Preview only")
+                && note.contains("generated flat face normals")));
+        assert!(geometry
+            .parts
+            .iter()
+            .flat_map(|part| &part.vertices)
+            .all(|vertex| vertex.n.is_finite() && (vertex.n.length() - 1.0).abs() < 1e-5));
+        assert_eq!(bytes, original);
+        assert_eq!(Sha256::digest(&bytes), hash);
+    }
+
+    #[test]
+    fn preview_with_existing_normals_retains_strict_geometry_and_has_no_repair_flag() {
+        let strict = ImportedGeometry::decode(A).unwrap();
+        let preview = ImportedGeometry::decode_preview(A).unwrap();
+        assert!(!strict.uses_generated_normals() && !preview.uses_generated_normals());
+        assert_eq!(strict.report, preview.report);
+        for (expected, actual) in strict.parts.iter().zip(&preview.parts) {
+            assert_eq!(expected.material_index, actual.material_index);
+            assert_eq!(expected.color, actual.color);
+            assert_eq!(expected.emission, actual.emission);
+            for (expected, actual) in expected.vertices.iter().zip(&actual.vertices) {
+                assert_eq!(expected.p, actual.p);
+                assert_eq!(expected.n, actual.n);
+            }
         }
     }
 }

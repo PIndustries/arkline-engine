@@ -14,6 +14,26 @@ pub(super) struct Primitive {
 }
 
 pub(super) fn decode(bytes: &[u8]) -> Result<Vec<Primitive>, String> {
+    decode_with_mode(bytes, false).map(|(parts, _)| parts)
+}
+
+/// Inspection may synthesize flat normals only when NORMAL is absent.
+/// Invalid provided normals and every other strict feature check still fail.
+pub(super) fn decode_preview(bytes: &[u8]) -> Result<(Vec<Primitive>, bool), String> {
+    decode_with_mode(bytes, true)
+}
+
+struct DecodeState {
+    indices: usize,
+    node_visits: usize,
+    allow_missing_normals: bool,
+    generated_normals: bool,
+}
+
+fn decode_with_mode(
+    bytes: &[u8],
+    allow_missing_normals: bool,
+) -> Result<(Vec<Primitive>, bool), String> {
     let fail = |s: &str| s.to_owned();
     if bytes.len() > 16 * 1024 * 1024 {
         return Err(fail("Ship asset exceeds 16 MiB"));
@@ -81,41 +101,41 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Vec<Primitive>, String> {
         .default_scene()
         .ok_or_else(|| fail("Missing default scene"))?;
     let mut result = Vec::new();
-    let mut budget = 600_000usize;
-    let mut node_visits = 4096usize;
+    let mut state = DecodeState {
+        indices: 600_000,
+        node_visits: 4096,
+        allow_missing_normals,
+        generated_normals: false,
+    };
     for node in scene.nodes() {
-        visit(
-            node,
-            Mat4::IDENTITY,
-            blob,
-            &mut result,
-            &mut budget,
-            &mut node_visits,
-            0,
-        )?;
+        visit(node, Mat4::IDENTITY, blob, &mut result, &mut state, 0)?;
     }
     if result.is_empty() {
         return Err(fail("Empty ship"));
     }
-    Ok(result)
+    Ok((result, state.generated_normals))
 }
 fn visit(
     node: gltf::Node<'_>,
     parent: Mat4,
     blob: &[u8],
     out: &mut Vec<Primitive>,
-    budget: &mut usize,
-    node_visits: &mut usize,
+    state: &mut DecodeState,
     depth: usize,
 ) -> Result<(), String> {
-    *node_visits = node_visits
+    state.node_visits = state
+        .node_visits
         .checked_sub(1)
         .ok_or("Ship node visit budget exceeded")?;
     if depth > 32 || out.len() > 128 {
         return Err("Ship hierarchy/primitive budget exceeded".into());
     }
     let transform = parent * Mat4::from_cols_array_2d(&node.transform().matrix());
-    if !transform.is_finite() || transform.determinant().abs() < 1e-10 {
+    let determinant = transform.determinant();
+    if !transform.is_finite()
+        || determinant.abs() < 1e-10
+        || (state.allow_missing_normals && !determinant.is_finite())
+    {
         return Err("Singular ship transform".into());
     }
     let normal_matrix = transform.inverse().transpose();
@@ -134,22 +154,64 @@ fn visit(
                 .read_positions()
                 .ok_or("Missing ship positions")?
                 .collect();
-            let normals: Vec<_> = reader
-                .read_normals()
-                .ok_or("Missing ship normals")?
-                .collect();
-            if positions.len() != normals.len() {
+            let normals = if p.get(&gltf::Semantic::Normals).is_some() {
+                Some(
+                    reader
+                        .read_normals()
+                        .ok_or(if state.allow_missing_normals {
+                            "Invalid ship normals"
+                        } else {
+                            "Missing ship normals"
+                        })?
+                        .collect::<Vec<_>>(),
+                )
+            } else if state.allow_missing_normals {
+                None
+            } else {
+                return Err("Missing ship normals".into());
+            };
+            if normals
+                .as_ref()
+                .is_some_and(|normals| positions.len() != normals.len())
+            {
                 return Err("Ship normal count mismatch".into());
+            }
+            if state.allow_missing_normals {
+                // Never repair malformed provided data. Check even unreferenced
+                // attribute values before expanding the validated index stream.
+                for point in &positions {
+                    let point = Vec3::from_array(*point);
+                    if !point.is_finite()
+                        || !(transform.transform_point3(point) / 100.0).is_finite()
+                    {
+                        return Err("Invalid ship vertex".into());
+                    }
+                }
+                if let Some(normals) = &normals {
+                    for normal in normals {
+                        let normal = Vec3::from_array(*normal);
+                        let length = normal.length_squared();
+                        let transformed = normal_matrix.transform_vector3(normal).normalize();
+                        if !normal.is_finite()
+                            || !length.is_finite()
+                            || length < 0.1
+                            || !transformed.is_finite()
+                            || transformed.length_squared() < 0.9
+                        {
+                            return Err("Invalid ship vertex".into());
+                        }
+                    }
+                }
             }
             let indices: Vec<u32> = reader
                 .read_indices()
                 .ok_or("Missing ship indices")?
                 .into_u32()
                 .collect();
-            if indices.len() % 3 != 0 || indices.len() > *budget {
+            if indices.len() % 3 != 0 || indices.len() > state.indices {
                 return Err("Ship triangle budget exceeded".into());
             }
-            *budget -= indices.len();
+            state.indices -= indices.len();
             let mut vertices = Vec::with_capacity(indices.len());
             for i in indices {
                 let point = Vec3::from_array(
@@ -157,12 +219,16 @@ fn visit(
                         .get(i as usize)
                         .ok_or("Ship index out of bounds")?,
                 );
-                let normal = Vec3::from_array(normals[i as usize]);
-                if !point.is_finite() || !normal.is_finite() || normal.length_squared() < 0.1 {
-                    return Err("Invalid ship vertex".into());
-                }
+                let n = if let Some(normals) = &normals {
+                    let normal = Vec3::from_array(normals[i as usize]);
+                    if !point.is_finite() || !normal.is_finite() || normal.length_squared() < 0.1 {
+                        return Err("Invalid ship vertex".into());
+                    }
+                    normal_matrix.transform_vector3(normal).normalize()
+                } else {
+                    Vec3::ZERO // Filled per face after validation and mirror correction.
+                };
                 let p = transform.transform_point3(point) / 100.0;
-                let n = normal_matrix.transform_vector3(normal).normalize();
                 if !p.is_finite() || !n.is_finite() {
                     return Err("Non-finite transformed ship vertex".into());
                 }
@@ -174,10 +240,24 @@ fn visit(
             {
                 return Err("Degenerate ship triangle".into());
             }
-            if transform.determinant() < 0.0 {
+            if determinant < 0.0 {
                 for tri in vertices.chunks_exact_mut(3) {
                     tri.swap(1, 2);
                 }
+            }
+            if normals.is_none() {
+                for triangle in vertices.chunks_exact_mut(3) {
+                    let normal = (triangle[1].p - triangle[0].p)
+                        .cross(triangle[2].p - triangle[0].p)
+                        .normalize();
+                    if !normal.is_finite() || (normal.length_squared() - 1.0).abs() > 1e-4 {
+                        return Err("Invalid generated face normal".into());
+                    }
+                    for vertex in triangle {
+                        vertex.n = normal;
+                    }
+                }
+                state.generated_normals = true;
             }
             let rgba = pbr.base_color_factor();
             let color = Vec3::new(rgba[0], rgba[1], rgba[2]);
@@ -205,7 +285,7 @@ fn visit(
         }
     }
     for child in node.children() {
-        visit(child, transform, blob, out, budget, node_visits, depth + 1)?;
+        visit(child, transform, blob, out, state, depth + 1)?;
     }
     Ok(())
 }
@@ -434,5 +514,196 @@ mod tests {
         assert!(decode(&fixture(1, [1., 1., 1.])).is_err());
         assert!(decode(&fixture(2, [0., 1., 1.])).is_err());
         assert!(decode(b"not glb").is_err());
+    }
+
+    fn preview_fixture_edit(
+        original: &[u8],
+        edit: impl FnOnce(&mut serde_json::Value, &mut Vec<u8>),
+    ) -> Vec<u8> {
+        let json_len = u32::from_le_bytes(original[12..16].try_into().unwrap()) as usize;
+        let mut document = serde_json::from_slice(&original[20..20 + json_len]).unwrap();
+        let mut binary = original[20 + json_len + 8..].to_vec();
+        edit(&mut document, &mut binary);
+        let mut json = serde_json::to_vec(&document).unwrap();
+        while json.len() % 4 != 0 {
+            json.push(b' ');
+        }
+        while binary.len() % 4 != 0 {
+            binary.push(0);
+        }
+        let mut bytes = Vec::new();
+        for value in [
+            0x46546c67_u32,
+            2,
+            (28 + json.len() + binary.len()) as u32,
+            json.len() as u32,
+            0x4e4f534a,
+        ] {
+            bytes.extend_from_slice(&value.to_le_bytes());
+        }
+        bytes.extend(json);
+        bytes.extend_from_slice(&(binary.len() as u32).to_le_bytes());
+        bytes.extend_from_slice(&0x004e4942_u32.to_le_bytes());
+        bytes.extend(binary);
+        bytes
+    }
+    fn preview_without_normals(index: u16, scale: [f32; 3]) -> Vec<u8> {
+        preview_fixture_edit(&fixture(index, scale), |document, _| {
+            document["meshes"][0]["primitives"][0]["attributes"]
+                .as_object_mut()
+                .unwrap()
+                .remove("NORMAL");
+        })
+    }
+    fn assert_face_normals(parts: &[Primitive]) {
+        for part in parts {
+            for triangle in part.vertices.chunks_exact(3) {
+                let face = (triangle[1].p - triangle[0].p)
+                    .cross(triangle[2].p - triangle[0].p)
+                    .normalize();
+                for vertex in triangle {
+                    assert!(vertex.p.is_finite() && vertex.n.is_finite());
+                    assert!((vertex.n.length() - 1.0).abs() < 1e-5);
+                    assert!(vertex.n.dot(face) > 0.99999);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn preview_missing_normals_calibration_has_twelve_unit_normal_faces_without_changing_bytes() {
+        use sha2::{Digest, Sha256};
+        let bytes = include_bytes!("../../../assets/examples/calibration-cube.glb").to_vec();
+        let original = bytes.clone();
+        let before = Sha256::digest(&bytes);
+        assert_eq!(decode(&bytes).err().unwrap(), "Missing ship normals");
+        let (parts, generated) = decode_preview(&bytes).unwrap();
+        assert!(generated);
+        assert_eq!(parts.len(), 1);
+        assert_eq!(parts[0].vertices.len(), 36);
+        assert_face_normals(&parts);
+        let (min, max) = parts.iter().flat_map(|part| &part.vertices).fold(
+            (Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY)),
+            |(min, max), vertex| (min.min(vertex.p), max.max(vertex.p)),
+        );
+        assert_eq!(min, Vec3::ZERO);
+        assert!(max.abs_diff_eq(Vec3::splat(0.01), 1e-7));
+        assert_eq!(bytes, original);
+        assert_eq!(Sha256::digest(&bytes), before);
+    }
+
+    #[test]
+    fn preview_missing_normals_are_generated_after_mirrored_nonuniform_transform() {
+        let bytes = preview_without_normals(2, [-2.0, 3.0, 1.0]);
+        let (parts, generated) = decode_preview(&bytes).unwrap();
+        assert!(generated);
+        assert_face_normals(&parts);
+        assert!(parts[0]
+            .vertices
+            .iter()
+            .all(|vertex| vertex.n.abs_diff_eq(Vec3::Z, 1e-6)));
+        assert!(parts[0]
+            .vertices
+            .iter()
+            .any(|vertex| vertex.p.abs_diff_eq(Vec3::new(0.08, 0.2, 0.3), 1e-6)));
+        assert_eq!(parts[0].roughness, 0.6);
+        assert_eq!(parts[0].metallic, 0.8);
+        assert_eq!(parts[0].emission, 1.6);
+    }
+
+    #[test]
+    fn preview_never_repairs_invalid_provided_normals_or_changes_valid_provided_normals() {
+        for value in [0.0, f32::NAN, f32::INFINITY, f32::MAX] {
+            let bytes = preview_fixture_edit(&fixture(2, [1.0; 3]), |_, binary| {
+                for i in 0..9 {
+                    binary[36 + i * 4..40 + i * 4].copy_from_slice(&value.to_le_bytes());
+                }
+            });
+            assert!(
+                decode_preview(&bytes).is_err(),
+                "Provided invalid normals must fail: {value}"
+            );
+        }
+        let original = fixture(2, [2.0, 3.0, 1.0]);
+        let strict = decode(&original).unwrap();
+        let (preview, generated) = decode_preview(&original).unwrap();
+        assert!(!generated);
+        for (actual, expected) in preview[0].vertices.iter().zip(&strict[0].vertices) {
+            assert_eq!(actual.p, expected.p);
+            assert_eq!(actual.n, expected.n);
+        }
+        let count = preview_fixture_edit(&original, |document, _| {
+            document["accessors"][1]["count"] = 2.into()
+        });
+        assert!(decode_preview(&count).is_err());
+    }
+
+    #[test]
+    fn preview_missing_normals_still_reject_bad_indices_degenerate_positions_and_materials() {
+        for bytes in [
+            preview_without_normals(9, [1.0; 3]),
+            preview_without_normals(1, [1.0; 3]),
+            preview_without_normals(2, [0.0, 1.0, 1.0]),
+        ] {
+            assert!(decode_preview(&bytes).is_err());
+        }
+        let nan = preview_fixture_edit(&preview_without_normals(2, [1.0; 3]), |_, binary| {
+            binary[..4].copy_from_slice(&f32::NAN.to_le_bytes())
+        });
+        assert!(decode_preview(&nan).is_err());
+        let material =
+            preview_fixture_edit(&preview_without_normals(2, [1.0; 3]), |document, _| {
+                document["materials"][0]["alphaMode"] = "BLEND".into()
+            });
+        assert!(decode_preview(&material).is_err());
+    }
+
+    #[test]
+    fn preview_validates_unreferenced_position_values_before_generating_normals() {
+        let bytes =
+            preview_fixture_edit(&preview_without_normals(2, [1.0; 3]), |document, binary| {
+                let mut extra = Vec::new();
+                for value in [f32::NAN, 0.0, 0.0] {
+                    extra.extend_from_slice(&value.to_le_bytes());
+                }
+                binary.splice(36..36, extra);
+                document["buffers"][0]["byteLength"] = 90.into();
+                document["bufferViews"][0]["byteLength"] = 48.into();
+                document["bufferViews"][1]["byteOffset"] = 48.into();
+                document["bufferViews"][2]["byteOffset"] = 84.into();
+                document["accessors"][0]["count"] = 4.into();
+            });
+        assert!(decode_preview(&bytes).is_err());
+    }
+
+    #[test]
+    fn preview_mixed_primitives_generate_only_missing_normals_and_fail_on_invalid_provided_data() {
+        let bytes = preview_fixture_edit(&fixture(2, [1.0; 3]), |document, binary| {
+            let supplied = document["meshes"][0]["primitives"][0].clone();
+            document["meshes"][0]["primitives"][0]["attributes"]
+                .as_object_mut()
+                .unwrap()
+                .remove("NORMAL");
+            document["meshes"][0]["primitives"]
+                .as_array_mut()
+                .unwrap()
+                .push(supplied);
+            for i in 0..3 {
+                for (j, value) in [0_f32, 1.0, 0.0].into_iter().enumerate() {
+                    let offset = 36 + (i * 3 + j) * 4;
+                    binary[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+                }
+            }
+        });
+        assert!(decode(&bytes).is_err());
+        let (parts, generated) = decode_preview(&bytes).unwrap();
+        assert!(generated);
+        assert_eq!(parts.len(), 2);
+        assert_face_normals(&parts[..1]);
+        assert!(parts[1].vertices.iter().all(|vertex| vertex.n == Vec3::Y));
+        let invalid = preview_fixture_edit(&bytes, |_, binary| {
+            binary[36..40].copy_from_slice(&f32::NAN.to_le_bytes())
+        });
+        assert!(decode_preview(&invalid).is_err());
     }
 }

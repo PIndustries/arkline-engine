@@ -140,7 +140,7 @@ impl ModelBrowser {
                 Source::File(file) => file.load().map(LoadedModel::Imported),
                 Source::Verified(verified) => Ok(LoadedModel::Imported(verified)),
                 Source::Snapshot(bytes) => {
-                    Verified::decode(bytes.as_ref().clone()).map(LoadedModel::Imported)
+                    Verified::decode_preview(bytes.as_ref().clone()).map(LoadedModel::Imported)
                 }
             }
             .map(Answer::Loaded),
@@ -639,8 +639,12 @@ impl ModelBrowser {
                 if let Some(error) = &self.gpu_error { ui.colored_label(egui::Color32::LIGHT_RED, format!("Preview unavailable: {error}")); }
                 if matches!(entry.model, Source::File(_) | Source::Snapshot(_)) {
                     if let Some(LoadedModel::Imported(verified)) = &self.loaded {
-                        if ui.button("Stage selected…").on_hover_text("Open import management with this verified geometry. Existing staged work is preserved unless it is the same asset.").clicked() {
+                        let generated_normals = verified.geometry.uses_generated_normals();
+                        if ui.add_enabled(!generated_normals, egui::Button::new("Stage selected…")).on_hover_text("Open import management with this verified geometry. Existing staged work is preserved unless it is the same asset.").clicked() {
                             action = Some(Action::Stage { label: entry.name.clone(), verified: verified.clone() });
+                        }
+                        if generated_normals {
+                            ui.small(crate::import_document::PREVIEW_ONLY_REASON);
                         }
                     }
                 }

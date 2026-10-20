@@ -309,6 +309,14 @@ fn runtime_hash(model: &RuntimeInspectionModel) -> String {
     for draw in &model.parts {
         let (mesh, matrix, color, emission) = draw.part;
         hash.update((mesh as u64).to_le_bytes());
+        match draw.range {
+            Some((first, count)) => {
+                hash.update([1]);
+                hash.update((first as u64).to_le_bytes());
+                hash.update((count as u64).to_le_bytes());
+            }
+            None => hash.update([0]),
+        }
         for number in matrix
             .to_cols_array()
             .into_iter()
@@ -318,7 +326,10 @@ fn runtime_hash(model: &RuntimeInspectionModel) -> String {
         {
             hash.update(number.to_le_bytes());
         }
-        for vertex in geometry.catalog.uploads()[mesh_index(mesh)].iter() {
+        let vertices = draw
+            .selected_vertices(&geometry.catalog.uploads()[mesh_index(mesh)])
+            .expect("Runtime hash uses only the selected source vertex range");
+        for vertex in vertices {
             for number in vertex.p.to_array().into_iter().chain(vertex.n.to_array()) {
                 hash.update(number.to_le_bytes());
             }
@@ -479,14 +490,86 @@ fn native_shared_model_preview_catalog_import_materials_controls_and_clear() {
             .iter()
             .map(|mesh| (mesh.vao, mesh.buffer, mesh.count))
             .collect::<Vec<_>>();
+        let catalog = model_catalog::runtime_model_catalog();
+        assert_eq!(catalog.len(), 111);
+        let unavailable = catalog
+            .iter()
+            .filter(|entry| entry.unavailable.is_some())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            unavailable.len(),
+            3,
+            "Only logical equipment remains without geometry"
+        );
+        let added_ids = catalog
+            .iter()
+            .filter(|entry| {
+                entry.id.starts_with("room/")
+                    || entry.id.starts_with("exterior/pioneer.exterior.window.")
+            })
+            .map(|entry| entry.id.clone())
+            .collect::<Vec<_>>();
+        assert_eq!(added_ids.len(), 16);
         let mut rows = Vec::new();
         let mut categories = std::collections::BTreeSet::new();
-        for descriptor in model_catalog::runtime_model_catalog()
-            .into_iter()
-            .filter(|entry| entry.unavailable.is_none())
-        {
+        let mut window_ranges = std::collections::BTreeSet::new();
+        let mut window_bounds = std::collections::BTreeSet::new();
+        let mut room_count = 0;
+        for descriptor in catalog.iter().filter(|entry| entry.unavailable.is_none()) {
             let model = model_catalog::load_runtime_model(&descriptor.id).unwrap();
             let before = runtime_hash(&model);
+            if descriptor
+                .id
+                .starts_with("exterior/pioneer.exterior.window.")
+            {
+                assert_eq!((model.info.triangles, model.info.batches), (12, 1));
+                assert_eq!(model.parts.len(), 1);
+                let draw = &model.parts[0];
+                let range = draw
+                    .range
+                    .expect("Each authored pane selects a source vertex range");
+                assert_eq!(range.1, 36);
+                assert!(
+                    window_ranges.insert(range),
+                    "Window pane source ranges must differ"
+                );
+                assert_eq!(
+                    mesh_index(draw.part.0),
+                    10 + 6,
+                    "All panes retain the original Navigation glass upload"
+                );
+                let source = flight_geometry().unwrap();
+                let full = &source.catalog.uploads()[mesh_index(draw.part.0)];
+                let selected = draw.selected_vertices(full).unwrap();
+                assert_eq!(selected.len(), 36);
+                assert!(full.len() > selected.len());
+                let (min, max) = selected.iter().fold(
+                    (Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY)),
+                    |(min, max), vertex| {
+                        let point = draw.part.1.transform_point3(vertex.p) * 100.0;
+                        (min.min(point), max.max(point))
+                    },
+                );
+                assert_eq!(model.info.min_m, min.to_array());
+                assert_eq!(model.info.max_m, max.to_array());
+                let bounds = model
+                    .info
+                    .min_m
+                    .into_iter()
+                    .chain(model.info.max_m)
+                    .map(f32::to_bits)
+                    .collect::<Vec<_>>();
+                assert!(
+                    window_bounds.insert(bounds),
+                    "The four panes retain distinct original body-space bounds"
+                );
+            }
+            if descriptor.id.starts_with("room/") {
+                room_count += 1;
+                assert!(model.info.triangles > 12 && model.parts.len() > 1,
+                    "Room preview must retain the actual multi-part wall, doorway and obstacle recipe");
+                assert!(model.parts.iter().all(|draw| draw.range.is_none()));
+            }
             harness.preview.set_runtime(model.clone()).unwrap();
             harness.frame(vec![]);
             let shot = harness.frame(vec![]);
@@ -539,20 +622,70 @@ fn native_shared_model_preview_catalog_import_materials_controls_and_clear() {
                 &model_catalog::load_runtime_model(&descriptor.id).unwrap()
             ));
             let representative = categories.insert(descriptor.category.clone());
-            rows.push(serde_json::json!({"id":descriptor.id,"category":descriptor.category,"triangles":model.info.triangles,"batches":model.info.batches,"occupied_depth_pixels":shot.occupied(),"runtime_material_uniforms_match":true,"source_sha256":before,"gpu_buffer_identities_retained":true,"representative_capture":representative.then(||capture(directory.as_deref(),&format!("catalog-{}",rows.len()),&shot))}));
+            rows.push(serde_json::json!({"id":descriptor.id,"category":descriptor.category,"source":descriptor.source,"source_notes":descriptor.notes,"triangles":model.info.triangles,"batches":model.info.batches,"min_m":model.info.min_m,"max_m":model.info.max_m,"vertex_ranges":model.parts.iter().map(|draw|draw.range).collect::<Vec<_>>(),"occupied_depth_pixels":shot.occupied(),"runtime_material_uniforms_match":true,"selected_source_sha256":before,"gpu_buffer_identities_retained":true,"representative_capture":representative.then(||capture(directory.as_deref(),&format!("catalog-{}",rows.len()),&shot))}));
         }
+        assert_eq!(rows.len(), 108);
+        assert_eq!(room_count, 12);
+        assert_eq!(
+            window_ranges,
+            [(72, 36), (108, 36), (216, 36), (252, 36)]
+                .into_iter()
+                .collect()
+        );
+        assert_eq!(window_bounds.len(), 4);
+        harness
+            .preview
+            .set_runtime(
+                model_catalog::load_runtime_model("exterior/pioneer.exterior.window.port.forward")
+                    .unwrap(),
+            )
+            .unwrap();
+        renderer.lock().unwrap().debug_wireframe = true;
+        let wireframe = harness.frame(vec![]);
+        let metrics = renderer.lock().unwrap().debug_metrics.get();
+        assert_eq!(
+            (
+                metrics.draw_calls,
+                metrics.triangles,
+                metrics.wireframe_draw_calls
+            ),
+            (1, 12, 1),
+            "Wireframe must use the same authored pane range as the fill pass"
+        );
+        assert!(wireframe.occupied() > 5);
+        renderer.lock().unwrap().debug_wireframe = false;
+        assert_eq!(
+            buffers,
+            renderer
+                .lock()
+                .unwrap()
+                .meshes
+                .iter()
+                .map(|mesh| (mesh.vao, mesh.buffer, mesh.count))
+                .collect::<Vec<_>>()
+        );
+        let wireframe_capture = capture(
+            directory.as_deref(),
+            "authored-window-range-wireframe",
+            &wireframe,
+        );
         let mut journeys = Vec::new();
-        for id in [
+        let mut journey_ids = [
             "ship/pioneer",
             "drone/recon",
             "drone/mining",
             "drone/attack",
             "station/exterior",
             "world/asteroid_ore",
-        ] {
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+        journey_ids.extend(added_ids);
+        for id in journey_ids {
             harness
                 .preview
-                .set_runtime(model_catalog::load_runtime_model(id).unwrap())
+                .set_runtime(model_catalog::load_runtime_model(&id).unwrap())
                 .unwrap();
             journeys.push(control_journey(
                 &mut harness,
@@ -629,16 +762,74 @@ fn native_shared_model_preview_catalog_import_materials_controls_and_clear() {
             "Loading/error selections must not retain an old model callback"
         );
         if let Some(directory) = &directory {
-            std::fs::write(directory.join("receipt.json"),serde_json::to_vec_pretty(&serde_json::json!({"schema_version":1,"scope":"Actual ModelPreview::show runtime/imported callbacks, real egui orbit/pan/wheel/Fit/Reset controls, private macOS CGL; no desktop window or uploads","vendor":gl.get_parameter_string(glow::VENDOR),"renderer":gl.get_parameter_string(glow::RENDERER),"gl_version":gl.get_parameter_string(glow::VERSION),"runtime_rendered_count":rows.len(),"runtime_models":rows,"control_journeys":journeys,"clear_and_error_remove_old_geometry":true,"captures_after_clear":[capture(Some(directory),"cleared",&cleared),capture(Some(directory),"invalid-selection",&failed)],"limitations":["GPU buffer identity retention is verified; GPU payload byte-readback invariance is not claimed","Source geometry/material invariance uses CPU hashes and exact uploaded scalar material tuples","This offscreen acceptance does not establish OS input, app focus or simulation authority"]})).unwrap()).unwrap();
+            std::fs::write(directory.join("receipt.json"),serde_json::to_vec_pretty(&serde_json::json!({"schema_version":2,"scope":"Actual ModelPreview::show runtime/imported callbacks, real egui orbit/pan/wheel/Fit/Reset controls, private macOS CGL; no desktop window or uploads","vendor":gl.get_parameter_string(glow::VENDOR),"renderer":gl.get_parameter_string(glow::RENDERER),"gl_version":gl.get_parameter_string(glow::VERSION),"runtime_catalog_count":catalog.len(),"runtime_rendered_count":rows.len(),"unavailable_logical_entries":unavailable.iter().map(|entry|serde_json::json!({"id":entry.id,"reason":entry.unavailable})).collect::<Vec<_>>(),"room_previews":room_count,"authored_window_previews":window_bounds.len(),"runtime_models":rows,"window_range_wireframe_capture":wireframe_capture,"control_journeys":journeys,"clear_and_error_remove_old_geometry":true,"captures_after_clear":[capture(Some(directory),"cleared",&cleared),capture(Some(directory),"invalid-selection",&failed)],"limitations":["GPU buffer identity retention is verified; GPU payload byte-readback invariance is not claimed","Source geometry/material invariance uses CPU hashes and exact uploaded scalar material tuples","Room cutaways use actual per-room wall, storage, doorway and equipment geometry; shared deck floors, ceilings, corridor ribs, lift/access core and deck perimeter context are omitted, with no proxy floor","Window previews select authored Navigation glass source ranges from the unchanged shared GPU buffer; mappings apply to this asset snapshot","This offscreen acceptance does not establish OS input, app focus or simulation authority"]})).unwrap()).unwrap();
         }
         drop(harness);
         assert_eq!(gl.get_error(), glow::NO_ERROR);
     }
 }
 
+/// Read the actual preview upload for the source cube, rather than assuming
+/// that a preview-only normal flag produced finite, correctly oriented data.
+unsafe fn inspect_generated_normal_upload(
+    gl: &glow::Context,
+    bindings: &[(glow::VertexArray, glow::Buffer, i32)],
+    report: &imported_asset::ImportReport,
+) -> serde_json::Value {
+    let previous = gl.get_parameter_buffer(glow::ARRAY_BUFFER_BINDING);
+    let mut corners = 0usize;
+    let mut normal_hash = Sha256::new();
+    let mut min = Vec3::splat(f32::INFINITY);
+    let mut max = Vec3::splat(f32::NEG_INFINITY);
+    for &(_, buffer, count) in bindings {
+        assert!(count > 0 && count % 3 == 0);
+        gl.bind_buffer(glow::ARRAY_BUFFER, Some(buffer));
+        let mut bytes = vec![0u8; count as usize * 24];
+        gl.get_buffer_sub_data(glow::ARRAY_BUFFER, 0, &mut bytes);
+        for face in bytes.chunks_exact(3 * 24) {
+            let vertices = face
+                .chunks_exact(24)
+                .map(|vertex| {
+                    let values = vertex
+                        .chunks_exact(4)
+                        .map(|number| f32::from_ne_bytes(number.try_into().unwrap()))
+                        .collect::<Vec<_>>();
+                    let position = Vec3::new(values[0], values[1], values[2]);
+                    let normal = Vec3::new(values[3], values[4], values[5]);
+                    assert!(position.is_finite() && normal.is_finite());
+                    assert!((normal.length() - 1.0).abs() < 1e-5);
+                    min = min.min(position);
+                    max = max.max(position);
+                    normal_hash.update(&vertex[12..]);
+                    (position, normal)
+                })
+                .collect::<Vec<_>>();
+            let face_normal = (vertices[1].0 - vertices[0].0)
+                .cross(vertices[2].0 - vertices[0].0)
+                .normalize();
+            assert!(face_normal.is_finite());
+            assert!(
+                vertices
+                    .iter()
+                    .all(|(_, normal)| normal.dot(face_normal) > 0.9999),
+                "Generated preview normals must follow each actual transformed triangle"
+            );
+            corners += vertices.len();
+        }
+    }
+    gl.bind_buffer(glow::ARRAY_BUFFER, previous);
+    assert_eq!(gl.get_error(), glow::NO_ERROR);
+    assert_eq!(corners, report.triangles * 3);
+    assert_eq!(min.to_array(), report.min_m);
+    assert_eq!(max.to_array(), report.max_m);
+    serde_json::json!({"readback_corners":corners,"finite_unit_face_normals":true,
+        "normals_follow_triangle_winding":true,"meter_bounds_match_report":true,
+        "normal_bytes_sha256":hex::encode(normal_hash.finalize())})
+}
+
 #[test]
 #[ignore = "Explicit actual repository GLB files through shared imported GPU preview; no desktop window"]
-fn native_shared_model_preview_actual_repository_glbs_and_calibration_rejection() {
+fn native_shared_model_preview_actual_repository_glbs_and_preview_normals() {
     unsafe {
         let directory =
             std::env::var_os("ARKLINE_REPOSITORY_GLB_EVIDENCE").map(std::path::PathBuf::from);
@@ -667,8 +858,14 @@ fn native_shared_model_preview_actual_repository_glbs_and_calibration_rejection(
             let bytes = std::fs::read(&path).unwrap();
             let sha256 = hex::encode(Sha256::digest(&bytes));
             sources.insert(sha256.clone());
-            let geometry = Arc::new(ImportedGeometry::decode(&bytes).unwrap());
+            let geometry = Arc::new(ImportedGeometry::decode_preview(&bytes).unwrap());
+            assert!(!geometry.uses_generated_normals());
             let report = geometry.report.clone();
+            assert_eq!(
+                ImportedGeometry::decode(&bytes).unwrap().report,
+                report,
+                "Sources with normals keep the strict report unchanged"
+            );
             assert_eq!(report.triangles, triangles, "{relative}");
             assert_eq!(report.primitives, batches, "{relative}");
             let (min, max, corners) = geometry.triangle_positions_m().fold(
@@ -744,6 +941,7 @@ fn native_shared_model_preview_actual_repository_glbs_and_calibration_rejection(
                 "source_sha256":sha256,
                 "source_bytes":bytes.len(),
                 "report":report,
+                "preview_only_generated_normals":false,
                 "report_matches_decoded_meter_vertices":true,
                 "uploaded_materials_match_all_source_batches":true,
                 "repeated_selection_retains_gpu_bindings":true,
@@ -751,18 +949,69 @@ fn native_shared_model_preview_actual_repository_glbs_and_calibration_rejection(
                 "capture":capture(directory.as_deref(), &format!("repository-glb-{}", rows.len()), &shot),
             }));
         }
-        // This source intentionally lacks NORMAL. Do not invent normals or a
-        // substitute cube to turn an unsupported file into a successful preview.
+        // Only explicit preview decoding generates normals for this source.
+        // Strict authoring validation still rejects the unchanged original bytes.
         let relative = "assets/examples/calibration-cube.glb";
         let path = repository.join(relative);
         let bytes = std::fs::read(&path).unwrap();
         let sha256 = hex::encode(Sha256::digest(&bytes));
-        harness.preview.clear();
-        let error = match ImportedGeometry::decode(&bytes) {
-            Ok(_) => panic!("Calibration source without NORMAL unexpectedly imported"),
+        let strict_error = match ImportedGeometry::decode(&bytes) {
+            Ok(_) => panic!("Strict calibration import without NORMAL unexpectedly succeeded"),
             Err(error) => error,
         };
-        assert_eq!(error, "Missing ship normals");
+        assert_eq!(strict_error, "Missing ship normals");
+        harness.preview.clear();
+        let geometry = Arc::new(ImportedGeometry::decode_preview(&bytes).unwrap());
+        assert!(geometry.uses_generated_normals());
+        let report = geometry.report.clone();
+        assert_eq!((report.triangles, report.primitives), (12, 1));
+        assert!(report.notes.iter().any(|note| note == "Preview only: missing NORMAL attributes were replaced with generated flat face normals. Original asset bytes are unchanged; this geometry cannot be staged, accepted or saved."));
+        harness.preview.set_imported(geometry.clone()).unwrap();
+        let bindings = harness.preview.imported.debug_mesh_bindings();
+        assert_eq!(bindings.len(), 1);
+        assert_eq!(bindings[0].2, 36);
+        let normal_readback = inspect_generated_normal_upload(&gl, &bindings, &report);
+        harness.frame(vec![]);
+        let calibration = harness.frame(vec![]);
+        assert!(calibration.occupied() > 500);
+        assert_eq!(geometry.report, report);
+        assert_eq!(
+            sha256,
+            hex::encode(Sha256::digest(std::fs::read(&path).unwrap()))
+        );
+        sources.insert(sha256.clone());
+        rows.push(serde_json::json!({"source_path":relative,"source_sha256":sha256,
+            "source_bytes":bytes.len(),"report":report,"preview_only_generated_normals":true,
+            "strict_authoring_error":strict_error,"normal_upload_readback":normal_readback,
+            "source_file_unchanged":true,"capture":capture(directory.as_deref(),"calibration-generated-face-normals",&calibration)}));
+        assert_eq!(rows.len(), 4);
+
+        // Reject malformed source geometry even in preview mode. This modifies
+        // only an in-memory copy of the cube's actual POSITION buffer.
+        let document = gltf::Gltf::from_slice(&bytes).unwrap();
+        let primitive = document
+            .meshes()
+            .next()
+            .unwrap()
+            .primitives()
+            .next()
+            .unwrap();
+        let positions = primitive.get(&gltf::Semantic::Positions).unwrap();
+        let view = positions.view().unwrap();
+        let json_length = u32::from_le_bytes(bytes[12..16].try_into().unwrap()) as usize;
+        let binary_start = 20 + json_length + 8;
+        let stride = view.stride().unwrap_or(positions.size());
+        let mut invalid = bytes.clone();
+        for index in 0..positions.count() {
+            let start = binary_start + view.offset() + positions.offset() + index * stride;
+            invalid[start..start + 12].fill(0);
+        }
+        harness.preview.clear();
+        let invalid_error = match ImportedGeometry::decode_preview(&invalid) {
+            Ok(_) => panic!("Degenerate source geometry unexpectedly received a preview fallback"),
+            Err(error) => error,
+        };
+        assert_eq!(invalid_error, "Degenerate ship triangle");
         let rejected = harness.frame(vec![]);
         assert!(matches!(harness.preview.source, PreviewSource::Empty));
         assert_eq!(rejected.occupied(), 0);
@@ -772,34 +1021,20 @@ fn native_shared_model_preview_actual_repository_glbs_and_calibration_rejection(
             hex::encode(Sha256::digest(std::fs::read(&path).unwrap()))
         );
         if let Some(directory) = &directory {
-            std::fs::write(
-                directory.join("receipt.json"),
-                serde_json::to_vec_pretty(&serde_json::json!({
-                    "schema_version":1,
-                    "scope":"Actual repository files read from their source paths, ImportedGeometry validation, shared ModelPreview callbacks and private macOS CGL color/depth readback",
-                    "vendor":gl.get_parameter_string(glow::VENDOR),
-                    "renderer":gl.get_parameter_string(glow::RENDERER),
-                    "gl_version":gl.get_parameter_string(glow::VERSION),
-                    "rendered_source_paths":rows.len(),
-                    "distinct_rendered_content_hashes":sources.len(),
-                    "sources":rows,
-                    "rejected_source":{
-                        "source_path":relative,
-                        "source_sha256":sha256,
-                        "source_bytes":bytes.len(),
-                        "error":error,
-                        "old_model_callback_removed":true,
-                        "source_file_unchanged":true,
-                        "capture":capture(Some(directory), "calibration-missing-normals-cleared", &rejected),
-                    },
-                    "limitations":[
-                        "Canonical Pioneer and study05 are currently identical content at distinct source paths; no distinct shape is claimed",
-                        "Calibration source has no normals and remains explicitly unsupported; no fallback geometry is generated",
-                        "GPU buffer identity and scalar material bindings are verified; GPU payload byte-readback invariance is not claimed",
-                        "Offscreen source-file acceptance does not establish desktop OS input or a running game session"
-                    ],
-                })).unwrap(),
-            ).unwrap();
+            std::fs::write(directory.join("receipt.json"),serde_json::to_vec_pretty(&serde_json::json!({
+                "schema_version":2,
+                "scope":"Four actual repository source paths through explicit preview decoding, shared ModelPreview callbacks and private macOS CGL color/depth readback",
+                "vendor":gl.get_parameter_string(glow::VENDOR),"renderer":gl.get_parameter_string(glow::RENDERER),"gl_version":gl.get_parameter_string(glow::VERSION),
+                "rendered_source_paths":rows.len(),"distinct_rendered_content_hashes":sources.len(),"sources":rows,
+                "strict_calibration_import_rejection":strict_error,
+                "rejected_invalid_source":{"source":"In-memory degenerate POSITION copy of calibration-cube.glb","error":invalid_error,
+                    "old_model_callback_removed":true,"no_geometry_fallback":true,"original_source_file_unchanged":true,
+                    "capture":capture(Some(directory),"invalid-source-geometry-cleared",&rejected)},
+                "limitations":["Canonical Pioneer and study05 are currently identical content at distinct source paths; no distinct shape is claimed",
+                    "Calibration generated flat normals are explicit preview presentation only; strict import still rejects it and no source bytes are changed",
+                    "Actual calibration GPU vertices/normals were read once to verify finite unit face normals and measured bounds; GPU payload invariance is not claimed",
+                    "Offscreen source-file acceptance does not establish desktop OS input or a running game session"]
+            })).unwrap()).unwrap();
         }
         drop(harness);
         assert_eq!(gl.get_error(), glow::NO_ERROR);

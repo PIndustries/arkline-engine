@@ -15,6 +15,8 @@ pub const MAX_BYTES: u64 = 16 * 1024 * 1024;
 pub const MAX_SCAN_ENTRIES: usize = 2048;
 pub const MAX_SCAN_DEPTH: usize = 8;
 pub const MAX_CANDIDATES: usize = 256;
+pub const PREVIEW_ONLY_REASON: &str =
+    "Generated face normals are preview only. Export authored normals to stage or save.";
 static TEMP: AtomicU64 = AtomicU64::new(0);
 #[derive(Clone, Debug, PartialEq)]
 pub struct ProjectFile {
@@ -107,6 +109,9 @@ impl AssetIndex {
         Ok(())
     }
     pub fn accept(&self, v: &Verified, source: String, license: String) -> Result<Self, String> {
+        if v.geometry.uses_generated_normals() {
+            return Err(PREVIEW_ONLY_REASON.into());
+        }
         let mut next = self.clone();
         next.revision = next.revision.checked_add(1).ok_or("Revision exhausted")?;
         let id = if let Some(a) = &next.asset {
@@ -142,6 +147,20 @@ impl Verified {
         }
         let sha256 = format!("{:x}", Sha256::digest(&bytes));
         let geometry = Arc::new(ImportedGeometry::decode(&bytes)?);
+        Ok(Self {
+            bytes: Arc::new(bytes),
+            geometry,
+            sha256,
+        })
+    }
+    /// Inspection may derive face normals without changing the source bytes.
+    /// This geometry cannot cross the strict accept, stage or save boundaries.
+    pub fn decode_preview(bytes: Vec<u8>) -> Result<Self, String> {
+        if bytes.len() as u64 > MAX_BYTES {
+            return Err("GLB exceeds 16 MiB".into());
+        }
+        let sha256 = format!("{:x}", Sha256::digest(&bytes));
+        let geometry = Arc::new(ImportedGeometry::decode_preview(&bytes)?);
         Ok(Self {
             bytes: Arc::new(bytes),
             geometry,
@@ -199,6 +218,13 @@ pub fn import(root: &Path, relative: &str) -> Result<Verified, String> {
         return Err("Choose a .glb file inside this project".into());
     }
     Verified::decode(read(&child(root, relative)?, MAX_BYTES)?)
+}
+/// Browser-only decode with the same ordinary-file, traversal and byte guards.
+pub fn preview(root: &Path, relative: &str) -> Result<Verified, String> {
+    if !relative.to_ascii_lowercase().ends_with(".glb") {
+        return Err("Choose a .glb file inside this project".into());
+    }
+    Verified::decode_preview(read(&child(root, relative)?, MAX_BYTES)?)
 }
 /// Explicit picker/drop input is ephemeral. Only verified bytes are saved later;
 /// the external path is never an asset binding and the source is never modified.
@@ -405,6 +431,9 @@ fn atomic_write(dir: &Path, name: &str, bytes: &[u8]) -> Result<(), String> {
     result
 }
 pub fn save(root: &Path, index: &AssetIndex, v: Option<&Verified>) -> Result<(), String> {
+    if v.is_some_and(|verified| verified.geometry.uses_generated_normals()) {
+        return Err(PREVIEW_ONLY_REASON.into());
+    }
     index.validate()?;
     let assets = directory(root, "Assets", true)?;
     if let Some(a) = &index.asset {
@@ -438,4 +467,141 @@ pub fn save(root: &Path, index: &AssetIndex, v: Option<&Verified>) -> Result<(),
         return Err("Asset index exceeds byte budget".into());
     }
     atomic_write(&assets, "ImportedAssets.json", &bytes)
+}
+
+#[cfg(test)]
+mod preview_tests {
+    use super::*;
+    const CALIBRATION: &[u8] = include_bytes!("../../../assets/examples/calibration-cube.glb");
+    const WEDGE: &[u8] = include_bytes!("../tests/fixtures/import/wedge.glb");
+    static NEXT_FIXTURE: AtomicU64 = AtomicU64::new(0);
+
+    // Retain disposable fixtures for inspection; no existing assets are removed.
+    fn fixture() -> PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "arkline-preview-document-{}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos(),
+            NEXT_FIXTURE.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir(&path).unwrap();
+        path
+    }
+
+    #[test]
+    fn calibration_preview_preserves_original_bytes_hash_and_strict_import_rejection() {
+        let preview = Verified::decode_preview(CALIBRATION.to_vec()).unwrap();
+        assert!(preview.geometry.uses_generated_normals());
+        assert_eq!(preview.geometry.report.triangles, 12);
+        assert_eq!(preview.geometry.report.version, 1);
+        assert_eq!(preview.bytes.as_slice(), CALIBRATION);
+        assert_eq!(preview.sha256, format!("{:x}", Sha256::digest(CALIBRATION)));
+        assert!(preview
+            .geometry
+            .report
+            .notes
+            .iter()
+            .any(|note| note.contains("generated flat face normals")
+                && note.contains("Original asset bytes are unchanged")));
+        assert!(Verified::decode(CALIBRATION.to_vec())
+            .err()
+            .unwrap()
+            .contains("normals"));
+        let authored = Verified::decode_preview(WEDGE.to_vec()).unwrap();
+        assert!(!authored.geometry.uses_generated_normals());
+        assert_eq!(
+            authored.geometry.report,
+            Verified::decode(WEDGE.to_vec()).unwrap().geometry.report
+        );
+    }
+
+    #[test]
+    fn preview_keeps_strict_source_path_and_size_guards() {
+        let root = fixture();
+        fs::write(root.join("calibration.glb"), CALIBRATION).unwrap();
+        assert_eq!(
+            preview(&root, "calibration.glb")
+                .unwrap()
+                .geometry
+                .report
+                .triangles,
+            12
+        );
+        assert!(import(&root, "calibration.glb").is_err());
+        assert!(import_selected(&root.join("calibration.glb")).is_err());
+        for relative in [
+            "",
+            "../calibration.glb",
+            "/calibration.glb",
+            "folder\\calibration.glb",
+            "C:calibration.glb",
+            "calibration.obj",
+        ] {
+            let preview_error = preview(&root, relative).err().unwrap();
+            assert_eq!(Some(preview_error), import(&root, relative).err());
+        }
+        let oversized = fs::File::create(root.join("large.glb")).unwrap();
+        oversized.set_len(MAX_BYTES + 1).unwrap();
+        assert_eq!(
+            preview(&root, "large.glb").err(),
+            import(&root, "large.glb").err()
+        );
+        #[cfg(unix)]
+        {
+            let outside = fixture();
+            fs::write(outside.join("normal.glb"), WEDGE).unwrap();
+            std::os::unix::fs::symlink(outside.join("normal.glb"), root.join("alias.glb")).unwrap();
+            std::os::unix::fs::symlink(&outside, root.join("linked")).unwrap();
+            for relative in ["alias.glb", "linked/normal.glb"] {
+                let error = preview(&root, relative).err().unwrap();
+                assert!(error.contains("symbolic links"));
+                assert_eq!(Some(error), import(&root, relative).err());
+            }
+        }
+        assert_eq!(fs::read(root.join("calibration.glb")).unwrap(), CALIBRATION);
+    }
+
+    #[test]
+    fn generated_preview_cannot_be_accepted_or_saved_even_with_matching_index() {
+        let preview = Verified::decode_preview(CALIBRATION.to_vec()).unwrap();
+        let original = AssetIndex::default();
+        assert_eq!(
+            original
+                .accept(&preview, String::new(), String::new())
+                .err()
+                .as_deref(),
+            Some(PREVIEW_ONLY_REASON)
+        );
+        assert_eq!(original, AssetIndex::default());
+        // Exercise save's independent defense with a valid matching index rather
+        // than relying on accept() having rejected the preview already.
+        let index = AssetIndex {
+            revision: 1,
+            next_id: 2,
+            asset: Some(AssetRecord {
+                id: 1,
+                revision: 1,
+                sha256: preview.sha256.clone(),
+                source_reference: String::new(),
+                license_reference: String::new(),
+                frame: "body-meters-v1".into(),
+                report: preview.geometry.report.clone(),
+            }),
+            ..AssetIndex::default()
+        };
+        index.validate().unwrap();
+        let root = fixture();
+        assert_eq!(
+            save(&root, &index, Some(&preview)).err().as_deref(),
+            Some(PREVIEW_ONLY_REASON)
+        );
+        assert!(
+            !root.join("Assets").exists(),
+            "Rejected preview must not create Assets or publish bytes"
+        );
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 0);
+    }
 }

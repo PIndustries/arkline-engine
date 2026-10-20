@@ -23,7 +23,7 @@ impl SourceFile {
         if let Some(reason) = &self.unavailable {
             return Err(reason.clone());
         }
-        doc::import(&self.root, &self.relative)
+        doc::preview(&self.root, &self.relative)
     }
 }
 
@@ -432,6 +432,27 @@ mod tests {
         assert_eq!(catalog.matching("visible.glb").count(), 1);
         #[cfg(unix)]
         assert_eq!(catalog.skipped, 1);
+    }
+
+    #[test]
+    fn calibration_source_loads_for_preview_without_weakening_strict_import() {
+        let project = fixture();
+        let repository = fixture();
+        let bytes = include_bytes!("../../../assets/examples/calibration-cube.glb");
+        write(&project, "Models/calibration.glb", bytes);
+        let catalog = scan(&project, &repository).unwrap();
+        let source = catalog.matching("calibration").next().unwrap();
+        let verified = source.load().unwrap();
+        assert_eq!(verified.geometry.report.triangles, 12);
+        assert!(verified.geometry.uses_generated_normals());
+        assert_eq!(verified.bytes.as_slice(), bytes);
+        assert!(doc::import(&project, "Models/calibration.glb").is_err());
+        assert_eq!(
+            fs::read(project.join("Models/calibration.glb"))
+                .unwrap()
+                .as_slice(),
+            bytes.as_slice()
+        );
     }
 
     #[test]

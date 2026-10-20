@@ -471,6 +471,9 @@ impl Imports {
         label: String,
         verified: Verified,
     ) -> Result<(), String> {
+        if verified.geometry.uses_generated_normals() {
+            return Err(doc::PREVIEW_ONLY_REASON.into());
+        }
         self.poll();
         if self.pending.is_some() {
             return Err(

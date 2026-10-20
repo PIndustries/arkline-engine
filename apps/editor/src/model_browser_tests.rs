@@ -21,7 +21,7 @@ fn answer(work: Work) -> Result<Answer, String> {
     match work {
         Work::Scan => Ok(Answer::Scanned(sources::SourceCatalog::default())),
         Work::Load { entry } => match entry.model {
-            Source::Snapshot(bytes) => Verified::decode(bytes.as_ref().clone())
+            Source::Snapshot(bytes) => Verified::decode_preview(bytes.as_ref().clone())
                 .map(|verified| Answer::Loaded(LoadedModel::Imported(verified))),
             _ => Err("Unexpected test source".into()),
         },
@@ -309,4 +309,100 @@ fn real_list_click_selects_and_no_results_clear_control_recovers_at_compact_size
     {
         std::panic::resume_unwind(panic);
     }
+}
+
+#[test]
+fn calibration_snapshot_previews_twelve_triangles_but_stage_button_cannot_emit_action() {
+    use sha2::{Digest, Sha256};
+    const CALIBRATION: &[u8] = include_bytes!("../../../assets/examples/calibration-cube.glb");
+    let project = std::env::temp_dir().join(format!(
+        "arkline-model-browser-preview-only-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir(&project).unwrap();
+    let mut imports = Imports::open(&project);
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while imports.saved.is_none() {
+        imports.poll();
+        assert!(
+            Instant::now() < deadline,
+            "Initial import baseline did not load"
+        );
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    let before = (imports.index.clone(), imports.saved.clone());
+    let mut browser = ModelBrowser::with_worker(Vec::new(), answer);
+    settle(&mut browser);
+    assert!(browser.open_snapshot("Calibration cube".into(), CALIBRATION.to_vec()));
+    settle(&mut browser);
+    assert_eq!(browser.state, LoadState::Ready);
+    match browser.loaded.as_ref().unwrap() {
+        LoadedModel::Imported(verified) => {
+            assert_eq!(verified.geometry.report.triangles, 12);
+            assert!(verified.geometry.uses_generated_normals());
+            assert_eq!(verified.bytes.as_slice(), CALIBRATION);
+            assert_eq!(
+                verified.sha256,
+                format!("{:x}", Sha256::digest(CALIBRATION))
+            );
+            assert!(verified
+                .geometry
+                .report
+                .notes
+                .iter()
+                .any(|note| note.contains("generated flat face normals")));
+        }
+        _ => panic!("Expected the calibration snapshot's actual imported geometry"),
+    }
+    let ctx = egui::Context::default();
+    let mut time = 0.0;
+    for size in [egui::vec2(1280.0, 900.0), egui::vec2(800.0, 600.0)] {
+        let mut draw = |events| {
+            time += 0.02;
+            let mut action = None;
+            let output = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
+                    time: Some(time),
+                    predicted_dt: 0.02,
+                    focused: true,
+                    events,
+                    ..Default::default()
+                },
+                |ctx| action = browser.show(ctx, None, &imports),
+            );
+            (output, action)
+        };
+        let _ = draw(vec![]);
+        let (output, action) = draw(vec![]);
+        assert!(action.is_none());
+        visible(&output, crate::import_document::PREVIEW_ONLY_REASON);
+        visible(&output, "Fit model");
+        visible(&output, "Reset view");
+        let point = visible(&output, "Stage selected…").center();
+        for pressed in [true, false] {
+            let (_, action) = draw(vec![
+                egui::Event::PointerMoved(point),
+                egui::Event::PointerButton {
+                    pos: point,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ]);
+            assert!(
+                action.is_none(),
+                "Preview-only geometry must not produce a staging action"
+            );
+        }
+    }
+    assert_eq!((imports.index.clone(), imports.saved.clone()), before);
+    assert!(imports.accepted.is_none() && imports.staged.is_none());
+    assert!(!project.join("Assets").exists());
+    browser.destroy();
+    imports.destroy();
 }
