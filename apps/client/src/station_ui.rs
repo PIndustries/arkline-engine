@@ -1481,7 +1481,9 @@ mod tests {
             |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     let pilot = cockpit.own().unwrap();
-                    cockpit.hangar_view.set_docked_traversal_enabled(true);
+                    cockpit
+                        .hangar_view
+                        .set_docked_traversal_enabled(cockpit.docked_navigation_present());
                     cockpit.hangar_view.ui(
                         ui,
                         &pilot,

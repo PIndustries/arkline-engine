@@ -594,8 +594,8 @@ fn midpoint(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
 fn ship_route(pose: PioneerDockedPose) -> [[f64; 3]; 4] {
     // Geometry-owner-proved route around the folded chair, then down the port aisle.
     [
-        [34.36, -0.32, 3.0],
-        [34.36, -0.32, 0.0],
+        [33.36, -0.32, 3.0],
+        [33.36, -0.32, 0.0],
         [34.1, -0.32, -0.5],
         [34.1, -0.32, -7.8],
     ]
@@ -1241,8 +1241,8 @@ fn authority_walks_from_pilot_seat_down_both_core_stairs_and_back_without_telepo
     let deck1_y = pose.origin_m[1] + geometry::deck_floor_y(1).unwrap();
     // Seat egress, the actual bridge opening, connector, and deck-two corridor.
     let approach = [
-        [34.36, 3.0],
-        [34.36, 0.0],
+        [33.36, 3.0],
+        [33.36, 0.0],
         [33.4, 0.0],
         [20.0, 0.0],
         [10.0, 0.0],
@@ -1345,7 +1345,7 @@ fn authority_walks_from_pilot_seat_down_both_core_stairs_and_back_without_telepo
         &mut server,
         &mut session,
         &mut now,
-        &[[34.54, 3.0]],
+        &[[33.54, 3.0]],
         &mut trace,
     );
     assert!(
@@ -1709,4 +1709,61 @@ fn canonical_sprint_uses_normalized_six_meters_per_second_and_same_lease_and_sto
         assert!(world.pilots["Walker"].walk_input.is_none());
         validate(&world, None).unwrap();
     }
+}
+
+#[test]
+fn previous_registration_save_is_rejected_without_rewriting_world() {
+    let directory = std::env::temp_dir().join(format!(
+        "arkline-old-pioneer-registration-{}-{}",
+        std::process::id(),
+        rand::random::<u64>()
+    ));
+    std::fs::create_dir_all(&directory).unwrap();
+    let database = directory.join("world.sqlite");
+    let mut server = Server::open(&database).unwrap();
+    let mut session = None;
+    connected(&mut server, &mut session);
+    leave_and_stand(&mut server, &mut session, LEFT_AT);
+    let mut world: World = serde_json::from_str(&durable(&server)).unwrap();
+    let old = PIONEER_DOCKED_REGISTRATION_REVISION - 1;
+    for actuator in world
+        .accounts
+        .get_mut("Walker")
+        .unwrap()
+        .docked_actuators
+        .values_mut()
+    {
+        actuator.binding.registration_revision = old;
+    }
+    let state = world
+        .pilots
+        .get_mut("Walker")
+        .unwrap()
+        .view
+        .station_avatar
+        .as_mut()
+        .unwrap()
+        .docked_traversal
+        .as_mut()
+        .unwrap();
+    state.binding.registration_revision = old;
+    state.actuators.binding.registration_revision = old;
+    let previous = serde_json::to_string(&world).unwrap();
+    server
+        .db
+        .execute("UPDATE world SET json=?1 WHERE id=1", [&previous])
+        .unwrap();
+    drop(server);
+    assert!(
+        Server::open(&database).is_err(),
+        "An older fit cannot be silently rebound"
+    );
+    let db = rusqlite::Connection::open(&database).unwrap();
+    let after: String = db
+        .query_row("SELECT json FROM world WHERE id=1", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(
+        after, previous,
+        "Failed admission must preserve feet, equipment, and saved world"
+    );
 }

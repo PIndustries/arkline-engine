@@ -615,6 +615,27 @@ fn computer_evidence(shot: &Shot) -> serde_json::Value {
         "Physical screen needs actual depth and lit UI pixels: visible={visible}, lit={lit}"
     );
     assert!(!shot.computer_labels.is_empty());
+    let surface = shot.surface.as_ref().unwrap();
+    let inset = surface.canvas_rect().shrink(8.0);
+    assert!(
+        [
+            inset.left_top(),
+            inset.right_top(),
+            inset.left_bottom(),
+            inset.right_bottom()
+        ]
+        .iter()
+        .all(|point| surface.project(*point).is_some()),
+        "All four interactive screen corners must be visible in the neutral seated view"
+    );
+    assert!(
+        screen_corners(shot)
+            .iter()
+            .all(|point| point.x >= 0.02 && point.x <= 0.98 && point.y >= 0.02 && point.y <= 0.98),
+        "Physical screen needs a visible viewport margin: {:?}",
+        screen_corners(shot)
+    );
+
     serde_json::json!({"depth_samples":visible,"lit_samples":lit,"physical_roundtrip":true,
         "projection":screen_corner_evidence(shot)})
 }

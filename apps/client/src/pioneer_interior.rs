@@ -6,10 +6,6 @@ use arkline_protocol::{
 };
 use std::sync::Arc;
 
-#[cfg(test)]
-fn block(p: &mut Parts, min: Vec3, max: Vec3, color: Vec3, emission: f32) {
-    surface_block(p, min, max, color, emission, SurfaceRole::CoatedPanel);
-}
 fn surface_block(
     p: &mut Parts,
     min: Vec3,
@@ -862,19 +858,21 @@ mod room_inspection_tests {
     fn room_cutaways_omit_shared_slabs_and_access_core_geometry() {
         let mut shared = Parts(Vec::new());
         let steel = Vec3::new(0.045, 0.065, 0.072);
-        block(
+        surface_block(
             &mut shared,
             Vec3::new(0.0, -0.1, 0.0),
             Vec3::new(32.0, 0.0, 14.0),
             steel,
             0.0,
+            SurfaceRole::GripDeck,
         );
-        block(
+        surface_block(
             &mut shared,
             Vec3::new(0.0, 3.2, 0.0),
             Vec3::new(32.0, 3.3, 14.0),
             steel,
             0.0,
+            SurfaceRole::Composite,
         );
         shared
             .0

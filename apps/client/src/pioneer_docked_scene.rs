@@ -576,7 +576,7 @@ pub(super) fn show(
     if allowed {
         let (held, axes) = ui.input(|input| {
             (
-                state.is_none() && input.modifiers.shift,
+                pilot.station_avatar.is_none() && input.modifiers.shift,
                 [
                     (input.key_down(egui::Key::ArrowLeft) as i32
                         - input.key_down(egui::Key::ArrowRight) as i32) as f32,

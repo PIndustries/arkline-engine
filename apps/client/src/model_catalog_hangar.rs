@@ -264,7 +264,7 @@ pub(in crate::flight3d) fn load(id: &str) -> Option<Result<(Vec<InspectionDraw>,
             .into_iter()
             .map(|part| InspectionDraw {
                 part,
-                material: Material::PaintedHull,
+                material: surface_roles::material(part.0).unwrap_or(Material::PaintedHull),
                 range: None,
             })
             .collect(),

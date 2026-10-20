@@ -1,4 +1,4 @@
-//! Version-one registration for the docked Pioneer walking scene.
+//! Version-two registration for the docked Pioneer walking scene.
 //!
 //! Positions are body metres until explicitly transformed into station metres.
 //! The dimensions below are presentation and walking geometry, not engineering
@@ -10,7 +10,9 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 
-pub const PIONEER_DOCKED_REGISTRATION_REVISION: u32 = 1;
+// Revision 2 changes the fitted bay and workstation. Old saved bindings must
+// remain with their matching build until an explicit migration is validated.
+pub const PIONEER_DOCKED_REGISTRATION_REVISION: u32 = 2;
 pub const PIONEER_DOCKED_SOURCE_SHA256: &str =
     "8125644f007537437942d34169e527c08ddd2dfaed575c874e2263ff2b7cb123";
 const EPS: f64 = 1.0e-8;
@@ -1460,7 +1462,9 @@ pub fn cockpit_screen(index: usize) -> Option<([f64; 3], [f64; 3])> {
         0 => Some(([34.94, 1.112, 3.0], [0.020, 0.075, 0.18])),
         1 => Some(([35.02, 0.77, 2.4], [0.012, 0.13, 0.18])),
         2 => Some(([35.02, 0.77, 3.6], [0.012, 0.13, 0.18])),
-        3 => Some(([35.0, 0.77, 3.0], [0.020, 0.175, 0.27])),
+        // Raise the central display mount 5 cm so its complete interactive face
+        // fits the neutral seated view, preserving the console and pilot eye.
+        3 => Some(([35.0, 0.82, 3.0], [0.020, 0.175, 0.27])),
         4 => Some(([35.02, 1.02, 2.4], [0.012, 0.085, 0.18])),
         5 => Some(([35.02, 1.02, 3.6], [0.012, 0.085, 0.18])),
         _ => None,
@@ -2097,6 +2101,34 @@ mod tests {
     }
 
     #[test]
+    fn fitted_cockpit_has_continuous_rear_chair_circulation() {
+        let g = registered_geometry(&crate::default_pioneer()).unwrap();
+        for pose in [
+            PioneerDockedPose::private(),
+            PioneerDockedPose::fleet(FleetLayoutRevision::CircularV1),
+        ] {
+            let d = dynamic_geometry(pose, state(pose)).unwrap();
+            let mut feet = seat_anchors(pose).root_station_m;
+            let mut previous = Some(PioneerDockedSupport::Cockpit);
+            // Walk from the folded seat around its port side, through the aft
+            // aisle, around the starboard side, and back to the same seat root.
+            // Every 25 mm sample uses full-height capsule and floor collision.
+            for target in [
+                [33.36, 3.0],
+                [33.36, 0.0],
+                [32.10, 0.0],
+                [32.10, 4.2],
+                [33.36, 4.2],
+                [33.36, 3.0],
+                [33.54, 3.0],
+            ] {
+                walk(&g, &d, pose, &mut feet, target, &mut previous);
+            }
+            assert!((0..3).all(|i| (feet[i] - seat_anchors(pose).root_station_m[i]).abs() < 1e-8));
+        }
+    }
+
+    #[test]
     fn fitted_seat_egress_and_interlocked_boarding_route_have_continuous_support() {
         let g = registered_geometry(&crate::default_pioneer()).unwrap();
         for pose in [
@@ -2267,7 +2299,7 @@ mod tests {
         assert_eq!(pilot_joints(1.0).eye_m, [33.54, 1.33, 3.0]);
         assert_eq!(
             cockpit_screen(3),
-            Some(([34.0, 0.77, 3.0], [0.020, 0.175, 0.27]))
+            Some(([34.0, 0.82, 3.0], [0.020, 0.175, 0.27]))
         );
         assert!(cockpit_screen(6).is_none());
     }
