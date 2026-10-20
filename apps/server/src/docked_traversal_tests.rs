@@ -1798,3 +1798,55 @@ fn previous_registration_save_is_rejected_without_rewriting_world() {
         "Failed admission must preserve feet, equipment, and saved world"
     );
 }
+
+#[test]
+fn hatch_motion_is_timed_reversible_paused_and_holds_on_power_loss() {
+    let mut server = Server::open_in_memory().unwrap();
+    let mut session = None;
+    connected(&mut server, &mut session);
+    leave_and_stand(&mut server, &mut session, LEFT_AT);
+    let mut now = STANDING_AT;
+    for target in ship_route(PioneerDockedPose::private()) {
+        walk_to(&mut server, &mut session, &mut now, target);
+    }
+    let start = now;
+    let request = |open| DockedTraversalRequest::SetHatch {
+        binding: binding(),
+        hatch: DockedHatch::Inner,
+        open,
+    };
+    let started = ok(command(&mut server, &mut session, request(true), now));
+    let h = &traversal(&started).actuators.hatches.as_ref().unwrap()[0];
+    assert!(h.moving && h.fraction == 0.0 && !traversal(&started).actuators.inner_hatch_open);
+    let middle = snapshot(&mut server, &mut session, start + 750);
+    let h = &traversal(&middle).actuators.hatches.as_ref().unwrap()[0];
+    assert!((h.fraction - 0.5).abs() < 1e-10 && h.moving);
+    let paused = snapshot(&mut server, &mut session, start + 750);
+    assert_eq!(traversal(&paused).actuators, traversal(&middle).actuators);
+    let before = durable(&server);
+    let world: World = serde_json::from_str(&before).unwrap();
+    assert!(crate::docked_traversal::can_undock(&world, "Walker").is_err());
+    let reversed = ok(command(
+        &mut server,
+        &mut session,
+        request(false),
+        start + 750,
+    ));
+    assert_eq!(traversal(&reversed).actuators.hatch_fractions()[0], 0.5);
+    let quarter = snapshot(&mut server, &mut session, start + 1125);
+    assert!((traversal(&quarter).actuators.hatch_fractions()[0] - 0.25).abs() < 1e-10);
+    let mut world: World = serde_json::from_str(&durable(&server)).unwrap();
+    world
+        .accounts
+        .get_mut("Walker")
+        .unwrap()
+        .docked_actuators
+        .get_mut(&binding().host_vessel_id)
+        .unwrap()
+        .service_power_available = false;
+    crate::docked_traversal::advance(&mut world, start + 1625, None).unwrap();
+    let a = &world.accounts["Walker"].docked_actuators[&binding().host_vessel_id];
+    assert_eq!(a.hatch_fractions()[0], 0.25);
+    assert!(!a.hatches.as_ref().unwrap()[0].moving && a.hatches.as_ref().unwrap()[0].blocked);
+    assert!(!a.hatches_closed());
+}

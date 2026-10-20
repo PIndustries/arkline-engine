@@ -116,6 +116,9 @@ pub enum PioneerDockedCell {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PioneerDockedMaterial {
+    WallPanel,
+    GripDeck,
+    ServiceCeiling,
     Graphite,
     Titanium,
     Carbon,
@@ -534,7 +537,7 @@ impl PioneerDockedGeometry {
             id,
             [min[0], height - thickness, min[1]],
             [max[0], height, max[1]],
-            PioneerDockedMaterial::Graphite,
+            PioneerDockedMaterial::GripDeck,
             PioneerDockedCollision::Support,
             cell,
             PioneerDockedPanelKind::Structure,
@@ -566,7 +569,7 @@ impl PioneerDockedGeometry {
                 half_m: [half[0], 0.06, half[1]],
                 axes: [axes[0], Y, axes[1]],
             },
-            PioneerDockedMaterial::Graphite,
+            PioneerDockedMaterial::GripDeck,
             PioneerDockedCollision::Support,
             cell,
             PioneerDockedPanelKind::Structure,
@@ -671,7 +674,7 @@ pub fn registered_geometry(document: &RoomLayoutDocument) -> Result<PioneerDocke
                 format!("deck{deck}/ceiling/{i}"),
                 [r[0] - 12.0, floor + 3.2, r[1] - 7.0],
                 [r[2] - 12.0, floor + 3.3, r[3] - 7.0],
-                PioneerDockedMaterial::Graphite,
+                PioneerDockedMaterial::ServiceCeiling,
                 PioneerDockedCollision::Solid,
                 cell,
                 PioneerDockedPanelKind::Structure,
@@ -689,7 +692,7 @@ pub fn registered_geometry(document: &RoomLayoutDocument) -> Result<PioneerDocke
                 format!("deck{deck}/boundary/{i}"),
                 deck_to_body(deck, min).unwrap(),
                 deck_to_body(deck, max).unwrap(),
-                PioneerDockedMaterial::Graphite,
+                PioneerDockedMaterial::WallPanel,
                 PioneerDockedCollision::Solid,
                 cell,
                 PioneerDockedPanelKind::Structure,
@@ -709,7 +712,7 @@ pub fn registered_geometry(document: &RoomLayoutDocument) -> Result<PioneerDocke
                 format!("deck{deck}/forward/{i}"),
                 deck_to_body(deck, min).unwrap(),
                 deck_to_body(deck, max).unwrap(),
-                PioneerDockedMaterial::Graphite,
+                PioneerDockedMaterial::WallPanel,
                 PioneerDockedCollision::Solid,
                 cell,
                 PioneerDockedPanelKind::Structure,
@@ -747,7 +750,7 @@ pub fn registered_geometry(document: &RoomLayoutDocument) -> Result<PioneerDocke
                     if o.kind == StationObstacleKind::Storage {
                         PioneerDockedMaterial::Carbon
                     } else {
-                        PioneerDockedMaterial::Graphite
+                        PioneerDockedMaterial::WallPanel
                     },
                     PioneerDockedCollision::Solid,
                     roomcell,
@@ -763,7 +766,7 @@ pub fn registered_geometry(document: &RoomLayoutDocument) -> Result<PioneerDocke
                     format!("room/{}/header", room.id),
                     deck_to_body(deck, [x - w * 0.5, h, z]).unwrap(),
                     deck_to_body(deck, [x + w * 0.5, room.clear_lwh_m[2], z + 0.15]).unwrap(),
-                    PioneerDockedMaterial::Graphite,
+                    PioneerDockedMaterial::WallPanel,
                     PioneerDockedCollision::Solid,
                     roomcell,
                     PioneerDockedPanelKind::Structure,
@@ -785,8 +788,73 @@ pub fn registered_geometry(document: &RoomLayoutDocument) -> Result<PioneerDocke
     add_stairs(&mut g);
     add_connector(&mut g);
     add_cockpit_furniture(&mut g);
+    add_service_finish(&mut g);
     validate_geometry(&g)?;
     Ok(g)
+}
+
+/// Construction finish shares the registered geometry in every camera/route.
+/// These static ceiling/service housings create no equipment or powered circuit.
+fn add_service_finish(g: &mut PioneerDockedGeometry) {
+    for deck in [1, 2] {
+        let floor = deck_floor_y(deck).unwrap();
+        let cell = if deck == 1 {
+            PioneerDockedCell::Deck1
+        } else {
+            PioneerDockedCell::Deck2
+        };
+        // Service cassettes and separated longitudinal cable trays stay above
+        // 2.9 m clear height; the aft stairwell retains its existing open well.
+        for bay in 0..12 {
+            let x = -5.5 + bay as f64 * 2.0;
+            g.block(
+                format!("finish/deck{deck}/cassette/{bay}"),
+                [x, floor + 3.08, -0.68],
+                [x + 1.82, floor + 3.18, 0.68],
+                PioneerDockedMaterial::ServiceCeiling,
+                PioneerDockedCollision::Decoration,
+                cell,
+                PioneerDockedPanelKind::Structure,
+            );
+            for side in [-1.0, 1.0] {
+                let z = side * 0.82;
+                g.block(
+                    format!("finish/deck{deck}/tray/{bay}/{side}"),
+                    [x, floor + 2.98, z - 0.08],
+                    [x + 1.82, floor + 3.11, z + 0.08],
+                    PioneerDockedMaterial::Titanium,
+                    PioneerDockedCollision::Decoration,
+                    cell,
+                    PioneerDockedPanelKind::Structure,
+                );
+                g.block(
+                    format!("finish/deck{deck}/tray-lid/{bay}/{side}"),
+                    [x + 0.05, floor + 2.96, z - 0.055],
+                    [x + 1.77, floor + 2.98, z + 0.055],
+                    PioneerDockedMaterial::Carbon,
+                    PioneerDockedCollision::Decoration,
+                    cell,
+                    PioneerDockedPanelKind::Structure,
+                );
+            }
+        }
+    }
+    // The fitted bridge has its own service ceiling, not an exposed hull void.
+    for bay in 0..3 {
+        let x = 31.75 + bay as f64;
+        for side in [-1.0, 1.0] {
+            let z = side * 4.8;
+            g.block(
+                format!("finish/bridge/service/{bay}/{side}"),
+                [x, 2.72, z - 0.25],
+                [x + 0.82, 2.87, z + 0.25],
+                PioneerDockedMaterial::ServiceCeiling,
+                PioneerDockedCollision::Decoration,
+                PioneerDockedCell::Cockpit,
+                PioneerDockedPanelKind::Structure,
+            );
+        }
+    }
 }
 
 fn add_stairs(g: &mut PioneerDockedGeometry) {
@@ -2423,6 +2491,52 @@ mod tests {
                 && *first >= c.source_first_vertex
                 && *first + 3 <= c.source_first_vertex + c.source_vertex_count));
             assert!(c.volumes.iter().all(|b| b.valid()));
+        }
+    }
+}
+
+#[cfg(test)]
+mod hatch_motion_geometry_tests {
+    use super::*;
+    #[test]
+    fn paired_leaves_retain_open_geometry_and_conservatively_enclose_every_angle() {
+        for hatch in [PioneerDockedHatch::Inner, PioneerDockedHatch::Outer] {
+            assert!(hatch_leaf_bounds(hatch, f64::NAN).is_err());
+            assert!(hatch_leaf_bounds(hatch, -0.01).is_err());
+            let swept = hatch_leaf_sweep_bounds(hatch, 0.0, 1.0).unwrap();
+            assert_eq!(swept.len(), 180);
+            for tick in 0..=1800 {
+                let fraction = tick as f64 / 1800.0;
+                for (leaf_index, b) in hatch_leaf_bounds(hatch, fraction)
+                    .unwrap()
+                    .iter()
+                    .enumerate()
+                {
+                    let i = ((fraction * 90.0).floor() as usize).min(89) * 2 + leaf_index;
+                    for x in [-1.0, 1.0] {
+                        for y in [-1.0, 1.0] {
+                            for z in [-1.0, 1.0] {
+                                let point = add(
+                                    b.center_m,
+                                    add(
+                                        mul(b.axes[0], x * b.half_m[0]),
+                                        add(
+                                            mul(b.axes[1], y * b.half_m[1]),
+                                            mul(b.axes[2], z * b.half_m[2]),
+                                        ),
+                                    ),
+                                );
+                                let local = swept[i].local(point);
+                                assert!((0..3)
+                                    .all(|axis| local[axis].abs() <= swept[i].half_m[axis] + 1e-7));
+                            }
+                        }
+                    }
+                }
+            }
+            let open = hatch_leaf_bounds(hatch, 1.0).unwrap();
+            assert!(open.iter().all(|b| b.valid()));
+            assert_ne!(open, hatch_leaf_bounds(hatch, 0.0).unwrap());
         }
     }
 }

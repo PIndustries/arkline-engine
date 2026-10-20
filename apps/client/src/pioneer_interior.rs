@@ -175,7 +175,7 @@ fn obstacle_model_parts(o: arkline_protocol::StationObstacle) -> Vec<ModelPart> 
         if fixture {
             Vec3::new(0.09, 0.13, 0.14)
         } else {
-            steel
+            Vec3::new(0.36, 0.34, 0.28)
         },
         0.0,
         if fixture {
@@ -211,8 +211,8 @@ fn room_decoration_parts(room: &arkline_protocol::RoomLayout) -> Vec<ModelPart> 
             &mut p,
             Vec3::new(jamb_x - 0.025, 0.0, face - 0.01),
             Vec3::new(jamb_x + 0.025, door_height, face + 0.17),
-            Vec3::new(0.025, 0.35, 0.14),
-            0.5,
+            Vec3::new(0.018, 0.095, 0.054),
+            0.0,
             SurfaceRole::EnamelTrim,
         );
     }
@@ -220,8 +220,8 @@ fn room_decoration_parts(room: &arkline_protocol::RoomLayout) -> Vec<ModelPart> 
         &mut p,
         Vec3::new(door - door_width * 0.5, door_height - 0.04, face - 0.01),
         Vec3::new(door + door_width * 0.5, door_height, face + 0.17),
-        Vec3::new(0.025, 0.35, 0.14),
-        0.5,
+        Vec3::new(0.018, 0.095, 0.054),
+        0.0,
         SurfaceRole::EnamelTrim,
     );
     surface_block(

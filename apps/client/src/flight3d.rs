@@ -5867,6 +5867,7 @@ fn mesh_fragment_prefix() -> String {
 const AUTHORED_MATERIAL_FUNCTION: &str = "struct ArkSurface{vec3 base_color;float roughness;float metallic;vec3 emission;};ArkSurface ark_graph_surface(vec3 body_meters,ArkSurface authored_surface){return authored_surface;}\n";
 const FRAGMENT_BODY: &str = r#"
 in vec3 world;in vec3 surface_normal;in vec3 local_position;
+uniform mat4 model;
 uniform float surface_opacity;uniform int ark_graph_enabled;uniform vec4 material_params;uniform float hull_surface;uniform float station_lighting;uniform float environment_atmosphere;uniform vec3 environment_up;
 uniform vec3 planet_center;uniform vec3 base_color;uniform vec3 eye;uniform float emission;uniform float emission_power;uniform vec4 emission_override;uniform vec3 emissive_color;uniform int material_kind;out vec4 color;
 float ark_terrain(vec3 p){return ark_noise3(p)*0.53+ark_noise3(p*2.07+13.8)*0.27+ark_noise3(p*4.13-7.1)*0.13+ark_noise3(p*8.41+29.4)*0.07;}
@@ -5899,10 +5900,17 @@ if(material_kind==1 || material_kind==2){
         ArkSurface surface=ark_graph_surface(local_position*100.0,authored);
         albedo=surface.base_color;roughness=surface.roughness;metallic=surface.metallic;emitted=surface.emission;
     }
-    if(material_params.z>0.5){
+    if(material_params.z>0.5 && material_params.z<1.5){
         float vein=1.0-smoothstep(0.045,0.11,abs(ark_noise3(local_position*5.0)-0.52));
         metallic=mix(0.0,0.82,vein);roughness=mix(0.90,0.34,vein);
         albedo=mix(albedo,vec3(0.48,0.38,0.22),vein*0.72);
+    }
+    if(material_params.z>1.5){
+        // Each typed box retains metric dimensions through station/space scale.
+        vec3 meters=local_position*vec3(length(model[0].xyz),length(model[1].xyz),length(model[2].xyz))*100.0;
+        vec3 face=abs(local_position);
+        vec2 uv=face.x>=face.y && face.x>=face.z ? meters.yz : (face.y>=face.z ? meters.xz : meters.xy);
+        ark_interior_surface(uv,material_params.z,albedo,roughness);
     }
     if(hull_surface>0.5){ark_hull_surface(local_position*100.0,albedo,roughness,metallic);}
     // Existing screen panels use a dark dielectric backing; no canopy transmission is invented.

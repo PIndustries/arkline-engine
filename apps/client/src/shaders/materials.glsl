@@ -61,3 +61,25 @@ void ark_hull_surface(vec3 meters,inout vec3 albedo,inout float roughness,float 
     albedo*=clamp(1.0+broad*0.12+grain*0.04,0.90,1.10);
     roughness=clamp(roughness+broad*0.07+grain*mix(0.035,0.08,metallic),0.08,1.0);
 }
+
+// Metric construction details, antialiased with actual fragment footprint.
+// No random grunge or light is added; normals/geometry remain authored.
+void ark_interior_surface(vec2 meters,float role,inout vec3 albedo,inout float roughness){
+    float footprint=max(length(fwidth(meters)),0.0001);
+    if(role<2.5){
+        vec2 seam=abs(fract(meters/vec2(1.2,0.8)+0.5)-0.5)*vec2(1.2,0.8);
+        float joint=1.0-smoothstep(0.004,0.004+footprint,min(seam.x,seam.y));
+        albedo*=mix(1.0,0.28,joint);roughness=mix(roughness,0.86,joint);
+        // Protective lower-band cladding is modelled separately, not inferred here.
+    }else if(role<3.5){
+        float resolved=1.0-smoothstep(0.02,0.07,footprint);
+        vec2 q=meters*vec2(25.0,25.0);
+        float grip=1.0-smoothstep(0.08,0.18,abs(fract(q.x+q.y)-0.5));
+        vec2 seam=abs(fract(meters/0.8+0.5)-0.5)*0.8;
+        float joint=1.0-smoothstep(0.004,0.004+footprint,min(seam.x,seam.y));
+        albedo*=mix(1.0,1.22,grip*resolved)*mix(1.0,0.3,joint);roughness=0.9;
+    }else{
+        float slots=1.0-smoothstep(0.003,0.003+footprint,abs(fract(meters.x/0.10+0.5)-0.5)*0.10);
+        albedo*=mix(1.0,0.5,slots);roughness=0.82;
+    }
+}

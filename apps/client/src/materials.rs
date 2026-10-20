@@ -18,9 +18,9 @@ impl Material {
             Self::Rock => [0.92, 0.0, 0.0, 0.0],
             Self::Ore => [0.90, 0.0, 1.0, 0.0],
             Self::PaintedHull => [0.46, 0.0, 0.0, 0.0],
-            Self::CoatedPanel => [0.62, 0.0, 0.0, 0.0],
-            Self::GripDeck => [0.90, 0.0, 0.0, 0.0],
-            Self::Composite => [0.82, 0.0, 0.0, 0.0],
+            Self::CoatedPanel => [0.62, 0.0, 2.0, 0.0],
+            Self::GripDeck => [0.90, 0.0, 3.0, 0.0],
+            Self::Composite => [0.82, 0.0, 4.0, 0.0],
             Self::FixtureDiffuser => [0.65, 0.0, 0.0, 0.0],
             Self::BareMetal => [0.30, 1.0, 0.0, 0.0],
             Self::Glass => [0.12, 0.0, 0.0, 1.0],
@@ -45,7 +45,8 @@ mod tests {
         ] {
             let [roughness, metal, ore, glass] = material.parameters();
             assert!((0.08..=1.0).contains(&roughness));
-            assert!([metal, ore, glass].iter().all(|v| (0.0..=1.0).contains(v)));
+            assert!([metal, glass].iter().all(|v| (0.0..=1.0).contains(v)));
+            assert!((0.0..=4.0).contains(&ore) && ore.fract() == 0.0);
         }
         assert_eq!(Material::Rock.parameters()[1], 0.0);
         assert_eq!(Material::PaintedHull.parameters()[1], 0.0);

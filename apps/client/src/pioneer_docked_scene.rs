@@ -121,6 +121,9 @@ fn box_matrix(bounds: &PioneerDockedBox) -> Mat4 {
 }
 fn surface(material: PioneerDockedMaterial) -> (Vec3, f32) {
     match material {
+        PioneerDockedMaterial::WallPanel => (Vec3::new(0.36, 0.34, 0.28), 0.0),
+        PioneerDockedMaterial::GripDeck => (Vec3::new(0.018, 0.024, 0.026), 0.0),
+        PioneerDockedMaterial::ServiceCeiling => (Vec3::new(0.022, 0.029, 0.033), 0.0),
         PioneerDockedMaterial::Graphite => (Vec3::new(0.045, 0.065, 0.072), 0.0),
         PioneerDockedMaterial::Titanium => (Vec3::new(0.17, 0.22, 0.23), 0.0),
         PioneerDockedMaterial::Carbon => (Vec3::new(0.018, 0.024, 0.027), 0.0),
@@ -134,6 +137,9 @@ fn surface(material: PioneerDockedMaterial) -> (Vec3, f32) {
 fn panel_surface_role(material: PioneerDockedMaterial) -> surface_roles::SurfaceRole {
     use surface_roles::SurfaceRole;
     match material {
+        PioneerDockedMaterial::WallPanel => SurfaceRole::CoatedPanel,
+        PioneerDockedMaterial::GripDeck => SurfaceRole::GripDeck,
+        PioneerDockedMaterial::ServiceCeiling => SurfaceRole::Composite,
         PioneerDockedMaterial::Graphite => SurfaceRole::CoatedPanel,
         PioneerDockedMaterial::Titanium => SurfaceRole::ExposedAlloy,
         PioneerDockedMaterial::Carbon => SurfaceRole::Composite,
