@@ -231,6 +231,10 @@ impl Cockpit {
         });
         egui::Grid::new("personal-inventory")
             .num_columns(3)
+            .min_col_width(0.0)
+            .max_col_width(
+                ((ui.available_width() - 2.0 * ui.spacing().item_spacing.x) / 3.0).max(1.0),
+            )
             .striped(true)
             .show(ui, |ui| {
                 ui.strong("Container");

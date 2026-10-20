@@ -277,6 +277,8 @@ impl Cockpit {
             }
             egui::Grid::new("resource-authority-summary")
                 .num_columns(2)
+                .min_col_width(0.0)
+                .max_col_width(((ui.available_width() - 18.0) / 2.0).max(1.0))
                 .spacing(egui::vec2(18.0, 5.0))
                 .show(ui, |ui| {
                     if let Some(job) = &job {
@@ -368,6 +370,8 @@ impl Cockpit {
         ui.collapsing("Telemetry details", |ui| {
             egui::Grid::new("resource-secondary-telemetry")
                 .num_columns(2)
+                .min_col_width(0.0)
+                .max_col_width(((ui.available_width() - 18.0) / 2.0).max(1.0))
                 .spacing(egui::vec2(18.0, 6.0))
                 .show(ui, |ui| {
                     if let Some(job) = self.own_resource_job() {

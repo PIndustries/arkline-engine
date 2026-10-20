@@ -283,6 +283,8 @@ impl Cockpit {
         ui.strong(format!("SELECTED DRONE #{id}"));
         egui::Grid::new("selected-drone-authority")
             .num_columns(2)
+            .min_col_width(0.0)
+            .max_col_width(((ui.available_width() - 20.0) / 2.0).max(1.0))
             .spacing(egui::vec2(20.0, 7.0))
             .show(ui, |ui| {
                 for (label, value) in [

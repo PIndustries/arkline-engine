@@ -4132,7 +4132,8 @@ impl eframe::App for Cockpit {
                     egui::ScrollArea::vertical()
                         .id_salt("focused_task_content")
                         .auto_shrink([false, false])
-                        .max_height(ui.available_height().max(120.0))
+                        .min_scrolled_height(0.0)
+                        .max_height(ui.available_height().max(0.0))
                         .show(ui, |ui| self.service_content(ui));
                 });
             if let Some(response) = panel_response {
