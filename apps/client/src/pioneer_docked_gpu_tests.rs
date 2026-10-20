@@ -126,7 +126,7 @@ impl Harness {
                     self.view.ui(ui, pilot, now, true, None, None, None, now);
                     if self.instruments {
                         self.view
-                            .paint_docked_instruments(ui, pilot, &snapshot, now, true);
+                            .paint_docked_instruments(ui, pilot, &snapshot, now, true, false);
                     }
                 });
             },
