@@ -1,3 +1,5 @@
+> Historical build: the current unified Models app and validation are recorded in [UNIFIED-MODEL-VALIDATION-20261020.md](UNIFIED-MODEL-VALIDATION-20261020.md).
+
 # Native drone models and viewer
 
 Build **26.10.20.2** is running as **PID9337** on the preserved disposable

@@ -1,0 +1,422 @@
+{
+  "schema_version": 1,
+  "updated_utc": "2026-10-20T06:42:07.436072+00:00",
+  "build": "26.10.20.3",
+  "production_source_head": "57fad16f8727cd254d99f70ed3c60416d60fa549",
+  "incremental_commits": {
+    "client": "2257bde",
+    "editor": "40b6ceb",
+    "lint": "edc6654",
+    "build_stamp": "57fad16",
+    "repository_glb_acceptance": "607064d78eda54454457567b1f2f2a11ac96e978"
+  },
+  "package": {
+    "build_version": "26.10.20.3",
+    "cf_bundle_version": "2485.0.3",
+    "source_head_before_version_commit": "edc6654b29e5de0919ed1333a5b6ec45c0bf4d4e",
+    "binary_sha256_before_signing": "9eb8175b752cf08fbbc02dcfa2090d9bb9fc93b7c03af235292f0809cd6ee0b5",
+    "packaged_executable_sha256": "e76bfecdf411f2178a11b059510b9b66ac646241d928cd443ef3733c7fd96a8c",
+    "app": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/unified-model-viewer-20261020/Arkline Editor Reconstructed.app",
+    "signature": "local ad-hoc; verified deep strict",
+    "profile": "debug; debug information disabled; incremental disabled"
+  },
+  "coverage": {
+    "runtime_catalog_entries": 111,
+    "runtime_geometry_previews": 92,
+    "runtime_unavailable_entries": 19,
+    "unique_mesh_asset_count_claimed": false,
+    "repository_source_paths": 7,
+    "repository_glb_paths": 4,
+    "repository_blend_paths": 3,
+    "actual_current_window_entries": 118,
+    "source_scan_limits": {
+      "visited_entries": 2048,
+      "depth": 8,
+      "candidates": 256,
+      "glb_bytes": 16777216
+    },
+    "world_shader_limits": "Planet and terrain retain actual triangles with plain inspection materials, not full live shaders"
+  },
+  "workspace_tests": {
+    "at_utc": "2026-10-20T06:38:43.114628+00:00",
+    "build": "26.10.20.3",
+    "source_head_before": "57fad16f8727cd254d99f70ed3c60416d60fa549",
+    "source_head_after": "57fad16f8727cd254d99f70ed3c60416d60fa549",
+    "status_before": "",
+    "status_after": "",
+    "exit_code": 0,
+    "top_level_suites": 55,
+    "passed": 879,
+    "failed": 0,
+    "ignored": 31,
+    "guard_log": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T063442144431Z.log",
+    "guard_receipt": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T063442144431Z.json"
+  },
+  "native_named_checks": {
+    "build": "26.10.20.3",
+    "source_head": "57fad16f8727cd254d99f70ed3c60416d60fa549",
+    "results": [
+      {
+        "test": "native_shared_model_preview_catalog_import_materials_controls_and_clear",
+        "exit_code": 0,
+        "command": [
+          "/usr/bin/python3",
+          "-S",
+          "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/tools/guarded-local-build.py",
+          "--timeout-seconds",
+          "300",
+          "--",
+          "/usr/bin/env",
+          "ARKLINE_MODEL_PREVIEW_EVIDENCE=/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/unified-model-viewer-20261020/shared-preview-final-gpu",
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "arkline-client",
+          "native_shared_model_preview_catalog_import_materials_controls_and_clear",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "guard_announcement": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T063213393596Z.log",
+        "evidence_directory": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/unified-model-viewer-20261020/shared-preview-final-gpu"
+      },
+      {
+        "test": "native_drone_gallery_all_classes_orbit_zoom_reset_share_runtime_geometry",
+        "exit_code": 0,
+        "command": [
+          "/usr/bin/python3",
+          "-S",
+          "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/tools/guarded-local-build.py",
+          "--timeout-seconds",
+          "180",
+          "--",
+          "/usr/bin/env",
+          "ARKLINE_DRONE_MODEL_EVIDENCE=/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/unified-model-viewer-20261020/drone-regression",
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "arkline-client",
+          "native_drone_gallery_all_classes_orbit_zoom_reset_share_runtime_geometry",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "guard_announcement": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T063303673993Z.log",
+        "evidence_directory": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/unified-model-viewer-20261020/drone-regression"
+      },
+      {
+        "test": "native_cockpit_depth_query_uses_draw_framebuffer_without_rebinding",
+        "exit_code": 0,
+        "command": [
+          "/usr/bin/python3",
+          "-S",
+          "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/tools/guarded-local-build.py",
+          "--timeout-seconds",
+          "180",
+          "--",
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "arkline-client",
+          "native_cockpit_depth_query_uses_draw_framebuffer_without_rebinding",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "guard_announcement": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T063310758829Z.log",
+        "evidence_directory": null
+      },
+      {
+        "test": "native_cockpit_display_preserves_depth_perspective_and_state",
+        "exit_code": 0,
+        "command": [
+          "/usr/bin/python3",
+          "-S",
+          "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/tools/guarded-local-build.py",
+          "--timeout-seconds",
+          "180",
+          "--",
+          "/usr/bin/env",
+          "ARKLINE_COCKPIT_QA_DIR=/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/unified-model-viewer-20261020/display-depth",
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "arkline-client",
+          "native_cockpit_display_preserves_depth_perspective_and_state",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "guard_announcement": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T063311820150Z.log",
+        "evidence_directory": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/unified-model-viewer-20261020/display-depth"
+      },
+      {
+        "test": "native_pioneer_cockpit_enclosure_matches_source_and_keeps_window_apertures",
+        "exit_code": 0,
+        "command": [
+          "/usr/bin/python3",
+          "-S",
+          "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/tools/guarded-local-build.py",
+          "--timeout-seconds",
+          "180",
+          "--",
+          "/usr/bin/env",
+          "ARKLINE_COCKPIT_QA_DIR=/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/unified-model-viewer-20261020/enclosure",
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "arkline-client",
+          "native_pioneer_cockpit_enclosure_matches_source_and_keeps_window_apertures",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "guard_announcement": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T063312877070Z.log",
+        "evidence_directory": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/unified-model-viewer-20261020/enclosure"
+      },
+      {
+        "test": "native_cockpit_cached_feed_tracks_physical_quad_under_head_look_and_roll",
+        "exit_code": 0,
+        "command": [
+          "/usr/bin/python3",
+          "-S",
+          "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/tools/guarded-local-build.py",
+          "--timeout-seconds",
+          "180",
+          "--",
+          "/usr/bin/env",
+          "ARKLINE_COCKPIT_FEED_QA_DIR=/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/unified-model-viewer-20261020/physical-feed",
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "arkline-client",
+          "native_cockpit_cached_feed_tracks_physical_quad_under_head_look_and_roll",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "guard_announcement": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T063324977246Z.log",
+        "evidence_directory": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/unified-model-viewer-20261020/physical-feed"
+      },
+      {
+        "test": "native_cockpit_shift_keeps_both_instrument_layers_and_live_feed_updating",
+        "exit_code": 0,
+        "command": [
+          "/usr/bin/python3",
+          "-S",
+          "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/tools/guarded-local-build.py",
+          "--timeout-seconds",
+          "180",
+          "--",
+          "/usr/bin/env",
+          "ARKLINE_COCKPIT_SHIFT_QA_DIR=/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/unified-model-viewer-20261020/shift-live-feed",
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "arkline-client",
+          "native_cockpit_shift_keeps_both_instrument_layers_and_live_feed_updating",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "guard_announcement": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T063327048969Z.log",
+        "evidence_directory": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/unified-model-viewer-20261020/shift-live-feed"
+      },
+      {
+        "test": "native_gallery_two_instances_render_and_preview_without_mutating_source",
+        "exit_code": 0,
+        "command": [
+          "/usr/bin/python3",
+          "-S",
+          "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/tools/guarded-local-build.py",
+          "--timeout-seconds",
+          "180",
+          "--",
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "arkline-client",
+          "native_gallery_two_instances_render_and_preview_without_mutating_source",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "guard_announcement": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T063334134903Z.log",
+        "evidence_directory": null
+      }
+    ]
+  },
+  "shared_gpu_receipt": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/unified-model-viewer-20261020/shared-preview-final-gpu/receipt.json",
+  "shared_gpu_summary": {
+    "runtime_rendered_count": 92,
+    "control_journeys": [
+      {
+        "model": "ship-pioneer",
+        "exact_reset": true,
+        "fit_retains_direction_and_restores_framing": true
+      },
+      {
+        "model": "drone-recon",
+        "exact_reset": true,
+        "fit_retains_direction_and_restores_framing": true
+      },
+      {
+        "model": "drone-mining",
+        "exact_reset": true,
+        "fit_retains_direction_and_restores_framing": true
+      },
+      {
+        "model": "drone-attack",
+        "exact_reset": true,
+        "fit_retains_direction_and_restores_framing": true
+      },
+      {
+        "model": "station-exterior",
+        "exact_reset": true,
+        "fit_retains_direction_and_restores_framing": true
+      },
+      {
+        "model": "world-asteroid_ore",
+        "exact_reset": true,
+        "fit_retains_direction_and_restores_framing": true
+      },
+      {
+        "model": "wedge",
+        "exact_reset": true,
+        "fit_retains_direction_and_restores_framing": true
+      },
+      {
+        "model": "spire",
+        "exact_reset": true,
+        "fit_retains_direction_and_restores_framing": true
+      }
+    ],
+    "renderer": "Apple M4 Max",
+    "gl_version": "4.1 Metal - 91.7",
+    "clear_and_error_remove_old_geometry": true
+  },
+  "required_checks": {
+    "fmt_log": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T063058403424Z.log",
+    "native_all_target_clippy_log": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T063039220185Z.log",
+    "wasm_client_clippy_log": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T063054333751Z.log",
+    "warnings_denied": true,
+    "published_exact_head_ci_claimed": false,
+    "post_test_native_client_all_targets_clippy_log": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T064056101367Z.log",
+    "final_fmt_log": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T064106210559Z.log"
+  },
+  "native_app_swap": {
+    "at_utc": "2026-10-20T06:33:57.800445+00:00",
+    "old_pid": 9337,
+    "old_command": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/drone-model-viewer-fixed-20261020/Arkline Editor Reconstructed.app/Contents/MacOS/arkline-editor --project /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/reconstruction-native-fixed-20261020/disposable-project --pilot ReconstructionQA",
+    "close_exit": 0,
+    "close_stdout": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T063356784507Z.log\nNormal owned-window close completed for PID 9337; no forced termination\n",
+    "close_stderr": "",
+    "method": "Normal AX window close; no forced termination",
+    "project_preserved": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/reconstruction-native-fixed-20261020/disposable-project",
+    "launch_command": [
+      "/usr/bin/open",
+      "-a",
+      "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/unified-model-viewer-20261020/Arkline Editor Reconstructed.app",
+      "--args",
+      "--project",
+      "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/reconstruction-native-fixed-20261020/disposable-project",
+      "--pilot",
+      "ReconstructionQA"
+    ],
+    "open_exit": 0,
+    "open_stdout": "",
+    "open_stderr": "",
+    "new_matching_processes": [
+      "7924 /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/unified-model-viewer-20261020/Arkline Editor Reconstructed.app/Contents/MacOS/arkline-editor --project /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/reconstruction-native-fixed-20261020/disposable-project --pilot ReconstructionQA"
+    ],
+    "old_pid_present": false,
+    "build": "26.10.20.3",
+    "new_pid": 7924
+  },
+  "actual_os_acceptance": {
+    "pid": 7924,
+    "build_title_verified": true,
+    "models_list_and_actual_preview_visible": true,
+    "primary_capture": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/unified-model-viewer-20261020/os-evidence/new-app-first-window.png",
+    "automated_model_control_journeys_completed": false,
+    "reason": "Concurrent desktop navigation changed the workspace to Rooms during attempted model control input. Automated OS input was stopped.",
+    "invalid_model_evidence": [
+      "pioneer-default.png",
+      "pioneer-orbit.png",
+      "pioneer-pan.png"
+    ],
+    "invalid_evidence_reason": "These names were assigned before the concurrent workspace change was seen. They show Rooms/play views and establish no model-control acceptance.",
+    "keyboard_text_injection": false
+  },
+  "attachment_review": {
+    "library_file_id": "libfile_03a0c9c93d608191a201bbd46f946576",
+    "filename": "image(6).png",
+    "width": 1042,
+    "height": 2048,
+    "sha256": "38890bb6e4d301c39f3865f671eb8442cf9ea8821831fcad5ffcbd1eca5724ba",
+    "actual_pixels_viewed": true,
+    "uploaded": false,
+    "stored_in_git": false
+  },
+  "repository_source_gpu_acceptance": {
+    "test": "native_shared_model_preview_actual_repository_glbs_and_calibration_rejection",
+    "exit_code": 0,
+    "receipt": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/unified-model-viewer-20261020/repository-glbs-gpu/receipt.json",
+    "guard_log": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T064012334329Z.log",
+    "rendered_paths": 3,
+    "distinct_rendered_contents": 2,
+    "triangles_by_source_path": [
+      103466,
+      78246,
+      103466
+    ],
+    "batches_per_source": 9,
+    "calibration_error": "Missing ship normals",
+    "calibration_old_geometry_cleared": true,
+    "test_only_source_commit": "607064d78eda54454457567b1f2f2a11ac96e978",
+    "production_source_unchanged": true
+  },
+  "preservation": {
+    "old_pid_9337_closed_normally": true,
+    "new_pid": 7924,
+    "project": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/reconstruction-native-fixed-20261020/disposable-project",
+    "original_recovery_source_untouched": true,
+    "shared_runner_untouched": true,
+    "external_drive_operations": false,
+    "uploads": false,
+    "pushes_prs_merges_deployments": false
+  },
+  "limits": [
+    "Source is a new reconstruction over retained stage inputs, not exact recovery of missing combined46/47.",
+    "Only static opaque indexed GLB geometry with supported scalar materials is previewed. Unsupported files remain visible with reasons.",
+    "The calibration GLB lacks normals and fails visibly. Blender source files are cataloged without proxy rendering.",
+    "Browser GPU runtime is not established by browser-target compilation.",
+    "OS model search/category/control/resize acceptance is incomplete due concurrent desktop use.",
+    "GPU buffer identity and CPU geometry/material invariance are checked; GPU buffer payload byte-readback is not claimed."
+  ],
+  "native_explicit_test_count": 9
+}
