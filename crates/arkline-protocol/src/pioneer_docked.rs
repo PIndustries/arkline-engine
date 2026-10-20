@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 // Revision 2 changes the fitted bay and workstation. Old saved bindings must
 // remain with their matching build until an explicit migration is validated.
-pub const PIONEER_DOCKED_REGISTRATION_REVISION: u32 = 2;
+pub const PIONEER_DOCKED_REGISTRATION_REVISION: u32 = 3;
 pub const PIONEER_DOCKED_SOURCE_SHA256: &str =
     "8125644f007537437942d34169e527c08ddd2dfaed575c874e2263ff2b7cb123";
 const EPS: f64 = 1.0e-8;
@@ -129,6 +129,7 @@ pub enum PioneerDockedCollision {
     Solid,
     Support,
     Decoration,
+    TraversalBarrier,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PioneerDockedPanelKind {
@@ -218,6 +219,7 @@ pub struct PioneerDockedGeometry {
 }
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PioneerDockedActuators {
+    pub hatch_fractions: Option<[f64; 2]>,
     pub room_door_open: bool,
     pub inner_hatch_open: bool,
     pub outer_hatch_open: bool,
@@ -355,7 +357,7 @@ pub fn hatch_anchors(pose: PioneerDockedPose) -> PioneerDockedHatchAnchors {
         inner_inside_station_m: body_to_station(pose, add(inner_center, mul(d, -0.75))),
         inner_outside_station_m: body_to_station(pose, add(inner_center, mul(d, 0.75))),
         outer_inside_station_m: body_to_station(pose, add(at_p(0.0, -0.65), [0.0, FLOOR, 0.0])),
-        outer_outside_station_m: body_to_station(pose, add(at_p(0.0, 0.75), [0.0, FLOOR, 0.0])),
+        outer_outside_station_m: body_to_station(pose, add(at_p(0.0, 0.80), [0.0, FLOOR, 0.0])),
         inner_bounds: PioneerDockedBox {
             center_m: add(inner_center, [0.0, 1.2, 0.0]),
             half_m: [0.6, 1.2, 0.04],
@@ -1472,6 +1474,66 @@ pub fn cockpit_screen(index: usize) -> Option<([f64; 3], [f64; 3])> {
     screen.map(|(center, half)| (pilot_station_point(center), half))
 }
 
+/// Paired inward-opening leaves, shared by rendering, collision and sweep checks.
+/// Measured travel has no undeclared sliding pocket; open leaves remain physical.
+pub fn hatch_leaf_bounds(
+    hatch: PioneerDockedHatch,
+    fraction: f64,
+) -> Result<[PioneerDockedBox; 2], String> {
+    if !fraction.is_finite() || !(0.0..=1.0).contains(&fraction) {
+        return Err("Invalid hatch fraction".into());
+    }
+    let anchors = hatch_anchors(PioneerDockedPose::private());
+    let b = match hatch {
+        PioneerDockedHatch::Inner => anchors.inner_bounds,
+        PioneerDockedHatch::Outer => anchors.outer_bounds,
+    };
+    let a = b.half_m[0];
+    let m = (0.01 + a - 0.005) * 0.5;
+    let w = (a - 0.005 - 0.01) * 0.5;
+    let (sin, cos) = (fraction * std::f64::consts::FRAC_PI_2).sin_cos();
+    Ok([-1.0, 1.0].map(|side| {
+        let u = add(mul(b.axes[0], cos), mul(b.axes[2], -side * sin));
+        let v = add(mul(b.axes[0], side * sin), mul(b.axes[2], cos));
+        let hinge = add(
+            b.center_m,
+            add(mul(b.axes[0], side * a), mul(b.axes[2], 0.05)),
+        );
+        PioneerDockedBox {
+            center_m: add(hinge, add(mul(u, side * (m - a)), mul(v, -0.05))),
+            half_m: [w, b.half_m[1], 0.04],
+            axes: [u, Y, v],
+        }
+    }))
+}
+/// Conservative boxes enclose every intermediate angle, not only sampled poses.
+pub fn hatch_leaf_sweep_bounds(
+    hatch: PioneerDockedHatch,
+    from: f64,
+    to: f64,
+) -> Result<Vec<PioneerDockedBox>, String> {
+    hatch_leaf_bounds(hatch, from)?;
+    hatch_leaf_bounds(hatch, to)?;
+    let steps = ((to - from).abs() * 90.0).ceil().max(1.0) as usize;
+    let radius: f64 = match hatch {
+        PioneerDockedHatch::Inner => 0.597,
+        PioneerDockedHatch::Outer => 0.696,
+    };
+    let delta =
+        2.0 * radius * ((to - from).abs() * std::f64::consts::FRAC_PI_2 / steps as f64 / 4.0).sin()
+            + 1e-8;
+    let mut result = Vec::with_capacity(steps * 2);
+    for step in 0..steps {
+        let f = from + (to - from) * (step as f64 + 0.5) / steps as f64;
+        for mut b in hatch_leaf_bounds(hatch, f)? {
+            b.half_m[0] += delta;
+            b.half_m[2] += delta;
+            result.push(b);
+        }
+    }
+    Ok(result)
+}
+
 pub fn dynamic_geometry(
     pose: PioneerDockedPose,
     state: PioneerDockedActuators,
@@ -1491,24 +1553,44 @@ pub fn dynamic_geometry(
     }
     let mut g = PioneerDockedGeometry::default();
     let a = hatch_anchors(pose);
-    for (id, bounds, open) in [
+    let fractions = state.hatch_fractions.unwrap_or([
+        f64::from(state.inner_hatch_open),
+        f64::from(state.outer_hatch_open),
+    ]);
+    for (index, (id, bounds, hatch)) in [
         (
             "boarding/inner-leaf",
             a.inner_bounds,
-            state.inner_hatch_open,
+            PioneerDockedHatch::Inner,
         ),
         (
             "boarding/outer-leaf",
             a.outer_bounds,
-            state.outer_hatch_open,
+            PioneerDockedHatch::Outer,
         ),
-    ] {
-        if !open {
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        for (leaf, bounds) in hatch_leaf_bounds(hatch, fractions[index])?
+            .into_iter()
+            .enumerate()
+        {
             g.panel(
-                id,
+                format!("{id}/{leaf}"),
+                bounds,
+                PioneerDockedMaterial::Titanium,
+                PioneerDockedCollision::Solid,
+                PioneerDockedCell::Vestibule,
+                PioneerDockedPanelKind::Door,
+            );
+        }
+        if fractions[index] > 0.0 && fractions[index] < 1.0 {
+            g.panel(
+                format!("{id}/travel-barrier"),
                 bounds,
                 PioneerDockedMaterial::Graphite,
-                PioneerDockedCollision::Solid,
+                PioneerDockedCollision::TraversalBarrier,
                 PioneerDockedCell::Vestibule,
                 PioneerDockedPanelKind::Door,
             );
@@ -1938,6 +2020,7 @@ mod tests {
 
     fn state(pose: PioneerDockedPose) -> PioneerDockedActuators {
         PioneerDockedActuators {
+            hatch_fractions: None,
             room_door_open: true,
             inner_hatch_open: true,
             outer_hatch_open: false,

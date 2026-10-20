@@ -573,11 +573,11 @@ fn probe_closed_hatch(
 fn set_hatch(
     server: &mut Server,
     session: &mut Option<String>,
-    now: u64,
+    now: &mut u64,
     hatch: DockedHatch,
     open: bool,
 ) -> Response {
-    command(
+    let response = command(
         server,
         session,
         DockedTraversalRequest::SetHatch {
@@ -585,8 +585,14 @@ fn set_hatch(
             hatch,
             open,
         },
-        now,
-    )
+        *now,
+    );
+    if response.ok {
+        *now += DOCKED_HATCH_TRAVEL_MS;
+        snapshot(server, session, *now)
+    } else {
+        response
+    }
 }
 fn midpoint(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
     std::array::from_fn(|axis| (a[axis] + b[axis]) * 0.5)
@@ -724,12 +730,19 @@ fn authority_physical_hatches_lift_and_station_roundtrip_preserve_canonical_feet
     ok(set_hatch(
         &mut server,
         &mut session,
-        now,
+        &mut now,
         DockedHatch::Inner,
         true,
     ));
     assert!(
-        !set_hatch(&mut server, &mut session, now, DockedHatch::Outer, true).ok,
+        !set_hatch(
+            &mut server,
+            &mut session,
+            &mut now,
+            DockedHatch::Outer,
+            true
+        )
+        .ok,
         "both boarding hatches must not open together"
     );
     let inner_midpoint = midpoint(
@@ -743,7 +756,14 @@ fn authority_physical_hatches_lift_and_station_roundtrip_preserve_canonical_feet
         traversal(&occupied).feet_m
     ));
     assert!(
-        !set_hatch(&mut server, &mut session, now, DockedHatch::Inner, false).ok,
+        !set_hatch(
+            &mut server,
+            &mut session,
+            &mut now,
+            DockedHatch::Inner,
+            false
+        )
+        .ok,
         "a hatch must not close through an occupied capsule"
     );
     walk_to(
@@ -761,7 +781,7 @@ fn authority_physical_hatches_lift_and_station_roundtrip_preserve_canonical_feet
     ok(set_hatch(
         &mut server,
         &mut session,
-        now,
+        &mut now,
         DockedHatch::Inner,
         false,
     ));
@@ -774,7 +794,7 @@ fn authority_physical_hatches_lift_and_station_roundtrip_preserve_canonical_feet
     ok(set_hatch(
         &mut server,
         &mut session,
-        now,
+        &mut now,
         DockedHatch::Outer,
         true,
     ));
@@ -792,7 +812,16 @@ fn authority_physical_hatches_lift_and_station_roundtrip_preserve_canonical_feet
         geometry::PioneerDockedHatch::Outer,
         traversal(&occupied).feet_m
     ));
-    assert!(!set_hatch(&mut server, &mut session, now, DockedHatch::Outer, false).ok);
+    assert!(
+        !set_hatch(
+            &mut server,
+            &mut session,
+            &mut now,
+            DockedHatch::Outer,
+            false
+        )
+        .ok
+    );
     walk_to(
         &mut server,
         &mut session,
@@ -802,7 +831,7 @@ fn authority_physical_hatches_lift_and_station_roundtrip_preserve_canonical_feet
     ok(set_hatch(
         &mut server,
         &mut session,
-        now,
+        &mut now,
         DockedHatch::Outer,
         false,
     ));
@@ -867,7 +896,7 @@ fn authority_physical_hatches_lift_and_station_roundtrip_preserve_canonical_feet
     ok(set_hatch(
         &mut server,
         &mut session,
-        now,
+        &mut now,
         DockedHatch::Outer,
         true,
     ));
@@ -880,14 +909,14 @@ fn authority_physical_hatches_lift_and_station_roundtrip_preserve_canonical_feet
     ok(set_hatch(
         &mut server,
         &mut session,
-        now,
+        &mut now,
         DockedHatch::Outer,
         false,
     ));
     ok(set_hatch(
         &mut server,
         &mut session,
-        now,
+        &mut now,
         DockedHatch::Inner,
         true,
     ));
@@ -906,7 +935,7 @@ fn authority_physical_hatches_lift_and_station_roundtrip_preserve_canonical_feet
     ok(set_hatch(
         &mut server,
         &mut session,
-        now,
+        &mut now,
         DockedHatch::Inner,
         false,
     ));
@@ -1128,6 +1157,7 @@ fn authority_walks_from_pilot_seat_down_both_core_stairs_and_back_without_telepo
         let dynamic = geometry::dynamic_geometry(
             pose,
             PioneerDockedActuators {
+                hatch_fractions: None,
                 room_door_open: false,
                 inner_hatch_open: actuator.inner_hatch_open,
                 outer_hatch_open: actuator.outer_hatch_open,
@@ -1389,7 +1419,7 @@ fn authority_reverses_lift_within_hatch_tolerance_without_stopping_short() {
     ok(set_hatch(
         &mut server,
         &mut session,
-        now,
+        &mut now,
         DockedHatch::Inner,
         true,
     ));
@@ -1408,14 +1438,14 @@ fn authority_reverses_lift_within_hatch_tolerance_without_stopping_short() {
     ok(set_hatch(
         &mut server,
         &mut session,
-        now,
+        &mut now,
         DockedHatch::Inner,
         false,
     ));
     ok(set_hatch(
         &mut server,
         &mut session,
-        now,
+        &mut now,
         DockedHatch::Outer,
         true,
     ));
@@ -1428,7 +1458,7 @@ fn authority_reverses_lift_within_hatch_tolerance_without_stopping_short() {
     ok(set_hatch(
         &mut server,
         &mut session,
-        now,
+        &mut now,
         DockedHatch::Outer,
         false,
     ));
@@ -1464,6 +1494,7 @@ fn authority_reverses_lift_within_hatch_tolerance_without_stopping_short() {
         geometry::dynamic_geometry(
             pose,
             PioneerDockedActuators {
+                hatch_fractions: None,
                 room_door_open: true,
                 inner_hatch_open: state.actuators.inner_hatch_open,
                 outer_hatch_open: state.actuators.outer_hatch_open,
@@ -1534,7 +1565,7 @@ fn authority_reverses_lift_within_hatch_tolerance_without_stopping_short() {
     ok(set_hatch(
         &mut server,
         &mut session,
-        now,
+        &mut now,
         DockedHatch::Outer,
         true,
     ));
@@ -1558,7 +1589,7 @@ fn authority_reverses_lift_within_hatch_tolerance_without_stopping_short() {
     ok(set_hatch(
         &mut server,
         &mut session,
-        now,
+        &mut now,
         DockedHatch::Outer,
         false,
     ));

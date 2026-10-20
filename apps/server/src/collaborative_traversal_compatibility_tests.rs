@@ -126,6 +126,7 @@ fn populated_response_fixture() -> Response {
         updated_at_ms: now,
         seat_transition: None,
         actuators: DockedVesselActuators {
+            hatches: None,
             binding,
             inner_hatch_open: false,
             outer_hatch_open: false,

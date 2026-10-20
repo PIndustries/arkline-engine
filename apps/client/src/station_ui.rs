@@ -218,8 +218,7 @@ impl Cockpit {
             let ready = self.can_operate() && state.grounded && state.seat_transition.is_none();
             let seats = seat_anchors(pose);
             let seat_distance = station_distance(state.feet_m, seats.root_station_m);
-            let secured = !state.actuators.inner_hatch_open
-                && !state.actuators.outer_hatch_open
+            let secured = state.actuators.hatches_closed()
                 && !state.actuators.lift.moving
                 && (state.actuators.lift.floor_station_m - lift_geometry(pose).ship_floor_m).abs()
                     < 0.03;
@@ -264,6 +263,24 @@ impl Cockpit {
                         "outer hatch",
                     ),
                 ] {
+                    let index = usize::from(hatch == DockedHatch::Outer);
+                    let motion = state.actuators.hatches.as_ref().map(|h| &h[index]);
+                    let open = motion.map_or(open, |h| h.target_open);
+                    if distance <= 3.0 {
+                        if let Some(motion) = motion {
+                            ui.small(format!(
+                                "{label}: {:.0}% {}",
+                                motion.fraction * 100.0,
+                                if motion.blocked {
+                                    "held · clear sweep and retry"
+                                } else if motion.moving {
+                                    "moving"
+                                } else {
+                                    "stopped"
+                                }
+                            ));
+                        }
+                    }
                     let lift_at_ship = !state.actuators.lift.moving
                         && (state.actuators.lift.floor_station_m
                             - lift_geometry(pose).ship_floor_m)
@@ -280,14 +297,14 @@ impl Cockpit {
                         )
                     } else {
                         match hatch {
-                            DockedHatch::Inner => !state.actuators.outer_hatch_open,
-                            DockedHatch::Outer => !state.actuators.inner_hatch_open && lift_at_ship,
+                            DockedHatch::Inner => state.actuators.hatch_closed(1),
+                            DockedHatch::Outer => state.actuators.hatch_closed(0) && lift_at_ship,
                         }
                     };
                     if distance <= 3.0
                         && ui
                             .add_enabled(
-                                ready && hatch_ready,
+                                ready && hatch_ready && state.actuators.service_power_available,
                                 egui::Button::new(format!(
                                     "{} {label}",
                                     if open { "Close" } else { "Open" }
@@ -314,8 +331,7 @@ impl Cockpit {
                                 ready
                                     && state.actuators.service_power_available
                                     && !state.actuators.lift.moving
-                                    && !state.actuators.inner_hatch_open
-                                    && !state.actuators.outer_hatch_open,
+                                    && state.actuators.hatches_closed(),
                                 egui::Button::new(label),
                             )
                             .clicked()
@@ -1432,6 +1448,7 @@ mod tests {
                 updated_at_ms: 1000,
                 seat_transition: None,
                 actuators: DockedVesselActuators {
+                    hatches: None,
                     binding,
                     inner_hatch_open: false,
                     outer_hatch_open: false,

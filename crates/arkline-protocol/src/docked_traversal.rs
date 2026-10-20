@@ -132,14 +132,48 @@ pub struct DockedLiftState {
     pub moving: bool,
     pub updated_at_ms: u64,
 }
+pub const DOCKED_HATCH_TRAVEL_MS: u64 = 1_500;
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DockedHatchState {
+    pub fraction: f64,
+    pub target_open: bool,
+    pub moving: bool,
+    pub blocked: bool,
+    pub updated_at_ms: u64,
+}
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DockedVesselActuators {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hatches: Option<[DockedHatchState; 2]>,
     pub binding: DockedTraversalBinding,
     pub inner_hatch_open: bool,
     pub outer_hatch_open: bool,
     pub lift: DockedLiftState,
     /// Station docking service availability, independent of ship capacitor load.
     pub service_power_available: bool,
+}
+
+impl DockedVesselActuators {
+    pub fn hatch_fractions(&self) -> [f64; 2] {
+        self.hatches.as_ref().map_or(
+            [
+                f64::from(self.inner_hatch_open),
+                f64::from(self.outer_hatch_open),
+            ],
+            |h| [h[0].fraction, h[1].fraction],
+        )
+    }
+    pub fn hatches_closed(&self) -> bool {
+        self.hatch_fractions().iter().all(|f| *f == 0.0)
+            && self
+                .hatches
+                .as_ref()
+                .is_none_or(|h| h.iter().all(|s| !s.moving))
+    }
+    pub fn hatch_closed(&self, index: usize) -> bool {
+        self.hatch_fractions()[index] == 0.0
+            && self.hatches.as_ref().is_none_or(|h| !h[index].moving)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

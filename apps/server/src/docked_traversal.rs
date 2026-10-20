@@ -50,6 +50,7 @@ fn initial_actuators(binding: DockedTraversalBinding, now: u64) -> Result<Docked
     let pose = docked_binding_pose(&binding).map_err(anyhow::Error::msg)?;
     let lift = geometry::lift_geometry(pose);
     Ok(DockedVesselActuators {
+        hatches: None,
         binding,
         inner_hatch_open: false,
         outer_hatch_open: false,
@@ -295,6 +296,12 @@ pub(super) fn stop_lifts(w: &mut World, now: u64) {
         for actuator in account.docked_actuators.values_mut() {
             actuator.lift.moving = false;
             actuator.lift.updated_at_ms = now;
+            if let Some(hatches) = &mut actuator.hatches {
+                for hatch in hatches {
+                    hatch.moving = false;
+                    hatch.updated_at_ms = now;
+                }
+            }
         }
     }
     refresh_actuator_views(w);
@@ -341,6 +348,7 @@ pub(super) fn legacy_recovery(w: &mut World, name: &str, now: u64) {
             if let Ok(pose) = docked_binding_pose(&actuator.binding) {
                 actuator.inner_hatch_open = false;
                 actuator.outer_hatch_open = false;
+                actuator.hatches = None;
                 actuator.lift.floor_station_m = geometry::lift_geometry(pose).ship_floor_m;
                 actuator.lift.target = DockedLiftStop::Ship;
                 actuator.lift.moving = false;
@@ -356,6 +364,7 @@ fn dynamic(
     now: u64,
 ) -> geometry::PioneerDockedActuators {
     geometry::PioneerDockedActuators {
+        hatch_fractions: Some(actuator.hatch_fractions()),
         room_door_open: room_open,
         inner_hatch_open: actuator.inner_hatch_open,
         outer_hatch_open: actuator.outer_hatch_open,
@@ -480,8 +489,7 @@ pub(super) fn can_undock(w: &World, name: &str) -> Result<()> {
             if let Some(actuator) = account.docked_actuators.get(host) {
                 let pose = docked_binding_pose(&actuator.binding).map_err(anyhow::Error::msg)?;
                 ensure!(
-                    !actuator.inner_hatch_open
-                        && !actuator.outer_hatch_open
+                    actuator.hatches_closed()
                         && !actuator.lift.moving
                         && (actuator.lift.floor_station_m
                             - geometry::lift_geometry(pose).ship_floor_m)
@@ -541,8 +549,7 @@ pub(super) fn execute(
     if actuator.binding != expected && existing.is_none() {
         let old_pose = docked_binding_pose(&actuator.binding).map_err(anyhow::Error::msg)?;
         ensure!(
-            !actuator.inner_hatch_open
-                && !actuator.outer_hatch_open
+            actuator.hatches_closed()
                 && !actuator.lift.moving
                 && (actuator.lift.floor_station_m - geometry::lift_geometry(old_pose).ship_floor_m)
                     .abs()
@@ -670,13 +677,13 @@ pub(super) fn execute(
                         DockedHatch::Inner => (
                             anchors.inner_inside_station_m,
                             anchors.inner_outside_station_m,
-                            actuator.outer_hatch_open,
+                            !actuator.hatch_closed(1),
                             geometry::PioneerDockedHatch::Inner,
                         ),
                         DockedHatch::Outer => (
                             anchors.outer_inside_station_m,
                             anchors.outer_outside_station_m,
-                            actuator.inner_hatch_open,
+                            !actuator.hatch_closed(0),
                             geometry::PioneerDockedHatch::Outer,
                         ),
                     };
@@ -710,10 +717,41 @@ pub(super) fn execute(
                             });
                         ensure!(!occupied, "boarding hatch doorway is occupied");
                     }
-                    match hatch {
-                        DockedHatch::Inner => actuator.inner_hatch_open = open,
-                        DockedHatch::Outer => actuator.outer_hatch_open = open,
-                    }
+                    ensure!(
+                        actuator.service_power_available,
+                        "station docking-service power unavailable; hatch held safely"
+                    );
+                    let index = usize::from(hatch == DockedHatch::Outer);
+                    let fractions = actuator.hatch_fractions();
+                    ensure!(
+                        !hatch_sweep_occupied(
+                            w,
+                            &expected,
+                            pose,
+                            geometry_hatch,
+                            fractions[index],
+                            f64::from(open)
+                        )?,
+                        "boarding hatch sweep is occupied"
+                    );
+                    let states = actuator.hatches.get_or_insert_with(|| {
+                        std::array::from_fn(|i| DockedHatchState {
+                            fraction: fractions[i],
+                            target_open: fractions[i] == 1.0,
+                            moving: false,
+                            blocked: false,
+                            updated_at_ms: now,
+                        })
+                    });
+                    states[index] = DockedHatchState {
+                        fraction: fractions[index],
+                        target_open: open,
+                        moving: fractions[index] != f64::from(open),
+                        blocked: false,
+                        updated_at_ms: now,
+                    };
+                    actuator.inner_hatch_open = states[0].fraction == 1.0;
+                    actuator.outer_hatch_open = states[1].fraction == 1.0;
                 }
                 DockedTraversalRequest::CallLift { stop, .. } => {
                     let anchors = geometry::lift_call_anchors(pose);
@@ -724,7 +762,7 @@ pub(super) fn execute(
                         "walk to a boarding-lift control first"
                     );
                     ensure!(
-                        !actuator.inner_hatch_open && !actuator.outer_hatch_open,
+                        actuator.hatches_closed(),
                         "close both boarding hatches before moving the lift"
                     );
                     ensure!(
@@ -784,10 +822,7 @@ fn advance_actor(
         let dt = (next - cursor) as f64 / 1000.0;
         let old_floor = actuator.lift.floor_station_m;
         if actuator.lift.moving {
-            if !actuator.service_power_available
-                || actuator.inner_hatch_open
-                || actuator.outer_hatch_open
-            {
+            if !actuator.service_power_available || !actuator.hatches_closed() {
                 actuator.lift.moving = false;
             } else {
                 let target = match actuator.lift.target {
@@ -970,11 +1005,93 @@ fn advance_actor(
     state.actuators = actuator.clone();
     Ok(false)
 }
+fn hatch_sweep_occupied(
+    w: &World,
+    binding: &DockedTraversalBinding,
+    pose: PioneerDockedPose,
+    hatch: geometry::PioneerDockedHatch,
+    from: f64,
+    to: f64,
+) -> Result<bool> {
+    let sweep = geometry::hatch_leaf_sweep_bounds(hatch, from, to).map_err(anyhow::Error::msg)?;
+    Ok(w.pilots
+        .values()
+        .filter_map(|p| p.view.station_avatar.as_ref()?.docked_traversal.as_ref())
+        .filter(|s| s.binding.host_vessel_id == binding.host_vessel_id)
+        .any(|s| {
+            let feet = geometry::station_to_body(pose, s.feet_m);
+            sweep
+                .iter()
+                .any(|b| geometry::box_intersects_capsule(*b, feet, 1.8, 0.3))
+        }))
+}
+fn advance_hatches(w: &mut World, now: u64) -> Result<()> {
+    let names: Vec<_> = w.accounts.keys().cloned().collect();
+    for name in names {
+        let actuators: Vec<_> = w.accounts[&name]
+            .docked_actuators
+            .values()
+            .cloned()
+            .collect();
+        for mut actuator in actuators {
+            let Some(mut hatches) = actuator.hatches.clone() else {
+                continue;
+            };
+            let pose = docked_binding_pose(&actuator.binding).map_err(anyhow::Error::msg)?;
+            for (index, hatch) in hatches.iter_mut().enumerate() {
+                if !hatch.moving {
+                    continue;
+                }
+                let target = f64::from(hatch.target_open);
+                let step =
+                    now.saturating_sub(hatch.updated_at_ms) as f64 / DOCKED_HATCH_TRAVEL_MS as f64;
+                let next = if hatch.target_open {
+                    (hatch.fraction + step).min(target)
+                } else {
+                    (hatch.fraction - step).max(target)
+                };
+                let which = if index == 0 {
+                    geometry::PioneerDockedHatch::Inner
+                } else {
+                    geometry::PioneerDockedHatch::Outer
+                };
+                if !actuator.service_power_available
+                    || hatch_sweep_occupied(
+                        w,
+                        &actuator.binding,
+                        pose,
+                        which,
+                        hatch.fraction,
+                        next,
+                    )?
+                {
+                    hatch.moving = false;
+                    hatch.blocked = true;
+                } else {
+                    hatch.fraction = next;
+                    hatch.moving = next != target;
+                }
+                hatch.updated_at_ms = now;
+            }
+            actuator.inner_hatch_open = hatches[0].fraction == 1.0;
+            actuator.outer_hatch_open = hatches[1].fraction == 1.0;
+            actuator.hatches = Some(hatches);
+            w.accounts
+                .get_mut(&name)
+                .unwrap()
+                .docked_actuators
+                .insert(actuator.binding.host_vessel_id.clone(), actuator);
+        }
+    }
+    refresh_actuator_views(w);
+    Ok(())
+}
 pub(super) fn advance(
     w: &mut World,
     now: u64,
     document: Option<&RoomLayoutDocument>,
 ) -> Result<()> {
+    advance_hatches(w, now)?;
     let names = w
         .pilots
         .iter()
@@ -1121,6 +1238,17 @@ pub(super) fn validate(w: &World, document: Option<&RoomLayoutDocument>) -> Resu
             );
             let pose = docked_binding_pose(&actuator.binding).map_err(anyhow::Error::msg)?;
             let lift = geometry::lift_geometry(pose);
+            if let Some(hatches) = &actuator.hatches {
+                ensure!(
+                    hatches
+                        .iter()
+                        .all(|h| h.fraction.is_finite() && (0.0..=1.0).contains(&h.fraction))
+                        && (hatches[0].fraction == 0.0 || hatches[1].fraction == 0.0)
+                        && actuator.inner_hatch_open == (hatches[0].fraction == 1.0)
+                        && actuator.outer_hatch_open == (hatches[1].fraction == 1.0),
+                    "invalid persisted boarding hatch motion"
+                );
+            }
             ensure!(
                 actuator.lift.floor_station_m.is_finite()
                     && actuator.lift.floor_station_m >= lift.station_floor_m - EPSILON_M

@@ -3849,6 +3849,7 @@ mod tests {
             updated_at_ms: 1000,
             seat_transition: None,
             actuators: arkline_protocol::DockedVesselActuators {
+                hatches: None,
                 binding,
                 inner_hatch_open: false,
                 outer_hatch_open: false,

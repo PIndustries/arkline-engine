@@ -151,7 +151,10 @@ fn panel_parts(
     geometry
         .panels
         .iter()
-        .filter(move |panel| !skip_rooms || panel.kind != PioneerDockedPanelKind::RoomObstacle)
+        .filter(move |panel| {
+            panel.collision != arkline_protocol::PioneerDockedCollision::TraversalBarrier
+                && (!skip_rooms || panel.kind != PioneerDockedPanelKind::RoomObstacle)
+        })
         .map(move |panel| {
             let (color, emission) = surface(panel.material);
             (
@@ -171,6 +174,7 @@ fn actuator_pose(
 ) -> PioneerDockedActuators {
     let upper = deck_to_body(2, [0.0; 3]).expect("Registered upper deck");
     PioneerDockedActuators {
+        hatch_fractions: state.map(|state| state.actuators.hatch_fractions()),
         room_door_open: room.is_some_and(|room| room.door_open),
         inner_hatch_open: state.is_some_and(|state| state.actuators.inner_hatch_open),
         outer_hatch_open: state.is_some_and(|state| state.actuators.outer_hatch_open),
@@ -792,6 +796,7 @@ mod tests {
             updated_at_ms: 1000,
             seat_transition: None,
             actuators: arkline_protocol::DockedVesselActuators {
+                hatches: None,
                 binding,
                 inner_hatch_open: false,
                 outer_hatch_open: false,

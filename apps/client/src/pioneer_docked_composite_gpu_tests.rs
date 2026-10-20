@@ -684,6 +684,7 @@ fn native_pioneer_docked_composite_computer_pixels_input_and_focus() {
             updated_at_ms: now,
             seat_transition: None,
             actuators: DockedVesselActuators {
+                hatches: None,
                 binding: binding.clone(),
                 inner_hatch_open: false,
                 outer_hatch_open: false,
