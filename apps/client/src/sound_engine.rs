@@ -223,9 +223,11 @@ fn open_stream(shared: Arc<Shared>, cues: Receiver<Cue>) -> Result<cpal::Stream,
     }?;
     stream.play().map_err(|e| e.to_string())?;
     *shared.status.lock().unwrap() = format!(
-        "Audio output opened · {} · {} Hz",
+        "Audio output opened · {} · {} Hz · {:?} · {} channels",
         device.name().unwrap_or_else(|_| "Default output".into()),
-        config.sample_rate.0
+        config.sample_rate.0,
+        supported.sample_format(),
+        config.channels
     );
     Ok(stream)
 }
@@ -810,6 +812,39 @@ mod tests {
                 assert_eq!(peak, 0.);
             }
         }
+    }
+    #[test]
+    fn output_conversion_preserves_test_signal_for_supported_formats() {
+        fn check<T>()
+        where
+            T: cpal::SizedSample + cpal::FromSample<f32>,
+            f32: cpal::FromSample<T>,
+        {
+            use cpal::Sample;
+            let mut synth = Synth::new(48000.);
+            synth.cue(Cue::TestOutput);
+            let mut peak = 0.0_f32;
+            let mut energy = 0.0_f64;
+            let mut nonzero = 0;
+            for _ in 0..57600 {
+                let original = synth.next();
+                let converted = T::from_sample(original);
+                let decoded = f32::from_sample(converted);
+                assert!(decoded.is_finite());
+                assert!((decoded - original).abs() <= 1.0 / 32768.0);
+                peak = peak.max(decoded.abs());
+                energy += f64::from(decoded).powi(2);
+                nonzero += usize::from(decoded.abs() > 0.005);
+            }
+            assert!(peak > 0.025 && peak < 0.08);
+            assert!(nonzero > 18000);
+            assert!(energy > 0.1);
+            let zero = f32::from_sample(T::from_sample(0.0));
+            assert_eq!(zero, 0.0, "digital silence must preserve its midpoint");
+        }
+        check::<f32>();
+        check::<i16>();
+        check::<u16>();
     }
     #[test]
     #[ignore = "Explicit invocation sends test tones through actual selected output; not acoustic capture"]
