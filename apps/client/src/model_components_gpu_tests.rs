@@ -269,6 +269,72 @@ fn native_source_components_exact_ranges_context_controls_and_buffer_invariance(
                 (10, 103_466 + count as u64 / 3, 1),
                 "{name}: complete source context plus one exact selected range and outline"
             );
+            let focus_piece_journey = if name == "Panel fastener" {
+                // The recorded whole-ship view leaves this real 18 cm part at
+                // roughly three pixels. Focus changes framing of the same
+                // source coordinates; it never substitutes marker geometry.
+                let direction = (harness.preview.camera.yaw, harness.preview.camera.pitch);
+                harness.click(highlighted.label("Focus piece"));
+                let focused = settle(&mut harness);
+                assert!(harness.preview.has_context() && harness.preview.context_visible());
+                let expected = Framing::bounds(model.min, model.max).unwrap();
+                let actual = harness.preview.framing.unwrap();
+                assert_eq!(actual.display, expected.display);
+                assert_eq!(actual.radius, expected.radius);
+                assert_eq!(
+                    (harness.preview.camera.yaw, harness.preview.camera.pitch),
+                    direction
+                );
+                let focused_green = selected_green_pixels(&focused, &model, &harness.preview);
+                assert!(focused_green > 32 && focused_green > green_pixels * 8,
+                    "Focus piece must make the actual tiny fastener clearly larger than its whole-ship highlight");
+                assert!(focused.occupied() > highlighted.occupied() * 16);
+                let metrics = renderer.lock().unwrap().debug_metrics.get();
+                assert_eq!(
+                    (
+                        metrics.draw_calls,
+                        metrics.triangles,
+                        metrics.wireframe_draw_calls
+                    ),
+                    (10, 103_466 + count as u64 / 3, 1),
+                    "Focus must retain full source context and the exact selected range/outline"
+                );
+                harness.click(focused.label("Fit ship"));
+                let ship_fit = settle(&mut harness);
+                assert!(harness.preview.context_visible());
+                assert_eq!(
+                    (harness.preview.camera.yaw, harness.preview.camera.pitch),
+                    direction
+                );
+                assert_eq!(
+                    canvas_hash(&highlighted),
+                    canvas_hash(&ship_fit),
+                    "Fit ship must reproduce the original whole-context framing"
+                );
+                harness.click(ship_fit.label("Focus piece"));
+                let refocused = settle(&mut harness);
+                let reset_context = harness.reset(&refocused);
+                assert!(harness.preview.context_visible());
+                assert_eq!(
+                    canvas_hash(&highlighted),
+                    canvas_hash(&reset_context),
+                    "Reset from Focus must restore the current context mode's default ship framing"
+                );
+                assert_eq!(before, runtime_hash(&model));
+                assert_eq!(assembly_before, runtime_hash(&assembly));
+                Some(
+                    serde_json::json!({"actual_focus_and_fit_ship_pointer_controls":true,
+                    "whole_ship_green_pixels":green_pixels,"focused_green_pixels":focused_green,
+                    "focused_selected_depth_pixels":focused.occupied(),
+                    "same_source_context_and_exact_range":true,"direction_retained":true,
+                    "fit_ship_restores_exact_pixels":true,"reset_restores_context_default":true,
+                    "captures":[capture(directory.as_deref(),"fastener-focus-piece",&focused),
+                        capture(directory.as_deref(),"fastener-fit-ship",&ship_fit),
+                        capture(directory.as_deref(),"fastener-focus-reset",&reset_context)]}),
+                )
+            } else {
+                None
+            };
             let center = highlighted.canvas.center();
             let end = center + egui::vec2(60.0, 24.0);
             harness.frame(pointer(center, true));
@@ -371,7 +437,7 @@ fn native_source_components_exact_ranges_context_controls_and_buffer_invariance(
                     .collect::<Vec<_>>()
             );
             let prefix = format!("part-{}", rows.len());
-            rows.push(serde_json::json!({"id":id,"name":name,"material":row["material"],"source_primitive":primitive,"first_corner":first,"corner_count":count,"triangles":model.info.triangles,"min_m":model.info.min_m,"max_m":model.info.max_m,"selected_source_sha256":before,"scalar_material_exact":true,"context_line_pixels_outside_selected_depth":context_pixels,"green_outline_pixels_at_projected_source_position":green_pixels,"actual_mode_controls":true,"orbit_pan_wheel_fit_reset":true,"resize_sizes":[[320,HEIGHT],[WIDTH,320]],"captures":[capture(directory.as_deref(),&format!("{prefix}-isolate"),&isolated),capture(directory.as_deref(),&format!("{prefix}-highlight"),&highlighted),capture(directory.as_deref(),&format!("{prefix}-orbit"),&orbit),capture(directory.as_deref(),&format!("{prefix}-pan"),&panned),capture(directory.as_deref(),&format!("{prefix}-zoom"),&zoomed)]}));
+            rows.push(serde_json::json!({"id":id,"name":name,"material":row["material"],"source_primitive":primitive,"first_corner":first,"corner_count":count,"triangles":model.info.triangles,"min_m":model.info.min_m,"max_m":model.info.max_m,"selected_source_sha256":before,"scalar_material_exact":true,"context_line_pixels_outside_selected_depth":context_pixels,"green_outline_pixels_at_projected_source_position":green_pixels,"actual_mode_controls":true,"focus_piece_journey":focus_piece_journey,"orbit_pan_wheel_fit_reset":true,"resize_sizes":[[320,HEIGHT],[WIDTH,320]],"captures":[capture(directory.as_deref(),&format!("{prefix}-isolate"),&isolated),capture(directory.as_deref(),&format!("{prefix}-highlight"),&highlighted),capture(directory.as_deref(),&format!("{prefix}-orbit"),&orbit),capture(directory.as_deref(),&format!("{prefix}-pan"),&panned),capture(directory.as_deref(),&format!("{prefix}-zoom"),&zoomed)]}));
             previous_model = Some(model);
         }
         harness.preview.clear();
@@ -415,7 +481,7 @@ fn native_source_components_exact_ranges_context_controls_and_buffer_invariance(
         assert_eq!(gpu_before, gpu_after, "Actual source GPU payloads must remain byte-identical after every selection/mode/control change");
         assert_eq!(assembly_before, runtime_hash(&assembly));
         if let Some(directory) = &directory {
-            std::fs::write(directory.join("receipt.json"), serde_json::to_vec_pretty(&serde_json::json!({"schema_version":1,"scope":"Actual shared ModelPreview callbacks and egui mode/orbit/pan/Fit/Reset controls, private macOS CGL; no desktop window or uploads","saved_export_receipt":"assets/ships/pioneer/pioneer-export.json","saved_export_receipt_sha256":hex::encode(Sha256::digest(receipt_bytes)),"source_glb_sha256":receipt["output"]["sha256"],"source_blend_sha256":receipt["source"]["sha256"],"source_identity_scope":receipt["source"]["identity_scope"],"source_part_count":objects.len(),"cpu_oracle":"all_686_source_pieces_independently_match_saved_receipt_and_partition_source","representative_gpu_count":rows.len(),"material_classes_rendered":9,"context":"ship/pioneer","context_primitive_batches":assembly.parts.len(),"context_triangles":assembly.info.triangles,"representatives":rows,"gpu_buffer_identities_retained":true,"nine_source_gpu_payloads_byte_identical":true,"source_gpu_payload_sha256":gpu_after,"assembly_cpu_source_sha256":assembly_before,"clear_and_invalid_context_remove_stale_drawings":true,"cleared":capture(Some(directory),"cleared",&cleared),"invalid_context":capture(Some(directory),"invalid-context",&failed),"limitations":["Every exported source object has one primitive/material; the nine-primitive assembly is context, not a fabricated multi-primitive object","Representative GPU journeys cover 11 exact objects; independent CPU tests cover all 686 receipt rows and the full 103466-triangle partition","Wireframe context and green selection outline are inspection overlays; original source geometry, scalar materials and bytes are unchanged","This offscreen acceptance does not establish OS input, app focus, gameplay or engineering approval"]})).unwrap()).unwrap();
+            std::fs::write(directory.join("receipt.json"), serde_json::to_vec_pretty(&serde_json::json!({"schema_version":2,"scope":"Actual shared ModelPreview callbacks and egui mode/Focus piece/Fit ship/orbit/pan/Fit/Reset controls, private macOS CGL; no desktop window or uploads","saved_export_receipt":"assets/ships/pioneer/pioneer-export.json","saved_export_receipt_sha256":hex::encode(Sha256::digest(receipt_bytes)),"source_glb_sha256":receipt["output"]["sha256"],"source_blend_sha256":receipt["source"]["sha256"],"source_identity_scope":receipt["source"]["identity_scope"],"source_part_count":objects.len(),"cpu_oracle":"all_686_source_pieces_independently_match_saved_receipt_and_partition_source","representative_gpu_count":rows.len(),"material_classes_rendered":9,"context":"ship/pioneer","context_primitive_batches":assembly.parts.len(),"context_triangles":assembly.info.triangles,"representatives":rows,"gpu_buffer_identities_retained":true,"nine_source_gpu_payloads_byte_identical":true,"source_gpu_payload_sha256":gpu_after,"assembly_cpu_source_sha256":assembly_before,"clear_and_invalid_context_remove_stale_drawings":true,"cleared":capture(Some(directory),"cleared",&cleared),"invalid_context":capture(Some(directory),"invalid-context",&failed),"limitations":["Every exported source object has one primitive/material; the nine-primitive assembly is context, not a fabricated multi-primitive object","Representative GPU journeys cover 11 exact objects; independent CPU tests cover all 686 receipt rows and the full 103466-triangle partition","Wireframe context and green selection outline are inspection overlays; original source geometry, scalar materials and bytes are unchanged","Tiny objects may occupy only a few pixels in whole-ship context; Focus piece is required to inspect their actual geometry at useful size, and Fit ship restores the full context","Context mode retains all nine ship source batches; this acceptance does not establish lower hidden-geometry cost or frame-time improvements","This offscreen acceptance does not establish OS input, app focus, gameplay or engineering approval"]})).unwrap()).unwrap();
         }
         drop(harness);
         assert_eq!(gl.get_error(), glow::NO_ERROR);

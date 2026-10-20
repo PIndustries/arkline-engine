@@ -236,6 +236,25 @@ impl ModelPreview {
         Ok(())
     }
 
+    /// Enlarge the selected source geometry without changing its location in context.
+    pub fn focus_selected(&mut self) -> Result<(), String> {
+        let PreviewSource::Runtime(model) = &self.source else {
+            return Err("Select a runtime piece before focusing it".into());
+        };
+        self.framing = Some(Self::runtime_framing(model)?);
+        self.camera.fit();
+        Ok(())
+    }
+
+    /// Return to the complete verified ship frame, retaining the viewing direction.
+    pub fn fit_context(&mut self) -> Result<(), String> {
+        self.set_context_visible(true)?;
+        let context = self.context.as_ref().ok_or("No verified ship context")?;
+        self.framing = Some(Self::runtime_framing(context)?);
+        self.camera.fit();
+        Ok(())
+    }
+
     pub fn set_imported(&mut self, geometry: Arc<ImportedGeometry>) -> Result<(), String> {
         if matches!(&self.source, PreviewSource::Imported(current) if Arc::ptr_eq(current, &geometry))
         {
@@ -297,6 +316,14 @@ impl ModelPreview {
         }
         ui.horizontal_wrapped(|ui| {
             let has_model = self.framing.is_some();
+            if self.show_context {
+                if ui.button("Focus piece").clicked() {
+                    let _ = self.focus_selected();
+                }
+                if ui.button("Fit ship").clicked() {
+                    let _ = self.fit_context();
+                }
+            }
             if ui
                 .add_enabled(has_model, egui::Button::new("Fit model"))
                 .clicked()
@@ -308,6 +335,11 @@ impl ModelPreview {
                 .clicked()
             {
                 self.camera = PreviewCamera::default();
+                if self.show_context {
+                    let _ = self.fit_context();
+                } else if matches!(self.source, PreviewSource::Runtime(_)) {
+                    let _ = self.focus_selected();
+                }
             }
             ui.label("Left drag: orbit · right/middle drag: pan · wheel: zoom");
         });

@@ -187,6 +187,193 @@ fn import_snapshots_and_guarded_files_snapshot_stay_separate_and_cache_is_bounde
     assert!(matches!(browser.state, LoadState::Unavailable(_)));
 }
 
+#[test]
+fn same_id_import_availability_refresh_restores_selected_verified_geometry_and_tree() {
+    let loads = Arc::new(AtomicUsize::new(0));
+    let counted = loads.clone();
+    let mut browser = ModelBrowser::with_worker(Vec::new(), move |work| {
+        if matches!(work, Work::Load { .. }) {
+            counted.fetch_add(1, Ordering::SeqCst);
+        }
+        answer(work)
+    });
+    settle(&mut browser);
+    let verified = Verified::decode(WEDGE.to_vec()).unwrap();
+    let id = format!("import:accepted:7:{}", verified.sha256);
+    let mut snapshot = BrowserImportSnapshot {
+        id: id.clone(),
+        name: "Accepted asset #7 · revision 1".into(),
+        source: "Accepted import".into(),
+        identity: verified.sha256.clone(),
+        notes: vec!["Accepted content saved".into()],
+        verified: None,
+        unavailable: Some("Accepted geometry unavailable. File is temporarily unavailable.".into()),
+    };
+    browser.sync_imports(vec![snapshot.clone()]);
+    browser.select(browser.imports[0].clone(), false);
+    browser.rebuild_tree();
+    assert!(matches!(browser.state, LoadState::Unavailable(_)));
+    assert!(browser.loaded.is_none());
+    let unavailable = find_node(
+        &browser.tree.as_ref().unwrap().roots,
+        &["Imported snapshots", &snapshot.name],
+    );
+    assert!(unavailable.entry.as_ref().unwrap().unavailable.is_some());
+
+    // Restoring bytes does not change the accepted content ID or source hash.
+    // The cached tree and current selection must nevertheless become available.
+    snapshot.verified = Some(verified.clone());
+    snapshot.unavailable = None;
+    browser.sync_imports(vec![snapshot.clone()]);
+    settle(&mut browser);
+    browser.rebuild_tree();
+    browser.update_preview(None);
+    assert_eq!(browser.selected_id(), Some(id.as_str()));
+    assert_eq!(browser.state, LoadState::Ready);
+    let selected = browser.selected.as_ref().unwrap();
+    assert!(selected.unavailable.is_none());
+    assert_eq!(selected.identity, verified.sha256);
+    assert!(matches!(&selected.model, Source::Verified(_)));
+    match browser.loaded.as_ref().unwrap() {
+        LoadedModel::Imported(restored) => {
+            assert!(Arc::ptr_eq(&restored.geometry, &verified.geometry));
+            assert!(Arc::ptr_eq(&restored.bytes, &verified.bytes));
+        }
+        _ => panic!("Restored import must use the original verified source geometry"),
+    }
+    let restored = find_node(
+        &browser.tree.as_ref().unwrap().roots,
+        &["Imported snapshots", &snapshot.name],
+    )
+    .entry
+    .as_ref()
+    .unwrap();
+    assert_eq!(restored.id, id);
+    assert!(restored.unavailable.is_none());
+    assert!(matches!(&restored.model, Source::Verified(_)));
+    assert_eq!(browser.uploaded_epoch, Some(browser.epoch));
+    assert_eq!(loads.load(Ordering::SeqCst), 0);
+    browser.destroy();
+}
+
+#[test]
+fn same_id_import_metadata_refresh_preserves_ready_geometry_cache_and_preview_epoch() {
+    let loads = Arc::new(AtomicUsize::new(0));
+    let counted = loads.clone();
+    let mut browser = ModelBrowser::with_worker(Vec::new(), move |work| {
+        if matches!(work, Work::Load { .. }) {
+            counted.fetch_add(1, Ordering::SeqCst);
+        }
+        answer(work)
+    });
+    settle(&mut browser);
+    browser.select(
+        entry("cached:other", "Cached fixture", "Project", SPIRE),
+        false,
+    );
+    settle(&mut browser);
+    let cached_geometry = match &browser.cache.front().unwrap().1 {
+        LoadedModel::Imported(verified) => verified.geometry.clone(),
+        _ => panic!("Expected the existing decoded fixture in the cache"),
+    };
+    let verified = Verified::decode(WEDGE.to_vec()).unwrap();
+    let id = format!("import:accepted:7:{}", verified.sha256);
+    let mut snapshot = BrowserImportSnapshot {
+        id: id.clone(),
+        name: "Accepted asset #7 · revision 1".into(),
+        source: "Accepted import".into(),
+        identity: verified.sha256.clone(),
+        notes: vec![
+            "Source: fixture.glb".into(),
+            "Accepted content unsaved".into(),
+        ],
+        verified: Some(verified.clone()),
+        unavailable: None,
+    };
+    browser.sync_imports(vec![snapshot.clone()]);
+    browser.select(browser.imports[0].clone(), false);
+    browser.rebuild_tree();
+    assert_eq!(
+        find_node(
+            &browser.tree.as_ref().unwrap().roots,
+            &["Imported snapshots", &snapshot.name],
+        )
+        .entry
+        .as_ref()
+        .unwrap()
+        .notes,
+        snapshot.notes,
+    );
+    browser.update_preview(None);
+    let epoch = browser.epoch;
+    let uploaded_epoch = browser.uploaded_epoch;
+    assert_eq!(uploaded_epoch, Some(epoch));
+    let preview = browser.preview.as_ref().unwrap() as *const ModelPreview;
+    let cache_ids = browser
+        .cache
+        .iter()
+        .map(|(id, _)| id.clone())
+        .collect::<Vec<_>>();
+
+    // Saving or editing accepted metadata keeps the same content identity. It
+    // should refresh visible metadata without resetting the selected preview.
+    snapshot.name = "Accepted asset #7 · revision 2".into();
+    snapshot.source = "Accepted import · project".into();
+    snapshot.notes = vec![
+        "Source: fixture.glb".into(),
+        "License: project license".into(),
+        "Accepted content saved".into(),
+    ];
+    browser.sync_imports(vec![snapshot.clone()]);
+    browser.rebuild_tree();
+    browser.update_preview(None);
+    assert_eq!(browser.selected_id(), Some(id.as_str()));
+    assert_eq!(browser.state, LoadState::Ready);
+    let selected = browser.selected.as_ref().unwrap();
+    assert_eq!(selected.name, snapshot.name);
+    assert_eq!(selected.source, snapshot.source);
+    assert_eq!(selected.identity, verified.sha256);
+    assert_eq!(selected.notes, snapshot.notes);
+    let tree_entry = find_node(
+        &browser.tree.as_ref().unwrap().roots,
+        &["Imported snapshots", &snapshot.name],
+    )
+    .entry
+    .as_ref()
+    .unwrap();
+    assert_eq!(tree_entry.name, snapshot.name);
+    assert_eq!(tree_entry.source, snapshot.source);
+    assert_eq!(tree_entry.notes, snapshot.notes);
+    assert!(matches!(&tree_entry.model, Source::Verified(_)));
+    match browser.loaded.as_ref().unwrap() {
+        LoadedModel::Imported(current) => {
+            assert!(Arc::ptr_eq(&current.geometry, &verified.geometry));
+            assert!(Arc::ptr_eq(&current.bytes, &verified.bytes));
+        }
+        _ => panic!("Metadata refresh must preserve the selected verified geometry"),
+    }
+    assert_eq!(browser.epoch, epoch);
+    assert_eq!(browser.uploaded_epoch, uploaded_epoch);
+    assert_eq!(
+        browser.preview.as_ref().unwrap() as *const ModelPreview,
+        preview
+    );
+    assert_eq!(
+        browser
+            .cache
+            .iter()
+            .map(|(id, _)| id.clone())
+            .collect::<Vec<_>>(),
+        cache_ids,
+    );
+    match &browser.cache.front().unwrap().1 {
+        LoadedModel::Imported(cached) => assert!(Arc::ptr_eq(&cached.geometry, &cached_geometry)),
+        _ => panic!("Metadata refresh must retain cached geometry"),
+    }
+    assert_eq!(loads.load(Ordering::SeqCst), 1);
+    browser.destroy();
+}
+
 fn visible(output: &egui::FullOutput, label: &str) -> egui::Rect {
     output
         .shapes

@@ -40,6 +40,24 @@ struct Entry {
     model: Source,
 }
 impl Entry {
+    fn verified_hash(&self) -> Option<&str> {
+        match &self.model {
+            Source::Verified(verified) => Some(&verified.sha256),
+            _ => None,
+        }
+    }
+    fn same_import_snapshot(&self, other: &Self) -> bool {
+        self.id == other.id
+            && self.name == other.name
+            && self.category == other.category
+            && self.hierarchy == other.hierarchy
+            && self.source == other.source
+            && self.identity == other.identity
+            && self.notes == other.notes
+            && self.unavailable == other.unavailable
+            && self.spec == other.spec
+            && self.verified_hash() == other.verified_hash()
+    }
     fn matches(&self, search: &str, category: Option<&str>) -> bool {
         category.is_none_or(|category| category == self.category)
             && (search.is_empty()
@@ -369,12 +387,7 @@ impl ModelBrowser {
         }
     }
     fn sync_imports(&mut self, snapshots: Vec<BrowserImportSnapshot>) {
-        let previous = self
-            .imports
-            .iter()
-            .map(|entry| entry.id.clone())
-            .collect::<Vec<_>>();
-        self.imports = snapshots
+        let imports = snapshots
             .into_iter()
             .map(|snapshot| Entry {
                 id: snapshot.id,
@@ -391,31 +404,62 @@ impl ModelBrowser {
                     .map(Source::Verified)
                     .unwrap_or_else(|| Source::Snapshot(Arc::new(Vec::new()))),
             })
-            .collect();
-        if previous
-            != self
-                .imports
+            .collect::<Vec<_>>();
+        let previous = std::mem::replace(&mut self.imports, imports);
+        if previous.len() != self.imports.len()
+            || previous
                 .iter()
-                .map(|entry| entry.id.clone())
-                .collect::<Vec<_>>()
+                .zip(&self.imports)
+                .any(|(before, after)| !before.same_import_snapshot(after))
         {
             self.tree = None;
         }
-        if let Some(selected) = &self.selected {
-            if previous.contains(&selected.id)
-                && !self.imports.iter().any(|entry| entry.id == selected.id)
-            {
-                self.epoch += 1;
-                self.loaded = None;
-                self.waiting = None;
-                self.uploaded_epoch = None;
-                self.state = LoadState::Unavailable(
-                    "This import snapshot changed. Select the current accepted or staged entry."
-                        .into(),
-                );
-                if let Some(preview) = &mut self.preview {
-                    preview.clear();
+        let Some(selected) = self.selected.clone() else {
+            return;
+        };
+        if let Some(current) = self
+            .imports
+            .iter()
+            .find(|entry| entry.id == selected.id)
+            .cloned()
+        {
+            let restored = matches!(self.state, LoadState::Unavailable(_))
+                && current.unavailable.is_none()
+                && current.verified_hash().is_some();
+            if !selected.same_import_snapshot(&current) || restored {
+                // A Save or provenance/revision update does not change verified
+                // content. Keep its camera, GPU upload, cache and pending work.
+                let unchanged_geometry = current.unavailable.is_none()
+                    && self.state == LoadState::Ready
+                    && matches!(&self.loaded, Some(LoadedModel::Imported(verified)) if current.verified_hash() == Some(verified.sha256.as_str()));
+                if unchanged_geometry {
+                    self.selected = Some(current);
+                } else if let (LoadState::Unavailable(_), Some(reason)) =
+                    (&self.state, &current.unavailable)
+                {
+                    // Refresh a changed failure message without retrying or
+                    // rebuilding the same unavailable preview every frame.
+                    self.state = LoadState::Unavailable(reason.clone());
+                    self.selected = Some(current);
+                } else {
+                    if selected.verified_hash() != current.verified_hash() {
+                        self.cache.retain(|(id, _)| id != &current.id);
+                    }
+                    // Restored bytes are already verified by import management;
+                    // select consumes that snapshot without another decode.
+                    self.select(current, true);
                 }
+            }
+        } else if previous.iter().any(|entry| entry.id == selected.id) {
+            self.epoch += 1;
+            self.loaded = None;
+            self.waiting = None;
+            self.uploaded_epoch = None;
+            self.state = LoadState::Unavailable(
+                "This import snapshot changed. Select the current accepted or staged entry.".into(),
+            );
+            if let Some(preview) = &mut self.preview {
+                preview.clear();
             }
         }
     }

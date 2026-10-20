@@ -4,6 +4,8 @@ use super::super::*;
 
 const GLASS: &str = "pioneer/part/b200a9824e59e3c68bcb4a9726401968c5dc72286637d03904f40a58e81f60e3";
 const HULL: &str = "pioneer/part/d9e8088471d3686fd783795df45dcc235b99ab7426033cf4d2a2cfcc5ade3309";
+const FASTENER: &str =
+    "pioneer/part/93b1e92719d87904124b250f308c4f2c08d3253bc01ceb1abed406429977d204";
 const WEDGE: &[u8] = include_bytes!("../../editor/tests/fixtures/import/wedge.glb");
 
 fn bounded(test: impl FnOnce() + Send + 'static) {
@@ -370,4 +372,156 @@ fn source_piece_unsupported_context_toggle_preserves_current_selection() {
         matches!(&preview.source, PreviewSource::Imported(current) if Arc::ptr_eq(current, &imported))
     );
     assert!(!preview.has_context() && !preview.context_visible());
+}
+
+#[test]
+fn source_piece_focus_and_fit_ship_buttons_keep_context_and_restore_mode_framing() {
+    bounded(|| {
+        let selected = model_catalog::load_runtime_model(FASTENER).unwrap();
+        let context = model_catalog::load_runtime_model("ship/pioneer").unwrap();
+        assert_eq!((selected.parts.len(), selected.info.triangles), (1, 108));
+        let selected_before = source_signature(&selected);
+        let context_before = source_signature(&context);
+        let geometry = flight_geometry().unwrap();
+        let uploads = geometry.catalog.uploads().to_vec();
+        let selected_framing = Framing::bounds(selected.min, selected.max).unwrap();
+        let ship_framing = Framing::bounds(context.min, context.max).unwrap();
+        assert_ne!(selected_framing.display, ship_framing.display);
+        assert!(
+            selected_framing.display.x_axis.x > ship_framing.display.x_axis.x * 100.0,
+            "The tiny saved fastener must use its own measured source bounds"
+        );
+        let mut preview = ModelPreview::new(None);
+        preview
+            .set_runtime_context(selected.clone(), Some(context.clone()))
+            .unwrap();
+        let mut controls = Controls::new();
+        controls.frame(&mut preview, vec![]);
+        let (output, _) = controls.frame(&mut preview, vec![]);
+        controls.click(&mut preview, &output, "Highlight in ship");
+        assert!(preview.context_visible());
+        let (_, canvas) = controls.frame(&mut preview, vec![]);
+        controls.drag(
+            &mut preview,
+            canvas,
+            egui::PointerButton::Primary,
+            egui::vec2(40.0, 18.0),
+        );
+        controls.drag(
+            &mut preview,
+            canvas,
+            egui::PointerButton::Secondary,
+            egui::vec2(22.0, -12.0),
+        );
+        controls.frame(
+            &mut preview,
+            vec![
+                egui::Event::PointerMoved(canvas.center()),
+                egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: egui::vec2(0.0, -20.0),
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ],
+        );
+        for _ in 0..20 {
+            controls.frame(&mut preview, vec![]);
+        }
+        let direction = (preview.camera.yaw, preview.camera.pitch);
+        assert_ne!(direction, (DEFAULT_YAW, DEFAULT_PITCH));
+        assert!(preview.camera.pan.length() > 0.01 && preview.camera.zoom > 1.0);
+        let (output, _) = controls.frame(&mut preview, vec![]);
+        controls.click(&mut preview, &output, "Focus piece");
+        assert!(preview.has_context() && preview.context_visible());
+        assert_eq!((preview.camera.yaw, preview.camera.pitch), direction);
+        assert_eq!(
+            (preview.camera.zoom, preview.camera.pan),
+            (1.0, egui::Vec2::ZERO)
+        );
+        assert_framing(&preview, &selected);
+        assert!(
+            matches!(&preview.source, PreviewSource::Runtime(current) if Arc::ptr_eq(current, &selected))
+        );
+        assert!(Arc::ptr_eq(preview.context.as_ref().unwrap(), &context));
+        let (_, canvas) = controls.frame(&mut preview, vec![]);
+        controls.drag(
+            &mut preview,
+            canvas,
+            egui::PointerButton::Middle,
+            egui::vec2(-20.0, 14.0),
+        );
+        assert!(preview.camera.pan.length() > 0.01);
+        let (output, _) = controls.frame(&mut preview, vec![]);
+        controls.click(&mut preview, &output, "Fit ship");
+        assert!(preview.has_context() && preview.context_visible());
+        assert_eq!((preview.camera.yaw, preview.camera.pitch), direction);
+        assert_eq!(
+            (preview.camera.zoom, preview.camera.pan),
+            (1.0, egui::Vec2::ZERO)
+        );
+        assert_framing(&preview, &context);
+        let (output, _) = controls.frame(&mut preview, vec![]);
+        controls.click(&mut preview, &output, "Focus piece");
+        assert_framing(&preview, &selected);
+        let (_, canvas) = controls.frame(&mut preview, vec![]);
+        controls.drag(
+            &mut preview,
+            canvas,
+            egui::PointerButton::Primary,
+            egui::vec2(-30.0, 12.0),
+        );
+        assert_ne!(preview.camera, PreviewCamera::default());
+        let (output, _) = controls.frame(&mut preview, vec![]);
+        controls.click(&mut preview, &output, "Reset view");
+        assert!(preview.has_context() && preview.context_visible());
+        assert_eq!(preview.camera, PreviewCamera::default());
+        assert_framing(&preview, &context);
+        assert!(
+            matches!(&preview.source, PreviewSource::Runtime(current) if Arc::ptr_eq(current, &selected))
+        );
+        assert!(Arc::ptr_eq(preview.context.as_ref().unwrap(), &context));
+        assert_eq!(source_signature(&selected), selected_before);
+        assert_eq!(source_signature(&context), context_before);
+        let after = flight_geometry().unwrap();
+        assert!(Arc::ptr_eq(&geometry, &after));
+        assert_eq!(uploads.len(), after.catalog.uploads().len());
+        for (before, after) in uploads.iter().zip(after.catalog.uploads()) {
+            assert!(Arc::ptr_eq(before, after));
+            assert_eq!(before.len(), after.len());
+        }
+    });
+}
+
+#[test]
+fn source_piece_focus_and_fit_errors_without_context_leave_selection_safe() {
+    let mut preview = ModelPreview::new(None);
+    assert!(preview.focus_selected().is_err());
+    assert!(preview.fit_context().is_err());
+    assert!(matches!(preview.source, PreviewSource::Empty));
+    assert!(preview.framing.is_none() && !preview.has_context());
+    let selected = model_catalog::load_runtime_model(FASTENER).unwrap();
+    preview.set_runtime(selected.clone()).unwrap();
+    let framing = preview.framing.unwrap();
+    let camera = preview.camera;
+    assert!(preview.fit_context().is_err());
+    assert_eq!(preview.framing.unwrap().display, framing.display);
+    assert_eq!(preview.camera, camera);
+    assert!(!preview.has_context() && !preview.context_visible());
+    assert!(
+        matches!(&preview.source, PreviewSource::Runtime(current) if Arc::ptr_eq(current, &selected))
+    );
+    let imported = Arc::new(ImportedGeometry::decode(WEDGE).unwrap());
+    preview.set_imported(imported.clone()).unwrap();
+    let framing = preview.framing.unwrap();
+    assert!(preview.fit_context().is_err());
+    assert_eq!(preview.framing.unwrap().display, framing.display);
+    assert!(
+        matches!(&preview.source, PreviewSource::Imported(current) if Arc::ptr_eq(current, &imported))
+    );
+    assert!(!preview.has_context() && !preview.context_visible());
+    preview.clear();
+    assert!(preview.focus_selected().is_err());
+    assert!(preview.fit_context().is_err());
+    assert!(matches!(preview.source, PreviewSource::Empty));
+    assert!(preview.framing.is_none() && !preview.has_context());
 }
