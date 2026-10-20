@@ -58,11 +58,20 @@ pub enum Cue {
     LowPower,
     CargoFull,
     Ui,
+    TestOutput,
 }
 struct Shared {
     mix: Mutex<Mix>,
     status: Mutex<String>,
     callbacks: AtomicU64,
+    queued: AtomicU64,
+    consumed: AtomicU64,
+    dropped: AtomicU64,
+    nonzero_frames: AtomicU64,
+    peak_bits: AtomicU64,
+    rms_bits: AtomicU64,
+    started: std::time::Instant,
+    last_callback_ns: AtomicU64,
 }
 pub struct SoundEngine {
     shared: Arc<Shared>,
@@ -78,6 +87,14 @@ impl Default for SoundEngine {
                 mix: Mutex::new(Mix::default()),
                 status: Mutex::new("Audio not started".into()),
                 callbacks: AtomicU64::new(0),
+                queued: AtomicU64::new(0),
+                consumed: AtomicU64::new(0),
+                dropped: AtomicU64::new(0),
+                nonzero_frames: AtomicU64::new(0),
+                peak_bits: AtomicU64::new(0),
+                rms_bits: AtomicU64::new(0),
+                started: std::time::Instant::now(),
+                last_callback_ns: AtomicU64::new(0),
             }),
             cues: None,
             stop: None,
@@ -137,11 +154,27 @@ impl SoundEngine {
     }
     pub fn cue(&mut self, cue: Cue) {
         if let Some(queue) = &self.cues {
-            let _ = queue.try_send(cue);
+            if queue.try_send(cue).is_ok() {
+                self.shared.queued.fetch_add(1, Ordering::Relaxed);
+            } else {
+                self.shared.dropped.fetch_add(1, Ordering::Relaxed);
+            }
         }
     }
     pub fn status(&self) -> String {
-        self.shared.status.lock().unwrap().clone()
+        let mix = *self.shared.mix.lock().unwrap();
+        let age = self
+            .shared
+            .started
+            .elapsed()
+            .as_nanos()
+            .min(u64::MAX as u128) as u64;
+        let last = self.shared.last_callback_ns.load(Ordering::Relaxed);
+        format!("{} · callbacks {} ({} ms ago) · cues {}/{} (dropped {}) · signal peak {:.4}, current RMS {:.4} · master {:.0}%, effects {:.0}%{}{}",
+            self.shared.status.lock().unwrap(), self.shared.callbacks.load(Ordering::Relaxed), age.saturating_sub(last)/1_000_000,
+            self.shared.consumed.load(Ordering::Relaxed), self.shared.queued.load(Ordering::Relaxed), self.shared.dropped.load(Ordering::Relaxed),
+            f32::from_bits(self.shared.peak_bits.load(Ordering::Relaxed) as u32), f32::from_bits(self.shared.rms_bits.load(Ordering::Relaxed) as u32),
+            mix.master*100.,mix.effects*100.,if mix.muted { " · MUTED" } else { "" },if mix.ducked { " · voice ducking" } else { "" })
     }
     pub fn retry(&mut self) {
         if let Some(stop) = self.stop.take() {
@@ -190,7 +223,7 @@ fn open_stream(shared: Arc<Shared>, cues: Receiver<Cue>) -> Result<cpal::Stream,
     }?;
     stream.play().map_err(|e| e.to_string())?;
     *shared.status.lock().unwrap() = format!(
-        "Audio output active · {} · {} Hz",
+        "Audio output opened · {} · {} Hz",
         device.name().unwrap_or_else(|_| "Default output".into()),
         config.sample_rate.0
     );
@@ -214,16 +247,38 @@ fn stream<T: cpal::SizedSample + cpal::FromSample<f32>>(
                 }
                 for _ in 0..32 {
                     match cues.try_recv() {
-                        Ok(cue) => synth.cue(cue),
+                        Ok(cue) => {
+                            synth.cue(cue);
+                            shared.consumed.fetch_add(1, Ordering::Relaxed);
+                        }
                         Err(_) => break,
                     }
                 }
+                let mut peak = 0.0_f32;
+                let mut energy = 0.0_f32;
+                let mut nonzero = 0_u64;
                 for frame in out.chunks_mut(channels) {
                     let sample = synth.next();
+                    peak = peak.max(sample.abs());
+                    energy += sample * sample;
+                    nonzero += u64::from(sample.abs() > 1e-7);
                     for channel in frame {
                         *channel = T::from_sample(sample);
                     }
                 }
+                shared
+                    .peak_bits
+                    .fetch_max(peak.to_bits() as u64, Ordering::Relaxed);
+                let frames = (out.len() / channels).max(1);
+                shared.rms_bits.store(
+                    (energy / frames as f32).sqrt().to_bits() as u64,
+                    Ordering::Relaxed,
+                );
+                shared.nonzero_frames.fetch_add(nonzero, Ordering::Relaxed);
+                shared.last_callback_ns.store(
+                    shared.started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
+                    Ordering::Relaxed,
+                );
                 shared.callbacks.fetch_add(1, Ordering::Relaxed);
             },
             move |error| {
@@ -338,6 +393,12 @@ impl Synth {
             Cue::CargoFull => {
                 self.layer(440., 0., 0.18, 0.075, 0., 0., 0.025, 0.12, 0.2);
                 self.layer(330., 0., 0.28, 0.08, 0., 0.18, 0.025, 0.2, 0.2);
+            }
+            // A distinct one-second mid-band diagnostic, rather than a 60 ms UI
+            // tick. It uses exactly the saved master/effects/mute/voice gain path.
+            Cue::TestOutput => {
+                self.layer(660., 0., 0.45, 0.20, 0., 0., 0.025, 0.12, 0.12);
+                self.layer(880., 0., 0.55, 0.20, 0., 0.55, 0.025, 0.15, 0.12);
             }
             Cue::Ui => self.layer(720., -60., 0.06, 0.055, 0., 0., 0.01, 0.045, 0.1),
         }
@@ -720,6 +781,67 @@ mod tests {
         assert!(nonzero > count as u64 / 4);
         eprintln!("Preview {path}: 22.000s mono PCM16 48000Hz; peak={peak:.6}, RMS={:.6}, nonzero={nonzero}/{count}",(squares/count as f64).sqrt());
         eprintln!("Timeline: 0–1 silence;1 Connect;2–4.5 Undock+engine;4.5–6 fade/silence;6 MiningStart;6–10.5 mining loop;8.5 MiningCycle;10.5 MiningStop;11.2–12 silence;12 WarpCharge;12–14 buildup;14 WarpEnter;14–16 transit;16 WarpArrival;17.5–18 silence;18 Lock;18.5 LowPower;19.5 CargoFull;20.1–22 silence.");
+    }
+    #[test]
+    fn output_test_is_distinct_sustained_and_honors_mute_and_zero_effects() {
+        for (muted, effects, expected) in [
+            (false, 0.65, true),
+            (true, 0.65, false),
+            (false, 0.0, false),
+        ] {
+            let mut synth = Synth::new(48000.);
+            synth.mix = Mix {
+                muted,
+                effects,
+                ..Mix::default()
+            };
+            synth.cue(Cue::TestOutput);
+            let mut peak = 0.0_f32;
+            let mut signal_frames = 0;
+            for _ in 0..57600 {
+                let sample = synth.next();
+                peak = peak.max(sample.abs());
+                signal_frames += usize::from(sample.abs() > 0.005);
+            }
+            if expected {
+                assert!(peak > 0.025 && peak < 0.08);
+                assert!(signal_frames > 18000);
+            } else {
+                assert_eq!(peak, 0.);
+            }
+        }
+    }
+    #[test]
+    #[ignore = "Explicit invocation sends test tones through actual selected output; not acoustic capture"]
+    fn actual_output_receives_nonzero_test_pcm() {
+        let mut engine = SoundEngine::default();
+        engine.set_mix(Mix::default());
+        engine.start();
+        engine.cue(Cue::TestOutput);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        while engine.shared.nonzero_frames.load(Ordering::Relaxed) < 18000
+            && std::time::Instant::now() < deadline
+        {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        let peak = f32::from_bits(engine.shared.peak_bits.load(Ordering::Relaxed) as u32);
+        let receipt = serde_json::json!({"scope":"Actual CPAL callback PCM before output sample conversion; no microphone or system-output capture, no claim of acoustic audibility", "status":engine.status(),"callbacks":engine.shared.callbacks.load(Ordering::Relaxed),"cues_queued":engine.shared.queued.load(Ordering::Relaxed),"cues_consumed":engine.shared.consumed.load(Ordering::Relaxed),"nonzero_frames":engine.shared.nonzero_frames.load(Ordering::Relaxed),"peak":peak});
+        eprintln!("{receipt}");
+        if let Some(path) = std::env::var_os("ARKLINE_AUDIO_EVIDENCE") {
+            std::fs::write(path, serde_json::to_vec_pretty(&receipt).unwrap()).unwrap();
+        }
+        assert_eq!(
+            engine.shared.consumed.load(Ordering::Relaxed),
+            1,
+            "{}",
+            engine.status()
+        );
+        assert!(
+            engine.shared.nonzero_frames.load(Ordering::Relaxed) > 18000,
+            "{}",
+            engine.status()
+        );
+        assert!(peak > 0.025 && peak < 0.08, "{}", engine.status());
     }
     #[test]
     #[ignore = "Explicit invocation plays procedural sound on the actual default device"]

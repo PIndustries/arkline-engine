@@ -841,7 +841,7 @@ impl Cockpit {
             self.sound.retry();
         }
         if action.test {
-            self.sound.cue(sound_engine::Cue::Ui);
+            self.sound.cue(sound_engine::Cue::TestOutput);
         }
         ui.separator();
         ui.label("LIGHTING QUALITY");

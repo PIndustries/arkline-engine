@@ -127,10 +127,19 @@ impl SoundSettings {
             .add(egui::Slider::new(&mut self.effects, 0.0..=1.0).text("Effects"))
             .changed();
         ui.horizontal_wrapped(|ui| {
-            action.test = ui.button("Test sound").clicked();
+            action.test = ui
+                .button("Test sound")
+                .on_hover_text("Two sustained mid-range tones through your saved game-sound levels")
+                .clicked();
             action.retry = ui.button("Retry audio").clicked();
         });
         ui.label(format!("Output: {status}"));
+        if self.muted || self.master == 0. || self.effects == 0. {
+            ui.colored_label(
+                egui::Color32::YELLOW,
+                "Test sound is silent while mute is on or Master/Effects is zero.",
+            );
+        }
         ui.small("Uses the system default output. Voice input and spoken replies have separate controls.");
         action
     }

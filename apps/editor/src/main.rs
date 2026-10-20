@@ -448,6 +448,10 @@ impl eframe::App for Editor {
                     self.inspector_tab = 0;
                     self.client.open_mining_panel();
                 }
+                if ui.button("Sound").clicked() {
+                    self.workspace = 0;
+                    self.client.open_sound_panel();
+                }
                 ui.menu_button("Tools", |ui| {
                     ui.selectable_value(&mut self.workspace, 2, "Physics lab");
                     if ui.button("Render debug").clicked() {

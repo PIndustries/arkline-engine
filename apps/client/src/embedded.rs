@@ -243,6 +243,12 @@ impl EmbeddedClient {
         self.cockpit.start_audio_output();
     }
 
+    /// Local sound controls remain reachable while walking or editing a scene.
+    pub fn open_sound_panel(&mut self) {
+        self.cockpit.service_tab = ServiceTab::Settings;
+        self.cockpit.services_open = true;
+    }
+
     /// Opens deterministic mining controls without starting the clock or a job.
     pub fn open_mining_panel(&mut self) {
         self.cockpit.service_tab = ServiceTab::ShipComputer;
