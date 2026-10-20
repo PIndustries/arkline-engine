@@ -1844,6 +1844,13 @@ impl Cockpit {
                 ("IN RANGE", "Station is within docking range")
             };
             ui.small(status).on_hover_text(help);
+            if ui
+                .small_button("Expand panel")
+                .on_hover_text("Open this page at normal interface size")
+                .clicked()
+            {
+                self.services_open = true;
+            }
         });
     }
     fn power_gauge(&self, ui: &mut egui::Ui) {
@@ -4072,7 +4079,7 @@ impl eframe::App for Cockpit {
                             (ServiceTab::Cargo, "▣", "Inventory"),
                             (ServiceTab::Modules, "M", "Mining modules"),
                             (ServiceTab::Drones, "D", "Drone fleet"),
-                            (ServiceTab::ShipComputer, "Mining", "Mining routine"),
+                            (ServiceTab::ShipComputer, "MI", "Mining routine"),
                             (ServiceTab::Corporation, "C", "Corporation"),
                             (ServiceTab::Exchange, "⇄", "Exchange"),
                             (ServiceTab::Activity, "≡", "Activity"),
@@ -4212,12 +4219,7 @@ impl eframe::App for Cockpit {
                 self.service_tab = ServiceTab::Modules;
             }
         }
-        if self.services_open
-            && self.service_tab != ServiceTab::Layouts
-            && (self.view_mode != ViewMode::Cockpit
-                || in_hangar
-                || self.service_tab == ServiceTab::ShipComputer)
-        {
+        if self.services_open && self.service_tab != ServiceTab::Layouts {
             let mut open = true;
             let (panel_pos, panel_size) = self.layout.position(
                 "services",

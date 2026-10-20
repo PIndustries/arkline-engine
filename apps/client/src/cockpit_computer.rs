@@ -5,7 +5,7 @@ use super::CockpitSurface;
 use eframe::egui::{self, epaint, Context, Event, Key, Modifiers, PointerButton, Pos2, Rect};
 use std::collections::HashMap;
 
-pub(crate) const COMPUTER_CANVAS_SIZE: egui::Vec2 = egui::vec2(840.0, 600.0);
+pub(crate) const COMPUTER_CANVAS_SIZE: egui::Vec2 = egui::vec2(560.0, 380.0);
 const OUTSIDE: Pos2 = egui::pos2(-10_000.0, -10_000.0);
 
 #[derive(Clone, Copy)]
@@ -433,7 +433,21 @@ impl CockpitComputer {
         self.parent.get_or_insert_with(|| parent.clone());
         self.context.set_os(parent.os());
         self.context.set_theme(parent.theme());
-        self.context.set_style(parent.style());
+        let mut style = (*parent.style()).clone();
+        // This is a physical instrument, not a reduced desktop screenshot.
+        // Keep a legible logical type scale inside its bounded smaller canvas.
+        for (text, size) in [
+            (egui::TextStyle::Small, 12.0),
+            (egui::TextStyle::Body, 14.0),
+            (egui::TextStyle::Button, 14.0),
+            (egui::TextStyle::Monospace, 13.0),
+            (egui::TextStyle::Heading, 17.0),
+        ] {
+            if let Some(font) = style.text_styles.get_mut(&text) {
+                font.size = font.size.max(size);
+            }
+        }
+        self.context.set_style(style);
         // set_fonts compares definitions and rebuilds only when they change.
         // Atlas growth/compaction remains wholly owned by this secondary context.
         let definitions = parent.fonts(|fonts| fonts.lock().fonts.definitions().clone());

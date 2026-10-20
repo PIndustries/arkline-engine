@@ -1991,19 +1991,21 @@ impl FlightView {
                         }
                     }
                 }
-                painter.text(
-                    rect.left_top() + egui::vec2(18.0, 16.0),
-                    egui::Align2::LEFT_TOP,
-                    format!(
-                        "{} / ARKLINE ORBITAL",
-                        systems()
-                            .iter()
-                            .find(|s| s.id == system_id)
-                            .map_or("UNKNOWN", |s| s.name.as_str())
-                    ),
-                    egui::FontId::monospace(12.0),
-                    super::TEAL,
-                );
+                if !cockpit {
+                    painter.text(
+                        rect.left_top() + egui::vec2(18.0, 16.0),
+                        egui::Align2::LEFT_TOP,
+                        format!(
+                            "{} / ARKLINE ORBITAL",
+                            systems()
+                                .iter()
+                                .find(|s| s.id == system_id)
+                                .map_or("UNKNOWN", |s| s.name.as_str())
+                        ),
+                        egui::FontId::monospace(12.0),
+                        super::TEAL,
+                    );
+                }
                 painter.text(
                     rect.left_bottom() + egui::vec2(18.0, -16.0),
                     egui::Align2::LEFT_BOTTOM,

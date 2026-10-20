@@ -744,10 +744,10 @@ pub(super) fn show(
             });
     }
     ui.painter().text(
-        rect.left_top() + egui::vec2(14.0, 12.0),
+        rect.left_top() + egui::vec2(72.0, 64.0),
         egui::Align2::LEFT_TOP,
         if state.is_none() {
-            "PIONEER · PILOT SEAT · Shift + arrows: look"
+            ""
         } else if live {
             "PIONEER · DOCKED · W/S move · RMB turn"
         } else {
@@ -938,3 +938,44 @@ mod tests {
 #[cfg(all(test, target_os = "macos"))]
 #[path = "pioneer_docked_gpu_tests.rs"]
 mod native_tests;
+
+#[cfg(test)]
+mod composition_fit_tests {
+    use super::*;
+    #[test]
+    fn all_five_instruments_fit_real_viewport_aspects_with_forward_clearance() {
+        let eye = vector(pilot_joints(0.0).eye_m);
+        for size in [egui::vec2(1570.,1014.),egui::vec2(1120.,720.),egui::vec2(800.,650.)] {
+            let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO,size);
+            let vp = Mat4::perspective_rh_gl(FOV_RADIANS,viewport.aspect_ratio(),0.02,100.)
+                * Mat4::look_at_rh(eye,eye+Vec3::X,Vec3::Y);
+            for index in 1..6 {
+                let (center,half)=arkline_protocol::cockpit_screen(index).unwrap();
+                let surface=CockpitSurface::registered(viewport,vp,Mat4::IDENTITY,vector(center),vector(half),index,egui::vec2(300.,180.)).unwrap();
+                let canvas=surface.canvas_rect();
+                for point in [canvas.left_top(),canvas.right_top(),canvas.left_bottom(),canvas.right_bottom()] {
+                    let projected=surface.project(point).expect("Every complete physical face must fit; no clipping fallback");
+                    assert!(viewport.shrink(8.).contains(projected),"Face {index}, {size:?}: {projected:?}");
+                    assert!(surface.unproject(projected).unwrap().distance(point)<0.1);
+                }
+                if index==3 {
+                    assert!(surface.bounds().width()/size.x<0.45);
+                    assert!(surface.bounds().top()>size.y*0.5,"Computer must stay below primary forward target area");
+                }
+            }
+        }
+    }
+    #[test]
+    fn runtime_perimeter_refit_clears_identified_source_brace_without_mutating_catalog() {
+        let original=pioneer_asset().unwrap();
+        let derived=super::super::pioneer_docked_source::source_meshes().unwrap();
+        let eye=Vec3::new(33.22,1.,3.);
+        let direction=Vec3::new(1.,-0.05,0.);
+        let metres=Mat4::from_scale(Vec3::splat(100.));
+        assert!(ray_mesh_hit(eye,direction,metres,&original[1].vertices).is_some());
+        assert!(ray_mesh_hit(eye,direction,metres,&derived[1]).is_none(),"Audited old diagonal must not remain across the primary aperture");
+        let geometry=registered_geometry(&arkline_protocol::default_pioneer()).unwrap();
+        let post=geometry.panels.iter().find(|p|p.id=="cockpit/canopy/source-perimeter-post").unwrap();
+        assert!(ray_mesh_hit(Vec3::new(33.22,1.,4.8),Vec3::X,box_matrix(&post.bounds),&cube()).is_some(),"Replacement is actual retained geometry at the perimeter");
+    }
+}

@@ -59,6 +59,20 @@ const SOURCES: [SourcePart; 3] = [
     },
 ];
 
+// Explicit measured runtime refit: replace the source diagonal across the
+// pilot's primary sightline with the shared perimeter post in pioneer_docked.
+// Catalog/inspection uploads and the saved GLB remain byte-for-byte original.
+const PILOT_BRACE: SourcePart = SourcePart {
+    id: "part:8797073fe7367d18c774c7dcaa3f62e4588e0aebc9e78c3781d1e4b5b8cd8505",
+    name: "Study05 cockpit diagonal brace starboard",
+    primitive: 1,
+    first: 112608,
+    count: 324,
+    material: "Titanium machinery",
+    material_id: "material:2e4b79a53f5d6a450c73bf2b573933f76a43373c0bdcc489c83a15237cfb346a",
+    affected: 112608..112932,
+};
+
 /// Order is canonical primitives 0 (hull), 1 (machinery), 6 (glass).
 /// A source mismatch disables this derived presentation rather than guessing.
 pub(super) fn source_meshes() -> Result<[Vec<Vertex>; 3], String> {
@@ -90,6 +104,11 @@ fn build() -> Result<[Vec<Vertex>; 3], String> {
             return Err("Docked Pioneer material/source range mismatch".into());
         }
         result[slot] = derive(&part.vertices, source.affected.clone(), cuts(slot)?)?;
+        if slot == 1 {
+            let added = result[slot].len() - part.vertices.len();
+            result[slot]
+                .drain(PILOT_BRACE.first + added..PILOT_BRACE.first + added + PILOT_BRACE.count);
+        }
     }
     Ok(result)
 }
@@ -124,7 +143,7 @@ fn validate_identity(receipt: &serde_json::Value) -> Result<(), String> {
         .as_array()
         .filter(|materials| materials.len() == 9)
         .ok_or("Docked Pioneer material catalog mismatch")?;
-    for source in &SOURCES {
+    for source in SOURCES.iter().chain(std::iter::once(&PILOT_BRACE)) {
         let matches: Vec<_> = parts
             .iter()
             .filter(|part| part["source_id"] == source.id)
@@ -489,10 +508,18 @@ mod tests {
                 &original[..source.affected.start],
                 &derived[slot][..source.affected.start]
             ));
-            let suffix_len = original.len() - source.affected.end;
+            let suffix = if slot == 1 {
+                [
+                    &original[source.affected.end..PILOT_BRACE.first],
+                    &original[PILOT_BRACE.first + PILOT_BRACE.count..],
+                ]
+                .concat()
+            } else {
+                original[source.affected.end..].to_vec()
+            };
             assert!(identical(
-                &original[source.affected.end..],
-                &derived[slot][derived[slot].len() - suffix_len..]
+                &suffix,
+                &derived[slot][derived[slot].len() - suffix.len()..]
             ));
             assert_ne!(original.len(), derived[slot].len());
             // The two broad hull caps retain surrounding hull surface.
@@ -555,7 +582,7 @@ mod tests {
         let first = build().unwrap();
         let second = build().unwrap();
         assert!(first[0].len() > COUNTS[0]);
-        assert_eq!([first[1].len(), first[2].len()], [156510, 366]);
+        assert_eq!([first[1].len(), first[2].len()], [156186, 366]);
         for (slot, (a, b)) in first.iter().zip(&second).enumerate() {
             assert!(identical(a, b));
             assert_eq!(a.len() % 3, 0);

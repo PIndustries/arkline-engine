@@ -10,10 +10,10 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 
-// Revision 3 adds retained moving hatch leaves to the fitted bay/workstation.
+// Revision 4 fits the raised pilot station, connected console and canopy liner.
 // Old saved bindings must
 // remain with their matching build until an explicit migration is validated.
-pub const PIONEER_DOCKED_REGISTRATION_REVISION: u32 = 3;
+pub const PIONEER_DOCKED_REGISTRATION_REVISION: u32 = 4;
 pub const PIONEER_DOCKED_SOURCE_SHA256: &str =
     "8125644f007537437942d34169e527c08ddd2dfaed575c874e2263ff2b7cb123";
 const EPS: f64 = 1.0e-8;
@@ -22,6 +22,10 @@ const FLOOR: f64 = -0.32;
 // Registration admission/recovery must be coordinated before accepting this recipe.
 const COCKPIT_REAR_X_M: f64 = 31.6;
 const PILOT_STATION_SHIFT_X_M: f64 = -1.0;
+const PILOT_SEAT_RISE_M: f64 = 0.35;
+fn workstation_point(point: [f64; 3]) -> [f64; 3] {
+    add(pilot_station_point(point), [0.0, PILOT_SEAT_RISE_M, 0.0])
+}
 fn pilot_station_point(point: [f64; 3]) -> [f64; 3] {
     add(point, [PILOT_STATION_SHIFT_X_M, 0.0, 0.0])
 }
@@ -301,7 +305,7 @@ pub fn pilot_joints(standing_fraction: f64) -> PioneerDockedPilotJoints {
             p,
         )
     });
-    PioneerDockedPilotJoints {
+    let mut joints = PioneerDockedPilotJoints {
         root_m: pilot_station_point([34.54, FLOOR, 3.0]),
         eye_m: pilot_station_point(lerp([34.22, 1.0, 3.0], [34.54, 1.33, 3.0], p)),
         head_m: pilot_station_point(lerp([34.22, 1.0, 3.0], [34.54, 1.32, 3.0], p)),
@@ -323,19 +327,34 @@ pub fn pilot_joints(standing_fraction: f64) -> PioneerDockedPilotJoints {
         }),
         knees_m: sides.map(|s| {
             pilot_station_point(lerp(
-                [34.62, 0.23, 3.0 + s * 0.13],
+                [34.72, 0.23, 3.0 + s * 0.13],
                 [34.58, 0.1875, 3.0 + s * 0.13],
                 p,
             ))
         }),
         feet_m: sides.map(|s| {
             pilot_station_point(lerp(
-                [34.62, -0.23, 3.0 + s * 0.13],
+                [34.87, -0.23, 3.0 + s * 0.13],
                 [34.54, -0.245, 3.0 + s * 0.13],
                 p,
             ))
         }),
+    };
+    // Only the seated body is elevated. Standing root, exit anchors and walking
+    // supports remain in their existing body frame; transition is continuous.
+    let rise = PILOT_SEAT_RISE_M * (1.0 - p);
+    for point in [&mut joints.eye_m, &mut joints.head_m, &mut joints.neck_m]
+        .into_iter()
+        .chain(joints.shoulders_m.iter_mut())
+        .chain(joints.elbows_m.iter_mut())
+        .chain(joints.hands_m.iter_mut())
+        .chain(joints.hips_m.iter_mut())
+        .chain(joints.knees_m.iter_mut())
+        .chain(joints.feet_m.iter_mut())
+    {
+        point[1] += rise;
     }
+    joints
 }
 pub fn seat_transition_pose(leaving: bool, progress: f64) -> (f64, f64) {
     let p = if leaving {
@@ -1442,30 +1461,10 @@ fn add_cockpit_furniture(g: &mut PioneerDockedGeometry) {
     use PioneerDockedMaterial::{Carbon, Graphite, Titanium};
     let cell = PioneerDockedCell::Cockpit;
     let solid = PioneerDockedCollision::Solid;
-    for (i, (z0, z1)) in [(2.27, 2.53), (3.47, 3.73)].into_iter().enumerate() {
-        g.block(
-            format!("cockpit/console/{i}"),
-            pilot_station_point([34.76, 0.47, z0]),
-            pilot_station_point([35.08, 0.77, z1]),
-            Graphite,
-            solid,
-            cell,
-            PioneerDockedPanelKind::Furniture,
-        );
-        g.block(
-            format!("cockpit/console-pedestal/{i}"),
-            pilot_station_point([34.78, FLOOR, z0 + 0.04]),
-            pilot_station_point([34.88, 0.47, z1 - 0.04]),
-            Titanium,
-            solid,
-            cell,
-            PioneerDockedPanelKind::Furniture,
-        );
-    }
     g.block(
         "pilot-chair/wallplate",
-        pilot_station_point([33.70, -0.20, 2.60]),
-        pilot_station_point([33.77, 1.05, 3.40]),
+        workstation_point([33.70, -0.20, 2.60]),
+        workstation_point([33.77, 1.05, 3.40]),
         Titanium,
         solid,
         cell,
@@ -1473,8 +1472,8 @@ fn add_cockpit_furniture(g: &mut PioneerDockedGeometry) {
     );
     g.block(
         "pilot-chair/backrest",
-        pilot_station_point([33.80, 0.32, 2.70]),
-        pilot_station_point([33.86, 1.05, 3.30]),
+        workstation_point([33.80, 0.32, 2.70]),
+        workstation_point([33.86, 1.05, 3.30]),
         Carbon,
         solid,
         cell,
@@ -1483,8 +1482,8 @@ fn add_cockpit_furniture(g: &mut PioneerDockedGeometry) {
     for (i, (z0, z1)) in [(2.60, 2.68), (3.32, 3.40)].into_iter().enumerate() {
         g.block(
             format!("pilot-chair/hinge/{i}"),
-            pilot_station_point([33.77, 0.12, z0]),
-            pilot_station_point([34.0, 0.32, z1]),
+            workstation_point([33.77, 0.12, z0]),
+            workstation_point([34.0, 0.32, z1]),
             Titanium,
             solid,
             cell,
@@ -1497,12 +1496,97 @@ fn add_cockpit_furniture(g: &mut PioneerDockedGeometry) {
     g.block(
         "pilot-chair/deck-support",
         [32.66, FLOOR, 2.60],
-        [32.78, -0.19, 3.40],
+        [32.78, -0.19 + PILOT_SEAT_RISE_M, 3.40],
         Titanium,
         solid,
         cell,
         PioneerDockedPanelKind::Furniture,
     );
+    // One connected, deck-supported workstation. Its aft edge stays beyond
+    // the standing capsule (X33.54 + radius0.30), preserving seat/egress paths.
+    for (id, min, max, material) in [
+        (
+            "console/worktop",
+            [33.88, 0.90, 2.25],
+            [34.44, 0.97, 3.75],
+            Carbon,
+        ),
+        (
+            "console/front-support",
+            [34.36, FLOOR, 2.25],
+            [34.44, 0.90, 3.75],
+            Graphite,
+        ),
+        (
+            "console/footrest",
+            [33.85, FLOOR, 2.68],
+            [34.18, 0.085, 3.32],
+            Carbon,
+        ),
+        (
+            "console/center-mount",
+            [34.06, 0.97, 2.82],
+            [34.12, 1.12, 3.18],
+            Titanium,
+        ),
+        (
+            "console/port-mount",
+            [34.38, 0.97, 2.35],
+            [34.43, 1.37, 2.65],
+            Titanium,
+        ),
+        (
+            "console/starboard-mount",
+            [34.38, 0.97, 3.35],
+            [34.43, 1.37, 3.65],
+            Titanium,
+        ),
+        // The inner canopy perimeter joins the existing roof and front floor;
+        // source glazing and diagonal structure remain intact ahead of it.
+        // Replaces the exact audited diagonal in the derived runtime source.
+        // The post meets the original panoramic sill/brow at X35.6; its
+        // projection aligns with the inner starboard jamb, clear of +X target.
+        (
+            "canopy/source-perimeter-post",
+            [35.55, -0.65, 4.75],
+            [35.62, 2.71, 4.85],
+            Titanium,
+        ),
+        (
+            "canopy/header",
+            [34.80, 2.02, -6.8],
+            [34.90, 2.88, 5.8],
+            Graphite,
+        ),
+        (
+            "canopy/sill",
+            [34.80, FLOOR, -6.8],
+            [34.90, 0.45, 5.8],
+            Carbon,
+        ),
+        (
+            "canopy/port-jamb",
+            [34.80, 0.45, 1.72],
+            [34.90, 2.02, 1.82],
+            Titanium,
+        ),
+        (
+            "canopy/starboard-jamb",
+            [34.80, 0.45, 4.18],
+            [34.90, 2.02, 4.28],
+            Titanium,
+        ),
+    ] {
+        g.block(
+            format!("cockpit/{id}"),
+            min,
+            max,
+            material,
+            solid,
+            cell,
+            PioneerDockedPanelKind::Furniture,
+        );
+    }
     // Index identities mirror the existing six screen slots. Slot zero is
     // transparent telemetry, not a depth-writing console panel.
     for i in 1..6 {
@@ -1514,7 +1598,7 @@ fn add_cockpit_furniture(g: &mut PioneerDockedGeometry) {
                 half_m: half,
                 axes: [X, Y, Z],
             },
-            PioneerDockedMaterial::Emerald,
+            Graphite,
             solid,
             cell,
             PioneerDockedPanelKind::Instrument,
@@ -1537,18 +1621,18 @@ fn add_cockpit_furniture(g: &mut PioneerDockedGeometry) {
 /// Existing screen slot identities, now fitted to the same physical console.
 /// Returns body-space centre and half extents; zero is canopy telemetry only.
 pub fn cockpit_screen(index: usize) -> Option<([f64; 3], [f64; 3])> {
-    let screen = match index {
-        0 => Some(([34.94, 1.112, 3.0], [0.020, 0.075, 0.18])),
-        1 => Some(([35.02, 0.77, 2.4], [0.012, 0.13, 0.18])),
-        2 => Some(([35.02, 0.77, 3.6], [0.012, 0.13, 0.18])),
-        // Raise the central display mount 3 cm so its complete interactive face
-        // fits the neutral seated view, preserving the console and pilot eye.
-        3 => Some(([35.0, 0.80, 3.0], [0.020, 0.175, 0.27])),
-        4 => Some(([35.02, 1.02, 2.4], [0.012, 0.085, 0.18])),
-        5 => Some(([35.02, 1.02, 3.6], [0.012, 0.085, 0.18])),
-        _ => None,
+    // Measured to keep every complete face inside the neutral55-degree view,
+    // with the central interactive display below the forward sightline.
+    let (center, half) = match index {
+        0 => ([34.94, 1.112, 3.0], [0.020, 0.075, 0.18]),
+        1 => ([35.36, 0.77, 2.49], [0.012, 0.13, 0.17]),
+        2 => ([35.36, 0.77, 3.51], [0.012, 0.13, 0.17]),
+        3 => ([35.05, 0.80, 3.0], [0.020, 0.140, 0.210]),
+        4 => ([35.36, 1.02, 2.49], [0.012, 0.085, 0.17]),
+        5 => ([35.36, 1.02, 3.51], [0.012, 0.085, 0.17]),
+        _ => return None,
     };
-    screen.map(|(center, half)| (pilot_station_point(center), half))
+    Some((workstation_point(center), half))
 }
 
 /// Paired inward-opening leaves, shared by rendering, collision and sweep checks.
@@ -1690,7 +1774,7 @@ pub fn dynamic_geometry(
     let fold = state.chair_fold * std::f64::consts::FRAC_PI_2;
     let rotation = tilt - fold;
     let (s, c) = rotation.sin_cos();
-    let hinge = pilot_station_point([33.96, 0.265218, 3.0]);
+    let hinge = workstation_point([33.96, 0.265218, 3.0]);
     let length = 0.5_f64.hypot(0.1);
     let local = [length * 0.5, -0.03, 0.0];
     let tilt_axes = [[c, s, 0.0], [-s, c, 0.0], Z];
@@ -2455,11 +2539,11 @@ mod tests {
             let reverse = seat_transition_pose(false, 1.0 - i as f64 / 1000.0);
             assert!((reverse.0 - fold).abs() < EPS && (reverse.1 - standing).abs() < EPS);
         }
-        assert_eq!(pilot_joints(0.0).eye_m, [33.22, 1.0, 3.0]);
+        assert_eq!(pilot_joints(0.0).eye_m, [33.22, 1.35, 3.0]);
         assert_eq!(pilot_joints(1.0).eye_m, [33.54, 1.33, 3.0]);
         assert_eq!(
             cockpit_screen(3),
-            Some(([34.0, 0.80, 3.0], [0.020, 0.175, 0.27]))
+            Some(([34.05, 1.15, 3.0], [0.020, 0.140, 0.210]))
         );
         assert!(cockpit_screen(6).is_none());
     }

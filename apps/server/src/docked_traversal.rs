@@ -1230,6 +1230,39 @@ pub(super) fn validate_room_layout(w: &World, document: &RoomLayoutDocument) -> 
     }
     Ok(())
 }
+/// Revision3 ->4 changes only the pilot furniture/forward aperture. Boarding
+/// anchors and every walking support are retained. Rebind only an empty,
+/// closed/stowed vessel; occupied or moving saves still require the old build.
+/// This edits binding identity only, never inventory, jobs, feet or actuators.
+pub(super) fn migrate_stowed_cockpit_v3(w: &mut World) -> Result<()> {
+    if PIONEER_DOCKED_REGISTRATION_REVISION != 4
+        || w.pilots.values().any(|p| p.view.station_avatar.is_some())
+    {
+        return Ok(());
+    }
+    let mut ready = Vec::new();
+    for (name, account) in &w.accounts {
+        if w.resource_jobs.get(name).is_some_and(|j| !j.view.phase.is_terminal()) {continue;}
+        for (host, actuator) in &account.docked_actuators {
+            if actuator.binding.registration_revision != 3 {continue;}
+            let mut upgraded = actuator.binding.clone();
+            upgraded.registration_revision = 4;
+            let pose = docked_binding_pose(&upgraded).map_err(anyhow::Error::msg)?;
+            if actuator.hatches_closed() && !actuator.lift.moving
+                && actuator.lift.target == DockedLiftStop::Ship
+                && (actuator.lift.floor_station_m - geometry::lift_geometry(pose).ship_floor_m).abs() <= EPSILON_M
+                && actuator.hatches.as_ref().is_none_or(|states| states.iter().all(|h| !h.moving && !h.target_open && h.fraction == 0.0))
+            {
+                ready.push((name.clone(),host.clone(),upgraded));
+            }
+        }
+    }
+    for (name,host,binding) in ready {
+        w.accounts.get_mut(&name).unwrap().docked_actuators.get_mut(&host).unwrap().binding = binding;
+    }
+    Ok(())
+}
+
 pub(super) fn validate(w: &World, document: Option<&RoomLayoutDocument>) -> Result<()> {
     for (name, account) in &w.accounts {
         ensure!(

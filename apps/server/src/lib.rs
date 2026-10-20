@@ -290,6 +290,7 @@ impl Server {
             // when an externally changed layout file would trap them.
             station::validate_room_layout(&world, room_layout)?;
         }
+        docked_traversal::migrate_stowed_cockpit_v3(&mut world)?;
         docked_traversal::stop_lifts(&mut world, now);
         station::migrate(&mut world, editor_room_layout.as_ref());
         for pilot in world.pilots.values_mut() {

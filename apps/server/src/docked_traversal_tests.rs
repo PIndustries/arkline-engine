@@ -1898,3 +1898,40 @@ fn hatch_motion_is_timed_reversible_paused_and_holds_on_power_loss() {
     assert!(!a.hatches.as_ref().unwrap()[0].moving && a.hatches.as_ref().unwrap()[0].blocked);
     assert!(!a.hatches_closed());
 }
+
+#[test]
+fn stowed_v3_cockpit_rebinds_only_identity_and_occupied_or_open_worlds_stay_untouched() {
+    let mut server=Server::open(":memory:").unwrap();
+    let mut session=None;
+    connected(&mut server,&mut session);
+    leave_and_stand(&mut server,&mut session,LEFT_AT);
+    ok(command(&mut server,&mut session,DockedTraversalRequest::TakeSeat{binding:binding()},STANDING_AT+1));
+    let response=snapshot(&mut server,&mut session,STANDING_AT+1+DOCKED_SEAT_TRANSITION_MS);
+    assert!(pilot(&response).station_avatar.is_none());
+    let mut old:World=serde_json::from_str(&durable(&server)).unwrap();
+    for actuator in old.accounts.get_mut("Walker").unwrap().docked_actuators.values_mut() {
+        actuator.binding.registration_revision=3;
+    }
+    let mut expected=old.clone();
+    for actuator in expected.accounts.get_mut("Walker").unwrap().docked_actuators.values_mut() {
+        actuator.binding.registration_revision=4;
+    }
+    let mut migrated=old.clone();
+    docked_traversal::migrate_stowed_cockpit_v3(&mut migrated).unwrap();
+    assert_eq!(serde_json::to_value(&migrated).unwrap(),serde_json::to_value(&expected).unwrap(),"Only registration binding may change, preserving all economic/physical state");
+    validate(&migrated,None).unwrap();
+    for open in [false,true] {
+        let mut blocked=old.clone();
+        if open {
+            blocked.accounts.get_mut("Walker").unwrap().docked_actuators.values_mut().next().unwrap().inner_hatch_open=true;
+        } else {
+            let avatar=StationAvatar {docked_traversal:None,onboard_interior:true,
+                interior_deck:2,jump_started_ms:None,seated:false,position:[0.;3],
+                heading:0.,moving:false,sprinting:false,updated_at_ms:0};
+            blocked.pilots.get_mut("Walker").unwrap().view.station_avatar=Some(avatar);
+        }
+        let before=serde_json::to_value(&blocked).unwrap();
+        docked_traversal::migrate_stowed_cockpit_v3(&mut blocked).unwrap();
+        assert_eq!(serde_json::to_value(&blocked).unwrap(),before);
+    }
+}
