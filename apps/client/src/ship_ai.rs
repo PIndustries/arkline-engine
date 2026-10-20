@@ -811,7 +811,8 @@ mod tests {
             let r = send(
                 &mut s,
                 Request::Connect {
-                    supports_pioneer_interior: true, supports_docked_traversal_v2: false,
+                    supports_pioneer_interior: true,
+                    supports_docked_traversal_v2: false,
                     world_layout_version: 1,
                     supports_fleet_hangar: true,
                     supports_room_controls: true,
@@ -904,7 +905,8 @@ mod tests {
         let r = send(
             &mut worker,
             Request::Connect {
-                supports_pioneer_interior: true, supports_docked_traversal_v2: false,
+                supports_pioneer_interior: true,
+                supports_docked_traversal_v2: false,
                 world_layout_version: 1,
                 supports_fleet_hangar: true,
                 supports_room_controls: true,

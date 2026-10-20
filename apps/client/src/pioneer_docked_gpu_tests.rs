@@ -338,6 +338,7 @@ fn native_pioneer_registered_docked_scene_displays_continuity_and_visibility() {
         let seated = pilot(None);
         let seated_source = serde_json::to_vec(&seated).unwrap();
         let first = harness.settle(&seated, 1000);
+        let mut captures = vec![capture(directory.as_deref(), "pilot-seat", &first)];
         assert!(first.occupied > 1000);
         let surface = harness
             .view
@@ -375,7 +376,7 @@ fn native_pioneer_registered_docked_scene_displays_continuity_and_visibility() {
             })
             .count();
         assert!(instrument_pixels>20,"Actual live instrument triangles must render in front of their real opaque backing, not disappear behind it");
-        let mut captures = vec![capture(directory.as_deref(), "pilot-seat", &first)];
+
         let frame = egui::Event::PointerMoved(egui::pos2(WIDTH as f32 * 0.5, HEIGHT as f32 * 0.5));
         for _ in 0..3 {
             harness.frame(

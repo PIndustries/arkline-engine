@@ -74,18 +74,18 @@ pub mod model_catalog;
 #[cfg(not(target_arch = "wasm32"))]
 #[path = "model_preview.rs"]
 pub mod model_preview;
-#[path = "ship_asset.rs"]
-mod ship_asset;
 #[path = "pioneer_docked_source.rs"]
 mod pioneer_docked_source;
+#[path = "ship_asset.rs"]
+mod ship_asset;
 #[path = "view_visibility.rs"]
 mod view_visibility;
 use view_visibility::part_in_view;
 #[cfg(not(target_arch = "wasm32"))]
-use view_visibility::{ViewProfileStart, ViewProfiler};
-#[cfg(not(target_arch = "wasm32"))]
 pub use view_visibility::ViewRenderMetrics;
 pub use view_visibility::ViewVisibility;
+#[cfg(not(target_arch = "wasm32"))]
+use view_visibility::{ViewProfileStart, ViewProfiler};
 
 #[cfg(all(test, target_os = "linux"))]
 #[path = "exterior_gpu_tests.rs"]
@@ -535,7 +535,11 @@ impl FlightView {
     }
     #[cfg(not(target_arch = "wasm32"))]
     pub fn debug_view_render_metrics(&self) -> Vec<ViewRenderMetrics> {
-        self.renderer.as_ref().ok().and_then(|r|r.lock().ok().map(|r|r.view_profiler.borrow().samples())).unwrap_or_default()
+        self.renderer
+            .as_ref()
+            .ok()
+            .and_then(|r| r.lock().ok().map(|r| r.view_profiler.borrow().samples()))
+            .unwrap_or_default()
     }
 
     pub(crate) fn cockpit_presentation_active(&self, mode: super::ViewMode) -> bool {
@@ -2427,7 +2431,7 @@ struct FlightGeometry {
     station_batches: Vec<(usize, Vec3, f32)>,
     drone_parts: [Arc<Vec<ModelPart>>; 3],
     docked_meshes: Option<[usize; 3]>,
-    docked_parts: Result<Arc<Vec<ModelPart>>,String>,
+    docked_parts: Result<Arc<Vec<ModelPart>>, String>,
 }
 fn flight_geometry() -> Result<Arc<FlightGeometry>, String> {
     static GEOMETRY: std::sync::OnceLock<Result<Arc<FlightGeometry>, String>> =
@@ -2471,17 +2475,26 @@ fn flight_geometry() -> Result<Arc<FlightGeometry>, String> {
             });
             // Derived runtime cuts append new buffers. Inspection retains every
             // original upload, source ID, draw range and original material.
-            let (docked_meshes,docked_parts) = match pioneer_docked_source::source_meshes() {
-                Ok(source)=> {
-                    let slots=[upload.len(),upload.len()+1,upload.len()+2];
+            let (docked_meshes, docked_parts) = match pioneer_docked_source::source_meshes() {
+                Ok(source) => {
+                    let slots = [upload.len(), upload.len() + 1, upload.len() + 2];
                     upload.extend(source);
-                    let parts=Arc::new(pioneer_asset()?.iter().enumerate().map(|(i,p)| {
-                        let mesh=[0,1,6].iter().position(|&v|v==i).map_or(10+i,|slot|slots[slot]);
-                        (mesh,Mat4::IDENTITY,p.color,p.emission)
-                    }).collect());
-                    (Some(slots),Ok(parts))
-                },
-                Err(error)=>(None,Err(error)),
+                    let parts = Arc::new(
+                        pioneer_asset()?
+                            .iter()
+                            .enumerate()
+                            .map(|(i, p)| {
+                                let mesh = [0, 1, 6]
+                                    .iter()
+                                    .position(|&v| v == i)
+                                    .map_or(10 + i, |slot| slots[slot]);
+                                (mesh, Mat4::IDENTITY, p.color, p.emission)
+                            })
+                            .collect(),
+                    );
+                    (Some(slots), Ok(parts))
+                }
+                Err(error) => (None, Err(error)),
             };
             Ok(Arc::new(FlightGeometry {
                 catalog: Arc::new(DepthMeshCatalog::new(
@@ -2552,46 +2565,61 @@ impl Renderer {
     /// Canonical inspection materials/buffers stay opaque and unchanged. This
     /// pass retains pane triangles, uses no opaque depth writes, and draws after
     /// opaque geometry; it does not turn the whole source batch into an opening.
-    unsafe fn draw_registered_glass(&self,part:&ModelPart) {
-        let gl=&self.gl;
-        let blend=gl.is_enabled(glow::BLEND);
-        let src_rgb=gl.get_parameter_i32(glow::BLEND_SRC_RGB) as u32;
-        let dst_rgb=gl.get_parameter_i32(glow::BLEND_DST_RGB) as u32;
-        let src_alpha=gl.get_parameter_i32(glow::BLEND_SRC_ALPHA) as u32;
-        let dst_alpha=gl.get_parameter_i32(glow::BLEND_DST_ALPHA) as u32;
-        let depth_write=gl.get_parameter_bool(glow::DEPTH_WRITEMASK);
-        let equation_rgb=gl.get_parameter_i32(glow::BLEND_EQUATION_RGB) as u32;
-        let equation_alpha=gl.get_parameter_i32(glow::BLEND_EQUATION_ALPHA) as u32;
+    unsafe fn draw_registered_glass(&self, part: &ModelPart) {
+        let gl = &self.gl;
+        let blend = gl.is_enabled(glow::BLEND);
+        let src_rgb = gl.get_parameter_i32(glow::BLEND_SRC_RGB) as u32;
+        let dst_rgb = gl.get_parameter_i32(glow::BLEND_DST_RGB) as u32;
+        let src_alpha = gl.get_parameter_i32(glow::BLEND_SRC_ALPHA) as u32;
+        let dst_alpha = gl.get_parameter_i32(glow::BLEND_DST_ALPHA) as u32;
+        let depth_write = gl.get_parameter_bool(glow::DEPTH_WRITEMASK);
+        let equation_rgb = gl.get_parameter_i32(glow::BLEND_EQUATION_RGB) as u32;
+        let equation_alpha = gl.get_parameter_i32(glow::BLEND_EQUATION_ALPHA) as u32;
         gl.enable(glow::BLEND);
-        gl.blend_equation_separate(glow::FUNC_ADD,glow::FUNC_ADD);
-        gl.blend_func_separate(glow::SRC_ALPHA,glow::ONE_MINUS_SRC_ALPHA,glow::ONE,glow::ONE_MINUS_SRC_ALPHA);
+        gl.blend_equation_separate(glow::FUNC_ADD, glow::FUNC_ADD);
+        gl.blend_func_separate(
+            glow::SRC_ALPHA,
+            glow::ONE_MINUS_SRC_ALPHA,
+            glow::ONE,
+            glow::ONE_MINUS_SRC_ALPHA,
+        );
         gl.depth_mask(false);
         self.runtime_surface_opacity.set(0.16);
-        self.draw(part.0,part.1,part.2,part.3);
+        self.draw(part.0, part.1, part.2, part.3);
         self.runtime_surface_opacity.set(1.);
         gl.depth_mask(depth_write);
-        gl.blend_func_separate(src_rgb,dst_rgb,src_alpha,dst_alpha);
-        gl.blend_equation_separate(equation_rgb,equation_alpha);
-        if !blend { gl.disable(glow::BLEND); }
+        gl.blend_func_separate(src_rgb, dst_rgb, src_alpha, dst_alpha);
+        gl.blend_equation_separate(equation_rgb, equation_alpha);
+        if !blend {
+            gl.disable(glow::BLEND);
+        }
     }
-    fn visible_part(&self,vp:Mat4,part:&ModelPart,stats:&mut ViewVisibility)->bool {
+    fn visible_part(&self, vp: Mat4, part: &ModelPart, stats: &mut ViewVisibility) -> bool {
         #[cfg(not(target_arch = "wasm32"))]
-        let started=std::time::Instant::now();
-        let triangles=self.depth_meshes.vertex_count(part.0) as u64/3;
-        stats.candidate_draws+=1;stats.candidate_triangles+=triangles;
-        let visible=part_in_view(&self.depth_meshes,vp,part);
-        if visible {stats.submitted_draws+=1;stats.submitted_triangles+=triangles;}
+        let started = std::time::Instant::now();
+        let triangles = self.depth_meshes.vertex_count(part.0) as u64 / 3;
+        stats.candidate_draws += 1;
+        stats.candidate_triangles += triangles;
+        let visible = part_in_view(&self.depth_meshes, vp, part);
+        if visible {
+            stats.submitted_draws += 1;
+            stats.submitted_triangles += triangles;
+        }
         #[cfg(not(target_arch = "wasm32"))]
-        { stats.cpu_prepare_ns+=started.elapsed().as_nanos().min(u64::MAX as u128) as u64; }
+        {
+            stats.cpu_prepare_ns += started.elapsed().as_nanos().min(u64::MAX as u128) as u64;
+        }
         visible
     }
     #[cfg(not(target_arch = "wasm32"))]
-    unsafe fn begin_view_profile(&self,key:&str,frame:u64)->ViewProfileStart {
-        self.view_profiler.borrow_mut().begin(&self.gl,key,frame)
+    unsafe fn begin_view_profile(&self, key: &str, frame: u64) -> ViewProfileStart {
+        self.view_profiler.borrow_mut().begin(&self.gl, key, frame)
     }
     #[cfg(not(target_arch = "wasm32"))]
-    unsafe fn finish_view_profile(&self,start:ViewProfileStart,visibility:ViewVisibility) {
-        self.view_profiler.borrow_mut().finish(&self.gl,start,visibility);
+    unsafe fn finish_view_profile(&self, start: ViewProfileStart, visibility: ViewVisibility) {
+        self.view_profiler
+            .borrow_mut()
+            .finish(&self.gl, start, visibility);
     }
     unsafe fn new(gl: Arc<glow::Context>) -> Result<Self, String> {
         if gl.version().is_embedded && gl.version().major < 3 {
@@ -2829,7 +2857,10 @@ impl Renderer {
         );
         gl.uniform_matrix_4_f32_slice(self.uniforms.model.as_ref(), false, &model.to_cols_array());
         gl.uniform_3_f32(self.uniforms.color.as_ref(), color.x, color.y, color.z);
-        gl.uniform_1_f32(self.uniforms.surface_opacity.as_ref(), self.runtime_surface_opacity.get());
+        gl.uniform_1_f32(
+            self.uniforms.surface_opacity.as_ref(),
+            self.runtime_surface_opacity.get(),
+        );
         gl.uniform_1_f32(self.uniforms.emission.as_ref(), emission);
         let light_color = embedded_primitive(mesh).map_or(color, |p| p.emissive_color);
         gl.uniform_3_f32(
@@ -3189,10 +3220,17 @@ impl Renderer {
             .get_parameter_framebuffer(glow::DRAW_FRAMEBUFFER_BINDING)
             .or(callback_target);
         #[cfg(not(target_arch = "wasm32"))]
-        let profile = self.begin_view_profile(&if frame.drone_camera {
-            frame.camera_drone.map_or_else(|| "drone:unbound".to_owned(),|id|format!("drone:{id}"))
-        } else {"main".to_owned()},frame.now);
-        let mut visibility=ViewVisibility::default();
+        let profile = self.begin_view_profile(
+            &if frame.drone_camera {
+                frame
+                    .camera_drone
+                    .map_or_else(|| "drone:unbound".to_owned(), |id| format!("drone:{id}"))
+            } else {
+                "main".to_owned()
+            },
+            frame.now,
+        );
+        let mut visibility = ViewVisibility::default();
         let shadow_texture = self.paint_sun_shadow(
             frame,
             callback_target,
@@ -3247,7 +3285,7 @@ impl Renderer {
         if space.scene(STATION_CENTER_POSITION).distance(frame.eye) < 1100.0 {
             let model = Mat4::from_translation(space.scene(STATION_CENTER_POSITION));
             for &(mesh, color, emission) in &self.station_batches {
-                if self.visible_part(frame.vp,&(mesh,model,color,emission),&mut visibility) {
+                if self.visible_part(frame.vp, &(mesh, model, color, emission), &mut visibility) {
                     self.draw_material(mesh, model, color, emission, Material::BareMetal);
                 }
             }
@@ -3263,8 +3301,10 @@ impl Renderer {
             } else {
                 Vec3::new(0.36, 0.29, 0.18)
             };
-            let model=asteroid_model(asteroid,space,frame.now);
-            if !self.visible_part(frame.vp,&(3,model,color,0.),&mut visibility) {continue;}
+            let model = asteroid_model(asteroid, space, frame.now);
+            if !self.visible_part(frame.vp, &(3, model, color, 0.), &mut visibility) {
+                continue;
+            }
             self.draw_material(
                 3,
                 model,
@@ -3284,7 +3324,9 @@ impl Renderer {
             .filter(|g| space.scene(g.position).distance(frame.eye) < 1100.0)
         {
             for model in gate_models(gate, space) {
-                if !self.visible_part(frame.vp,&(1,model,Vec3::ONE,0.),&mut visibility) {continue;}
+                if !self.visible_part(frame.vp, &(1, model, Vec3::ONE, 0.), &mut visibility) {
+                    continue;
+                }
                 self.draw_material(
                     1,
                     model,
@@ -3309,8 +3351,18 @@ impl Renderer {
                 self.exterior_emission
                     .set(exterior.map_or_else(Default::default, |b| b.emission_power()));
                 for &(mesh, model, color, emission) in cached_ship_parts(pilot.ship_class) {
-                    if self.visible_part(frame.vp,&(mesh,ship*model,color,emission),&mut visibility) {
-                        self.draw_material(mesh, ship * model, color, emission, Material::BareMetal);
+                    if self.visible_part(
+                        frame.vp,
+                        &(mesh, ship * model, color, emission),
+                        &mut visibility,
+                    ) {
+                        self.draw_material(
+                            mesh,
+                            ship * model,
+                            color,
+                            emission,
+                            Material::BareMetal,
+                        );
                     }
                 }
             }
@@ -3320,7 +3372,11 @@ impl Renderer {
                     for (mesh, model, color, emission) in
                         turret_parts(pilot.ship_class, state.rotation, module_id)
                     {
-                        if self.visible_part(frame.vp,&(mesh,ship*model,color,emission),&mut visibility) {
+                        if self.visible_part(
+                            frame.vp,
+                            &(mesh, ship * model, color, emission),
+                            &mut visibility,
+                        ) {
                             self.draw(mesh, ship * model, color, emission);
                         }
                     }
@@ -3336,7 +3392,11 @@ impl Renderer {
                 for &(mesh, local, color, emission) in
                     self.drone_parts[drone_models::class_index(drone.class)].iter()
                 {
-                    if self.visible_part(frame.vp,&(mesh,base*local,color,emission),&mut visibility) {
+                    if self.visible_part(
+                        frame.vp,
+                        &(mesh, base * local, color, emission),
+                        &mut visibility,
+                    ) {
                         self.draw(mesh, base * local, color, emission);
                     }
                 }
@@ -3407,7 +3467,7 @@ impl Renderer {
         gl.use_program(None);
         self.restore_shadow_texture(shadow_texture);
         #[cfg(not(target_arch = "wasm32"))]
-        self.finish_view_profile(profile,visibility);
+        self.finish_view_profile(profile, visibility);
     }
     /// Additive, depth-tested effects do not write depth or obscure UI meshes.
     unsafe fn paint_warp_tunnel(&self, frame: &Frame) {
@@ -4650,9 +4710,15 @@ fn docked_source_primitive(mesh: usize) -> Option<usize> {
     if (10..19).contains(&mesh) {
         return Some(mesh - 10);
     }
-    if mesh < 19 { return None; }
+    if mesh < 19 {
+        return None;
+    }
     let geometry = flight_geometry().ok()?;
-    geometry.docked_meshes?.iter().position(|&slot| slot == mesh).map(|i| [0,1,6][i])
+    geometry
+        .docked_meshes?
+        .iter()
+        .position(|&slot| slot == mesh)
+        .map(|i| [0, 1, 6][i])
 }
 fn embedded_primitive(mesh: usize) -> Option<&'static ship_asset::Primitive> {
     pioneer_asset().ok()?.get(docked_source_primitive(mesh)?)

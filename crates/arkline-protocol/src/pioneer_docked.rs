@@ -1036,11 +1036,11 @@ fn add_connector(g: &mut PioneerDockedGeometry) {
             PioneerDockedPanelKind::Structure,
         );
     }
-    // A 1 mm lower threshold avoids coplanar overlap at the inside turn; the
-    // support plane remains the common walking floor within the tolerance.
+    // This is the same physical floor as the vestibule and the ship-level
+    // lift. Its support and solid top must coincide exactly at their joins.
     g.oriented_floor(
         "boarding/threshold",
-        add(at_p(0.0, 0.4), [0.0, FLOOR - 0.001, 0.0]),
+        add(at_p(0.0, 0.4), [0.0, FLOOR, 0.0]),
         [0.9, 1.2],
         [T, N],
         PioneerDockedSupport::Connector,

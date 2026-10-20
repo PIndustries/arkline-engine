@@ -35,11 +35,13 @@ impl DepthMeshCatalog {
     pub(super) fn uploads(&self) -> &[Arc<[Vertex]>] {
         &self.meshes
     }
-    pub(super) fn mesh_bounds(&self, mesh: usize) -> Option<(Vec3,Vec3)> {
+    pub(super) fn mesh_bounds(&self, mesh: usize) -> Option<(Vec3, Vec3)> {
         self.bounds.get(mesh_index(mesh)).copied()
     }
     pub(super) fn vertex_count(&self, mesh: usize) -> usize {
-        self.meshes.get(mesh_index(mesh)).map_or(0, |mesh| mesh.len())
+        self.meshes
+            .get(mesh_index(mesh))
+            .map_or(0, |mesh| mesh.len())
     }
 }
 
@@ -181,13 +183,29 @@ impl CockpitOcclusion {
 
     /// Generic registered panel ray gate, using exactly the supplied opaque
     /// scene triangles and the same world plane as the emitted display pass.
-    pub(super) fn point_unblocked(&self,vp:Mat4,viewport:egui::Rect,pointer:egui::Pos2,point:Vec3)->bool {
-        if !self.valid() || !point.is_finite() {return false;}
-        let Some(ray)=SceneRay::screen(vp,viewport,pointer) else {return false};
-        let offset=point-ray.origin;
-        let distance=offset.dot(ray.direction);
-        if !distance.is_finite() || distance<=0. || (offset-ray.direction*distance).length()>0.001 {return false;}
-        self.nearest(ray,vp,(distance-0.00001).max(0.)).is_none()
+    pub(super) fn point_unblocked(
+        &self,
+        vp: Mat4,
+        viewport: egui::Rect,
+        pointer: egui::Pos2,
+        point: Vec3,
+    ) -> bool {
+        if !self.valid() || !point.is_finite() {
+            return false;
+        }
+        let Some(ray) = SceneRay::screen(vp, viewport, pointer) else {
+            return false;
+        };
+        let offset = point - ray.origin;
+        let distance = offset.dot(ray.direction);
+        if !distance.is_finite()
+            || distance <= 0.
+            || (offset - ray.direction * distance).length() > 0.001
+        {
+            return false;
+        }
+        self.nearest(ray, vp, (distance - 0.00001).max(0.))
+            .is_none()
     }
 
     pub(super) fn hit_surface(

@@ -8,17 +8,28 @@ pub(crate) fn panel_access(pilot: &arkline_protocol::PilotView) -> bool {
     pilot.ship_class == arkline_protocol::ShipClass::Pioneer
         && pilot.location == arkline_protocol::Location::Docked
         && pilot.station_avatar.as_ref().is_some_and(|a| {
-            let position = if let Some(state)=&a.docked_traversal {
-                if state.version!=arkline_protocol::DOCKED_TRAVERSAL_VERSION
-                    || state.support!=arkline_protocol::DockedSupport::Deck1 {return false;}
-                let Ok(pose)=arkline_protocol::docked_binding_pose(&state.binding) else {return false};
-                let body=arkline_protocol::station_to_body(pose,state.feet_m);
-                [body[0]+12.,body[1]-arkline_protocol::deck_floor_y(1).unwrap_or(f64::NAN),body[2]+7.]
+            let position = if let Some(state) = &a.docked_traversal {
+                if state.version != arkline_protocol::DOCKED_TRAVERSAL_VERSION
+                    || state.support != arkline_protocol::DockedSupport::Deck1
+                {
+                    return false;
+                }
+                let Ok(pose) = arkline_protocol::docked_binding_pose(&state.binding) else {
+                    return false;
+                };
+                let body = arkline_protocol::station_to_body(pose, state.feet_m);
+                [
+                    body[0] + 12.,
+                    body[1] - arkline_protocol::deck_floor_y(1).unwrap_or(f64::NAN),
+                    body[2] + 7.,
+                ]
             } else {
-                if !a.onboard_interior || a.interior_deck!=d.deck {return false;}
+                if !a.onboard_interior || a.interior_deck != d.deck {
+                    return false;
+                }
                 a.position
             };
-            position.iter().all(|coordinate|coordinate.is_finite())
+            position.iter().all(|coordinate| coordinate.is_finite())
                 && position
                     .iter()
                     .zip(d.breaker_position)

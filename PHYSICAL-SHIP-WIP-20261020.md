@@ -14,13 +14,15 @@ Implemented in this WIP:
 
 Validation completed on intermediate working-tree states (local, not published exact-head CI):
 
-- Initial shared protocol suite: 43 passed; log `.build/logs/20261020T085727190817Z.log`. The later eight geometry journey tests were not present in that run.
+- Initial shared protocol suite: 43 passed; log `.build/logs/20261020T085727190817Z.log`. The later seven geometry journey tests were not present in that run.
 - Registered client scene/display tests: 4 passed, 1 explicit native GPU test ignored; log `.build/logs/20261020T085934371584Z.log`.
 - Docked client/input/source tests: 19 passed, 1 native GPU test ignored; log `.build/logs/20261020T090055595646Z.log`.
 - Exact source-opening tests: 5 passed (overlap the preceding filter); log `.build/logs/20261020T090116752422Z.log`.
 - Independent conservative frustum tests: 2 passed; log `.build/logs/20261020T090117796423Z.log`.
 - Native production crates and WebGL client compiled. Full all-target check identified a verifier fixture field, now updated; the complete all-target check must be rerun. Full formatting/Clippy are still pending.
 
-Queued for the next validation/fix checkpoint: execute the newly saved eight shared geometry journeys and eight authority tests, compatibility tests, native CGL UI/image journeys, full native/Wasm lint and workspace suite; inspect all native evidence; correct any resulting failures. The step-query contract, lift support join, inner-hatch approach and display-front-plane mismatches were corrected during review but still require these journey checks. Native app handoff and actual OS window acceptance remain pending the saved-work answer. No automatic app closure or discard is authorized.
+Queued for the next validation/fix checkpoint: execute the newly saved seven shared geometry journeys and eight authority tests, compatibility tests, native CGL UI/image journeys, full native/Wasm lint and workspace suite; inspect all native evidence; correct any resulting failures. The step-query contract, lift support join, inner-hatch approach and display-front-plane mismatches were corrected during review but still require these journey checks. Native app handoff and actual OS window acceptance remain pending the saved-work answer. No automatic app closure or discard is authorized.
 
 All processes are bounded by `tools/guarded-local-build.py`; no execution transport blocker remains. No push, PR, issue mutation, deployment, external-drive operation or user project modification was performed.
+
+Follow-up floor repair: the boarding threshold now shares the exact −0.32 m support/slab height with the vestibule; no collision tolerance was loosened. All seven geometry journeys pass in `.build/logs/20261020T090520151621Z.log`. All thirteen authority/compatibility tests pass in `.build/logs/20261020T090525217212Z.log`, including the real hatch/lift/station round trip, power hold and continuous reseating. Native GPU and full-suite acceptance remain pending.

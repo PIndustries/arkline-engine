@@ -186,7 +186,8 @@ mod tests {
         let mut client = Connection::connect(&endpoint).unwrap();
         let response: Response = client
             .exchange(&Request::Connect {
-                supports_pioneer_interior: true, supports_docked_traversal_v2: false,
+                supports_pioneer_interior: true,
+                supports_docked_traversal_v2: false,
                 world_layout_version: 1,
                 supports_fleet_hangar: true,
                 supports_room_controls: true,
