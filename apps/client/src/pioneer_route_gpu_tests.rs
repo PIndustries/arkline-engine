@@ -384,6 +384,9 @@ impl Harness {
     }
 
     unsafe fn frame(&mut self, events: Vec<egui::Event>) -> Shot {
+        self.render_frame(events, true)
+    }
+    unsafe fn render_frame(&mut self, events: Vec<egui::Event>, readback: bool) -> Shot {
         let frame_start = std::time::Instant::now();
         for event in &events {
             if let egui::Event::Key { modifiers, .. } = event {
@@ -500,26 +503,31 @@ impl Harness {
         }
         self.gl
             .bind_framebuffer(glow::READ_FRAMEBUFFER, Some(target.framebuffer));
-        let mut rgba = vec![0; WIDTH * HEIGHT * 4];
-        self.gl.read_pixels(
-            0,
-            0,
-            WIDTH as i32,
-            HEIGHT as i32,
-            glow::RGBA,
-            glow::UNSIGNED_BYTE,
-            glow::PixelPackData::Slice(Some(&mut rgba)),
-        );
-        let mut bytes = vec![0; WIDTH * HEIGHT * 4];
-        self.gl.read_pixels(
-            0,
-            0,
-            WIDTH as i32,
-            HEIGHT as i32,
-            glow::DEPTH_COMPONENT,
-            glow::FLOAT,
-            glow::PixelPackData::Slice(Some(&mut bytes)),
-        );
+        let mut rgba = vec![0; if readback { WIDTH * HEIGHT * 4 } else { 0 }];
+        if readback {
+            self.gl.read_pixels(
+                0,
+                0,
+                WIDTH as i32,
+                HEIGHT as i32,
+                glow::RGBA,
+                glow::UNSIGNED_BYTE,
+                glow::PixelPackData::Slice(Some(&mut rgba)),
+            );
+        }
+        let mut bytes = vec![0; if readback { WIDTH * HEIGHT * 4 } else { 0 }];
+        if readback {
+            self.gl.read_pixels(
+                0,
+                0,
+                WIDTH as i32,
+                HEIGHT as i32,
+                glow::DEPTH_COMPONENT,
+                glow::FLOAT,
+                glow::PixelPackData::Slice(Some(&mut bytes)),
+            );
+        }
+        self.gl.flush();
         assert_eq!(
             self.gl.get_error(),
             glow::NO_ERROR,
@@ -1395,7 +1403,39 @@ fn native_pioneer_bridge_corridor_finish_review() {
                 .unwrap()
                 .debug_metrics
                 .get();
+            // Warm the actual engine pass, then collect asynchronous timer results.
+            // No colour/depth readback, glFinish, or query-result wait in this loop.
+            for _ in 0..24 {
+                h.render_frame(vec![], false);
+            }
+            let mut cpu = Vec::new();
+            let mut prepare = Vec::new();
+            let mut gpu = std::collections::BTreeMap::new();
+            for _ in 0..64 {
+                h.render_frame(vec![], false);
+                let metric = h
+                    .cockpit
+                    .hangar_view
+                    .debug_view_render_metrics()
+                    .into_iter()
+                    .find(|s| s.key == "docked")
+                    .unwrap();
+                cpu.push(metric.cpu_submit_ns);
+                prepare.push(metric.visibility.cpu_prepare_ns);
+                if let (Some(frame), Some(ns)) = (metric.gpu_frame, metric.gpu_elapsed_ns) {
+                    gpu.insert(frame, ns);
+                }
+            }
+            let summarize = |mut values: Vec<u64>| {
+                assert!(
+                    values.len() >= 16,
+                    "Enough independent completed timing samples"
+                );
+                values.sort_unstable();
+                serde_json::json!({"samples":values.len(),"median_ms":values[values.len()/2] as f64/1e6,"p95_ms":values[(values.len()*95/100).min(values.len()-1)] as f64/1e6})
+            };
             let mut result = capture(Some(&directory), name, &last);
+            result["steady_state_no_readback"] = serde_json::json!({"warmup_frames":24,"sample_frames":64,"cpu_submission":summarize(cpu),"cpu_preparation":summarize(prepare),"gpu_elapsed":summarize(gpu.into_values().collect()),"scope":"1500x960 docked scene pass only; asynchronous unique GPU query frames; no readback or completion wait; CPU driver throttling may remain"});
             result["median_frame_wall_ms_including_readback"] = samples[2].into();
             result["last_scene_pass_draw_calls"] = metrics.draw_calls.into();
             result["last_scene_pass_triangles"] = metrics.triangles.into();
