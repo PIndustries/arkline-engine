@@ -272,6 +272,15 @@ impl Harness {
             .expect("Editor and gameplay routes must retain canonical v2 embodiment")
     }
 
+    fn advance_time(&mut self, milliseconds: u64) {
+        assert_eq!(milliseconds % 50, 0);
+        let before = self.world.as_ref().unwrap().time();
+        for _ in 0..milliseconds / 50 {
+            self.world.as_mut().unwrap().advance(50).unwrap();
+        }
+        assert_eq!(self.world.as_ref().unwrap().time() - before, milliseconds);
+    }
+
     fn walk_to_body(&mut self, target: [f64; 3]) {
         for _ in 0..240 {
             let state = self.traversal();
@@ -1175,7 +1184,7 @@ fn native_pioneer_animated_hatches_boarding_and_return() {
                 binding: binding.clone(),
             },
         });
-        h.world.as_mut().unwrap().advance(900).unwrap();
+        h.advance_time(900);
         h.refresh();
         for target in [
             [33.36, -0.32, 3.0],
@@ -1203,7 +1212,7 @@ fn native_pioneer_animated_hatches_boarding_and_return() {
         };
         set(&mut h, arkline_protocol::DockedHatch::Inner, true);
         for step in 1..=5 {
-            h.world.as_mut().unwrap().advance(250).unwrap();
+            h.advance_time(250);
             let shot = h.frame(vec![]);
             let fraction = h.traversal().actuators.hatch_fractions()[0];
             assert!((fraction - step as f64 / 5.0).abs() < 1e-8);
@@ -1217,11 +1226,11 @@ fn native_pioneer_animated_hatches_boarding_and_return() {
         assert!(h.traversal().actuators.inner_hatch_open);
         h.walk_to_body(body(a.inner_outside_station_m));
         set(&mut h, arkline_protocol::DockedHatch::Inner, false);
-        h.world.as_mut().unwrap().advance(1500).unwrap();
+        h.advance_time(1500);
         h.refresh();
         h.walk_to_body(body(a.outer_inside_station_m));
         set(&mut h, arkline_protocol::DockedHatch::Outer, true);
-        h.world.as_mut().unwrap().advance(1500).unwrap();
+        h.advance_time(1500);
         h.refresh();
         let outer = h.settle();
         captures.push(capture(
@@ -1231,7 +1240,7 @@ fn native_pioneer_animated_hatches_boarding_and_return() {
         ));
         h.walk_to_body(body(a.outer_outside_station_m));
         set(&mut h, arkline_protocol::DockedHatch::Outer, false);
-        h.world.as_mut().unwrap().advance(1500).unwrap();
+        h.advance_time(1500);
         h.refresh();
         h.walk_to_body(body([
             lift.center_station_m[0],
@@ -1244,7 +1253,7 @@ fn native_pioneer_animated_hatches_boarding_and_return() {
                 stop: arkline_protocol::DockedLiftStop::Station,
             },
         });
-        h.world.as_mut().unwrap().advance(12000).unwrap();
+        h.advance_time(12000);
         h.refresh();
         assert_eq!(
             h.traversal().actuators.lift.floor_station_m,
@@ -1266,22 +1275,22 @@ fn native_pioneer_animated_hatches_boarding_and_return() {
                 stop: arkline_protocol::DockedLiftStop::Ship,
             },
         });
-        h.world.as_mut().unwrap().advance(12000).unwrap();
+        h.advance_time(12000);
         h.refresh();
         h.walk_to_body(body(a.outer_outside_station_m));
         set(&mut h, arkline_protocol::DockedHatch::Outer, true);
-        h.world.as_mut().unwrap().advance(1500).unwrap();
+        h.advance_time(1500);
         h.refresh();
         h.walk_to_body(body(a.outer_inside_station_m));
         set(&mut h, arkline_protocol::DockedHatch::Outer, false);
-        h.world.as_mut().unwrap().advance(1500).unwrap();
+        h.advance_time(1500);
         h.refresh();
         set(&mut h, arkline_protocol::DockedHatch::Inner, true);
-        h.world.as_mut().unwrap().advance(1500).unwrap();
+        h.advance_time(1500);
         h.refresh();
         h.walk_to_body(body(a.inner_inside_station_m));
         set(&mut h, arkline_protocol::DockedHatch::Inner, false);
-        h.world.as_mut().unwrap().advance(1500).unwrap();
+        h.advance_time(1500);
         h.refresh();
         for target in [
             [34.1, -0.32, -0.5],
@@ -1296,7 +1305,7 @@ fn native_pioneer_animated_hatches_boarding_and_return() {
                 binding: binding.clone(),
             },
         });
-        h.world.as_mut().unwrap().advance(900).unwrap();
+        h.advance_time(900);
         h.refresh();
         h.cockpit.hangar_view.pitch = 0.0;
         h.cockpit.hangar_view.yaw = pose.yaw as f32;

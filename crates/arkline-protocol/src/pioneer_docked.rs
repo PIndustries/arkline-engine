@@ -1533,9 +1533,9 @@ pub fn cockpit_screen(index: usize) -> Option<([f64; 3], [f64; 3])> {
         0 => Some(([34.94, 1.112, 3.0], [0.020, 0.075, 0.18])),
         1 => Some(([35.02, 0.77, 2.4], [0.012, 0.13, 0.18])),
         2 => Some(([35.02, 0.77, 3.6], [0.012, 0.13, 0.18])),
-        // Raise the central display mount 5 cm so its complete interactive face
+        // Raise the central display mount 3 cm so its complete interactive face
         // fits the neutral seated view, preserving the console and pilot eye.
-        3 => Some(([35.0, 0.82, 3.0], [0.020, 0.175, 0.27])),
+        3 => Some(([35.0, 0.80, 3.0], [0.020, 0.175, 0.27])),
         4 => Some(([35.02, 1.02, 2.4], [0.012, 0.085, 0.18])),
         5 => Some(([35.02, 1.02, 3.6], [0.012, 0.085, 0.18])),
         _ => None,
@@ -2451,7 +2451,7 @@ mod tests {
         assert_eq!(pilot_joints(1.0).eye_m, [33.54, 1.33, 3.0]);
         assert_eq!(
             cockpit_screen(3),
-            Some(([34.0, 0.82, 3.0], [0.020, 0.175, 0.27]))
+            Some(([34.0, 0.80, 3.0], [0.020, 0.175, 0.27]))
         );
         assert!(cockpit_screen(6).is_none());
     }

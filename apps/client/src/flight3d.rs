@@ -2336,6 +2336,7 @@ struct Uniforms {
     hull_surface: Option<glow::UniformLocation>,
     environment_atmosphere: Option<glow::UniformLocation>,
     station_lighting: Option<glow::UniformLocation>,
+    scene_meter_scale: Option<glow::UniformLocation>,
     environment_up: Option<glow::UniformLocation>,
     sky_inverse: Option<glow::UniformLocation>,
     sky_eye: Option<glow::UniformLocation>,
@@ -2363,6 +2364,7 @@ impl Uniforms {
             hull_surface: gl.get_uniform_location(program, "hull_surface"),
             environment_atmosphere: gl.get_uniform_location(program, "environment_atmosphere"),
             station_lighting: gl.get_uniform_location(program, "station_lighting"),
+            scene_meter_scale: gl.get_uniform_location(program, "scene_meter_scale"),
             environment_up: gl.get_uniform_location(program, "environment_up"),
             sky_inverse: gl.get_uniform_location(background, "inverse_view_projection"),
             sky_eye: gl.get_uniform_location(background, "camera_eye"),
@@ -3377,6 +3379,7 @@ impl Renderer {
             frame.eye.z,
         );
         gl.uniform_1_f32(self.uniforms.station_lighting.as_ref(), 0.0);
+        gl.uniform_1_f32(self.uniforms.scene_meter_scale.as_ref(), 100.0);
         gl.uniform_1_f32(self.uniforms.environment_atmosphere.as_ref(), density);
         gl.uniform_3_f32(self.uniforms.environment_up.as_ref(), up.x, up.y, up.z);
         self.paint_environment(frame);
@@ -5868,6 +5871,7 @@ const AUTHORED_MATERIAL_FUNCTION: &str = "struct ArkSurface{vec3 base_color;floa
 const FRAGMENT_BODY: &str = r#"
 in vec3 world;in vec3 surface_normal;in vec3 local_position;
 uniform mat4 model;
+uniform float scene_meter_scale;
 uniform float surface_opacity;uniform int ark_graph_enabled;uniform vec4 material_params;uniform float hull_surface;uniform float station_lighting;uniform float environment_atmosphere;uniform vec3 environment_up;
 uniform vec3 planet_center;uniform vec3 base_color;uniform vec3 eye;uniform float emission;uniform float emission_power;uniform vec4 emission_override;uniform vec3 emissive_color;uniform int material_kind;out vec4 color;
 float ark_terrain(vec3 p){return ark_noise3(p)*0.53+ark_noise3(p*2.07+13.8)*0.27+ark_noise3(p*4.13-7.1)*0.13+ark_noise3(p*8.41+29.4)*0.07;}
@@ -5907,7 +5911,7 @@ if(material_kind==1 || material_kind==2){
     }
     if(material_params.z>1.5){
         // Each typed box retains metric dimensions through station/space scale.
-        vec3 meters=local_position*vec3(length(model[0].xyz),length(model[1].xyz),length(model[2].xyz))*100.0;
+        vec3 meters=local_position*vec3(length(model[0].xyz),length(model[1].xyz),length(model[2].xyz))*max(scene_meter_scale,1.0);
         vec3 face=abs(local_position);
         vec2 uv=face.x>=face.y && face.x>=face.z ? meters.yz : (face.y>=face.z ? meters.xz : meters.xy);
         ark_interior_surface(uv,material_params.z,albedo,roughness);

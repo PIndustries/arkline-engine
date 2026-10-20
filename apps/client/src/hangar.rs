@@ -1134,6 +1134,8 @@ unsafe fn begin_model_pass(
     gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
     gl.use_program(Some(renderer.program));
     renderer.upload_spatial_material();
+    // Hangar/inspection recipes already use metres; flight passes use 100 m units.
+    gl.uniform_1_f32(renderer.uniforms.scene_meter_scale.as_ref(), 1.0);
     gl.uniform_1_f32(
         gl.get_uniform_location(renderer.program, "station_lighting")
             .as_ref(),
