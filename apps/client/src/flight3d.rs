@@ -542,6 +542,7 @@ impl FlightView {
         self.computer_surface.clone()
     }
     /// Editor viewport ownership is separate from paused flight-command permission.
+    #[cfg(any(not(target_arch = "wasm32"), test))]
     pub(crate) fn set_head_look_input_allowed(&mut self, allowed: bool) {
         self.head_look_input_allowed = allowed;
     }

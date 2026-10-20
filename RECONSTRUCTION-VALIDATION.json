@@ -1,0 +1,673 @@
+{
+  "at_utc": "2026-10-20T04:51:33.738207+00:00",
+  "workspace": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020",
+  "branch": "reconstruct/cockpit-worldspace-20261020",
+  "baseline_commit": "c4222513b4985918141e5447978f2c816c5a91e9",
+  "packaged_runtime_commit": "dac820668fdd17bfef2f0bdba32e2663b993be1c",
+  "build_version_override": "26.10.19.2",
+  "source_provenance": "New reconstruction; fourteen verified recovered inputs were imported at65927b5, then bounded integration/runtime fixes were committed. Not a byte-exact restoration of the missing combined46/47 source.",
+  "post_package_code_change": {
+    "patch": "diff --git a/apps/client/src/flight3d.rs b/apps/client/src/flight3d.rs\nindex d8f5d70..1ecafce 100644\n--- a/apps/client/src/flight3d.rs\n+++ b/apps/client/src/flight3d.rs\n@@ -542,6 +542,7 @@ impl FlightView {\n         self.computer_surface.clone()\n     }\n     /// Editor viewport ownership is separate from paused flight-command permission.\n+    #[cfg(any(not(target_arch = \"wasm32\"), test))]\n     pub(crate) fn set_head_look_input_allowed(&mut self, allowed: bool) {\n         self.head_look_input_allowed = allowed;\n     }",
+    "effect": "Only adds a cfg guard excluding the native editor setter from production wasm builds; native/test implementation and runtime behavior are unchanged."
+  },
+  "workspace_tests": {
+    "totals": {
+      "passed": 845,
+      "failed": 0,
+      "ignored": 29
+    },
+    "suite_count": 55,
+    "suites": {
+      "Running unittests src/main.rs (.build/target/debug/deps/arkline_asset_tool-f224f0e5969c1e23)": {
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running unittests src/main.rs (.build/target/debug/deps/arkline-b9d50f5fa5f57a58)": {
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running unittests src/lib.rs (.build/target/debug/deps/arkline_client-cb71cdb45c82c180)": {
+        "passed": 307,
+        "failed": 0,
+        "ignored": 27
+      },
+      "Running unittests src/main.rs (.build/target/debug/deps/arkline_client-d0245195d67615dc)": {
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/spatial_material_contract.rs (.build/target/debug/deps/spatial_material_contract-a5ff48fe7cc7d070)": {
+        "passed": 8,
+        "failed": 0,
+        "ignored": 1
+      },
+      "Running unittests src/main.rs (.build/target/debug/deps/arkline_editor-8744b54556ac176b)": {
+        "passed": 269,
+        "failed": 0,
+        "ignored": 1
+      },
+      "Running unittests src/lib.rs (.build/target/debug/deps/arkline_protocol-0071a8fa3ef806ad)": {
+        "passed": 41,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running unittests src/lib.rs (.build/target/debug/deps/arkline_server-a638276ececf6aea)": {
+        "passed": 50,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running unittests src/main.rs (.build/target/debug/deps/arkline_server-0b5b1c7fcaa3a70b)": {
+        "passed": 4,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/access_tokens.rs (.build/target/debug/deps/access_tokens-41e6d8ac57f4f8e9)": {
+        "passed": 17,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/assets_validation.rs (.build/target/debug/deps/assets_validation-30da8b24914992c0)": {
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/asteroids.rs (.build/target/debug/deps/asteroids-b0e83eab8a6f2ee0)": {
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/circular_hangar.rs (.build/target/debug/deps/circular_hangar-36eb7ca588c23332)": {
+        "passed": 4,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/drone_targeting_acceptance.rs (.build/target/debug/deps/drone_targeting_acceptance-6f1c8b6f7427b4b2)": {
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/economy.rs (.build/target/debug/deps/economy-2e7d7f8b121ac620)": {
+        "passed": 5,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/fleet_acceptance.rs (.build/target/debug/deps/fleet_acceptance-19840e692b5bf8d4)": {
+        "passed": 4,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/fleet_formation.rs (.build/target/debug/deps/fleet_formation-01b171fc46b352af)": {
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/fleet_hangar.rs (.build/target/debug/deps/fleet_hangar-2c43743fe7b47d5d)": {
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/fleet_hangar_migration.rs (.build/target/debug/deps/fleet_hangar_migration-15a6b4d5d7039c64)": {
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/fleet_lifecycle.rs (.build/target/debug/deps/fleet_lifecycle-bdb06085cc9c1570)": {
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/flight_tcp.rs (.build/target/debug/deps/flight_tcp-5e9810dd4306fb63)": {
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/inertia_orbits.rs (.build/target/debug/deps/inertia_orbits-d31c25c6fe53685f)": {
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/interior_compatibility.rs (.build/target/debug/deps/interior_compatibility-1c3cb78c3fd7e9e0)": {
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/journey.rs (.build/target/debug/deps/journey-35fb7c171556b5c4)": {
+        "passed": 4,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/local_development.rs (.build/target/debug/deps/local_development-2c79da98231684bb)": {
+        "passed": 5,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/mining_loop_acceptance.rs (.build/target/debug/deps/mining_loop_acceptance-ef1ec15d96d53421)": {
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/mining_modules.rs (.build/target/debug/deps/mining_modules-aff60fc7f9073f5d)": {
+        "passed": 7,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/multi_lock_migration.rs (.build/target/debug/deps/multi_lock_migration-fb268bedcecbed9a)": {
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/navigation.rs (.build/target/debug/deps/navigation-5371e645feb89088)": {
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/piloting.rs (.build/target/debug/deps/piloting-28a2e7a3c628e2b0)": {
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/pioneer_interior.rs (.build/target/debug/deps/pioneer_interior-7c13153e20c35d56)": {
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/power_acceptance.rs (.build/target/debug/deps/power_acceptance-d4bf0d236c8de296)": {
+        "passed": 5,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/quarters_acceptance.rs (.build/target/debug/deps/quarters_acceptance-c3d213b49db20532)": {
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/quarters_server.rs (.build/target/debug/deps/quarters_server-2dc4a351b34145fd)": {
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/remote_control.rs (.build/target/debug/deps/remote_control-7bf4132264258ba8)": {
+        "passed": 4,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/resource_job_atomicity.rs (.build/target/debug/deps/resource_job_atomicity-692e57a9012980c1)": {
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/resource_jobs.rs (.build/target/debug/deps/resource_jobs-de17f9bc16fbe1f5)": {
+        "passed": 7,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/room_controls.rs (.build/target/debug/deps/room_controls-fccb70c1cf002d50)": {
+        "passed": 5,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/ships.rs (.build/target/debug/deps/ships-cfc9cdac5a2f5462)": {
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/station_assets.rs (.build/target/debug/deps/station_assets-f571337b8069bb09)": {
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/station_jump.rs (.build/target/debug/deps/station_jump-68aeaa168f8a9f84)": {
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/station_walking.rs (.build/target/debug/deps/station_walking-4994a810106c239f)": {
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/station_walking_tcp.rs (.build/target/debug/deps/station_walking_tcp-09a5f001eb817e16)": {
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/surface_sandbox.rs (.build/target/debug/deps/surface_sandbox-4a0e27051de1fa3d)": {
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/targeting.rs (.build/target/debug/deps/targeting-21fef08b4a8ae208)": {
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/traffic_acceptance.rs (.build/target/debug/deps/traffic_acceptance-f3d4a5eb6c6048e7)": {
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/websocket_transport.rs (.build/target/debug/deps/websocket_transport-31ed2314bd8295a6)": {
+        "passed": 4,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/world_layout.rs (.build/target/debug/deps/world_layout-e8a8565f747743f5)": {
+        "passed": 12,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running unittests src/lib.rs (.build/target/debug/deps/arkline_verifier-65d6374c87d40df4)": {
+        "passed": 13,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running unittests src/main.rs (.build/target/debug/deps/arkline_verifier-1bb9f46b33832b0b)": {
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Running tests/checkpoint_cli.rs (.build/target/debug/deps/checkpoint_cli-c3df1c85d986e90b)": {
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Doc-tests arkline_client": {
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Doc-tests arkline_protocol": {
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Doc-tests arkline_server": {
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      },
+      "Doc-tests arkline_verifier": {
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    "guard": {
+      "receipt": ".build/logs/20261020T044147366550Z.json",
+      "log": ".build/logs/20261020T044147366550Z.log",
+      "command": [
+        "cargo",
+        "test",
+        "--offline",
+        "--workspace",
+        "--locked",
+        "--no-fail-fast"
+      ],
+      "workspace": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020",
+      "target": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target",
+      "start_free_bytes": 276361072640,
+      "start_limit_gib": 50,
+      "stop_limit_gib": 30,
+      "toolchain": "/Users/thepherm/.rustup/toolchains/1.89.0-aarch64-apple-darwin/bin",
+      "timeout_seconds": 600.0,
+      "exit_code": 0,
+      "guard_error": null,
+      "end_free_bytes": 273839730688
+    }
+  },
+  "workspace_clippy": {
+    "receipt": ".build/logs/20261020T044945185485Z.json",
+    "log": ".build/logs/20261020T044945185485Z.log",
+    "command": [
+      "cargo",
+      "clippy",
+      "--offline",
+      "--workspace",
+      "--all-targets",
+      "--locked",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "workspace": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020",
+    "target": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target",
+    "start_free_bytes": 271144370176,
+    "start_limit_gib": 50,
+    "stop_limit_gib": 30,
+    "toolchain": "/Users/thepherm/.rustup/toolchains/1.89.0-aarch64-apple-darwin/bin",
+    "timeout_seconds": 180.0,
+    "exit_code": 0,
+    "guard_error": null,
+    "end_free_bytes": 271043530752
+  },
+  "browser_clippy": {
+    "receipt": ".build/logs/20261020T044907072782Z.json",
+    "log": ".build/logs/20261020T044907072782Z.log",
+    "command": [
+      "cargo",
+      "clippy",
+      "--offline",
+      "--locked",
+      "-p",
+      "arkline-client",
+      "--target",
+      "wasm32-unknown-unknown",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "workspace": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020",
+    "target": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target",
+    "start_free_bytes": 271579967488,
+    "start_limit_gib": 50,
+    "stop_limit_gib": 30,
+    "toolchain": "/Users/thepherm/.rustup/toolchains/1.89.0-aarch64-apple-darwin/bin",
+    "timeout_seconds": 240.0,
+    "exit_code": 0,
+    "guard_error": null,
+    "end_free_bytes": 271545135104
+  },
+  "native_gpu": {
+    "build": "26.10.19.2",
+    "results": [
+      {
+        "test": "native_cockpit_depth_query_uses_draw_framebuffer_without_rebinding",
+        "exit_code": 0,
+        "command": [
+          "/usr/bin/python3",
+          "-S",
+          "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/tools/guarded-local-build.py",
+          "--timeout-seconds",
+          "240",
+          "--",
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "arkline-client",
+          "native_cockpit_depth_query_uses_draw_framebuffer_without_rebinding",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "guard_announcement": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T044606424200Z.log",
+        "evidence_directory": null
+      },
+      {
+        "test": "native_cockpit_display_preserves_depth_perspective_and_state",
+        "exit_code": 0,
+        "command": [
+          "/usr/bin/python3",
+          "-S",
+          "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/tools/guarded-local-build.py",
+          "--timeout-seconds",
+          "240",
+          "--",
+          "/usr/bin/env",
+          "ARKLINE_COCKPIT_QA_DIR=/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/reconstruction-native-fixed-20261020/display-depth",
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "arkline-client",
+          "native_cockpit_display_preserves_depth_perspective_and_state",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "guard_announcement": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T044621537870Z.log",
+        "evidence_directory": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/reconstruction-native-fixed-20261020/display-depth"
+      },
+      {
+        "test": "native_pioneer_cockpit_enclosure_matches_source_and_keeps_window_apertures",
+        "exit_code": 0,
+        "command": [
+          "/usr/bin/python3",
+          "-S",
+          "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/tools/guarded-local-build.py",
+          "--timeout-seconds",
+          "240",
+          "--",
+          "/usr/bin/env",
+          "ARKLINE_COCKPIT_QA_DIR=/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/reconstruction-native-fixed-20261020/enclosure",
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "arkline-client",
+          "native_pioneer_cockpit_enclosure_matches_source_and_keeps_window_apertures",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "guard_announcement": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T044622580605Z.log",
+        "evidence_directory": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/reconstruction-native-fixed-20261020/enclosure"
+      },
+      {
+        "test": "native_cockpit_cached_feed_tracks_physical_quad_under_head_look_and_roll",
+        "exit_code": 0,
+        "command": [
+          "/usr/bin/python3",
+          "-S",
+          "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/tools/guarded-local-build.py",
+          "--timeout-seconds",
+          "240",
+          "--",
+          "/usr/bin/env",
+          "ARKLINE_COCKPIT_FEED_QA_DIR=/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/reconstruction-native-fixed-20261020/physical-feed",
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "arkline-client",
+          "native_cockpit_cached_feed_tracks_physical_quad_under_head_look_and_roll",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "guard_announcement": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T044634673452Z.log",
+        "evidence_directory": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/reconstruction-native-fixed-20261020/physical-feed"
+      },
+      {
+        "test": "native_cockpit_shift_keeps_both_instrument_layers_and_live_feed_updating",
+        "exit_code": 0,
+        "command": [
+          "/usr/bin/python3",
+          "-S",
+          "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/tools/guarded-local-build.py",
+          "--timeout-seconds",
+          "240",
+          "--",
+          "/usr/bin/env",
+          "ARKLINE_COCKPIT_SHIFT_QA_DIR=/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/reconstruction-native-fixed-20261020/shift-live-feed",
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "arkline-client",
+          "native_cockpit_shift_keeps_both_instrument_layers_and_live_feed_updating",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "guard_announcement": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T044636718728Z.log",
+        "evidence_directory": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/reconstruction-native-fixed-20261020/shift-live-feed"
+      }
+    ]
+  },
+  "auxiliary_checks": {
+    "build": "26.10.19.2",
+    "results": [
+      {
+        "check": "format",
+        "exit_code": 0,
+        "command": [
+          "/usr/bin/python3",
+          "-S",
+          "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/tools/guarded-local-build.py",
+          "--timeout-seconds",
+          "180",
+          "--",
+          "cargo",
+          "fmt",
+          "--all",
+          "--",
+          "--check"
+        ],
+        "guard_announcement": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T044920636238Z.log"
+      },
+      {
+        "check": "build_guard",
+        "exit_code": 0,
+        "command": [
+          "/usr/bin/python3",
+          "-S",
+          "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/tools/guarded-local-build.py",
+          "--timeout-seconds",
+          "180",
+          "--",
+          "/usr/bin/python3",
+          "-S",
+          "tools/test_guarded_local_build.py"
+        ],
+        "guard_announcement": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T044921678735Z.log"
+      },
+      {
+        "check": "packaging",
+        "exit_code": 0,
+        "command": [
+          "/usr/bin/python3",
+          "-S",
+          "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/tools/guarded-local-build.py",
+          "--timeout-seconds",
+          "180",
+          "--",
+          "/opt/homebrew/bin/python3",
+          "-S",
+          "tools/test_package_release.py"
+        ],
+        "guard_announcement": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T044922721212Z.log"
+      },
+      {
+        "check": "publication_boundaries",
+        "exit_code": 0,
+        "command": [
+          "/usr/bin/python3",
+          "-S",
+          "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/tools/guarded-local-build.py",
+          "--timeout-seconds",
+          "180",
+          "--",
+          "/opt/homebrew/bin/python3",
+          "-S",
+          "tools/ci/test_publish_release.py"
+        ],
+        "guard_announcement": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T044923764461Z.log"
+      },
+      {
+        "check": "speech_bridge",
+        "exit_code": 0,
+        "command": [
+          "/usr/bin/python3",
+          "-S",
+          "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/tools/guarded-local-build.py",
+          "--timeout-seconds",
+          "180",
+          "--",
+          "/usr/bin/swiftc",
+          "-target",
+          "arm64-apple-macos14.0",
+          "-swift-version",
+          "5",
+          "-warnings-as-errors",
+          "-module-cache-path",
+          "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target/swift-module-cache",
+          "tools/arkline-speech.swift",
+          "-o",
+          "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target/arkline-speech"
+        ],
+        "guard_announcement": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T044924805876Z.log"
+      }
+    ]
+  },
+  "package": {
+    "build_version": "26.10.19.2",
+    "source_head_before_version_commit": "dac820668fdd17bfef2f0bdba32e2663b993be1c",
+    "binary_sha256_before_signing": "3e3706c8119010be43cdfe7c6a9eac983d5852bcc3a05f0ec8107ca9addce08c",
+    "packaged_executable_sha256": "a7ead5120072a8a49ce1d0c90e3e07e882e4768877afc3ce761f0a88b5a1a050",
+    "app": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/reconstruction-native-fixed-20261020/Arkline Editor Reconstructed.app",
+    "signature": "local ad-hoc; verified deep strict",
+    "profile": "debug; debug information disabled; incremental disabled"
+  },
+  "launch": {
+    "at": "2026-10-20T04:42:34.974297+00:00",
+    "build": "26.10.19.2",
+    "pid": 26743,
+    "command": [
+      "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/reconstruction-native-fixed-20261020/Arkline Editor Reconstructed.app/Contents/MacOS/arkline-editor",
+      "--project",
+      "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/reconstruction-native-fixed-20261020/disposable-project",
+      "--pilot",
+      "ReconstructionQA"
+    ],
+    "project": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/reconstruction-native-fixed-20261020/disposable-project",
+    "purpose": "Intentional persistent editor launch for user; startup health checked separately",
+    "os_input_acceptance": "pending",
+    "verified_command": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/reconstruction-native-fixed-20261020/Arkline Editor Reconstructed.app/Contents/MacOS/arkline-editor --project /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/reconstruction-native-fixed-20261020/disposable-project --pilot ReconstructionQA",
+    "stderr_bytes": 0,
+    "disposable_world_created": true,
+    "launchservices_error": "-10810; direct packaged executable launch succeeded"
+  },
+  "preserved": {
+    "recovery_head": "3e500c9449dee3f7390c1cde2b2fdd0b53a2c07c",
+    "recovery_bundle_sha256": "f83d7d43978db8b832e062a6a84d5dfac681f9401f9928eac8cd36ed114efa23",
+    "runner_head": "c4222513b4985918141e5447978f2c816c5a91e9",
+    "both_worktrees_clean": true
+  },
+  "internal_free_gib": 251.48925018310547,
+  "limits": [
+    "OS-delivered pointer/keyboard and visible desktop acceptance remain unverified.",
+    "Native GPU snapshots use deterministic local telemetry/drone fixtures, not a running network authority.",
+    "Browser lint is compiled validation; browser GPU/runtime acceptance is not established.",
+    "All checks are local; no published exact-head CI, push, PR, merge, deployment or MOVESPEED write occurred."
+  ],
+  "current_source_sha256": {
+    "BUILD_VERSION": "bc7ac814376b8f34fcf53e4da8730bf279384479ab046a327a7450dcd8da97c8",
+    "apps/client/src/cockpit_computer.rs": "0573e0ce45565cedb3ab35cda2a114c26b396ba694978254dc12fac65f1f4869",
+    "apps/client/src/cockpit_computer_integration_tests.rs": "a71b5113108bb32a6ec04d369ae31eedd201cf51f43abd79f45118fc60eddb65",
+    "apps/client/src/cockpit_computer_tests.rs": "01a4705370a0821c5c63e9d37324ed6ef188843f295b4f5632612871e3b880cc",
+    "apps/client/src/cockpit_displays.rs": "edc0ae47d3fe465612bbd7091eae2f8a26420816c991bddb810341be18ca66f3",
+    "apps/client/src/cockpit_displays_gpu_tests.rs": "ab1d0ca18f30d7b87f25924c2b35ff7faa7ec78a94bb8f72997232ee0361f805",
+    "apps/client/src/cockpit_enclosure_gpu_tests.rs": "a3bd27ab558b992e3714547230e696a05783d15a51638cbd7ca44daf0b471dda",
+    "apps/client/src/cockpit_fit.rs": "0f65b16460a7b7facfd9a47a0e0760cbb25f8826519608ca1a2c4681b0c20773",
+    "apps/client/src/cockpit_maps.rs": "f44ea97f281200ff6b7ab2975efdd46de3849b0bed717a59bfad1721361b2655",
+    "apps/client/src/cockpit_mode_transition_tests.rs": "7da9d566519ef40c90d9855889886860e4090cba65222e2b0244a629a360b2ef",
+    "apps/client/src/cockpit_occlusion.rs": "1bb038fed4be3d643e686db15acad9faa452b8dde49548f907dfc746a4655572",
+    "apps/client/src/cockpit_occlusion_geometry.rs": "8c0bdde94840d9da54cb06b282ca06717cecd7382c44662cfbc2e8ad82401dd8",
+    "apps/client/src/cockpit_occlusion_tests.rs": "2e6464f88ddd370e854f8a0bcd4063e2b404755b2fbe7bd5c1b9b584b66e3e87",
+    "apps/client/src/cockpit_radar.rs": "3cb4a41afff51dc5341b6d6bc143e2aa67c328c104b17f26ae176228337d334e",
+    "apps/client/src/embedded.rs": "e95e4f8463a6498557373587db386a62e0ce32b7f7ae87456235143b40fb9098",
+    "apps/client/src/exterior_gpu_tests.rs": "c9cb706f7682936b40d21eb4d3b35acb5139f756b5c498136a1cc903c74b5fa7",
+    "apps/client/src/flight3d.rs": "afef195380343fc204c48e391538c03ddc2405f877527a2e3c01ec8c44ca8ba5",
+    "apps/client/src/lib.rs": "73c705bea6cb3ef6fa2afcfe8dd5c39f2ef39354adce937a313d9e2f19ba34c6",
+    "apps/client/src/local_lighting.rs": "b0831ed9ed0297d55e0839622db406520bd6e79521fc8d5115d22a15dba3fe00",
+    "apps/client/src/spatial_material_gpu_tests.rs": "c5df888c46c4b313f2bcf8940c605ec17f430836647fe5467e9dd6b9fd44691a",
+    "apps/editor/src/main.rs": "7190a22292382aba24aebdc962d9818bfc8c48b9b4a847ec910f6161ecc0aa21",
+    "apps/editor/src/shift_embedded_tests.rs": "07bded8650cee8db535179db59a64469e1d3b065192859758df362e1f62decc4",
+    "tools/guarded-local-build.py": "602c1ecc18b9e85b0a8c0f07d5b6bf29a9683e09da7df50862c19f5f790c4924",
+    "tools/test_guarded_local_build.py": "d5f056c8aed44112c92d59181e42c4bdd21d242c1dba31d67a6e8348ac3c869f"
+  },
+  "cargo_lock_sha256": "245d3a3e5dde50ef6c6e93b103192ff4bd5c23cf8005454a90bbee5e31e3ec2c"
+}

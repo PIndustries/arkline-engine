@@ -1,19 +1,41 @@
-# Cockpit integration reconstruction
+# Cockpit reconstruction and native build
 
-This workspace starts at surviving committed baseline c4222513b4985918141e5447978f2c816c5a91e9. Fourteen cockpit-stage source files were imported from the preserved original-source recovery checkpoint3e500c9449dee3f7390c1cde2b2fdd0b53a2c07c, with hashes checked against its provenance.json.
+The reconstructed editor runs locally as build **26.10.19.2** on a disposable project. Its physical cockpit, live instruments and video pass the explicit Mac GPU journeys. This is new integration work over surviving source; the missing combined builds46/47 were not fully recovered.
 
-The four large integration files and any necessary supporting glue will be newly reconstructed using the committed baseline and preserved original patches/fragments. They are not asserted to be byte-exact recovery of the missing build46/47 source.
+## Source and preservation
 
-Recovery evidence and its bundle remain untouched. This checkout has no remotes. Only meaningful local commits are authorized; no pushing, PR creation, deployment, MOVESPEED writes or storage migration.
+The baseline is `c4222513b4985918141e5447978f2c816c5a91e9`. Fourteen hash-verified stage files from recovery checkpoint `3e500c9449dee3f7390c1cde2b2fdd0b53a2c07c` were imported at `65927b5`. The four integration files—client `lib.rs`, `embedded.rs`, `flight3d.rs` and editor `main.rs`—were reconstructed against that baseline and the retained patches. Later working-copy fixes are new code, not exact recovery.
 
-Validation results will be recorded here as they occur. No successful build or runtime result is implied by importing the source.
+The recovery checkout, its original portable bundle and the shared runner remain clean and unchanged. The original bundle still hashes to `f83d7d43978db8b832e062a6a84d5dfac681f9401f9928eac8cd36ed114efa23`. This checkout has no remotes.
 
-Checkpoint: the four integration files are reconstructed and client/editor all-target cargo check passes with the repository-pinned installed Rust1.89.0. Formatting/test/lint/native results remain in progress. The working-copy Shift/GPU tests were adapted to the actual baseline UI/protocol/GLB provenance; no unavailable authored-part receipt or missing nested edge-test suite is fabricated. The source recovery evidence remains unchanged.
+## Changes
 
-Input review checkpoint: fixed nested egui context access on a glass press, duplicate/replayed platform commands, and head-look bypass of editor viewport permission. Five focused physical-computer integration tests pass, including a child-process deadline/reap regression and exact clipboard command counts. The optional guard timeout was exercised against an owned sleeper and stopped it. Full workspace/native reruns remain pending.
+The actual service UI renders in a persistent secondary context onto a ship-mounted 3D display. Canonical hull triangles provide matching visual and input occlusion. Display painting remains active while Shift is held. Editor text/viewport ownership gates head-look independently of paused simulation commands.
 
-Workspace test checkpoint: client suite passes307tests with26explicitlyignored; new pointer-lock, clipboard and head-look regressions pass. Five editor browser tests exposed temporary-folder Git ancestry inherited from this checkout. The guard now sets a Git discovery ceiling for its temporary directory; an actual disposable-repository guard regression passes (five guard tests total). Application browser filtering code is unchanged; editor/full-suite rerun pending.
+Fixed nested egui input locking on glass clicks, duplicate/replayed platform commands and the editor head-look ownership bypass. A child-process click regression has a deadline and guaranteed termination/reaping. Native testing then found that legacy `DEPTH_BITS` queries raised `INVALID_ENUM` on macOS core OpenGL. All three physical rendering passes now query the current draw attachment without rebinding it. Real tests cover color-only, depth and default targets, plus separate read/draw bindings. The Shift fixture now renders a real parent TextEdit and positively exercises scene input as well as blocked text input.
 
-Full workspace checkpoint: bounded offline workspace test run20261020T043100964775Z completed with exit0. Client307passed/26ignored; editor269passed/1ignored; all other workspace suites passed. Final formatting and workspace/all-target Clippy also passed. Browser Clippy could not start compilation because gloo-timers0.3.0 is absent from the local offline cache; browser acceptance is not established.
+## Validation
 
-Native Mac checkpoint: actual private CGL execution isolated a legacy DEPTH_BITS query producing INVALID_ENUM1280 on core OpenGL. The three physical render passes now inspect the current draw framebuffer attachment without rebinding. Real color-only/depth/default target regression passes on AppleM4Max, GL4.1Metal91.7 (depth0/32/32), and the original display depth/perspective/state test passes. Source enclosure/aperture test also passes. The Shift fixture now renders a real parent TextEdit and checks both denied and positive head-look. Remaining native journeys and a rebuilt app are pending. The initial packaged26.10.19.1 app predates this GL fix and has not been launched.
+| Local check | Result |
+| --- | --- |
+| Full workspace tests | 845 passed, zero failed, 29 explicitly ignored |
+| Workspace/all-target Clippy with warnings denied | Passed |
+| wasm32 client Clippy with warnings denied | Passed; five missing locked crates were fetched, then the offline recheck passed |
+| Formatting | Passed |
+| Explicit native CGL tests | All five passed for build 26.10.19.2 |
+| Build-guard / packaging / publication-boundary Python tests | 5 / 8 / 15 passed |
+| Native speech bridge compile, warnings treated as errors | Passed |
+
+The five hardware checks cover depth-query safety, perspective/depth/state restoration, canonical enclosure and apertures, physical feed orientation under head-look/roll, and whole-App Shift/live glyph/telemetry/video composition. Hardware was Apple M4 Max, OpenGL 4.1 Metal91.7. The whole-App journey rendered 20 frames, retained real parent text focus, positively moved head-look outside text focus and kept received fixture snapshots unchanged.
+
+All builds used installed Rust 1.89.0, one internal `.build/target`, one compile job, no incremental compilation and no debug information. The guard requires 50 GiB free at start and stops its own process group below 30 GiB, on path changes or at the operation deadline. The earlier hanging run was stopped; all later checks completed within their bounds. Disposable Git discovery is isolated from the parent checkout.
+
+Detailed commands, logs, hashes, source composition and limits are in [RECONSTRUCTION-VALIDATION.json](RECONSTRUCTION-VALIDATION.json). These are local checks; no published exact-head CI run is implied.
+
+## App and acceptance limits
+
+The app is `.build/packages/reconstruction-native-fixed-20261020/Arkline Editor Reconstructed.app`. Its local ad-hoc signature verifies. The packaged executable was built from runtime commit `dac820668fdd17bfef2f0bdba32e2663b993be1c` with BUILD_VERSION set to 26.10.19.2. The sole later code change is a wasm cfg guard on the native editor setter; native code is unchanged, and native/browser Clippy both pass afterward. Build counters are local to this new reconstruction checkout and use the repository's America/Chicago date policy.
+
+No prior editor was running. LaunchServices returned -10810; directly launching `Contents/MacOS/arkline-editor` with explicit `--project` and `--pilot ReconstructionQA` succeeded. The owned process26743 created its disposable world and remains running without startup stderr. The launch receipt records its exact command.
+
+Visible OS click/key acceptance and browser GPU execution remain unverified. Native rendered PNGs and JSON receipts are under that package directory. Telemetry/drone changes in the GPU tests are deterministic fixtures, not live authority measurements. Existing user projects were not opened. No push, PR, merge, deployment, external-drive write or storage migration occurred.
