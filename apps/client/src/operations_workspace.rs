@@ -90,31 +90,35 @@ impl Cockpit {
                 }
             }
         });
-        if !self.connected {
-            ui.colored_label(
-                AMBER,
-                "Disconnected · showing last received authority state; commands unavailable",
-            );
-        } else if self.embedded && self.embedded_paused {
-            ui.colored_label(
-                MUTED,
-                "Simulation paused · values are frozen at the authority clock",
-            );
-        } else if self.snapshot.as_ref().is_none_or(|snapshot| {
-            self.presentation_time()
-                .saturating_sub(snapshot.server_time_ms)
-                > 1500
-        }) {
-            ui.colored_label(
-                AMBER,
-                "Waiting for a current authority snapshot · shown values may be stale",
-            );
-        }
-        if self.request_pending {
-            ui.colored_label(AMBER, "Command pending · awaiting server acknowledgement");
-        }
-        if !self.notice.is_empty() {
-            ui.small(format!("Last authority response: {}", self.notice));
+        // Mining owns its concise local authority state; avoid repeating its
+        // pause, pending and response notices above the same summary.
+        if self.service_tab != ServiceTab::ShipComputer {
+            if !self.connected {
+                ui.colored_label(
+                    AMBER,
+                    "Disconnected · showing last received authority state; commands unavailable",
+                );
+            } else if self.embedded && self.embedded_paused {
+                ui.colored_label(
+                    MUTED,
+                    "Simulation paused · values are frozen at the authority clock",
+                );
+            } else if self.snapshot.as_ref().is_none_or(|snapshot| {
+                self.presentation_time()
+                    .saturating_sub(snapshot.server_time_ms)
+                    > 1500
+            }) {
+                ui.colored_label(
+                    AMBER,
+                    "Waiting for a current authority snapshot · shown values may be stale",
+                );
+            }
+            if self.request_pending {
+                ui.colored_label(AMBER, "Command pending · awaiting server acknowledgement");
+            }
+            if !self.notice.is_empty() {
+                ui.small(format!("Last authority response: {}", self.notice));
+            }
         }
         ui.separator();
     }

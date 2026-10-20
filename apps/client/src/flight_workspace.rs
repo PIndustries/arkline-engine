@@ -11,6 +11,10 @@ impl Cockpit {
             // Reuse the canonical selector so Local/System map scope, reset,
             // ship focus and on-foot first/third-person controls stay reachable.
             self.view_selector(ui);
+            if self.own().is_some_and(|pilot| pilot.station_avatar.is_some()) {
+                ui.small("On foot · return to pilot seat for ship cameras")
+                    .on_hover_text("Walk to the physical pilot chair and choose Return to pilot seat to use 2D, 3D and Cockpit ship views.");
+            }
             if !self.embedded {
                 ui.separator();
                 self.flight_workspace_shortcuts(ui);

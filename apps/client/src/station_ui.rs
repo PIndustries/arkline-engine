@@ -1207,6 +1207,15 @@ impl Cockpit {
                 <= 1500
         });
         let ready = self.can_operate() && fresh;
+        let routine_status = if !self.connected {
+            "Disconnected · last known mining routine"
+        } else if self.embedded_paused {
+            "Mining routine paused"
+        } else if !fresh {
+            "Mining routine status stale"
+        } else {
+            "Mining autopilot active"
+        };
         ui.horizontal_wrapped(|ui| {
             if let Some(state) = state {
                 ui.strong(docked_state_label(state));
@@ -1242,7 +1251,7 @@ impl Cockpit {
                     ui.small("Seat transition");
                 }
                 if in_space {
-                    ui.small(if active_job { "Autopilot continues · exterior locked" } else { "Interior · exterior locked" });
+                    ui.small("Exterior access locked");
                 } else if let Some(room) = self.docked_room_name(state) {
                     ui.small(room);
                 }
@@ -1262,13 +1271,26 @@ impl Cockpit {
                     self.send(Request::Undock);
                 }
                 if in_space {
-                    ui.small(if active_job { "Walk inside · autopilot continues" } else { "Exterior access locked" });
+                    ui.small("Walk inside · exterior access locked");
                 }
+            }
+            if active_job {
+                ui.small(routine_status);
             }
         });
         if state.is_some() && !in_space {
             ui.collapsing("Nearby controls and route", |ui| {
-                self.docked_station_actions(ui);
+                let height = ui.available_height().clamp(1.0, 64.0);
+                egui::ScrollArea::vertical()
+                    .id_salt("nearby_ship_controls_scroll")
+                    .max_height(height)
+                    .min_scrolled_height(0.0)
+                    .auto_shrink([false, true])
+                    .show(ui, |ui| {
+                        ui.add_enabled_ui(fresh, |ui| {
+                            self.docked_station_actions(ui);
+                        });
+                    });
             });
         }
     }

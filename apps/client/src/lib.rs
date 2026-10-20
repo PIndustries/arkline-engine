@@ -2081,15 +2081,9 @@ impl Cockpit {
         }
     }
 
-    fn service_visible(&self, tab: ServiceTab) -> bool {
-        self.own().is_none_or(|p| p.station_avatar.is_none())
-            || !matches!(
-                tab,
-                ServiceTab::Navigation
-                    | ServiceTab::Hangar
-                    | ServiceTab::Modules
-                    | ServiceTab::Sandbox
-            )
+    fn service_visible(&self, _tab: ServiceTab) -> bool {
+        // Destinations remain reachable on foot; each panel gates its commands.
+        true
     }
     fn release_workspace_input(&mut self) {
         self.workspace_input_waiting_release = true;
@@ -2109,7 +2103,6 @@ impl Cockpit {
                 ServiceTab::Navigation
                     | ServiceTab::Modules
                     | ServiceTab::Sandbox
-                    | ServiceTab::Hangar
                     | ServiceTab::Station
             )
         {
@@ -3947,6 +3940,17 @@ impl eframe::App for Cockpit {
             self.service_tab = ServiceTab::Station;
         }
         let in_hangar = self.in_station_hangar();
+        // Reserve persistent bottom chrome before placing any task/identity window.
+        if in_hangar || self.space_walk_available() {
+            self.station_overlay(ctx);
+        }
+        egui::TopBottomPanel::bottom("flight_authority_status")
+            .frame(
+                egui::Frame::new()
+                    .fill(self.theme.panel())
+                    .inner_margin(egui::Margin::symmetric(12, 6)),
+            )
+            .show(ctx, |ui| self.flight_workspace_status(ui));
         let bounds = ctx.available_rect().shrink(8.0);
         self.layout.begin_frame(bounds);
         // Floating layers are registered before the background consumes pointer input.
@@ -4131,13 +4135,17 @@ impl eframe::App for Cockpit {
                 .movable(!self.layout.pinned)
                 .collapsible(false)
                 .constrain_to(bounds)
-                .frame(self.overlay_frame(ctx))
-                .vscroll(true)
+                .frame(self.overlay_frame(ctx).fill(self.theme.panel()))
+                .vscroll(false)
                 .show(ctx, |ui| {
                     content_size = Some(ui.max_rect().size());
                     self.service_tabs(ui);
                     ui.separator();
-                    self.service_content(ui);
+                    egui::ScrollArea::vertical()
+                        .id_salt("focused_task_content")
+                        .auto_shrink([false, false])
+                        .max_height(ui.available_height().max(120.0))
+                        .show(ui, |ui| self.service_content(ui));
                 });
             if let Some(response) = panel_response {
                 self.layout.record(
@@ -4149,9 +4157,6 @@ impl eframe::App for Cockpit {
                 );
             }
             self.services_open &= open;
-        }
-        if in_hangar || self.space_walk_available() {
-            self.station_overlay(ctx);
         }
         self.hangar_view.set_space_snapshot(
             if self
@@ -4186,13 +4191,6 @@ impl eframe::App for Cockpit {
                 .as_ref()
                 .and_then(|assets| assets.pioneer_room.clone()),
         );
-        egui::TopBottomPanel::bottom("flight_authority_status")
-            .frame(
-                egui::Frame::new()
-                    .fill(self.theme.panel())
-                    .inner_margin(egui::Margin::symmetric(12, 6)),
-            )
-            .show(ctx, |ui| self.flight_workspace_status(ui));
         self.physical_engineering_window(ctx);
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)

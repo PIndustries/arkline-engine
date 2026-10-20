@@ -352,7 +352,13 @@ impl eframe::App for Editor {
                             .color(Color32::from_rgb(234, 235, 229)),
                     );
                     ui.add_space(18.0);
-                    if ui.selectable_label(self.flight_focus, "Play").clicked() {
+                    if ui
+                        .selectable_label(self.flight_focus, "Play")
+                        .on_hover_text(
+                            "Play workspace only. Switching workspaces does not start or pause the simulation.",
+                        )
+                        .clicked()
+                    {
                         self.back_to_flight();
                     }
                     if ui.selectable_label(!self.flight_focus, "Editor").clicked() {
@@ -425,6 +431,7 @@ impl eframe::App for Editor {
                                     .selected(selected)
                                     .min_size(egui::vec2(82.0, 30.0)),
                             )
+                            .on_disabled_hover_text("Map uses ship cameras. Walk back to the pilot seat and physically reseat to use them.")
                             .clicked()
                         {
                             self.show_play_workspace();
@@ -552,9 +559,13 @@ impl eframe::App for Editor {
                                     self.client.status() == &EmbeddedStatus::Stopped
                                 }),
                             egui::Button::new(if clock_control {
-                                "▶  Play"
+                                if paused {
+                                    "Resume simulation"
+                                } else {
+                                    "Start simulation"
+                                }
                             } else {
-                                "Game / resume"
+                                "Resume controls"
                             }),
                         )
                         .clicked()
@@ -608,7 +619,7 @@ impl eframe::App for Editor {
             });
         }
         egui::TopBottomPanel::bottom("editor_drawer_bar")
-            .exact_height(28.)
+            .exact_height(40.)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     for (tab, label) in [(0, "Console"), (1, "Project")] {
@@ -1230,7 +1241,7 @@ mod tests {
                     .collect();
                 let expected: &[&str] = if workspace == 0 {
                     &[
-                        "▶  Play",
+                        "Resume simulation",
                         "Ⅱ  Pause",
                         "Step 50 ms",
                         "■  Stop",
@@ -1240,7 +1251,7 @@ mod tests {
                         "Step one node",
                     ]
                 } else {
-                    &["▶  Play", "Ⅱ  Pause", "Step 50 ms", "■  Stop"]
+                    &["Resume simulation", "Ⅱ  Pause", "Step 50 ms", "■  Stop"]
                 };
                 for label in expected {
                     assert!(
@@ -1670,10 +1681,18 @@ mod tests {
                     if t.galley.text() == "Console" {
                         console_y = t.pos.y;
                     }
-                    if ["▶  Play", "Ⅱ  Pause", "Step 50 ms", "■  Stop"].contains(&t.galley.text())
+                    if [
+                        "Start simulation",
+                        "Resume simulation",
+                        "Ⅱ  Pause",
+                        "Step 50 ms",
+                        "■  Stop",
+                    ]
+                    .contains(&t.galley.text())
                     {
                         assert!(clipped.clip_rect.contains(t.pos));
-                        assert!(t.pos.y < 58.0);
+                        // Transport is below the two shell rows and optional editor tools.
+                        assert!(t.pos.y < 176.0);
                         found += 1;
                     }
                 }
@@ -1726,7 +1745,7 @@ mod tests {
             .shapes
             .iter()
             .find_map(|clipped| match &clipped.shape {
-                egui::Shape::Text(text) if text.galley.text() == "▶  Play" => {
+                egui::Shape::Text(text) if text.galley.text() == "Resume simulation" => {
                     Some(text.pos + text.galley.rect.center().to_vec2())
                 }
                 _ => None,
