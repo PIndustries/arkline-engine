@@ -445,7 +445,7 @@ pub(super) fn validate(w: &World, room_layout: Option<&RoomLayoutDocument>) -> R
         if let Some(a) = &p.view.station_avatar {
             let l = layout_for(p.view.ship_class, fleet, fleet_layout);
             ensure!(
-                p.view.location == Location::Docked
+                (p.view.location == Location::Docked || a.docked_traversal.is_some())
                     && a.heading.is_finite()
                     && a.position.iter().all(|v| v.is_finite())
                     && a.position[1] >= 0.0

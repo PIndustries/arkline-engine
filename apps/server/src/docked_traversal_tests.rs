@@ -2078,3 +2078,218 @@ fn cockpit_v4_reopens_copied_completed_world_without_economic_changes() {
         ledger.len()
     );
 }
+
+#[test]
+fn owned_space_routine_keeps_running_through_seat_exit_walk_and_reseat() {
+    let mut server = Server::open(":memory:").unwrap();
+    let mut session = None;
+    connected(&mut server, &mut session);
+    ok(server.handle_at(&mut session, Request::Undock, CONNECTED_AT + 1));
+    let rejected = command(
+        &mut server,
+        &mut session,
+        DockedTraversalRequest::LeaveSeat { binding: binding() },
+        CONNECTED_AT + 2,
+    );
+    assert!(
+        !rejected.ok,
+        "unattended manual flight does not permit seat exit"
+    );
+    let started = ok(server.handle_at(
+        &mut session,
+        Request::StartResourceJob {
+            pilot: None,
+            target_units: 5000,
+        },
+        CONNECTED_AT + 3,
+    ));
+    let job_id = started.snapshot.as_ref().unwrap().resource_jobs[0].id;
+    let left_at = CONNECTED_AT + 4;
+    ok(command(
+        &mut server,
+        &mut session,
+        DockedTraversalRequest::LeaveSeat { binding: binding() },
+        left_at,
+    ));
+    let standing = snapshot(
+        &mut server,
+        &mut session,
+        left_at + DOCKED_SEAT_TRANSITION_MS,
+    );
+    assert!(traversal(&standing).seat_transition.is_none());
+    assert_ne!(pilot(&standing).location, Location::Docked);
+    let before = traversal(&standing).feet_m;
+    let at = left_at + DOCKED_SEAT_TRANSITION_MS + 1;
+    ok(command(
+        &mut server,
+        &mut session,
+        DockedTraversalRequest::Walk {
+            binding: binding(),
+            forward: -1.0,
+            strafe: 0.0,
+            turn: 0.0,
+            sprint: false,
+        },
+        at,
+    ));
+    let walked = snapshot(&mut server, &mut session, at + 100);
+    assert_ne!(traversal(&walked).feet_m, before);
+    let world: World = serde_json::from_str(&durable(&server)).unwrap();
+    assert_eq!(world.resource_jobs["Walker"].view.id, job_id);
+    assert!(!world.resource_jobs["Walker"].view.phase.is_terminal());
+    // An authenticated internal routine command still works while on foot.
+    server
+        .execute(
+            &mut session,
+            Request::Navigate {
+                mode: NavigationMode::Stop,
+            },
+            at + 101,
+            true,
+            None,
+        )
+        .unwrap();
+    // Manual controls and exterior equipment reject without cancelling the job.
+    assert!(
+        !server
+            .handle_at(
+                &mut session,
+                Request::Navigate {
+                    mode: NavigationMode::Stop
+                },
+                at + 102
+            )
+            .ok
+    );
+    assert!(
+        !command(
+            &mut server,
+            &mut session,
+            DockedTraversalRequest::SetHatch {
+                binding: binding(),
+                hatch: DockedHatch::Inner,
+                open: true,
+            },
+            at + 103
+        )
+        .ok
+    );
+    assert!(
+        !command(
+            &mut server,
+            &mut session,
+            DockedTraversalRequest::CallLift {
+                binding: binding(),
+                stop: DockedLiftStop::Station,
+            },
+            at + 104
+        )
+        .ok
+    );
+    ok(command(
+        &mut server,
+        &mut session,
+        DockedTraversalRequest::Walk {
+            binding: binding(),
+            forward: 0.0,
+            strafe: 0.0,
+            turn: 0.0,
+            sprint: false,
+        },
+        at + 105,
+    ));
+    ok(command(
+        &mut server,
+        &mut session,
+        DockedTraversalRequest::TakeSeat { binding: binding() },
+        at + 106,
+    ));
+    let seated = snapshot(
+        &mut server,
+        &mut session,
+        at + 106 + DOCKED_SEAT_TRANSITION_MS,
+    );
+    assert!(pilot(&seated).station_avatar.is_none());
+    let world: World = serde_json::from_str(&durable(&server)).unwrap();
+    assert_eq!(world.resource_jobs["Walker"].view.id, job_id);
+    assert!(!world.resource_jobs["Walker"].view.phase.is_terminal());
+}
+
+#[test]
+fn owned_space_routine_returns_and_completes_without_stranding_interior_walker() {
+    let mut server = Server::open(":memory:").unwrap();
+    let mut session = None;
+    connected(&mut server, &mut session);
+    ok(server.handle_at(&mut session, Request::Undock, CONNECTED_AT + 1));
+    ok(server.handle_at(
+        &mut session,
+        Request::StartResourceJob {
+            pilot: None,
+            target_units: 1000,
+        },
+        CONNECTED_AT + 2,
+    ));
+    let left_at = CONNECTED_AT + 3;
+    ok(command(
+        &mut server,
+        &mut session,
+        DockedTraversalRequest::LeaveSeat { binding: binding() },
+        left_at,
+    ));
+    let at = left_at + DOCKED_SEAT_TRANSITION_MS;
+    let standing = snapshot(&mut server, &mut session, at);
+    let feet = traversal(&standing).feet_m;
+    // Independently constructed valid end-of-haul authority fixture. Reserve is
+    // transferred into cargo, preserving the normal economic invariant.
+    let mut world: World = serde_json::from_str(&durable(&server)).unwrap();
+    let mut remaining = 1000;
+    for asteroid in &mut world.asteroids {
+        let taken = remaining.min(asteroid.ore);
+        asteroid.ore -= taken;
+        remaining -= taken;
+    }
+    assert_eq!(remaining, 0);
+    world.belt_ore -= 1000;
+    let p = world.pilots.get_mut("Walker").unwrap();
+    p.view.ore = 1000;
+    p.view.location = Location::Station;
+    p.warp = None;
+    let f = p.view.flight.as_mut().unwrap();
+    f.position = STATION_POSITION;
+    f.velocity = [0.0; 3];
+    f.mode = NavigationMode::Stop;
+    f.warp = None;
+    f.updated_at_ms = at;
+    world.resource_jobs.get_mut("Walker").unwrap().view.phase =
+        ResourceJobPhase::ReturningToStation;
+    validate(&world, None).unwrap();
+    server
+        .db
+        .execute(
+            "UPDATE world SET json=?1 WHERE id=1",
+            [serde_json::to_string(&world).unwrap()],
+        )
+        .unwrap();
+    for dt in 1..=4 {
+        server.tick_at(at + dt).unwrap();
+        snapshot(&mut server, &mut session, at + dt);
+    }
+    let finished = snapshot(&mut server, &mut session, at + 5);
+    assert_eq!(pilot(&finished).location, Location::Docked);
+    assert_eq!(traversal(&finished).feet_m, feet);
+    let job = &finished.snapshot.as_ref().unwrap().resource_jobs[0];
+    assert_eq!(job.phase, ResourceJobPhase::Completed);
+    assert_eq!(job.stored_units, 1000);
+    ok(command(
+        &mut server,
+        &mut session,
+        DockedTraversalRequest::TakeSeat { binding: binding() },
+        at + 6,
+    ));
+    let seated = snapshot(
+        &mut server,
+        &mut session,
+        at + 6 + DOCKED_SEAT_TRANSITION_MS,
+    );
+    assert!(pilot(&seated).station_avatar.is_none());
+}

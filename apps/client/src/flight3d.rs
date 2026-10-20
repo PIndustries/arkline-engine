@@ -2042,6 +2042,94 @@ impl FlightView {
         picked
     }
 }
+/// Registered walking coordinates remain ship-local while the normal flight
+/// renderer supplies the live vessel pose, exterior world and warp effects.
+#[allow(clippy::too_many_arguments)]
+fn moving_interior_frame(
+    snapshot: &Snapshot,
+    pilot: &PilotView,
+    now: u64,
+    connected: bool,
+    aspect: f32,
+    pose: arkline_protocol::PioneerDockedPose,
+    eye: Vec3,
+    look: Vec3,
+    parts: &[ModelPart],
+) -> Result<Frame, String> {
+    let world_layout = super::snapshot_world_layout(snapshot)?.clone();
+    let space = Space {
+        origin: display_position(pilot, now),
+    };
+    let rotation = ship_orientation_at(pilot, now);
+    let registration = hangar::pioneer_docked_scene::body_frame(pose);
+    let inverse = registration.inverse();
+    let eye = rotation * inverse.transform_point3(eye) / 100.0;
+    let look = rotation * inverse.transform_point3(look) / 100.0;
+    let view = Mat4::look_at_rh(eye, look, rotation * Vec3::Y);
+    let projection = |near, far| {
+        Mat4::perspective_rh_gl(cockpit_fov(pilot.ship_class), aspect, near, far) * view
+    };
+    let system = pilot.system_id;
+    Ok(Frame {
+        pioneer_parts: Some(Arc::new(
+            parts
+                .iter()
+                .map(|&(mesh, model, color, emission)| (mesh, inverse * model, color, emission))
+                .collect(),
+        )),
+        exterior: snapshot.exterior.clone().map(Arc::new),
+        lighting_quality: Default::default(),
+        cockpit_vp: projection(0.0002, 10.0),
+        cockpit_occlusion: None,
+        snapshot_time: snapshot.server_time_ms,
+        planet_vp: projection(1.0, 300_000.0),
+        system_id: system,
+        ship_class: pilot.ship_class,
+        drone_camera: false,
+        camera_drone: None,
+        scene: Arc::new(FrameScene {
+            world_layout,
+            traffic: snapshot
+                .traffic
+                .iter()
+                .filter(|a| a.system_id == system)
+                .cloned()
+                .collect(),
+            surface_props: snapshot
+                .surface_props
+                .iter()
+                .filter(|a| a.system_id == system)
+                .cloned()
+                .collect(),
+            asteroids: snapshot
+                .asteroids
+                .iter()
+                .filter(|a| a.system_id == system)
+                .cloned()
+                .collect(),
+            gates: gates()
+                .into_iter()
+                .filter(|a| a.system_id == system)
+                .collect(),
+            pilots: snapshot
+                .pilots
+                .iter()
+                .filter(|a| a.system_id == system)
+                .cloned()
+                .collect(),
+        }),
+        space,
+        cockpit: true,
+        rotation,
+        connected,
+        vp: projection(0.03, 1200.0),
+        eye,
+        now,
+        own: pilot.name.clone(),
+        docking: None,
+    })
+}
+
 #[derive(Clone)]
 struct Frame {
     /// Canonical local body metres, immutable and independent of each camera.

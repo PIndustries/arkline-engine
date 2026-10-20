@@ -742,6 +742,7 @@ impl Server {
                     | Request::CancelResourceJob { .. }
                     | Request::BeginRemoteControl { .. }
                     | Request::EndRemoteControl
+                    | Request::DockedTraversal { .. }
             )
         {
             if let Some(name) = session.as_ref() {
@@ -752,7 +753,7 @@ impl Server {
             }
         }
         if let Some(name) = session.as_ref() {
-            if world
+            if !automated && world
                 .pilots
                 .get(name)
                 .is_some_and(|p| p.view.station_avatar.is_some())

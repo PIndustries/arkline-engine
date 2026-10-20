@@ -60,6 +60,7 @@ pub struct HangarView {
     room_layout: Option<arkline_protocol::RoomLayoutState>,
     room_parts: Option<pioneer_interior::LayoutPartsCache>,
     docked_enabled: bool,
+    space_snapshot: Option<Arc<Snapshot>>,
     #[cfg(test)]
     docked_disable_culling: bool,
     docked_scene: Option<pioneer_docked_scene::SceneCache>,
@@ -106,6 +107,7 @@ impl HangarView {
             room_layout: None,
             room_parts: None,
             docked_enabled: false,
+            space_snapshot: None,
             #[cfg(test)]
             docked_disable_culling: false,
             docked_scene: None,
@@ -229,6 +231,9 @@ impl HangarView {
             now,
             connected,
         );
+    }
+    pub(crate) fn set_space_snapshot(&mut self, snapshot: Option<Arc<Snapshot>>) {
+        self.space_snapshot = snapshot;
     }
     pub fn input_surface(&self) -> Option<(egui::Rect, egui::LayerId)> {
         self.surface

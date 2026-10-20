@@ -1389,7 +1389,11 @@ impl Cockpit {
         {
             return (
                 format!("ON FOOT / {}", station_ui::docked_state_label(state)),
-                station_ui::docked_exit_guidance(state).into(),
+                if pilot.location == Location::Docked {
+                    station_ui::docked_exit_guidance(state).into()
+                } else {
+                    "Autopilot continues · return to the cockpit chair to pilot · exterior access locked".into()
+                },
                 None,
                 self.accent(),
             );
@@ -4344,9 +4348,19 @@ impl eframe::App for Cockpit {
             }
             self.services_open = open;
         }
-        if in_hangar {
+        if in_hangar || self.space_walk_available() {
             self.station_overlay(ctx);
         }
+        self.hangar_view.set_space_snapshot(
+            if self
+                .own()
+                .is_some_and(|pilot| pilot.location != Location::Docked)
+            {
+                self.snapshot.clone().map(std::sync::Arc::new)
+            } else {
+                None
+            },
+        );
         self.hangar_view
             .set_docked_traversal_enabled(self.docked_navigation_present());
         self.hangar_view.set_head_look_input_allowed(

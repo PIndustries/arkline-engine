@@ -105,7 +105,7 @@ pub(in crate::flight3d) fn physical_surface(
 fn vector(point: [f64; 3]) -> Vec3 {
     Vec3::from_array(point.map(|value| value as f32))
 }
-fn body_frame(pose: PioneerDockedPose) -> Mat4 {
+pub(in crate::flight3d) fn body_frame(pose: PioneerDockedPose) -> Mat4 {
     Mat4::from_rotation_translation(
         Quat::from_rotation_y(-pose.yaw as f32),
         vector(pose.origin_m),
@@ -690,7 +690,18 @@ pub(super) fn show(
         });
     #[cfg(not(target_arch = "wasm32"))]
     let scene_preparation = std::time::Instant::now();
-    let mut parts = match scene_parts(cache, &dynamic, pose, fleet, eye, host) {
+    let mut parts = match if pilot.location != Location::Docked {
+        body_parts(cache, &dynamic).map(|parts| {
+            parts
+                .into_iter()
+                .map(|(mesh, model, color, emission)| {
+                    (mesh, body_frame(pose) * model, color, emission)
+                })
+                .collect()
+        })
+    } else {
+        scene_parts(cache, &dynamic, pose, fleet, eye, host)
+    } {
         Ok(parts) => parts,
         Err(error) => {
             ui.painter().text(
@@ -723,6 +734,20 @@ pub(super) fn show(
     let cull = !view.docked_disable_culling;
     #[cfg(not(test))]
     let cull = true;
+    let space_frame = view.space_snapshot.as_ref().and_then(|snapshot| {
+        moving_interior_frame(
+            snapshot,
+            pilot,
+            now,
+            live,
+            rect.aspect_ratio(),
+            pose,
+            eye,
+            look,
+            &parts,
+        )
+        .ok()
+    });
     if let Some(renderer) = &view.renderer {
         let renderer = renderer.clone();
         #[cfg(target_arch = "wasm32")]
@@ -734,15 +759,19 @@ pub(super) fn show(
                 callback: Arc::new(egui_glow::CallbackFn::new(move |_, _| {
                     if let Ok(mut renderer) = renderer.lock() {
                         unsafe {
-                            paint_scene(
-                                &mut renderer,
-                                vp,
-                                eye,
-                                &parts,
-                                now,
-                                cull,
-                                scene_prepare_ns,
-                            );
+                            if let Some(frame) = &space_frame {
+                                renderer.paint(frame, None);
+                            } else {
+                                paint_scene(
+                                    &mut renderer,
+                                    vp,
+                                    eye,
+                                    &parts,
+                                    now,
+                                    cull,
+                                    scene_prepare_ns,
+                                );
+                            }
                         }
                     }
                 })),
@@ -753,6 +782,8 @@ pub(super) fn show(
         egui::Align2::LEFT_TOP,
         if state.is_none() {
             ""
+        } else if live && pilot.location != Location::Docked {
+            "PIONEER INTERIOR · AUTOPILOT · W/S move · RMB turn"
         } else if live {
             "PIONEER · DOCKED · W/S move · RMB turn"
         } else {

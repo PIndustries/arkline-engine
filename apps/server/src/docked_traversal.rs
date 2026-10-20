@@ -63,6 +63,23 @@ fn initial_actuators(binding: DockedTraversalBinding, now: u64) -> Result<Docked
         service_power_available: true,
     })
 }
+// Canonical traversal feet are registration-local: the renderer carries this
+// rigid frame with the owned vessel in flight, rather than following station space.
+fn active_owned_job(w: &World, name: &str) -> bool {
+    w.resource_jobs
+        .get(name)
+        .is_some_and(|j| !j.view.phase.is_terminal() && j.view.controller == name)
+}
+fn interior_support(support: DockedSupport) -> bool {
+    matches!(
+        support,
+        DockedSupport::Deck1
+            | DockedSupport::Deck2
+            | DockedSupport::Cockpit
+            | DockedSupport::Connector
+            | DockedSupport::CoreStairs
+    )
+}
 fn projection(state: DockedTraversalState, now: u64) -> StationAvatar {
     let point = if state.binding.fleet_hangar {
         fleet_berth_pose(state.binding.fleet_layout, ShipClass::Pioneer).boarding_point
@@ -93,7 +110,6 @@ fn owned_canonical<'a>(
         .docked_traversal
         .as_ref()?;
     (pilot.view.ship_class == ShipClass::Pioneer
-        && pilot.view.location == Location::Docked
         && owned_host == Some(state.binding.host_vessel_id.as_str())
         && state.actuators.binding == state.binding
         && docked_traversal_deck(state).is_ok())
@@ -512,8 +528,15 @@ pub(super) fn execute(
 ) -> Result<()> {
     let pilot = w.pilots.get(name).context("pilot missing")?;
     ensure!(
-        pilot.view.location == Location::Docked && pilot.view.ship_class == ShipClass::Pioneer,
-        "pilot-seat exit requires your docked Pioneer"
+        pilot.view.ship_class == ShipClass::Pioneer
+            && (pilot.view.location == Location::Docked
+                || active_owned_job(w, name)
+                || pilot
+                    .view
+                    .station_avatar
+                    .as_ref()
+                    .is_some_and(|a| a.docked_traversal.is_some())),
+        "pilot-seat exit in space requires your active owned Pioneer routine"
     );
     ensure!(
         w.accounts[name].docked_traversal_compatible,
@@ -524,12 +547,25 @@ pub(super) fn execute(
             && !w.remote_controls.values().any(|worker| worker == name),
         "end remote control before leaving the pilot seat"
     );
+    let automatic = active_owned_job(w, name);
     ensure!(
-        w.resource_jobs
+        !w.resource_jobs
             .get(name)
-            .is_none_or(|job| job.view.phase.is_terminal()),
-        "stop automated vessel work before docked traversal"
+            .is_some_and(|job| !job.view.phase.is_terminal())
+            || automatic,
+        "only the pilot's own routine permits interior traversal"
     );
+    let enclosed = pilot.view.location != Location::Docked || automatic;
+    if enclosed {
+        ensure!(
+            !matches!(
+                request,
+                DockedTraversalRequest::SetHatch { .. } | DockedTraversalRequest::CallLift { .. }
+            ),
+            "boarding hatches and lift are locked during spaceflight or automated work"
+        );
+        can_undock(w, name)?;
+    }
     let expected = binding(w, name, document)?;
     ensure!(
         request.binding() == &expected,
@@ -571,13 +607,14 @@ pub(super) fn execute(
             "return aboard before leaving the pilot seat"
         );
         ensure!(
-            pilot.view.flight.as_ref().is_none_or(|flight| matches!(
-                flight.mode,
-                NavigationMode::Stop | NavigationMode::Manual
-            ) && flight
-                .velocity
-                .iter()
-                .all(|v| v.abs() < 0.001)),
+            automatic
+                || pilot.view.flight.as_ref().is_none_or(|flight| matches!(
+                    flight.mode,
+                    NavigationMode::Stop | NavigationMode::Manual
+                ) && flight
+                    .velocity
+                    .iter()
+                    .all(|v| v.abs() < 0.001)),
             "stop vessel automation before leaving the pilot seat"
         );
         let anchor = geometry::seat_anchors(pose);
@@ -1126,8 +1163,8 @@ pub(super) fn advance(
             .clone()
             .unwrap();
         ensure!(
-            pilot.view.location == Location::Docked && pilot.view.ship_class == ShipClass::Pioneer,
-            "docked traversal cannot follow a flying or swapped vessel"
+            pilot.view.ship_class == ShipClass::Pioneer,
+            "interior traversal cannot follow a swapped vessel"
         );
         ensure!(
             state.binding.host_vessel_id == expected.host_vessel_id
@@ -1149,6 +1186,13 @@ pub(super) fn advance(
             w.pilots.get_mut(&name).unwrap().walk_input = None;
             state.moving = false;
             state.sprinting = false;
+        }
+        if w.pilots[&name].view.location != Location::Docked || active_owned_job(w, &name) {
+            can_undock(w, &name)?;
+            ensure!(
+                interior_support(state.support),
+                "space traversal must remain inside the vessel"
+            );
         }
         let input = w.pilots[&name].walk_input.clone();
         let completed_seat = advance_actor(
@@ -1329,7 +1373,7 @@ pub(super) fn validate(w: &World, document: Option<&RoomLayoutDocument>) -> Resu
         {
             ensure!(
                 state.version == DOCKED_TRAVERSAL_VERSION
-                    && pilot.view.location == Location::Docked
+                    && (pilot.view.location == Location::Docked || interior_support(state.support))
                     && pilot.view.ship_class == ShipClass::Pioneer
                     && state.feet_m.iter().all(|v| v.is_finite())
                     && state.heading.is_finite()
