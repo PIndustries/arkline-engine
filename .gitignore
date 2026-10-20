@@ -12,3 +12,6 @@
 
 __pycache__/
 *.pyc
+
+# One bounded local reconstruction target and receipts.
+/.build/
