@@ -3755,7 +3755,7 @@ impl eframe::App for Cockpit {
         self.hangar_view.clear_cockpit_presentation();
         let computer_active = self.connected
             && !self.boot.visible
-            && (self.verified_docked_binding().is_some()
+            && (self.in_station_hangar() && self.verified_docked_binding().is_some()
                 || !self.in_station_hangar()
                     && self.flight_view.cockpit_presentation_active(self.view_mode));
         if !computer_active
@@ -4276,6 +4276,14 @@ impl eframe::App for Cockpit {
                                 .snapshot
                                 .as_ref()
                                 .is_some_and(|s| now.saturating_sub(s.server_time_ms) <= 1500);
+                        if pilot.station_avatar.is_none()
+                            && self.verified_docked_binding().is_some()
+                        {
+                            // Aboard Cockpit is the actual pilot-eye camera;
+                            // exterior views are selected through ship camera modes.
+                            self.hangar_view.on_foot_view =
+                                flight3d::hangar::OnFootView::FirstPerson;
+                        }
                         if let Some(action) = self.hangar_view.ui(
                             ui,
                             &pilot,

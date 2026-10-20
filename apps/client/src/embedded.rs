@@ -610,7 +610,7 @@ impl EmbeddedClient {
 
     /// Reports physical display geometry, not the presence of a 2D egui window.
     pub fn computer_display_visible(&self) -> bool {
-        if self.cockpit.verified_docked_binding().is_some() {
+        if self.cockpit.in_station_hangar() && self.cockpit.verified_docked_binding().is_some() {
             self.cockpit.hangar_view.computer_surface().is_some()
         } else {
             self.cockpit.flight_view.computer_surface().is_some()
@@ -998,19 +998,17 @@ impl EmbeddedClient {
     }
     fn current_view(&self) -> Option<EmbeddedView> {
         let pilot = self.cockpit.own()?;
-        if self.cockpit.in_station_hangar() {
-            return Some(
-                if pilot.station_avatar.is_some()
-                    || self.cockpit.verified_docked_binding().is_some()
-                {
-                    match self.cockpit.hangar_view.on_foot_view {
-                        flight3d::hangar::OnFootView::FirstPerson => EmbeddedView::FirstPerson,
-                        flight3d::hangar::OnFootView::ThirdPerson => EmbeddedView::ThirdPerson,
-                    }
-                } else {
-                    EmbeddedView::Hangar
-                },
-            );
+        let registered_aboard =
+            pilot.station_avatar.is_none() && self.cockpit.verified_docked_binding().is_some();
+        if self.cockpit.in_station_hangar() && !registered_aboard {
+            return Some(if pilot.station_avatar.is_some() {
+                match self.cockpit.hangar_view.on_foot_view {
+                    flight3d::hangar::OnFootView::FirstPerson => EmbeddedView::FirstPerson,
+                    flight3d::hangar::OnFootView::ThirdPerson => EmbeddedView::ThirdPerson,
+                }
+            } else {
+                EmbeddedView::Hangar
+            });
         }
         Some(match self.cockpit.view_mode {
             ViewMode::Cockpit => EmbeddedView::Cockpit,
@@ -3768,6 +3766,63 @@ mod tests {
             Some(EmbeddedView::Cockpit)
         );
     }
+    #[test]
+    fn registered_docked_seat_keeps_ship_camera_modes_and_matching_render_routes() {
+        let (mut client, requests) = debug_fixture();
+        let snapshot = client.cockpit.snapshot.as_mut().unwrap();
+        snapshot.pilots[0].location = Location::Docked;
+        snapshot.docked_traversal_capability =
+            Some(arkline_protocol::docked_traversal_capability());
+        client.cockpit.assets = Some(arkline_protocol::AssetsView {
+            pioneer_room: Some(arkline_protocol::PioneerRoomState::uncommissioned(
+                "owned-pioneer".into(),
+            )),
+            pioneer_room_layout: None,
+            hangar: None,
+            pioneer_interior_available: true,
+            pioneer_interior_decks: 2,
+            ships: vec![],
+            storage: vec![],
+            corporation: None,
+            invitations: vec![],
+        });
+        assert!(client.cockpit.verified_docked_binding().is_some());
+        let before = serde_json::to_value(client.snapshot().unwrap()).unwrap();
+        // Returning from an interior can leave a walking-camera selection behind.
+        client.cockpit.hangar_view.on_foot_view = flight3d::hangar::OnFootView::ThirdPerson;
+        assert_eq!(
+            client.debug_view_state().available,
+            vec![
+                EmbeddedView::Cockpit,
+                EmbeddedView::External,
+                EmbeddedView::Tactical,
+                EmbeddedView::Tactical3d
+            ]
+        );
+        for (view, registered_scene) in [
+            (EmbeddedView::Cockpit, true),
+            (EmbeddedView::External, false),
+            (EmbeddedView::Tactical, false),
+            (EmbeddedView::Tactical3d, false),
+            (EmbeddedView::Cockpit, true),
+        ] {
+            client.set_debug_view(view).unwrap();
+            assert_eq!(client.debug_view_state().current, Some(view));
+            assert_eq!(
+                client.cockpit.in_station_hangar(),
+                registered_scene,
+                "camera selection must choose its actual renderer"
+            );
+            assert_eq!(client.scene_state(), Some(EditorSceneState::Cockpit));
+            assert_eq!(
+                serde_json::to_value(client.snapshot().unwrap()).unwrap(),
+                before,
+                "camera selection cannot change authoritative embodiment"
+            );
+        }
+        assert!(requests.try_recv().is_err());
+    }
+
     #[test]
     fn debug_view_rejects_embodiment_changes_and_disconnected_controls() {
         let (mut client, requests) = debug_fixture();

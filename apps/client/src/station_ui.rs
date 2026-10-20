@@ -293,7 +293,7 @@ impl Cockpit {
                 {
                     self.send(Request::Undock);
                 }
-                self.on_foot_view_selector(ui);
+                self.view_selector(ui);
             });
             ui.small("Walk through the ship to the airlock and boarding lift. Shift + arrows look around.");
         }
@@ -483,9 +483,14 @@ impl Cockpit {
         self.manual_remote.is_none()
             && self.own().is_some_and(|p| {
                 p.location == Location::Docked
-                    // The embedded sandbox uses a boarded pilot for cockpit
-                    // development. Camera mode changes must not change scenes.
-                    && (!self.embedded || p.station_avatar.is_some() || self.verified_docked_binding().is_some())
+                    && (p.station_avatar.is_some()
+                        // Registered cockpit geometry uses station metres;
+                        // aboard external/tactical cameras keep their own renderer.
+                        || if self.verified_docked_binding().is_some() {
+                            self.view_mode == ViewMode::Cockpit
+                        } else {
+                            !self.embedded
+                        })
             })
     }
     pub(super) fn station_actions(&mut self, ui: &mut egui::Ui) {

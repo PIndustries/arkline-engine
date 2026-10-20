@@ -76,6 +76,7 @@ struct Shot {
     rgba: Vec<u8>,
     surface: Option<CockpitSurface>,
     labels: Vec<(String, egui::Pos2)>,
+    parent_labels: Vec<(String, egui::Pos2)>,
     computer_vertices: usize,
     head: [f32; 2],
     depth_pixels: usize,
@@ -91,6 +92,13 @@ impl Shot {
                     self.labels.iter().map(|(text, _)| text).collect::<Vec<_>>()
                 )
             })
+            .1
+    }
+    fn parent_label(&self, label: &str) -> egui::Pos2 {
+        self.parent_labels
+            .iter()
+            .find(|(text, _)| text == label)
+            .unwrap_or_else(|| panic!("Visible actual parent control {label:?} missing"))
             .1
     }
     fn physical_label(&self, label: &str) -> egui::Pos2 {
@@ -222,6 +230,20 @@ impl Harness {
             source,
             "UI input cannot mutate received authority data"
         );
+        let parent_labels = output
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) => {
+                    let point = text.pos + text.galley.rect.center().to_vec2();
+                    shape
+                        .clip_rect
+                        .contains(point)
+                        .then(|| (text.galley.text().to_owned(), point))
+                }
+                _ => None,
+            })
+            .collect();
         let surface = self.cockpit.hangar_view.computer_surface();
         let labels = self.cockpit.computer_ui_labels.clone();
         let computer_vertices = self
@@ -302,6 +324,7 @@ impl Harness {
             rgba,
             surface,
             labels,
+            parent_labels,
             computer_vertices,
             head: self.cockpit.hangar_view.head_look_angles(),
             depth_pixels,
@@ -615,6 +638,35 @@ fn native_pioneer_docked_composite_computer_pixels_input_and_focus() {
                 true,
             );
         }
+        let ready = harness.settle();
+        let left = harness.click(ready.parent_label("Leave pilot seat"));
+        match requests
+            .try_recv()
+            .expect("Visible parent Leave pilot seat must emit its actual bound request")
+        {
+            arkline_protocol::Request::DockedTraversal {
+                request: arkline_protocol::DockedTraversalRequest::LeaveSeat { binding: actual },
+            } => assert_eq!(actual, binding),
+            other => panic!("Unexpected seat request {other:?}"),
+        }
+        assert!(requests.try_recv().is_err());
+        captures.push(capture(
+            directory.as_deref(),
+            "visible-bound-leave-seat",
+            &left,
+        ));
+        // The isolated channel has no authority worker. Install a compatible
+        // received state below; first leave a real physical gesture pending.
+        harness.cockpit.request_pending = false;
+        let seated_before_transition = harness.settle();
+        let stale_button = seated_before_transition.physical_label("UNDOCK");
+        let pending_press = harness.frame(pointer(stale_button, true), egui::Modifiers::NONE, true);
+        assert!(requests.try_recv().is_err());
+        captures.push(capture(
+            directory.as_deref(),
+            "computer-press-before-onfoot",
+            &pending_press,
+        ));
         let pose = arkline_protocol::docked_binding_pose(&binding).unwrap();
         let seat = arkline_protocol::seat_anchors(pose);
         let now = 1000 + (harness.time * 1000.0) as u64;
@@ -658,19 +710,65 @@ fn native_pioneer_docked_composite_computer_pixels_input_and_focus() {
             harness.cockpit.verified_docked_binding().as_ref(),
             Some(&binding)
         );
+        let released_after_transition =
+            harness.frame(pointer(stale_button, false), egui::Modifiers::NONE, true);
+        assert!(requests.try_recv().is_err(),"A physical press from the seated frame must not activate on release after the surface disappears");
         let onfoot = harness.settle();
         assert!(onfoot.depth_pixels > 1000);
+        assert!(onfoot.surface.is_none(),"This upright first-person fixture looks above the actual low computer; old surface must be cleared");
+        assert!(onfoot.labels.is_empty(),"Cached canonical vertices must not expose active computer labels without a physical surface");
+        assert!(!harness.cockpit.cockpit_computer.wants_keyboard_input());
+        assert!(harness
+            .cockpit
+            .hangar_view
+            .computer_hit_tester(&harness.ctx)(stale_button)
+        .is_none());
+        assert!(!harness
+            .ctx
+            .memory(|memory| memory.has_focus(egui::Id::new(PARENT_TEXT))));
+        assert_eq!(
+            harness.cockpit.hangar_view.on_foot_view,
+            hangar::OnFootView::FirstPerson
+        );
+        captures.push(capture(
+            directory.as_deref(),
+            "stale-release-after-onfoot",
+            &released_after_transition,
+        ));
         captures.push(capture(
             directory.as_deref(),
             "composed-onfoot-cockpit",
             &onfoot,
         ));
+        harness.click(onfoot.parent_label("Third person"));
+        assert_eq!(
+            harness.cockpit.hangar_view.on_foot_view,
+            hangar::OnFootView::ThirdPerson
+        );
+        let third_person = harness.settle();
+        assert_eq!(
+            harness.cockpit.hangar_view.on_foot_view,
+            hangar::OnFootView::ThirdPerson,
+            "Actual chosen third-person view must survive subsequent composed Cockpit updates"
+        );
+        captures.push(capture(
+            directory.as_deref(),
+            "composed-onfoot-third-person",
+            &third_person,
+        ));
+        harness.click(third_person.parent_label("First person"));
+        harness.settle();
+        assert_eq!(
+            harness.cockpit.hangar_view.on_foot_view,
+            hangar::OnFootView::FirstPerson,
+            "Actual chosen first-person view must also persist"
+        );
         assert!(
             requests.try_recv().is_err(),
             "Typing, ownership and presentation changes must not issue unrelated commands"
         );
         if let Some(directory) = &directory {
-            std::fs::write(directory.join("receipt.json"),serde_json::to_vec_pretty(&serde_json::json!({"schema_version":1,"scope":"Actual Cockpit::update + negotiated HangarView + render_cockpit_computer secondary context + physical GPU display/depth/layer input in private macOS CGL; no desktop window","source_glb_sha256":arkline_protocol::PIONEER_DOCKED_SOURCE_SHA256,"registration_revision":binding.registration_revision,"layout_sha256":binding.layout_sha256,"host_vessel_id":binding.host_vessel_id,"viewport_px":[WIDTH,HEIGHT],"center_computer_lit_samples":lit,"center_computer_canonical_vertices":baseline.computer_vertices,"physical_button_request":"Undock","physical_hover_and_press_send_nothing":true,"physical_release_sends_exactly_one_actual_ui_request":true,"computer_typing":"Native cockpit text","secondary_text_owns_headlook":true,"parent_text_owns_keyboard_and_headlook":true,"window_focus_loss_cancels_computer_input":true,"positive_owned_headlook":true,"received_snapshot_unchanged_by_input":true,"captures":captures,"vendor":gl.get_parameter_string(glow::VENDOR),"renderer":gl.get_parameter_string(glow::RENDERER),"gl_version":gl.get_parameter_string(glow::VERSION),"limitations":["Undock was captured in an isolated in-memory command channel and was never executed","On-foot state is a deterministic compatible snapshot fixture; full authority walking/interlock journeys remain separate","Native offscreen composition proves neither OS focus/input delivery nor a packaged app launch","No network, local authority, audio device, project or canonical source asset was opened or modified"]})).unwrap()).unwrap();
+            std::fs::write(directory.join("receipt.json"),serde_json::to_vec_pretty(&serde_json::json!({"schema_version":2,"scope":"Actual Cockpit::update + negotiated HangarView + render_cockpit_computer secondary context + physical GPU display/depth/layer input in private macOS CGL; no desktop window","source_glb_sha256":arkline_protocol::PIONEER_DOCKED_SOURCE_SHA256,"registration_revision":binding.registration_revision,"layout_sha256":binding.layout_sha256,"host_vessel_id":binding.host_vessel_id,"viewport_px":[WIDTH,HEIGHT],"center_computer_lit_samples":lit,"center_computer_canonical_vertices":baseline.computer_vertices,"physical_button_request":"Undock","physical_hover_and_press_send_nothing":true,"physical_release_sends_exactly_one_actual_ui_request":true,"visible_parent_leave_seat_sends_exact_bound_request":true,"seated_press_onfoot_release_sends_nothing":true,"missing_surface_clears_active_labels_keyboard_and_hit_guard":true,"onfoot_cached_canonical_vertices":onfoot.computer_vertices,"actual_first_third_person_selection_persists":true,"computer_typing":"Native cockpit text","secondary_text_owns_headlook":true,"parent_text_owns_keyboard_and_headlook":true,"window_focus_loss_cancels_computer_input":true,"positive_owned_headlook":true,"received_snapshot_unchanged_by_input":true,"captures":captures,"vendor":gl.get_parameter_string(glow::VENDOR),"renderer":gl.get_parameter_string(glow::RENDERER),"gl_version":gl.get_parameter_string(glow::VERSION),"limitations":["Undock and the bound LeaveSeat request were captured in an isolated in-memory command channel and were never executed","On-foot state is a deterministic compatible snapshot fixture; full authority walking/interlock journeys remain separate","Native offscreen composition proves neither OS focus/input delivery nor a packaged app launch","No network, local authority, audio device, project or canonical source asset was opened or modified"]})).unwrap()).unwrap();
         }
         drop(harness);
         assert_eq!(gl.get_error(), glow::NO_ERROR);
