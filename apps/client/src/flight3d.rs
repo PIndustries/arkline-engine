@@ -22,6 +22,44 @@ use glam::{Mat4, Quat, Vec3};
 use glow::HasContext;
 use std::sync::{Arc, Mutex};
 
+/// Inspect the current draw target without rebinding it. Desktop core OpenGL
+/// removed DEPTH_BITS; querying it silently suppresses physical displays after
+/// raising INVALID_ENUM. WebGL/GLES retain that default-framebuffer query.
+unsafe fn draw_framebuffer_depth_bits(gl: &glow::Context) -> i32 {
+    if gl.version().is_embedded {
+        return gl.get_parameter_i32(glow::DEPTH_BITS);
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let attachment = if gl
+            .get_parameter_framebuffer(glow::DRAW_FRAMEBUFFER_BINDING)
+            .is_some()
+        {
+            glow::DEPTH_ATTACHMENT
+        } else {
+            glow::DEPTH
+        };
+        if gl.get_framebuffer_attachment_parameter_i32(
+            glow::DRAW_FRAMEBUFFER,
+            attachment,
+            glow::FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE,
+        ) as u32
+            == glow::NONE
+        {
+            return 0;
+        }
+        gl.get_framebuffer_attachment_parameter_i32(
+            glow::DRAW_FRAMEBUFFER,
+            attachment,
+            glow::FRAMEBUFFER_ATTACHMENT_DEPTH_SIZE,
+        )
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        0
+    }
+}
+
 #[path = "imported_asset.rs"]
 pub mod imported_asset;
 
@@ -2830,7 +2868,7 @@ impl Renderer {
             gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, draw);
             gl.bind_framebuffer(glow::READ_FRAMEBUFFER, read);
             // A color-only target cannot enforce the physical display's depth.
-            if surface_geometry.is_none() || gl.get_parameter_i32(glow::DEPTH_BITS) > 0 {
+            if surface_geometry.is_none() || draw_framebuffer_depth_bits(&gl) > 0 {
                 gl.viewport(
                     viewport.left_px,
                     viewport.from_bottom_px,

@@ -882,7 +882,9 @@ fn native_cockpit_shift_keeps_both_instrument_layers_and_live_feed_updating() {
         cockpit.flight_view = FlightView::new(Some(&gl));
         cockpit.embedded = true;
         cockpit.embedded_paused = false;
-        cockpit.embedded_input = false;
+        // This renderer fixture owns game input. Parent text focus, rather
+        // than a globally denied input flag, must block the negative cases.
+        cockpit.embedded_input = true;
         cockpit.view_mode = crate::ViewMode::Cockpit;
         cockpit.service_tab = crate::ServiceTab::Navigation;
         cockpit.services_open = false;
@@ -945,27 +947,29 @@ fn native_cockpit_shift_keeps_both_instrument_layers_and_live_feed_updating() {
                 text_focus: false,
             },
             ShiftCase {
-                name: "search-focus-established",
+                name: "parent-text-focus-established",
                 shift: false,
                 focused: true,
                 arrow: None,
                 text_focus: true,
             },
             ShiftCase {
-                name: "search-focus-shift-arrow",
+                name: "parent-text-focus-shift-arrow",
                 shift: true,
                 focused: true,
                 arrow: Some(egui::Key::ArrowRight),
                 text_focus: true,
             },
             ShiftCase {
-                name: "search-focus-shift-release",
+                name: "parent-text-focus-shift-release",
                 shift: false,
                 focused: true,
                 arrow: None,
                 text_focus: true,
             },
         ];
+        let parent_text_id = egui::Id::new("cockpit_gpu_fixture_parent_text");
+        let mut parent_text = String::from("Parent fixture text input");
         let mut step = 0u64;
         let mut previous_arrow = None;
         let mut observations = Vec::new();
@@ -1041,19 +1045,10 @@ fn native_cockpit_shift_keeps_both_instrument_layers_and_live_feed_updating() {
                     }
                     previous_arrow = case.arrow;
                 }
-                ctx.memory_mut(|memory| {
-                    if case.text_focus {
-                        let search = egui::Id::new("cockpit_travel_search");
-                        // Request once, then let the real TextEdit install and
-                        // retain its arrow-key focus filter before testing keys.
-                        // Re-requesting every frame resets that egui filter.
-                        if !memory.has_focus(search) {
-                            memory.request_focus(search);
-                        }
-                    } else if let Some(id) = memory.focused() {
-                        memory.surrender_focus(id);
-                    }
-                });
+                let parent_text_focus_retained =
+                    ctx.memory(|memory| memory.has_focus(parent_text_id));
+                let mut parent_text_focused = false;
+                let mut parent_text_rect = None;
                 let previous_look = cockpit.flight_view.head_look;
                 let output = ctx.run(
                     egui::RawInput {
@@ -1066,6 +1061,35 @@ fn native_cockpit_shift_keeps_both_instrument_layers_and_live_feed_updating() {
                         ..Default::default()
                     },
                     |ctx| {
+                        if case.text_focus {
+                            // This is a real parent-context editor widget. The
+                            // cockpit service UI lives in its secondary context
+                            // and cannot supply parent keyboard focus here.
+                            egui::Area::new(egui::Id::new("cockpit_gpu_parent_text_fixture"))
+                                .order(egui::Order::Foreground)
+                                .fixed_pos(egui::pos2(8.0, 8.0))
+                                .show(ctx, |ui| {
+                                    let response = ui.add(
+                                        egui::TextEdit::singleline(&mut parent_text)
+                                            .id(parent_text_id)
+                                            .desired_width(240.0),
+                                    );
+                                    // Preserve the TextEdit's installed arrow
+                                    // filter once focus has been established.
+                                    if !response.has_focus() {
+                                        response.request_focus();
+                                    }
+                                    parent_text_focused = response.has_focus();
+                                    parent_text_rect = Some(response.rect);
+                                });
+                            assert!(parent_text_focused && ctx.wants_keyboard_input());
+                        } else {
+                            ctx.memory_mut(|memory| {
+                                if let Some(id) = memory.focused() {
+                                    memory.surrender_focus(id);
+                                }
+                            });
+                        }
                         eframe::App::update(&mut cockpit, ctx, &mut eframe::Frame::_new_kittest());
                     },
                 );
@@ -1310,17 +1334,35 @@ fn native_cockpit_shift_keeps_both_instrument_layers_and_live_feed_updating() {
                     );
                 }
                 if case.text_focus {
-                    assert!(ctx
-                        .memory(|memory| memory.has_focus(egui::Id::new("cockpit_travel_search"))));
+                    assert!(parent_text_focused);
+                    assert!(ctx.memory(|memory| memory.has_focus(parent_text_id)));
+                    assert!(ctx.wants_keyboard_input());
+                    let rect = parent_text_rect.expect("a real parent TextEdit was rendered");
+                    assert!(rect.is_finite() && rect.width() > 0.0 && rect.height() > 0.0);
+                    if case.name != "parent-text-focus-established" || pass > 0 {
+                        assert!(
+                            parent_text_focus_retained,
+                            "the real parent TextEdit must retain focus between input frames"
+                        );
+                    }
                     assert!(
                         look.iter()
                             .zip(previous_look)
-                            .all(|(after, before)| after.abs() <= before.abs() + 1.0e-6),
-                        "Text-focused Shift+arrows must not start head look"
+                            .all(|(after, before)| (*after - before).abs() <= 1.0e-6),
+                        "Parent TextEdit ownership must freeze head look, including Shift+arrows"
+                    );
+                } else if case.shift && case.focused && case.arrow.is_some() {
+                    assert!(
+                        look.iter()
+                            .zip(previous_look)
+                            .any(|(after, before)| (*after - before).abs() > 1.0e-5),
+                        "Owned scene input must still positively exercise Shift+arrow head look"
                     );
                 }
                 observations.push(serde_json::json!({"state":case.name,"frame":step,"received_time_ms":now,
-                    "shift":case.shift,"window_focused":case.focused,"search_focused":case.text_focus,
+                    "shift":case.shift,"window_focused":case.focused,"game_input_allowed":cockpit.embedded_input,
+                    "parent_text_fixture_requested":case.text_focus,"parent_text_focused":parent_text_focused,
+                    "parent_text_focus_retained_before_frame":parent_text_focus_retained,
                     "head_look_rad":look,"received_power_j":charge,"received_ore":ore,"console_label":label,
                     "canonical_computer_vertices":power_glyph_vertices,"canonical_computer_uv_sha256":power_glyph_hash,
                     "display_lit_samples":screen_lit,"power_changed_samples":power_changed,"console_changed_samples":console_changed,
@@ -1340,7 +1382,7 @@ fn native_cockpit_shift_keeps_both_instrument_layers_and_live_feed_updating() {
                 "build":include_str!("../../../BUILD_VERSION").trim(),"glb_sha256":pioneer_asset_sha256(),
                 "vendor":gl.get_parameter_string(glow::VENDOR),"renderer":gl.get_parameter_string(glow::RENDERER),"gl_version":gl.get_parameter_string(glow::VERSION),
                 "viewport_px":[width,height],"frames_rendered":step,"observations":observations,
-                "fixture":"Isolated existing headless Cockpit fixture, no connector/mailbox receiver/local server; received snapshot values changed by the test only",
+                "fixture":"Isolated headless Cockpit with game input enabled and a real stable-ID parent TextEdit rendered before each text-focus frame; no connector/mailbox receiver/local server; received snapshot values changed by the test only",
                 "limitations":["Real native offscreen glyph/material/video composition does not establish OS keyboard/window focus delivery or browser GPU acceptance", "Telemetry and drone snapshots are explicit deterministic test fixtures, not measurements from a running authority", "No world, project, canonical geometry, network session or credentials were modified"]});
             std::fs::write(
                 directory.join("receipt.json"),

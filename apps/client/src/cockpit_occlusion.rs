@@ -386,7 +386,7 @@ impl CockpitDepthProgram {
         let gl = &renderer.gl;
         if !vp.is_finite()
             || !geometry.valid()
-            || gl.get_parameter_i32(glow::DEPTH_BITS) <= 0
+            || draw_framebuffer_depth_bits(gl) <= 0
             || geometry.external.iter().any(|draw| {
                 renderer
                     .meshes

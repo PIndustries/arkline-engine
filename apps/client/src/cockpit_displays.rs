@@ -106,7 +106,7 @@ impl CockpitDisplayRenderer {
         }
         let gl = &self.gl;
         // A color-only callback target cannot enforce physical occlusion.
-        if gl.get_parameter_i32(glow::DEPTH_BITS) <= 0 {
+        if draw_framebuffer_depth_bits(gl) <= 0 {
             return;
         }
         let mut total_vertices = 0usize;

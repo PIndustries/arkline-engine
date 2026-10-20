@@ -193,6 +193,9 @@ fn native_cockpit_display_preserves_depth_perspective_and_state() {
             gl.bind_texture(glow::TEXTURE_2D, old_texture);
             gl.bind_sampler(0, Some(sampler));
             gl.active_texture(glow::TEXTURE3);
+            assert_eq!(gl.get_error(), glow::NO_ERROR, "before display depth query");
+            assert!(draw_framebuffer_depth_bits(&gl) > 0);
+            assert_eq!(gl.get_error(), glow::NO_ERROR, "draw target depth query");
             renderer.paint(info(), &painter, matrix, &batches);
             assert_eq!(gl.get_error(), glow::NO_ERROR, "{name} display pass");
             let mut viewport = [0; 4];
@@ -304,6 +307,62 @@ fn native_cockpit_display_preserves_depth_perspective_and_state() {
         renderer.destroy();
         painter.destroy();
         target.destroy(&gl);
+    }
+}
+
+#[test]
+#[ignore = "Explicit private macOS CGL draw-target depth query regression; no app window"]
+fn native_cockpit_depth_query_uses_draw_framebuffer_without_rebinding() {
+    unsafe {
+        let (_context, gl) = PrivateContext::create();
+        let depth = CachedFeed::create(&gl, 992, 32, 32).unwrap();
+        let color_only = CachedFeed::create(&gl, 993, 32, 32).unwrap();
+        gl.framebuffer_renderbuffer(
+            glow::FRAMEBUFFER,
+            glow::DEPTH_ATTACHMENT,
+            glow::RENDERBUFFER,
+            None,
+        );
+        assert_eq!(
+            gl.check_framebuffer_status(glow::FRAMEBUFFER),
+            glow::FRAMEBUFFER_COMPLETE
+        );
+        gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(depth.framebuffer));
+        gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, Some(color_only.framebuffer));
+        assert_eq!(gl.get_error(), glow::NO_ERROR, "depth query fixture");
+        assert_eq!(draw_framebuffer_depth_bits(&gl), 0);
+        assert_eq!(gl.get_error(), glow::NO_ERROR, "color-only draw target");
+        assert_eq!(
+            gl.get_parameter_framebuffer(glow::DRAW_FRAMEBUFFER_BINDING),
+            Some(color_only.framebuffer)
+        );
+        assert_eq!(
+            gl.get_parameter_framebuffer(glow::READ_FRAMEBUFFER_BINDING),
+            Some(depth.framebuffer)
+        );
+        gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, Some(depth.framebuffer));
+        let bits = draw_framebuffer_depth_bits(&gl);
+        assert!(bits >= 24, "actual depth attachment: {bits}");
+        assert_eq!(gl.get_error(), glow::NO_ERROR, "depth draw target");
+        gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None);
+        let default_bits = draw_framebuffer_depth_bits(&gl);
+        assert!(default_bits >= 0);
+        assert_eq!(gl.get_error(), glow::NO_ERROR, "default draw target");
+        assert_eq!(
+            gl.get_parameter_framebuffer(glow::DRAW_FRAMEBUFFER_BINDING),
+            None
+        );
+        assert_eq!(
+            gl.get_parameter_framebuffer(glow::READ_FRAMEBUFFER_BINDING),
+            Some(depth.framebuffer)
+        );
+        println!(
+            "GL {} / {}: color-only depth0, FBO depth{bits}, default depth{default_bits}",
+            gl.get_parameter_string(glow::VERSION),
+            gl.get_parameter_string(glow::RENDERER)
+        );
+        color_only.destroy(&gl);
+        depth.destroy(&gl);
     }
 }
 
