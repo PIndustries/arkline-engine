@@ -78,7 +78,7 @@ struct ViewCase {
     open_window: bool,
 }
 
-fn cases() -> [ViewCase; 11] {
+fn cases() -> [ViewCase; 13] {
     use std::f32::consts::{FRAC_PI_2, PI};
     [
         ViewCase {
@@ -89,16 +89,35 @@ fn cases() -> [ViewCase; 11] {
             open_window: true,
         },
         ViewCase {
-            name: "port",
+            // The fitted seat is aft of the wrap panes. A cardinal side look
+            // hits the new bay wall; retain this as a strict enclosure case.
+            name: "port-bulkhead",
             yaw: FRAC_PI_2,
             pitch: 0.,
+            roll: 0.,
+            open_window: false,
+        },
+        ViewCase {
+            name: "starboard-bulkhead",
+            yaw: -FRAC_PI_2,
+            pitch: 0.,
+            roll: 0.,
+            open_window: false,
+        },
+        // Aim through the actual source wrap panes, above the instruments,
+        // from the unchanged registered seated eye. These are reachable head
+        // look angles, not a relocated camera or synthetic opening.
+        ViewCase {
+            name: "port-window",
+            yaw: 65.0_f32.to_radians(),
+            pitch: 0.12,
             roll: 0.,
             open_window: true,
         },
         ViewCase {
-            name: "starboard",
-            yaw: -FRAC_PI_2,
-            pitch: 0.,
+            name: "starboard-window",
+            yaw: -PI / 4.0,
+            pitch: 0.25,
             roll: 0.,
             open_window: true,
         },
@@ -166,7 +185,22 @@ fn frame(case: ViewCase, width: usize, height: usize) -> Frame {
     // The frame's floating origin retains the same precise body-space camera.
     let world_origin = [90_000_000_000.; 3];
     let rotation = Quat::from_rotation_x(case.roll);
-    let camera = rotation * Quat::from_rotation_y(case.yaw) * Quat::from_rotation_z(case.pitch);
+    let steps = (case.yaw.abs().max(case.pitch.abs()) / 0.14)
+        .ceil()
+        .max(1.0) as usize;
+    let axes = [
+        case.yaw / (steps as f32 * 0.14),
+        case.pitch / (steps as f32 * 0.14),
+    ];
+    let mut head = [0.0; 2];
+    for _ in 0..steps {
+        update_head_look(&mut head, true, axes, 0.1);
+    }
+    assert!(
+        (head[0] - case.yaw).abs() < 1e-5 && (head[1] - case.pitch).abs() < 1e-5,
+        "Enclosure view must be reachable by ordinary seated head-look input"
+    );
+    let camera = rotation * Quat::from_rotation_y(head[0]) * Quat::from_rotation_z(head[1]);
     let eye = rotation * (cockpit_fit::eye_body_meters(ShipClass::Pioneer) / 100.);
     let view = Mat4::look_at_rh(eye, eye + camera * Vec3::X, camera * Vec3::Y);
     let aspect = width as f32 / height as f32;
@@ -383,6 +417,18 @@ fn native_pioneer_cockpit_enclosure_matches_source_and_keeps_window_apertures() 
                 let y = height / 2;
                 let pointer = egui::pos2(x as f32 + 0.5, height as f32 - y as f32 - 0.5);
                 let expected = canonical_hit(&frame, pointer, viewport);
+                let (ray_origin, ray_direction) =
+                    screen_ray(frame.cockpit_vp, viewport, pointer).unwrap();
+                let glass_distance = ray_mesh_hit(
+                    ray_origin,
+                    ray_direction,
+                    frame.pioneer_body_mount() * Mat4::from_scale(Vec3::splat(100.0)),
+                    &source_parts[6].vertices,
+                );
+                if case.open_window {
+                    assert!(glass_distance.is_some(),
+                        "{}: an open sightline must cross actual authored navigation glazing, not a hull gap", case.name);
+                }
                 assert_eq!(
                     expected.is_none(),
                     case.open_window,
@@ -424,6 +470,7 @@ fn native_pioneer_cockpit_enclosure_matches_source_and_keeps_window_apertures() 
                     "name":case.name,"width":width,"height":height,
                     "yaw_rad":case.yaw,"pitch_rad":case.pitch,"ship_roll_rad":case.roll,
                     "open_window":case.open_window,"eye_scene":frame.eye.to_array(),
+                    "authored_glazing_ray_distance_m":glass_distance.map(|distance| distance*100.),
                     "view_projection":frame.cockpit_vp.to_cols_array(),
                     "central_surface_fraction":fraction,"canonical_runtime_ray_distance_m":expected.map(|value|value*100.),
                     "actual_depth_distance_m":actual_distance.map(|value|value*100.),
@@ -451,7 +498,8 @@ fn native_pioneer_cockpit_enclosure_matches_source_and_keeps_window_apertures() 
                 "source_part_count":source_parts.len(),"source_triangles":source_triangles,
                 "vendor":gl.get_parameter_string(glow::VENDOR),"renderer":gl.get_parameter_string(glow::RENDERER),"gl_version":gl.get_parameter_string(glow::VERSION),
                 "fitted_eye_body_m":cockpit_fit::eye_body_meters(ShipClass::Pioneer).to_array(),
-                "eye_provenance":"Presentation camera fitted to measured canonical bridge cavity; not an authored seat or registered walkable interior",
+                "eye_provenance":"Shared registration-3 pilot_joints(0) seated eye; no camera relocation",
+                "registration_revision":arkline_protocol::PIONEER_DOCKED_REGISTRATION_REVISION,
                 "fov_vertical_rad":COCKPIT_FOV,"cockpit_near_m":0.02,"cockpit_far_m":1000.,
                 "yaw_tested_rad":[-std::f32::consts::PI,std::f32::consts::PI],"pitch_tested_rad":[-1.45,1.45],
                 "lighting":"Existing Balanced world material/shadow path","gpu_source_buffers_retained":true,

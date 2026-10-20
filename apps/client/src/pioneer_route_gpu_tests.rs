@@ -281,6 +281,39 @@ impl Harness {
         assert_eq!(self.world.as_ref().unwrap().time() - before, milliseconds);
     }
 
+    fn wait_for_lift(&mut self, stop: arkline_protocol::DockedLiftStop, target: f64) {
+        // The private/fleet berth floors differ. Allow a complete 1 m/s stroke
+        // plus one second, without inventing an arrival by editing authority.
+        let start = self.traversal().actuators.lift.floor_station_m;
+        let limit = ((target - start).abs().ceil() as u64 + 1) * 1000;
+        let before = self.world.as_ref().unwrap().time();
+        for _ in 0..=limit / 50 {
+            let state = self.traversal();
+            let lift = &state.actuators.lift;
+            assert_eq!(lift.target, stop);
+            assert!(
+                state.grounded && state.support == DockedSupport::BoardingLift,
+                "Pilot must ride the lift through its entire stroke: {state:?}"
+            );
+            assert!((state.feet_m[1] - lift.floor_station_m).abs() < 1e-6);
+            if !lift.moving {
+                assert_eq!(lift.floor_station_m, target, "Lift stopped before arrival");
+                eprintln!(
+                    "Lift {stop:?}: {start} -> {target} in {} ms (limit {limit})",
+                    self.world.as_ref().unwrap().time() - before
+                );
+                return;
+            }
+            assert!(
+                self.world.as_ref().unwrap().time() - before < limit,
+                "Lift failed to arrive within {limit} ms: {lift:?}"
+            );
+            self.advance_time(50);
+            self.refresh();
+        }
+        unreachable!("bounded lift loop must return or fail");
+    }
+
     fn walk_to_body(&mut self, target: [f64; 3]) {
         for _ in 0..240 {
             let state = self.traversal();
@@ -1259,8 +1292,10 @@ fn native_pioneer_animated_hatches_boarding_and_return() {
                 stop: arkline_protocol::DockedLiftStop::Station,
             },
         });
-        h.advance_time(12000);
-        h.refresh();
+        h.wait_for_lift(
+            arkline_protocol::DockedLiftStop::Station,
+            lift.station_floor_m,
+        );
         assert_eq!(
             h.traversal().actuators.lift.floor_station_m,
             lift.station_floor_m
@@ -1281,8 +1316,7 @@ fn native_pioneer_animated_hatches_boarding_and_return() {
                 stop: arkline_protocol::DockedLiftStop::Ship,
             },
         });
-        h.advance_time(12000);
-        h.refresh();
+        h.wait_for_lift(arkline_protocol::DockedLiftStop::Ship, lift.ship_floor_m);
         h.walk_to_body(body(a.outer_outside_station_m));
         set(&mut h, arkline_protocol::DockedHatch::Outer, true);
         h.advance_time(1500);
