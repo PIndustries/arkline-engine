@@ -4015,10 +4015,18 @@ impl eframe::App for Cockpit {
                                     },
                                 );
                                 if in_hangar {
-                                    ui.label("Station / interior");
-                                } else {
-                                    self.view_selector(ui);
+                                    ui.label(
+                                        if self
+                                            .own()
+                                            .is_some_and(|pilot| pilot.location != Location::Docked)
+                                        {
+                                            "Ship interior / autopilot"
+                                        } else {
+                                            "Station / interior"
+                                        },
+                                    );
                                 }
+                                self.view_selector(ui);
                             });
                             if !self.notice.is_empty() {
                                 ui.small(&self.notice);
@@ -4078,9 +4086,8 @@ impl eframe::App for Cockpit {
                                 } else {
                                     "STATION HANGAR".into()
                                 });
-                            } else {
-                                self.view_selector(ui);
                             }
+                            self.view_selector(ui);
                             if !self.embedded {
                                 let fullscreen = is_fullscreen(ctx);
                                 if ui

@@ -91,11 +91,15 @@ impl Cockpit {
         }
         let assets = self.assets.as_ref()?;
         let host = assets.pioneer_room.as_ref()?.vessel_id.clone();
-        if assets.hangar.as_ref().is_some_and(|fleet| {
-            !fleet.berths.iter().any(|berth| {
-                berth.active && berth.id == host && berth.ship_class == ShipClass::Pioneer
+        // In flight the active vessel is intentionally absent from station
+        // berths. Registration/owned room/layout still bind the local interior.
+        if pilot.location == Location::Docked
+            && assets.hangar.as_ref().is_some_and(|fleet| {
+                !fleet.berths.iter().any(|berth| {
+                    berth.active && berth.id == host && berth.ship_class == ShipClass::Pioneer
+                })
             })
-        }) {
+        {
             return None;
         }
         let document = assets
@@ -202,6 +206,7 @@ impl Cockpit {
         let Some(binding) = self.verified_docked_binding() else {
             ui.strong("Pioneer traversal unavailable");
             ui.small("The ship registration or room layout does not match this client. Reconnect with matching sources before moving.");
+            ui.horizontal_wrapped(|ui| self.view_selector(ui));
             return true;
         };
         let Some(pilot) = self.own() else {
@@ -603,15 +608,23 @@ impl Cockpit {
     pub(super) fn in_station_hangar(&self) -> bool {
         self.manual_remote.is_none()
             && self.own().is_some_and(|p| {
-                (p.location == Location::Docked || self.space_walk_available())
-                    && (p.station_avatar.is_some()
-                        // Registered cockpit geometry uses station metres;
-                        // aboard external/tactical cameras keep their own renderer.
-                        || if self.docked_navigation_present() {
-                            self.view_mode == ViewMode::Cockpit
-                        } else {
-                            !self.embedded
-                        })
+                if p.location != Location::Docked {
+                    // Only walking uses the ship-local interior renderer.
+                    // A seated autopilot keeps FlightView's complete cockpit,
+                    // instrument textures and drone-feed composition.
+                    return p
+                        .station_avatar
+                        .as_ref()
+                        .is_some_and(|avatar| avatar.docked_traversal.is_some());
+                }
+                p.station_avatar.is_some()
+                    // Registered cockpit geometry uses station metres;
+                    // aboard external/tactical cameras keep their own renderer.
+                    || if self.docked_navigation_present() {
+                        self.view_mode == ViewMode::Cockpit
+                    } else {
+                        !self.embedded
+                    }
             })
     }
     pub(super) fn station_actions(&mut self, ui: &mut egui::Ui) {
