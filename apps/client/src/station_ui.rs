@@ -245,15 +245,6 @@ impl Cockpit {
                 && !state.actuators.lift.moving
                 && (state.actuators.lift.floor_station_m - lift_geometry(pose).ship_floor_m).abs()
                     < 0.03;
-            let hatches = hatch_anchors(pose);
-            let inner_distance =
-                station_distance(state.feet_m, hatches.inner_inside_station_m).min(
-                    station_distance(state.feet_m, hatches.inner_outside_station_m),
-                );
-            let outer_distance =
-                station_distance(state.feet_m, hatches.outer_inside_station_m).min(
-                    station_distance(state.feet_m, hatches.outer_outside_station_m),
-                );
             ui.horizontal_wrapped(|ui| {
                 if seat_distance <= 1.5
                     && ui
@@ -274,86 +265,7 @@ impl Cockpit {
                     });
                 }
                 if !in_space {
-                    for (hatch, distance, open, label) in [
-                        (
-                            DockedHatch::Inner,
-                            inner_distance,
-                            state.actuators.inner_hatch_open,
-                            "inner hatch",
-                        ),
-                        (
-                            DockedHatch::Outer,
-                            outer_distance,
-                            state.actuators.outer_hatch_open,
-                            "outer hatch",
-                        ),
-                    ] {
-                        let index = usize::from(hatch == DockedHatch::Outer);
-                        let motion = state.actuators.hatches.as_ref().map(|h| &h[index]);
-                        let open = motion.map_or(open, |h| {
-                            if h.blocked {
-                                !h.target_open
-                            } else {
-                                h.target_open
-                            }
-                        });
-                        if distance <= 3.0 {
-                            if let Some(motion) = motion {
-                                ui.small(format!(
-                                    "{label}: {:.0}% {}",
-                                    motion.fraction * 100.0,
-                                    if motion.blocked {
-                                        "held · clear sweep and retry"
-                                    } else if motion.moving {
-                                        "moving"
-                                    } else {
-                                        "stopped"
-                                    }
-                                ));
-                            }
-                        }
-                        let lift_at_ship = !state.actuators.lift.moving
-                            && (state.actuators.lift.floor_station_m
-                                - lift_geometry(pose).ship_floor_m)
-                                .abs()
-                                < 0.03;
-                        let hatch_ready = if open {
-                            !hatch_occupied(
-                                pose,
-                                match hatch {
-                                    DockedHatch::Inner => PioneerDockedHatch::Inner,
-                                    DockedHatch::Outer => PioneerDockedHatch::Outer,
-                                },
-                                state.feet_m,
-                            )
-                        } else {
-                            match hatch {
-                                DockedHatch::Inner => state.actuators.hatch_closed(1),
-                                DockedHatch::Outer => {
-                                    state.actuators.hatch_closed(0) && lift_at_ship
-                                }
-                            }
-                        };
-                        if distance <= 3.0
-                            && ui
-                                .add_enabled(
-                                    ready && hatch_ready && state.actuators.service_power_available,
-                                    egui::Button::new(format!(
-                                        "{} {label}",
-                                        if open { "Close" } else { "Open" }
-                                    )),
-                                )
-                                .clicked()
-                        {
-                            self.send(Request::DockedTraversal {
-                                request: DockedTraversalRequest::SetHatch {
-                                    binding: binding.clone(),
-                                    hatch,
-                                    open: !open,
-                                },
-                            });
-                        }
-                    }
+                    self.boarding_hatch_controls(ui, state);
                     self.boarding_lift_controls(ui, state);
                 }
             });
@@ -1169,6 +1081,229 @@ impl Cockpit {
         );
     }
 
+    fn boarding_control_block_reason(&self, state: &DockedTraversalState) -> Option<&'static str> {
+        if !self.connected {
+            Some("Reconnect to operate boarding equipment")
+        } else if self.embedded_paused {
+            Some("Resume simulation to operate boarding equipment")
+        } else if self.snapshot.as_ref().is_none_or(|snapshot| {
+            self.presentation_time()
+                .saturating_sub(snapshot.server_time_ms)
+                > 1500
+        }) {
+            Some("Waiting for a fresh world update")
+        } else if self.request_pending {
+            Some("Waiting for command confirmation")
+        } else if self
+            .own()
+            .is_none_or(|pilot| pilot.location != Location::Docked)
+        {
+            Some("Exterior access locked in space")
+        } else if self.snapshot.as_ref().is_some_and(|snapshot| {
+            self.own().is_some_and(|pilot| {
+                snapshot
+                    .resource_jobs
+                    .iter()
+                    .any(|job| job.pilot == pilot.name && !job.phase.is_terminal())
+            })
+        }) {
+            Some("Mining routine owns the ship · boarding equipment locked")
+        } else if !state.grounded || state.seat_transition.is_some() {
+            Some("Stand at the boarding control before operating it")
+        } else if !state.actuators.service_power_available {
+            Some("Docking service power unavailable · equipment held safely")
+        } else {
+            None
+        }
+    }
+
+    /// Primary and detailed panels submit the same bound commands. These are
+    /// snapshot interlocks, not local door animation or pressure simulation.
+    fn boarding_hatch_controls(&mut self, ui: &mut egui::Ui, state: &DockedTraversalState) {
+        if self
+            .own()
+            .is_none_or(|pilot| pilot.location != Location::Docked)
+        {
+            return;
+        }
+        let Ok(pose) = docked_binding_pose(&state.binding) else {
+            return;
+        };
+        let anchors = hatch_anchors(pose);
+        let fractions = state.actuators.hatch_fractions();
+        let common_block = self.boarding_control_block_reason(state);
+        let mut nearest = f64::INFINITY;
+        let mut visible = false;
+        for (hatch, geometry_hatch, index, name, inside, outside) in [
+            (
+                DockedHatch::Inner,
+                PioneerDockedHatch::Inner,
+                0,
+                "inner hatch",
+                anchors.inner_inside_station_m,
+                anchors.inner_outside_station_m,
+            ),
+            (
+                DockedHatch::Outer,
+                PioneerDockedHatch::Outer,
+                1,
+                "outer hatch",
+                anchors.outer_inside_station_m,
+                anchors.outer_outside_station_m,
+            ),
+        ] {
+            let distance =
+                station_distance(state.feet_m, inside).min(station_distance(state.feet_m, outside));
+            nearest = nearest.min(distance);
+            if distance > 3.0 {
+                continue;
+            }
+            visible = true;
+            let fraction = fractions[index];
+            let motion = state
+                .actuators
+                .hatches
+                .as_ref()
+                .map(|hatches| &hatches[index]);
+            let next_open = motion.map_or(fraction < 1.0, |motion| {
+                if motion.blocked {
+                    motion.target_open
+                } else {
+                    !motion.target_open
+                }
+            });
+            let status = if motion.is_some_and(|motion| motion.blocked) {
+                format!(
+                    "Held {:.0}% → {}",
+                    fraction * 100.0,
+                    if motion.unwrap().target_open {
+                        "open"
+                    } else {
+                        "closed"
+                    }
+                )
+            } else if let Some(motion) = motion.filter(|motion| motion.moving) {
+                format!(
+                    "{} {:.0}%",
+                    if motion.target_open {
+                        "Opening"
+                    } else {
+                        "Closing"
+                    },
+                    fraction * 100.0
+                )
+            } else if fraction == 0.0 {
+                "Closed".into()
+            } else if fraction == 1.0 {
+                "Open".into()
+            } else {
+                format!("Stopped {:.0}%", fraction * 100.0)
+            };
+            let sweep = hatch_leaf_sweep_bounds(geometry_hatch, fraction, f64::from(next_open));
+            let sweep_occupied = sweep.as_ref().is_ok_and(|bounds| {
+                self.snapshot.as_ref().is_some_and(|snapshot| {
+                    snapshot
+                        .pilots
+                        .iter()
+                        .filter_map(|pilot| {
+                            pilot.station_avatar.as_ref()?.docked_traversal.as_ref()
+                        })
+                        .filter(|occupant| {
+                            occupant.binding.host_vessel_id == state.binding.host_vessel_id
+                        })
+                        .any(|occupant| {
+                            let feet = station_to_body(pose, occupant.feet_m);
+                            bounds.iter().any(|bounds| {
+                                box_intersects_capsule(
+                                    *bounds,
+                                    feet,
+                                    AVATAR_HEIGHT_M,
+                                    STATION_AVATAR_RADIUS_M,
+                                )
+                            })
+                        })
+                })
+            });
+            let doorway_occupied = !next_open
+                && self.snapshot.as_ref().is_some_and(|snapshot| {
+                    snapshot
+                        .pilots
+                        .iter()
+                        .filter_map(|pilot| {
+                            pilot.station_avatar.as_ref()?.docked_traversal.as_ref()
+                        })
+                        .filter(|occupant| {
+                            occupant.binding.host_vessel_id == state.binding.host_vessel_id
+                        })
+                        .any(|occupant| hatch_occupied(pose, geometry_hatch, occupant.feet_m))
+                });
+            let other = 1 - index;
+            let blocked = common_block.or_else(|| {
+                if sweep.is_err() {
+                    Some("Hatch geometry unavailable · reconnect")
+                } else if next_open && !state.actuators.hatch_closed(other) {
+                    Some("Close the other hatch first")
+                } else if next_open
+                    && hatch == DockedHatch::Outer
+                    && (state.actuators.lift.moving
+                        || (state.actuators.lift.floor_station_m
+                            - lift_geometry(pose).ship_floor_m)
+                            .abs()
+                            > 0.015)
+                {
+                    Some("Call and stop the lift at ship level first")
+                } else if doorway_occupied {
+                    Some("Step clear of the hatch doorway")
+                } else if sweep_occupied {
+                    Some("Step clear of the hatch leaf sweep")
+                } else {
+                    None
+                }
+            });
+            let purpose = if hatch == DockedHatch::Inner {
+                "Cabin ↔ vestibule"
+            } else {
+                "Vestibule ↔ lift"
+            };
+            ui.small(format!("{purpose} · {status}"));
+            let clicked = ui.push_id(("boarding_hatch", index), |ui| {
+                ui.add_enabled(blocked.is_none(), egui::Button::new(format!("{} {name}", if next_open { "Open" } else { "Close" })))
+                    .on_hover_text(format!("{name}: {purpose}; control {distance:.1} m away. Server-confirmed motion and interlocks."))
+                    .clicked()
+            }).inner;
+            if clicked {
+                self.send(Request::DockedTraversal {
+                    request: DockedTraversalRequest::SetHatch {
+                        binding: state.binding.clone(),
+                        hatch,
+                        open: next_open,
+                    },
+                });
+            }
+            if common_block.is_none() {
+                if let Some(reason) = blocked {
+                    ui.small(format!("{name}: {reason}"));
+                }
+            }
+        }
+        if visible {
+            if let Some(reason) = common_block {
+                ui.small(reason);
+            }
+        }
+        if !visible
+            && nearest.is_finite()
+            && matches!(
+                state.support,
+                DockedSupport::Connector | DockedSupport::BoardingLift
+            )
+        {
+            ui.small(format!(
+                "Hatch control {nearest:.1} m away · walk within 3 m"
+            ));
+        }
+    }
+
     /// The platform's real commands stay reachable without opening route details.
     /// Both presentations share authority gates; the server owns all movement.
     fn boarding_lift_controls(&mut self, ui: &mut egui::Ui, state: &DockedTraversalState) {
@@ -1189,40 +1324,15 @@ impl Cockpit {
         {
             return;
         }
-        let fresh = self.snapshot.as_ref().is_some_and(|snapshot| {
-            self.presentation_time()
-                .saturating_sub(snapshot.server_time_ms)
-                <= 1500
+        let blocked = self.boarding_control_block_reason(state).or_else(|| {
+            if !state.actuators.hatches_closed() {
+                Some("Close both boarding hatches before moving the lift")
+            } else if state.actuators.lift.moving {
+                Some("Boarding lift moving · remain on the platform")
+            } else {
+                None
+            }
         });
-        let active_job = self.snapshot.as_ref().is_some_and(|snapshot| {
-            self.own().is_some_and(|pilot| {
-                snapshot
-                    .resource_jobs
-                    .iter()
-                    .any(|job| job.pilot == pilot.name && !job.phase.is_terminal())
-            })
-        });
-        let blocked = if !self.connected {
-            Some("Reconnect to operate the boarding lift")
-        } else if self.embedded_paused {
-            Some("Resume simulation to operate the boarding lift")
-        } else if !fresh {
-            Some("Waiting for a fresh world update")
-        } else if self.request_pending {
-            Some("Waiting for command confirmation")
-        } else if active_job {
-            Some("Mining routine owns the ship · boarding lift locked")
-        } else if !state.grounded || state.seat_transition.is_some() {
-            Some("Stand on the platform or beside its call control")
-        } else if !state.actuators.service_power_available {
-            Some("Docking service power unavailable · lift held safely")
-        } else if !state.actuators.hatches_closed() {
-            Some("Close both boarding hatches before moving the lift")
-        } else if state.actuators.lift.moving {
-            Some("Boarding lift moving · remain on the platform")
-        } else {
-            None
-        };
         let geometry = lift_geometry(pose);
         for (stop, label, height) in [
             (DockedLiftStop::Ship, "Lift to ship", geometry.ship_floor_m),
@@ -1293,6 +1403,7 @@ impl Cockpit {
             if let Some(state) = state {
                 ui.strong(docked_state_label(state));
                 if !in_space {
+                    self.boarding_hatch_controls(ui, state);
                     self.boarding_lift_controls(ui, state);
                 }
                 if let Ok(pose) = docked_binding_pose(&binding) {
@@ -1356,10 +1467,10 @@ impl Cockpit {
         });
         if state.is_some() && !in_space {
             ui.collapsing("Nearby controls and route", |ui| {
-                let height = ui.available_height().clamp(1.0, 64.0);
+                ui.small("Route: cabin → inner hatch → vestibule → outer hatch → lift. Close the other hatch before opening one.");
                 egui::ScrollArea::vertical()
                     .id_salt("nearby_ship_controls_scroll")
-                    .max_height(height)
+                    .max_height(96.0)
                     .min_scrolled_height(0.0)
                     .auto_shrink([false, true])
                     .show(ui, |ui| {
@@ -1375,7 +1486,7 @@ impl Cockpit {
         if self.docked_navigation_present() {
             if self.embedded {
                 egui::TopBottomPanel::bottom("embedded_docked_traversal_actions")
-                    .height_range(34.0..=112.0)
+                    .height_range(34.0..=220.0)
                     .resizable(false)
                     .frame(self.overlay_frame(ctx))
                     .show(ctx, |ui| {
@@ -1714,6 +1825,141 @@ mod tests {
             });
         }
         cockpit
+    }
+
+    #[test]
+    fn registered_airlock_primary_controls_fit_real_overlay_and_send_bound_request() {
+        for size in [Vec2::new(1500.0, 1000.0), Vec2::new(900.0, 650.0)] {
+            for expanded in [false, true] {
+                let ctx = egui::Context::default();
+                let mut style = (*ctx.style()).clone();
+                style.animation_time = 0.0;
+                ctx.set_style(style);
+                let mut cockpit = docked_fixture(&ctx, true);
+                let state = cockpit.snapshot.as_mut().unwrap().pilots[0]
+                    .station_avatar
+                    .as_mut()
+                    .unwrap()
+                    .docked_traversal
+                    .as_mut()
+                    .unwrap();
+                let binding = state.binding.clone();
+                let pose = docked_binding_pose(&binding).unwrap();
+                state.feet_m = hatch_anchors(pose).outer_inside_station_m;
+                state.support = DockedSupport::Connector;
+                state.surface_id = "boarding/vestibule".into();
+                state.actuators.hatches = Some(std::array::from_fn(|_| DockedHatchState {
+                    fraction: 0.0,
+                    target_open: false,
+                    moving: false,
+                    blocked: false,
+                    updated_at_ms: 1000,
+                }));
+                let body_feet = station_to_body(pose, state.feet_m);
+                assert!(
+                    hatch_leaf_sweep_bounds(PioneerDockedHatch::Outer, 0.0, 1.0)
+                        .unwrap()
+                        .iter()
+                        .all(|bounds| !box_intersects_capsule(
+                            *bounds,
+                            body_feet,
+                            AVATAR_HEIGHT_M,
+                            STATION_AVATAR_RADIUS_M
+                        )),
+                    "Fixture must stand clear of the actual leaf sweep"
+                );
+                let before = serde_json::to_value(&cockpit.snapshot).unwrap();
+                let (tx, rx) = mpsc::channel();
+                cockpit.commands = Some(tx);
+                let mut details_target = None;
+                let mut outer_target = None;
+                let mut details_seen = false;
+                for pass in 0..10 {
+                    let target = if expanded && (pass == 2 || pass == 3) {
+                        details_target
+                    } else if pass == 7 || pass == 8 {
+                        outer_target
+                    } else {
+                        None
+                    };
+                    let events = target.map_or_else(Vec::new, |pos| {
+                        vec![
+                            egui::Event::PointerMoved(pos),
+                            egui::Event::PointerButton {
+                                pos,
+                                button: egui::PointerButton::Primary,
+                                pressed: pass == 2 || pass == 7,
+                                modifiers: egui::Modifiers::NONE,
+                            },
+                        ]
+                    });
+                    let output = ctx.run(
+                        egui::RawInput {
+                            screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, size)),
+                            time: Some(pass as f64 / 60.0),
+                            events,
+                            ..Default::default()
+                        },
+                        |ctx| {
+                            egui::TopBottomPanel::bottom("airlock_test_editor_status")
+                                .exact_height(28.0)
+                                .show(ctx, |ui| {
+                                    ui.label("Editor status");
+                                });
+                            cockpit.station_overlay(ctx);
+                            egui::CentralPanel::default().show(ctx, |_ui| {});
+                        },
+                    );
+                    let usable =
+                        egui::Rect::from_min_max(Pos2::ZERO, Pos2::new(size.x, size.y - 28.0));
+                    let mut first_inner = None;
+                    let mut first_outer = None;
+                    for shape in &output.shapes {
+                        if let egui::Shape::Text(text) = &shape.shape {
+                            let label = text.galley.text();
+                            let center = text.pos + text.galley.rect.center().to_vec2();
+                            if label == "Nearby controls and route" {
+                                details_target = Some(center);
+                            }
+                            if label.starts_with("Route: cabin") {
+                                details_seen = true;
+                            }
+                            if label == "Open inner hatch" && first_inner.is_none() {
+                                first_inner = Some((center, shape.clip_rect));
+                            }
+                            if label == "Open outer hatch" && first_outer.is_none() {
+                                first_outer = Some((center, shape.clip_rect));
+                            }
+                        }
+                    }
+                    if pass == 5 {
+                        for (name, button) in [("inner", first_inner), ("outer", first_outer)] {
+                            let (center, clip) =
+                                button.expect("Both primary hatch actions must be emitted");
+                            assert!(clip.contains(center) && usable.contains(center),
+                                "Primary {name} hatch action clipped at {size:?}, details={expanded}: center={center:?} clip={clip:?}");
+                        }
+                        outer_target = first_outer.map(|(center, _)| center);
+                        assert_eq!(
+                            details_seen, expanded,
+                            "Details must be exercised in both real overlay states"
+                        );
+                    }
+                }
+                let received = rx.try_recv();
+                assert!(
+                    matches!(&received, Ok(Request::DockedTraversal {
+                    request: DockedTraversalRequest::SetHatch { binding: actual, hatch: DockedHatch::Outer, open: true }
+                }) if actual == &binding),
+                    "Visible primary Outer action must submit its real bound command at {size:?}, details={expanded}: {received:?}"
+                );
+                assert_eq!(
+                    serde_json::to_value(&cockpit.snapshot).unwrap(),
+                    before,
+                    "UI must not animate or move the authoritative hatch locally"
+                );
+            }
+        }
     }
 
     #[test]
