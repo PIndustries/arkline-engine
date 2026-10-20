@@ -1053,7 +1053,9 @@ fn advance_hatches(w: &mut World, now: u64) -> Result<()> {
                 };
                 // Fixed ticks can sum to 0.9999999999999999. Snap only the
                 // sub-nanometre endpoint residue so open/closed interlocks settle.
-                if (next-target).abs() < 1.0e-9 { next=target; }
+                if (next - target).abs() < 1.0e-9 {
+                    next = target;
+                }
                 let which = if index == 0 {
                     geometry::PioneerDockedHatch::Inner
                 } else {

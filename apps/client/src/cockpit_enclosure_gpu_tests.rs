@@ -220,15 +220,20 @@ fn frame(case: ViewCase, width: usize, height: usize) -> Frame {
 /// Raycast the same retained source-derived and installed construction triangles
 /// as the current runtime. The uncut historical rear wall is not a live surface.
 fn canonical_hit(frame: &Frame, pointer: egui::Pos2, viewport: egui::Rect) -> Option<f32> {
-    let (origin,direction)=screen_ray(frame.cockpit_vp,viewport,pointer).unwrap();
-    let geometry=flight_geometry().unwrap();
-    let mount=frame.pioneer_body_mount();
-    let parts=frame.canonical_pioneer_parts().expect("Current canonical Pioneer recipe");
-    parts.iter().filter(|part| docked_source_primitive(part.0)!=Some(6))
+    let (origin, direction) = screen_ray(frame.cockpit_vp, viewport, pointer).unwrap();
+    let geometry = flight_geometry().unwrap();
+    let mount = frame.pioneer_body_mount();
+    let parts = frame
+        .canonical_pioneer_parts()
+        .expect("Current canonical Pioneer recipe");
+    parts
+        .iter()
+        .filter(|part| docked_source_primitive(part.0) != Some(6))
         .filter_map(|part| {
-            let vertices=&geometry.catalog.uploads()[mesh_index(part.0)];
-            ray_mesh_hit(origin,direction,mount*part.1,vertices)
-        }).min_by(f32::total_cmp)
+            let vertices = &geometry.catalog.uploads()[mesh_index(part.0)];
+            ray_mesh_hit(origin, direction, mount * part.1, vertices)
+        })
+        .min_by(f32::total_cmp)
 }
 
 unsafe fn render(

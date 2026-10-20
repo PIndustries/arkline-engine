@@ -307,8 +307,8 @@ impl Harness {
                 request: DockedTraversalRequest::Walk {
                     sprint: false,
                     binding: state.binding,
-                    forward: (dx * cos + dz * sin) / distance * amount,
-                    strafe: (-dx * sin + dz * cos) / distance * amount,
+                    forward: ((dx * cos + dz * sin) / distance * amount).clamp(-1.0, 1.0),
+                    strafe: ((-dx * sin + dz * cos) / distance * amount).clamp(-1.0, 1.0),
                     turn: 0.0,
                 },
             });
