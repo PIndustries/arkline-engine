@@ -118,6 +118,7 @@ impl Server {
             supports_room_controls,
             supports_fleet_hangar,
             supports_pioneer_interior,
+            supports_docked_traversal_v2,
         } = request
         {
             let Some(auth) = &self.auth else {
@@ -145,6 +146,7 @@ impl Server {
                     supports_room_controls,
                     supports_fleet_hangar,
                     supports_pioneer_interior,
+                    supports_docked_traversal_v2,
                 },
                 now,
                 Some(admission),

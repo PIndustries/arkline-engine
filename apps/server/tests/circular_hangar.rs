@@ -23,6 +23,7 @@ impl Fixture {
             .unwrap();
         let mut world: Value = serde_json::from_str(&raw).unwrap();
         world["pilots"]["Walker"]["view"]["station_avatar"] = serde_json::to_value(StationAvatar {
+            docked_traversal: None,
             onboard_interior: false,
             interior_deck: 1,
             jump_started_ms: None,
@@ -65,6 +66,7 @@ fn connect(
             supports_room_controls: true,
             supports_fleet_hangar: true,
             supports_pioneer_interior: true,
+            supports_docked_traversal_v2: false,
             protocol_version: PROTOCOL_VERSION,
             pilot: name.into(),
             resume_token: token,

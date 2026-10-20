@@ -76,6 +76,7 @@ impl Client {
             world_layout_version: 1,
             supports_fleet_hangar: false,
             supports_pioneer_interior: true,
+            supports_docked_traversal_v2: false,
             protocol_version: PROTOCOL_VERSION,
             pilot: pilot.into(),
             resume_token: token,
@@ -186,6 +187,7 @@ fn two_pilots_trade_recover_and_export_consistent_history() {
                 world_layout_version: 1,
                 supports_fleet_hangar: false,
                 supports_pioneer_interior: true,
+                supports_docked_traversal_v2: false,
                 protocol_version: PROTOCOL_VERSION,
                 pilot: "Alice".into(),
                 resume_token: None
@@ -354,6 +356,7 @@ fn transport_presence_counts_sessions_without_removing_persistent_ships() {
         world_layout_version: 1,
         supports_fleet_hangar: false,
         supports_pioneer_interior: true,
+        supports_docked_traversal_v2: false,
         protocol_version: PROTOCOL_VERSION,
         pilot: "PresencePilot".into(),
         resume_token: Some("wrong".into()),

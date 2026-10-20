@@ -84,12 +84,44 @@ impl Live {
             .iter()
             .find(|p| p.name == self.pilot)
             .unwrap();
-        if pilot
-            .station_avatar
-            .as_ref()
-            .is_some_and(|a| !a.onboard_interior || a.interior_deck != 1)
-        {
-            return Err("Operate from the cockpit or aboard Pioneer deck one.");
+        if let Some(avatar) = pilot.station_avatar.as_ref() {
+            let accessible = if let Some(state) = avatar.docked_traversal.as_ref() {
+                let assets = self.assets.as_ref().unwrap();
+                let document = assets
+                    .pioneer_room_layout
+                    .as_ref()
+                    .map(|layout| layout.document.clone())
+                    .unwrap_or_else(arkline_protocol::default_pioneer_room_layout);
+                let fleet_layout = self
+                    .snapshot
+                    .as_ref()
+                    .and_then(|snapshot| snapshot.world_layout.as_ref())
+                    .map_or_else(arkline_protocol::FleetLayoutRevision::default, |layout| {
+                        layout.fleet_layout
+                    });
+                let expected = arkline_protocol::docked_traversal_binding(
+                    vessel.into(),
+                    &document,
+                    fleet_layout,
+                    assets.hangar.is_some(),
+                );
+                document.validate_live().is_ok()
+                    && state.binding == expected
+                    && state.actuators.binding == expected
+                    && state.version == arkline_protocol::DOCKED_TRAVERSAL_VERSION
+                    && self
+                        .snapshot
+                        .as_ref()
+                        .and_then(|snapshot| snapshot.docked_traversal_capability.as_ref())
+                        == Some(&arkline_protocol::docked_traversal_capability())
+                    && state.support == arkline_protocol::DockedSupport::Deck1
+                    && arkline_protocol::docked_binding_pose(&state.binding).is_ok()
+            } else {
+                avatar.onboard_interior && avatar.interior_deck == 1
+            };
+            if !accessible {
+                return Err("Operate from the cockpit or aboard Pioneer deck one.");
+            }
         }
         if !room.commissioned {
             return Err("Commission room power in Game → Equipment first.");

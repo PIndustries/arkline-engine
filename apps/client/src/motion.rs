@@ -143,6 +143,7 @@ mod tests {
     use super::*;
     fn snapshot(time: u64, x: f64) -> Snapshot {
         Snapshot {
+            docked_traversal_capability: None,
             world_layout: None,
             exterior: None,
             resource_jobs: vec![],

@@ -23,6 +23,7 @@ fn connect(
             supports_room_controls: false,
             supports_fleet_hangar: fleet,
             supports_pioneer_interior: true,
+            supports_docked_traversal_v2: false,
             protocol_version: PROTOCOL_VERSION,
             pilot: name.into(),
             resume_token: token,

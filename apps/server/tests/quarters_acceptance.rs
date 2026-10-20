@@ -62,6 +62,7 @@ fn walk_quarters_and_return_to_board_without_moving_ship_or_economy() {
                 world_layout_version: 1,
                 supports_fleet_hangar: false,
                 supports_pioneer_interior: true,
+                supports_docked_traversal_v2: false,
                 protocol_version: PROTOCOL_VERSION,
                 pilot: "Resident".into(),
                 resume_token: None,

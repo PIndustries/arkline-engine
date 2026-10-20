@@ -326,6 +326,16 @@ impl EmbeddedClient {
         }
         Some(match pilot.station_avatar.as_ref() {
             None => EditorSceneState::Cockpit,
+            Some(avatar) if avatar.docked_traversal.is_some() => {
+                match avatar.docked_traversal.as_ref().unwrap().support {
+                    arkline_protocol::DockedSupport::Station => EditorSceneState::StationHangar,
+                    arkline_protocol::DockedSupport::Deck1
+                    | arkline_protocol::DockedSupport::CoreStairs => {
+                        EditorSceneState::InteriorDeck1
+                    }
+                    _ => EditorSceneState::InteriorDeck2,
+                }
+            }
             Some(avatar) if !avatar.onboard_interior => EditorSceneState::StationHangar,
             Some(avatar) if avatar.interior_deck == 2 => EditorSceneState::InteriorDeck2,
             Some(_) => EditorSceneState::InteriorDeck1,
@@ -600,7 +610,11 @@ impl EmbeddedClient {
 
     /// Reports physical display geometry, not the presence of a 2D egui window.
     pub fn computer_display_visible(&self) -> bool {
-        self.cockpit.flight_view.computer_surface().is_some()
+        if self.cockpit.verified_docked_binding().is_some() {
+            self.cockpit.hangar_view.computer_surface().is_some()
+        } else {
+            self.cockpit.flight_view.computer_surface().is_some()
+        }
     }
 
     /// Parent overlays, inactive documents and parent text fields own input.
@@ -615,14 +629,20 @@ impl EmbeddedClient {
     fn release_cockpit_input(&mut self) {
         self.cockpit.cockpit_computer.cancel_input();
         self.cockpit.flight_view.set_computer_keyboard_owned(false);
+        self.cockpit.hangar_view.set_computer_keyboard_owned(false);
         self.cockpit.flight_view.set_head_look_input_allowed(false);
-        self.cockpit.pilot_input.relinquish(&self.cockpit.controls);
+        self.cockpit.hangar_view.set_head_look_input_allowed(false);
+        let _ = self.cockpit.pilot_input.update(false, Default::default());
+        self.cockpit.controls.clear_flight();
+        self.cockpit.stop_station_walk();
         self.editor_input.awaiting_release = true;
     }
 
     /// Poll a hidden viewport without treating workspace absence as a rendered frame.
     pub fn poll_hidden(&mut self) {
         self.release_cockpit_input();
+        self.cockpit.flight_view.clear_cockpit_presentation();
+        self.cockpit.hangar_view.clear_cockpit_presentation();
         self.poll();
         self.cockpit.frame_intervals.clear();
         self.cockpit.frame_observed = Instant::now();
@@ -658,6 +678,9 @@ impl EmbeddedClient {
         // visible while an editor overlay or held-key release owns input.
         self.cockpit
             .flight_view
+            .set_head_look_input_allowed(self.cockpit.embedded_input);
+        self.cockpit
+            .hangar_view
             .set_head_look_input_allowed(self.cockpit.embedded_input);
         self.cockpit.update(ctx, frame);
         if self.free_camera_enabled && self.free_camera.is_none() {
@@ -976,14 +999,18 @@ impl EmbeddedClient {
     fn current_view(&self) -> Option<EmbeddedView> {
         let pilot = self.cockpit.own()?;
         if self.cockpit.in_station_hangar() {
-            return Some(if pilot.station_avatar.is_some() {
-                match self.cockpit.hangar_view.on_foot_view {
-                    flight3d::hangar::OnFootView::FirstPerson => EmbeddedView::FirstPerson,
-                    flight3d::hangar::OnFootView::ThirdPerson => EmbeddedView::ThirdPerson,
-                }
-            } else {
-                EmbeddedView::Hangar
-            });
+            return Some(
+                if pilot.station_avatar.is_some()
+                    || self.cockpit.verified_docked_binding().is_some()
+                {
+                    match self.cockpit.hangar_view.on_foot_view {
+                        flight3d::hangar::OnFootView::FirstPerson => EmbeddedView::FirstPerson,
+                        flight3d::hangar::OnFootView::ThirdPerson => EmbeddedView::ThirdPerson,
+                    }
+                } else {
+                    EmbeddedView::Hangar
+                },
+            );
         }
         Some(match self.cockpit.view_mode {
             ViewMode::Cockpit => EmbeddedView::Cockpit,
@@ -1039,6 +1066,14 @@ impl EmbeddedClient {
         let scene = match self.cockpit.own() {
             None => "No authoritative pilot snapshot".into(),
             Some(p) if self.cockpit.in_station_hangar() => match p.station_avatar {
+                Some(a) if a.docked_traversal.is_some() => {
+                    format!(
+                        "Pioneer · {}",
+                        super::station_ui::docked_support_label(
+                            a.docked_traversal.as_ref().unwrap().support
+                        )
+                    )
+                }
                 Some(a) if a.onboard_interior => {
                     format!("Pioneer interior · deck {}", a.interior_deck)
                 }
@@ -1093,6 +1128,13 @@ impl EmbeddedClient {
         } else {
             self.cockpit.flight_view.debug_render_metrics()
         }
+    }
+    /// Each renderer reports its own view keys and frame age; feed passes never
+    /// overwrite the main view's measured work.
+    pub fn debug_view_render_metrics(&self) -> Vec<crate::ViewRenderMetrics> {
+        let mut views = self.cockpit.flight_view.debug_view_render_metrics();
+        views.extend(self.cockpit.hangar_view.debug_view_render_metrics());
+        views
     }
     pub fn set_material_preview(&mut self, preview: Option<EmbeddedMaterialPreview>) {
         self.cockpit.flight_view.set_material_preview(preview);
@@ -3046,6 +3088,7 @@ mod tests {
         client.state = EmbeddedStatus::Running;
         let pilot = &mut client.cockpit.snapshot.as_mut().unwrap().pilots[0];
         pilot.station_avatar = Some(StationAvatar {
+            docked_traversal: None,
             onboard_interior: false,
             interior_deck: 1,
             jump_started_ms: None,
@@ -3755,6 +3798,7 @@ mod tests {
         assert!(client.set_debug_view(EmbeddedView::Cockpit).is_err());
         client.cockpit.embedded = true;
         client.cockpit.snapshot.as_mut().unwrap().pilots[0].station_avatar = Some(StationAvatar {
+            docked_traversal: None,
             position: arkline_protocol::PIONEER_LIFT_POINT,
             heading: 0.0,
             moving: false,

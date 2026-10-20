@@ -63,6 +63,43 @@ impl Mailbox {
             remote: None,
         });
     }
+    /// Latest own-vessel sample carries its immutable physical registration.
+    pub fn publish_docked(
+        &self,
+        binding: arkline_protocol::DockedTraversalBinding,
+        forward: f64,
+        strafe: f64,
+        turn: f64,
+    ) {
+        let mut state = self.0.lock().unwrap();
+        state.generation = state.generation.wrapping_add(1);
+        state.pending = Some(PendingControl {
+            generation: state.generation,
+            request: Request::DockedTraversal {
+                request: arkline_protocol::DockedTraversalRequest::Walk {
+                    binding,
+                    forward,
+                    strafe,
+                    turn,
+                },
+            },
+            remote: None,
+        });
+    }
+    /// Releasing a flight viewport must preserve an already queued walking stop.
+    pub fn clear_flight(&self) {
+        let mut state = self.0.lock().unwrap();
+        let flight = state.pending.as_ref().is_some_and(|pending| {
+            matches!(
+                pending.request,
+                Request::PilotInput { .. } | Request::RemoteControl { .. }
+            )
+        });
+        if flight {
+            state.generation = state.generation.wrapping_add(1);
+            state.pending = None;
+        }
+    }
     pub fn clear(&self) {
         let mut state = self.0.lock().unwrap();
         state.generation = state.generation.wrapping_add(1);
@@ -408,6 +445,27 @@ mod tests {
                 assert!(sample.rotation[1] < 0.0);
             },
         );
+    }
+    #[test]
+    fn flight_release_preserves_queued_station_stop_but_clears_thrust() {
+        let mailbox = Mailbox::default();
+        mailbox.publish_station(0.0, 0.0, 0.0);
+        mailbox.clear_flight();
+        mailbox.clear_flight();
+        assert!(matches!(
+            mailbox.take(),
+            Some(Request::StationWalk {
+                forward: 0.0,
+                strafe: 0.0,
+                turn: 0.0
+            })
+        ));
+        mailbox.publish(Controls {
+            translation: [1.0, 0.0, 0.0],
+            rotation: [0.0; 3],
+        });
+        mailbox.clear_flight();
+        assert!(mailbox.take().is_none());
     }
     #[test]
     fn mailbox_replaces_stale_thrust_with_release() {

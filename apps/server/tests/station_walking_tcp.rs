@@ -63,6 +63,7 @@ impl Client {
             world_layout_version: 1,
             supports_fleet_hangar: false,
             supports_pioneer_interior: true,
+            supports_docked_traversal_v2: false,
             protocol_version: PROTOCOL_VERSION,
             pilot: "Navigator".into(),
             resume_token: token,

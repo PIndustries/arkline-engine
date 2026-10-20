@@ -13,7 +13,7 @@ pub use flight3d::model_catalog::{
 #[cfg(not(target_arch = "wasm32"))]
 pub use flight3d::model_preview::ModelPreview;
 #[cfg(not(target_arch = "wasm32"))]
-pub use flight3d::DebugRenderMetrics;
+pub use flight3d::{DebugRenderMetrics, ViewRenderMetrics, ViewVisibility};
 mod material_preview;
 pub use material_preview::EmbeddedMaterialPreview;
 mod material_program;
@@ -360,6 +360,7 @@ impl WorkerIdentity {
                 supports_pioneer_interior: true,
                 supports_fleet_hangar: true,
                 supports_room_controls: true,
+                supports_docked_traversal_v2: true,
                 world_layout_version: WORLD_LAYOUT_SCHEMA_VERSION,
             })
         } else {
@@ -370,6 +371,7 @@ impl WorkerIdentity {
                 supports_pioneer_interior: true,
                 supports_fleet_hangar: true,
                 supports_room_controls: true,
+                supports_docked_traversal_v2: true,
                 world_layout_version: WORLD_LAYOUT_SCHEMA_VERSION,
             })
         }
@@ -648,6 +650,7 @@ struct Cockpit {
     computer_ui_labels: Vec<(String, Pos2)>,
     hangar_view: flight3d::hangar::HangarView,
     station_walk_active: bool,
+    docked_walk_binding: Option<DockedTraversalBinding>,
     frozen_time: Option<u64>,
     focus_on_first_frame: bool,
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
@@ -775,6 +778,7 @@ impl Cockpit {
             computer_ui_labels: Vec::new(),
             hangar_view: flight3d::hangar::HangarView::new(cc.gl.as_ref()),
             station_walk_active: false,
+            docked_walk_binding: None,
             frozen_time: None,
             focus_on_first_frame: true,
             local_server: None,
@@ -976,6 +980,8 @@ impl Cockpit {
         self.boot.connect();
         self.connected = false;
         self.controls = pilot_input::Mailbox::default();
+        self.station_walk_active = false;
+        self.docked_walk_binding = None;
         self.pilot_input = pilot_input::PilotInput::default();
         self.motion.clear();
         self.timeline_origin = None;
@@ -1115,6 +1121,7 @@ impl Cockpit {
                 | Request::Dock
                 | Request::Undock
                 | Request::DisembarkShip
+                | Request::DockedTraversal { .. }
                 | Request::EnterInterior
                 | Request::ExitInterior
                 | Request::InteriorLift { .. }
@@ -1124,8 +1131,15 @@ impl Cockpit {
                 | Request::Jump { .. }
                 | Request::StartResourceJob { .. }
         ) {
-            self.pilot_input.relinquish(&self.controls);
+            if matches!(request, Request::DockedTraversal { .. }) {
+                self.stop_station_walk();
+                let _ = self.pilot_input.update(false, Default::default());
+                self.controls.clear_flight();
+            } else {
+                self.pilot_input.relinquish(&self.controls);
+            }
             self.station_walk_active = false;
+            self.docked_walk_binding = None;
         }
         if !matches!(request, Request::Snapshot | Request::ExportLedger) {
             self.cancel_ai();
@@ -1349,6 +1363,18 @@ impl Cockpit {
                 MUTED,
             );
         };
+        if let Some(state) = pilot
+            .station_avatar
+            .as_ref()
+            .and_then(|avatar| avatar.docked_traversal.as_ref())
+        {
+            return (
+                format!("ON FOOT / {}", station_ui::docked_support_label(state.support)),
+                "Walk through the ship; use hatch controls and the boarding lift to reach the station.".into(),
+                None,
+                self.accent(),
+            );
+        }
         if let Some(avatar) = &pilot.station_avatar {
             let (title, guidance) = if avatar.onboard_interior {
                 (
@@ -1832,11 +1858,20 @@ impl Cockpit {
     /// changes only its 3D vertices and ray map, never egui's allocation sizes.
     fn render_cockpit_computer(&mut self, ctx: &egui::Context, in_hangar: bool) {
         use flight3d::cockpit_computer::ComputerPermission;
-        let surface = self.flight_view.computer_surface();
-        let hit = self.flight_view.computer_hit_tester(ctx);
+        let docked = in_hangar && self.verified_docked_binding().is_some();
+        let surface = if docked {
+            self.hangar_view.computer_surface()
+        } else {
+            self.flight_view.computer_surface()
+        };
+        let hit: Box<dyn Fn(egui::Pos2) -> Option<egui::Pos2>> = if docked {
+            Box::new(self.hangar_view.computer_hit_tester(ctx))
+        } else {
+            Box::new(self.flight_view.computer_hit_tester(ctx))
+        };
         let active = self.connected
-            && !in_hangar
-            && self.flight_view.cockpit_presentation_active(self.view_mode);
+            && (docked
+                || !in_hangar && self.flight_view.cockpit_presentation_active(self.view_mode));
         let input_allowed = self.embedded_input
             && !self.embedded_paused
             && ctx.input(|input| input.focused && !input.viewport().minimized.unwrap_or(false));
@@ -1929,7 +1964,9 @@ impl Cockpit {
             };
         }
         self.flight_view
-            .set_computer_keyboard_owned(output.wants_keyboard_input);
+            .set_computer_keyboard_owned(!docked && output.wants_keyboard_input);
+        self.hangar_view
+            .set_computer_keyboard_owned(docked && output.wants_keyboard_input);
         if output.wants_keyboard_input {
             let ime = output.platform_output.ime.and_then(|ime| {
                 surface
@@ -1942,7 +1979,11 @@ impl Cockpit {
             self.settings_notice = format!("Cockpit display: {}", output.diagnostics.join("; "));
         }
         if active {
-            self.flight_view.submit_computer(ctx, output.primitives);
+            if docked {
+                self.hangar_view.submit_computer(ctx, output.primitives);
+            } else {
+                self.flight_view.submit_computer(ctx, output.primitives);
+            }
         }
     }
 
@@ -3711,10 +3752,12 @@ impl eframe::App for Cockpit {
         // A previous frame's mounted surface must never survive an early return,
         // a world switch or a hidden/free-camera presentation.
         self.flight_view.clear_cockpit_presentation();
+        self.hangar_view.clear_cockpit_presentation();
         let computer_active = self.connected
             && !self.boot.visible
-            && !self.in_station_hangar()
-            && self.flight_view.cockpit_presentation_active(self.view_mode);
+            && (self.verified_docked_binding().is_some()
+                || !self.in_station_hangar()
+                    && self.flight_view.cockpit_presentation_active(self.view_mode));
         if !computer_active
             || !self.embedded_input
             || self.embedded_paused
@@ -3724,6 +3767,8 @@ impl eframe::App for Cockpit {
             self.cockpit_computer.cancel_input();
         }
         self.flight_view
+            .set_computer_keyboard_owned(self.cockpit_computer.wants_keyboard_input());
+        self.hangar_view
             .set_computer_keyboard_owned(self.cockpit_computer.wants_keyboard_input());
         self.poll_voice();
         self.poll_ship_ai();
@@ -4209,6 +4254,11 @@ impl eframe::App for Cockpit {
         if in_hangar {
             self.station_overlay(ctx);
         }
+        self.hangar_view
+            .set_docked_traversal_enabled(self.verified_docked_binding().is_some());
+        self.hangar_view.set_head_look_input_allowed(
+            self.embedded_input && !self.cockpit_computer.wants_keyboard_input(),
+        );
         self.hangar_view.set_room_layout(
             self.assets
                 .as_ref()
@@ -4237,6 +4287,17 @@ impl eframe::App for Cockpit {
                             self.snapshot.as_ref().map_or(now, |s| s.server_time_ms),
                         ) {
                             self.activate_quarters_terminal(action);
+                        }
+                        if self.verified_docked_binding().is_some() {
+                            if let Some(snapshot) = self.snapshot.as_ref() {
+                                self.hangar_view.paint_docked_instruments(
+                                    ui,
+                                    &pilot,
+                                    snapshot,
+                                    now,
+                                    self.connected,
+                                );
+                            }
                         }
                     }
                 } else if self.view_mode != ViewMode::Tactical {
@@ -4900,6 +4961,7 @@ mod tests {
         cockpit.connected = true;
         cockpit.pilot = "pilot".into();
         cockpit.snapshot = Some(Snapshot {
+            docked_traversal_capability: None,
             world_layout: None,
             exterior: None,
             resource_jobs: vec![],
@@ -6370,6 +6432,7 @@ mod tests {
         cockpit.connected = true;
         cockpit.pilot = "pilot".into();
         cockpit.snapshot = Some(Snapshot {
+            docked_traversal_capability: None,
             world_layout: None,
             exterior: None,
             resource_jobs: vec![],
@@ -6700,6 +6763,7 @@ mod tests {
                         supports_pioneer_interior: _,
                         supports_fleet_hangar: _,
                         supports_room_controls: _,
+                        supports_docked_traversal_v2: _,
                         world_layout_version,
                         protocol_version,
                         pilot,

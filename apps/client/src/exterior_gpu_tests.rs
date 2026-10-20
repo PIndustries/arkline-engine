@@ -713,7 +713,7 @@ fn native_authority_pioneer_adoption_capture() {
                 supports_room_controls: true,
                 world_layout_version: 1,
                 supports_fleet_hangar: true,
-                supports_pioneer_interior: true,
+                supports_pioneer_interior: true, supports_docked_traversal_v2: false,
                 protocol_version: arkline_protocol::PROTOCOL_VERSION,
                 pilot: AUTHORITY_CAPTURE_PILOT.into(),
                 resume_token: None,

@@ -2,12 +2,13 @@
 use super::*;
 #[derive(Clone, Serialize, Deserialize)]
 pub(super) struct WalkInput {
-    forward: f64,
-    strafe: f64,
-    turn: f64,
-    accepted_ms: u64,
+    pub(super) forward: f64,
+    pub(super) strafe: f64,
+    pub(super) turn: f64,
+    pub(super) accepted_ms: u64,
 }
 pub(super) fn stop(p: &mut Pilot) {
+    docked_traversal::stop(p);
     p.walk_input = None;
     if let Some(a) = &mut p.view.station_avatar {
         a.moving = false;
@@ -16,6 +17,13 @@ pub(super) fn stop(p: &mut Pilot) {
     }
 }
 pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result<()> {
+    ensure!(
+        w.pilots
+            .get(name)
+            .and_then(|pilot| pilot.view.station_avatar.as_ref())
+            .is_none_or(|avatar| avatar.docked_traversal.is_none()),
+        "use the continuous docked traversal controls while v2 is active"
+    );
     if matches!(&r, Request::ExitInterior)
         && w.pilots.get(name).is_some_and(|pilot| {
             pilot.view.ship_class == ShipClass::Pioneer
@@ -63,6 +71,7 @@ pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result
             }
             p.walk_input = None;
             p.view.station_avatar = Some(StationAvatar {
+                docked_traversal: None,
                 onboard_interior: true,
                 interior_deck: 1,
                 jump_started_ms: None,
@@ -115,6 +124,7 @@ pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result
             );
             p.walk_input = None;
             p.view.station_avatar = Some(StationAvatar {
+                docked_traversal: None,
                 onboard_interior: false,
                 interior_deck: 1,
                 jump_started_ms: None,
@@ -130,6 +140,7 @@ pub(super) fn execute(w: &mut World, name: &str, r: Request, now: u64) -> Result
             ensure!(p.view.station_avatar.is_none(), "already on foot");
             p.controls = None;
             p.view.station_avatar = Some(StationAvatar {
+                docked_traversal: None,
                 onboard_interior: false,
                 interior_deck: 1,
                 jump_started_ms: None,
@@ -245,6 +256,9 @@ pub(super) fn migrate(w: &mut World, room_layout: Option<&RoomLayoutDocument>) {
     for (name, p) in &mut w.pilots {
         let fleet = w.accounts.get(name).is_some_and(|a| a.fleet_hangar);
         if let Some(a) = &mut p.view.station_avatar {
+            if a.docked_traversal.is_some() {
+                continue;
+            }
             if obstacles_for(
                 p.view.ship_class,
                 a.onboard_interior,
@@ -282,6 +296,9 @@ pub(super) fn advance(w: &mut World, now: u64, room_layout: Option<&RoomLayoutDo
         let Some(a) = &mut p.view.station_avatar else {
             continue;
         };
+        if a.docked_traversal.is_some() {
+            continue;
+        }
         if p.view.location != Location::Docked {
             p.view.station_avatar = None;
             p.walk_input = None;
@@ -374,6 +391,7 @@ pub(super) fn advance(w: &mut World, now: u64, room_layout: Option<&RoomLayoutDo
     }
 }
 pub(super) fn validate_room_layout(w: &World, document: &RoomLayoutDocument) -> Result<()> {
+    docked_traversal::validate_room_layout(w, document)?;
     document.validate_live().map_err(anyhow::Error::msg)?;
     for (name, pilot) in &w.pilots {
         if pilot.view.ship_class != ShipClass::Pioneer {

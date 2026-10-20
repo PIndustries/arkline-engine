@@ -14,6 +14,7 @@ fn connect(
             world_layout_version: 1,
             supports_fleet_hangar: false,
             supports_pioneer_interior: supports,
+            supports_docked_traversal_v2: false,
             protocol_version: PROTOCOL_VERSION,
             pilot: "Compatible".into(),
             resume_token: token,

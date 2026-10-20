@@ -235,6 +235,19 @@ fn connected_room_static_parts() -> Vec<ModelPart> {
     p.0
 }
 
+/// Exact existing room walls, storage, doorway surrounds and ceiling light.
+/// Registered docked scenes supply shared slabs/access paths separately, so the
+/// original full-deck slabs cannot cover the physical stairwell opening.
+pub(super) fn room_shell_parts(room: &arkline_protocol::RoomLayout) -> Vec<ModelPart> {
+    let mut parts: Vec<ModelPart> = room
+        .obstacles()
+        .into_iter()
+        .flat_map(obstacle_model_parts)
+        .collect();
+    parts.extend(room_decoration_parts(room));
+    parts
+}
+
 /// A cutaway of one default room using installed runtime recipes. Shared deck
 /// floors, ceilings, corridor ribs/markings and access-core context are omitted.
 #[cfg(not(target_arch = "wasm32"))]
@@ -245,12 +258,7 @@ pub(super) fn inspection_room_parts(source_id: &str) -> Result<Vec<ModelPart>, S
         .iter()
         .find(|room| room.source_room_id.as_deref() == Some(source_id))
         .ok_or_else(|| format!("Unknown Pioneer source room: {source_id}"))?;
-    let mut parts: Vec<ModelPart> = room
-        .obstacles()
-        .into_iter()
-        .flat_map(obstacle_model_parts)
-        .collect();
-    parts.extend(room_decoration_parts(room));
+    let mut parts = room_shell_parts(room);
     if room.runtime_room_id.as_deref() == Some(arkline_protocol::PIONEER_CONNECTED_ROOM.room_id) {
         parts.extend(connected_room_static_parts());
         let mut state =

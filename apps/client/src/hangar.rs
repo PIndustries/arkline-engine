@@ -8,6 +8,8 @@ use arkline_protocol::{hangar_layout, StationAvatar};
 mod avatar_animation;
 #[path = "avatar_follow.rs"]
 mod avatar_follow;
+#[path = "pioneer_docked_scene.rs"]
+mod pioneer_docked_scene;
 #[path = "pioneer_interior.rs"]
 mod pioneer_interior;
 #[path = "quarters.rs"]
@@ -54,6 +56,17 @@ pub struct HangarView {
     last_camera_pose: Option<(Vec3, f32, f32)>,
     room_layout: Option<arkline_protocol::RoomLayoutState>,
     room_parts: Option<pioneer_interior::LayoutPartsCache>,
+    docked_enabled: bool,
+    #[cfg(test)]
+    docked_disable_culling: bool,
+    docked_scene: Option<pioneer_docked_scene::SceneCache>,
+    docked_initialized: bool,
+    head_look_input_allowed: bool,
+    head_look: [f32; 2],
+    computer_keyboard_owned: bool,
+    docked_surfaces: [Option<CockpitSurface>; 6],
+    docked_layer: Option<egui::LayerId>,
+    docked_display_renderer: Option<Arc<Mutex<CockpitDisplayRenderer>>>,
 }
 impl HangarView {
     // egui callbacks share ownership on one browser thread; SendWrapper guards access.
@@ -65,6 +78,9 @@ impl HangarView {
             Some(Err(error)) => (None, Some(error)),
             None => (None, Some("Hangar needs a GPU rendering context".into())),
         };
+        let docked_display_renderer = gl
+            .and_then(|gl| unsafe { CockpitDisplayRenderer::new(gl.clone()).ok() })
+            .map(|renderer| Arc::new(Mutex::new(renderer)));
         Self {
             on_foot_view: OnFootView::ThirdPerson,
             renderer,
@@ -86,6 +102,17 @@ impl HangarView {
             last_camera_pose: None,
             room_layout: None,
             room_parts: None,
+            docked_enabled: false,
+            #[cfg(test)]
+            docked_disable_culling: false,
+            docked_scene: None,
+            docked_initialized: false,
+            head_look_input_allowed: true,
+            head_look: [0.0; 2],
+            computer_keyboard_owned: false,
+            docked_surfaces: std::array::from_fn(|_| None),
+            docked_layer: None,
+            docked_display_renderer,
         }
     }
     #[cfg(not(target_arch = "wasm32"))]
@@ -125,6 +152,80 @@ impl HangarView {
             .as_ref()
             .and_then(|r| r.lock().ok().map(|r| r.debug_metrics.get()))
             .unwrap_or_default()
+    }
+    /// The caller enables this only after matching the negotiated source registration.
+    pub fn set_docked_traversal_enabled(&mut self, enabled: bool) {
+        self.docked_enabled = enabled;
+    }
+    pub fn set_head_look_input_allowed(&mut self, allowed: bool) {
+        self.head_look_input_allowed = allowed;
+    }
+    #[cfg(test)]
+    pub fn head_look_angles(&self) -> [f32; 2] {
+        self.head_look
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn debug_view_render_metrics(&self) -> Vec<ViewRenderMetrics> {
+        self.renderer
+            .as_ref()
+            .and_then(|renderer| {
+                renderer
+                    .lock()
+                    .ok()
+                    .map(|renderer| renderer.view_profiler.borrow().samples())
+            })
+            .unwrap_or_default()
+    }
+    pub(crate) fn computer_surface(&self) -> Option<CockpitSurface> {
+        self.docked_surfaces[3].clone()
+    }
+    pub(crate) fn set_computer_keyboard_owned(&mut self, owned: bool) {
+        self.computer_keyboard_owned = owned;
+    }
+    pub(crate) fn clear_cockpit_presentation(&mut self) {
+        self.docked_surfaces = std::array::from_fn(|_| None);
+        self.docked_layer = None;
+    }
+    pub(crate) fn computer_hit_tester(
+        &self,
+        ctx: &egui::Context,
+    ) -> impl Fn(egui::Pos2) -> Option<egui::Pos2> + 'static {
+        let surface = self.computer_surface();
+        let layer = self.docked_layer;
+        let ctx = ctx.clone();
+        move |point| {
+            if layer.is_none() || ctx.layer_id_at(point) != layer {
+                return None;
+            }
+            surface.as_ref()?.unproject(point)
+        }
+    }
+    pub(crate) fn submit_computer(
+        &self,
+        ctx: &egui::Context,
+        primitives: Vec<egui::ClippedPrimitive>,
+    ) {
+        if let (Some(surface), Some(layer)) = (self.computer_surface(), self.docked_layer) {
+            surface.submit(ctx, layer, primitives);
+        }
+    }
+    pub(crate) fn paint_docked_instruments(
+        &self,
+        ui: &egui::Ui,
+        pilot: &PilotView,
+        snapshot: &Snapshot,
+        now: u64,
+        connected: bool,
+    ) {
+        paint_instruments(
+            ui,
+            &self.docked_surfaces,
+            pilot,
+            snapshot,
+            None,
+            now,
+            connected,
+        );
     }
     pub fn input_surface(&self) -> Option<(egui::Rect, egui::LayerId)> {
         self.surface
@@ -177,6 +278,14 @@ impl HangarView {
         self.yaw += (turn * 2.0 * dt as f64) as f32;
     }
     pub fn destroy(&mut self) {
+        self.clear_cockpit_presentation();
+        if let Some(renderer) = self.docked_display_renderer.take() {
+            if let Ok(mut renderer) = renderer.lock() {
+                unsafe {
+                    renderer.destroy();
+                }
+            }
+        }
         if let Some(renderer) = self.renderer.take() {
             if let Ok(mut renderer) = renderer.lock() {
                 unsafe {
@@ -197,6 +306,17 @@ impl HangarView {
         exterior: Option<&arkline_protocol::ExteriorWorldState>,
         server_time_ms: u64,
     ) -> Option<HangarAction> {
+        if pilot.ship_class == ShipClass::Pioneer
+            && (self.docked_enabled
+                || pilot
+                    .station_avatar
+                    .as_ref()
+                    .is_some_and(|avatar| avatar.docked_traversal.is_some()))
+        {
+            return pioneer_docked_scene::show(self, ui, pilot, now, live, fleet, room);
+        }
+        self.docked_initialized = false;
+        self.clear_cockpit_presentation();
         let (rect, response) =
             ui.allocate_exact_size(ui.available_size(), egui::Sense::click_and_drag());
         self.surface = Some((rect, ui.layer_id()));
@@ -1370,6 +1490,7 @@ mod tests {
     #[test]
     fn avatar_has_human_scale_and_walk_articulation() {
         let mut avatar = StationAvatar {
+            docked_traversal: None,
             onboard_interior: false,
             interior_deck: 1,
             jump_started_ms: None,
@@ -1560,6 +1681,7 @@ mod tests {
                     let mut parts = pioneer_interior::parts(deck);
                     if deck == 2 {
                         let avatar = StationAvatar {
+                            docked_traversal: None,
                             onboard_interior: true,
                             interior_deck: 2,
                             jump_started_ms: None,
@@ -1738,6 +1860,7 @@ mod tests {
                 gl.bind_framebuffer(glow::FRAMEBUFFER, Some(capture.framebuffer));
                 gl.viewport(0, 0, tile as i32, tile as i32);
                 let avatar = StationAvatar {
+                    docked_traversal: None,
                     onboard_interior: false,
                     interior_deck: 1,
                     jump_started_ms: None,

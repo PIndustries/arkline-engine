@@ -284,6 +284,14 @@ impl EditorWorld {
         let fleet_revision = world.scene_layout.definition().fleet_layout;
         let pilot = world.pilots.get_mut(name).context("editor pilot missing")?;
         ensure!(
+            pilot
+                .view
+                .station_avatar
+                .as_ref()
+                .is_none_or(|avatar| avatar.docked_traversal.is_none()),
+            "finish docked traversal before using editor scene placement"
+        );
+        ensure!(
             pilot.view.location == Location::Docked,
             "dock your ship before changing editor scene state"
         );
@@ -296,6 +304,7 @@ impl EditorWorld {
                     hangar_layout(pilot.view.ship_class).boarding_point
                 };
                 Some(StationAvatar {
+                    docked_traversal: None,
                     onboard_interior: false,
                     interior_deck: 1,
                     position,
@@ -317,6 +326,7 @@ impl EditorWorld {
                     2
                 };
                 Some(StationAvatar {
+                    docked_traversal: None,
                     onboard_interior: true,
                     interior_deck: deck,
                     position: if deck == 1 {
@@ -522,6 +532,7 @@ impl EditorWorld {
 // Exhaustive fixed names only: never serialize request payloads or credentials into traces.
 fn request_kind(request: &Request) -> &'static str {
     match request {
+        Request::DockedTraversal { .. } => "docked_traversal",
         Request::StationSit { .. } => "station_sit",
         Request::DisembarkShip => "disembark_ship",
         Request::EnterShip => "enter_ship",
@@ -719,6 +730,7 @@ mod tests {
             supports_room_controls: true,
             supports_fleet_hangar: true,
             supports_pioneer_interior: true,
+            supports_docked_traversal_v2: false,
         }
     }
     fn call(w: &mut EditorWorld, s: &mut Option<String>, r: Request) -> Response {
@@ -1447,6 +1459,7 @@ mod graph_tests {
                 supports_room_controls,
                 supports_fleet_hangar: true,
                 supports_pioneer_interior: true,
+                supports_docked_traversal_v2: false,
             },
         );
         assert!(r.ok);

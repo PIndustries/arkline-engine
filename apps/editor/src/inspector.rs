@@ -39,14 +39,26 @@ pub fn show(
         });
         egui::CollapsingHeader::new("Position and motion").default_open(true).show(ui, |ui| {
             if let Some(a)=&p.station_avatar {
-                ui.small(if a.onboard_interior { "Avatar: deck-local coordinates (meters)" } else { "Avatar: hangar-local coordinates (meters)" });
-                if a.onboard_interior { row(ui,"Deck",a.interior_deck.to_string()); }
-                vector(ui,"Feet",a.position,"m");
-                row(ui,"Heading",format!("{:.3} rad",a.heading));
-                row(ui,"Moving",a.moving.to_string());
-                row(ui,"Seated",a.seated.to_string());
-                row(ui,"Jump start",a.jump_started_ms.map_or("Grounded".into(),|v|format!("{v} ms")));
-                row(ui,"Avatar update",format!("{} ms",a.updated_at_ms));
+                if let Some(state)=&a.docked_traversal {
+                    ui.small("Avatar: station-world coordinates (meters)");
+                    row(ui,"Vessel",&state.binding.host_vessel_id);
+                    row(ui,"Support",format!("{:?}",state.support));
+                    vector(ui,"Feet",state.feet_m,"m");
+                    row(ui,"Heading",format!("{:.3} rad",state.heading));
+                    row(ui,"Moving",state.moving.to_string());
+                    row(ui,"Grounded",state.grounded.to_string());
+                    row(ui,"Seat transition",state.seat_transition.as_ref().map_or("None".into(),|phase|format!("{:?}",phase.phase)));
+                    row(ui,"Avatar update",format!("{} ms",state.updated_at_ms));
+                } else {
+                    ui.small(if a.onboard_interior { "Avatar: deck-local coordinates (meters)" } else { "Avatar: hangar-local coordinates (meters)" });
+                    if a.onboard_interior { row(ui,"Deck",a.interior_deck.to_string()); }
+                    vector(ui,"Feet",a.position,"m");
+                    row(ui,"Heading",format!("{:.3} rad",a.heading));
+                    row(ui,"Moving",a.moving.to_string());
+                    row(ui,"Seated",a.seated.to_string());
+                    row(ui,"Jump start",a.jump_started_ms.map_or("Grounded".into(),|v|format!("{v} ms")));
+                    row(ui,"Avatar update",format!("{} ms",a.updated_at_ms));
+                }
             }
             if let Some(f)=&p.flight {
                 ui.small("Ship: system-space coordinates");

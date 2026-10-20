@@ -14,6 +14,10 @@ mod exterior_effects;
 pub use exterior_effects::*;
 mod pioneer_interior;
 pub use pioneer_interior::*;
+pub mod pioneer_docked;
+pub use pioneer_docked::*;
+mod docked_traversal;
+pub use docked_traversal::*;
 mod room_layout;
 pub use room_layout::*;
 pub mod material_compile;
@@ -447,6 +451,9 @@ pub const GENESIS_HASH: &str = "000000000000000000000000000000000000000000000000
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "command", rename_all = "snake_case")]
 pub enum Request {
+    DockedTraversal {
+        request: DockedTraversalRequest,
+    },
     StationSit {
         seated: bool,
     },
@@ -585,6 +592,8 @@ pub enum Request {
         supports_fleet_hangar: bool,
         #[serde(default)]
         supports_pioneer_interior: bool,
+        #[serde(default)]
+        supports_docked_traversal_v2: bool,
     },
     Connect {
         /// Missing on older clients, which can only use legacy world geometry.
@@ -597,6 +606,8 @@ pub enum Request {
         /// Missing on older clients; only visual clients with interior support opt in.
         #[serde(default)]
         supports_pioneer_interior: bool,
+        #[serde(default)]
+        supports_docked_traversal_v2: bool,
         protocol_version: u32,
         pilot: String,
         resume_token: Option<String>,
@@ -955,6 +966,9 @@ pub const STATION_WALK_LEASE_MS: u64 = 500;
 pub const STATION_BOARD_RANGE_M: f64 = 3.0;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct StationAvatar {
+    /// Negotiated canonical station-world feet. Legacy fields remain a stopped hangar projection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub docked_traversal: Option<DockedTraversalState>,
     /// Pioneer deck-one local coordinates when true; private hangar otherwise.
     #[serde(default)]
     pub onboard_interior: bool,
@@ -1104,6 +1118,9 @@ pub struct AssetsView {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Snapshot {
+    /// Absent on authorities without this exact additive registration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub docked_traversal_capability: Option<DockedTraversalCapability>,
     /// The authority's immutable realm layout. Absence means exact legacy v1.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub world_layout: Option<WorldLayoutDefinition>,

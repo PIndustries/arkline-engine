@@ -2,6 +2,9 @@ pub mod access_tokens;
 mod assets;
 pub mod collaborative_editor;
 pub mod collaborative_transport;
+mod docked_traversal;
+#[cfg(test)]
+mod docked_traversal_tests;
 mod drones;
 pub mod editor;
 mod exterior_effects;
@@ -143,6 +146,7 @@ pub struct Server {
     online_sessions: BTreeMap<String, usize>,
     // Conservative latch: clear only after ALL sessions for this pilot leave.
     interior_incompatible: std::collections::BTreeSet<String>,
+    docked_incompatible: std::collections::BTreeSet<String>,
     fleet_incompatible: std::collections::BTreeSet<String>,
     room_incompatible: std::collections::BTreeSet<String>,
     // Kept after db so SQLite closes before authority is released. Never unlink
@@ -286,6 +290,7 @@ impl Server {
             // when an externally changed layout file would trap them.
             station::validate_room_layout(&world, room_layout)?;
         }
+        docked_traversal::stop_lifts(&mut world, now);
         station::migrate(&mut world, editor_room_layout.as_ref());
         for pilot in world.pilots.values_mut() {
             mining::stop_all(pilot, "Server restarted");
@@ -319,6 +324,7 @@ impl Server {
             auth: None,
             online_sessions: BTreeMap::new(),
             interior_incompatible: Default::default(),
+            docked_incompatible: Default::default(),
             fleet_incompatible: Default::default(),
             room_incompatible: Default::default(),
             _ownership_lock: ownership_lock,
@@ -441,6 +447,30 @@ impl Server {
             }
         }
 
+        let legacy_docked = matches!(
+            &request,
+            Request::Connect {
+                supports_docked_traversal_v2: false,
+                ..
+            }
+        );
+        if let Request::Connect {
+            pilot,
+            supports_docked_traversal_v2,
+            ..
+        } = &mut request
+        {
+            if self.docked_incompatible.contains(pilot) {
+                *supports_docked_traversal_v2 = false;
+            }
+        }
+        if matches!(&request, Request::DockedTraversal { .. })
+            && session
+                .as_ref()
+                .is_some_and(|name| self.docked_incompatible.contains(name))
+        {
+            return Response::error("Close incompatible clients, then disconnect and reconnect all sessions before docked traversal");
+        }
         let legacy_connect = matches!(
             &request,
             Request::Connect {
@@ -477,10 +507,21 @@ impl Server {
                         self.fleet_incompatible.insert(name.clone());
                     }
                 }
+                if legacy_docked {
+                    if let Some(name) = session.as_ref() {
+                        self.docked_incompatible.insert(name.clone());
+                    }
+                }
                 if legacy_connect {
                     if let Some(name) = session.as_ref() {
                         self.interior_incompatible.insert(name.clone());
                     }
+                }
+                if session
+                    .as_ref()
+                    .is_some_and(|name| self.docked_incompatible.contains(name))
+                {
+                    docked_traversal::project_legacy_response(&mut response);
                 }
                 let online = self.online_sessions.keys().cloned().collect::<Vec<_>>();
                 if let Some(snapshot) = &mut response.snapshot {
@@ -507,6 +548,7 @@ impl Server {
             if *count == 0 {
                 self.online_sessions.remove(pilot);
                 self.interior_incompatible.remove(pilot);
+                self.docked_incompatible.remove(pilot);
                 self.fleet_incompatible.remove(pilot);
                 self.room_incompatible.remove(pilot);
                 if let Err(error) = self.stop_disconnected(pilot) {
@@ -533,6 +575,7 @@ impl Server {
         power::advance(&mut world, now)?;
         room_controls::advance(&mut world, now)?;
         flight::advance(&mut world, now);
+        docked_traversal::advance(&mut world, now, self.editor_room_layout.as_ref())?;
         station::advance(&mut world, now, self.editor_room_layout.as_ref());
         surface::update(&mut world);
         universe::advance_locks(&mut world, now);
@@ -675,6 +718,7 @@ impl Server {
         power::advance(&mut world, now)?;
         room_controls::advance(&mut world, now)?;
         flight::advance(&mut world, now);
+        docked_traversal::advance(&mut world, now, self.editor_room_layout.as_ref())?;
         station::advance(&mut world, now, self.editor_room_layout.as_ref());
         surface::update(&mut world);
         universe::advance_locks(&mut world, now);
@@ -723,6 +767,23 @@ impl Server {
             }
         }
         match request {
+            Request::DockedTraversal { request } => {
+                let name = session
+                    .as_ref()
+                    .context("connect before docked traversal")?;
+                ensure!(
+                    !remote && !automated,
+                    "docked traversal cannot be delegated"
+                );
+                docked_traversal::execute(
+                    &mut world,
+                    name,
+                    request,
+                    now,
+                    self.editor_room_layout.as_ref(),
+                )?;
+                message = "Docked traversal action accepted";
+            }
             request @ (Request::StationSit { .. }
             | Request::DisembarkShip
             | Request::EnterShip
@@ -861,6 +922,14 @@ impl Server {
             }
             Request::BoardShip { id } => {
                 let name = session.as_ref().context("connect before boarding")?;
+                ensure!(
+                    world.pilots[name]
+                        .view
+                        .station_avatar
+                        .as_ref()
+                        .is_none_or(|avatar| avatar.docked_traversal.is_none()),
+                    "return to your pilot seat before boarding another vessel"
+                );
                 event = assets::board(&mut world, name, &id, now)?;
                 message = "Vessel boarded";
             }
@@ -885,6 +954,7 @@ impl Server {
                 supports_room_controls,
                 supports_fleet_hangar,
                 supports_pioneer_interior,
+                supports_docked_traversal_v2,
                 protocol_version,
                 pilot,
                 resume_token,
@@ -1001,6 +1071,15 @@ impl Server {
                     }
                 }
                 assets::ensure_accounts(&mut world);
+                let old_fleet_mode = world.accounts[&pilot].fleet_hangar;
+                world
+                    .accounts
+                    .get_mut(&pilot)
+                    .unwrap()
+                    .docked_traversal_compatible = supports_docked_traversal_v2;
+                if !supports_docked_traversal_v2 || old_fleet_mode != supports_fleet_hangar {
+                    docked_traversal::legacy_recovery(&mut world, &pilot, now);
+                }
                 world.accounts.get_mut(&pilot).unwrap().room_compatible = supports_room_controls;
                 if !supports_room_controls {
                     room_controls::legacy_recovery(&mut world, &pilot, now);
@@ -1052,6 +1131,9 @@ impl Server {
                         gate.system_id == world.pilots[&name].view.system_id,
                         "gate is in another system"
                     );
+                }
+                if matches!(&request, Request::Undock) {
+                    docked_traversal::can_undock(&world, &name)?;
                 }
                 let pilot = world.pilots.get_mut(&name).context("pilot missing")?;
                 flight::ensure_flight(pilot, now);
@@ -1378,6 +1460,7 @@ impl Server {
             .or(transport_session.as_ref())
             .and_then(|name| assets::view(&world, name));
         let snapshot = Snapshot {
+            docked_traversal_capability: Some(docked_traversal_capability()),
             world_layout: Some(world.scene_layout.definition()),
             exterior: Some(exterior_effects::view(&world, now)),
             remote_controls: world
@@ -1493,6 +1576,7 @@ fn validate(world: &World, room_layout: Option<&RoomLayoutDocument>) -> Result<(
         .validate()
         .map_err(anyhow::Error::msg)?;
     station::validate(world, room_layout)?;
+    docked_traversal::validate(world, room_layout)?;
     remote_control::validate(world)?;
     resource_jobs::validate(world)?;
     surface::validate(world)?;
@@ -1544,6 +1628,7 @@ mod tests {
                 supports_room_controls: false,
                 supports_fleet_hangar: false,
                 supports_pioneer_interior: true,
+                supports_docked_traversal_v2: false,
                 protocol_version: PROTOCOL_VERSION,
                 world_layout_version: WORLD_LAYOUT_SCHEMA_VERSION,
                 pilot: "Traveler".into(),

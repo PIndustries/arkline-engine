@@ -169,6 +169,7 @@ fn fleet(revision: FleetLayoutRevision) -> arkline_protocol::HangarView {
 
 fn avatar(pose: &str) -> Option<Vec<ModelPart>> {
     let mut avatar = StationAvatar {
+        docked_traversal: None,
         onboard_interior: false,
         interior_deck: 1,
         jump_started_ms: None,

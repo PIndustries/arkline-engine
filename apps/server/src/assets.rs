@@ -1,6 +1,10 @@
 use super::*;
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub(super) struct Account {
+    #[serde(default)]
+    pub(super) docked_traversal_compatible: bool,
+    #[serde(default)]
+    pub(super) docked_actuators: BTreeMap<String, DockedVesselActuators>,
     /// Legacy and new vessels explicitly start with the exterior branch enabled.
     #[serde(default = "exterior_enabled_by_default")]
     pub(super) pioneer_exterior_enabled: bool,

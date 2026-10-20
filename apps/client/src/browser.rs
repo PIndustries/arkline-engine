@@ -124,7 +124,7 @@ pub fn worker(
             write(&dir.join("storage-check"), "ok")?;
             let token = storage()?.get_item(&format!("arkline:{}", path.display())).map_err(|_| "Cannot read resume credential")?;
             let socket = Socket::connect(&server).await?;
-            let mut response = socket.exchange(&Request::Connect { supports_pioneer_interior: true, supports_fleet_hangar: true, supports_room_controls: true, world_layout_version: WORLD_LAYOUT_SCHEMA_VERSION, protocol_version: PROTOCOL_VERSION, pilot, resume_token: token }).await?;
+            let mut response = socket.exchange(&Request::Connect { supports_pioneer_interior: true, supports_docked_traversal_v2: true, supports_fleet_hangar: true, supports_room_controls: true, world_layout_version: WORLD_LAYOUT_SCHEMA_VERSION, protocol_version: PROTOCOL_VERSION, pilot, resume_token: token }).await?;
             if !response.ok { return Err(response.message); }
             validate_world_admission_response(&response)?;
             if let Some(token) = response.resume_token.take() { write(&path, &token)?; }

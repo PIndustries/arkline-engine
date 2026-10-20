@@ -152,6 +152,7 @@ mod tests {
     use arkline_protocol::*;
     fn snapshot(ore: u64, remaining: u64) -> Snapshot {
         Snapshot {
+            docked_traversal_capability: None,
             world_layout: None,
             exterior: None,
             resource_jobs: vec![],

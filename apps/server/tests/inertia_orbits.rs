@@ -15,6 +15,7 @@ fn setup(s: &mut Server, class: ShipClass) -> Option<String> {
             world_layout_version: 1,
             supports_fleet_hangar: false,
             supports_pioneer_interior: true,
+            supports_docked_traversal_v2: false,
             protocol_version: PROTOCOL_VERSION,
             pilot: "Pilot".into(),
             resume_token: None,

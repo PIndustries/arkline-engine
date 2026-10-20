@@ -370,6 +370,16 @@ impl DevelopmentEditorClient {
         secret: &str,
         connect: Option<Request>,
     ) -> Result<(Self, Response)> {
+        Self::connect_with_capabilities(address, secret, connect, false)
+    }
+
+    /// Viewers opt into traversal metadata without acquiring a game session.
+    pub fn connect_with_capabilities(
+        address: SocketAddr,
+        secret: &str,
+        connect: Option<Request>,
+        supports_docked_traversal_v2: bool,
+    ) -> Result<(Self, Response)> {
         ensure!(
             address.ip().is_loopback(),
             "development editor client connects to loopback only"
@@ -383,6 +393,7 @@ impl DevelopmentEditorClient {
                 secret: secret.to_owned(),
                 connect,
                 world_layout_version: arkline_protocol::WORLD_LAYOUT_SCHEMA_VERSION,
+                supports_docked_traversal_v2,
             },
         )?;
         let (role, response) = match reply {
@@ -522,6 +533,8 @@ enum WireRequest {
         connect: Option<Request>,
         #[serde(default)]
         world_layout_version: u32,
+        #[serde(default)]
+        supports_docked_traversal_v2: bool,
     },
     Snapshot,
     Game {
@@ -602,6 +615,7 @@ enum ActorAction {
         secret: String,
         connect: Option<Request>,
         world_layout_version: u32,
+        supports_docked_traversal_v2: bool,
     },
     Snapshot,
     Game(Request),
@@ -765,6 +779,7 @@ fn dispatch(
                 secret,
                 connect,
                 world_layout_version,
+                supports_docked_traversal_v2,
             } => {
                 let role = if constant_time_equal(secret.as_bytes(), secrets.editor.as_bytes()) {
                     CollaborationRole::Editor
@@ -782,8 +797,12 @@ fn dispatch(
                     }
                     _ => unreachable!(),
                 };
-                let (id, response) =
-                    authority.join_with_layout_capability(role, request, world_layout_version)?;
+                let (id, response) = authority.join_with_capabilities(
+                    role,
+                    request,
+                    world_layout_version,
+                    supports_docked_traversal_v2,
+                )?;
                 Ok(ActorOutput::Joined(id, role, response))
             }
             ActorAction::Snapshot => {
@@ -960,6 +979,7 @@ fn serve_peer(mut stream: TcpStream, actor: SyncSender<ActorCommand>) -> Result<
         secret,
         connect,
         world_layout_version,
+        supports_docked_traversal_v2,
     } = request
     else {
         write_line_deadline(
@@ -978,6 +998,7 @@ fn serve_peer(mut stream: TcpStream, actor: SyncSender<ActorCommand>) -> Result<
             secret,
             connect,
             world_layout_version,
+            supports_docked_traversal_v2,
         },
     ) {
         Ok(output) => output,
@@ -1284,6 +1305,10 @@ fn constant_time_equal(left: &[u8], right: &[u8]) -> bool {
 }
 
 #[cfg(test)]
+#[path = "collaborative_transport_traversal_tests.rs"]
+mod traversal_compatibility_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use arkline_protocol::{default_pioneer_room_layout, PROTOCOL_VERSION};
@@ -1304,6 +1329,7 @@ mod tests {
             world_layout_version: 1,
             supports_fleet_hangar: true,
             supports_pioneer_interior: true,
+            supports_docked_traversal_v2: false,
         }
     }
 
@@ -1624,6 +1650,7 @@ mod tests {
                 session: None,
                 action: ActorAction::Join {
                     world_layout_version: arkline_protocol::WORLD_LAYOUT_SCHEMA_VERSION,
+                    supports_docked_traversal_v2: false,
                     secret: "editor-cancel".into(),
                     connect: Some(connect("CancelledPilot")),
                 },
@@ -1662,6 +1689,7 @@ mod tests {
                 session: None,
                 action: ActorAction::Join {
                     world_layout_version: arkline_protocol::WORLD_LAYOUT_SCHEMA_VERSION,
+                    supports_docked_traversal_v2: false,
                     secret: "editor-cancel".into(),
                     connect: Some(connect("AbandonedPilot")),
                 },
@@ -1705,6 +1733,7 @@ mod tests {
                 None,
                 ActorAction::Join {
                     world_layout_version: arkline_protocol::WORLD_LAYOUT_SCHEMA_VERSION,
+                    supports_docked_traversal_v2: false,
                     secret: "viewer-cancel".into(),
                     connect: None,
                 },
@@ -1720,6 +1749,7 @@ mod tests {
             None,
             ActorAction::Join {
                 world_layout_version: arkline_protocol::WORLD_LAYOUT_SCHEMA_VERSION,
+                supports_docked_traversal_v2: false,
                 secret: "viewer-cancel".into(),
                 connect: None,
             },

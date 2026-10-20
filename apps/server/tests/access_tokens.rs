@@ -463,6 +463,7 @@ fn legacy(name: &str, token: Option<String>) -> arkline_protocol::Request {
         world_layout_version: 1,
         supports_fleet_hangar: true,
         supports_pioneer_interior: true,
+        supports_docked_traversal_v2: false,
     }
 }
 fn account(
@@ -484,6 +485,7 @@ fn account(
         world_layout_version: 1,
         supports_fleet_hangar: true,
         supports_pioneer_interior: true,
+        supports_docked_traversal_v2: false,
     }
 }
 #[test]

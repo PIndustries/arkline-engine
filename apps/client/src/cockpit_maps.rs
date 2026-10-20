@@ -19,6 +19,7 @@ pub(crate) struct CockpitSurface {
     index: usize,
     renderer: Option<Arc<Mutex<CockpitDisplayRenderer>>>,
     occlusion: Option<(Arc<CockpitOcclusion>, Mat4, Mat4)>,
+    registered_occlusion: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -92,6 +93,21 @@ impl CockpitSurface {
         index: usize,
         canvas_size: egui::Vec2,
     ) -> Option<Self> {
+        let (center,size)=*cockpit_screens(class).get(index)?;
+        Self::from_plane(viewport,local_to_clip,center,
+            Vec3::new(0.,size.y-0.008,size.z-0.008),center.x-0.025-0.006-0.0001,index,canvas_size)
+    }
+
+    /// Physical panel coordinates in one registered body frame. The same plane
+    /// supplies emitted UI triangles and pointer rays, without a camera mount.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn registered(viewport:egui::Rect,vp:Mat4,mount:Mat4,center:Vec3,half:Vec3,index:usize,canvas_size:egui::Vec2)->Option<Self> {
+        Self::from_plane(viewport,vp*mount,center,Vec3::new(0.,half.y-0.008,half.z-0.008),
+            center.x-0.025-0.006-0.0001,index,canvas_size)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn from_plane(viewport:egui::Rect,local_to_clip:Mat4,center:Vec3,half:Vec3,plane_x:f32,index:usize,canvas_size:egui::Vec2)->Option<Self> {
         if !viewport.is_finite()
             || viewport.width() <= 0.0
             || viewport.height() <= 0.0
@@ -101,10 +117,7 @@ impl CockpitSurface {
         {
             return None;
         }
-        let (center, size) = *cockpit_screens(class).get(index)?;
-        // Exact front bias shared with DisplayFace. It separates emitted pixels
-        // from the dielectric backing while retaining real scene depth.
-        let plane_x = center.x - 0.025 - 0.006 - 0.0001;
+        if !center.is_finite() || !half.is_finite() || half.y<=0. || half.z<=0. || !plane_x.is_finite() {return None;}
         // A perspective projection maps its camera center to (0,0,z,0).
         // Recover it in mount-local coordinates to reject the display's back.
         let camera = local_to_clip.inverse() * glam::Vec4::new(0.0, 0.0, 1.0, 0.0);
@@ -117,11 +130,12 @@ impl CockpitSurface {
             local_to_clip,
             plane_x,
             center,
-            half: Vec3::new(0.0, size.y - 0.008, size.z - 0.008),
+            half,
             bounds: egui::Rect::NOTHING,
             index,
             renderer: None,
             occlusion: None,
+            registered_occlusion: false,
         };
         let corners = [
             result.canvas.left_top(),
@@ -169,6 +183,11 @@ impl CockpitSurface {
         self.occlusion = Some((scene, vp, mount));
         self
     }
+    pub(super) fn with_registered_occlusion(mut self,scene:Arc<CockpitOcclusion>,vp:Mat4,mount:Mat4)->Self {
+        self.occlusion=Some((scene,vp,mount));
+        self.registered_occlusion=true;
+        self
+    }
     /// Exact glass-plane geometry for a cached video tile. Coordinates are
     /// display-local; the caller's GPU shader applies the same mount MVP.
     pub(super) fn feed_geometry(&self, tile: egui::Rect) -> Option<(Mat4, Vec3, Vec3)> {
@@ -201,8 +220,10 @@ impl CockpitSurface {
     }
 
     pub(super) fn unproject(&self, point: egui::Pos2) -> Option<egui::Pos2> {
-        if let Some((scene, vp, mount)) = &self.occlusion {
-            return scene.hit_surface(*vp, self.viewport, point, self.index, *mount, self.canvas);
+        if !self.registered_occlusion {
+            if let Some((scene,vp,mount))=&self.occlusion {
+                return scene.hit_surface(*vp,self.viewport,point,self.index,*mount,self.canvas);
+            }
         }
         let (origin, direction) = screen_ray(self.local_to_clip, self.viewport, point)?;
         if direction.x.abs() < 1e-7 {
@@ -213,6 +234,10 @@ impl CockpitSurface {
             return None;
         }
         let hit = origin + direction * t;
+        if self.registered_occlusion {
+            let (scene,vp,mount)=self.occlusion.as_ref()?;
+            if !scene.point_unblocked(*vp,self.viewport,point,mount.transform_point3(hit)) {return None;}
+        }
         let clip = self.local_to_clip * hit.extend(1.0);
         if !clip.is_finite() || clip.w <= 0.0 || clip.z < -clip.w || clip.z > clip.w {
             return None;
@@ -1280,5 +1305,33 @@ mod remote_tests {
         assert_eq!(main.eye, Vec3::new(1.0, 2.0, 3.0));
         assert!(!feed.cockpit);
         assert!(feed.drone_camera);
+    }
+}
+
+#[cfg(test)]
+mod registered_display_tests {
+    use super::*;
+    use super::super::cockpit_occlusion::{DepthDraw,DepthMeshCatalog};
+    #[test]
+    fn registered_display_input_and_emitted_plane_share_real_scene_blocking() {
+        let viewport=egui::Rect::from_min_size(egui::Pos2::ZERO,egui::vec2(1000.,800.));
+        let vp=Mat4::perspective_rh_gl(1.2,1.25,0.05,100.)*
+            Mat4::look_at_rh(Vec3::new(-2.,1.,0.),Vec3::new(0.,1.,0.),Vec3::Y);
+        let catalog=Arc::new(DepthMeshCatalog::new(vec![Arc::from(super::super::cube())]));
+        let clear=Arc::new(CockpitOcclusion::new(ShipClass::Pioneer,catalog.clone(),vec![],vec![]).unwrap());
+        let surface=CockpitSurface::registered(viewport,vp,Mat4::IDENTITY,Vec3::new(0.,1.,0.),
+            Vec3::new(0.02,0.25,0.4),3,egui::vec2(300.,180.)).unwrap()
+            .with_registered_occlusion(clear,vp,Mat4::IDENTITY);
+        let point=surface.canvas_rect().center();
+        let screen=surface.project(point).unwrap();
+        assert!(surface.unproject(screen).unwrap().distance(point)<0.001);
+        let emitted=surface.local_point(point);
+        assert!((emitted.x+0.0311).abs()<0.000001);
+        let wall=Mat4::from_scale_rotation_translation(Vec3::new(0.1,1.,1.),Quat::IDENTITY,Vec3::new(-1.,1.,0.));
+        let draw=DepthDraw::whole(&catalog,0,wall).unwrap();
+        let blocked=Arc::new(CockpitOcclusion::new(ShipClass::Pioneer,catalog,vec![draw],vec![]).unwrap());
+        let blocked=surface.with_registered_occlusion(blocked,vp,Mat4::IDENTITY);
+        assert!(blocked.unproject(screen).is_none());
+        assert!(blocked.project(point).is_some(),"projection alone must never grant input through geometry");
     }
 }

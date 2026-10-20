@@ -46,6 +46,7 @@ pub enum CollaborationRole {
 struct Session {
     server_session: Option<String>,
     role: CollaborationRole,
+    supports_docked_traversal_v2: bool,
 }
 
 /// One simulation, clock, and graph shared by every joined session.
@@ -95,6 +96,18 @@ impl CollaborativeEditorHost {
         request: Request,
         world_layout_version: u32,
     ) -> Result<(EditorSessionId, Response)> {
+        self.join_with_capabilities(role, request, world_layout_version, false)
+    }
+
+    /// A viewer negotiates traversal rendering independently of game Connect.
+    /// This only changes its response projection, never the shared world state.
+    pub fn join_with_capabilities(
+        &mut self,
+        role: CollaborationRole,
+        request: Request,
+        world_layout_version: u32,
+        supports_docked_traversal_v2: bool,
+    ) -> Result<(EditorSessionId, Response)> {
         ensure!(
             self.sessions.len() < MAX_COLLABORATIVE_EDITOR_SESSIONS,
             "editor session limit reached"
@@ -118,7 +131,7 @@ impl CollaborativeEditorHost {
             ),
         }
         let mut server_session = None;
-        let response = self.world.handle(&mut server_session, request);
+        let mut response = self.world.handle(&mut server_session, request);
         ensure!(response.ok, "{}", response.message);
         if role == CollaborationRole::Viewer {
             let layout = response
@@ -142,8 +155,10 @@ impl CollaborativeEditorHost {
             Session {
                 server_session,
                 role,
+                supports_docked_traversal_v2,
             },
         );
+        project_traversal_response(&mut response, role, supports_docked_traversal_v2);
         Ok((id, response))
     }
 
@@ -164,7 +179,13 @@ impl CollaborativeEditorHost {
             ),
             "use join to establish a session"
         );
-        Ok(self.world.handle(&mut session.server_session, request))
+        let mut response = self.world.handle(&mut session.server_session, request);
+        project_traversal_response(
+            &mut response,
+            session.role,
+            session.supports_docked_traversal_v2,
+        );
+        Ok(response)
     }
 
     pub fn is_paused(&self) -> bool {
@@ -314,6 +335,36 @@ impl CollaborativeEditorHost {
     }
 }
 
+/// Responses own cloned public state. Legacy unauthenticated viewers cannot
+/// render canonical traversal coordinates, so omit only their additive metadata.
+fn project_traversal_response(
+    response: &mut Response,
+    role: CollaborationRole,
+    supports_docked_traversal_v2: bool,
+) {
+    if role != CollaborationRole::Viewer || supports_docked_traversal_v2 {
+        return;
+    }
+    fn legacy_snapshot(snapshot: &mut Snapshot) {
+        snapshot.docked_traversal_capability = None;
+        for pilot in &mut snapshot.pilots {
+            if let Some(avatar) = &mut pilot.station_avatar {
+                avatar.docked_traversal = None;
+            }
+        }
+    }
+    if let Some(snapshot) = &mut response.snapshot {
+        legacy_snapshot(snapshot);
+    }
+    if let Some(ledger) = &mut response.ledger {
+        legacy_snapshot(&mut ledger.snapshot);
+    }
+}
+
+#[cfg(test)]
+#[path = "collaborative_traversal_compatibility_tests.rs"]
+mod traversal_compatibility_tests;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -334,6 +385,7 @@ mod tests {
             world_layout_version: 1,
             supports_fleet_hangar: true,
             supports_pioneer_interior: true,
+            supports_docked_traversal_v2: false,
         }
     }
 

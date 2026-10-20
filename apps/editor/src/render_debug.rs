@@ -44,6 +44,18 @@ impl RenderDebug {
             metrics.wireframe_draw_calls
         ));
         ui.small("Counts describe the last GPU mesh scene pass, which may be a camera feed; sky and shadow passes are excluded. Wireframe adds rendering work. A 2D view does not submit this 3D mesh pass.");
+        for sample in client.debug_view_render_metrics() {
+            ui.separator();
+            ui.strong(format!("{} · sample {} ms",sample.key,sample.frame));
+            ui.label(format!("Visibility-tested draws: {} / {} submitted",sample.visibility.submitted_draws,sample.visibility.candidate_draws));
+            ui.label(format!("Visibility-tested triangles: {} / {} submitted",sample.visibility.submitted_triangles,sample.visibility.candidate_triangles));
+            ui.small(format!("CPU selection {:.3} ms · pass submission {:.3} ms",sample.visibility.cpu_prepare_ns as f64/1e6,sample.cpu_submit_ns as f64/1e6));
+            ui.small(match (sample.gpu_elapsed_ns,sample.gpu_frame) {
+                (Some(ns),Some(frame))=>format!("GPU pass {:.3} ms · completed sample {frame} ms",ns as f64/1e6),
+                _=>"GPU pass timing unavailable or pending".into(),
+            });
+        }
+        ui.small("Each camera selects independently. Visibility counts cover tested mesh groups; sky, effects and required shadow/depth passes may still run. GPU timing covers the enclosing pass and is read asynchronously. Cached feeds retain their prior sample timestamp.");
         ui.separator();
         ui.strong("Observed view transitions");
         ui.small("Most recent first. Simulation time stays fixed while paused.");

@@ -22,6 +22,7 @@ fn explicit_asteroid_lock_depletion_and_legacy_migration_conserve_ore() {
             world_layout_version: 1,
             supports_fleet_hangar: false,
             supports_pioneer_interior: true,
+            supports_docked_traversal_v2: false,
             protocol_version: PROTOCOL_VERSION,
             pilot: "Miner".into(),
             resume_token: None,

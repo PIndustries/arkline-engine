@@ -45,6 +45,7 @@ fn interior_rooms_doors_restart_and_boarding_lifecycle() {
             world_layout_version: 1,
             supports_fleet_hangar: false,
             supports_pioneer_interior: true,
+            supports_docked_traversal_v2: false,
             protocol_version: PROTOCOL_VERSION,
             pilot: "Walker".into(),
             resume_token: None,
@@ -176,6 +177,7 @@ fn interior_rooms_doors_restart_and_boarding_lifecycle() {
                 world_layout_version: 1,
                 supports_fleet_hangar: false,
                 supports_pioneer_interior: true,
+                supports_docked_traversal_v2: false,
                 protocol_version: PROTOCOL_VERSION,
                 pilot: "Walker".into(),
                 resume_token: token
