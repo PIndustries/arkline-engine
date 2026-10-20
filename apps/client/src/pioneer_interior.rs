@@ -197,7 +197,7 @@ pub(super) fn architectural_bulkhead_parts(
     let size = max - min;
     let thin = if size.x < size.z { 0 } else { 2 };
     let run = 2 - thin;
-    if size[thin] < 0.035 || size[run] < 0.18 || size.y < 0.15 {
+    if size[thin] < 0.04 || size[run] < 0.18 || size.y < 0.15 {
         surface_block(&mut p, min, max, cream, 0., SurfaceRole::ArchitecturalPanel);
         return p.0;
     }
@@ -1071,7 +1071,21 @@ mod room_inspection_tests {
             } else {
                 9
             };
-            assert_eq!(inspected.len(), expected, "{source_id}");
+            if room.deck == 2 {
+                // Passive corridor-facing architecture replaces two wall slabs;
+                // room equipment/light authority remains the original recipe.
+                assert!(
+                    (expected..=expected + 20).contains(&inspected.len()),
+                    "{source_id}: architectural instance budget"
+                );
+                assert_eq!(
+                    inspected.iter().filter(|part| part.3 > 0.).count(),
+                    1,
+                    "{source_id}: only the original room ceiling diffuser"
+                );
+            } else {
+                assert_eq!(inspected.len(), expected, "{source_id}");
+            }
         }
         assert!(inspection_room_parts("unknown-room").is_err());
     }
@@ -1410,5 +1424,56 @@ mod tests {
         let eye = camera(target, Vec3::new(10.0, 6.0, 2.0));
         assert!(eye.y <= 2.95 && eye.z > 5.8);
         assert!(!parts(1).is_empty());
+    }
+}
+
+#[cfg(test)]
+mod architectural_finish_tests {
+    use super::*;
+
+    #[test]
+    fn fitted_finishes_remain_inside_existing_solid_wall_envelopes() {
+        for (min, max, floor, cover) in [
+            (
+                Vec3::new(20., -0.32, -0.78),
+                Vec3::new(31.6, 2.08, -0.70),
+                -0.32,
+                true,
+            ),
+            (
+                Vec3::new(31.48, -0.32, -6.88),
+                Vec3::new(31.6, 2.88, -0.7),
+                -0.32,
+                true,
+            ),
+            (Vec3::new(4., 0., 5.7), Vec3::new(7.7, 3.2, 5.85), 0., false),
+            (Vec3::new(4., 2.4, 5.7), Vec3::new(5., 3.2, 5.85), 0., false),
+            (Vec3::ZERO, Vec3::new(2., 3., 0.03), 0., false),
+        ] {
+            let parts = architectural_bulkhead_parts(min, max, floor, Vec3::splat(0.4), cover);
+            assert!(!parts.is_empty() && parts.len() <= 16);
+            for (mesh, model, _, emission) in parts {
+                assert_eq!(
+                    mesh_index(mesh),
+                    0,
+                    "No extra source mesh or equipment model"
+                );
+                assert_eq!(emission, 0., "Passive finish cannot invent a light output");
+                assert!(model.is_finite() && model.determinant() > 0.);
+                for x in [-1., 1.] {
+                    for y in [-1., 1.] {
+                        for z in [-1., 1.] {
+                            let vertex = model.transform_point3(Vec3::new(x, y, z));
+                            assert!(
+                                (0..3)
+                                    .all(|i| vertex[i] >= min[i] - 1e-5
+                                        && vertex[i] <= max[i] + 1e-5),
+                                "Finish {vertex:?} escapes original solid {min:?}..{max:?}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
     }
 }

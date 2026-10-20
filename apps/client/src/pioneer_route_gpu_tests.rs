@@ -1452,6 +1452,12 @@ fn native_pioneer_bridge_corridor_finish_review() {
             collision, geometry.supports, geometry.portals
         );
         let parts = pioneer_docked_scene::default_body_parts().unwrap();
+        assert!(parts.len() <= 650, "Bounded architectural instance budget");
+        assert_eq!(
+            parts.iter().filter(|p| p.3 > 0.).count(),
+            63,
+            "No new emitter or lighting authority"
+        );
         let receipt = serde_json::json!({"scope":"Reachable native offscreen engine views; real LeaveSeat and ordinary authority walking; no desktop input claim",
             "source_head":option_env!("GIT_HEAD"),"source_glb_sha256":arkline_protocol::PIONEER_DOCKED_SOURCE_SHA256,
             "registration_revision":arkline_protocol::PIONEER_DOCKED_REGISTRATION_REVISION,
