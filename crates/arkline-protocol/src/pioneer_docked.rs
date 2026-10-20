@@ -10,7 +10,8 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 
-// Revision 2 changes the fitted bay and workstation. Old saved bindings must
+// Revision 3 adds retained moving hatch leaves to the fitted bay/workstation.
+// Old saved bindings must
 // remain with their matching build until an explicit migration is validated.
 pub const PIONEER_DOCKED_REGISTRATION_REVISION: u32 = 3;
 pub const PIONEER_DOCKED_SOURCE_SHA256: &str =

@@ -120,6 +120,7 @@ struct Harness {
     updates: mpsc::Sender<crate::Update>,
     requests: mpsc::Receiver<Request>,
     input_time: f64,
+    modifiers: egui::Modifiers,
     ui_undocks: usize,
     authority_requests: Vec<serde_json::Value>,
 }
@@ -206,6 +207,7 @@ impl Harness {
             updates,
             requests,
             input_time: 0.0,
+            modifiers: egui::Modifiers::NONE,
             ui_undocks: 0,
             authority_requests: Vec::new(),
         }
@@ -341,6 +343,11 @@ impl Harness {
 
     unsafe fn frame(&mut self, events: Vec<egui::Event>) -> Shot {
         let frame_start = std::time::Instant::now();
+        for event in &events {
+            if let egui::Event::Key { modifiers, .. } = event {
+                self.modifiers = *modifiers;
+            }
+        }
         self.world.as_mut().unwrap().advance(50).unwrap();
         self.refresh();
         self.input_time += 0.05;
@@ -357,6 +364,7 @@ impl Harness {
                 )),
                 time: Some(self.input_time),
                 predicted_dt: 0.05,
+                modifiers: self.modifiers,
                 focused: true,
                 events,
                 ..Default::default()
@@ -920,6 +928,56 @@ fn native_pioneer_editor_gameplay_decks_and_space_share_canonical_views() {
         cases.push(serde_json::json!({"route":"editor-deck2","geometry":floor_evidence(&deck2, &state.binding,
             &[[5.0,-0.32,0.0],[10.0,-0.32,0.0],[15.0,-0.32,0.0]])}));
 
+        // Real held Shift+W feeds authoritative sprint and visible third-person gait.
+        harness.cockpit.hangar_view.on_foot_view = OnFootView::ThirdPerson;
+        harness.cockpit.hangar_view.pitch = 0.15;
+        let before_sprint = harness.traversal().feet_m;
+        let pointer = deck2.viewport.unwrap().center();
+        harness.frame(vec![
+            egui::Event::PointerMoved(pointer),
+            egui::Event::Key {
+                key: egui::Key::W,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::SHIFT,
+            },
+        ]);
+        for _ in 0..5 {
+            harness.frame(vec![]);
+        }
+        let stride_a = harness.frame(vec![]);
+        captures.push(capture(
+            directory.as_deref(),
+            "third-person-sprint-stride-a",
+            &stride_a,
+        ));
+        for _ in 0..3 {
+            harness.frame(vec![]);
+        }
+        let stride_b = harness.frame(vec![]);
+        captures.push(capture(
+            directory.as_deref(),
+            "third-person-sprint-stride-b",
+            &stride_b,
+        ));
+        let sprint_state = harness.traversal();
+        assert!(sprint_state.sprinting && sprint_state.moving);
+        assert!(
+            Vec3::from_array(sprint_state.feet_m.map(|v| v as f32))
+                .distance(Vec3::from_array(before_sprint.map(|v| v as f32)))
+                > 2.0
+        );
+        harness.frame(vec![egui::Event::Key {
+            key: egui::Key::W,
+            physical_key: None,
+            pressed: false,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        }]);
+        harness.settle();
+        assert!(!harness.traversal().sprinting);
+        harness.placement(EditorSceneState::InteriorDeck2);
         let document = harness
             .cockpit
             .assets
@@ -961,6 +1019,15 @@ fn native_pioneer_editor_gameplay_decks_and_space_share_canonical_views() {
             "geometry":floor_evidence(&galley, &crew_state.binding,
                 &[[door_x,-0.32,door_z+inward*1.35],[door_x,-0.32,door_z+inward*1.6],[door_x,-0.32,door_z+inward*2.0]])}));
 
+        harness.walk_to_body([door_x, -0.32, door_z + inward * 2.1]);
+        harness.heading(0.0);
+        harness.cockpit.hangar_view.pitch = 0.12;
+        let galley_inside = harness.settle();
+        captures.push(capture(
+            directory.as_deref(),
+            "gameplay-galley-fitted-furniture",
+            &galley_inside,
+        ));
         harness.placement(EditorSceneState::InteriorDeck1);
         harness.heading(0.0);
         let deck1_state = harness.traversal();
@@ -1087,5 +1154,164 @@ fn native_pioneer_editor_gameplay_decks_and_space_share_canonical_views() {
         }
         drop(harness);
         assert_eq!(gl.get_error(), glow::NO_ERROR);
+    }
+}
+
+#[test]
+#[ignore = "Explicit native macOS animated hatch and physical boarding journey; disposable EditorWorld"]
+fn native_pioneer_animated_hatches_boarding_and_return() {
+    unsafe {
+        let directory = PathBuf::from(
+            std::env::var_os("ARKLINE_PIONEER_HATCH_EVIDENCE").expect("Retained evidence path"),
+        );
+        std::fs::create_dir(&directory).unwrap();
+        let (_context, gl) = PrivateContext::create();
+        let mut h = Harness::new(gl, Some(directory.clone()));
+        h.settle();
+        let binding = h.cockpit.verified_docked_binding().unwrap();
+        let pose = arkline_protocol::docked_binding_pose(&binding).unwrap();
+        h.command(Request::DockedTraversal {
+            request: DockedTraversalRequest::LeaveSeat {
+                binding: binding.clone(),
+            },
+        });
+        h.world.as_mut().unwrap().advance(900).unwrap();
+        h.refresh();
+        for target in [
+            [33.36, -0.32, 3.0],
+            [33.36, -0.32, 0.0],
+            [34.1, -0.32, -0.5],
+            [34.1, -0.32, -7.8],
+        ] {
+            h.walk_to_body(target);
+        }
+        let a = arkline_protocol::hatch_anchors(pose);
+        let lift = arkline_protocol::lift_geometry(pose);
+        let body = |point| arkline_protocol::station_to_body(pose, point);
+        let facing = (a.inner_bounds.axes[2][2]).atan2(a.inner_bounds.axes[2][0]);
+        h.heading(facing);
+        let mut captures = vec![capture(Some(&directory), "inner-closed", &h.settle())];
+        let mut motion = Vec::new();
+        let set = |h: &mut Harness, hatch, open| {
+            h.command(Request::DockedTraversal {
+                request: DockedTraversalRequest::SetHatch {
+                    binding: binding.clone(),
+                    hatch,
+                    open,
+                },
+            });
+        };
+        set(&mut h, arkline_protocol::DockedHatch::Inner, true);
+        for step in 1..=5 {
+            h.world.as_mut().unwrap().advance(250).unwrap();
+            let shot = h.frame(vec![]);
+            let fraction = h.traversal().actuators.hatch_fractions()[0];
+            assert!((fraction - step as f64 / 5.0).abs() < 1e-8);
+            motion.push(serde_json::json!({"step":step,"fraction":fraction,"frame":shot.frame}));
+            captures.push(capture(
+                Some(&directory),
+                &format!("inner-opening-{step}"),
+                &shot,
+            ));
+        }
+        assert!(h.traversal().actuators.inner_hatch_open);
+        h.walk_to_body(body(a.inner_outside_station_m));
+        set(&mut h, arkline_protocol::DockedHatch::Inner, false);
+        h.world.as_mut().unwrap().advance(1500).unwrap();
+        h.refresh();
+        h.walk_to_body(body(a.outer_inside_station_m));
+        set(&mut h, arkline_protocol::DockedHatch::Outer, true);
+        h.world.as_mut().unwrap().advance(1500).unwrap();
+        h.refresh();
+        let outer = h.settle();
+        captures.push(capture(
+            Some(&directory),
+            "outer-open-retained-leaves",
+            &outer,
+        ));
+        h.walk_to_body(body(a.outer_outside_station_m));
+        set(&mut h, arkline_protocol::DockedHatch::Outer, false);
+        h.world.as_mut().unwrap().advance(1500).unwrap();
+        h.refresh();
+        h.walk_to_body(body([
+            lift.center_station_m[0],
+            lift.ship_floor_m,
+            lift.center_station_m[2],
+        ]));
+        h.command(Request::DockedTraversal {
+            request: DockedTraversalRequest::CallLift {
+                binding: binding.clone(),
+                stop: arkline_protocol::DockedLiftStop::Station,
+            },
+        });
+        h.world.as_mut().unwrap().advance(12000).unwrap();
+        h.refresh();
+        assert_eq!(
+            h.traversal().actuators.lift.floor_station_m,
+            lift.station_floor_m
+        );
+        let call = arkline_protocol::lift_call_anchors(pose);
+        h.walk_to_body(body(call.station_station_m));
+        let station = h.settle();
+        captures.push(capture(Some(&directory), "station-exit", &station));
+        assert_eq!(h.traversal().support, DockedSupport::Station);
+        h.walk_to_body(body([
+            lift.center_station_m[0],
+            lift.station_floor_m,
+            lift.center_station_m[2],
+        ]));
+        h.command(Request::DockedTraversal {
+            request: DockedTraversalRequest::CallLift {
+                binding: binding.clone(),
+                stop: arkline_protocol::DockedLiftStop::Ship,
+            },
+        });
+        h.world.as_mut().unwrap().advance(12000).unwrap();
+        h.refresh();
+        h.walk_to_body(body(a.outer_outside_station_m));
+        set(&mut h, arkline_protocol::DockedHatch::Outer, true);
+        h.world.as_mut().unwrap().advance(1500).unwrap();
+        h.refresh();
+        h.walk_to_body(body(a.outer_inside_station_m));
+        set(&mut h, arkline_protocol::DockedHatch::Outer, false);
+        h.world.as_mut().unwrap().advance(1500).unwrap();
+        h.refresh();
+        set(&mut h, arkline_protocol::DockedHatch::Inner, true);
+        h.world.as_mut().unwrap().advance(1500).unwrap();
+        h.refresh();
+        h.walk_to_body(body(a.inner_inside_station_m));
+        set(&mut h, arkline_protocol::DockedHatch::Inner, false);
+        h.world.as_mut().unwrap().advance(1500).unwrap();
+        h.refresh();
+        for target in [
+            [34.1, -0.32, -0.5],
+            [33.36, -0.32, 0.0],
+            [33.36, -0.32, 3.0],
+            [33.54, -0.32, 3.0],
+        ] {
+            h.walk_to_body(target);
+        }
+        h.command(Request::DockedTraversal {
+            request: DockedTraversalRequest::TakeSeat {
+                binding: binding.clone(),
+            },
+        });
+        h.world.as_mut().unwrap().advance(900).unwrap();
+        h.refresh();
+        h.cockpit.hangar_view.pitch = 0.0;
+        h.cockpit.hangar_view.yaw = pose.yaw as f32;
+        h.cockpit.hangar_view.head_look = [0.0; 2];
+        let returned = h.settle();
+        captures.push(capture(Some(&directory), "returned-reseated", &returned));
+        assert!(h.cockpit.own().unwrap().station_avatar.is_none());
+        let screen = computer_evidence(&returned);
+        let cache =
+            pioneer_docked_scene::SceneCache::new(arkline_protocol::default_pioneer()).unwrap();
+        let parts = pioneer_docked_scene::seated_body_parts(&cache, None, 0).unwrap();
+        std::fs::write(directory.join("receipt.json"),serde_json::to_vec_pretty(&serde_json::json!({
+            "native_macOS_offscreen":true,"desktop_acceptance":false,"captures":captures,"motion":motion,
+            "registered_panels":cache.geometry.panels.len(),"body_draw_parts":parts.len(),
+            "source_sha256":arkline_protocol::PIONEER_DOCKED_SOURCE_SHA256,"registration_revision":arkline_protocol::PIONEER_DOCKED_REGISTRATION_REVISION,
+            "returned_screen":screen,"authority_requests":h.authority_requests,"fixture":authority_fixture(&h.directory)})).unwrap()).unwrap();
     }
 }

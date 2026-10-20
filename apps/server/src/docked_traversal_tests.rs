@@ -1835,6 +1835,54 @@ fn hatch_motion_is_timed_reversible_paused_and_holds_on_power_loss() {
     assert_eq!(traversal(&reversed).actuators.hatch_fractions()[0], 0.5);
     let quarter = snapshot(&mut server, &mut session, start + 1125);
     assert!((traversal(&quarter).actuators.hatch_fractions()[0] - 0.25).abs() < 1e-10);
+    let saved = durable(&server);
+    let directory = std::env::temp_dir().join(format!(
+        "arkline-hatch-restart-{}-{}",
+        std::process::id(),
+        rand::random::<u64>()
+    ));
+    std::fs::create_dir_all(&directory).unwrap();
+    let database = directory.join("world.sqlite");
+    let disk = Server::open(&database).unwrap();
+    disk.db
+        .execute("UPDATE world SET json=?1 WHERE id=1", [&saved])
+        .unwrap();
+    drop(disk);
+    let disk = Server::open(&database).unwrap();
+    let reopened: World = serde_json::from_str(&durable(&disk)).unwrap();
+    let held = &reopened.accounts["Walker"].docked_actuators[&binding().host_vessel_id];
+    assert_eq!(held.hatch_fractions()[0], 0.25);
+    assert!(!held.hatches.as_ref().unwrap()[0].moving);
+    let mut occupied: World = serde_json::from_str(&saved).unwrap();
+    let mut blocker = occupied.pilots["Walker"].clone();
+    let leaf = geometry::hatch_leaf_bounds(geometry::PioneerDockedHatch::Inner, 0.125).unwrap()[0];
+    let feet = geometry::body_to_station(
+        PioneerDockedPose::private(),
+        [leaf.center_m[0], -0.32, leaf.center_m[2]],
+    );
+    blocker
+        .view
+        .station_avatar
+        .as_mut()
+        .unwrap()
+        .docked_traversal
+        .as_mut()
+        .unwrap()
+        .feet_m = feet;
+    occupied.pilots.insert("SweepObstacle".into(), blocker);
+    let blocked = crate::docked_traversal::execute(
+        &mut occupied,
+        "Walker",
+        request(false),
+        start + 1125,
+        None,
+    );
+    assert!(blocked.is_err() && blocked.unwrap_err().to_string().contains("occupied"));
+    assert_eq!(
+        occupied.accounts["Walker"].docked_actuators[&binding().host_vessel_id].hatch_fractions()
+            [0],
+        0.25
+    );
     let mut world: World = serde_json::from_str(&durable(&server)).unwrap();
     world
         .accounts

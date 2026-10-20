@@ -551,10 +551,34 @@ mod tests {
                 && obstacle.max[2] > passage_z
                 && obstacle.max[1] > 1.0
         }));
-        assert!(document.obstacles(2).iter().all(|obstacle| {
-            obstacle.kind != StationObstacleKind::Storage
-                || (obstacle.min[0] == 0.7 && obstacle.min[2] == 6.45)
-        }));
+        let upper = document.obstacles(2);
+        let storage: Vec<_> = upper
+            .iter()
+            .filter(|o| o.kind == StationObstacleKind::Storage)
+            .collect();
+        assert_eq!(
+            storage.len(),
+            2,
+            "Only the core cabinet and fitted galley counter are installed"
+        );
+        assert!(storage.iter().any(|o| o.min == [0.7, 0.0, 6.45]));
+        assert!(storage.iter().any(|o| (o.min[0] - 5.0).abs() < 1e-9
+            && (o.min[2] - 12.95).abs() < 1e-9
+            && o.max[1] == 0.9));
+        assert_eq!(
+            upper
+                .iter()
+                .filter(|o| o.kind == StationObstacleKind::Table)
+                .count(),
+            1
+        );
+        assert_eq!(
+            upper
+                .iter()
+                .filter(|o| o.kind == StationObstacleKind::Sofa)
+                .count(),
+            2
+        );
     }
 
     #[test]
