@@ -635,3 +635,173 @@ fn native_shared_model_preview_catalog_import_materials_controls_and_clear() {
         assert_eq!(gl.get_error(), glow::NO_ERROR);
     }
 }
+
+#[test]
+#[ignore = "Explicit actual repository GLB files through shared imported GPU preview; no desktop window"]
+fn native_shared_model_preview_actual_repository_glbs_and_calibration_rejection() {
+    unsafe {
+        let directory =
+            std::env::var_os("ARKLINE_REPOSITORY_GLB_EVIDENCE").map(std::path::PathBuf::from);
+        if let Some(directory) = &directory {
+            std::fs::create_dir(directory).unwrap();
+        }
+        let repository = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let (_context, gl) = PrivateContext::create();
+        let mut harness = Harness::new(gl.clone());
+        harness.frame(vec![]);
+        let mut rows = Vec::new();
+        let mut sources = std::collections::BTreeSet::new();
+        for (relative, triangles, batches) in [
+            ("assets/ships/pioneer/pioneer.glb", 103_466, 9),
+            ("assets/ships/pioneer/studies/pioneer-study.glb", 78_246, 9),
+            (
+                "assets/ships/pioneer/studies/study05/pioneer-study05.glb",
+                103_466,
+                9,
+            ),
+        ] {
+            // Match browser loading: remove the previous model before validating
+            // the selected file, then use the same verified imported backend.
+            harness.preview.clear();
+            let path = repository.join(relative);
+            let bytes = std::fs::read(&path).unwrap();
+            let sha256 = hex::encode(Sha256::digest(&bytes));
+            sources.insert(sha256.clone());
+            let geometry = Arc::new(ImportedGeometry::decode(&bytes).unwrap());
+            let report = geometry.report.clone();
+            assert_eq!(report.triangles, triangles, "{relative}");
+            assert_eq!(report.primitives, batches, "{relative}");
+            let (min, max, corners) = geometry.triangle_positions_m().fold(
+                (
+                    Vec3::splat(f32::INFINITY),
+                    Vec3::splat(f32::NEG_INFINITY),
+                    0usize,
+                ),
+                |(min, max, count), position| {
+                    let point = Vec3::from_array(position);
+                    assert!(point.is_finite());
+                    (min.min(point), max.max(point), count + 1)
+                },
+            );
+            assert_eq!(report.min_m, min.to_array());
+            assert_eq!(report.max_m, max.to_array());
+            assert_eq!(corners, triangles * 3);
+            let source = ship_asset::decode(&bytes).unwrap();
+            assert_eq!(
+                report.materials,
+                source
+                    .iter()
+                    .map(|part| part.material_name.clone())
+                    .collect::<Vec<_>>()
+            );
+            let expected_materials = source
+                .iter()
+                .map(|part| {
+                    (
+                        part.color,
+                        part.emissive_color * part.emission,
+                        part.roughness,
+                        part.metallic,
+                    )
+                })
+                .collect::<Vec<_>>();
+            harness.preview.set_imported(geometry.clone()).unwrap();
+            let bindings = harness.preview.imported.debug_mesh_bindings();
+            assert_eq!(bindings.len(), batches);
+            assert_eq!(
+                bindings
+                    .iter()
+                    .map(|binding| binding.2 as usize)
+                    .collect::<Vec<_>>(),
+                source
+                    .iter()
+                    .map(|part| part.vertices.len())
+                    .collect::<Vec<_>>()
+            );
+            assert_eq!(
+                harness.preview.imported.debug_materials(),
+                expected_materials,
+                "{relative}: every uploaded batch must retain its source GLB scalar material"
+            );
+            harness.frame(vec![]);
+            let shot = harness.frame(vec![]);
+            assert!(
+                shot.occupied() > 500,
+                "{relative}: source geometry must be visible"
+            );
+            assert!(
+                matches!(&harness.preview.source, PreviewSource::Imported(current) if Arc::ptr_eq(current, &geometry))
+            );
+            harness.preview.set_imported(geometry.clone()).unwrap();
+            assert_eq!(bindings, harness.preview.imported.debug_mesh_bindings());
+            assert_eq!(geometry.report, report);
+            assert_eq!(
+                sha256,
+                hex::encode(Sha256::digest(std::fs::read(&path).unwrap()))
+            );
+            rows.push(serde_json::json!({
+                "source_path":relative,
+                "source_sha256":sha256,
+                "source_bytes":bytes.len(),
+                "report":report,
+                "report_matches_decoded_meter_vertices":true,
+                "uploaded_materials_match_all_source_batches":true,
+                "repeated_selection_retains_gpu_bindings":true,
+                "source_file_unchanged":true,
+                "capture":capture(directory.as_deref(), &format!("repository-glb-{}", rows.len()), &shot),
+            }));
+        }
+        // This source intentionally lacks NORMAL. Do not invent normals or a
+        // substitute cube to turn an unsupported file into a successful preview.
+        let relative = "assets/examples/calibration-cube.glb";
+        let path = repository.join(relative);
+        let bytes = std::fs::read(&path).unwrap();
+        let sha256 = hex::encode(Sha256::digest(&bytes));
+        harness.preview.clear();
+        let error = match ImportedGeometry::decode(&bytes) {
+            Ok(_) => panic!("Calibration source without NORMAL unexpectedly imported"),
+            Err(error) => error,
+        };
+        assert_eq!(error, "Missing ship normals");
+        let rejected = harness.frame(vec![]);
+        assert!(matches!(harness.preview.source, PreviewSource::Empty));
+        assert_eq!(rejected.occupied(), 0);
+        assert!(harness.preview.imported.debug_mesh_bindings().is_empty());
+        assert_eq!(
+            sha256,
+            hex::encode(Sha256::digest(std::fs::read(&path).unwrap()))
+        );
+        if let Some(directory) = &directory {
+            std::fs::write(
+                directory.join("receipt.json"),
+                serde_json::to_vec_pretty(&serde_json::json!({
+                    "schema_version":1,
+                    "scope":"Actual repository files read from their source paths, ImportedGeometry validation, shared ModelPreview callbacks and private macOS CGL color/depth readback",
+                    "vendor":gl.get_parameter_string(glow::VENDOR),
+                    "renderer":gl.get_parameter_string(glow::RENDERER),
+                    "gl_version":gl.get_parameter_string(glow::VERSION),
+                    "rendered_source_paths":rows.len(),
+                    "distinct_rendered_content_hashes":sources.len(),
+                    "sources":rows,
+                    "rejected_source":{
+                        "source_path":relative,
+                        "source_sha256":sha256,
+                        "source_bytes":bytes.len(),
+                        "error":error,
+                        "old_model_callback_removed":true,
+                        "source_file_unchanged":true,
+                        "capture":capture(Some(directory), "calibration-missing-normals-cleared", &rejected),
+                    },
+                    "limitations":[
+                        "Canonical Pioneer and study05 are currently identical content at distinct source paths; no distinct shape is claimed",
+                        "Calibration source has no normals and remains explicitly unsupported; no fallback geometry is generated",
+                        "GPU buffer identity and scalar material bindings are verified; GPU payload byte-readback invariance is not claimed",
+                        "Offscreen source-file acceptance does not establish desktop OS input or a running game session"
+                    ],
+                })).unwrap(),
+            ).unwrap();
+        }
+        drop(harness);
+        assert_eq!(gl.get_error(), glow::NO_ERROR);
+    }
+}
