@@ -171,9 +171,9 @@ impl ProjectWorkspace {
 
     pub fn preview_handoff_result(&mut self, queued: bool) {
         self.message = if queued {
-            "GLB snapshot queued in the model tools. Review the report and choose Accept preview there; no asset was applied or saved."
+            "GLB snapshot opened in Models. Preview is read-only; use Stage selected… then import management to accept or save it."
         } else {
-            "The model tools are busy. Open Assets and finish its current operation, then return here and choose Preview in model tools again."
+            "Models could not open this snapshot. Return to Files and choose Preview in model tools again; existing imports were preserved."
         }.into();
     }
 

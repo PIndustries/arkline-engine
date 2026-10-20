@@ -339,7 +339,9 @@ fn frame(p: &mut Imports, ctx: &egui::Context, events: Vec<egui::Event>) -> egui
             events,
             ..Default::default()
         },
-        |ctx| p.show(ctx, None),
+        |ctx| {
+            p.show(ctx, None);
+        },
     )
 }
 fn point(o: &egui::FullOutput, label: &str) -> egui::Pos2 {
@@ -1009,7 +1011,9 @@ fn drop_import_uses_same_verified_pipeline_without_touching_authority() {
             }],
             ..Default::default()
         },
-        |ctx| p.show(ctx, None),
+        |ctx| {
+            p.show(ctx, None);
+        },
     );
     settle(&mut p);
     assert_eq!(p.candidate_label, "drop.glb");

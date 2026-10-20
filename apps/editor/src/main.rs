@@ -19,6 +19,7 @@ mod imports;
 mod inspector;
 mod material_graph;
 mod materials;
+mod model_browser;
 mod physics_lab;
 mod project_workspace;
 mod provenance;
@@ -29,7 +30,7 @@ mod session_panel;
 #[cfg(test)]
 mod shift_embedded_tests;
 mod surface_materials;
-use arkline_client::{EmbeddedAssetGallery, EmbeddedClient, EmbeddedDroneGallery, EmbeddedStatus};
+use arkline_client::{EmbeddedAssetGallery, EmbeddedClient, EmbeddedStatus};
 use eframe::egui::{self, Color32, RichText};
 use std::{collections::VecDeque, path::PathBuf, time::Duration};
 const BUILD: &str = include_str!("../../../BUILD_VERSION");
@@ -68,7 +69,7 @@ struct Editor {
     workspace: usize,
     wireframe: bool,
     asset_gallery: Option<EmbeddedAssetGallery>,
-    drone_gallery: Option<EmbeddedDroneGallery>,
+    model_browser: Option<model_browser::ModelBrowser>,
     graphics: Option<std::sync::Arc<eframe::glow::Context>>,
     render_debug: render_debug::RenderDebug,
     physics_lab: physics_lab::PhysicsLab,
@@ -125,7 +126,7 @@ impl Editor {
             workspace: 0,
             wireframe: false,
             asset_gallery: None,
-            drone_gallery: None,
+            model_browser: None,
             graphics: cc.gl.clone(),
             render_debug: render_debug::RenderDebug::default(),
             physics_lab: physics_lab::PhysicsLab::default(),
@@ -401,20 +402,7 @@ impl eframe::App for Editor {
             });
         egui::TopBottomPanel::top("workspace_tabs").show(ctx, |ui| {
             ui.horizontal_wrapped(|ui| {
-                ui.menu_button("Model", |ui| {
-                    if ui.button("Drone models").clicked() {
-                        self.workspace = 8;
-                        ui.close_menu();
-                    }
-                    if ui.button("GLB preview").clicked() {
-                        self.workspace = 5;
-                        ui.close_menu();
-                    }
-                    if ui.button("Engineering candidate").clicked() {
-                        self.open_inspector(2);
-                        ui.close_menu();
-                    }
-                });
+                ui.selectable_value(&mut self.workspace, 8, "Models");
                 if ui
                     .selectable_label(self.workspace == 0 && self.inspector_tab == 6, "Rooms")
                     .clicked()
@@ -425,7 +413,12 @@ impl eframe::App for Editor {
                 ui.selectable_value(&mut self.workspace, 6, "Git");
                 ui.selectable_value(&mut self.workspace, 7, "Files");
                 ui.menu_button("Systems", |ui| {
-                    for (tab, label) in [(4, "Equipment"), (7, "Exterior"), (5, "Service paths")] {
+                    for (tab, label) in [
+                        (2, "Engineering candidate"),
+                        (4, "Equipment"),
+                        (7, "Exterior"),
+                        (5, "Service paths"),
+                    ] {
                         if ui.button(label).clicked() {
                             self.open_inspector(tab);
                             ui.close_menu();
@@ -498,9 +491,6 @@ impl eframe::App for Editor {
                             self.events_open = false;
                         }
                     }
-                    if ui.button("Assets").clicked() {
-                        self.workspace = 5;
-                    }
                     if let Some(world) = &snapshot {
                         ui.small(format!("Simulation: {} ms", world.server_time_ms));
                     }
@@ -556,10 +546,13 @@ impl eframe::App for Editor {
             if let Some(project_workspace::PreviewRequest::Model { label, bytes }) =
                 self.project_workspace.show(ctx)
             {
-                let queued = self.imports.selected_bytes(label, bytes);
+                let queued = self
+                    .model_browser
+                    .get_or_insert_with(|| model_browser::ModelBrowser::open(&self.project))
+                    .open_snapshot(label, bytes);
                 self.project_workspace.preview_handoff_result(queued);
                 if queued {
-                    self.workspace = 5;
+                    self.workspace = 8;
                 }
             }
             self.session_controls(ctx);
@@ -580,18 +573,29 @@ impl eframe::App for Editor {
         }
         if self.workspace == 8 {
             self.client.poll_hidden();
-            egui::CentralPanel::default().show(ctx, |ui| {
-                self.drone_gallery
-                    .get_or_insert_with(|| EmbeddedDroneGallery::new(self.graphics.as_ref()))
-                    .show(ui);
-            });
+            let action = self
+                .model_browser
+                .get_or_insert_with(|| model_browser::ModelBrowser::open(&self.project))
+                .show(ctx, self.graphics.as_ref(), &self.imports);
+            match action {
+                Some(model_browser::Action::ManageImports) => self.workspace = 5,
+                Some(model_browser::Action::Stage { label, verified }) => {
+                    match self.imports.stage_browser_preview(label, verified) {
+                        Ok(()) => self.workspace = 5,
+                        Err(error) => self.model_browser.as_mut().unwrap().set_notice(error),
+                    }
+                }
+                None => {}
+            }
             self.session_controls(ctx);
             ctx.request_repaint_after(Duration::from_millis(33));
             return;
         }
         if self.workspace == 5 {
             self.client.poll_hidden();
-            self.imports.show(ctx, self.graphics.as_ref());
+            if self.imports.show(ctx, self.graphics.as_ref()) {
+                self.workspace = 8;
+            }
             self.session_controls(ctx);
             ctx.request_repaint_after(Duration::from_millis(33));
             return;
@@ -875,8 +879,8 @@ impl eframe::App for Editor {
         if let Some(gallery) = &mut self.asset_gallery {
             gallery.destroy();
         }
-        if let Some(gallery) = &mut self.drone_gallery {
-            gallery.destroy();
+        if let Some(browser) = &mut self.model_browser {
+            browser.destroy();
         }
     }
 }

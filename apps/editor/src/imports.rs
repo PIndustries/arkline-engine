@@ -20,6 +20,7 @@ enum Kind {
 enum Work {
     Import(String),
     Selected(PathBuf),
+    #[cfg(test)]
     SelectedBytes(Vec<u8>),
     Pick,
     Browse,
@@ -46,6 +47,16 @@ struct Pending {
     kind: Kind,
     edit: u64,
     candidate: u64,
+}
+#[derive(Clone)]
+pub(super) struct BrowserImportSnapshot {
+    pub id: String,
+    pub name: String,
+    pub source: String,
+    pub identity: String,
+    pub notes: Vec<String>,
+    pub verified: Option<Verified>,
+    pub unavailable: Option<String>,
 }
 pub struct Imports {
     sender: Option<SyncSender<Job>>,
@@ -199,6 +210,7 @@ impl Imports {
         self.candidate_label = file_label(&path);
         self.queue(Work::Selected(path), Kind::Import);
     }
+    #[cfg(test)]
     pub(super) fn selected_bytes(&mut self, label: String, bytes: Vec<u8>) -> bool {
         self.poll();
         if self.pending.is_some() {
@@ -398,7 +410,92 @@ impl Imports {
             self.accepted.as_ref()
         }
     }
-    pub fn show(&mut self, ctx: &egui::Context, gl: Option<&Arc<glow::Context>>) {
+    pub(super) fn browser_snapshots(&self) -> Vec<BrowserImportSnapshot> {
+        let mut snapshots = Vec::new();
+        if let Some(asset) = &self.index.asset {
+            snapshots.push(BrowserImportSnapshot {
+                id: format!("import:accepted:{}:{}", asset.id, asset.sha256),
+                name: format!("Accepted asset #{} · revision {}", asset.id, asset.revision),
+                source: "Accepted import".into(),
+                identity: asset.sha256.clone(),
+                notes: vec![
+                    format!(
+                        "Source: {}",
+                        if asset.source_reference.is_empty() {
+                            "unknown"
+                        } else {
+                            &asset.source_reference
+                        }
+                    ),
+                    format!(
+                        "License: {}",
+                        if asset.license_reference.is_empty() {
+                            "unknown"
+                        } else {
+                            &asset.license_reference
+                        }
+                    ),
+                    if self.saved.as_ref() == Some(&self.index) {
+                        "Accepted content saved"
+                    } else {
+                        "Accepted content unsaved"
+                    }
+                    .into(),
+                ],
+                verified: self.accepted.clone(),
+                unavailable: self
+                    .accepted
+                    .is_none()
+                    .then(|| format!("Accepted geometry unavailable. {}", self.message)),
+            });
+        }
+        if let Some(verified) = &self.staged {
+            snapshots.push(BrowserImportSnapshot {
+                id: format!("import:staged:{}", verified.sha256),
+                name: if self.candidate_label.is_empty() {
+                    "Staged import".into()
+                } else {
+                    format!("Staged · {}", self.candidate_label)
+                },
+                source: "Staged import".into(),
+                identity: verified.sha256.clone(),
+                notes: vec!["Staged geometry has not been accepted or saved.".into()],
+                verified: Some(verified.clone()),
+                unavailable: None,
+            });
+        }
+        snapshots
+    }
+    pub(super) fn stage_browser_preview(
+        &mut self,
+        label: String,
+        verified: Verified,
+    ) -> Result<(), String> {
+        self.poll();
+        if self.pending.is_some() {
+            return Err(
+                "An import operation is still pending. Open Import / manage… to finish it.".into(),
+            );
+        }
+        if self
+            .staged
+            .as_ref()
+            .is_some_and(|staged| staged.sha256 != verified.sha256)
+        {
+            return Err("A different staged import is still open. Finish or cancel it in Import / manage… before staging this model.".into());
+        }
+        self.path.clear();
+        self.candidate_changed(true);
+        self.candidate_label = label;
+        self.staged = Some(verified);
+        self.show_staged = true;
+        self.message =
+            "Verified model staged. Review its source and license, then Accept preview when ready."
+                .into();
+        Ok(())
+    }
+    pub fn show(&mut self, ctx: &egui::Context, gl: Option<&Arc<glow::Context>>) -> bool {
+        let mut open_models = false;
         self.poll();
         let dropped = ctx.input_mut(|input| std::mem::take(&mut input.raw.dropped_files));
         if !dropped.is_empty() {
@@ -412,7 +509,8 @@ impl Imports {
             }
         }
         egui::SidePanel::left("project_assets").default_width(350.).width_range(300. ..=480.).show(ctx,|ui|{egui::ScrollArea::vertical().show(ui,|ui|{
-            ui.heading("Project assets");ui.label("Static GLB preview · project content only");
+            if ui.button("Models").clicked() { open_models = true; }
+            ui.heading("Import management");ui.label("Accept and save project GLB assets");
             self.browser(ui);
             ui.horizontal(|ui|{if ui.add_enabled(self.pending.is_none()&&!self.path.is_empty(),egui::Button::new("Inspect selected")).clicked(){self.stage();}
                 if ui.add_enabled(self.staged.is_some()||self.pending.as_ref().is_some_and(|p|p.kind!=Kind::Save),egui::Button::new("Cancel staged")).clicked(){self.cancel();}});
@@ -462,6 +560,7 @@ impl Imports {
             ui.heading("Imported geometry");
             if geometry.as_ref().is_some_and(|v| self.shown.as_ref()!=Some(&v.sha256)) && self.preview.is_some() { ui.label("Requested geometry is not displayed: GPU upload failed. The previous GPU allocation is retained for recovery."); } else if let Some(preview)=&mut self.preview {preview.show(ui,geometry.as_ref().map(|v|&v.geometry.report));}else{ui.label("A GPU context is required for actual geometry preview. Validation report remains available.");}
         });
+        open_models
     }
     fn browser(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
@@ -535,6 +634,7 @@ fn run(root: &Path, work: Work) -> Result<Answer, String> {
     match work {
         Work::Import(path) => doc::import(root, &path).map(Answer::Imported),
         Work::Selected(path) => doc::import_selected(&path).map(Answer::Imported),
+        #[cfg(test)]
         Work::SelectedBytes(bytes) => Verified::decode(bytes).map(Answer::Imported),
         Work::Browse => doc::catalog(root).map(Answer::Browsed),
         Work::Pick => {
@@ -649,3 +749,7 @@ mod byte_handoff_tests {
 #[cfg(test)]
 #[path = "import_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "model_browser_import_tests.rs"]
+mod model_browser_bridge_tests;
