@@ -26,3 +26,5 @@ Visually inspected after captures `/tmp/pioneer-material-response-route-20261020
 ## Steering to the Mining workflow
 
 User clarified a missing Mining tab. A read-only independent audit found the quantity routine survives unchanged from recovered snapshots including `78fdc5d`; current visible route is labelled AI and is hidden on foot. Historic Mining text also appears as an asteroid overview filter, so a distinct older quantity tab is not proved by the shallow recovered history. The existing StartResourceJob authority already handles quantity/full-hold return, drone recall, dock/deposit and repeated trips. Next work restores discoverable UI access to that exact existing workflow; it must not create a duplicate miner. Historical PR/issue leads are treated read-only, with no GitHub edits.
+
+Subsequent supported task-history recovery confirmed the distinct Mining header and on-foot panel were original Oct19 changes, omitted from the reconstructed snapshot. See [Mining access recovery](mining-access-recovery-20261020.md). The earlier shallow-history uncertainty above is superseded by those original patches.

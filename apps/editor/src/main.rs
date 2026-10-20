@@ -439,7 +439,11 @@ impl eframe::App for Editor {
                 {
                     self.open_inspector(0);
                 }
-                if ui.button("Mining").on_hover_text("Open the server-controlled repeat mining routine").clicked() {
+                if ui
+                    .button("Mining")
+                    .on_hover_text("Open the server-controlled repeat mining routine")
+                    .clicked()
+                {
                     self.workspace = 0;
                     self.inspector_tab = 0;
                     self.client.open_mining_panel();
@@ -1461,7 +1465,14 @@ mod tests {
     fn mining_header_opens_existing_routine_without_starting_the_world() {
         let ctx = egui::Context::default();
         let cc = eframe::CreationContext::_new_kittest(ctx.clone());
-        let project = std::env::temp_dir().join(format!("arkline-mining-header-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let project = std::env::temp_dir().join(format!(
+            "arkline-mining-header-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
         let mut editor = Editor::new(&cc, project, "MiningHeaderPilot".into());
         let deadline = std::time::Instant::now() + Duration::from_secs(5);
         while !editor.client.ready() && std::time::Instant::now() < deadline {
@@ -1472,12 +1483,32 @@ mod tests {
         let before = serde_json::to_value(editor.client.snapshot().unwrap()).unwrap();
         for size in [egui::vec2(1080., 720.), egui::vec2(1500., 960.)] {
             editor.workspace = 3;
-            let frame = |editor: &mut Editor, events| ctx.run(egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)), events, ..Default::default() }, |ctx| editor.update(ctx, &mut eframe::Frame::_new_kittest()));
+            let frame = |editor: &mut Editor, events| {
+                ctx.run(
+                    egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
+                        events,
+                        ..Default::default()
+                    },
+                    |ctx| editor.update(ctx, &mut eframe::Frame::_new_kittest()),
+                )
+            };
             frame(&mut editor, vec![]);
             let output = frame(&mut editor, vec![]);
             let point = visible_point(&output, "Mining");
             for pressed in [true, false] {
-                frame(&mut editor, vec![egui::Event::PointerMoved(point), egui::Event::PointerButton { pos: point, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE }]);
+                frame(
+                    &mut editor,
+                    vec![
+                        egui::Event::PointerMoved(point),
+                        egui::Event::PointerButton {
+                            pos: point,
+                            button: egui::PointerButton::Primary,
+                            pressed,
+                            modifiers: egui::Modifiers::NONE,
+                        },
+                    ],
+                );
             }
             frame(&mut editor, vec![]);
             let output = frame(&mut editor, vec![]);
@@ -1485,7 +1516,10 @@ mod tests {
             assert_eq!(editor.workspace, 0);
             assert_eq!(editor.inspector_tab, 0);
             assert_eq!(editor.client.status(), &EmbeddedStatus::Paused);
-            assert_eq!(serde_json::to_value(editor.client.snapshot().unwrap()).unwrap(), before);
+            assert_eq!(
+                serde_json::to_value(editor.client.snapshot().unwrap()).unwrap(),
+                before
+            );
         }
         editor.client.on_exit();
     }
