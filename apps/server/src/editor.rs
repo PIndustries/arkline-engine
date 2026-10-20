@@ -277,74 +277,92 @@ impl EditorWorld {
                 && !world.remote_controls.values().any(|pilot| pilot == name),
             "end remote control before changing editor scene state"
         );
-        let fleet = world
+        let canonical = world
             .accounts
             .get(name)
-            .is_some_and(|account| account.fleet_hangar);
-        let fleet_revision = world.scene_layout.definition().fleet_layout;
-        let pilot = world.pilots.get_mut(name).context("editor pilot missing")?;
-        ensure!(
-            pilot
-                .view
-                .station_avatar
-                .as_ref()
-                .is_none_or(|avatar| avatar.docked_traversal.is_none()),
-            "finish docked traversal before using editor scene placement"
-        );
-        ensure!(
-            pilot.view.location == Location::Docked,
-            "dock your ship before changing editor scene state"
-        );
-        let avatar = match state {
-            EditorSceneState::Cockpit => None,
-            EditorSceneState::StationHangar => {
-                let position = if fleet {
-                    fleet_berth_pose(fleet_revision, pilot.view.ship_class).boarding_point
-                } else {
-                    hangar_layout(pilot.view.ship_class).boarding_point
-                };
-                Some(StationAvatar {
-                    docked_traversal: None,
-                    onboard_interior: false,
-                    interior_deck: 1,
-                    position,
-                    heading: 0.0,
-                    seated: false,
-                    moving: false,
-                    jump_started_ms: None,
-                    updated_at_ms: now,
-                })
-            }
-            EditorSceneState::InteriorDeck1 | EditorSceneState::InteriorDeck2 => {
-                ensure!(
-                    pilot.view.ship_class == ShipClass::Pioneer,
-                    "only Pioneer interiors are walkable"
-                );
-                let deck = if state == EditorSceneState::InteriorDeck1 {
-                    1
-                } else {
-                    2
-                };
-                Some(StationAvatar {
-                    docked_traversal: None,
-                    onboard_interior: true,
-                    interior_deck: deck,
-                    position: if deck == 1 {
-                        PIONEER_INTERIOR_ENTRY
+            .is_some_and(|account| account.docked_traversal_compatible)
+            && world
+                .pilots
+                .get(name)
+                .is_some_and(|pilot| pilot.view.ship_class == ShipClass::Pioneer);
+        if canonical {
+            docked_traversal::editor_place(
+                &mut world,
+                name,
+                state,
+                now,
+                &self.room_layout.document,
+            )?;
+        } else {
+            let fleet = world
+                .accounts
+                .get(name)
+                .is_some_and(|account| account.fleet_hangar);
+            let fleet_revision = world.scene_layout.definition().fleet_layout;
+            let pilot = world.pilots.get_mut(name).context("editor pilot missing")?;
+            ensure!(
+                pilot
+                    .view
+                    .station_avatar
+                    .as_ref()
+                    .is_none_or(|avatar| avatar.docked_traversal.is_none()),
+                "finish docked traversal before using editor scene placement"
+            );
+            ensure!(
+                pilot.view.location == Location::Docked,
+                "dock your ship before changing editor scene state"
+            );
+            let avatar = match state {
+                EditorSceneState::Cockpit => None,
+                EditorSceneState::StationHangar => {
+                    let position = if fleet {
+                        fleet_berth_pose(fleet_revision, pilot.view.ship_class).boarding_point
                     } else {
-                        PIONEER_LIFT_POINT
-                    },
-                    heading: std::f64::consts::FRAC_PI_2,
-                    seated: false,
-                    moving: false,
-                    jump_started_ms: None,
-                    updated_at_ms: now,
-                })
-            }
-        };
-        pilot.view.station_avatar = avatar;
-        pilot.walk_input = None;
-        pilot.controls = None;
+                        hangar_layout(pilot.view.ship_class).boarding_point
+                    };
+                    Some(StationAvatar {
+                        docked_traversal: None,
+                        onboard_interior: false,
+                        interior_deck: 1,
+                        position,
+                        heading: 0.0,
+                        seated: false,
+                        moving: false,
+                        jump_started_ms: None,
+                        updated_at_ms: now,
+                    })
+                }
+                EditorSceneState::InteriorDeck1 | EditorSceneState::InteriorDeck2 => {
+                    ensure!(
+                        pilot.view.ship_class == ShipClass::Pioneer,
+                        "only Pioneer interiors are walkable"
+                    );
+                    let deck = if state == EditorSceneState::InteriorDeck1 {
+                        1
+                    } else {
+                        2
+                    };
+                    Some(StationAvatar {
+                        docked_traversal: None,
+                        onboard_interior: true,
+                        interior_deck: deck,
+                        position: if deck == 1 {
+                            PIONEER_INTERIOR_ENTRY
+                        } else {
+                            PIONEER_LIFT_POINT
+                        },
+                        heading: std::f64::consts::FRAC_PI_2,
+                        seated: false,
+                        moving: false,
+                        jump_started_ms: None,
+                        updated_at_ms: now,
+                    })
+                }
+            };
+            pilot.view.station_avatar = avatar;
+            pilot.walk_input = None;
+            pilot.controls = None;
+        }
         validate(&world, self.server.editor_room_layout.as_ref())?;
         tx.execute(
             "UPDATE world SET json=?1 WHERE id=1",
@@ -1228,6 +1246,355 @@ mod tests {
             .db
             .query_row("SELECT json FROM world WHERE id=1", [], |row| row.get(0))
             .unwrap()
+    }
+
+    fn connect_canonical(token: Option<String>) -> Request {
+        let mut request = connect_interior();
+        if let Request::Connect {
+            supports_docked_traversal_v2,
+            resume_token,
+            ..
+        } = &mut request
+        {
+            *supports_docked_traversal_v2 = true;
+            *resume_token = token;
+        }
+        request
+    }
+
+    #[test]
+    fn canonical_editor_placements_preserve_clock_systems_and_registered_equipment() {
+        for revision in [
+            SceneLayoutRevision::LegacyV1,
+            SceneLayoutRevision::OrbitalV1,
+        ] {
+            let path = dir();
+            let mut world = EditorWorld::open_with_creation_scene(&path, revision).unwrap();
+            let mut session = None;
+            call(&mut world, &mut session, connect_canonical(None));
+            world
+                .set_scene_state(&session, EditorSceneState::InteriorDeck1)
+                .unwrap();
+            call(
+                &mut world,
+                &mut session,
+                Request::SetPioneerRoom {
+                    action: PioneerRoomCommand::Breaker { closed: true },
+                },
+            );
+            let initial: World = serde_json::from_str(&persisted_world(&world)).unwrap();
+            let binding = initial.pilots["EditorPilot"]
+                .view
+                .station_avatar
+                .as_ref()
+                .unwrap()
+                .docked_traversal
+                .as_ref()
+                .unwrap()
+                .binding
+                .clone();
+            call(
+                &mut world,
+                &mut session,
+                Request::DockedTraversal {
+                    request: DockedTraversalRequest::Walk {
+                        binding: binding.clone(),
+                        forward: 1.0,
+                        strafe: 0.0,
+                        turn: 0.0,
+                    },
+                },
+            );
+            let before: World = serde_json::from_str(&persisted_world(&world)).unwrap();
+            let time = world.time();
+            let pose = docked_binding_pose(&binding).unwrap();
+            for (scene, support, deck) in [
+                (
+                    EditorSceneState::InteriorDeck2,
+                    DockedSupport::Deck2,
+                    Some(2),
+                ),
+                (
+                    EditorSceneState::InteriorDeck1,
+                    DockedSupport::Deck1,
+                    Some(1),
+                ),
+                (
+                    EditorSceneState::StationHangar,
+                    DockedSupport::Station,
+                    None,
+                ),
+            ] {
+                world.set_scene_state(&session, scene).unwrap();
+                let after: World = serde_json::from_str(&persisted_world(&world)).unwrap();
+                let avatar = after.pilots["EditorPilot"]
+                    .view
+                    .station_avatar
+                    .as_ref()
+                    .unwrap();
+                let state = avatar.docked_traversal.as_ref().unwrap();
+                assert_eq!(state.support, support);
+                assert_eq!(docked_traversal_deck(state).unwrap(), deck);
+                assert_eq!(state.binding, binding);
+                assert!(state.grounded && !state.moving && state.seat_transition.is_none());
+                assert_eq!(state.vertical_velocity_mps, 0.0);
+                assert!(!avatar.onboard_interior && !avatar.moving);
+                let expected_feet = if let Some(deck) = deck {
+                    body_to_station(pose, deck_to_body(deck, [12.0, 0.0, 7.0]).unwrap())
+                } else {
+                    lift_call_anchors(pose).station_station_m
+                };
+                assert_eq!(state.feet_m, expected_feet);
+                let mut expected = before.clone();
+                let pilot = expected.pilots.get_mut("EditorPilot").unwrap();
+                pilot.view.station_avatar = Some(avatar.clone());
+                pilot.walk_input = None;
+                pilot.controls = None;
+                assert_eq!(
+                    serde_json::to_value(expected).unwrap(),
+                    serde_json::to_value(&after).unwrap()
+                );
+                validate(&after, Some(&world.room_layout.document)).unwrap();
+                assert_eq!(world.time(), time);
+                assert!(world.is_paused());
+                for request in [
+                    Request::Undock,
+                    Request::SelectShip {
+                        ship_class: ShipClass::Prospector,
+                    },
+                    Request::PilotInput {
+                        translation: [1.0, 0.0, 0.0],
+                        rotation: [0.0; 3],
+                    },
+                ] {
+                    let durable = persisted_world(&world);
+                    assert!(!world.handle(&mut session, request).ok);
+                    assert_eq!(persisted_world(&world), durable);
+                }
+            }
+            world
+                .set_scene_state(&session, EditorSceneState::Cockpit)
+                .unwrap();
+            assert!(snapshot(&mut world).pilots[0].station_avatar.is_none());
+            let seated: World = serde_json::from_str(&persisted_world(&world)).unwrap();
+            assert_eq!(
+                serde_json::to_value(&before.accounts).unwrap(),
+                serde_json::to_value(&seated.accounts).unwrap()
+            );
+            world.play();
+            world
+                .set_scene_state(&session, EditorSceneState::InteriorDeck2)
+                .unwrap();
+            assert!(!world.is_paused());
+            assert_eq!(world.time(), time);
+            drop(world);
+            let reopened = EditorWorld::open(&path).unwrap();
+            let saved: World = serde_json::from_str(&persisted_world(&reopened)).unwrap();
+            assert_eq!(
+                saved.pilots["EditorPilot"]
+                    .view
+                    .station_avatar
+                    .as_ref()
+                    .unwrap()
+                    .docked_traversal
+                    .as_ref()
+                    .unwrap()
+                    .support,
+                DockedSupport::Deck2
+            );
+            assert_eq!(reopened.time(), time);
+            drop(reopened);
+            std::fs::remove_dir_all(path).unwrap();
+        }
+    }
+
+    #[test]
+    fn legacy_editor_avatar_changes_registration_only_on_explicit_compatible_placement() {
+        let path = dir();
+        let mut world = EditorWorld::open(&path).unwrap();
+        let initial_time = world.time();
+        let mut session = None;
+        let token = call(&mut world, &mut session, connect_interior())
+            .resume_token
+            .unwrap();
+        world
+            .set_scene_state(&session, EditorSceneState::InteriorDeck1)
+            .unwrap();
+        world.disconnect(&mut session);
+        drop(world);
+        let mut world = EditorWorld::open(&path).unwrap();
+        let resumed = call(&mut world, &mut session, connect_canonical(Some(token)));
+        let old = resumed
+            .snapshot
+            .unwrap()
+            .pilots
+            .into_iter()
+            .find(|pilot| pilot.name == "EditorPilot")
+            .unwrap();
+        let old = old.station_avatar.unwrap();
+        assert!(old.onboard_interior && old.docked_traversal.is_none());
+        world
+            .set_scene_state(&session, EditorSceneState::InteriorDeck1)
+            .unwrap();
+        let now = snapshot(&mut world).pilots[0]
+            .station_avatar
+            .clone()
+            .unwrap();
+        assert!(now.docked_traversal.is_some() && !now.onboard_interior);
+        assert_eq!(world.time(), initial_time);
+        drop(world);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[test]
+    fn canonical_equipment_access_and_door_occupancy_use_bound_registered_coordinates() {
+        let path = dir();
+        let mut world = EditorWorld::open(&path).unwrap();
+        let mut session = None;
+        call(&mut world, &mut session, connect_canonical(None));
+        world
+            .set_scene_state(&session, EditorSceneState::InteriorDeck1)
+            .unwrap();
+        call(
+            &mut world,
+            &mut session,
+            Request::SetPioneerRoom {
+                action: PioneerRoomCommand::Door {
+                    open: true,
+                    manual: true,
+                },
+            },
+        );
+        call(
+            &mut world,
+            &mut session,
+            Request::SetPioneerExterior {
+                enabled: false,
+                expected_revision: 0,
+            },
+        );
+        let mut fixture: World = serde_json::from_str(&persisted_world(&world)).unwrap();
+        let now = world.time();
+        let d = PIONEER_CONNECTED_ROOM;
+        let state = fixture
+            .pilots
+            .get_mut("EditorPilot")
+            .unwrap()
+            .view
+            .station_avatar
+            .as_mut()
+            .unwrap()
+            .docked_traversal
+            .as_mut()
+            .unwrap();
+        let pose = docked_binding_pose(&state.binding).unwrap();
+        let doorway = [
+            (d.door_min[0] + d.door_max[0]) * 0.5,
+            0.0,
+            (d.door_min[2] + d.door_max[2]) * 0.5,
+        ];
+        state.feet_m = body_to_station(pose, deck_to_body(1, doorway).unwrap());
+        let owned = fixture.accounts["EditorPilot"].vessel_id(ShipClass::Pioneer);
+        assert!(
+            docked_traversal::interior_position(&fixture.pilots["EditorPilot"], owned).is_some()
+        );
+        assert!(docked_traversal::interior_position(
+            &fixture.pilots["EditorPilot"],
+            Some("other-vessel")
+        )
+        .is_none());
+        assert!(!docked_traversal::aboard(
+            &fixture.pilots["EditorPilot"],
+            Some("other-vessel")
+        ));
+        assert!(room_controls::execute(
+            &mut fixture,
+            "EditorPilot",
+            PioneerRoomCommand::Door {
+                open: false,
+                manual: true
+            },
+            now
+        )
+        .is_err());
+        fixture
+            .accounts
+            .get_mut("EditorPilot")
+            .unwrap()
+            .pioneer_room
+            .as_mut()
+            .unwrap()
+            .door_commanded_open = false;
+        room_controls::advance(&mut fixture, now + 50).unwrap();
+        let room = fixture.accounts["EditorPilot"]
+            .pioneer_room
+            .as_ref()
+            .unwrap();
+        assert!(room.door_open);
+        assert_eq!(room.interlock.as_deref(), Some("Doorway occupied"));
+        world
+            .set_scene_state(&session, EditorSceneState::InteriorDeck2)
+            .unwrap();
+        assert!(
+            !world
+                .handle(
+                    &mut session,
+                    Request::SetPioneerRoom {
+                        action: PioneerRoomCommand::Light { on: false },
+                    }
+                )
+                .ok
+        );
+        call(
+            &mut world,
+            &mut session,
+            Request::SetPioneerExterior {
+                enabled: true,
+                expected_revision: 0,
+            },
+        );
+        world
+            .set_scene_state(&session, EditorSceneState::StationHangar)
+            .unwrap();
+        assert!(
+            !world
+                .handle(
+                    &mut session,
+                    Request::SetPioneerExterior {
+                        enabled: false,
+                        expected_revision: 0
+                    }
+                )
+                .ok
+        );
+        assert!(
+            !world
+                .handle(
+                    &mut session,
+                    Request::SetPioneerRoom {
+                        action: PioneerRoomCommand::Light { on: false },
+                    }
+                )
+                .ok
+        );
+        world
+            .set_scene_state(&session, EditorSceneState::InteriorDeck2)
+            .unwrap();
+        let mut stairs = snapshot(&mut world).pilots[0]
+            .station_avatar
+            .clone()
+            .unwrap()
+            .docked_traversal
+            .unwrap();
+        stairs.support = DockedSupport::CoreStairs;
+        for (body_y, expected) in [(-3.0, 1), (-1.0, 2)] {
+            stairs.feet_m = body_to_station(pose, [-10.0, body_y, -2.0]);
+            assert_eq!(docked_traversal_deck(&stairs).unwrap(), Some(expected));
+        }
+        stairs.version = 0;
+        assert!(docked_traversal_deck(&stairs).is_err());
+        drop(world);
+        std::fs::remove_dir_all(path).unwrap();
     }
 
     #[test]

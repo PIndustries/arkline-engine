@@ -43,7 +43,17 @@ pub fn show(
                     ui.small("Avatar: station-world coordinates (meters)");
                     row(ui,"Vessel",&state.binding.host_vessel_id);
                     row(ui,"Support",format!("{:?}",state.support));
+                    match arkline_protocol::docked_traversal_deck(state) {
+                        Ok(Some(deck)) => row(ui,"Deck",deck.to_string()),
+                        Ok(None) => row(ui,"Deck","Outside registered decks"),
+                        Err(error) => { ui.colored_label(Color32::YELLOW,error); }
+                    }
                     vector(ui,"Feet",state.feet_m,"m");
+                    if let Ok(pose)=arkline_protocol::docked_binding_pose(&state.binding) {
+                        if state.feet_m.iter().all(|coordinate|coordinate.is_finite()) {
+                            vector(ui,"Body feet",arkline_protocol::station_to_body(pose,state.feet_m),"m");
+                        }
+                    }
                     row(ui,"Heading",format!("{:.3} rad",state.heading));
                     row(ui,"Moving",state.moving.to_string());
                     row(ui,"Grounded",state.grounded.to_string());

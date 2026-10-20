@@ -161,6 +161,30 @@ pub struct DockedTraversalState {
     pub actuators: DockedVesselActuators,
 }
 
+/// Semantic deck for a registered avatar; station and boarding lift are not ship decks.
+/// Stair identity follows the actual body-space height rather than a legacy deck flag.
+pub fn docked_traversal_deck(state: &DockedTraversalState) -> Result<Option<u8>, String> {
+    if state.version != DOCKED_TRAVERSAL_VERSION
+        || !state.feet_m.iter().all(|coordinate| coordinate.is_finite())
+        || !state.heading.is_finite()
+    {
+        return Err("Invalid canonical traversal pose".into());
+    }
+    let pose = docked_binding_pose(&state.binding)?;
+    Ok(match state.support {
+        DockedSupport::Deck1 => Some(1),
+        DockedSupport::Deck2 | DockedSupport::Cockpit | DockedSupport::Connector => Some(2),
+        DockedSupport::CoreStairs => {
+            let body = crate::station_to_body(pose, state.feet_m);
+            let midpoint = (crate::deck_floor_y(1).expect("registered lower deck")
+                + crate::deck_floor_y(2).expect("registered upper deck"))
+                * 0.5;
+            Some(if body[1] < midpoint { 1 } else { 2 })
+        }
+        DockedSupport::Station | DockedSupport::BoardingLift => None,
+    })
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum DockedTraversalRequest {

@@ -30,6 +30,16 @@ pub(super) fn docked_support_label(support: DockedSupport) -> &'static str {
     }
 }
 
+pub(super) fn docked_state_label(state: &DockedTraversalState) -> String {
+    match arkline_protocol::docked_traversal_deck(state) {
+        Err(_) => "PIONEER REGISTRATION UNRESOLVED".into(),
+        Ok(Some(deck)) if state.support == DockedSupport::CoreStairs => {
+            format!("PIONEER ACCESS STAIRS · DECK {deck}")
+        }
+        _ => docked_support_label(state.support).into(),
+    }
+}
+
 fn station_distance(a: [f64; 3], b: [f64; 3]) -> f64 {
     a.iter()
         .zip(b)
@@ -110,14 +120,49 @@ impl Cockpit {
         Some(binding)
     }
 
-    fn docked_navigation_present(&self) -> bool {
-        self.verified_docked_binding().is_some()
-            || self.own().is_some_and(|pilot| {
-                pilot
-                    .station_avatar
+    pub(super) fn docked_navigation_present(&self) -> bool {
+        self.own().is_some_and(|pilot| {
+            if pilot
+                .station_avatar
+                .as_ref()
+                .is_some_and(|avatar| avatar.docked_traversal.is_some())
+            {
+                return true;
+            }
+            // An existing legacy avatar retains its current journey. A known
+            // canonical seated Pioneer must never gain legacy teleport entry
+            // merely because its capability, assets or binding are unresolved.
+            pilot.name == self.pilot
+                && self.manual_remote.is_none()
+                && pilot.location == Location::Docked
+                && pilot.ship_class == ShipClass::Pioneer
+                && pilot.station_avatar.is_none()
+                && self
+                    .snapshot
                     .as_ref()
-                    .is_some_and(|avatar| avatar.docked_traversal.is_some())
-            })
+                    .is_some_and(|snapshot| snapshot.docked_traversal_capability.is_some())
+        })
+    }
+
+    fn docked_room_name(&self, state: &DockedTraversalState) -> Option<String> {
+        if !matches!(state.support, DockedSupport::Deck1 | DockedSupport::Deck2) {
+            return None;
+        }
+        let deck = arkline_protocol::docked_traversal_deck(state).ok()??;
+        let pose = docked_binding_pose(&state.binding).ok()?;
+        let body = arkline_protocol::station_to_body(pose, state.feet_m);
+        let position = [
+            body[0] + 12.0,
+            body[1] - arkline_protocol::deck_floor_y(deck)?,
+            body[2] + 7.0,
+        ];
+        let document = self
+            .assets
+            .as_ref()
+            .and_then(|assets| assets.pioneer_room_layout.as_ref())
+            .map(|layout| layout.document.clone())
+            .unwrap_or_else(default_pioneer_room_layout);
+        live_room_name(&document, deck, position).map(str::to_owned)
     }
 
     fn docked_station_actions(&mut self, ui: &mut egui::Ui) -> bool {
@@ -145,7 +190,7 @@ impl Cockpit {
         }
         if let Some(state) = state {
             ui.horizontal_wrapped(|ui| {
-                ui.strong(docked_support_label(state.support));
+                ui.strong(docked_state_label(state));
                 self.on_foot_view_selector(ui);
                 if state.seat_transition.is_some() {
                     ui.small("Pilot seat transition");
@@ -153,6 +198,9 @@ impl Cockpit {
                     ui.small("Lift moving");
                 }
             });
+            if let Some(room) = self.docked_room_name(state) {
+                ui.small(format!("Room: {room}"));
+            }
             let ready = self.can_operate() && state.grounded && state.seat_transition.is_none();
             let seats = seat_anchors(pose);
             let seat_distance = station_distance(state.feet_m, seats.root_station_m);
@@ -486,7 +534,7 @@ impl Cockpit {
                     && (p.station_avatar.is_some()
                         // Registered cockpit geometry uses station metres;
                         // aboard external/tactical cameras keep their own renderer.
-                        || if self.verified_docked_binding().is_some() {
+                        || if self.docked_navigation_present() {
                             self.view_mode == ViewMode::Cockpit
                         } else {
                             !self.embedded
@@ -1462,6 +1510,107 @@ mod tests {
             "legacy crew/station embodiment stays legacy until an explicit seat exit"
         );
         assert!(!cockpit.docked_navigation_present());
+    }
+
+    #[test]
+    fn unresolved_seated_registration_blocks_legacy_entry_without_changing_camera_authority() {
+        let ctx = egui::Context::default();
+        for missing_assets in [false, true] {
+            let mut cockpit = docked_fixture(&ctx, false);
+            let (tx, rx) = std::sync::mpsc::channel();
+            cockpit.commands = Some(tx);
+            if missing_assets {
+                cockpit.assets = None;
+            } else {
+                cockpit
+                    .snapshot
+                    .as_mut()
+                    .unwrap()
+                    .docked_traversal_capability
+                    .as_mut()
+                    .unwrap()
+                    .source_sha256 = "unmatched-source".into();
+            }
+            assert!(cockpit.docked_navigation_present());
+            assert!(cockpit.verified_docked_binding().is_none());
+            cockpit.view_mode = ViewMode::Cockpit;
+            assert!(cockpit.in_station_hangar());
+            cockpit.view_mode = ViewMode::External;
+            assert!(!cockpit.in_station_hangar());
+            let output = ctx.run(Default::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    assert!(cockpit.docked_station_actions(ui));
+                });
+            });
+            let labels: Vec<_> = output
+                .shapes
+                .into_iter()
+                .filter_map(|shape| {
+                    if let egui::Shape::Text(text) = shape.shape {
+                        Some(text.galley.job.text.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            assert!(labels
+                .iter()
+                .any(|label| label == "Pioneer traversal unavailable"));
+            assert!(!labels
+                .iter()
+                .any(|label| label.contains("Explore") || label.contains("Enter ship")));
+            assert!(cockpit.own().unwrap().station_avatar.is_none());
+            assert!(rx.try_recv().is_err());
+        }
+    }
+
+    #[test]
+    fn registered_room_and_stair_labels_follow_bound_body_coordinates() {
+        let ctx = egui::Context::default();
+        let cockpit = docked_fixture(&ctx, true);
+        let mut state = cockpit
+            .own()
+            .unwrap()
+            .station_avatar
+            .unwrap()
+            .docked_traversal
+            .unwrap();
+        let pose = docked_binding_pose(&state.binding).unwrap();
+        let layout = default_pioneer_room_layout();
+        for room in &layout.rooms {
+            let local = [
+                room.origin_xz_m[0] + room.clear_lwh_m[0] * 0.5,
+                0.0,
+                room.origin_xz_m[1] + room.clear_lwh_m[1] * 0.5,
+            ];
+            state.support = if room.deck == 1 {
+                DockedSupport::Deck1
+            } else {
+                DockedSupport::Deck2
+            };
+            state.feet_m = arkline_protocol::body_to_station(
+                pose,
+                arkline_protocol::deck_to_body(room.deck, local).unwrap(),
+            );
+            assert_eq!(
+                cockpit.docked_room_name(&state).as_deref(),
+                Some(room.name.as_str())
+            );
+        }
+        state.support = DockedSupport::CoreStairs;
+        for (body_y, deck) in [(-3.0, 1), (-1.0, 2)] {
+            state.feet_m = arkline_protocol::body_to_station(pose, [0.0, body_y, 0.0]);
+            assert_eq!(
+                docked_state_label(&state),
+                format!("PIONEER ACCESS STAIRS · DECK {deck}")
+            );
+            assert!(cockpit.docked_room_name(&state).is_none());
+        }
+        state.binding.layout_sha256 = "invalid".into();
+        assert_eq!(
+            docked_state_label(&state),
+            "PIONEER REGISTRATION UNRESOLVED"
+        );
     }
 
     #[test]

@@ -266,6 +266,7 @@ fn native_spatial_material_pioneer_section_and_paused_feeds() {
         let flight_vp = Mat4::orthographic_rh_gl(-0.42, 0.42, -0.21, 0.21, 0.001, 2.)
             * Mat4::look_at_rh(flight_eye, Vec3::new(-0.1, 0., 0.), Vec3::Y);
         let frame = Frame {
+            pioneer_parts: None,
             exterior: None,
             lighting_quality: Default::default(),
             cockpit_vp: flight_vp,

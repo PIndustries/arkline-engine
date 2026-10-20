@@ -184,6 +184,7 @@ fn frame(case: ViewCase, width: usize, height: usize) -> Frame {
     .unwrap();
     assert!(ship_orientation_at(&pilot, 1000).dot(rotation).abs() > 1. - 1.0e-6);
     Frame {
+        pioneer_parts: None,
         exterior: None,
         lighting_quality: super::super::lighting_settings::LightingQuality::Balanced,
         cockpit_vp,

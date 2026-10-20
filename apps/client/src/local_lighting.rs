@@ -297,6 +297,7 @@ mod tests {
     use super::*;
     fn frame() -> Frame {
         Frame {
+            pioneer_parts: None,
             exterior: None,
             lighting_quality: Default::default(),
             cockpit_vp: Mat4::IDENTITY,

@@ -20,11 +20,7 @@ pub(super) fn execute(
         "exterior controller belongs to your active Pioneer"
     );
     ensure!(
-        pilot
-            .view
-            .station_avatar
-            .as_ref()
-            .is_none_or(|a| a.onboard_interior),
+        docked_traversal::aboard(pilot, w.accounts[name].vessel_id(ShipClass::Pioneer)),
         "operate exterior controls aboard your Pioneer"
     );
     w.accounts

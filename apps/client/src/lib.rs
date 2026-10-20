@@ -1369,7 +1369,7 @@ impl Cockpit {
             .and_then(|avatar| avatar.docked_traversal.as_ref())
         {
             return (
-                format!("ON FOOT / {}", station_ui::docked_support_label(state.support)),
+                format!("ON FOOT / {}", station_ui::docked_state_label(state)),
                 "Walk through the ship; use hatch controls and the boarding lift to reach the station.".into(),
                 None,
                 self.accent(),
@@ -3974,12 +3974,19 @@ impl eframe::App for Cockpit {
                                 },
                             );
                             if in_hangar {
+                                let registered = self.own().and_then(|pilot| {
+                                    pilot
+                                        .station_avatar
+                                        .and_then(|avatar| avatar.docked_traversal)
+                                });
                                 let interior_deck = self
                                     .own()
                                     .and_then(|p| p.station_avatar)
                                     .filter(|a| a.onboard_interior)
                                     .map(|a| a.interior_deck);
-                                ui.strong(if let Some(deck) = interior_deck {
+                                ui.strong(if let Some(state) = registered {
+                                    station_ui::docked_state_label(&state)
+                                } else if let Some(deck) = interior_deck {
                                     format!("PIONEER INTERIOR · DECK {deck}")
                                 } else if self.in_captains_quarters() {
                                     "CAPTAIN'S QUARTERS".into()
@@ -4255,7 +4262,7 @@ impl eframe::App for Cockpit {
             self.station_overlay(ctx);
         }
         self.hangar_view
-            .set_docked_traversal_enabled(self.verified_docked_binding().is_some());
+            .set_docked_traversal_enabled(self.docked_navigation_present());
         self.hangar_view.set_head_look_input_allowed(
             self.embedded_input && !self.cockpit_computer.wants_keyboard_input(),
         );
@@ -4263,6 +4270,16 @@ impl eframe::App for Cockpit {
             self.assets
                 .as_ref()
                 .and_then(|a| a.pioneer_room_layout.clone()),
+        );
+        self.flight_view.set_pioneer_layout(
+            self.assets
+                .as_ref()
+                .and_then(|assets| assets.pioneer_room_layout.clone()),
+        );
+        self.flight_view.set_pioneer_room(
+            self.assets
+                .as_ref()
+                .and_then(|assets| assets.pioneer_room.clone()),
         );
         self.physical_engineering_window(ctx);
         egui::CentralPanel::default()
@@ -4276,9 +4293,7 @@ impl eframe::App for Cockpit {
                                 .snapshot
                                 .as_ref()
                                 .is_some_and(|s| now.saturating_sub(s.server_time_ms) <= 1500);
-                        if pilot.station_avatar.is_none()
-                            && self.verified_docked_binding().is_some()
-                        {
+                        if pilot.station_avatar.is_none() && self.docked_navigation_present() {
                             // Aboard Cockpit is the actual pilot-eye camera;
                             // exterior views are selected through ship camera modes.
                             self.hangar_view.on_foot_view =

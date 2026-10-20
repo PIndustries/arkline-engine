@@ -389,6 +389,9 @@ pub struct FlightView {
     editor_free_camera_active: bool,
     editor_free_camera_space: Option<Space>,
     last_camera_pose: Option<(Vec3, f32, f32)>,
+    pioneer_layout: Option<arkline_protocol::RoomLayoutState>,
+    pioneer_room: Option<arkline_protocol::PioneerRoomState>,
+    pioneer_scene: Option<hangar::pioneer_docked_scene::SceneCache>,
 }
 impl FlightView {
     // egui callbacks share ownership on one browser thread; SendWrapper guards access.
@@ -443,7 +446,38 @@ impl FlightView {
             editor_free_camera_active: false,
             editor_free_camera_space: None,
             last_camera_pose: None,
+            pioneer_layout: None,
+            pioneer_room: None,
+            pioneer_scene: None,
         }
+    }
+    pub(crate) fn set_pioneer_layout(&mut self, layout: Option<arkline_protocol::RoomLayoutState>) {
+        self.pioneer_layout = layout;
+    }
+    pub(crate) fn set_pioneer_room(&mut self, room: Option<arkline_protocol::PioneerRoomState>) {
+        self.pioneer_room = room;
+    }
+    fn canonical_pioneer_parts(&mut self, now: u64) -> Result<Arc<Vec<ModelPart>>, String> {
+        let document = self
+            .pioneer_layout
+            .as_ref()
+            .map(|layout| layout.document.clone())
+            .unwrap_or_else(arkline_protocol::default_pioneer);
+        document.validate_live()?;
+        if self
+            .pioneer_scene
+            .as_ref()
+            .is_none_or(|scene| !scene.matches(&document))
+        {
+            self.pioneer_scene = Some(hangar::pioneer_docked_scene::SceneCache::new(document)?);
+        }
+        hangar::pioneer_docked_scene::seated_body_parts(
+            self.pioneer_scene
+                .as_ref()
+                .expect("validated canonical scene"),
+            self.pioneer_room.as_ref(),
+            now,
+        )
     }
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     pub fn set_editor_free_camera(&mut self, active: bool, pose: Option<(Vec3, f32, f32)>) {
@@ -558,14 +592,25 @@ impl FlightView {
     }
     fn physical_surface(&self, index: usize, canvas: egui::Vec2) -> Option<CockpitSurface> {
         let frame = self.cockpit_display_frame.as_ref()?;
-        let mut surface = CockpitSurface::new(
-            frame.viewport,
-            frame.vp * frame.mount,
-            frame.class,
-            index,
-            canvas,
-        )?
-        .with_occlusion(frame.scene.clone(), frame.vp, frame.mount);
+        let mut surface = if frame.class == ShipClass::Pioneer {
+            hangar::pioneer_docked_scene::physical_surface(
+                frame.viewport,
+                frame.vp,
+                frame.mount,
+                index,
+                canvas,
+                frame.scene.clone(),
+            )?
+        } else {
+            CockpitSurface::new(
+                frame.viewport,
+                frame.vp * frame.mount,
+                frame.class,
+                index,
+                canvas,
+            )?
+            .with_occlusion(frame.scene.clone(), frame.vp, frame.mount)
+        };
         if let Ok(renderer) = &self.display_renderer {
             surface = surface.with_renderer(renderer.clone());
         }
@@ -936,7 +981,11 @@ impl FlightView {
             * Quat::from_rotation_z(self.head_look[1]);
         let class = own_pilot.map_or(ShipClass::Pioneer, |p| p.ship_class);
         let ship_origin = own_pilot.map_or(Vec3::ZERO, |p| space.position(p, now));
-        let cockpit_mount = cockpit_fit::mount(ship_origin, rotation, class);
+        let cockpit_mount = if class == ShipClass::Pioneer {
+            Mat4::from_scale_rotation_translation(Vec3::splat(0.01), rotation, ship_origin)
+        } else {
+            cockpit_fit::mount(ship_origin, rotation, class)
+        };
         let (mut eye, mut view) = if cockpit {
             let eye = ship_origin + rotation * (cockpit_fit::eye_body_meters(class) / 100.0);
             (
@@ -971,7 +1020,7 @@ impl FlightView {
             if tactical {
                 1.22
             } else if cockpit {
-                COCKPIT_FOV
+                cockpit_fov(class)
             } else {
                 0.85
             },
@@ -981,12 +1030,31 @@ impl FlightView {
         );
         let vp = projection * view;
         let cockpit_vp = Mat4::perspective_rh_gl(
-            COCKPIT_FOV,
+            cockpit_fov(class),
             rect.width() / rect.height().max(1.0),
             0.0002,
             10.0,
         ) * view;
+        let pioneer_parts = if class == ShipClass::Pioneer {
+            match self.canonical_pioneer_parts(now) {
+                Ok(parts) => Some(parts),
+                Err(error) => {
+                    self.clear_cockpit_presentation();
+                    ui.painter_at(rect).text(
+                        rect.center(),
+                        egui::Align2::CENTER_CENTER,
+                        format!("Canonical Pioneer unavailable: {error}"),
+                        egui::FontId::proportional(16.0),
+                        super::AMBER,
+                    );
+                    return None;
+                }
+            }
+        } else {
+            None
+        };
         let mut frame = Frame {
+            pioneer_parts,
             exterior: snapshot.exterior.clone().map(Arc::new),
             lighting_quality: self.lighting_quality,
             cockpit_vp,
@@ -996,7 +1064,7 @@ impl FlightView {
                 if tactical {
                     1.22
                 } else if cockpit {
-                    COCKPIT_FOV
+                    cockpit_fov(class)
                 } else {
                     0.85
                 },
@@ -1027,7 +1095,10 @@ impl FlightView {
                 pilots: snapshot
                     .pilots
                     .iter()
-                    .filter(|p| p.system_id == system_id && p.location != Location::Docked)
+                    .filter(|p| {
+                        p.system_id == system_id
+                            && (p.location != Location::Docked || p.name == pilot_name)
+                    })
                     .cloned()
                     .collect(),
             }),
@@ -1971,6 +2042,8 @@ impl FlightView {
 }
 #[derive(Clone)]
 struct Frame {
+    /// Canonical local body metres, immutable and independent of each camera.
+    pioneer_parts: Option<Arc<Vec<ModelPart>>>,
     exterior: Option<Arc<arkline_protocol::ExteriorWorldState>>,
     lighting_quality: super::lighting_settings::LightingQuality,
     cockpit_vp: Mat4,
@@ -1993,6 +2066,29 @@ struct Frame {
 
     docking: Option<(f32, bool)>,
 }
+impl Frame {
+    fn canonical_pioneer_parts(&self) -> Option<Arc<Vec<ModelPart>>> {
+        self.pioneer_parts
+            .clone()
+            .or_else(|| hangar::pioneer_docked_scene::default_body_parts().ok())
+    }
+    fn pioneer_body_mount(&self) -> Mat4 {
+        let origin = self
+            .scene
+            .pilots
+            .iter()
+            .find(|pilot| pilot.name == self.own)
+            .map_or_else(
+                || {
+                    self.eye
+                        - self.rotation * (cockpit_fit::eye_body_meters(ShipClass::Pioneer) / 100.0)
+                },
+                |pilot| self.space.position(pilot, self.now),
+            );
+        Mat4::from_scale_rotation_translation(Vec3::splat(0.01), self.rotation, origin)
+    }
+}
+
 #[derive(Clone)]
 struct FrameScene {
     world_layout: WorldLayoutDefinition,
@@ -3339,6 +3435,7 @@ impl Renderer {
                 );
             }
         }
+        let mut registered_glass = Vec::new();
         for pilot in &frame.scene.pilots {
             if space.position(pilot, frame.now).distance(frame.eye) > 1100.0 {
                 continue;
@@ -3353,19 +3450,41 @@ impl Renderer {
                 let exterior = exterior_visuals::for_pilot(frame, pilot);
                 self.exterior_emission
                     .set(exterior.map_or_else(Default::default, |b| b.emission_power()));
-                for &(mesh, model, color, emission) in cached_ship_parts(pilot.ship_class) {
-                    if self.visible_part(
-                        frame.vp,
-                        &(mesh, ship * model, color, emission),
-                        &mut visibility,
-                    ) {
-                        self.draw_material(
-                            mesh,
-                            ship * model,
-                            color,
-                            emission,
-                            Material::BareMetal,
-                        );
+                if own && pilot.ship_class == ShipClass::Pioneer {
+                    if let Some(parts) = frame.canonical_pioneer_parts() {
+                        let mount = frame.pioneer_body_mount();
+                        for &(mesh, model, color, emission) in parts.iter() {
+                            let part = (mesh, mount * model, color, emission);
+                            if self.visible_part(frame.vp, &part, &mut visibility) {
+                                if docked_source_primitive(mesh) == Some(6) {
+                                    registered_glass.push(part);
+                                } else {
+                                    self.draw_material(
+                                        mesh,
+                                        part.1,
+                                        color,
+                                        emission,
+                                        Material::BareMetal,
+                                    );
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    for &(mesh, model, color, emission) in cached_ship_parts(pilot.ship_class) {
+                        if self.visible_part(
+                            frame.vp,
+                            &(mesh, ship * model, color, emission),
+                            &mut visibility,
+                        ) {
+                            self.draw_material(
+                                mesh,
+                                ship * model,
+                                color,
+                                emission,
+                                Material::BareMetal,
+                            );
+                        }
                     }
                 }
             }
@@ -3457,6 +3576,9 @@ impl Renderer {
             }
         }
         self.paint_living_world(frame);
+        for part in &registered_glass {
+            self.draw_registered_glass(part);
+        }
         self.paint_effects(frame);
         if !frame.drone_camera {
             self.paint_warp_tunnel(frame);
@@ -3547,6 +3669,28 @@ impl Renderer {
             false,
             &frame.cockpit_vp.to_cols_array(),
         );
+        if frame.ship_class == ShipClass::Pioneer {
+            if let Some(parts) = frame.canonical_pioneer_parts() {
+                let mount = frame.pioneer_body_mount();
+                for &(mesh, model, color, emission) in parts.iter() {
+                    if docked_source_primitive(mesh) != Some(6) {
+                        self.draw_material(
+                            mesh,
+                            mount * model,
+                            color,
+                            emission,
+                            Material::BareMetal,
+                        );
+                    }
+                }
+                for &(mesh, model, color, emission) in parts.iter() {
+                    if docked_source_primitive(mesh) == Some(6) {
+                        self.draw_registered_glass(&(mesh, mount * model, color, emission));
+                    }
+                }
+            }
+            return;
+        }
         let origin = frame
             .scene
             .pilots
@@ -4080,6 +4224,13 @@ fn in_warp(location: &Location, now: u64) -> bool {
 }
 /// Shared bezel geometry and instrument layout: +X forward, +Y up, +Z right.
 const COCKPIT_FOV: f32 = 1.22;
+fn cockpit_fov(class: ShipClass) -> f32 {
+    if class == ShipClass::Pioneer {
+        hangar::pioneer_docked_scene::FOV_RADIANS
+    } else {
+        COCKPIT_FOV
+    }
+}
 fn cockpit_screens(class: ShipClass) -> [(Vec3, Vec3); 6] {
     let mut screens = [
         (Vec3::new(0.72, 0.12, 0.0), Vec3::new(0.020, 0.075, 0.18)),
@@ -5813,6 +5964,7 @@ mod tests {
     fn frame_for_scene_clone_test() -> Frame {
         let vp = Mat4::IDENTITY;
         Frame {
+            pioneer_parts: None,
             exterior: None,
             lighting_quality: Default::default(),
             cockpit_vp: vp,
@@ -6205,6 +6357,7 @@ mod tests {
             let view = Mat4::look_at_rh(Vec3::ZERO, Vec3::X, Vec3::Y);
             let vp = Mat4::perspective_rh_gl(1.05, 1., 0.002, 1200.) * view;
             let mut frame = Frame {
+                pioneer_parts: None,
                 exterior: None,
                 lighting_quality: Default::default(),
                 cockpit_vp: vp,

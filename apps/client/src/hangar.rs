@@ -9,7 +9,7 @@ mod avatar_animation;
 #[path = "avatar_follow.rs"]
 mod avatar_follow;
 #[path = "pioneer_docked_scene.rs"]
-mod pioneer_docked_scene;
+pub(super) mod pioneer_docked_scene;
 #[path = "pioneer_interior.rs"]
 mod pioneer_interior;
 #[path = "quarters.rs"]
@@ -643,8 +643,12 @@ fn should_render_avatar(
 }
 
 fn view_projection(eye: Vec3, target: Vec3, aspect: f32) -> Mat4 {
-    Mat4::perspective_rh_gl(55f32.to_radians(), aspect.max(0.1), 0.08, 30000.0)
-        * Mat4::look_at_rh(eye, target, Vec3::Y)
+    Mat4::perspective_rh_gl(
+        pioneer_docked_scene::FOV_RADIANS,
+        aspect.max(0.1),
+        0.08,
+        30000.0,
+    ) * Mat4::look_at_rh(eye, target, Vec3::Y)
 }
 
 fn bay_parts(class: ShipClass) -> Vec<ModelPart> {

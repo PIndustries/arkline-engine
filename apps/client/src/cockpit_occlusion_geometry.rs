@@ -156,8 +156,17 @@ fn external_draws(
             ship_orientation_at(pilot, frame.now),
         );
         if !frame.cockpit || pilot.name != frame.own {
-            for &(mesh, model, _, _) in cached_ship_parts(pilot.ship_class) {
-                out.push(mesh, ship * model)?;
+            if pilot.name == frame.own && pilot.ship_class == ShipClass::Pioneer {
+                let mount = frame.pioneer_body_mount();
+                for &(mesh, model, _, _) in frame.canonical_pioneer_parts()?.iter() {
+                    if docked_source_primitive(mesh) != Some(6) {
+                        out.push(mesh, mount * model)?;
+                    }
+                }
+            } else {
+                for &(mesh, model, _, _) in cached_ship_parts(pilot.ship_class) {
+                    out.push(mesh, ship * model)?;
+                }
             }
         }
         // Own turrets are also drawn before paint_cockpit clears world depth.
@@ -353,6 +362,15 @@ fn own_cockpit_draws(frame: &Frame, catalog: &DepthMeshCatalog) -> Option<Vec<De
         );
     let base = cockpit_fit::mount(origin, frame.rotation, frame.ship_class);
     let mut out = Collector::new(catalog);
+    if frame.ship_class == ShipClass::Pioneer {
+        let mount = frame.pioneer_body_mount();
+        for &(mesh, model, _, _) in frame.canonical_pioneer_parts()?.iter() {
+            if docked_source_primitive(mesh) != Some(6) {
+                out.push(mesh, mount * model)?;
+            }
+        }
+        return Some(out.draws);
+    }
     if frame.ship_class == ShipClass::Pioneer {
         let body = Mat4::from_rotation_translation(frame.rotation, origin);
         for &(mesh, model, _, _) in cached_ship_parts(frame.ship_class) {

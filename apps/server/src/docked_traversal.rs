@@ -80,6 +80,198 @@ fn projection(state: DockedTraversalState, now: u64) -> StationAvatar {
         updated_at_ms: now,
     }
 }
+fn owned_canonical<'a>(
+    pilot: &'a Pilot,
+    owned_host: Option<&str>,
+) -> Option<&'a DockedTraversalState> {
+    let state = pilot
+        .view
+        .station_avatar
+        .as_ref()?
+        .docked_traversal
+        .as_ref()?;
+    (pilot.view.ship_class == ShipClass::Pioneer
+        && pilot.view.location == Location::Docked
+        && owned_host == Some(state.binding.host_vessel_id.as_str())
+        && state.actuators.binding == state.binding
+        && docked_traversal_deck(state).is_ok())
+    .then_some(state)
+}
+
+/// Equipment access uses the actual bound deck, never the stopped legacy projection.
+/// Stairs, cockpit and boarding equipment do not grant deck-room access.
+pub(super) fn interior_position(pilot: &Pilot, owned_host: Option<&str>) -> Option<(u8, [f64; 3])> {
+    if pilot.view.ship_class != ShipClass::Pioneer {
+        return None;
+    }
+    let avatar = pilot.view.station_avatar.as_ref()?;
+    if avatar.docked_traversal.is_some() {
+        let state = owned_canonical(pilot, owned_host)?;
+        let deck = match state.support {
+            DockedSupport::Deck1 => 1,
+            DockedSupport::Deck2 => 2,
+            _ => return None,
+        };
+        let pose = docked_binding_pose(&state.binding).ok()?;
+        let body = geometry::station_to_body(pose, state.feet_m);
+        Some((
+            deck,
+            [
+                body[0] + 12.0,
+                body[1] - geometry::deck_floor_y(deck)?,
+                body[2] + 7.0,
+            ],
+        ))
+    } else {
+        avatar
+            .onboard_interior
+            .then_some((avatar.interior_deck, avatar.position))
+    }
+}
+
+/// Being inside the registered vessel is distinct from standing on its station lift.
+pub(super) fn aboard(pilot: &Pilot, owned_host: Option<&str>) -> bool {
+    if pilot.view.ship_class != ShipClass::Pioneer {
+        return false;
+    }
+    let Some(avatar) = pilot.view.station_avatar.as_ref() else {
+        return true;
+    };
+    if avatar.docked_traversal.is_some() {
+        owned_canonical(pilot, owned_host).is_some_and(|state| {
+            matches!(
+                state.support,
+                DockedSupport::Deck1
+                    | DockedSupport::Deck2
+                    | DockedSupport::Cockpit
+                    | DockedSupport::Connector
+                    | DockedSupport::CoreStairs
+            )
+        })
+    } else {
+        avatar.onboard_interior
+    }
+}
+
+/// Explicit editor-only placement uses the same registration and collision queries
+/// as gameplay. It never advances the clock or changes vessel modules/actuators.
+pub(super) fn editor_place(
+    world: &mut World,
+    name: &str,
+    scene: EditorSceneState,
+    now: u64,
+    document: &RoomLayoutDocument,
+) -> Result<()> {
+    let pilot = world.pilots.get(name).context("editor pilot missing")?;
+    ensure!(
+        pilot.view.location == Location::Docked && pilot.view.ship_class == ShipClass::Pioneer,
+        "canonical editor placement requires your docked Pioneer"
+    );
+    ensure!(
+        world.accounts[name].docked_traversal_compatible,
+        "all sessions must support canonical traversal placement"
+    );
+    if scene == EditorSceneState::Cockpit {
+        // Explicit sandbox placement may bypass walking, but cannot erase the
+        // equipment interlock and thereby allow an unsafe subsequent undock.
+        can_undock(world, name)?;
+        let pilot = world.pilots.get_mut(name).unwrap();
+        pilot.view.station_avatar = None;
+        pilot.walk_input = None;
+        pilot.controls = None;
+        return Ok(());
+    }
+    let expected = binding(world, name, Some(document))?;
+    let pose = docked_binding_pose(&expected).map_err(anyhow::Error::msg)?;
+    let static_geometry = registered(Some(document))?;
+    let mut actuator = world.accounts[name]
+        .docked_actuators
+        .get(&expected.host_vessel_id)
+        .cloned()
+        .unwrap_or(initial_actuators(expected.clone(), now)?);
+    if actuator.binding != expected {
+        ensure!(
+            actuator.binding.host_vessel_id == expected.host_vessel_id
+                && actuator.binding.registration_revision == expected.registration_revision
+                && actuator.binding.fleet_layout == expected.fleet_layout
+                && actuator.binding.fleet_hangar == expected.fleet_hangar,
+            "boarding equipment registration changed; reconnect safely"
+        );
+        // A validated live room edit does not change hatch/lift registration.
+        actuator.binding = expected.clone();
+    }
+    let (feet_m, desired_support) = match scene {
+        EditorSceneState::InteriorDeck1 | EditorSceneState::InteriorDeck2 => {
+            let deck = if scene == EditorSceneState::InteriorDeck1 {
+                1
+            } else {
+                2
+            };
+            let body = geometry::deck_to_body(deck, [12.0, 0.0, 7.0])
+                .context("registered editor deck missing")?;
+            (
+                geometry::body_to_station(pose, body),
+                if deck == 1 {
+                    DockedSupport::Deck1
+                } else {
+                    DockedSupport::Deck2
+                },
+            )
+        }
+        EditorSceneState::StationHangar => (
+            geometry::lift_call_anchors(pose).station_station_m,
+            DockedSupport::Station,
+        ),
+        EditorSceneState::Cockpit => unreachable!(),
+    };
+    let mut state = DockedTraversalState {
+        version: DOCKED_TRAVERSAL_VERSION,
+        binding: expected.clone(),
+        feet_m,
+        heading: pose.yaw,
+        support: desired_support,
+        surface_id: String::new(),
+        moving: false,
+        grounded: true,
+        vertical_velocity_mps: 0.0,
+        updated_at_ms: now,
+        seat_transition: None,
+        actuators: actuator.clone(),
+    };
+    let dynamic_geometry = geometry::dynamic_geometry(
+        pose,
+        dynamic(&actuator, room_open(world, name), &state, now),
+    )
+    .map_err(anyhow::Error::msg)?;
+    let hit = support(
+        &static_geometry,
+        &dynamic_geometry,
+        pose,
+        &state,
+        feet_m,
+        EPSILON_M,
+    )
+    .context("editor landing has no registered support")?;
+    ensure!(
+        hit.support == desired_support
+            && (hit.height_m - feet_m[1]).abs() <= EPSILON_M
+            && clear(&static_geometry, &dynamic_geometry, pose, &state, feet_m),
+        "editor landing is blocked by the current registered geometry"
+    );
+    state.surface_id = hit.surface_id;
+    let pilot = world.pilots.get_mut(name).unwrap();
+    pilot.view.station_avatar = Some(projection(state, now));
+    pilot.walk_input = None;
+    pilot.controls = None;
+    world
+        .accounts
+        .get_mut(name)
+        .unwrap()
+        .docked_actuators
+        .insert(expected.host_vessel_id, actuator);
+    Ok(())
+}
+
 pub(super) fn stop(pilot: &mut Pilot) {
     pilot.walk_input = None;
     if let Some(state) = pilot

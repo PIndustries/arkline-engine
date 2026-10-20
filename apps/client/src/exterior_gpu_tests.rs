@@ -289,6 +289,7 @@ fn frame() -> Frame {
         "mode":NavigationMode::Stop,"updated_at_ms":1000,"acceleration":[0.,0.,0.]}}))
         .unwrap();
     Frame {
+        pioneer_parts: None,
         exterior: Some(Arc::new(exterior())),
         lighting_quality: super::super::lighting_settings::LightingQuality::High,
         cockpit_vp: vp,
@@ -612,6 +613,7 @@ impl AuthorityCaptureCamera {
             8.,
         ) * Mat4::look_at_rh(eye, target, rotation * Vec3::from_array(self.up));
         Frame {
+            pioneer_parts: None,
             exterior: snapshot.exterior.clone().map(Arc::new),
             lighting_quality: super::super::lighting_settings::LightingQuality::High,
             cockpit_vp: vp,

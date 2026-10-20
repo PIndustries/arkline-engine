@@ -17,17 +17,35 @@ pub(super) fn load_w(room: Option<&PioneerRoomState>) -> u64 {
             0
         }
 }
-fn doorway_occupied(p: &Pilot) -> bool {
-    p.view.station_avatar.as_ref().is_some_and(|a| {
-        a.onboard_interior && a.interior_deck == 1 && {
-            let d = PIONEER_CONNECTED_ROOM;
-            let r = STATION_AVATAR_RADIUS_M;
-            a.position[0] > d.door_min[0] - r
-                && a.position[0] < d.door_max[0] + r
-                && a.position[2] > d.door_min[2] - r
-                && a.position[2] < d.door_max[2] + r
-        }
-    })
+fn doorway_occupied(p: &Pilot, owned_host: Option<&str>) -> bool {
+    let Some((1, position)) = docked_traversal::interior_position(p, owned_host) else {
+        return false;
+    };
+    let d = PIONEER_CONNECTED_ROOM;
+    if p.view
+        .station_avatar
+        .as_ref()
+        .is_some_and(|avatar| avatar.docked_traversal.is_some())
+    {
+        // The same registered leaf bounds/capsule dimensions drive collision.
+        let bounds = PioneerDockedBox {
+            center_m: std::array::from_fn(|axis| (d.door_min[axis] + d.door_max[axis]) * 0.5),
+            half_m: std::array::from_fn(|axis| (d.door_max[axis] - d.door_min[axis]) * 0.5),
+            axes: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+        };
+        pioneer_docked::box_intersects_capsule(
+            bounds,
+            position,
+            AVATAR_HEIGHT_M,
+            STATION_AVATAR_RADIUS_M,
+        )
+    } else {
+        let r = STATION_AVATAR_RADIUS_M;
+        position[0] > d.door_min[0] - r
+            && position[0] < d.door_max[0] + r
+            && position[2] > d.door_min[2] - r
+            && position[2] < d.door_max[2] + r
+    }
 }
 fn outputs(r: &mut PioneerRoomState, powered: bool, occupied: bool) {
     let main = powered && r.breaker_closed;
@@ -129,7 +147,7 @@ pub(super) fn advance(w: &mut World, now: u64) -> Result<()> {
     for (name, a) in &mut w.accounts {
         let p = w.pilots.get_mut(name).unwrap();
         let active = p.view.ship_class == ShipClass::Pioneer;
-        let occupied = active && doorway_occupied(p);
+        let occupied = active && doorway_occupied(p, a.vessel_id(ShipClass::Pioneer));
         let power = if active {
             &mut p.view.power
         } else {
@@ -175,16 +193,21 @@ pub(super) fn execute(
         "room controller belongs to your active Pioneer"
     );
     ensure!(
-        p.view
-            .station_avatar
-            .as_ref()
-            .is_none_or(|a| a.onboard_interior && a.interior_deck == 1),
+        p.view.station_avatar.is_none()
+            || docked_traversal::interior_position(
+                p,
+                w.accounts[name].vessel_id(ShipClass::Pioneer)
+            )
+            .is_some_and(|(deck, _)| deck == 1),
         "use engineering aboard or inside Pioneer deck one"
     );
     if matches!(command, PioneerRoomCommand::Door { open: false, .. }) {
-        ensure!(!doorway_occupied(p), "doorway occupied");
+        ensure!(
+            !doorway_occupied(p, w.accounts[name].vessel_id(ShipClass::Pioneer)),
+            "doorway occupied"
+        );
     }
-    let occupied = doorway_occupied(p);
+    let occupied = doorway_occupied(p, w.accounts[name].vessel_id(ShipClass::Pioneer));
     let powered = p.view.power.as_ref().is_some_and(|p| p.charge_j > 0);
     let a = w.accounts.get_mut(name).unwrap();
     let r = a

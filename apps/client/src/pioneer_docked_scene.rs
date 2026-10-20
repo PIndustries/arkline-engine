@@ -9,13 +9,16 @@ use arkline_protocol::{
     RoomLayoutDocument,
 };
 
-pub(super) struct SceneCache {
+pub(in crate::flight3d) const FOV_RADIANS: f32 = 55.0 * std::f32::consts::PI / 180.0;
+
+#[derive(Clone)]
+pub(in crate::flight3d) struct SceneCache {
     document: RoomLayoutDocument,
     geometry: Arc<PioneerDockedGeometry>,
     rooms: Arc<Vec<ModelPart>>,
 }
 impl SceneCache {
-    fn new(document: RoomLayoutDocument) -> Result<Self, String> {
+    pub(in crate::flight3d) fn new(document: RoomLayoutDocument) -> Result<Self, String> {
         let geometry = Arc::new(registered_geometry(&document)?);
         let mut rooms = Vec::new();
         for room in &document.rooms {
@@ -32,6 +35,71 @@ impl SceneCache {
             rooms: Arc::new(rooms),
         })
     }
+    pub(in crate::flight3d) fn matches(&self, document: &RoomLayoutDocument) -> bool {
+        self.document == *document
+    }
+}
+
+/// One immutable body-metre recipe for station and flight presentation. Only
+/// the caller's rigid body-to-view transform changes between environments.
+pub(in crate::flight3d) fn body_parts(
+    cache: &SceneCache,
+    dynamic: &PioneerDockedGeometry,
+) -> Result<Vec<ModelPart>, String> {
+    let source = docked_pioneer_parts()?;
+    let mut parts = source
+        .iter()
+        .map(|&(mesh, model, color, emission)| {
+            (
+                mesh,
+                Mat4::from_scale(Vec3::splat(100.0)) * model,
+                color,
+                emission,
+            )
+        })
+        .collect::<Vec<_>>();
+    parts.extend(panel_parts(&cache.geometry, Mat4::IDENTITY, true));
+    parts.extend(panel_parts(dynamic, Mat4::IDENTITY, false));
+    parts.extend(cache.rooms.iter().copied());
+    Ok(parts)
+}
+
+pub(in crate::flight3d) fn seated_body_parts(
+    cache: &SceneCache,
+    room: Option<&arkline_protocol::PioneerRoomState>,
+    now: u64,
+) -> Result<Arc<Vec<ModelPart>>, String> {
+    let pose = PioneerDockedPose::private();
+    let dynamic = dynamic_geometry(pose, actuator_pose(None, pose, room, now))?;
+    body_parts(cache, &dynamic).map(Arc::new)
+}
+
+pub(in crate::flight3d) fn default_body_parts() -> Result<Arc<Vec<ModelPart>>, String> {
+    static PARTS: std::sync::OnceLock<Result<Arc<Vec<ModelPart>>, String>> =
+        std::sync::OnceLock::new();
+    PARTS
+        .get_or_init(|| {
+            let cache = SceneCache::new(arkline_protocol::default_pioneer())?;
+            seated_body_parts(&cache, None, 0)
+        })
+        .clone()
+}
+
+/// The same real backing plane and opaque-scene ray guard in every view.
+pub(in crate::flight3d) fn physical_surface(
+    rect: egui::Rect,
+    vp: Mat4,
+    mount: Mat4,
+    index: usize,
+    canvas: egui::Vec2,
+    scene: Arc<CockpitOcclusion>,
+) -> Option<CockpitSurface> {
+    if index == 0 {
+        return None;
+    }
+    let (center, half) = arkline_protocol::cockpit_screen(index)?;
+    CockpitSurface::registered(rect, vp, mount, vector(center), vector(half), index, canvas)
+        .map(|surface| surface.with_registered_occlusion(scene, vp, mount))
 }
 
 fn vector(point: [f64; 3]) -> Vec3 {
@@ -224,22 +292,10 @@ fn scene_parts(
         parts.extend(quarters::room_parts(ShipClass::Pioneer, 0));
         parts
     };
-    let source = docked_pioneer_parts()?;
-    parts.extend(source.iter().map(|&(mesh, model, color, emission)| {
-        (
-            mesh,
-            body * Mat4::from_scale(Vec3::splat(100.0)) * model,
-            color,
-            emission,
-        )
-    }));
-    parts.extend(panel_parts(&cache.geometry, body, true));
-    parts.extend(panel_parts(dynamic, body, false));
     parts.extend(
-        cache
-            .rooms
-            .iter()
-            .map(|&(mesh, model, color, emission)| (mesh, body * model, color, emission)),
+        body_parts(cache, dynamic)?
+            .into_iter()
+            .map(|(mesh, model, color, emission)| (mesh, body * model, color, emission)),
     );
     Ok(parts)
 }
@@ -287,7 +343,6 @@ fn registered_surfaces(
         if index == 0 {
             return None;
         }
-        let (center, half) = arkline_protocol::cockpit_screen(index)?;
         let canvas = if index == 3 {
             cockpit_computer::COMPUTER_CANVAS_SIZE
         } else if index == 5 {
@@ -295,16 +350,7 @@ fn registered_surfaces(
         } else {
             egui::vec2(300.0, 180.0)
         };
-        let mut surface = CockpitSurface::registered(
-            rect,
-            vp,
-            mount,
-            vector(center),
-            vector(half),
-            index,
-            canvas,
-        )?
-        .with_registered_occlusion(scene.clone(), vp, mount);
+        let mut surface = physical_surface(rect, vp, mount, index, canvas, scene.clone())?;
         if let Some(renderer) = &view.docked_display_renderer {
             surface = surface.with_renderer(renderer.clone());
         }

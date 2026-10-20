@@ -926,6 +926,11 @@ pub(super) fn remote_ship_frame(
         origin: super::super::motion::position(worker, main.now),
     };
     feed.system_id = worker.system_id;
+    // A worker's view cannot inherit another owner's installed room layout.
+    // Its absent payload resolves the immutable default source recipe instead.
+    if worker.name != main.own {
+        feed.pioneer_parts = None;
+    }
     feed.own = worker.name.clone();
     feed.ship_class = worker.ship_class;
     feed.rotation = ship_orientation_at(worker, main.now);
@@ -1270,6 +1275,7 @@ mod remote_tests {
     }
     fn main_frame() -> Frame {
         Frame {
+            pioneer_parts: None,
             exterior: None,
             lighting_quality: Default::default(),
             cockpit_vp: Mat4::IDENTITY,

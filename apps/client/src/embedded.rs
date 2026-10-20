@@ -327,13 +327,12 @@ impl EmbeddedClient {
         Some(match pilot.station_avatar.as_ref() {
             None => EditorSceneState::Cockpit,
             Some(avatar) if avatar.docked_traversal.is_some() => {
-                match avatar.docked_traversal.as_ref().unwrap().support {
-                    arkline_protocol::DockedSupport::Station => EditorSceneState::StationHangar,
-                    arkline_protocol::DockedSupport::Deck1
-                    | arkline_protocol::DockedSupport::CoreStairs => {
-                        EditorSceneState::InteriorDeck1
-                    }
-                    _ => EditorSceneState::InteriorDeck2,
+                let state = avatar.docked_traversal.as_ref().unwrap();
+                match arkline_protocol::docked_traversal_deck(state).ok()? {
+                    Some(1) => EditorSceneState::InteriorDeck1,
+                    Some(2) => EditorSceneState::InteriorDeck2,
+                    None => EditorSceneState::StationHangar,
+                    Some(_) => return None,
                 }
             }
             Some(avatar) if !avatar.onboard_interior => EditorSceneState::StationHangar,
@@ -999,7 +998,7 @@ impl EmbeddedClient {
     fn current_view(&self) -> Option<EmbeddedView> {
         let pilot = self.cockpit.own()?;
         let registered_aboard =
-            pilot.station_avatar.is_none() && self.cockpit.verified_docked_binding().is_some();
+            pilot.station_avatar.is_none() && self.cockpit.docked_navigation_present();
         if self.cockpit.in_station_hangar() && !registered_aboard {
             return Some(if pilot.station_avatar.is_some() {
                 match self.cockpit.hangar_view.on_foot_view {
@@ -1067,9 +1066,7 @@ impl EmbeddedClient {
                 Some(a) if a.docked_traversal.is_some() => {
                     format!(
                         "Pioneer · {}",
-                        super::station_ui::docked_support_label(
-                            a.docked_traversal.as_ref().unwrap().support
-                        )
+                        super::station_ui::docked_state_label(a.docked_traversal.as_ref().unwrap())
                     )
                 }
                 Some(a) if a.onboard_interior => {
@@ -2790,7 +2787,10 @@ mod tests {
                     .find(|pilot| pilot.name == "SceneBridgeGuest")
                     .is_some_and(|pilot| {
                         pilot.station_avatar.as_ref().is_some_and(|avatar| {
-                            avatar.onboard_interior && avatar.interior_deck == 1
+                            avatar.docked_traversal.as_ref().is_some_and(|state| {
+                                state.support == arkline_protocol::DockedSupport::Deck1
+                                    && arkline_protocol::docked_traversal_deck(state) == Ok(Some(1))
+                            })
                         })
                     })
             })
@@ -3821,6 +3821,109 @@ mod tests {
             );
         }
         assert!(requests.try_recv().is_err());
+    }
+
+    #[test]
+    fn canonical_scene_state_uses_registered_support_and_stair_body_height() {
+        let (mut client, requests) = debug_fixture();
+        let document = arkline_protocol::default_pioneer_room_layout();
+        let binding = arkline_protocol::docked_traversal_binding(
+            "owned-pioneer".into(),
+            &document,
+            arkline_protocol::FleetLayoutRevision::LinearV1,
+            false,
+        );
+        let pose = arkline_protocol::docked_binding_pose(&binding).unwrap();
+        let state = arkline_protocol::DockedTraversalState {
+            version: arkline_protocol::DOCKED_TRAVERSAL_VERSION,
+            binding: binding.clone(),
+            feet_m: arkline_protocol::body_to_station(pose, [0.0, -3.0, 0.0]),
+            heading: 0.0,
+            support: arkline_protocol::DockedSupport::CoreStairs,
+            surface_id: "core-stairs".into(),
+            moving: false,
+            grounded: true,
+            vertical_velocity_mps: 0.0,
+            updated_at_ms: 1000,
+            seat_transition: None,
+            actuators: arkline_protocol::DockedVesselActuators {
+                binding,
+                inner_hatch_open: false,
+                outer_hatch_open: false,
+                lift: arkline_protocol::DockedLiftState {
+                    floor_station_m: arkline_protocol::lift_geometry(pose).ship_floor_m,
+                    target: arkline_protocol::DockedLiftStop::Ship,
+                    moving: false,
+                    updated_at_ms: 1000,
+                },
+                service_power_available: true,
+            },
+        };
+        let pilot = &mut client.cockpit.snapshot.as_mut().unwrap().pilots[0];
+        pilot.location = Location::Docked;
+        pilot.station_avatar = Some(StationAvatar {
+            docked_traversal: Some(state),
+            position: [0.0; 3],
+            heading: 0.0,
+            moving: false,
+            updated_at_ms: 1000,
+            onboard_interior: false,
+            interior_deck: 1,
+            seated: false,
+            jump_started_ms: None,
+        });
+        for (support, body_y, expected) in [
+            (
+                arkline_protocol::DockedSupport::CoreStairs,
+                -3.0,
+                EditorSceneState::InteriorDeck1,
+            ),
+            (
+                arkline_protocol::DockedSupport::CoreStairs,
+                -1.0,
+                EditorSceneState::InteriorDeck2,
+            ),
+            (
+                arkline_protocol::DockedSupport::Connector,
+                -0.32,
+                EditorSceneState::InteriorDeck2,
+            ),
+            (
+                arkline_protocol::DockedSupport::BoardingLift,
+                -4.12,
+                EditorSceneState::StationHangar,
+            ),
+            (
+                arkline_protocol::DockedSupport::Station,
+                -4.12,
+                EditorSceneState::StationHangar,
+            ),
+        ] {
+            let state = client.cockpit.snapshot.as_mut().unwrap().pilots[0]
+                .station_avatar
+                .as_mut()
+                .unwrap()
+                .docked_traversal
+                .as_mut()
+                .unwrap();
+            state.support = support;
+            state.feet_m = arkline_protocol::body_to_station(pose, [0.0, body_y, 0.0]);
+            assert_eq!(client.scene_state(), Some(expected));
+        }
+        client.cockpit.snapshot.as_mut().unwrap().pilots[0]
+            .station_avatar
+            .as_mut()
+            .unwrap()
+            .docked_traversal
+            .as_mut()
+            .unwrap()
+            .binding
+            .layout_sha256 = "invalid".into();
+        assert_eq!(client.scene_state(), None);
+        assert!(
+            requests.try_recv().is_err(),
+            "classification never sends a placement command"
+        );
     }
 
     #[test]

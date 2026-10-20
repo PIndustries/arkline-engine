@@ -194,8 +194,19 @@ impl Renderer {
                         Vec3::ONE,
                         ship_orientation_at(p, frame.now),
                     );
-                    for &(mesh, model, _, _) in cached_ship_parts(p.ship_class) {
-                        push_caster(&mut casters, (mesh, ship * model), frame.eye);
+                    if p.name == frame.own && p.ship_class == ShipClass::Pioneer {
+                        if let Some(parts) = frame.canonical_pioneer_parts() {
+                            let mount = frame.pioneer_body_mount();
+                            for &(mesh, model, _, _) in parts.iter() {
+                                if docked_source_primitive(mesh) != Some(6) {
+                                    push_caster(&mut casters, (mesh, mount * model), frame.eye);
+                                }
+                            }
+                        }
+                    } else {
+                        for &(mesh, model, _, _) in cached_ship_parts(p.ship_class) {
+                            push_caster(&mut casters, (mesh, ship * model), frame.eye);
+                        }
                     }
                     for id in 0..2 {
                         if let Some(t) = self.turrets.get(&(p.name.clone(), id)) {

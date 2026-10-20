@@ -9,9 +9,12 @@ const NAVIGATION_GLASS_MESH: usize = 10 + NAVIGATION_GLASS_PRIMITIVE;
 
 pub(super) fn eye_body_meters(class: ShipClass) -> Vec3 {
     if class == ShipClass::Pioneer {
-        // The source cavity is X33.65..35.155, Y-0.82..2.88. Offset
-        // from its central mullion into the starboard front pane.
-        Vec3::new(34.1, 1.0, 3.0)
+        // One canonical seated joint supplies docked and flight eye placement.
+        Vec3::from_array(
+            arkline_protocol::pilot_joints(0.0)
+                .eye_m
+                .map(|value| value as f32),
+        )
     } else {
         let spec = class.spec();
         Vec3::new(
