@@ -1,5 +1,8 @@
 //! Private station bay in actual meters, using the same hull meshes as flight.
 use super::*;
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "model_catalog_hangar.rs"]
+pub(super) mod inspection_catalog;
 use arkline_protocol::{hangar_layout, StationAvatar};
 #[path = "avatar_animation.rs"]
 mod avatar_animation;
@@ -913,28 +916,10 @@ unsafe fn paint_with_fixture_lighting(
     exterior: &[exterior_visuals::Instance],
     station_fixtures: Option<&[local_lighting::Light]>,
 ) {
-    renderer.prepare_spatial_material();
-    #[cfg(not(target_arch = "wasm32"))]
-    renderer.debug_metrics.set(Default::default());
-    if renderer.destroyed {
+    let Some(shadow_texture) = begin_model_pass(renderer, vp, eye, station_lighting) else {
         return;
-    }
+    };
     let gl = &renderer.gl;
-    gl.disable(glow::CULL_FACE);
-    gl.disable(glow::BLEND);
-    gl.enable(glow::DEPTH_TEST);
-    gl.depth_func(glow::LEQUAL);
-    gl.depth_mask(true);
-    gl.clear_depth_f32(1.0);
-    gl.clear_color(0.008, 0.014, 0.019, 1.0);
-    gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
-    gl.use_program(Some(renderer.program));
-    renderer.upload_spatial_material();
-    gl.uniform_1_f32(
-        gl.get_uniform_location(renderer.program, "station_lighting")
-            .as_ref(),
-        if station_lighting { 1.0 } else { 0.0 },
-    );
     let mut lights: Vec<_> = base
         .into_iter()
         .flatten()
@@ -980,12 +965,6 @@ unsafe fn paint_with_fixture_lighting(
         });
         renderer.local_lights.upload_lights(gl, combined);
     }
-    let shadow_texture = renderer.disable_sun_shadow();
-    gl.uniform_1_f32(renderer.uniforms.environment_atmosphere.as_ref(), 0.0);
-    gl.uniform_3_f32(renderer.uniforms.environment_up.as_ref(), 0.0, 1.0, 0.0);
-    gl.uniform_matrix_4_f32_slice(renderer.uniforms.vp.as_ref(), false, &vp.to_cols_array());
-    gl.uniform_3_f32(renderer.uniforms.eye.as_ref(), eye.x, eye.y, eye.z);
-    gl.uniform_1_i32(renderer.uniforms.material.as_ref(), 0);
     for &(mesh, model, color, emission) in base.into_iter().flatten().chain(dynamic.iter()) {
         renderer.draw(mesh, model, color, emission);
     }
@@ -998,6 +977,77 @@ unsafe fn paint_with_fixture_lighting(
         for &(mesh, model, color, emission) in &instance.fixtures {
             renderer.draw(mesh, model, color, emission);
         }
+    }
+    renderer.restore_shadow_texture(shadow_texture);
+}
+
+// All preview adapters share the existing material/shadow/state preparation.
+// Callers keep their own geometry and lighting recipes; this only sets the pass.
+type ShadowBinding = (Option<glow::Texture>, u32, Option<glow::Sampler>);
+unsafe fn begin_model_pass(
+    renderer: &mut Renderer,
+    vp: Mat4,
+    eye: Vec3,
+    station_lighting: bool,
+) -> Option<ShadowBinding> {
+    renderer.prepare_spatial_material();
+    #[cfg(not(target_arch = "wasm32"))]
+    renderer.debug_metrics.set(Default::default());
+    if renderer.destroyed {
+        return None;
+    }
+    let gl = &renderer.gl;
+    gl.disable(glow::CULL_FACE);
+    gl.disable(glow::BLEND);
+    gl.enable(glow::DEPTH_TEST);
+    gl.depth_func(glow::LEQUAL);
+    gl.depth_mask(true);
+    gl.clear_depth_f32(1.0);
+    gl.clear_color(0.008, 0.014, 0.019, 1.0);
+    gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
+    gl.use_program(Some(renderer.program));
+    renderer.upload_spatial_material();
+    gl.uniform_1_f32(
+        gl.get_uniform_location(renderer.program, "station_lighting")
+            .as_ref(),
+        if station_lighting { 1.0 } else { 0.0 },
+    );
+    let shadow_texture = renderer.disable_sun_shadow();
+    gl.uniform_1_f32(renderer.uniforms.environment_atmosphere.as_ref(), 0.0);
+    gl.uniform_3_f32(renderer.uniforms.environment_up.as_ref(), 0.0, 1.0, 0.0);
+    gl.uniform_matrix_4_f32_slice(renderer.uniforms.vp.as_ref(), false, &vp.to_cols_array());
+    gl.uniform_3_f32(renderer.uniforms.eye.as_ref(), eye.x, eye.y, eye.z);
+    gl.uniform_1_i32(renderer.uniforms.material.as_ref(), 0);
+    Some(shadow_texture)
+}
+
+/// Inspect exact shared catalog draws, retaining each runtime surface response.
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) unsafe fn paint_inspection(
+    renderer: &mut Renderer,
+    vp: Mat4,
+    eye: Vec3,
+    model: &model_catalog::RuntimeInspectionModel,
+    display: Mat4,
+) {
+    let Some(shadow_texture) = begin_model_pass(renderer, vp, eye, true) else {
+        return;
+    };
+    renderer.exterior_emission.set(Default::default());
+    let lights: Vec<_> = model
+        .parts
+        .iter()
+        .filter_map(|draw| {
+            let (mesh, transform, color, emission) = draw.part;
+            (mesh == 0 && emission >= 0.7 && color.min_element() > 0.25)
+                .then_some(((display * transform).w_axis.truncate(), color))
+        })
+        .take(8)
+        .collect();
+    renderer.local_lights.upload_station(&renderer.gl, &lights);
+    for draw in &model.parts {
+        let (mesh, transform, color, emission) = draw.part;
+        renderer.draw_material(mesh, display * transform, color, emission, draw.material);
     }
     renderer.restore_shadow_texture(shadow_texture);
 }

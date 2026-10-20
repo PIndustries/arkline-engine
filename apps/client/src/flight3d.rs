@@ -68,6 +68,12 @@ pub mod imported_asset;
 pub mod drone_gallery;
 #[path = "drone_models.rs"]
 mod drone_models;
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "model_catalog.rs"]
+pub mod model_catalog;
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "model_preview.rs"]
+pub mod model_preview;
 #[path = "ship_asset.rs"]
 mod ship_asset;
 
@@ -3376,88 +3382,8 @@ impl Renderer {
                 self.draw_material(mesh, body * model, color, emission, Material::BareMetal);
             }
         }
-        let steel = Vec3::new(0.055, 0.08, 0.09);
-        let glow = Vec3::new(0.08, 0.62, 0.43);
-        // Forward is local +X; glazing is open between structural pillars.
-        for side in [-1.0, 1.0] {
-            if frame.ship_class != ShipClass::Pioneer {
-                self.draw(
-                    0,
-                    base * transform(
-                        Vec3::new(0.88, 0.03, side * cockpit_span(frame.ship_class)),
-                        Vec3::new(0.025, 0.62, 0.018),
-                        Quat::from_rotation_x(side * 0.22),
-                    ),
-                    steel,
-                    0.0,
-                );
-            }
-            self.draw(
-                0,
-                base * transform(
-                    Vec3::new(0.63, -0.38, side * 0.42),
-                    Vec3::new(0.35, 0.15, 0.13),
-                    Quat::IDENTITY,
-                ),
-                steel,
-                0.0,
-            );
-            for i in 0..6 {
-                self.draw(
-                    0,
-                    base * transform(
-                        Vec3::new(0.77, -0.34, side * (0.22 + i as f32 * 0.04)),
-                        Vec3::splat(0.013),
-                        Quat::IDENTITY,
-                    ),
-                    glow,
-                    0.8,
-                );
-            }
-        }
-        if frame.ship_class != ShipClass::Pioneer {
-            self.draw(
-                0,
-                base * transform(
-                    Vec3::new(0.75, 0.57, 0.0),
-                    Vec3::new(0.065, 0.035, 0.57),
-                    Quat::IDENTITY,
-                ),
-                steel,
-                0.0,
-            );
-            self.draw(
-                0,
-                base * transform(
-                    Vec3::new(0.82, -0.50, 0.0),
-                    Vec3::new(0.22, 0.13, 0.58),
-                    Quat::IDENTITY,
-                ),
-                steel,
-                0.0,
-            );
-        }
-        for (index, (center, size)) in cockpit_screens(frame.ship_class).into_iter().enumerate() {
-            if index == 0 {
-                continue;
-            } // Transparent canopy telemetry preserves forward visibility.
-            self.draw(
-                0,
-                base * transform(center, size, Quat::IDENTITY),
-                glow * 0.23,
-                0.25,
-            );
-            self.draw_material(
-                0,
-                base * transform(
-                    center - Vec3::X * 0.025,
-                    Vec3::new(0.006, size.y - 0.008, size.z - 0.008),
-                    Quat::IDENTITY,
-                ),
-                Vec3::new(0.004, 0.012, 0.010),
-                0.1,
-                Material::Glass,
-            );
+        for &((mesh, model, color, emission), material) in cached_cockpit_parts(frame.ship_class) {
+            self.draw_material(mesh, base * model, color, emission, material);
         }
     }
     unsafe fn paint_effects(&self, frame: &Frame) {
@@ -4595,6 +4521,120 @@ fn pioneer_asset_sha256() -> &'static str {
 }
 
 type ModelPart = (usize, Mat4, Vec3, f32);
+// One recipe supplies the live enclosure/console draws and native inspection.
+// These coordinates precede the class-specific cockpit_fit mount.
+fn cached_cockpit_parts(class: ShipClass) -> &'static [(ModelPart, Material)] {
+    static MODELS: [std::sync::OnceLock<Vec<(ModelPart, Material)>>; 7] =
+        [const { std::sync::OnceLock::new() }; 7];
+    let index = arkline_protocol::ALL_SHIP_CLASSES
+        .iter()
+        .position(|c| *c == class)
+        .unwrap();
+    MODELS[index].get_or_init(|| {
+        let mut parts = MaterialParts(Vec::new());
+        let steel = Vec3::new(0.055, 0.08, 0.09);
+        let glow = Vec3::new(0.08, 0.62, 0.43);
+        // Forward is local +X; glazing is open between structural pillars.
+        for side in [-1.0, 1.0] {
+            if class != ShipClass::Pioneer {
+                parts.draw(
+                    0,
+                    transform(
+                        Vec3::new(0.88, 0.03, side * cockpit_span(class)),
+                        Vec3::new(0.025, 0.62, 0.018),
+                        Quat::from_rotation_x(side * 0.22),
+                    ),
+                    steel,
+                    0.0,
+                );
+            }
+            parts.draw(
+                0,
+                transform(
+                    Vec3::new(0.63, -0.38, side * 0.42),
+                    Vec3::new(0.35, 0.15, 0.13),
+                    Quat::IDENTITY,
+                ),
+                steel,
+                0.0,
+            );
+            for i in 0..6 {
+                parts.draw(
+                    0,
+                    transform(
+                        Vec3::new(0.77, -0.34, side * (0.22 + i as f32 * 0.04)),
+                        Vec3::splat(0.013),
+                        Quat::IDENTITY,
+                    ),
+                    glow,
+                    0.8,
+                );
+            }
+        }
+        if class != ShipClass::Pioneer {
+            parts.draw(
+                0,
+                transform(
+                    Vec3::new(0.75, 0.57, 0.0),
+                    Vec3::new(0.065, 0.035, 0.57),
+                    Quat::IDENTITY,
+                ),
+                steel,
+                0.0,
+            );
+            parts.draw(
+                0,
+                transform(
+                    Vec3::new(0.82, -0.50, 0.0),
+                    Vec3::new(0.22, 0.13, 0.58),
+                    Quat::IDENTITY,
+                ),
+                steel,
+                0.0,
+            );
+        }
+        for (index, (center, size)) in cockpit_screens(class).into_iter().enumerate() {
+            if index == 0 {
+                continue;
+            } // Transparent canopy telemetry preserves forward visibility.
+            parts.draw(
+                0,
+                transform(center, size, Quat::IDENTITY),
+                glow * 0.23,
+                0.25,
+            );
+            parts.draw_material(
+                0,
+                transform(
+                    center - Vec3::X * 0.025,
+                    Vec3::new(0.006, size.y - 0.008, size.z - 0.008),
+                    Quat::IDENTITY,
+                ),
+                Vec3::new(0.004, 0.012, 0.010),
+                0.1,
+                Material::Glass,
+            );
+        }
+        parts.0
+    })
+}
+struct MaterialParts(Vec<(ModelPart, Material)>);
+impl MaterialParts {
+    fn draw(&mut self, mesh: usize, model: Mat4, color: Vec3, emission: f32) {
+        self.draw_material(mesh, model, color, emission, Material::PaintedHull);
+    }
+    fn draw_material(
+        &mut self,
+        mesh: usize,
+        model: Mat4,
+        color: Vec3,
+        emission: f32,
+        material: Material,
+    ) {
+        self.0.push(((mesh, model, color, emission), material));
+    }
+}
+
 fn ship_parts(class: ShipClass) -> Vec<ModelPart> {
     cached_ship_parts(class).to_vec()
 }

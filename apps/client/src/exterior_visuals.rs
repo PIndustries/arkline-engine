@@ -133,33 +133,7 @@ impl Binding<'_> {
             .document
             .fixtures
             .iter()
-            .filter_map(|fixture| {
-                let output = self.output(fixture);
-                if output <= 0. {
-                    return None;
-                }
-                let (mesh, half) = match fixture.kind {
-                    ExteriorFixtureKind::Navigation => (2, Vec3::splat(0.18)),
-                    ExteriorFixtureKind::Strobe => (2, Vec3::splat(0.24)),
-                    // The authored recessed panes provide the Window surface; a
-                    // second axis-aligned cube would sit proud of wrapped glass.
-                    ExteriorFixtureKind::Window => return None,
-                    ExteriorFixtureKind::Panel => (0, Vec3::new(0.08, 0.15, 0.25)),
-                    // The accepted mount sits at the actual recessed throat,
-                    // inside the authored opening. Existing dynamic exhaust remains.
-                    ExteriorFixtureKind::EngineGlow => (2, Vec3::new(0.18, 1.1, 1.1)),
-                };
-                Some((
-                    mesh,
-                    pose * transform(
-                        Vec3::from_array(fixture.position_m.map(|v| v as f32)) / 100.,
-                        half / 100.,
-                        Quat::IDENTITY,
-                    ),
-                    Vec3::from_array(fixture.color),
-                    fixture.emission * output,
-                ))
-            })
+            .filter_map(|fixture| fixture_part(fixture, pose, self.output(fixture)))
             .collect()
     }
     pub(super) fn lights(self, pose: Mat4) -> Vec<local_lighting::Light> {
@@ -184,6 +158,38 @@ impl Binding<'_> {
             })
             .collect()
     }
+}
+
+/// The exact separate lens/body recipe. Window surfaces remain authored GLB panes.
+pub(super) fn fixture_part(
+    fixture: &arkline_protocol::ExteriorFixture,
+    pose: Mat4,
+    output: f32,
+) -> Option<ModelPart> {
+    if output <= 0. {
+        return None;
+    }
+    let (mesh, half) = match fixture.kind {
+        ExteriorFixtureKind::Navigation => (2, Vec3::splat(0.18)),
+        ExteriorFixtureKind::Strobe => (2, Vec3::splat(0.24)),
+        // The authored recessed panes provide the Window surface; a
+        // second axis-aligned cube would sit proud of wrapped glass.
+        ExteriorFixtureKind::Window => return None,
+        ExteriorFixtureKind::Panel => (0, Vec3::new(0.08, 0.15, 0.25)),
+        // The accepted mount sits at the actual recessed throat,
+        // inside the authored opening. Existing dynamic exhaust remains.
+        ExteriorFixtureKind::EngineGlow => (2, Vec3::new(0.18, 1.1, 1.1)),
+    };
+    Some((
+        mesh,
+        pose * transform(
+            Vec3::from_array(fixture.position_m.map(|v| v as f32)) / 100.,
+            half / 100.,
+            Quat::IDENTITY,
+        ),
+        Vec3::from_array(fixture.color),
+        fixture.emission * output,
+    ))
 }
 
 impl Renderer {

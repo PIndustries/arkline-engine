@@ -152,6 +152,99 @@ impl ImportedAssetPreview {
                 .unwrap_or_else(|| "GPU unavailable".into()))
         }
     }
+    /// Reuse the imported meter-space GPU data with a shared display-space camera.
+    /// `display` is a positive uniform scale plus translation; neither geometry nor
+    /// normals change, so lighting still uses the original scalar materials.
+    pub(super) fn shared_callback(
+        &self,
+        rect: egui::Rect,
+        vp: Mat4,
+        eye: Vec3,
+        display: Mat4,
+    ) -> Result<egui::PaintCallback, String> {
+        let (vp, eye) = Self::shared_camera(vp, eye, display)?;
+        let renderer = self
+            .renderer
+            .as_ref()
+            .ok_or_else(|| {
+                self.error
+                    .clone()
+                    .unwrap_or_else(|| "GPU unavailable".into())
+            })?
+            .clone();
+        drop(
+            renderer
+                .lock()
+                .map_err(|_| "Preview renderer unavailable".to_owned())?,
+        );
+        Ok(egui::PaintCallback {
+            rect,
+            callback: Arc::new(egui_glow::CallbackFn::new(move |_, _| {
+                if let Ok(renderer) = renderer.lock() {
+                    unsafe {
+                        renderer.paint(vp, eye);
+                        #[cfg(test)]
+                        assert_eq!(
+                            renderer.gl.get_error(),
+                            glow::NO_ERROR,
+                            "Imported preview shared paint callback"
+                        );
+                    }
+                }
+            })),
+        })
+    }
+    fn shared_camera(vp: Mat4, eye: Vec3, display: Mat4) -> Result<(Mat4, Vec3), String> {
+        if !vp.is_finite() || !eye.is_finite() || !display.is_finite() {
+            return Err("Imported preview camera must be finite".into());
+        }
+        let determinant = display.determinant();
+        if !determinant.is_finite() || determinant <= 0.0 {
+            return Err(
+                "Imported preview display transform must be invertible and positive".into(),
+            );
+        }
+        let inverse = display.inverse();
+        if !inverse.is_finite() {
+            return Err("Imported preview display inverse must be finite".into());
+        }
+        let vp = vp * display;
+        let eye = inverse.transform_point3(eye);
+        if !vp.is_finite() || !eye.is_finite() {
+            return Err("Imported preview meter-space camera must be finite".into());
+        }
+        Ok((vp, eye))
+    }
+    #[cfg(all(test, target_os = "macos"))]
+    pub(super) fn debug_mesh_bindings(&self) -> Vec<(glow::VertexArray, glow::Buffer, i32)> {
+        self.renderer
+            .as_ref()
+            .and_then(|renderer| {
+                renderer.lock().ok().map(|renderer| {
+                    renderer
+                        .meshes
+                        .iter()
+                        .map(|mesh| (mesh.vao, mesh.buffer, mesh.count))
+                        .collect()
+                })
+            })
+            .unwrap_or_default()
+    }
+    #[cfg(all(test, target_os = "macos"))]
+    pub(super) fn debug_materials(&self) -> Vec<(Vec3, Vec3, f32, f32)> {
+        self.renderer
+            .as_ref()
+            .and_then(|renderer| {
+                renderer.lock().ok().map(|renderer| {
+                    renderer
+                        .meshes
+                        .iter()
+                        .map(|mesh| (mesh.color, mesh.emission, mesh.roughness, mesh.metallic))
+                        .collect()
+                })
+            })
+            .unwrap_or_default()
+    }
     pub fn show(&mut self, ui: &mut egui::Ui, report: Option<&ImportReport>) {
         let Some(report) = report else {
             ui.label("No verified geometry to display.");
@@ -197,6 +290,12 @@ impl ImportedAssetPreview {
                     if let Ok(r) = r.lock() {
                         unsafe {
                             r.paint(vp, eye);
+                            #[cfg(test)]
+                            assert_eq!(
+                                r.gl.get_error(),
+                                glow::NO_ERROR,
+                                "Imported preview paint callback"
+                            );
                         }
                     }
                 })),
@@ -413,6 +512,59 @@ mod tests {
         assert_eq!(a.report.materials, ["wedge coating"]);
         assert_eq!(b.report.materials, ["spire coating"]);
         assert_eq!(a.parts[0].vertices.len(), 12);
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn imported_shared_camera_preserves_meter_space_lighting_and_projection() {
+        let center = Vec3::new(12., -7., 3.);
+        let display = Mat4::from_scale(Vec3::splat(0.25)) * Mat4::from_translation(-center);
+        let eye = Vec3::new(3., 2., 5.);
+        let vp = Mat4::perspective_rh_gl(45f32.to_radians(), 1.5, 0.01, 100.)
+            * Mat4::look_at_rh(eye, Vec3::ZERO, Vec3::Y);
+        let (meter_vp, meter_eye) = ImportedAssetPreview::shared_camera(vp, eye, display).unwrap();
+        let point = center + Vec3::new(1., 2., -1.);
+        assert!(
+            (meter_vp.project_point3(point) - vp.project_point3(display.transform_point3(point)))
+                .length()
+                < 1e-5
+        );
+        assert!((display.transform_point3(meter_eye) - eye).length() < 1e-5);
+        let meter_view = (meter_eye - point).normalize();
+        let display_view = (eye - display.transform_point3(point)).normalize();
+        assert!((meter_view - display_view).length() < 1e-5);
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn imported_shared_camera_rejects_nonfinite_or_singular_transforms() {
+        let invalid = Mat4::from_cols_array(&[f32::NAN; 16]);
+        for (vp, eye, display) in [
+            (invalid, Vec3::ZERO, Mat4::IDENTITY),
+            (Mat4::IDENTITY, Vec3::splat(f32::INFINITY), Mat4::IDENTITY),
+            (Mat4::IDENTITY, Vec3::ZERO, invalid),
+            (Mat4::IDENTITY, Vec3::ZERO, Mat4::ZERO),
+            (
+                Mat4::IDENTITY,
+                Vec3::ZERO,
+                Mat4::from_scale(Vec3::splat(-1.)),
+            ),
+            (
+                Mat4::from_scale(Vec3::splat(f32::MAX)),
+                Vec3::ZERO,
+                Mat4::from_scale(Vec3::splat(2.)),
+            ),
+            (
+                Mat4::IDENTITY,
+                -Vec3::splat(f32::MAX),
+                Mat4::from_translation(Vec3::splat(f32::MAX * 0.5)),
+            ),
+            (
+                Mat4::IDENTITY,
+                Vec3::ZERO,
+                Mat4::from_scale(Vec3::new(1e-39, 1., 1.)),
+            ),
+        ] {
+            assert!(ImportedAssetPreview::shared_camera(vp, eye, display).is_err());
+        }
     }
     #[cfg(target_os = "linux")]
     #[test]

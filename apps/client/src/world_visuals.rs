@@ -67,6 +67,16 @@ pub(super) fn surface_prop_model(
     ))
 }
 
+/// Exact body and top marker used by live construction props and inspection.
+pub(super) fn surface_prop_parts(model: Mat4) -> [ModelPart; 2] {
+    let marker = model
+        * (Mat4::from_translation(Vec3::Y * 1.01) * Mat4::from_scale(Vec3::new(0.75, 0.025, 0.75)));
+    [
+        (0, model, Vec3::new(0.17, 0.3, 0.27), 0.1),
+        (0, marker, Vec3::new(0.13, 0.7, 0.45), 0.7),
+    ]
+}
+
 pub(super) fn atmosphere_at(
     layout: &WorldLayoutDefinition,
     system_id: u32,
@@ -263,11 +273,9 @@ impl Renderer {
             else {
                 continue;
             };
-            self.draw(0, model, Vec3::new(0.17, 0.3, 0.27), 0.1);
-            let mut marker = model;
-            marker *= Mat4::from_translation(Vec3::Y * 1.01)
-                * Mat4::from_scale(Vec3::new(0.75, 0.025, 0.75));
-            self.draw(0, marker, Vec3::new(0.13, 0.7, 0.45), 0.7);
+            for (mesh, model, color, emission) in surface_prop_parts(model) {
+                self.draw(mesh, model, color, emission);
+            }
         }
         if frame
             .space

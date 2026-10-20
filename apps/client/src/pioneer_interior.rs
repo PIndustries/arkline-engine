@@ -193,7 +193,31 @@ fn build_parts(deck: u8, document: &RoomLayoutDocument) -> Vec<ModelPart> {
         0.3,
     );
     if deck == arkline_protocol::PIONEER_CONNECTED_ROOM.deck {
-        let d = arkline_protocol::PIONEER_CONNECTED_ROOM;
+        p.0.extend(equipment_static_parts("pioneer.deck1.airlock.breaker"));
+        block(
+            &mut p,
+            Vec3::new(4.28, 2.9, 0.3),
+            Vec3::new(4.32, 2.94, 5.3),
+            Vec3::new(0.1, 0.14, 0.12),
+            0.,
+        );
+        block(
+            &mut p,
+            Vec3::new(4.3, 2.9, 0.28),
+            Vec3::new(10.8, 2.94, 0.32),
+            Vec3::new(0.1, 0.14, 0.12),
+            0.,
+        );
+        p.0.extend(equipment_static_parts("pioneer.deck1.airlock.vent"));
+    }
+    p.0
+}
+/// Installed fixture bodies, kept separate from the shared room conduits.
+fn equipment_static_parts(id: &str) -> Vec<ModelPart> {
+    let mut p = Parts(Vec::new());
+    let steel = Vec3::new(0.045, 0.065, 0.072);
+    let d = arkline_protocol::PIONEER_CONNECTED_ROOM;
+    if id == "pioneer.deck1.airlock.breaker" {
         // Wall-flush service panel and ceiling conduit do not change walkable clearance.
         let panel = Vec3::from_array(d.breaker_position.map(|v| v as f32));
         block(
@@ -212,20 +236,8 @@ fn build_parts(deck: u8, document: &RoomLayoutDocument) -> Vec<ModelPart> {
                 0.,
             );
         }
-        block(
-            &mut p,
-            Vec3::new(4.28, 2.9, 0.3),
-            Vec3::new(4.32, 2.94, 5.3),
-            Vec3::new(0.1, 0.14, 0.12),
-            0.,
-        );
-        block(
-            &mut p,
-            Vec3::new(4.3, 2.9, 0.28),
-            Vec3::new(10.8, 2.94, 0.32),
-            Vec3::new(0.1, 0.14, 0.12),
-            0.,
-        );
+    }
+    if id == "pioneer.deck1.airlock.vent" {
         let vent = Vec3::from_array(d.vent_position.map(|v| v as f32));
         block(
             &mut p,
@@ -247,6 +259,7 @@ fn build_parts(deck: u8, document: &RoomLayoutDocument) -> Vec<ModelPart> {
     }
     p.0
 }
+
 /// Compatibility helper used by the legacy render fixtures.
 #[cfg(test)]
 pub(super) fn parts_with_room(
@@ -319,34 +332,50 @@ pub(super) fn state_parts(
     let Some(s) = room.filter(|_| deck == arkline_protocol::PIONEER_CONNECTED_ROOM.deck) else {
         return Vec::new();
     };
+    let mut parts = Vec::new();
+    for id in [
+        "pioneer.deck1.airlock.light",
+        "pioneer.deck1.airlock.emergency",
+        "pioneer.deck1.airlock.breaker",
+        "pioneer.deck1.airlock.vent",
+        "pioneer.deck1.airlock.door",
+    ] {
+        parts.extend(equipment_output_parts(id, s));
+    }
+    parts
+}
+
+fn equipment_output_parts(id: &str, state: &arkline_protocol::PioneerRoomState) -> Vec<ModelPart> {
     let d = arkline_protocol::PIONEER_CONNECTED_ROOM;
     let mut p = Parts(Vec::new());
-    for (point, half, color, on) in [
-        (
+    let fixture = match id {
+        "pioneer.deck1.airlock.light" => Some((
             d.light_position,
             Vec3::new(1.5, 0.025, 0.16),
             Vec3::new(0.50, 0.65, 0.55),
-            s.light_on,
-        ),
-        (
+            state.light_on,
+        )),
+        "pioneer.deck1.airlock.emergency" => Some((
             d.emergency_position,
             Vec3::new(0.2, 0.08, 0.03),
             Vec3::new(1., 0.55, 0.27),
-            s.emergency_light_on,
-        ),
-        (
+            state.emergency_light_on,
+        )),
+        "pioneer.deck1.airlock.breaker" => Some((
             d.breaker_position,
             Vec3::new(0.012, 0.10, 0.12),
             Vec3::new(0.03, 0.6, 0.2),
-            s.commissioned && s.breaker_closed,
-        ),
-        (
+            state.commissioned && state.breaker_closed,
+        )),
+        "pioneer.deck1.airlock.vent" => Some((
             d.vent_position,
             Vec3::new(0.05, 0.03, 0.07),
             Vec3::new(0.03, 0.5, 0.25),
-            s.vent_running,
-        ),
-    ] {
+            state.vent_running,
+        )),
+        _ => None,
+    };
+    if let Some((point, half, color, on)) = fixture {
         let center = Vec3::from_array(point.map(|v| v as f32));
         block(
             &mut p,
@@ -356,7 +385,7 @@ pub(super) fn state_parts(
             if on { 0.8 } else { 0. },
         );
     }
-    if !s.door_open {
+    if id == "pioneer.deck1.airlock.door" && !state.door_open {
         block(
             &mut p,
             Vec3::from_array(d.door_min.map(|v| v as f32)),
@@ -367,6 +396,22 @@ pub(super) fn state_parts(
     }
     p.0
 }
+
+/// Inspect a physical catalog entry using exactly its installed body and output recipes.
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) fn equipment_parts(
+    id: &str,
+    state: &arkline_protocol::PioneerRoomState,
+) -> Option<Vec<ModelPart>> {
+    arkline_protocol::pioneer_room_catalog()
+        .equipment
+        .iter()
+        .find(|entry| entry.id == id && entry.position.is_some())?;
+    let mut parts = equipment_static_parts(id);
+    parts.extend(equipment_output_parts(id, state));
+    Some(parts)
+}
+
 fn point_in_panel(point: egui::Pos2, quad: &[egui::Pos2; 4]) -> bool {
     let mut positive = false;
     let mut negative = false;
