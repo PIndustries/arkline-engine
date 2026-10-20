@@ -1801,7 +1801,7 @@ fn previous_registration_save_is_rejected_without_rewriting_world() {
 
 #[test]
 fn hatch_motion_is_timed_reversible_paused_and_holds_on_power_loss() {
-    let mut server = Server::open_in_memory().unwrap();
+    let mut server = Server::open(":memory:").unwrap();
     let mut session = None;
     connected(&mut server, &mut session);
     leave_and_stand(&mut server, &mut session, LEFT_AT);

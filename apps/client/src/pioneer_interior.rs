@@ -164,9 +164,99 @@ fn build_parts(deck: u8, document: &RoomLayoutDocument) -> Vec<ModelPart> {
 /// The exact installed wall/storage draw recipe for one protocol obstacle.
 fn obstacle_model_parts(o: arkline_protocol::StationObstacle) -> Vec<ModelPart> {
     let mut p = Parts(Vec::new());
-    let steel = Vec3::new(0.045, 0.065, 0.072);
+
     let min = Vec3::from_array(o.min.map(|v| v as f32));
     let max = Vec3::from_array(o.max.map(|v| v as f32));
+    if o.kind == StationObstacleKind::Table {
+        surface_block(
+            &mut p,
+            Vec3::new(min.x, max.y - 0.06, min.z),
+            max,
+            Vec3::new(0.055, 0.075, 0.068),
+            0.0,
+            SurfaceRole::Composite,
+        );
+        for x in [min.x + 0.1, max.x - 0.18] {
+            for z in [min.z + 0.1, max.z - 0.18] {
+                surface_block(
+                    &mut p,
+                    Vec3::new(x, min.y, z),
+                    Vec3::new(x + 0.08, max.y - 0.06, z + 0.08),
+                    Vec3::splat(0.18),
+                    0.0,
+                    SurfaceRole::ExposedAlloy,
+                );
+            }
+        }
+        return p.0;
+    }
+    if o.kind == StationObstacleKind::Sofa {
+        surface_block(
+            &mut p,
+            min,
+            Vec3::new(max.x, 0.25, max.z),
+            Vec3::new(0.035, 0.045, 0.04),
+            0.0,
+            SurfaceRole::ExposedAlloy,
+        );
+        surface_block(
+            &mut p,
+            Vec3::new(min.x + 0.03, 0.25, min.z + 0.02),
+            Vec3::new(max.x - 0.03, 0.44, max.z - 0.02),
+            Vec3::new(0.045, 0.08, 0.065),
+            0.0,
+            SurfaceRole::Composite,
+        );
+        surface_block(
+            &mut p,
+            Vec3::new(min.x + 0.03, 0.44, max.z - 0.08),
+            max,
+            Vec3::new(0.045, 0.08, 0.065),
+            0.0,
+            SurfaceRole::Composite,
+        );
+        return p.0;
+    }
+    if o.kind == StationObstacleKind::Storage && max.y < 1.1 && max.x - min.x > 2.0 {
+        // Closed fitted counter/cupboards, no invented powered device or UI.
+        surface_block(
+            &mut p,
+            min,
+            max,
+            Vec3::new(0.024, 0.07, 0.044),
+            0.0,
+            SurfaceRole::Composite,
+        );
+        surface_block(
+            &mut p,
+            Vec3::new(min.x, max.y - 0.04, min.z),
+            max,
+            Vec3::splat(0.21),
+            0.0,
+            SurfaceRole::ExposedAlloy,
+        );
+        for i in 0..3 {
+            let x = min.x + (max.x - min.x) * i as f32 / 3.0;
+            let w = (max.x - min.x) / 3.0;
+            surface_block(
+                &mut p,
+                Vec3::new(x + 0.02, min.y + 0.12, min.z - 0.002),
+                Vec3::new(x + w - 0.02, max.y - 0.07, min.z + 0.015),
+                Vec3::new(0.032, 0.095, 0.06),
+                0.0,
+                SurfaceRole::EnamelTrim,
+            );
+            surface_block(
+                &mut p,
+                Vec3::new(x + w - 0.14, max.y - 0.25, min.z - 0.012),
+                Vec3::new(x + w - 0.07, max.y - 0.12, min.z),
+                Vec3::splat(0.18),
+                0.0,
+                SurfaceRole::ExposedAlloy,
+            );
+        }
+        return p.0;
+    }
     let fixture = matches!(o.kind, StationObstacleKind::Storage);
     surface_block(
         &mut p,
@@ -842,7 +932,7 @@ mod room_inspection_tests {
             // Source roles do not create fictional equipment. Only the connected
             // airlock has installed utilities; five existing deck-one rooms have
             // their already-prototyped storage cabinet and display strip.
-            let expected = if source_id == "D1-P1" {
+            let expected = if source_id == "D1-P1" || source_id == "D2-S1" {
                 28
             } else if room.deck == 1 {
                 11
@@ -1066,8 +1156,8 @@ mod tests {
         let edited = super::build_parts(2, &document);
         assert_ne!(baseline, edited);
         assert!(edited.iter().any(|(_, model, color, emission)| {
-            *color == Vec3::new(0.025, 0.35, 0.14)
-                && (*emission - 0.5).abs() < f32::EPSILON
+            *color == Vec3::new(0.018, 0.095, 0.054)
+                && emission.abs() < f32::EPSILON
                 && (model.w_axis.x - positive_jamb_x).abs() < 0.001
                 && (model.w_axis.z - frame_z).abs() < 0.001
         }));

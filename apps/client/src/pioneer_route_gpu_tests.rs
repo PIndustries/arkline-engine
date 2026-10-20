@@ -73,6 +73,7 @@ const HEIGHT: usize = 960;
 const PILOT: &str = "NativePioneerRoutes";
 
 struct Shot {
+    frame_wall_ms: f64,
     rgba: Vec<u8>,
     depth: Vec<f32>,
     viewport: Option<egui::Rect>,
@@ -339,6 +340,7 @@ impl Harness {
     }
 
     unsafe fn frame(&mut self, events: Vec<egui::Event>) -> Shot {
+        let frame_start = std::time::Instant::now();
         self.world.as_mut().unwrap().advance(50).unwrap();
         self.refresh();
         self.input_time += 0.05;
@@ -491,6 +493,7 @@ impl Harness {
             computer_labels,
             registered_route,
             frame: now,
+            frame_wall_ms: frame_start.elapsed().as_secs_f64() * 1000.0,
         };
         let mut requests = self.requests.try_iter().collect::<Vec<_>>();
         if let Some(control) = self.cockpit.controls.take() {
@@ -775,7 +778,7 @@ fn capture(directory: Option<&Path>, name: &str, shot: &Shot) -> serde_json::Val
         .collect::<Vec<_>>();
     let filename = format!("{name}.png");
     let evidence = serde_json::json!({"name":name,"png":directory.map(|_|filename.clone()),"rgba_sha256":hex::encode(Sha256::digest(&bytes)),
-        "width":WIDTH,"height":HEIGHT,"orientation":"top-left RGBA8","authority_frame":shot.frame,
+        "frame_wall_ms_including_readback":shot.frame_wall_ms,"width":WIDTH,"height":HEIGHT,"orientation":"top-left RGBA8","authority_frame":shot.frame,
         "registered_route":shot.registered_route,"occupied_depth_pixels":shot.occupied(),
         "body_eye_m":shot.body_eye.map(|eye| eye.to_array()),"computer_surface":shot.surface.is_some(),
         "physical_screen_projection":shot.surface.as_ref().map(|_|screen_corner_evidence(shot))});

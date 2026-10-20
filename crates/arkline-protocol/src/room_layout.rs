@@ -105,7 +105,44 @@ impl RoomLayout {
                 max: [x + 2.8, 1.4, z + 1.8],
             });
         }
+        obstacles.extend(self.furnishings());
         obstacles
+    }
+
+    /// Newly fitted static galley furniture, not simulated kitchen equipment.
+    /// This recipe owns both visible bodies and authoritative collision.
+    pub fn furnishings(&self) -> Vec<StationObstacle> {
+        if self.deck != 2
+            || self.source_room_id.as_deref() != Some("D2-S1")
+            || self.clear_lwh_m[0] < 7.0
+            || self.clear_lwh_m[1] < 4.5
+        {
+            return Vec::new();
+        }
+        let [x, z] = self.origin_xz_m;
+        let depth = self.clear_lwh_m[1];
+        vec![
+            StationObstacle {
+                kind: StationObstacleKind::Storage,
+                min: [x + 0.8, 0.0, z + depth - 0.85],
+                max: [x + 3.6, 0.9, z + depth - 0.2],
+            },
+            StationObstacle {
+                kind: StationObstacleKind::Table,
+                min: [x + 5.0, 0.0, z + 2.0],
+                max: [x + 6.4, 0.75, z + 3.0],
+            },
+            StationObstacle {
+                kind: StationObstacleKind::Sofa,
+                min: [x + 4.9, 0.0, z + 1.25],
+                max: [x + 6.5, 0.7, z + 1.7],
+            },
+            StationObstacle {
+                kind: StationObstacleKind::Sofa,
+                min: [x + 4.9, 0.0, z + 3.3],
+                max: [x + 6.5, 0.7, z + 3.75],
+            },
+        ]
     }
 }
 
@@ -757,6 +794,32 @@ mod tests {
                     min: [x + 1.0, 0.0, z + 1.0],
                     max: [x + 2.8, 1.4, z + 1.8],
                 });
+            }
+            if room.source_room_id.as_deref() == Some("D2-S1") && length >= 7.0 && depth >= 4.5 {
+                for (kind, min, max) in [
+                    (
+                        StationObstacleKind::Storage,
+                        [x + 0.8, 0.0, z + depth - 0.85],
+                        [x + 3.6, 0.9, z + depth - 0.2],
+                    ),
+                    (
+                        StationObstacleKind::Table,
+                        [x + 5.0, 0.0, z + 2.0],
+                        [x + 6.4, 0.75, z + 3.0],
+                    ),
+                    (
+                        StationObstacleKind::Sofa,
+                        [x + 4.9, 0.0, z + 1.25],
+                        [x + 6.5, 0.7, z + 1.7],
+                    ),
+                    (
+                        StationObstacleKind::Sofa,
+                        [x + 4.9, 0.0, z + 3.3],
+                        [x + 6.5, 0.7, z + 3.75],
+                    ),
+                ] {
+                    obstacles.push(StationObstacle { kind, min, max });
+                }
             }
         }
         // This existing access-core enclosure is part of the authored baseline.
