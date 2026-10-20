@@ -118,6 +118,8 @@ pub enum PioneerDockedCell {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PioneerDockedMaterial {
     WallPanel,
+    /// Passive fitted finish; the existing solid bounds remain authoritative.
+    FittedBulkhead,
     GripDeck,
     ServiceCeiling,
     Graphite,
@@ -1039,7 +1041,7 @@ fn add_connector(g: &mut PioneerDockedGeometry) {
         "connector/roof",
         [20.0, 2.08, -0.78],
         [COCKPIT_REAR_X_M, 2.20, 0.78],
-        PioneerDockedMaterial::Graphite,
+        PioneerDockedMaterial::ServiceCeiling,
         PioneerDockedCollision::Solid,
         cell,
         PioneerDockedPanelKind::Structure,
@@ -1050,7 +1052,7 @@ fn add_connector(g: &mut PioneerDockedGeometry) {
             format!("connector/wall/{side}"),
             [20.0, FLOOR, z - 0.04],
             [COCKPIT_REAR_X_M, 2.08, z + 0.04],
-            PioneerDockedMaterial::Graphite,
+            PioneerDockedMaterial::FittedBulkhead,
             PioneerDockedCollision::Solid,
             cell,
             PioneerDockedPanelKind::Structure,
@@ -1093,7 +1095,7 @@ fn add_connector(g: &mut PioneerDockedGeometry) {
             format!("cockpit/rear-bulkhead/{i}"),
             [COCKPIT_REAR_X_M - 0.12, FLOOR, z0],
             [COCKPIT_REAR_X_M, 2.88, z1],
-            PioneerDockedMaterial::Graphite,
+            PioneerDockedMaterial::FittedBulkhead,
             PioneerDockedCollision::Solid,
             PioneerDockedCell::Cockpit,
             PioneerDockedPanelKind::Structure,
@@ -1135,7 +1137,13 @@ fn add_connector(g: &mut PioneerDockedGeometry) {
             format!("cockpit/{id}"),
             min,
             max,
-            PioneerDockedMaterial::Graphite,
+            if id == "ceiling" {
+                PioneerDockedMaterial::ServiceCeiling
+            } else if id == "starboard-wall" || id == "port-aft-wall" {
+                PioneerDockedMaterial::FittedBulkhead
+            } else {
+                PioneerDockedMaterial::Graphite
+            },
             PioneerDockedCollision::Solid,
             PioneerDockedCell::Cockpit,
             PioneerDockedPanelKind::Structure,

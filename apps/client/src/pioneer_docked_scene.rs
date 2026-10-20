@@ -121,6 +121,7 @@ fn box_matrix(bounds: &PioneerDockedBox) -> Mat4 {
 }
 fn surface(material: PioneerDockedMaterial) -> (Vec3, f32) {
     match material {
+        PioneerDockedMaterial::FittedBulkhead => (Vec3::new(0.46, 0.43, 0.35), 0.0),
         PioneerDockedMaterial::WallPanel => (Vec3::new(0.36, 0.34, 0.28), 0.0),
         PioneerDockedMaterial::GripDeck => (Vec3::new(0.018, 0.024, 0.026), 0.0),
         PioneerDockedMaterial::ServiceCeiling => (Vec3::new(0.022, 0.029, 0.033), 0.0),
@@ -137,6 +138,7 @@ fn surface(material: PioneerDockedMaterial) -> (Vec3, f32) {
 fn panel_surface_role(material: PioneerDockedMaterial) -> surface_roles::SurfaceRole {
     use surface_roles::SurfaceRole;
     match material {
+        PioneerDockedMaterial::FittedBulkhead => SurfaceRole::ArchitecturalPanel,
         PioneerDockedMaterial::WallPanel => SurfaceRole::CoatedPanel,
         PioneerDockedMaterial::GripDeck => SurfaceRole::GripDeck,
         PioneerDockedMaterial::ServiceCeiling => SurfaceRole::ServiceCeiling,
@@ -161,14 +163,29 @@ fn panel_parts(
             panel.collision != arkline_protocol::PioneerDockedCollision::TraversalBarrier
                 && (!skip_rooms || panel.kind != PioneerDockedPanelKind::RoomObstacle)
         })
-        .map(move |panel| {
-            let (color, emission) = surface(panel.material);
-            (
-                panel_surface_role(panel.material).cube(),
-                frame * box_matrix(&panel.bounds),
-                color,
-                emission,
-            )
+        .flat_map(move |panel| {
+            if panel.material == PioneerDockedMaterial::FittedBulkhead {
+                let center = vector(panel.bounds.center_m);
+                let half = vector(panel.bounds.half_m);
+                pioneer_interior::architectural_bulkhead_parts(
+                    center - half,
+                    center + half,
+                    arkline_protocol::deck_floor_y(2).unwrap() as f32,
+                    Vec3::new(0.46, 0.43, 0.35),
+                    panel.id == "cockpit/rear-bulkhead/0" || panel.id == "connector/wall/-1",
+                )
+                .into_iter()
+                .map(|(mesh, model, color, emission)| (mesh, frame * model, color, emission))
+                .collect::<Vec<_>>()
+            } else {
+                let (color, emission) = surface(panel.material);
+                vec![(
+                    panel_surface_role(panel.material).cube(),
+                    frame * box_matrix(&panel.bounds),
+                    color,
+                    emission,
+                )]
+            }
         })
 }
 

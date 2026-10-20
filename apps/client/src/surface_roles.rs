@@ -16,6 +16,7 @@ pub(super) enum SurfaceRole {
     InstrumentGlass = 6,
     FixtureDiffuser = 7,
     ServiceCeiling = 8,
+    ArchitecturalPanel = 9,
 }
 impl SurfaceRole {
     /// A tagged instance of the existing cube upload, never a new mesh slot.
@@ -24,6 +25,7 @@ impl SurfaceRole {
     }
     pub(super) const fn material(self) -> Material {
         match self {
+            Self::ArchitecturalPanel => Material::ArchitecturalPanel,
             Self::CoatedPanel => Material::CoatedPanel,
             Self::GripDeck => Material::GripDeck,
             Self::Composite => Material::Composite,
@@ -50,6 +52,7 @@ pub(super) fn material(mesh: usize) -> Option<Material> {
         6 => SurfaceRole::InstrumentGlass,
         7 => SurfaceRole::FixtureDiffuser,
         8 => SurfaceRole::ServiceCeiling,
+        9 => SurfaceRole::ArchitecturalPanel,
         _ => return None,
     };
     Some(role.material())
@@ -69,6 +72,7 @@ mod tests {
         let base = DepthDraw::whole(&catalog, 0, Mat4::IDENTITY).unwrap();
         for role in [
             SurfaceRole::CoatedPanel,
+            SurfaceRole::ArchitecturalPanel,
             SurfaceRole::GripDeck,
             SurfaceRole::Composite,
             SurfaceRole::ServiceCeiling,

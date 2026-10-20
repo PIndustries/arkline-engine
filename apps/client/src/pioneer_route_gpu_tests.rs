@@ -1369,7 +1369,9 @@ fn native_pioneer_animated_hatches_boarding_and_return() {
 #[ignore = "Explicit native reachable bridge/corridor visual and cost review in disposable authority"]
 fn native_pioneer_bridge_corridor_finish_review() {
     unsafe {
-        let directory = PathBuf::from(std::env::var_os("ARKLINE_PIONEER_FINISH_EVIDENCE").expect("Retained review path"));
+        let directory = PathBuf::from(
+            std::env::var_os("ARKLINE_PIONEER_FINISH_EVIDENCE").expect("Retained review path"),
+        );
         std::fs::create_dir(&directory).unwrap();
         let (_context, gl) = PrivateContext::create();
         let mut h = Harness::new(gl, Some(directory.clone()));
@@ -1383,7 +1385,16 @@ fn native_pioneer_bridge_corridor_finish_review() {
                 samples.push(last.frame_wall_ms);
             }
             samples.sort_by(f64::total_cmp);
-            let metrics = h.cockpit.hangar_view.renderer.as_ref().unwrap().lock().unwrap().debug_metrics.get();
+            let metrics = h
+                .cockpit
+                .hangar_view
+                .renderer
+                .as_ref()
+                .unwrap()
+                .lock()
+                .unwrap()
+                .debug_metrics
+                .get();
             let mut result = capture(Some(&directory), name, &last);
             result["median_frame_wall_ms_including_readback"] = samples[2].into();
             result["last_scene_pass_draw_calls"] = metrics.draw_calls.into();
@@ -1396,31 +1407,50 @@ fn native_pioneer_bridge_corridor_finish_review() {
         captures.push(sample(&mut h, "seated-aft-bulkhead"));
         h.cockpit.hangar_view.head_look = [0., 0.];
         let binding = h.cockpit.verified_docked_binding().unwrap();
-        h.command(Request::DockedTraversal { request: DockedTraversalRequest::LeaveSeat { binding } });
+        h.command(Request::DockedTraversal {
+            request: DockedTraversalRequest::LeaveSeat { binding },
+        });
         h.advance_time(900);
         h.refresh();
-        for target in [[33.36,-0.32,3.],[33.36,-0.32,0.],[32.10,-0.32,0.],[32.10,-0.32,4.2]] {
+        for target in [
+            [33.36, -0.32, 3.],
+            [33.36, -0.32, 0.],
+            [32.10, -0.32, 0.],
+            [32.10, -0.32, 4.2],
+        ] {
             h.walk_to_body(target);
         }
         h.heading(0.);
         captures.push(sample(&mut h, "reachable-rear-chair-aisle"));
-        h.walk_to_body([32.10,-0.32,0.]);
-        h.walk_to_body([27.,-0.32,0.]);
+        h.walk_to_body([32.10, -0.32, 0.]);
+        h.walk_to_body([27., -0.32, 0.]);
         h.heading(0.);
         captures.push(sample(&mut h, "reachable-connector-to-bridge"));
         h.heading(std::f64::consts::PI);
         captures.push(sample(&mut h, "reachable-connector-to-deck"));
-        h.walk_to_body([18.,-0.32,0.]);
-        h.walk_to_body([12.,-0.32,0.]);
+        h.walk_to_body([18., -0.32, 0.]);
+        h.walk_to_body([12., -0.32, 0.]);
         h.heading(0.);
         captures.push(sample(&mut h, "reachable-upper-corridor-forward"));
         h.heading(std::f64::consts::PI);
         captures.push(sample(&mut h, "reachable-upper-corridor-aft"));
         let document = arkline_protocol::default_pioneer();
         let geometry = arkline_protocol::registered_geometry(&document).unwrap();
-        let collision = geometry.panels.iter().filter(|p|p.collision != arkline_protocol::PioneerDockedCollision::Decoration)
-            .map(|p|format!("{}{:?}{:?}{:?}{:?}",p.id,p.bounds,p.collision,p.cell,p.kind)).collect::<Vec<_>>();
-        let binding_payload = format!("{:?}{:?}{:?}",collision,geometry.supports,geometry.portals);
+        let collision = geometry
+            .panels
+            .iter()
+            .filter(|p| p.collision != arkline_protocol::PioneerDockedCollision::Decoration)
+            .map(|p| {
+                format!(
+                    "{}{:?}{:?}{:?}{:?}",
+                    p.id, p.bounds, p.collision, p.cell, p.kind
+                )
+            })
+            .collect::<Vec<_>>();
+        let binding_payload = format!(
+            "{:?}{:?}{:?}",
+            collision, geometry.supports, geometry.portals
+        );
         let parts = pioneer_docked_scene::default_body_parts().unwrap();
         let receipt = serde_json::json!({"scope":"Reachable native offscreen engine views; real LeaveSeat and ordinary authority walking; no desktop input claim",
             "source_head":option_env!("GIT_HEAD"),"source_glb_sha256":arkline_protocol::PIONEER_DOCKED_SOURCE_SHA256,
@@ -1429,6 +1459,10 @@ fn native_pioneer_bridge_corridor_finish_review() {
             "canonical_body_instances":parts.len(),"emissive_instances":parts.iter().filter(|p|p.3>0.).count(),
             "captures":captures,"authority_fixture":authority_fixture(&h.directory),
             "timing_limit":"CPU wall time includes egui, GPU synchronization and readback; median of5 warm frames, not a GPU timestamp or general performance certification"});
-        std::fs::write(directory.join("receipt.json"),serde_json::to_vec_pretty(&receipt).unwrap()).unwrap();
+        std::fs::write(
+            directory.join("receipt.json"),
+            serde_json::to_vec_pretty(&receipt).unwrap(),
+        )
+        .unwrap();
     }
 }

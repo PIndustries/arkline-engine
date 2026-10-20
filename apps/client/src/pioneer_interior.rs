@@ -183,6 +183,105 @@ fn wall_finish(room: Option<&arkline_protocol::RoomLayout>) -> Vec3 {
     }
 }
 
+/// Layered, passive construction inside an existing solid wall envelope. The
+/// recessed infill, kick protection and frame have no new collision or equipment
+/// authority. Coordinates remain in the caller's metre frame.
+pub(super) fn architectural_bulkhead_parts(
+    min: Vec3,
+    max: Vec3,
+    floor: f32,
+    cream: Vec3,
+    service_cover: bool,
+) -> Vec<ModelPart> {
+    let mut p = Parts(Vec::new());
+    let size = max - min;
+    let thin = if size.x < size.z { 0 } else { 2 };
+    let run = 2 - thin;
+    if size[thin] < 0.035 || size[run] < 0.18 || size.y < 0.15 {
+        surface_block(&mut p, min, max, cream, 0., SurfaceRole::ArchitecturalPanel);
+        return p.0;
+    }
+    let graphite = Vec3::new(0.019, 0.026, 0.028);
+    let green = Vec3::new(0.018, 0.105, 0.062);
+    let alloy = Vec3::new(0.12, 0.145, 0.15);
+    let mut band = |y0: f32, y1: f32, inset: f32, color: Vec3, role| {
+        let mut a = min;
+        let mut b = max;
+        a.y = y0.max(min.y);
+        b.y = y1.min(max.y);
+        a[thin] += inset;
+        b[thin] -= inset;
+        if b.y > a.y {
+            surface_block(&mut p, a, b, color, 0., role);
+        }
+    };
+    // The continuous backer is recessed 18 mm; coatings sit 6 mm behind the
+    // structural frame. No vertex extends past the original solid boundary.
+    band(min.y, max.y, 0.018, graphite, SurfaceRole::Composite);
+    band(min.y, floor + 0.14, 0.002, graphite, SurfaceRole::Composite);
+    band(
+        floor + 0.14,
+        floor + 0.86,
+        0.006,
+        green,
+        SurfaceRole::EnamelTrim,
+    );
+    band(
+        floor + 0.86,
+        floor + 0.90,
+        0.001,
+        alloy,
+        SurfaceRole::ExposedAlloy,
+    );
+    band(
+        floor + 0.90,
+        max.y - 0.12,
+        0.006,
+        cream,
+        SurfaceRole::ArchitecturalPanel,
+    );
+    band(max.y - 0.12, max.y, 0., graphite, SurfaceRole::Composite);
+    // Structural stations follow metre-scale bays, not a dense panel grid.
+    let bays = (size[run] / 2.4).ceil().clamp(1., 6.) as usize;
+    for station in 0..=bays {
+        let u = min[run] + size[run] * station as f32 / bays as f32;
+        let mut a = min;
+        let mut b = max;
+        a[run] = (u - 0.025).max(min[run]);
+        b[run] = (u + 0.025).min(max[run]);
+        surface_block(&mut p, a, b, graphite, 0., SurfaceRole::Composite);
+    }
+    if service_cover && size[run] > 2.0 && size.y > 2.0 {
+        // One flush service-access cover at a deliberate maintenance station.
+        // Static housing/handle only: no operating panel or invented circuit.
+        let u = min[run] + size[run] * 0.28;
+        let mut a = min;
+        let mut b = max;
+        a[run] = u - 0.28;
+        b[run] = u + 0.28;
+        a.y = floor + 1.20;
+        b.y = floor + 1.82;
+        a[thin] += 0.001;
+        b[thin] -= 0.001;
+        surface_block(&mut p, a, b, graphite, 0., SurfaceRole::Composite);
+        a[run] += 0.025;
+        b[run] -= 0.025;
+        a.y += 0.025;
+        b.y -= 0.025;
+        a[thin] += 0.003;
+        b[thin] -= 0.003;
+        surface_block(&mut p, a, b, green, 0., SurfaceRole::EnamelTrim);
+        a[run] = u + 0.16;
+        b[run] = u + 0.19;
+        a.y = floor + 1.40;
+        b.y = floor + 1.60;
+        a[thin] = min[thin];
+        b[thin] = max[thin];
+        surface_block(&mut p, a, b, alloy, 0., SurfaceRole::ExposedAlloy);
+    }
+    p.0
+}
+
 fn obstacle_model_parts(
     o: arkline_protocol::StationObstacle,
     room: Option<&arkline_protocol::RoomLayout>,
@@ -191,6 +290,15 @@ fn obstacle_model_parts(
 
     let min = Vec3::from_array(o.min.map(|v| v as f32));
     let max = Vec3::from_array(o.max.map(|v| v as f32));
+    // Only the upper service-spine faces receive this bounded architectural
+    // slice. Installed rooms, cutaways and registered ship views reuse it.
+    if o.kind == StationObstacleKind::Wall
+        && room.is_some_and(|r| {
+            r.deck == 2 && (o.min[2] - r.door_wall_z()).abs() < 1e-8 && o.max[2] - o.min[2] < 0.16
+        })
+    {
+        return architectural_bulkhead_parts(min, max, 0., Vec3::new(0.46, 0.43, 0.35), false);
+    }
     if o.kind == StationObstacleKind::Table {
         surface_block(
             &mut p,
