@@ -9,3 +9,5 @@ Recovery evidence and its bundle remain untouched. This checkout has no remotes.
 Validation results will be recorded here as they occur. No successful build or runtime result is implied by importing the source.
 
 Checkpoint: the four integration files are reconstructed and client/editor all-target cargo check passes with the repository-pinned installed Rust1.89.0. Formatting/test/lint/native results remain in progress. The working-copy Shift/GPU tests were adapted to the actual baseline UI/protocol/GLB provenance; no unavailable authored-part receipt or missing nested edge-test suite is fabricated. The source recovery evidence remains unchanged.
+
+Input review checkpoint: fixed nested egui context access on a glass press, duplicate/replayed platform commands, and head-look bypass of editor viewport permission. Five focused physical-computer integration tests pass, including a child-process deadline/reap regression and exact clipboard command counts. The optional guard timeout was exercised against an owned sleeper and stopped it. Full workspace/native reruns remain pending.

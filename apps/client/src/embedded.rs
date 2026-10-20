@@ -169,7 +169,7 @@ impl EditorInputGate {
     }
 
     fn allow_input(&mut self, ctx: &egui::Context) -> bool {
-        if self.blocked || !ctx.input(|input| input.focused) {
+        if self.blocked || !ctx.input(|input| input.focused) || ctx.wants_keyboard_input() {
             self.awaiting_release = true;
             return false;
         }
@@ -615,6 +615,7 @@ impl EmbeddedClient {
     fn release_cockpit_input(&mut self) {
         self.cockpit.cockpit_computer.cancel_input();
         self.cockpit.flight_view.set_computer_keyboard_owned(false);
+        self.cockpit.flight_view.set_head_look_input_allowed(false);
         self.cockpit.pilot_input.relinquish(&self.cockpit.controls);
         self.editor_input.awaiting_release = true;
     }
@@ -652,6 +653,12 @@ impl EmbeddedClient {
                     .is_some_and(|p| ctx.available_rect().contains(p)),
                 self.free_camera_enabled,
             );
+        // Head-look is a viewport input permission, independent of whether
+        // paused simulation currently accepts flight commands. Keep geometry
+        // visible while an editor overlay or held-key release owns input.
+        self.cockpit
+            .flight_view
+            .set_head_look_input_allowed(self.cockpit.embedded_input);
         self.cockpit.update(ctx, frame);
         if self.free_camera_enabled && self.free_camera.is_none() {
             self.free_camera = self.active_scene_camera_pose();
@@ -2810,6 +2817,147 @@ mod tests {
         frame(&ctx, &mut gate, 3.0, vec![key(false)], false);
         frame(&ctx, &mut gate, 4.0, vec![button(false)], true);
         frame(&ctx, &mut gate, 5.0, vec![key(true)], true); // A new deliberate press is allowed.
+    }
+
+    #[test]
+    fn parent_text_focus_preserves_head_pose_until_held_arrow_releases() {
+        let ctx = egui::Context::default();
+        ctx.options_mut(|options| options.max_passes = std::num::NonZeroUsize::MIN);
+        let (mut client, requests) = debug_fixture();
+        client.cockpit.snapshot.as_mut().unwrap().pilots[0].location = Location::Belt;
+        client.cockpit.view_mode = ViewMode::Cockpit;
+        let authority = serde_json::to_value(client.snapshot()).unwrap();
+        let mut text = String::from("Parent editor field");
+        fn frame(
+            ctx: &egui::Context,
+            client: &mut EmbeddedClient,
+            text: &mut String,
+            time: f64,
+            focus: bool,
+            pointer: egui::Pos2,
+            events: Vec<egui::Event>,
+        ) {
+            let mut input = vec![egui::Event::PointerMoved(pointer)];
+            input.extend(events);
+            let _ = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        Pos2::ZERO,
+                        Vec2::new(1500.0, 960.0),
+                    )),
+                    time: Some(time),
+                    focused: true,
+                    modifiers: egui::Modifiers::SHIFT,
+                    events: input,
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::TopBottomPanel::top("embedded_headlook_parent_panel").show(ctx, |ui| {
+                        let response = ui.add(
+                            egui::TextEdit::singleline(text)
+                                .id(egui::Id::new("embedded_headlook_parent_text")),
+                        );
+                        if focus {
+                            response.request_focus();
+                        } else {
+                            response.surrender_focus();
+                        }
+                    });
+                    client.update(ctx, &mut eframe::Frame::_new_kittest());
+                },
+            );
+        }
+        let first_pointer = egui::pos2(1000.0, 400.0);
+        frame(
+            &ctx,
+            &mut client,
+            &mut text,
+            1.0,
+            false,
+            first_pointer,
+            vec![],
+        );
+        frame(
+            &ctx,
+            &mut client,
+            &mut text,
+            1.02,
+            false,
+            first_pointer,
+            vec![],
+        );
+        let viewport = client.cockpit.flight_view.input_surface().unwrap().0;
+        let pointer = viewport.min + viewport.size() * egui::vec2(0.65, 0.35);
+        let key = |pressed| egui::Event::Key {
+            key: egui::Key::ArrowRight,
+            physical_key: None,
+            pressed,
+            repeat: false,
+            modifiers: egui::Modifiers::SHIFT,
+        };
+        frame(
+            &ctx,
+            &mut client,
+            &mut text,
+            1.04,
+            false,
+            pointer,
+            vec![key(true)],
+        );
+        let pose = client.cockpit.flight_view.head_look_angles();
+        assert_ne!(
+            pose, [0.0; 2],
+            "Paused cockpit still permits owned viewport head-look"
+        );
+        assert!(client.computer_display_visible());
+        frame(&ctx, &mut client, &mut text, 1.06, true, pointer, vec![]);
+        assert!(
+            ctx.wants_keyboard_input(),
+            "Actual parent TextEdit must own input"
+        );
+        assert!(client.editor_input.awaiting_release);
+        assert_eq!(client.cockpit.flight_view.head_look_angles(), pose);
+        assert!(client.computer_display_visible());
+        frame(&ctx, &mut client, &mut text, 1.08, false, pointer, vec![]);
+        assert!(!ctx.wants_keyboard_input());
+        assert!(client.editor_input.awaiting_release);
+        assert_eq!(
+            client.cockpit.flight_view.head_look_angles(),
+            pose,
+            "Relinquishing parent focus while Arrow remains held must not rotate or recenter"
+        );
+        assert!(client.computer_display_visible());
+        frame(
+            &ctx,
+            &mut client,
+            &mut text,
+            1.10,
+            false,
+            pointer,
+            vec![key(false)],
+        );
+        assert!(!client.editor_input.awaiting_release);
+        assert_eq!(client.cockpit.flight_view.head_look_angles(), pose);
+        frame(
+            &ctx,
+            &mut client,
+            &mut text,
+            1.12,
+            false,
+            pointer,
+            vec![key(true)],
+        );
+        assert_ne!(
+            client.cockpit.flight_view.head_look_angles(),
+            pose,
+            "A new press after release must resume viewport head-look"
+        );
+        assert!(client.computer_display_visible());
+        assert_eq!(serde_json::to_value(client.snapshot()).unwrap(), authority);
+        assert!(
+            requests.try_recv().is_err(),
+            "Paused head-look is not a flight command"
+        );
     }
 
     #[test]

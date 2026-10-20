@@ -27,7 +27,9 @@ pub(crate) struct ComputerOutput {
     pub wants_keyboard_input: bool,
     pub pointer_on_computer: bool,
     /// IME rectangles remain canonical; integration must project them before
-    /// handing platform output to the native backend. No native window is opened.
+    /// handing them to the native backend. Commands and accessibility events are
+    /// already forwarded to the parent once by this helper; callers must not
+    /// forward them again. Repeated parent passes return only persistent state.
     pub platform_output: egui::PlatformOutput,
     pub diagnostics: Vec<String>,
 }
@@ -419,6 +421,11 @@ impl CockpitComputer {
             }
             self.cached.wants_keyboard_input = self.wants_keyboard_input();
             self.cached.pointer_on_computer = pointer_on_computer;
+            // A repeated layout pass may reuse triangles, cursor state and IME
+            // placement, but must never expose a copy/open-url command or a
+            // widget accessibility event for a second delivery.
+            self.cached.platform_output.commands.clear();
+            self.cached.platform_output.events.clear();
             return self.cached.clone();
         }
         self.last_frame = Some(frame);
@@ -531,6 +538,9 @@ impl CockpitComputer {
                 parent_output
                     .commands
                     .extend(platform_output.commands.iter().cloned());
+                parent_output
+                    .events
+                    .extend(platform_output.events.iter().cloned());
                 if pointer_on_computer {
                     parent_output.cursor_icon = platform_output.cursor_icon;
                     parent_output.mutable_text_under_cursor =

@@ -63,10 +63,20 @@ fn real_triangle_before_display_blocks_but_triangle_behind_does_not() {
     let target = face.plane_x;
     for is_own in [false, true] {
         assert!(scene(&[(target - 0.01, is_own)])
-            .pick(projection(), viewport(), pointer, &[face.clone()])
+            .pick(
+                projection(),
+                viewport(),
+                pointer,
+                std::slice::from_ref(&face)
+            )
             .is_none());
         assert!(scene(&[(target + 0.01, is_own)])
-            .pick(projection(), viewport(), pointer, &[face.clone()])
+            .pick(
+                projection(),
+                viewport(),
+                pointer,
+                std::slice::from_ref(&face)
+            )
             .is_some());
     }
 }
@@ -92,7 +102,12 @@ fn nearest_actual_blocker_wins_independent_of_input_order() {
         [(target - 0.1, true), (target + 0.1, false)],
     ] {
         assert!(scene(&entries)
-            .pick(projection(), viewport(), pointer, &[face.clone()])
+            .pick(
+                projection(),
+                viewport(),
+                pointer,
+                std::slice::from_ref(&face)
+            )
             .is_none());
     }
 }
@@ -136,7 +151,7 @@ fn scene_ray_distance_survives_real_mount_scale_and_nonuniform_blocker_scale() {
                     .unwrap();
             assert_eq!(
                 scene
-                    .pick(vp, viewport(), pointer, &[face.clone()])
+                    .pick(vp, viewport(), pointer, std::slice::from_ref(&face))
                     .is_none(),
                 blocked
             );

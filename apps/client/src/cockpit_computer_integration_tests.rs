@@ -258,3 +258,174 @@ fn ime_projection_rejects_invalid_canonical_geometry() {
     )
     .is_none());
 }
+
+#[test]
+fn one_copy_event_forwards_once_even_when_parent_repeats_its_layout_pass() {
+    const TEXT: &str = "One clipboard delivery";
+    fn copies(output: &egui::FullOutput) -> Vec<&str> {
+        output
+            .platform_output
+            .commands
+            .iter()
+            .filter_map(|command| {
+                if let egui::OutputCommand::CopyText(text) = command {
+                    Some(text.as_str())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+    let mut journey = Journey::new(egui::vec2(1500.0, 1000.0));
+    journey.focus_instruction();
+    journey.step(vec![egui::Event::Text(TEXT.into())]);
+    // Select through the actual TextEdit keyboard path, then issue one native
+    // Copy event. No test hook injects an output command.
+    journey.step(vec![
+        egui::Event::Key {
+            key: egui::Key::A,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::COMMAND,
+        },
+        egui::Event::Key {
+            key: egui::Key::A,
+            physical_key: None,
+            pressed: false,
+            repeat: false,
+            modifiers: egui::Modifiers::COMMAND,
+        },
+    ]);
+    let output = journey.step(vec![egui::Event::Copy]);
+    assert_eq!(
+        copies(&output),
+        vec![TEXT],
+        "one native Copy produces one parent command"
+    );
+    let next = journey.step(vec![]);
+    assert!(
+        copies(&next).is_empty(),
+        "commands cannot leak into a later input frame"
+    );
+
+    journey
+        .ctx
+        .options_mut(|options| options.max_passes = std::num::NonZeroUsize::new(2).unwrap());
+    journey.frame += 1;
+    let mut passes = 0;
+    let repeated = journey.ctx.run(
+        egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, journey.size)),
+            time: Some(journey.frame as f64 / 60.0),
+            focused: true,
+            events: vec![egui::Event::Copy],
+            ..Default::default()
+        },
+        |ctx| {
+            passes += 1;
+            eframe::App::update(
+                &mut journey.cockpit,
+                ctx,
+                &mut eframe::Frame::_new_kittest(),
+            );
+            if passes == 1 {
+                ctx.request_discard("exercise cached computer output on a second parent pass");
+            } else {
+                let surface = journey.cockpit.flight_view.computer_surface().unwrap();
+                let hit = journey.cockpit.flight_view.computer_hit_tester(ctx);
+                let cached = journey.cockpit.cockpit_computer.run(
+                    ctx,
+                    Some(&surface),
+                    flight3d::cockpit_computer::ComputerPermission {
+                        active: true,
+                        pointer: true,
+                        keyboard: true,
+                    },
+                    hit,
+                    |_| panic!("a cached helper pass must not replay widgets"),
+                );
+                assert!(cached.platform_output.commands.is_empty());
+                assert!(cached.platform_output.events.is_empty());
+                assert!(cached.platform_output.ime.is_some());
+            }
+        },
+    );
+    assert_eq!(
+        passes, 2,
+        "the regression must actually run a repeated parent layout pass"
+    );
+    assert_eq!(
+        copies(&repeated),
+        vec![TEXT],
+        "cached secondary output must not replay CopyText"
+    );
+    assert!(journey.cockpit.cockpit_computer.wants_keyboard_input());
+    assert!(
+        repeated.platform_output.ime.is_some(),
+        "persistent projected IME state survives the repeated pass"
+    );
+}
+
+// Isolate the deadlock regression in a process we can kill and reap. A timeout
+// thread would leave a permanently blocked egui thread alive in the test suite.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn physical_computer_press_finishes_within_a_reaped_process_deadline() {
+    struct ReapedChild(std::process::Child);
+    impl Drop for ReapedChild {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+    let mut child = ReapedChild(
+        std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "cockpit_computer_integration_tests::physical_computer_press_process_helper",
+                "--ignored",
+                "--nocapture",
+            ])
+            .env("ARKLINE_COMPUTER_PRESS_TEST_CHILD", "1")
+            .stdin(std::process::Stdio::null())
+            .spawn()
+            .expect("start physical press regression process"),
+    );
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    loop {
+        if let Some(status) = child
+            .0
+            .try_wait()
+            .expect("poll physical press regression process")
+        {
+            assert!(
+                status.success(),
+                "physical press regression child failed: {status}"
+            );
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "physical glass press exceeded 20s; child is killed and reaped on scope exit"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+#[ignore = "invoked by the bounded parent regression process"]
+fn physical_computer_press_process_helper() {
+    assert_eq!(
+        std::env::var("ARKLINE_COMPUTER_PRESS_TEST_CHILD").as_deref(),
+        Ok("1")
+    );
+    let mut journey = Journey::new(egui::vec2(1500.0, 1000.0));
+    let point = journey.require_label("Drones");
+    journey.click(point);
+    assert!(
+        journey.cockpit.service_tab == ServiceTab::Drones,
+        "real glass press/release must reach the actual secondary widget"
+    );
+}

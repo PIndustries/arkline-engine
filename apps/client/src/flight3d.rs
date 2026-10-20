@@ -298,6 +298,7 @@ pub struct FlightView {
     cockpit_layer: Option<egui::LayerId>,
     instrument_surfaces: Vec<CockpitSurface>,
     computer_keyboard_owned: bool,
+    head_look_input_allowed: bool,
     head_look: [f32; 2],
     yaw: f32,
     pitch: f32,
@@ -352,6 +353,7 @@ impl FlightView {
             cockpit_layer: None,
             instrument_surfaces: Vec::new(),
             computer_keyboard_owned: false,
+            head_look_input_allowed: true,
             head_look: [0.0; 2],
             yaw: 0.72,
             pitch: 0.35,
@@ -500,6 +502,14 @@ impl FlightView {
     }
     pub(crate) fn computer_surface(&self) -> Option<CockpitSurface> {
         self.computer_surface.clone()
+    }
+    /// Editor viewport ownership is separate from paused flight-command permission.
+    pub(crate) fn set_head_look_input_allowed(&mut self, allowed: bool) {
+        self.head_look_input_allowed = allowed;
+    }
+    #[cfg(test)]
+    pub(crate) fn head_look_angles(&self) -> [f32; 2] {
+        self.head_look
     }
     pub(crate) fn set_computer_keyboard_owned(&mut self, owned: bool) {
         self.computer_keyboard_owned = owned;
@@ -823,11 +833,19 @@ impl FlightView {
                 self.yaw.cos() * self.pitch.cos(),
             ) * self.distance;
         let rotation = own_pilot.map_or(Quat::IDENTITY, |p| ship_orientation_at(p, now));
-        let looking = cockpit
+        let head_look_input = cockpit
+            && self.head_look_input_allowed
             && !self.computer_keyboard_owned
-            && !ui.input(|input| input.pointer.any_pressed())
             && !ui.ctx().wants_keyboard_input()
-            && ui.input(|i| i.focused && i.modifiers.shift);
+            && ui.input(|input| {
+                input.focused && !input.pointer.any_down() && !input.pointer.any_pressed()
+            })
+            && ui
+                .input(|input| input.pointer.hover_pos())
+                .is_some_and(|point| {
+                    rect.contains(point) && ui.ctx().layer_id_at(point) == Some(ui.layer_id())
+                });
+        let looking = ui.input(|input| input.modifiers.shift);
         let axes = ui.input(|i| {
             [
                 (i.key_down(egui::Key::ArrowLeft) as i32 - i.key_down(egui::Key::ArrowRight) as i32)
@@ -836,7 +854,11 @@ impl FlightView {
                     as f32,
             ]
         });
-        update_head_look(&mut self.head_look, looking, axes, dt);
+        // Denied ownership freezes the presentation pose; it must not be
+        // interpreted as releasing Shift and recentering somebody else's view.
+        if head_look_input {
+            update_head_look(&mut self.head_look, looking, axes, dt);
+        }
         let head_rotation = rotation
             * Quat::from_rotation_y(self.head_look[0])
             * Quat::from_rotation_z(self.head_look[1]);
@@ -6339,6 +6361,126 @@ mod tests {
             }
         }
     }
+    #[test]
+    fn head_look_obeys_viewport_permission_and_preserves_blocked_pose() {
+        fn step(
+            ctx: &egui::Context,
+            cockpit: &mut super::super::Cockpit,
+            tick: u32,
+            shift: bool,
+            events: Vec<egui::Event>,
+        ) {
+            let _ = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(1200., 850.),
+                    )),
+                    focused: true,
+                    time: Some(tick as f64 / 60.),
+                    modifiers: egui::Modifiers {
+                        shift,
+                        ..Default::default()
+                    },
+                    events,
+                    ..Default::default()
+                },
+                |ctx| eframe::App::update(cockpit, ctx, &mut eframe::Frame::_new_kittest()),
+            );
+        }
+        let ctx = egui::Context::default();
+        ctx.options_mut(|options| options.max_passes = std::num::NonZeroUsize::MIN);
+        let mut cockpit = super::super::tests::view_test_cockpit(&ctx);
+        // Paused editor presentation may inspect the view without issuing flight commands.
+        cockpit.embedded = true;
+        cockpit.embedded_input = false;
+        cockpit.embedded_paused = true;
+        cockpit.frozen_time = Some(1000);
+        for tick in 1..=4 {
+            step(&ctx, &mut cockpit, tick, false, vec![]);
+        }
+        let (viewport, layer) = cockpit.flight_view.input_surface().unwrap();
+        let pointer = [
+            viewport.center(),
+            viewport.center_top() + egui::vec2(0., 24.),
+            viewport.left_top() + egui::vec2(24., 24.),
+        ]
+        .into_iter()
+        .find(|point| ctx.layer_id_at(*point) == Some(layer))
+        .unwrap();
+        let authority = serde_json::to_value(&cockpit.snapshot).unwrap();
+        let (tx, requests) = std::sync::mpsc::channel();
+        cockpit.commands = Some(tx);
+        cockpit.flight_view.head_look = [0.2, -0.1];
+        cockpit.flight_view.set_head_look_input_allowed(false);
+        step(
+            &ctx,
+            &mut cockpit,
+            5,
+            true,
+            vec![egui::Event::PointerMoved(pointer)],
+        );
+        let pose = cockpit.flight_view.editor_camera_pose();
+        let before = cockpit.flight_view.head_look_angles();
+        step(
+            &ctx,
+            &mut cockpit,
+            6,
+            true,
+            vec![egui::Event::Key {
+                key: egui::Key::ArrowLeft,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::SHIFT,
+            }],
+        );
+        assert_eq!(cockpit.flight_view.head_look_angles(), before);
+        assert_eq!(cockpit.flight_view.editor_camera_pose(), pose);
+        assert!(cockpit.flight_view.computer_surface().is_some());
+
+        // Positive control: the identical held key rotates only after viewport ownership.
+        cockpit.flight_view.set_head_look_input_allowed(true);
+        step(&ctx, &mut cockpit, 7, true, vec![]);
+        assert!(cockpit.flight_view.head_look_angles()[0] > before[0]);
+        assert!(cockpit.flight_view.computer_surface().is_some());
+
+        let before_outside = cockpit.flight_view.head_look_angles();
+        let pose = cockpit.flight_view.editor_camera_pose();
+        step(
+            &ctx,
+            &mut cockpit,
+            8,
+            true,
+            vec![egui::Event::PointerMoved(egui::pos2(-20., -20.))],
+        );
+        assert_eq!(cockpit.flight_view.head_look_angles(), before_outside);
+        assert_eq!(cockpit.flight_view.editor_camera_pose(), pose);
+        let press = egui::Event::PointerButton {
+            pos: pointer,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: egui::Modifiers::SHIFT,
+        };
+        step(
+            &ctx,
+            &mut cockpit,
+            9,
+            true,
+            vec![egui::Event::PointerMoved(pointer), press],
+        );
+        step(&ctx, &mut cockpit, 10, true, vec![]);
+        assert_eq!(
+            cockpit.flight_view.head_look_angles(),
+            before_outside,
+            "a held pointer drag must neither capture Shift look nor recenter the view"
+        );
+        assert!(cockpit.flight_view.computer_surface().is_some());
+        assert_eq!(serde_json::to_value(&cockpit.snapshot).unwrap(), authority);
+        assert!(cockpit.controls.is_empty());
+        assert!(requests.try_recv().is_err());
+    }
+
     #[test]
     fn head_look_is_bounded_and_release_recenters_without_ship_rotation() {
         let rotation = Quat::from_rotation_x(0.6);

@@ -1012,7 +1012,14 @@ fn native_cockpit_shift_keeps_both_instrument_layers_and_live_feed_updating() {
                     shift: case.shift,
                     ..Default::default()
                 };
-                let mut events = Vec::new();
+                // Real viewport ownership is required for head-look; the
+                // private renderer journey must supply a physical pointer too.
+                let pointer = cockpit
+                    .flight_view
+                    .cockpit_display_frame
+                    .as_ref()
+                    .map_or(screen.center(), |frame| frame.viewport.center());
+                let mut events = vec![egui::Event::PointerMoved(pointer)];
                 if previous_arrow != case.arrow {
                     if let Some(key) = previous_arrow {
                         events.push(egui::Event::Key {

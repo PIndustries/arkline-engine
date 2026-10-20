@@ -65,8 +65,11 @@ def stop_child(process):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check-only", action="store_true")
+    parser.add_argument("--timeout-seconds", type=float, default=0.0)
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
+    if args.timeout_seconds < 0:
+        parser.error("timeout must be non-negative")
     command = args.command
     if command[:1] == ["--"]:
         command = command[1:]
@@ -111,8 +114,10 @@ def main():
             receipt_path = build / "logs" / (stamp + ".json")
             receipt = {"command": command, "workspace": str(root), "target": env["CARGO_TARGET_DIR"],
                        "start_free_bytes": shutil.disk_usage(root).free, "start_limit_gib": 50,
-                       "stop_limit_gib": 30, "toolchain": str(TOOLCHAIN)}
+                       "stop_limit_gib": 30, "toolchain": str(TOOLCHAIN),
+                       "timeout_seconds": args.timeout_seconds}
             print(f"Guarded target: {env['CARGO_TARGET_DIR']}; log: {log_path}", flush=True)
+            deadline = time.monotonic() + args.timeout_seconds if args.timeout_seconds else None
             process = subprocess.Popen(command, cwd=root, env=env, stdout=subprocess.PIPE,
                                        stderr=subprocess.STDOUT, text=True, start_new_session=True)
             with log_path.open("w") as log:
@@ -126,6 +131,8 @@ def main():
                 guard_error = None
                 try:
                     while process.poll() is None:
+                        if deadline is not None and time.monotonic() >= deadline:
+                            raise RuntimeError(f"Runtime limit of {args.timeout_seconds:g} seconds exceeded")
                         check_workspace(root, identity)
                         for path in (build, build / "target", build / "tmp", build / "logs"):
                             if path.is_symlink() or path.stat().st_dev != identity[0]:

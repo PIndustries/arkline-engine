@@ -1833,21 +1833,33 @@ impl Cockpit {
             && ctx.input(|input| input.focused && !input.viewport().minimized.unwrap_or(false));
         // A real glass hit may transfer focus from an editor/overlay field.
         // Layer/depth rejection happens for each coordinate in the event batch.
-        let glass_pressed = active
-            && input_allowed
-            && ctx.input(|input| {
-                input.events.iter().any(|event| match event {
-                    egui::Event::PointerButton {
-                        pos, pressed: true, ..
-                    }
-                    | egui::Event::Touch {
-                        pos,
-                        phase: egui::TouchPhase::Start,
-                        ..
-                    } => hit(*pos).is_some(),
-                    _ => false,
-                })
-            });
+        // Context::input holds egui's exclusive context lock. The hit tester
+        // queries that same context's layers, so call it only after the input
+        // transaction has ended; otherwise the first glass press deadlocks.
+        let pressed_positions = if active && input_allowed {
+            ctx.input(|input| {
+                input
+                    .events
+                    .iter()
+                    .filter_map(|event| match event {
+                        egui::Event::PointerButton {
+                            pos, pressed: true, ..
+                        }
+                        | egui::Event::Touch {
+                            pos,
+                            phase: egui::TouchPhase::Start,
+                            ..
+                        } => Some(*pos),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+            })
+        } else {
+            Vec::new()
+        };
+        let glass_pressed = pressed_positions
+            .into_iter()
+            .any(|point| hit(point).is_some());
         if glass_pressed {
             ctx.memory_mut(|memory| {
                 if let Some(focused) = memory.focused() {
@@ -1917,15 +1929,6 @@ impl Cockpit {
             });
             ctx.output_mut(|parent| parent.ime = ime);
         }
-        ctx.output_mut(|parent| {
-            parent.commands.extend(output.platform_output.commands);
-            parent.events.extend(output.platform_output.events);
-            if output.pointer_on_computer {
-                parent.cursor_icon = output.platform_output.cursor_icon;
-                parent.mutable_text_under_cursor |=
-                    output.platform_output.mutable_text_under_cursor;
-            }
-        });
         if !output.diagnostics.is_empty() {
             self.settings_notice = format!("Cockpit display: {}", output.diagnostics.join("; "));
         }
