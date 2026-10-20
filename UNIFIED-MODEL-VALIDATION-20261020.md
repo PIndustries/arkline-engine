@@ -1,6 +1,6 @@
 # Unified native model browser
 
-Build **26.10.20.4** is packaged and validated at **ce8080b0be0fe66e7ccbd8961635a9b032840bc7**. It has **not been launched**. The earlier **26.10.20.3** app, PID **7924**, remains running on the preserved ReconstructionQA project; safe handoff readiness is pending.
+Build **26.10.20.4** is packaged and validated at **ce8080b0be0fe66e7ccbd8961635a9b032840bc7**. It is **running as PID 96422** after the user authorized discarding the previous unsaved session. The earlier **26.10.20.3** app, PID **7924**, closed normally and is absent. The saved ReconstructionQA project was preserved.
 
 [Prepared app](<.build/packages/unified-all-models-20261020/Arkline Editor Reconstructed.app>) · [Evidence and hashes](UNIFIED-MODEL-VALIDATION-20261020.json)
 
@@ -26,7 +26,7 @@ All **nine explicit native GPU checks passed for 26.10.20.4**. The shared previe
 
 ## Desktop status and historical evidence
 
-There is **no new OS desktop interaction acceptance for 26.10.20.4**. GPU pointer fixtures do not establish app focus or OS event delivery. The earlier 26.3 capture establishes only that build's title, Models navigation/list and a visible preview. Its later `pioneer-default.png`, `pioneer-orbit.png` and `pioneer-pan.png` files show Rooms/play after concurrent navigation; they are excluded from model-control acceptance. Search, category, control and resize acceptance for the new app remains pending safe handoff.
+A passive startup check verified one owned window titled **Arkline Editor — 26.10.20.4**, its exact packaged executable and preserved project arguments. No focus or input was changed. The passive screenshot caught a Stage Manager thumbnail and is excluded from usable-canvas acceptance. There is **no new OS desktop interaction acceptance for 26.10.20.4**. GPU pointer fixtures do not establish app focus or OS event delivery. The earlier 26.3 capture establishes only that build's title, Models navigation/list and a visible preview. Its later `pioneer-default.png`, `pioneer-orbit.png` and `pioneer-pan.png` files show Rooms/play after concurrent navigation; they are excluded from model-control acceptance. Search, category, control and resize acceptance for the new app remains unverified at the OS-input level; the GPU and egui fixture results above remain separate.
 
 The complete historical 26.3 record is retained under `historical_builds` in the evidence JSON, and its original package receipts remain untouched. Historical coverage and launch observations are not carried forward as current-build results.
 

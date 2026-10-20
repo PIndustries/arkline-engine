@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "updated_utc": "2026-10-20T07:19:43.140591+00:00",
+  "updated_utc": "2026-10-20T07:29:53.815910+00:00",
   "build": "26.10.20.4",
   "production_source_head": "ce8080b0be0fe66e7ccbd8961635a9b032840bc7",
   "incremental_commits": {
@@ -945,15 +945,33 @@
     ]
   },
   "native_app_swap": {
-    "build": "26.10.20.4",
-    "attempted": false,
-    "new_build_launched": false,
-    "status": "Prepared and validated; awaiting safe handoff readiness before replacing the running app.",
-    "reported_running_build": "26.10.20.3",
-    "reported_running_pid": 7924,
-    "running_app_path": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/unified-model-viewer-20261020/Arkline Editor Reconstructed.app",
+    "at_utc": "2026-10-20T07:22:27.981436+00:00",
+    "old_pid": 7924,
+    "old_command": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/unified-model-viewer-20261020/Arkline Editor Reconstructed.app/Contents/MacOS/arkline-editor --project /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/reconstruction-native-fixed-20261020/disposable-project --pilot ReconstructionQA",
+    "close_exit": 0,
+    "close_stdout": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T072225961891Z.log\nNormal owned-window close completed for PID 7924; no forced termination\n",
+    "close_stderr": "",
+    "method": "Normal AX window close; no forced termination",
     "project_preserved": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/reconstruction-native-fixed-20261020/disposable-project",
-    "status_source": "Integration owner handoff; no process, window or desktop action performed during this documentation update."
+    "launch_command": [
+      "/usr/bin/open",
+      "-a",
+      "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/unified-all-models-20261020/Arkline Editor Reconstructed.app",
+      "--args",
+      "--project",
+      "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/reconstruction-native-fixed-20261020/disposable-project",
+      "--pilot",
+      "ReconstructionQA"
+    ],
+    "open_exit": 0,
+    "open_stdout": "",
+    "open_stderr": "",
+    "new_matching_processes": [
+      "96422 /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/unified-all-models-20261020/Arkline Editor Reconstructed.app/Contents/MacOS/arkline-editor --project /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/reconstruction-native-fixed-20261020/disposable-project --pilot ReconstructionQA"
+    ],
+    "old_pid_present": false,
+    "build": "26.10.20.4",
+    "new_pid": 96422
   },
   "actual_os_acceptance": {
     "build": "26.10.20.4",
@@ -971,7 +989,18 @@
       "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/unified-model-viewer-20261020/os-evidence/pioneer-pan.png"
     ],
     "exclusion_reason": "These names were assigned before the concurrent workspace change was seen. They show Rooms/play views and establish no model-control acceptance.",
-    "keyboard_text_injection": false
+    "keyboard_text_injection": false,
+    "current_startup_verification": {
+      "at_utc": "2026-10-20T07:25:22Z",
+      "frontmost_pid": 95550,
+      "method": "Passive owned-window title/capture; no activation, input or content traversal",
+      "onscreen_window_count": 1,
+      "pid": 96422,
+      "titles": [
+        "Arkline Editor \u2014 26.10.20.4"
+      ]
+    },
+    "current_startup_limit": "Passive window title and exact process identity verified; Stage Manager thumbnail capture is not model-control desktop acceptance."
   },
   "preservation": {
     "historical_receipts_retained": true,
@@ -1448,6 +1477,6 @@
       18
     ],
     "finding": "Hull conversion is correct; decks, cockpit and station currently use disconnected frames and transfers. Actual cockpit-backwall and exterior crew openings do not exist.",
-    "gating": "Corrected viewer handoff readiness is pending; no walking production edits have begun."
+    "gating": "Walking queued by latest user priority: differentiated ship components in Models. No walking source edits were made."
   }
 }
