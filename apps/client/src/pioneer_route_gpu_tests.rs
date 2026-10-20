@@ -1512,3 +1512,84 @@ fn native_pioneer_bridge_corridor_finish_review() {
         .unwrap();
     }
 }
+
+#[test]
+#[ignore = "Explicit native cockpit composition at actual authority mining state; retained disposable world"]
+fn native_pioneer_cockpit_mining_composition() {
+    unsafe {
+        let directory = PathBuf::from(
+            std::env::var_os("ARKLINE_COCKPIT_COMPOSITION_EVIDENCE")
+                .expect("Retained composition path"),
+        );
+        std::fs::create_dir(&directory).unwrap();
+        let (_context, gl) = PrivateContext::create();
+        let mut h = Harness::new(gl, Some(directory.clone()));
+        h.cockpit.service_tab = crate::ServiceTab::Drones;
+        h.cockpit.drone_camera = true;
+        h.cockpit.drone_split = true;
+        let docked = h.settle();
+        let mut captures = vec![capture(Some(&directory), "docked-forward", &docked)];
+        h.command(Request::StartResourceJob {
+            target_units: 5000,
+            pilot: None,
+        });
+        for _ in 0..600 {
+            h.advance_time(1000);
+            h.refresh();
+            let p = h.cockpit.own().unwrap();
+            if p.drones.len() == 5 && p.ore >= 350 {
+                break;
+            }
+        }
+        let own = h.cockpit.own().unwrap();
+        assert!(
+            own.drones.len() == 5 && own.ore >= 350,
+            "Actual ordinary mining must reach the reported composition"
+        );
+        let mining_snapshot = h.cockpit.snapshot.clone().unwrap();
+        let mining = h.settle();
+        captures.push(capture(Some(&directory), "belt-mining-forward", &mining));
+        assert!(!mining.registered_route);
+        same_seated_view(&docked, &mining);
+        let cache =
+            pioneer_docked_scene::SceneCache::new(arkline_protocol::default_pioneer()).unwrap();
+        let parts = pioneer_docked_scene::seated_body_parts(&cache, None, 0).unwrap();
+        let geometry = flight_geometry().unwrap();
+        let eye = cockpit_fit::eye_body_meters(ShipClass::Pioneer);
+        let mut rays = Vec::new();
+        for direction in [
+            Vec3::new(1., 0., 0.),
+            Vec3::new(1., -0.05, 0.),
+            Vec3::new(1., 0.25, 0.4),
+            Vec3::new(1., -0.25, -0.4),
+        ] {
+            let mut hits = parts
+                .iter()
+                .enumerate()
+                .filter_map(|(index, part)| {
+                    if docked_source_primitive(part.0) == Some(6) {
+                        return None;
+                    }
+                    let vertices = &geometry.catalog.uploads()[mesh_index(part.0)];
+                    ray_mesh_hit(eye, direction, part.1, vertices)
+                        .map(|distance| (distance, index, part))
+                })
+                .collect::<Vec<_>>();
+            hits.sort_by(|a, b| a.0.total_cmp(&b.0));
+            rays.push(serde_json::json!({"direction":direction.to_array(),"hits":hits.iter().take(3).map(|(distance,index,part)|serde_json::json!({"distance":distance,"index":index,"mesh":part.0,"model":part.1.to_cols_array()})).collect::<Vec<_>>()}));
+        }
+        for (name, mode) in [
+            ("belt-external", crate::ViewMode::External),
+            ("belt-tactical3d", crate::ViewMode::Tactical3d),
+            ("belt-cockpit-return", crate::ViewMode::Cockpit),
+        ] {
+            h.cockpit.view_mode = mode;
+            let shot = h.settle();
+            captures.push(capture(Some(&directory), name, &shot));
+            if mode == crate::ViewMode::Cockpit {
+                same_seated_view(&mining, &shot);
+            }
+        }
+        std::fs::write(directory.join("receipt.json"),serde_json::to_vec_pretty(&serde_json::json!({"scope":"Actual Cockpit and native renderers; ordinary disposable 5000-ore authority job; no desktop/user-world mutation","captures":captures,"pilot":mining_snapshot.pilots.iter().find(|p|p.name==PILOT),"job":mining_snapshot.resource_jobs,"body_rays":rays})).unwrap()).unwrap();
+    }
+}
