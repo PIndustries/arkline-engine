@@ -1,6 +1,6 @@
 # Physical Pioneer — unvalidated local WIP recovery checkpoint
 
-This is the historical WIP record. The later prepared build and validation are in [Pioneer docked validation](PIONEER-DOCKED-VALIDATION-20261020.md).
+This is the historical WIP record. The later locally accepted build, actual native OS round trip and validation are in [Pioneer docked validation](PIONEER-DOCKED-VALIDATION-20261020.md).
 
 Status: implemented locally; not accepted, packaged, launched or published. This checkpoint preserves work before remaining geometry, authority and native GPU acceptance. Active file owners froze at coherent written boundaries before the commit.
 

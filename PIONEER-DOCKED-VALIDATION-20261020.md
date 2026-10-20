@@ -1,6 +1,6 @@
-# Physical Pioneer: prepared native build
+# Physical Pioneer: locally accepted native build
 
-Build **26.10.20.7** is prepared from clean source **cbf48c5cd09a97389d0260c79a09fbac63089f48**. Local required checks and all **14 explicit native GPU tests pass**. The app has not been launched; the existing **26.10.20.4** editor session remains untouched pending the user's saved-work handoff answer.
+Build **26.10.20.7** runs from clean runtime source **cbf48c5cd09a97389d0260c79a09fbac63089f48**. Local required checks, all **14 explicit native GPU tests** and the actual **macOS component viewer and full docked physical round trip pass**. PID **64207** remains paused and seated on a disposable `/tmp` project. [Native OS acceptance](PIONEER-NATIVE-OS-ACCEPTANCE-20261020.md) records the exact scope, screenshots and authority observations.
 
 [Prepared app](<.build/packages/pioneer-docked-fixed-20261020/Arkline Editor Reconstructed.app>) · [Commands, receipts and limits](PIONEER-DOCKED-VALIDATION-20261020.json) · [Source recovery receipt](.build/packages/pioneer-docked-fixed-20261020/source-checkpoint.json)
 
@@ -46,6 +46,8 @@ The app uses a verified deep/strict local ad-hoc signature, CFBundleVersion **24
 
 Incremental source checkpoints preserve the physical WIP 170de45, threshold repair 9c1e92d, native query repair ee9c903, composed/authority proof 371e64e, lift repair f196e2b and camera/input repair 98b95dc. A complete seven-ref bundle at cbf48c5 was verified before final tests; the source recovery receipt records the later documentation checkpoint and its complete verified bundle. The validated 26.10.20.5 component app/bundle and earlier recovery/shared-runner sources remain retained.
 
-This is a reconstruction over retained inputs, with no remotes, rather than exact recovery of missing combined 46/47 source. Results are local; no published exact-head CI, browser GPU run or Linux CI is implied. Native continuous rotated/circular fleet UI journeys remain unverified. Fresh native OS acceptance is pending the already-raised saved-work handoff answer. No particular dirty draft has been established; this precaution comes from the editor close guard covering Files/Git state but not all authoring drafts. No app closure/discard is authorized by elapsed time.
+This is a reconstruction over retained inputs, with no remotes, rather than exact recovery of missing combined 46/47 source. Results are local; no published exact-head CI, browser GPU run or Linux CI is implied. Following explicit user authorization, the old editor was ordinarily closed and this verified candidate was launched. The native journey covers one fresh circular-fleet Pioneer at yaw0: seat exit, both decks/stairs down and up, hatches, lift to station, station walk, return and reseating. OS physical computer typing/focus/headlook also passed. Detailed sampling and scope limits are in the linked native acceptance report.
+
+Automatic approval review rejected a persistent whole-Documents permission grant as broader than close/reopen authorization. No grant executed; Don't Allow and a fresh disposable `/tmp` project allowed the native work to finish. No saved-work handoff answer remains pending.
 
 No push, PR/issue/project mutation, merge, publication, deployment, external-drive operation or user-project modification was performed.

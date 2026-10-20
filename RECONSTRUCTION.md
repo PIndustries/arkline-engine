@@ -1,6 +1,6 @@
 # Cockpit reconstruction and native build
 
-The prepared physical Pioneer build is **26.10.20.7**; see [the current validation](PIONEER-DOCKED-VALIDATION-20261020.md). Its local checks pass, while native OS handoff remains pending and the existing 26.10.20.4 editor stays open. The historical reconstruction below describes build 26.10.19.2. This is new integration over surviving source; missing combined builds46/47 were not fully recovered.
+The locally accepted physical Pioneer build is **26.10.20.7**; see [the current validation](PIONEER-DOCKED-VALIDATION-20261020.md) and [actual native OS acceptance](PIONEER-NATIVE-OS-ACCEPTANCE-20261020.md). Required local checks, private GPU tests, component viewer and the full docked physical round trip pass; the app remains open, paused and seated on its disposable QA project. The historical reconstruction below describes build 26.10.19.2. This is new integration over surviving source; missing combined builds46/47 were not fully recovered.
 
 ## Source and preservation
 

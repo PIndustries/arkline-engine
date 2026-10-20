@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "at_utc": "2026-10-20T09:59:23.060893+00:00",
-  "status": "LOCAL_CHECKS_PASS_PREPARED_APP_NATIVE_OS_HANDOFF_PENDING",
+  "at_utc": "2026-10-20T12:25:35.315333+00:00",
+  "status": "LOCAL_REQUIRED_CHECKS_GPU_AND_NATIVE_OS_ACCEPTANCE_PASS",
   "build": "26.10.20.7",
   "source_head": "cbf48c5cd09a97389d0260c79a09fbac63089f48",
   "source": {
@@ -3225,18 +3225,19 @@
     "legacy_source_field_note": "The helper legacy field named before_version_commit records actual HEAD at packaging; this candidate was already stamped before packaging."
   },
   "handoff": {
-    "pending": true,
-    "candidate_launched": false,
-    "current_build": "26.10.20.4",
-    "last_verified_pid": 96422,
-    "reason": "Preserve a potentially unsaved authoring session. No particular dirty draft has been established; the editor close guard does not cover all authoring state. Parent has already asked the user.",
-    "close_guard_source": "apps/editor/src/main.rs:251",
-    "ready_source_receipt": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-docked-fixed-20261020/source-checkpoint.json"
+    "pending": false,
+    "candidate_launched": true,
+    "current_build": "26.10.20.7",
+    "last_verified_pid": 64207,
+    "authorization": "User explicitly authorized ordinary close/reopen as needed; no saved-work handoff question remains.",
+    "ordinary_close_and_disposable_launch": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-docked-fixed-20261020/native-os-acceptance/fresh-docked-launch-receipt.json",
+    "documents_granted": false,
+    "final_paused_and_seated": true,
+    "running_identity": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-docked-fixed-20261020/native-os-acceptance/final-running-identity.json"
   },
   "limitations": [
-    "Prepared app has not been launched; the existing 26.10.20.4 session remains untouched pending fresh saved-work readiness.",
-    "Private CGL captures prove actual macOS GPU rendering and egui input composition, not OS focus/event delivery or a packaged app launch.",
-    "Native scene views use deterministic checkpoints in the private station pose. Continuous stairs, hatches, lift and reseating are proved separately through real authority commands; rotated/circular fleet native UI journeys are not claimed.",
+    "Native OS acceptance covers the fresh disposable circular-fleet Pioneer at yaw0; rotated multi-vessel journeys are not claimed.",
+    "Private CGL checkpoints, real authority tests and desktop OS acceptance are separate scopes; screenshots and10Hzlift reads do not prove every frame/tick.",
     "Conservative per-view frustum selection is implemented. Room portal occlusion, LOD and a measured frame-rate improvement are not claimed; simulation is never culled.",
     "GPU elapsed samples are delayed, optional observations, not a paired performance benchmark. Existing Apple zero-texture warnings remain in full logs; explicit image/state assertions and GL error checks pass.",
     "Browser coverage is the exact CI Wasm Clippy command; browser GPU execution and Linux CI are not claimed.",
@@ -3263,5 +3264,32 @@
       "deck1/floor/0",
       "deck2/floor/5"
     ]
+  },
+  "native_os_acceptance": {
+    "report": "PIONEER-NATIVE-OS-ACCEPTANCE-20261020.json",
+    "status": "LOCAL_NATIVE_OS_ACCEPTANCE_PASS",
+    "audit_path": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-docked-fixed-20261020/native-os-acceptance/images-final-audit.json",
+    "audit_sha256": "09d35cdb2cedc629736f85d6f16e7ef1cd9d775b5b6fe7f01782aa71ac073780",
+    "images": 67,
+    "os_actions": 67,
+    "walking_driver_holds": 344,
+    "completed_walking_segments": 14,
+    "bounded_helper_stops": 3,
+    "final_state": {
+      "at_utc": "2026-10-20T12:22:00.172123+00:00",
+      "pilot": "DockedOSQA",
+      "clock_ms": 1792498225059,
+      "world_sha256": "7d729769995b08cd5cf3c85805ed326ee161718271b1769877cc289e70d0d153",
+      "location": {
+        "kind": "docked"
+      },
+      "ship_class": "pioneer",
+      "scene_layout": "orbital_v1",
+      "fleet_hangar": true,
+      "v2_compatible": true,
+      "avatar_present": false,
+      "v2": null,
+      "label": "accepted-seated-final-paused"
+    }
   }
 }
