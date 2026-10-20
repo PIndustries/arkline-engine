@@ -114,6 +114,7 @@ struct Harness {
     target: Option<CachedFeed>,
     world: Option<EditorWorld>,
     directory: PathBuf,
+    evidence_directory: Option<PathBuf>,
     session: Option<String>,
     updates: mpsc::Sender<crate::Update>,
     requests: mpsc::Receiver<Request>,
@@ -122,7 +123,7 @@ struct Harness {
     authority_requests: Vec<serde_json::Value>,
 }
 impl Harness {
-    unsafe fn new(gl: Arc<glow::Context>) -> Self {
+    unsafe fn new(gl: Arc<glow::Context>, evidence_directory: Option<PathBuf>) -> Self {
         let directory = std::env::temp_dir().join(format!(
             "arkline-native-pioneer-routes-{}-{}",
             std::process::id(),
@@ -134,6 +135,13 @@ impl Harness {
         let mut world =
             EditorWorld::open_with_creation_scene(&directory, SceneLayoutRevision::OrbitalV1)
                 .unwrap();
+        if let Some(evidence) = &evidence_directory {
+            std::fs::write(
+                evidence.join("fixture.json"),
+                serde_json::to_vec_pretty(&authority_fixture(&directory)).unwrap(),
+            )
+            .unwrap();
+        }
         let mut session = None;
         let response = world.handle(
             &mut session,
@@ -192,6 +200,7 @@ impl Harness {
             target: Some(target),
             world: Some(world),
             directory,
+            evidence_directory,
             session,
             updates,
             requests,
@@ -518,8 +527,16 @@ impl Drop for Harness {
             }
         }
         drop(self.world.take());
-        let _ = std::fs::remove_dir_all(&self.directory);
+        if self.evidence_directory.is_none() {
+            let _ = std::fs::remove_dir_all(&self.directory);
+        }
     }
+}
+
+fn authority_fixture(directory: &Path) -> serde_json::Value {
+    serde_json::json!({"schema_version":1,"pilot":PILOT,
+        "directory":directory,"database":directory.join("world.sqlite"),
+        "retained_for_evidence":true})
 }
 
 fn pointer(point: egui::Pos2, pressed: bool) -> Vec<egui::Event> {
@@ -595,28 +612,50 @@ fn computer_evidence(shot: &Shot) -> serde_json::Value {
         "Physical screen needs actual depth and lit UI pixels: visible={visible}, lit={lit}"
     );
     assert!(!shot.computer_labels.is_empty());
-    serde_json::json!({"depth_samples":visible,"lit_samples":lit,"physical_roundtrip":true})
+    serde_json::json!({"depth_samples":visible,"lit_samples":lit,"physical_roundtrip":true,
+        "projection":screen_corner_evidence(shot)})
 }
 
-fn screen_corners(shot: &Shot) -> Vec<egui::Vec2> {
+fn screen_corners(shot: &Shot) -> [egui::Vec2; 4] {
     let surface = shot.surface.as_ref().unwrap();
-    let viewport = shot.viewport.unwrap();
     let canvas = surface.canvas_rect().shrink(8.0);
+    let (local_to_clip, left_top, right_bottom) = surface
+        .feed_geometry(canvas)
+        .expect("Actual inset physical screen geometry");
+    // Compare the same physical corners even when homogeneous clipping removes
+    // the screen's bottom edge. Visible glass is tested separately with depth.
     [
+        left_top,
+        Vec3::new(left_top.x, left_top.y, right_bottom.z),
+        Vec3::new(left_top.x, right_bottom.y, left_top.z),
+        right_bottom,
+    ]
+    .map(|point| {
+        let clip = local_to_clip * point.extend(1.0);
+        assert!(
+            clip.is_finite() && clip.w > 1e-6,
+            "Physical screen corner must remain finite and in front of the camera: {clip:?}"
+        );
+        let projected = egui::vec2((clip.x / clip.w + 1.0) * 0.5, (1.0 - clip.y / clip.w) * 0.5);
+        assert!(projected.is_finite());
+        projected
+    })
+}
+
+fn screen_corner_evidence(shot: &Shot) -> serde_json::Value {
+    let surface = shot.surface.as_ref().unwrap();
+    let canvas = surface.canvas_rect().shrink(8.0);
+    let clipped = [
         canvas.left_top(),
         canvas.right_top(),
         canvas.left_bottom(),
         canvas.right_bottom(),
     ]
-    .into_iter()
-    .map(|point| {
-        (surface
-            .project(point)
-            .expect("Visible inset physical screen corner")
-            - viewport.min)
-            / viewport.size()
-    })
-    .collect()
+    .map(|point| surface.project(point).is_none());
+    serde_json::json!({"canonical_inset_px":8,
+        "corner_order":["left_top","right_top","left_bottom","right_bottom"],
+        "raw_viewport_normalized_corners":screen_corners(shot).map(|point| [point.x,point.y]),
+        "frustum_clipped_corners":clipped})
 }
 
 fn same_seated_view(reference: &Shot, actual: &Shot) {
@@ -624,7 +663,7 @@ fn same_seated_view(reference: &Shot, actual: &Shot) {
         "Docking and route changes must preserve the canonical seated body-space eye: {:?} versus {:?}", reference.body_eye, actual.body_eye);
     for (a, b) in screen_corners(reference).iter().zip(screen_corners(actual)) {
         assert!(
-            a.distance(b) < 0.015,
+            (*a - b).length() < 0.015,
             "Shared cockpit screen/FOV changed across routes: {a:?} vs {b:?}"
         );
     }
@@ -711,6 +750,11 @@ fn capture(directory: Option<&Path>, name: &str, shot: &Shot) -> serde_json::Val
         .copied()
         .collect::<Vec<_>>();
     let filename = format!("{name}.png");
+    let evidence = serde_json::json!({"name":name,"png":directory.map(|_|filename.clone()),"rgba_sha256":hex::encode(Sha256::digest(&bytes)),
+        "width":WIDTH,"height":HEIGHT,"orientation":"top-left RGBA8","authority_frame":shot.frame,
+        "registered_route":shot.registered_route,"occupied_depth_pixels":shot.occupied(),
+        "body_eye_m":shot.body_eye.map(|eye| eye.to_array()),"computer_surface":shot.surface.is_some(),
+        "physical_screen_projection":shot.surface.as_ref().map(|_|screen_corner_evidence(shot))});
     if let Some(directory) = directory {
         image::save_buffer_with_format(
             directory.join(&filename),
@@ -721,11 +765,13 @@ fn capture(directory: Option<&Path>, name: &str, shot: &Shot) -> serde_json::Val
             image::ImageFormat::Png,
         )
         .unwrap();
+        std::fs::write(
+            directory.join(format!("{name}.json")),
+            serde_json::to_vec_pretty(&evidence).unwrap(),
+        )
+        .unwrap();
     }
-    serde_json::json!({"name":name,"png":directory.map(|_|filename),"rgba_sha256":hex::encode(Sha256::digest(bytes)),
-        "width":WIDTH,"height":HEIGHT,"orientation":"top-left RGBA8","authority_frame":shot.frame,
-        "registered_route":shot.registered_route,"occupied_depth_pixels":shot.occupied(),
-        "body_eye_m":shot.body_eye.map(|eye| eye.to_array()),"computer_surface":shot.surface.is_some()})
+    evidence
 }
 
 fn remote_payload_isolation(snapshot: &arkline_protocol::Snapshot) {
@@ -785,7 +831,7 @@ fn native_pioneer_editor_gameplay_decks_and_space_share_canonical_views() {
             std::fs::create_dir(directory).unwrap();
         }
         let (_context, gl) = PrivateContext::create();
-        let mut harness = Harness::new(gl.clone());
+        let mut harness = Harness::new(gl.clone(), directory.clone());
         let flight_renderer = harness
             .cockpit
             .flight_view
@@ -998,12 +1044,14 @@ fn native_pioneer_editor_gameplay_decks_and_space_share_canonical_views() {
                 "remote_worker_does_not_inherit_other_owners_canonical_parts":true,
                 "stale_seated_press_after_deck_placement_sends_no_undock":true,"actual_ui_undocks":harness.ui_undocks,
                 "seated_body_eye_tolerance_m":0.03,"physical_screen_normalized_corner_tolerance":0.015,
+                "authority_fixture":authority_fixture(&harness.directory),
                 "cases":cases,"captures":captures,"authority_requests":harness.authority_requests,
                 "limitations":["Private CGL acceptance does not prove desktop OS focus/input or packaged app behavior",
                     "Editor placements use the real authority API; this does not click the editor toolbar",
                     "Crew movement uses bounded real authority Walk requests; OS keyboard delivery is separate",
                     "Space traversal uses the supported seated cockpit only; no unsupported space avatar is injected",
-                    "World and SQLite are disposable; the source project and canonical assets are untouched"]});
+                    "Canonical screen corners may be clipped by the viewport; raw projections and clipping masks are recorded",
+                    "The disposable world and SQLite are retained at authority_fixture.directory when evidence capture is requested"]});
             std::fs::write(
                 directory.join("receipt.json"),
                 serde_json::to_vec_pretty(&receipt).unwrap(),

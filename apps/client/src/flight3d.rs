@@ -2904,10 +2904,7 @@ impl Renderer {
         } else {
             preview_material(mesh, color, emission, self.material_preview)
         };
-        let mut params = embedded_primitive(mesh).map_or_else(
-            || material.parameters(),
-            |p| [p.roughness, p.metallic, 0.0, 0.0],
-        );
+        let mut params = resolved_material_parameters(mesh, material);
         if let Some(preview) = self
             .material_preview
             .filter(|_| !graph_enabled && preview_paint(mesh))
@@ -3459,13 +3456,7 @@ impl Renderer {
                                 if docked_source_primitive(mesh) == Some(6) {
                                     registered_glass.push(part);
                                 } else {
-                                    self.draw_material(
-                                        mesh,
-                                        part.1,
-                                        color,
-                                        emission,
-                                        Material::BareMetal,
-                                    );
+                                    self.draw(mesh, part.1, color, emission);
                                 }
                             }
                         }
@@ -3680,7 +3671,7 @@ impl Renderer {
                     if docked_source_primitive(mesh) != Some(6)
                         && self.visible_part(frame.cockpit_vp, &part, visibility)
                     {
-                        self.draw_material(mesh, part.1, color, emission, Material::BareMetal);
+                        self.draw(mesh, part.1, color, emission);
                     }
                 }
                 for &(mesh, model, color, emission) in parts.iter() {
@@ -4883,6 +4874,14 @@ fn embedded_primitive(mesh: usize) -> Option<&'static ship_asset::Primitive> {
 fn docked_pioneer_parts() -> Result<Arc<Vec<ModelPart>>, String> {
     flight_geometry()?.docked_parts.clone()
 }
+/// Source PBR takes precedence over the caller's procedural fallback, including
+/// locally clipped source meshes. Every canonical view uses the same resolver.
+fn resolved_material_parameters(mesh: usize, fallback: Material) -> [f32; 4] {
+    embedded_primitive(mesh).map_or_else(
+        || fallback.parameters(),
+        |primitive| [primitive.roughness, primitive.metallic, 0.0, 0.0],
+    )
+}
 fn pioneer_asset_sha256() -> &'static str {
     use sha2::{Digest, Sha256};
     static HASH: std::sync::OnceLock<String> = std::sync::OnceLock::new();
@@ -6022,6 +6021,40 @@ mod tests {
         assert_eq!(feed.camera_drone, Some(42));
         assert_eq!(feed.eye, Vec3::X);
         assert_eq!(feed.vp, Mat4::from_translation(Vec3::ONE));
+    }
+
+    #[test]
+    fn canonical_pioneer_views_share_painted_fallback_and_source_pbr() {
+        // Docked and flight canonical draws both use Renderer::draw. A plain
+        // procedural panel must retain its dielectric response in either view.
+        assert_eq!(
+            resolved_material_parameters(0, Material::PaintedHull),
+            [0.46, 0.0, 0.0, 0.0],
+        );
+        assert_ne!(
+            resolved_material_parameters(0, Material::PaintedHull),
+            resolved_material_parameters(0, Material::BareMetal),
+        );
+        let primitives = pioneer_asset().expect("Canonical source primitives");
+        let parts = docked_pioneer_parts().expect("Registered source cut geometry");
+        assert_eq!(primitives.len(), 9);
+        assert_eq!(parts.len(), primitives.len());
+        for (index, (primitive, part)) in primitives.iter().zip(parts.iter()).enumerate() {
+            let source = [primitive.roughness, primitive.metallic, 0.0, 0.0];
+            assert_eq!(
+                resolved_material_parameters(10 + index, Material::PaintedHull),
+                source
+            );
+            assert_eq!(
+                resolved_material_parameters(part.0, Material::PaintedHull),
+                source
+            );
+            assert_eq!(
+                resolved_material_parameters(part.0, Material::BareMetal),
+                source,
+                "Source primitive {index} must override either procedural fallback"
+            );
+        }
     }
 
     #[test]
