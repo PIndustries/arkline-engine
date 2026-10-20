@@ -5,8 +5,8 @@ use sha2::{Digest, Sha256};
 use std::ffi::{c_void, CString};
 use std::path::{Path, PathBuf};
 
-#[path = "cockpit_console_edge_gpu_tests.rs"]
-mod edge_tests;
+// Reconstructed checkout: unavailable older edge-suite module is not included.
+// The retained native tests below exercise enclosure, physical feed and Shift.
 
 #[link(name = "OpenGL", kind = "framework")]
 unsafe extern "C" {
@@ -337,7 +337,11 @@ fn native_pioneer_cockpit_enclosure_matches_source_and_keeps_window_apertures() 
         }
         let (_context, gl) = PrivateContext::create();
         let mut renderer = Renderer::new(gl.clone()).unwrap();
-        let (source, geometry) = pioneer_parts::PioneerSource::load_embedded().unwrap();
+        let source_parts = pioneer_asset().unwrap();
+        let source_triangles: usize = source_parts
+            .iter()
+            .map(|part| part.vertices.len() / 3)
+            .sum();
         let original_meshes: Vec<_> = renderer.meshes.iter().map(|mesh| mesh.buffer).collect();
         let mut evidence = Vec::new();
         for (width, height) in [(1080usize, 720usize), (1500, 960)] {
@@ -450,8 +454,9 @@ fn native_pioneer_cockpit_enclosure_matches_source_and_keeps_window_apertures() 
             let receipt = serde_json::json!({
                 "schema_version":1,"scope":"Actual flight Renderer::paint, private macOS CGL offscreen colour/depth; no app window or UI capture",
                 "build":include_str!("../../../BUILD_VERSION").trim(),
-                "source_sha256":source.source_sha256,"glb_sha256":source.glb_sha256,"receipt_sha256":source.receipt_sha256,
-                "source_part_count":source.parts.len(),"source_triangles":geometry.report.triangles,
+                "glb_sha256":pioneer_asset_sha256(),
+                "source_provenance":"Surviving baseline embedded GLB and decoded canonical triangles; unavailable authored-part receipt is not asserted",
+                "source_part_count":source_parts.len(),"source_triangles":source_triangles,
                 "vendor":gl.get_parameter_string(glow::VENDOR),"renderer":gl.get_parameter_string(glow::RENDERER),"gl_version":gl.get_parameter_string(glow::VERSION),
                 "fitted_eye_body_m":cockpit_fit::eye_body_meters(ShipClass::Pioneer).to_array(),
                 "eye_provenance":"Presentation camera fitted to measured canonical bridge cavity; not an authored seat or registered walkable interior",
@@ -982,7 +987,7 @@ fn native_cockpit_shift_keeps_both_instrument_layers_and_live_feed_updating() {
                 let own = &mut snapshot.pilots[0];
                 own.location = Location::Belt;
                 own.system_id = 3;
-                own.ore = Some(ore);
+                own.ore = ore;
                 own.power = Some(arkline_protocol::PowerState {
                     charge_j: charge,
                     capacity_j: 240_000,
@@ -1000,7 +1005,7 @@ fn native_cockpit_shift_keeps_both_instrument_layers_and_live_feed_updating() {
                 })).unwrap()];
                 cockpit.frozen_time = Some(now);
                 cockpit.timeline_origin = Some(now);
-                cockpit.snapshot_received_at = Some(std::time::Instant::now());
+                cockpit.observed = crate::Instant::now();
                 cockpit.selected_object = crate::SelectedObject::Belt;
                 let snapshot_before = serde_json::to_value(&cockpit.snapshot).unwrap();
                 let modifiers = egui::Modifiers {

@@ -7,3 +7,5 @@ The four large integration files and any necessary supporting glue will be newly
 Recovery evidence and its bundle remain untouched. This checkout has no remotes. Only meaningful local commits are authorized; no pushing, PR creation, deployment, MOVESPEED writes or storage migration.
 
 Validation results will be recorded here as they occur. No successful build or runtime result is implied by importing the source.
+
+Checkpoint: the four integration files are reconstructed and client/editor all-target cargo check passes with the repository-pinned installed Rust1.89.0. Formatting/test/lint/native results remain in progress. The working-copy Shift/GPU tests were adapted to the actual baseline UI/protocol/GLB provenance; no unavailable authored-part receipt or missing nested edge-test suite is fabricated. The source recovery evidence remains unchanged.

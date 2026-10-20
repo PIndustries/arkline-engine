@@ -1,0 +1,260 @@
+//! Real App input journeys through the current scene's physical glass ray map.
+//! The secondary context is observed for widget coordinates; it is never painted
+//! into the parent as an overlay. These tests do not open a network connection.
+use super::*;
+
+struct Journey {
+    ctx: egui::Context,
+    cockpit: Cockpit,
+    frame: u64,
+    size: Vec2,
+}
+
+impl Journey {
+    fn new(size: Vec2) -> Self {
+        let ctx = egui::Context::default();
+        ctx.options_mut(|options| options.max_passes = std::num::NonZeroUsize::MIN);
+        let cockpit = super::tests::view_test_cockpit(&ctx);
+        let mut journey = Self {
+            ctx,
+            cockpit,
+            frame: 0,
+            size,
+        };
+        for _ in 0..4 {
+            journey.step(vec![]);
+        }
+        assert!(journey.cockpit.flight_view.computer_surface().is_some());
+        journey
+    }
+
+    fn step(&mut self, events: Vec<egui::Event>) -> egui::FullOutput {
+        self.step_focused(events, true)
+    }
+
+    fn step_focused(&mut self, events: Vec<egui::Event>, focused: bool) -> egui::FullOutput {
+        self.frame += 1;
+        self.ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, self.size)),
+                time: Some(self.frame as f64 / 60.0),
+                focused,
+                events,
+                ..Default::default()
+            },
+            |ctx| eframe::App::update(&mut self.cockpit, ctx, &mut eframe::Frame::_new_kittest()),
+        )
+    }
+
+    fn label(&self, wanted: &str) -> Option<Pos2> {
+        let point = self
+            .cockpit
+            .computer_ui_labels
+            .iter()
+            .find(|(text, _)| text == wanted)?
+            .1;
+        let surface = self.cockpit.flight_view.computer_surface()?;
+        let projected = surface.project(point)?;
+        self.cockpit
+            .flight_view
+            .computer_hit(&self.ctx, projected)?;
+        Some(projected)
+    }
+
+    fn require_label(&self, wanted: &str) -> Pos2 {
+        self.label(wanted).unwrap_or_else(|| {
+            panic!(
+                "physical computer label {wanted:?} is not visible/hittable; actual labels: {:?}",
+                self.cockpit.computer_ui_labels,
+            )
+        })
+    }
+
+    fn click(&mut self, point: Pos2) {
+        self.step(vec![egui::Event::PointerMoved(point), button(point, true)]);
+        self.step(vec![button(point, false)]);
+    }
+
+    fn scroll_point(&self) -> Pos2 {
+        let surface = self.cockpit.flight_view.computer_surface().unwrap();
+        [
+            egui::pos2(420.0, 450.0),
+            egui::pos2(420.0, 350.0),
+            egui::pos2(300.0, 450.0),
+        ]
+        .into_iter()
+        .filter_map(|point| surface.project(point))
+        .find(|point| {
+            self.cockpit
+                .flight_view
+                .computer_hit(&self.ctx, *point)
+                .is_some()
+        })
+        .expect("content has a visible exact scene hit")
+    }
+
+    fn focus_instruction(&mut self) {
+        self.cockpit.service_tab = ServiceTab::ShipComputer;
+        for _ in 0..80 {
+            self.step(vec![]);
+            if self.label("Submit instruction").is_some()
+                && self.label("Gather 100 ore and bring it back").is_some()
+            {
+                let point = self.require_label("Gather 100 ore and bring it back");
+                self.click(point);
+                assert!(self.cockpit.cockpit_computer.wants_keyboard_input());
+                assert!(
+                    !self.ctx.wants_keyboard_input(),
+                    "focus belongs to the secondary context"
+                );
+                return;
+            }
+            let point = self.scroll_point();
+            self.step(vec![
+                egui::Event::PointerMoved(point),
+                egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: egui::vec2(0.0, -24.0),
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ]);
+        }
+        panic!("instruction text field never scrolled into the physical display");
+    }
+}
+
+fn button(pos: Pos2, pressed: bool) -> egui::Event {
+    egui::Event::PointerButton {
+        pos,
+        pressed,
+        button: egui::PointerButton::Primary,
+        modifiers: egui::Modifiers::NONE,
+    }
+}
+
+fn key(key: egui::Key, pressed: bool) -> egui::Event {
+    egui::Event::Key {
+        key,
+        physical_key: None,
+        pressed,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    }
+}
+
+// Called by the original baseline test names in lib.rs.
+pub(super) fn ai_console_input_journey() {
+    let mut journey = Journey::new(egui::vec2(1106.0, 768.0));
+    journey.focus_instruction();
+    let output = journey.step(vec![egui::Event::Text("Gather 20 ore".into())]);
+    assert_eq!(journey.cockpit.ai_prompt, "Gather 20 ore");
+    assert!(journey.cockpit.cockpit_computer.wants_keyboard_input());
+    assert!(journey.cockpit.controls.is_empty());
+    assert!(
+        !output.shapes.iter().any(|shape| matches!(
+            &shape.shape, egui::Shape::Text(text) if text.galley.text() == "Gather 20 ore"
+        )),
+        "computer text must stay off the parent's 2D paint list"
+    );
+    let ime = output
+        .platform_output
+        .ime
+        .expect("focused text field provides a projected IME caret");
+    assert!(ime.rect.is_finite() && ime.cursor_rect.is_finite());
+    assert!(egui::Rect::from_min_size(Pos2::ZERO, journey.size).contains(ime.cursor_rect.center()));
+}
+
+pub(super) fn fleet_command_input_journey() {
+    let mut journey = Journey::new(egui::vec2(1500.0, 1000.0));
+    let (tx, rx) = mpsc::channel();
+    journey.cockpit.commands = Some(tx);
+    let point = journey.require_label("Drones");
+    journey.click(point);
+    assert!(journey.cockpit.service_tab == ServiceTab::Drones);
+    let point = journey.require_label("Launch Recon 0/5");
+    journey.step(vec![
+        egui::Event::PointerMoved(point),
+        button(point, true),
+        key(egui::Key::W, true),
+    ]);
+    assert!(
+        journey.cockpit.controls.is_empty(),
+        "pressing a console control cannot also thrust"
+    );
+    journey.step(vec![button(point, false), key(egui::Key::W, false)]);
+    assert!(matches!(
+        rx.try_recv().unwrap(),
+        Request::LaunchDroneClass {
+            class: DroneClass::Recon
+        }
+    ));
+    assert!(
+        rx.try_recv().is_err(),
+        "one physical release issues one command"
+    );
+}
+
+#[test]
+fn computer_text_focus_is_revoked_before_unfocused_text_and_flight_keys() {
+    let mut journey = Journey::new(egui::vec2(1500.0, 1000.0));
+    journey.focus_instruction();
+    journey.step(vec![egui::Event::Text("Keep".into())]);
+    assert_eq!(journey.cockpit.ai_prompt, "Keep");
+    journey.step_focused(
+        vec![
+            egui::Event::Text(" discard".into()),
+            key(egui::Key::W, true),
+        ],
+        false,
+    );
+    assert_eq!(journey.cockpit.ai_prompt, "Keep");
+    assert!(!journey.cockpit.cockpit_computer.wants_keyboard_input());
+    assert!(journey.cockpit.controls.is_empty());
+}
+
+#[test]
+fn changing_presentation_revokes_computer_capture_and_old_surface() {
+    let mut journey = Journey::new(egui::vec2(1500.0, 1000.0));
+    journey.focus_instruction();
+    journey.cockpit.view_mode = ViewMode::External;
+    journey.step(vec![egui::Event::Text("discard".into())]);
+    assert!(journey.cockpit.flight_view.computer_surface().is_none());
+    assert!(!journey.cockpit.cockpit_computer.wants_keyboard_input());
+    assert!(journey.cockpit.ai_prompt.is_empty());
+}
+
+#[test]
+fn ime_projection_rejects_invalid_canonical_geometry() {
+    let journey = Journey::new(egui::vec2(1500.0, 1000.0));
+    let surface = journey.cockpit.flight_view.computer_surface().unwrap();
+    let rect = egui::Rect::from_min_max(egui::pos2(200.0, 200.0), egui::pos2(400.0, 280.0));
+    let caret = egui::Rect::from_min_max(egui::pos2(220.0, 230.0), egui::pos2(220.0, 250.0));
+    let projected = project_computer_ime(
+        &surface,
+        egui::output::IMEOutput {
+            rect,
+            cursor_rect: caret,
+        },
+    )
+    .expect("finite canvas rectangle and zero-width caret are valid");
+    assert!(projected.rect.is_finite() && projected.cursor_rect.is_finite());
+    assert_ne!(projected.rect, rect);
+    let invalid = egui::Rect::from_min_size(egui::pos2(f32::NAN, 0.0), egui::vec2(10.0, 10.0));
+    assert!(project_computer_ime(
+        &surface,
+        egui::output::IMEOutput {
+            rect: invalid,
+            cursor_rect: caret
+        }
+    )
+    .is_none());
+    let outside = egui::Rect::from_min_size(egui::pos2(900.0, 0.0), egui::vec2(10.0, 10.0));
+    assert!(project_computer_ime(
+        &surface,
+        egui::output::IMEOutput {
+            rect: outside,
+            cursor_rect: caret
+        }
+    )
+    .is_none());
+}

@@ -15,7 +15,7 @@ import time
 
 GIB = 2 ** 30
 EXPECTED = Path("/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020")
-TOOLCHAIN = Path("/Users/thepherm/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin")
+TOOLCHAIN = Path("/Users/thepherm/.rustup/toolchains/1.89.0-aarch64-apple-darwin/bin")
 
 
 def check_workspace(root, identity=None):
@@ -43,7 +43,7 @@ def child_environment(root):
         "CARGO_PROFILE_TEST_DEBUG": "0",
         "TMPDIR": str(root / ".build" / "tmp"),
         "PATH": str(TOOLCHAIN) + os.pathsep + env.get("PATH", ""),
-        "RUSTUP_TOOLCHAIN": "1.99.1",
+        "RUSTUP_TOOLCHAIN": "1.89.0",
     })
     return env
 
@@ -75,7 +75,7 @@ def main():
         identity = check_workspace(root)
         check_free(shutil.disk_usage(root).free, 50 * GIB)
         if not (TOOLCHAIN / "cargo").is_file():
-            raise RuntimeError("Recorded local toolchain is unavailable; no download or fallback")
+            raise RuntimeError("Repository-pinned local toolchain is unavailable; no download or fallback")
         env = child_environment(root)
         if args.check_only:
             print(json.dumps({"workspace": str(root), "free_gib": shutil.disk_usage(root).free / GIB,

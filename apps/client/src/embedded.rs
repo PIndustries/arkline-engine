@@ -154,6 +154,54 @@ enum ClockCommand {
     Shutdown,
 }
 
+/// Parent editor input is separate from the physical computer's own context.
+/// Returning from an overlay must not reuse a movement key or mouse drag that
+/// began in that overlay. Shift alone remains available for cockpit head-look.
+#[derive(Default)]
+struct EditorInputGate {
+    blocked: bool,
+    awaiting_release: bool,
+}
+impl EditorInputGate {
+    fn set_blocked(&mut self, blocked: bool) {
+        self.blocked = blocked;
+        self.awaiting_release |= blocked;
+    }
+
+    fn allow_input(&mut self, ctx: &egui::Context) -> bool {
+        if self.blocked || !ctx.input(|input| input.focused) {
+            self.awaiting_release = true;
+            return false;
+        }
+        if self.awaiting_release {
+            let held = ctx.input(|input| {
+                input.pointer.secondary_down()
+                    || [
+                        egui::Key::W,
+                        egui::Key::A,
+                        egui::Key::S,
+                        egui::Key::D,
+                        egui::Key::Q,
+                        egui::Key::E,
+                        egui::Key::Space,
+                        egui::Key::C,
+                        egui::Key::ArrowLeft,
+                        egui::Key::ArrowRight,
+                        egui::Key::ArrowUp,
+                        egui::Key::ArrowDown,
+                    ]
+                    .iter()
+                    .any(|key| input.key_down(*key))
+            });
+            if held {
+                return false;
+            }
+            self.awaiting_release = false;
+        }
+        true
+    }
+}
+
 pub struct EmbeddedClient {
     project_data_dir: PathBuf,
     data_dir: PathBuf,
@@ -187,6 +235,7 @@ pub struct EmbeddedClient {
     free_camera_scene_hangar: Option<bool>,
     free_camera_saved_view: Option<ViewMode>,
     free_camera_input_time: Option<f64>,
+    editor_input: EditorInputGate,
 }
 impl EmbeddedClient {
     pub fn new(cc: &eframe::CreationContext<'_>, data_dir: PathBuf, pilot: String) -> Self {
@@ -249,6 +298,7 @@ impl EmbeddedClient {
             free_camera_scene_hangar: None,
             free_camera_saved_view: None,
             free_camera_input_time: None,
+            editor_input: EditorInputGate::default(),
         }
     }
     /// Drain authority updates while another editor workspace owns the viewport.
@@ -308,7 +358,7 @@ impl EmbeddedClient {
         self.scene_ack = None;
         // Stop captured input before placement so held controls cannot move the
         // avatar immediately after its authoritative walk/jump reset.
-        self.cockpit.controls.clear();
+        self.release_cockpit_input();
         self.cockpit.pilot_input.disable_capture();
         Ok(id)
     }
@@ -423,6 +473,7 @@ impl EmbeddedClient {
         Ok(id)
     }
     pub fn poll(&mut self) {
+        let was_running = self.state == EmbeddedStatus::Running;
         for info in self.session_updates.try_iter() {
             self.session_info = Some(info);
         }
@@ -472,6 +523,12 @@ impl EmbeddedClient {
         self.cockpit.embedded_paused = self.state != EmbeddedStatus::Running;
         self.cockpit.embedded_input = false;
         self.cockpit.poll();
+        if !self.ready()
+            || !self.cockpit.connected
+            || (was_running && self.state != EmbeddedStatus::Running)
+        {
+            self.release_cockpit_input();
+        }
         // This exact notice belongs to the editor clock request. Never clear
         // gameplay feedback or a worker error that arrived with confirmation.
         if self.cockpit.notice == STOP_REQUEST_NOTICE {
@@ -535,14 +592,47 @@ impl EmbeddedClient {
             self.cockpit.frozen_time = self.cockpit.snapshot.as_ref().map(|s| s.server_time_ms);
         }
     }
+    /// The physical computer owns an independent egui context. Parent editor
+    /// shortcuts must consult it without blocking the computer's own input.
+    pub fn computer_wants_keyboard_input(&self) -> bool {
+        self.cockpit.cockpit_computer.wants_keyboard_input()
+    }
+
+    /// Reports physical display geometry, not the presence of a 2D egui window.
+    pub fn computer_display_visible(&self) -> bool {
+        self.cockpit.flight_view.computer_surface().is_some()
+    }
+
+    /// Parent overlays, inactive documents and parent text fields own input.
+    /// This does not hide scene geometry or alter authoritative simulation state.
+    pub fn set_editor_input_blocked(&mut self, blocked: bool) {
+        self.editor_input.set_blocked(blocked);
+        if blocked {
+            self.release_cockpit_input();
+        }
+    }
+
+    fn release_cockpit_input(&mut self) {
+        self.cockpit.cockpit_computer.cancel_input();
+        self.cockpit.flight_view.set_computer_keyboard_owned(false);
+        self.cockpit.pilot_input.relinquish(&self.cockpit.controls);
+        self.editor_input.awaiting_release = true;
+    }
+
     /// Poll a hidden viewport without treating workspace absence as a rendered frame.
     pub fn poll_hidden(&mut self) {
+        self.release_cockpit_input();
         self.poll();
         self.cockpit.frame_intervals.clear();
         self.cockpit.frame_observed = Instant::now();
     }
     pub fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         self.poll();
+        let input_allowed = self.editor_input.allow_input(ctx);
+        if !input_allowed {
+            self.release_cockpit_input();
+            self.cockpit.pilot_input.release_mouse(ctx);
+        }
         let in_hangar = self.cockpit.in_station_hangar();
         if self.free_camera_enabled && self.free_camera_scene_hangar != Some(in_hangar) {
             // Camera coordinates are scene-local; let the new scene render once before reseeding.
@@ -556,11 +646,12 @@ impl EmbeddedClient {
         self.cockpit
             .hangar_view
             .set_editor_free_camera(self.free_camera_enabled, self.free_camera);
-        self.cockpit.embedded_input = gameplay_input_allowed(
-            ctx.pointer_latest_pos()
-                .is_some_and(|p| ctx.available_rect().contains(p)),
-            self.free_camera_enabled,
-        );
+        self.cockpit.embedded_input = input_allowed
+            && gameplay_input_allowed(
+                ctx.pointer_latest_pos()
+                    .is_some_and(|p| ctx.available_rect().contains(p)),
+                self.free_camera_enabled,
+            );
         self.cockpit.update(ctx, frame);
         if self.free_camera_enabled && self.free_camera.is_none() {
             self.free_camera = self.active_scene_camera_pose();
@@ -573,6 +664,9 @@ impl EmbeddedClient {
     }
     /// Enable a renderer-only free camera. It never sends pilot or authority commands.
     pub fn set_free_camera(&mut self, enabled: bool) {
+        if enabled != self.free_camera_enabled {
+            self.release_cockpit_input();
+        }
         if enabled && !self.free_camera_enabled {
             self.free_camera_enabled = true;
             self.free_camera_scene_hangar = Some(self.cockpit.in_station_hangar());
@@ -621,7 +715,10 @@ impl EmbeddedClient {
         // This is render time, never simulation time, so it continues while paused.
         let dt = ctx.input(|i| i.stable_dt).clamp(0.0, 0.1);
         let viewport = ctx.available_rect();
-        let wants_keyboard = ctx.wants_keyboard_input();
+        let wants_keyboard = ctx.wants_keyboard_input()
+            || self.computer_wants_keyboard_input()
+            || self.editor_input.blocked
+            || self.editor_input.awaiting_release;
         // Hangar geometry uses meters; the space renderer uses 100 m units.
         let meters_per_scene_unit = if self.cockpit.in_station_hangar() {
             1.0
@@ -764,6 +861,7 @@ impl EmbeddedClient {
             return Err("Previous worker is busy; retry the session change".into());
         }
         self.set_free_camera(false);
+        self.release_cockpit_input();
         self.cockpit.controls.clear();
         self.cockpit.controls = pilot_input::Mailbox::default();
         self.cockpit.pilot_input.disable_capture();
@@ -821,10 +919,14 @@ impl EmbeddedClient {
         Ok(())
     }
     pub fn play(&mut self) {
-        self.queue_clock(ClockCommand::Play);
+        if self.queue_clock(ClockCommand::Play) {
+            self.release_cockpit_input();
+        }
     }
     pub fn pause(&mut self) {
-        self.queue_clock(ClockCommand::Pause);
+        if self.queue_clock(ClockCommand::Pause) {
+            self.release_cockpit_input();
+        }
     }
     /// Advances one 50 ms simulation tick, separately from graph node stepping.
     pub fn step(&mut self) {
@@ -832,6 +934,7 @@ impl EmbeddedClient {
     }
     pub fn stop(&mut self) {
         if self.queue_clock(ClockCommand::Stop) {
+            self.release_cockpit_input();
             self.cockpit.notice = STOP_REQUEST_NOTICE.into();
         }
     }
@@ -840,6 +943,7 @@ impl EmbeddedClient {
             return;
         }
         self.destroyed = true;
+        self.release_cockpit_input();
         let _ = self.clock.try_send(ClockCommand::Shutdown);
         self.cockpit.flight_view.destroy();
         self.cockpit.hangar_view.destroy();
@@ -950,6 +1054,9 @@ impl EmbeddedClient {
             return Err("View unavailable for the current confirmed pilot state. Camera controls cannot dock, board, or disembark.".into());
         }
         self.observe_view("Initial confirmed view");
+        if self.current_view() != Some(view) {
+            self.release_cockpit_input();
+        }
         match view {
             EmbeddedView::Cockpit => self.cockpit.view_mode = ViewMode::Cockpit,
             EmbeddedView::External => self.cockpit.view_mode = ViewMode::External,
@@ -2660,6 +2767,115 @@ mod tests {
     }
 
     #[test]
+    fn editor_input_gate_preserves_shift_and_waits_for_world_control_release() {
+        let ctx = egui::Context::default();
+        let mut gate = EditorInputGate::default();
+        gate.set_blocked(true);
+        gate.set_blocked(false);
+        fn frame(
+            ctx: &egui::Context,
+            gate: &mut EditorInputGate,
+            time: f64,
+            events: Vec<egui::Event>,
+            allowed: bool,
+        ) {
+            let _ = ctx.run(
+                egui::RawInput {
+                    time: Some(time),
+                    focused: true,
+                    modifiers: egui::Modifiers::SHIFT,
+                    events,
+                    ..Default::default()
+                },
+                |ctx| assert_eq!(gate.allow_input(ctx), allowed),
+            );
+        }
+        frame(&ctx, &mut gate, 1.0, vec![], true); // Bare Shift does not hide or block the scene.
+        gate.set_blocked(true);
+        gate.set_blocked(false);
+        let key = |pressed| egui::Event::Key {
+            key: egui::Key::W,
+            physical_key: None,
+            pressed,
+            repeat: false,
+            modifiers: egui::Modifiers::SHIFT,
+        };
+        let button = |pressed| egui::Event::PointerButton {
+            pos: egui::pos2(100.0, 100.0),
+            button: egui::PointerButton::Secondary,
+            pressed,
+            modifiers: egui::Modifiers::SHIFT,
+        };
+        frame(&ctx, &mut gate, 2.0, vec![key(true), button(true)], false);
+        frame(&ctx, &mut gate, 3.0, vec![key(false)], false);
+        frame(&ctx, &mut gate, 4.0, vec![button(false)], true);
+        frame(&ctx, &mut gate, 5.0, vec![key(true)], true); // A new deliberate press is allowed.
+    }
+
+    #[test]
+    fn editor_block_and_clock_controls_clear_input_without_mutating_snapshot() {
+        let (mut client, requests) = debug_fixture();
+        let (clock, commands) = mpsc::sync_channel(8);
+        client.clock = clock;
+        let authority = serde_json::to_value(client.snapshot()).unwrap();
+        let control = pilot_input::Controls {
+            translation: [1.0, 0.0, 0.0],
+            rotation: [0.0; 3],
+        };
+        client.cockpit.controls.publish(control);
+        client.set_editor_input_blocked(true);
+        assert!(client.cockpit.controls.is_empty());
+        client.set_editor_input_blocked(false);
+        assert!(client.editor_input.awaiting_release);
+        for action in [
+            SelfTestClock::Play,
+            SelfTestClock::Pause,
+            SelfTestClock::Stop,
+        ] {
+            client.cockpit.controls.publish(control);
+            match action {
+                SelfTestClock::Play => client.play(),
+                SelfTestClock::Pause => client.pause(),
+                SelfTestClock::Stop => client.stop(),
+            }
+            assert!(client.cockpit.controls.is_empty());
+            assert!(client.editor_input.awaiting_release);
+            assert!(matches!(
+                (action, commands.try_recv()),
+                (SelfTestClock::Play, Ok(ClockCommand::Play))
+                    | (SelfTestClock::Pause, Ok(ClockCommand::Pause))
+                    | (SelfTestClock::Stop, Ok(ClockCommand::Stop))
+            ));
+        }
+        assert_eq!(serde_json::to_value(client.snapshot()).unwrap(), authority);
+        assert!(requests.try_recv().is_err());
+    }
+
+    #[derive(Clone, Copy)]
+    enum SelfTestClock {
+        Play,
+        Pause,
+        Stop,
+    }
+
+    #[test]
+    fn hidden_poll_releases_world_input_without_replacing_confirmed_view() {
+        let (mut client, requests) = debug_fixture();
+        let authority = serde_json::to_value(client.snapshot()).unwrap();
+        let view = client.cockpit.view_mode;
+        client.cockpit.controls.publish(pilot_input::Controls {
+            translation: [1.0, 0.0, 0.0],
+            rotation: [0.0; 3],
+        });
+        client.poll_hidden();
+        assert!(client.cockpit.controls.is_empty());
+        assert!(client.editor_input.awaiting_release);
+        assert!(client.cockpit.view_mode == view);
+        assert_eq!(serde_json::to_value(client.snapshot()).unwrap(), authority);
+        assert!(requests.try_recv().is_err());
+    }
+
+    #[test]
     fn free_camera_suppresses_gameplay_input_even_over_viewport() {
         assert!(!gameplay_input_allowed(true, true));
         assert!(!gameplay_input_allowed(false, true));
@@ -2972,6 +3188,7 @@ mod tests {
                 free_camera_scene_hangar: None,
                 free_camera_saved_view: None,
                 free_camera_input_time: None,
+                editor_input: EditorInputGate::default(),
             },
             requests,
         )
@@ -3471,6 +3688,7 @@ mod tests {
             free_camera_scene_hangar: None,
             free_camera_saved_view: None,
             free_camera_input_time: None,
+            editor_input: EditorInputGate::default(),
         };
         client.cockpit.frame_intervals.push_back(1.245);
         client.cockpit.frame_observed = Instant::now() - Duration::from_secs(30);

@@ -148,6 +148,7 @@ impl CockpitOcclusion {
     /// Select the nearest physical display face that is not hidden by an actual
     /// supplied triangle. Use this same gate for hover, press, release and touch.
     /// Invalid/stale frame state must not fall back to surface.unproject alone.
+    #[cfg(test)]
     pub(super) fn pick(
         &self,
         vp: Mat4,
@@ -302,6 +303,7 @@ impl DisplayFace {
 
     /// Map clipped canonical UI vertices through this method for GPU painting.
     /// This is the exact same plane used for input; do not separately bias input.
+    #[cfg(test)]
     pub(super) fn local_point(&self, point: egui::Pos2) -> Option<Vec3> {
         if !point.is_finite() {
             return None;

@@ -2,6 +2,8 @@
 import importlib.util
 from pathlib import Path
 import tempfile
+import subprocess
+import sys
 import unittest
 from unittest import mock
 
@@ -26,6 +28,20 @@ class BuildGuardTests(unittest.TestCase):
                     guard.check_workspace(root, (original[0], original[1] + 1))
             with self.assertRaises(RuntimeError):
                 guard.check_workspace(root)
+
+    def test_guard_stops_its_owned_process_group(self):
+        child = subprocess.Popen(
+            [sys.executable, "-c", "import time; time.sleep(30)"],
+            start_new_session=True,
+        )
+        try:
+            self.assertIsNone(child.poll())
+            guard.stop_child(child)
+            self.assertIsNotNone(child.poll())
+        finally:
+            if child.poll() is None:
+                child.terminate()
+                child.wait()
 
     def test_target_and_temporary_paths_cannot_inherit_external_override(self):
         with mock.patch.dict("os.environ", {"CARGO_TARGET_DIR": "/Volumes/MOVESPEED/other", "TMPDIR": "/tmp"}):

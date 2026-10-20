@@ -1,4 +1,6 @@
-//! Real editor/embedded-worker input regression. No GL, window, OS input or public connection.
+//! Reconstructed editor/embedded-worker regression for the surviving authoring layout.
+//! The original recovered test is preserved in the independent evidence repository.
+//! Uses the actual worker and Session text field; no GL, OS input or public connection.
 use super::*;
 use crate::tests::visible_point;
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -57,7 +59,7 @@ fn frame(
         let message = panic.downcast_ref::<String>().map(String::as_str)
             .or_else(|| panic.downcast_ref::<&str>().copied()).unwrap_or("non-string panic");
         panic!("Editor::update panic at {size:?}, Shift={shift}, focused={focused}, document={:?}, view={:?}, status={:?}: {message}",
-            editor.shell.document, editor.client.debug_view_state(), editor.client.status());
+            (editor.workspace, editor.inspector_tab), editor.client.debug_view_state(), editor.client.status());
     })
 }
 
@@ -86,11 +88,11 @@ fn click(ctx: &egui::Context, editor: &mut Editor, size: egui::Vec2, time: &mut 
     }
 }
 
-fn visible_in(output: &egui::FullOutput, label: &str, area: egui::Rect) -> bool {
+fn visible_in(output: &egui::FullOutput, label: &str) -> bool {
     output.shapes.iter().any(|shape| match &shape.shape {
         egui::Shape::Text(text) if text.galley.text() == label => {
             let rect = text.galley.rect.translate(text.pos.to_vec2());
-            shape.clip_rect.contains_rect(rect) && area.contains_rect(rect)
+            shape.clip_rect.contains_rect(rect)
         }
         _ => false,
     })
@@ -106,16 +108,16 @@ fn assert_windows(
     expect_console: bool,
 ) {
     assert!(
-        editor.shell.navigation && editor.shell.properties,
+        editor.show_world && editor.show_inspector,
         "{state}: editor panels were closed at {size:?}"
     );
     assert_eq!(
-        editor.shell.diagnostics, diagnostics,
+        editor.drawer_open, diagnostics,
         "{state}: diagnostics visibility changed at {size:?}"
     );
     assert_eq!(
-        editor.shell.document,
-        Document::Scene,
+        (editor.workspace, editor.inspector_tab),
+        (0, 0),
         "{state}: input changed document"
     );
     assert!(
@@ -133,29 +135,21 @@ fn assert_windows(
         "{state}: input interrupted the actual Play worker"
     );
     assert!(
-        visible_in(output, "Navigator", editor.shell_rects[1]),
-        "{state}: Navigator content disappeared at {size:?}"
+        visible_in(output, "World outliner"),
+        "{state}: World outliner content disappeared at {size:?}"
     );
     assert!(
-        visible_in(output, "Properties", editor.shell_rects[2]),
-        "{state}: Properties content disappeared at {size:?}"
+        visible_in(output, "Live state"),
+        "{state}: Live state content disappeared at {size:?}"
     );
-    for label in [
-        "▶  Play",
-        "Ⅱ  Pause",
-        "Step 50 ms",
-        "■  Stop",
-        "Save",
-        "Layout",
-        "Session",
-    ] {
+    for label in ["▶  Play", "Ⅱ  Pause", "Step 50 ms", "■  Stop", "Session"] {
         assert!(
-            visible_in(output, label, editor.shell_rects[0]),
+            visible_in(output, label),
             "{state}: toolbar {label:?} disappeared at {size:?}"
         );
     }
     if diagnostics {
-        visible_point(output, "Hide diagnostics");
+        visible_point(output, "Project folder");
     }
     if !expect_console {
         return;
@@ -188,7 +182,7 @@ fn actual_editor_embedded_play_keeps_windows_through_shift_and_text_focus() {
         .set_debug_view(arkline_client::EmbeddedView::Cockpit)
         .unwrap();
     editor.client.set_free_camera(false);
-    editor.navigate(Document::Scene);
+    editor.open_inspector(0);
     editor.session_panel.open = false;
     let mut time = 0.;
     click(
@@ -216,9 +210,9 @@ fn actual_editor_embedded_play_keeps_windows_through_shift_and_text_focus() {
         (egui::vec2(1500., 960.), true),
         (egui::vec2(1080., 720.), false),
     ] {
-        editor.shell.navigation = true;
-        editor.shell.properties = true;
-        editor.shell.diagnostics = diagnostics;
+        editor.show_world = true;
+        editor.show_inspector = true;
+        editor.drawer_open = diagnostics;
         editor.bottom_tab = 1; // Project diagnostics preserve game input; this is not the command console.
         ctx.memory_mut(|memory| {
             if let Some(id) = memory.focused() {
@@ -281,15 +275,88 @@ fn actual_editor_embedded_play_keeps_windows_through_shift_and_text_focus() {
                 );
             }
         }
-        // Parent editor text focus must also suppress head-look. Secondary
-        // computer text focus and ray clicks are covered by the client bridge
-        // tests; a physical monitor no longer emits parent 2D text shapes.
-        let search = egui::Id::new("editor_shift_focus_fixture");
-        ctx.memory_mut(|memory| memory.request_focus(search));
-        frame(&ctx, &mut editor, size, &mut time, true, true, vec![]);
-        // Keep the real key held across the screen edge. Only the cockpit
-        // surface may leave view; unrelated editor windows must stay open.
-        ctx.memory_mut(|memory| memory.surrender_focus(search));
+        // Focus a real parent-editor TextEdit. F5 must not pause the worker
+        // while the Session pilot edit buffer owns keyboard input.
+        editor.session_panel.open = true;
+        for _ in 0..4 {
+            frame(&ctx, &mut editor, size, &mut time, false, true, vec![]);
+        }
+        let output = frame(&ctx, &mut editor, size, &mut time, false, true, vec![]);
+        let pilot_text = output
+            .shapes
+            .iter()
+            .rev()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.text() == editor.client.pilot() => {
+                    let rect = text.galley.rect.translate(text.pos.to_vec2());
+                    shape.clip_rect.contains_rect(rect).then_some(rect.center())
+                }
+                _ => None,
+            })
+            .expect("real Session pilot TextEdit is visible");
+        for pressed in [true, false] {
+            frame(
+                &ctx,
+                &mut editor,
+                size,
+                &mut time,
+                false,
+                true,
+                vec![
+                    egui::Event::PointerMoved(pilot_text),
+                    egui::Event::PointerButton {
+                        pos: pilot_text,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ],
+            );
+        }
+        assert!(
+            ctx.wants_keyboard_input(),
+            "Session text field did not gain focus"
+        );
+        for pressed in [true, false] {
+            frame(
+                &ctx,
+                &mut editor,
+                size,
+                &mut time,
+                false,
+                true,
+                vec![egui::Event::Key {
+                    key: egui::Key::F5,
+                    physical_key: None,
+                    pressed,
+                    repeat: false,
+                    modifiers: egui::Modifiers::NONE,
+                }],
+            );
+            assert_eq!(
+                editor.client.status(),
+                &EmbeddedStatus::Running,
+                "F5 escaped the focused Session TextEdit"
+            );
+        }
+        let focused_output = frame(&ctx, &mut editor, size, &mut time, true, true, vec![]);
+        assert_windows(
+            &ctx,
+            &editor,
+            &focused_output,
+            diagnostics,
+            size,
+            "Shift while Session text owns input",
+            true,
+        );
+        editor.session_panel.open = false;
+        ctx.memory_mut(|memory| {
+            if let Some(id) = memory.focused() {
+                memory.surrender_focus(id);
+            }
+        });
+        // Keep the real arrow key held across the cockpit screen edge. Only
+        // the physical display may leave view; editor panels must stay open.
         for key in [egui::Key::ArrowLeft, egui::Key::ArrowRight] {
             let modifiers = egui::Modifiers {
                 shift: true,
@@ -355,6 +422,97 @@ fn actual_editor_embedded_play_keeps_windows_through_shift_and_text_focus() {
             ),
             selected
         );
+    }
+    // Positive control: F5 still changes the real clock when neither editor
+    // text nor the secondary cockpit computer owns keyboard input.
+    ctx.memory_mut(|memory| {
+        if let Some(id) = memory.focused() {
+            memory.surrender_focus(id);
+        }
+    });
+    for expected in [EmbeddedStatus::Paused, EmbeddedStatus::Running] {
+        for pressed in [true, false] {
+            frame(
+                &ctx,
+                &mut editor,
+                egui::vec2(1500., 960.),
+                &mut time,
+                false,
+                true,
+                vec![egui::Event::Key {
+                    key: egui::Key::F5,
+                    physical_key: None,
+                    pressed,
+                    repeat: false,
+                    modifiers: egui::Modifiers::NONE,
+                }],
+            );
+        }
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while editor.client.status() != &expected && std::time::Instant::now() < deadline {
+            editor.client.poll();
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(
+            editor.client.status(),
+            &expected,
+            "unowned F5 did not control the clock"
+        );
+    }
+    click(
+        &ctx,
+        &mut editor,
+        egui::vec2(1500., 960.),
+        &mut time,
+        "Ⅱ  Pause",
+    );
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while editor.client.status() != &EmbeddedStatus::Paused && std::time::Instant::now() < deadline
+    {
+        editor.client.poll();
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert_eq!(editor.client.status(), &EmbeddedStatus::Paused);
+    click(
+        &ctx,
+        &mut editor,
+        egui::vec2(1500., 960.),
+        &mut time,
+        "▶  Play",
+    );
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while editor.client.status() != &EmbeddedStatus::Running && std::time::Instant::now() < deadline
+    {
+        editor.client.poll();
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert_eq!(editor.client.status(), &EmbeddedStatus::Running);
+    click(
+        &ctx,
+        &mut editor,
+        egui::vec2(1500., 960.),
+        &mut time,
+        "■  Stop",
+    );
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while editor.client.status() != &EmbeddedStatus::Stopped && std::time::Instant::now() < deadline
+    {
+        editor.client.poll();
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let output = frame(
+        &ctx,
+        &mut editor,
+        egui::vec2(1500., 960.),
+        &mut time,
+        true,
+        true,
+        vec![],
+    );
+    assert_eq!(editor.client.status(), &EmbeddedStatus::Stopped);
+    assert!(editor.show_world && editor.show_inspector);
+    for label in ["▶  Play", "Ⅱ  Pause", "Step 50 ms", "■  Stop", "Session"] {
+        visible_point(&output, label);
     }
     editor.client.on_exit();
 }

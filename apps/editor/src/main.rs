@@ -24,6 +24,8 @@ mod render_debug;
 mod rooms;
 mod service_paths;
 mod session_panel;
+#[cfg(test)]
+mod shift_embedded_tests;
 mod surface_materials;
 use arkline_client::{EmbeddedAssetGallery, EmbeddedClient, EmbeddedStatus};
 use eframe::egui::{self, Color32, RichText};
@@ -213,6 +215,15 @@ impl Editor {
 impl eframe::App for Editor {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         self.client.poll();
+        // Parent editor focus and document ownership release flight input without
+        // removing the cockpit's physical computer or its own text focus.
+        self.client.set_editor_input_blocked(
+            !ctx.input(|input| input.focused)
+                || ctx.wants_keyboard_input()
+                || self.workspace != 0
+                || self.inspector_tab == 2
+                || (self.inspector_tab == 6 && self.room_plan),
+        );
         self.cockpit.poll(&cockpit::Live::from_client(&self.client));
         self.rooms.poll_live(&mut self.client);
         self.exterior.poll_live(&mut self.client);
@@ -290,6 +301,7 @@ impl eframe::App for Editor {
             EmbeddedStatus::Paused | EmbeddedStatus::Running | EmbeddedStatus::Stopped
         );
         if !ctx.wants_keyboard_input()
+            && !self.client.computer_wants_keyboard_input()
             && ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::F5))
             && ready
         {
@@ -828,6 +840,9 @@ impl eframe::App for Editor {
             {
                 self.client.send_command(request);
             }
+            self.client.set_editor_input_blocked(
+                !ctx.input(|input| input.focused) || ctx.wants_keyboard_input(),
+            );
             self.client.update(ctx, frame);
         }
         // Editor dialogs are drawn after the embedded client's UI pass, which
@@ -963,6 +978,20 @@ mod tests {
     }
     use super::*;
     use eframe::App;
+
+    pub(super) fn visible_point(output: &egui::FullOutput, label: &str) -> egui::Pos2 {
+        output
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.text() == label => {
+                    let rect = text.galley.rect.translate(text.pos.to_vec2());
+                    shape.clip_rect.contains_rect(rect).then_some(rect.center())
+                }
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("fully visible {label:?} not found"))
+    }
     #[test]
     fn project_environment_is_optional_and_explicit_path_wins() {
         let default = PathBuf::from("default-project");

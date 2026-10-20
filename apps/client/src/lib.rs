@@ -28,6 +28,8 @@ mod audit;
 mod boot;
 #[cfg(target_arch = "wasm32")]
 mod browser;
+#[cfg(test)]
+mod cockpit_computer_integration_tests;
 mod effects;
 mod flight3d;
 mod layout;
@@ -632,6 +634,9 @@ struct Cockpit {
     motion: motion::MotionHistory,
     timeline_origin: Option<u64>,
     flight_view: flight3d::FlightView,
+    cockpit_computer: flight3d::cockpit_computer::CockpitComputer,
+    #[cfg(test)]
+    computer_ui_labels: Vec<(String, Pos2)>,
     hangar_view: flight3d::hangar::HangarView,
     station_walk_active: bool,
     frozen_time: Option<u64>,
@@ -756,6 +761,9 @@ impl Cockpit {
                 view.lighting_quality = lighting_quality;
                 view
             },
+            cockpit_computer: Default::default(),
+            #[cfg(test)]
+            computer_ui_labels: Vec::new(),
             hangar_view: flight3d::hangar::HangarView::new(cc.gl.as_ref()),
             station_walk_active: false,
             frozen_time: None,
@@ -950,6 +958,8 @@ impl Cockpit {
         #[cfg(target_arch = "wasm32")]
         self.sound.start();
         self.sound_scene.reset();
+        self.cockpit_computer.cancel_input();
+        self.flight_view.clear_cockpit_presentation();
         self.invalidate_ai_session();
         self.resource_pilot = None;
         self.remote_ship = None;
@@ -1279,6 +1289,8 @@ impl Cockpit {
             .map_or(&[], |layout| layout.planets.as_slice())
     }
     fn reject_world_layout(&mut self, error: String) {
+        self.cockpit_computer.cancel_input();
+        self.flight_view.clear_cockpit_presentation();
         self.invalidate_ai_session();
         self.effects.clear();
         self.motion.clear();
@@ -1807,6 +1819,121 @@ impl Cockpit {
             ui.small("Capacitor data unavailable");
         }
     }
+    /// Build the physical computer in one fixed logical canvas. Perspective
+    /// changes only its 3D vertices and ray map, never egui's allocation sizes.
+    fn render_cockpit_computer(&mut self, ctx: &egui::Context, in_hangar: bool) {
+        use flight3d::cockpit_computer::ComputerPermission;
+        let surface = self.flight_view.computer_surface();
+        let hit = self.flight_view.computer_hit_tester(ctx);
+        let active = self.connected
+            && !in_hangar
+            && self.flight_view.cockpit_presentation_active(self.view_mode);
+        let input_allowed = self.embedded_input
+            && !self.embedded_paused
+            && ctx.input(|input| input.focused && !input.viewport().minimized.unwrap_or(false));
+        // A real glass hit may transfer focus from an editor/overlay field.
+        // Layer/depth rejection happens for each coordinate in the event batch.
+        let glass_pressed = active
+            && input_allowed
+            && ctx.input(|input| {
+                input.events.iter().any(|event| match event {
+                    egui::Event::PointerButton {
+                        pos, pressed: true, ..
+                    }
+                    | egui::Event::Touch {
+                        pos,
+                        phase: egui::TouchPhase::Start,
+                        ..
+                    } => hit(*pos).is_some(),
+                    _ => false,
+                })
+            });
+        if glass_pressed {
+            ctx.memory_mut(|memory| {
+                if let Some(focused) = memory.focused() {
+                    memory.surrender_focus(focused);
+                }
+            });
+        }
+        let permission = ComputerPermission {
+            active,
+            pointer: input_allowed,
+            keyboard: input_allowed && !ctx.wants_keyboard_input(),
+        };
+        let mut computer = std::mem::take(&mut self.cockpit_computer);
+        #[cfg(test)]
+        let mut labels = None;
+        let output = computer.run(ctx, surface.as_ref(), permission, hit, |ui| {
+            ui.spacing_mut().item_spacing = Vec2::new(4.0, 3.0);
+            self.cockpit_actions(ui);
+            self.power_gauge(ui);
+            self.service_tabs(ui);
+            ui.separator();
+            egui::ScrollArea::vertical()
+                .auto_shrink([false, false])
+                .min_scrolled_height(0.0)
+                .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
+                .id_salt("cockpit_console_content")
+                .max_height(ui.available_height().max(0.0))
+                .show(ui, |ui| self.service_content(ui));
+            #[cfg(test)]
+            {
+                // Observe the actual secondary-context widgets for CPU input
+                // journeys. This never adds text or geometry to the parent UI.
+                labels = Some(ui.ctx().graphics_mut(|graphics| {
+                    graphics
+                        .entry(ui.layer_id())
+                        .all_entries()
+                        .filter_map(|shape| match &shape.shape {
+                            egui::Shape::Text(text) => {
+                                let center = text.pos + text.galley.rect.center().to_vec2();
+                                shape
+                                    .clip_rect
+                                    .contains(center)
+                                    .then(|| (text.galley.text().to_owned(), center))
+                            }
+                            _ => None,
+                        })
+                        .collect::<Vec<_>>()
+                }));
+            }
+        });
+        self.cockpit_computer = computer;
+        #[cfg(test)]
+        if let Some(labels) = labels {
+            self.computer_ui_labels = if active && surface.is_some() {
+                labels
+            } else {
+                Vec::new()
+            };
+        }
+        self.flight_view
+            .set_computer_keyboard_owned(output.wants_keyboard_input);
+        if output.wants_keyboard_input {
+            let ime = output.platform_output.ime.and_then(|ime| {
+                surface
+                    .as_ref()
+                    .and_then(|surface| project_computer_ime(surface, ime))
+            });
+            ctx.output_mut(|parent| parent.ime = ime);
+        }
+        ctx.output_mut(|parent| {
+            parent.commands.extend(output.platform_output.commands);
+            parent.events.extend(output.platform_output.events);
+            if output.pointer_on_computer {
+                parent.cursor_icon = output.platform_output.cursor_icon;
+                parent.mutable_text_under_cursor |=
+                    output.platform_output.mutable_text_under_cursor;
+            }
+        });
+        if !output.diagnostics.is_empty() {
+            self.settings_notice = format!("Cockpit display: {}", output.diagnostics.join("; "));
+        }
+        if active {
+            self.flight_view.submit_computer(ctx, output.primitives);
+        }
+    }
+
     fn service_visible(&self, tab: ServiceTab) -> bool {
         self.own().is_none_or(|p| p.station_avatar.is_none())
             || !matches!(
@@ -3522,6 +3649,7 @@ impl eframe::App for Cockpit {
         // Shut down only this cockpit's owned host inside the lifecycle callback.
         #[cfg(not(target_arch = "wasm32"))]
         drop(self.local_server.take());
+        self.cockpit_computer.clear();
         self.flight_view.destroy();
         self.hangar_view.destroy();
     }
@@ -3568,6 +3696,23 @@ impl eframe::App for Cockpit {
             self.engineering_panel = None;
         }
         self.sync_remote_control();
+        // A previous frame's mounted surface must never survive an early return,
+        // a world switch or a hidden/free-camera presentation.
+        self.flight_view.clear_cockpit_presentation();
+        let computer_active = self.connected
+            && !self.boot.visible
+            && !self.in_station_hangar()
+            && self.flight_view.cockpit_presentation_active(self.view_mode);
+        if !computer_active
+            || !self.embedded_input
+            || self.embedded_paused
+            || !ctx.input(|input| input.focused && !input.viewport().minimized.unwrap_or(false))
+            || ctx.wants_keyboard_input()
+        {
+            self.cockpit_computer.cancel_input();
+        }
+        self.flight_view
+            .set_computer_keyboard_owned(self.cockpit_computer.wants_keyboard_input());
         self.poll_voice();
         self.poll_ship_ai();
         self.update_sound();
@@ -3603,6 +3748,8 @@ impl eframe::App for Cockpit {
         self.effects.retain(self.presentation_time());
         if self.embedded_input
             && !ctx.wants_keyboard_input()
+            && !self.cockpit_computer.wants_keyboard_input()
+            && !ctx.input(|input| input.pointer.any_pressed())
             && ctx.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::Space))
             && self.can_fly()
         {
@@ -4050,46 +4197,6 @@ impl eframe::App for Cockpit {
         if in_hangar {
             self.station_overlay(ctx);
         }
-        if !in_hangar
-            && self.view_mode == ViewMode::Cockpit
-            && !self.flight_view.head_looking()
-            && !ctx.input(|i| i.modifiers.shift)
-        {
-            {
-                let rect = flight3d::cockpit_console_bounds(
-                    ctx.available_rect(),
-                    self.own().map_or(ShipClass::Pioneer, |p| p.ship_class),
-                )
-                .shrink(1.0);
-                egui::Area::new(egui::Id::new("physical_cockpit_console"))
-                    .fixed_pos(rect.min)
-                    .constrain(false)
-                    .movable(false)
-                    .show(ctx, |ui| {
-                        ui.set_min_size(rect.size());
-                        ui.set_max_size(rect.size());
-                        ui.set_clip_rect(rect);
-                        ui.spacing_mut().item_spacing = Vec2::new(4.0, 3.0);
-                        self.cockpit_actions(ui);
-                        self.power_gauge(ui);
-                        self.service_tabs(ui);
-                        ui.separator();
-                        egui::ScrollArea::vertical()
-                            .auto_shrink([false, false])
-                            .min_scrolled_height(0.0)
-                            .scroll_bar_visibility(
-                                egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
-                            )
-                            .id_salt("cockpit_console_content")
-                            .max_height((rect.bottom() - ui.cursor().top()).max(20.0))
-                            .max_width(rect.width())
-                            .show(ui, |ui| {
-                                ui.set_max_width(rect.width() - 18.0);
-                                self.service_content(ui);
-                            });
-                    });
-            }
-        }
         self.hangar_view.set_room_layout(
             self.assets
                 .as_ref()
@@ -4168,6 +4275,7 @@ impl eframe::App for Cockpit {
                     self.scene(ui);
                 }
             });
+        self.render_cockpit_computer(ctx, in_hangar);
         if let Err(error) = self
             .layout
             .finish_frame(ctx.input(|i| i.pointer.any_down()))
@@ -4192,7 +4300,10 @@ impl eframe::App for Cockpit {
         }
         if let Some(control) = self.pilot_input.sample(
             ctx,
-            flight_allowed && !self.embedded_paused && self.embedded_input,
+            flight_allowed
+                && !self.embedded_paused
+                && self.embedded_input
+                && !self.cockpit_computer.wants_keyboard_input(),
             if self.view_mode == ViewMode::Cockpit {
                 self.flight_view.input_surface()
             } else {
@@ -4210,6 +4321,31 @@ impl eframe::App for Cockpit {
         self.boot.paint_handoff(ctx);
     }
 }
+/// IME placement is the only window-space projection of the computer UI.
+/// All content rendering stays on the physical 3D display plane.
+fn project_computer_ime(
+    surface: &flight3d::CockpitSurface,
+    ime: egui::output::IMEOutput,
+) -> Option<egui::output::IMEOutput> {
+    let project = |rect: egui::Rect| {
+        if !rect.is_finite() || rect.width() < 0.0 || rect.height() < 0.0 {
+            return None;
+        }
+        let corners = [
+            surface.project(rect.left_top())?,
+            surface.project(rect.right_top())?,
+            surface.project(rect.right_bottom())?,
+            surface.project(rect.left_bottom())?,
+        ];
+        let projected = egui::Rect::from_points(&corners);
+        projected.is_finite().then_some(projected)
+    };
+    Some(egui::output::IMEOutput {
+        rect: project(ime.rect)?,
+        cursor_rect: project(ime.cursor_rect)?,
+    })
+}
+
 /// Only the process that spawned a local host owns its lifetime.
 #[cfg(not(target_arch = "wasm32"))]
 struct LocalServer(Child);
@@ -4664,86 +4800,7 @@ mod tests {
 
     #[test]
     fn physical_ai_console_scrolls_prompt_into_clipped_interactive_screen() {
-        let ctx = egui::Context::default();
-        let mut cockpit = view_test_cockpit(&ctx);
-        cockpit.view_mode = ViewMode::Cockpit;
-        cockpit.service_tab = ServiceTab::ShipComputer;
-        cockpit.snapshot.as_mut().unwrap().pilots[0].location = Location::Belt;
-        let viewport = egui::Rect::from_min_size(Pos2::ZERO, Vec2::new(1106., 768.));
-        let console = flight3d::cockpit_console_bounds(viewport, ShipClass::Pioneer).shrink(1.);
-        let mut prompt = None;
-        let mut saw_submit = false;
-        for step in 0..35 {
-            let events = if step > 3 {
-                vec![
-                    egui::Event::PointerMoved(console.center()),
-                    egui::Event::MouseWheel {
-                        unit: egui::MouseWheelUnit::Point,
-                        delta: Vec2::new(0., -20.),
-                        modifiers: Default::default(),
-                    },
-                ]
-            } else {
-                vec![]
-            };
-            let output = ctx.run(
-                egui::RawInput {
-                    screen_rect: Some(viewport),
-                    events,
-                    ..Default::default()
-                },
-                |ctx| eframe::App::update(&mut cockpit, ctx, &mut eframe::Frame::_new_kittest()),
-            );
-            for shape in output.shapes {
-                if let egui::Shape::Text(t) = shape.shape {
-                    let center = t.pos + t.galley.rect.center().to_vec2();
-                    if t.galley.text() == "Submit instruction"
-                        && console.contains(center)
-                        && shape.clip_rect.contains(center)
-                    {
-                        saw_submit = true;
-                    }
-                    if t.galley.text() == "Gather 100 ore and bring it back"
-                        && console.contains(center)
-                        && shape.clip_rect.contains(center)
-                    {
-                        prompt = Some(center);
-                    }
-                }
-            }
-            if saw_submit && prompt.is_some() {
-                break;
-            }
-        }
-        assert!(saw_submit, "Submit must scroll into the physical screen");
-        let point = prompt.expect("Prompt must become visible");
-        for pressed in [true, false] {
-            let _ = ctx.run(
-                egui::RawInput {
-                    screen_rect: Some(viewport),
-                    events: vec![
-                        egui::Event::PointerMoved(point),
-                        egui::Event::PointerButton {
-                            pos: point,
-                            button: egui::PointerButton::Primary,
-                            pressed,
-                            modifiers: Default::default(),
-                        },
-                    ],
-                    ..Default::default()
-                },
-                |ctx| eframe::App::update(&mut cockpit, ctx, &mut eframe::Frame::_new_kittest()),
-            );
-        }
-        let _ = ctx.run(
-            egui::RawInput {
-                screen_rect: Some(viewport),
-                events: vec![egui::Event::Text("Gather 20 ore".into())],
-                ..Default::default()
-            },
-            |ctx| eframe::App::update(&mut cockpit, ctx, &mut eframe::Frame::_new_kittest()),
-        );
-        assert_eq!(cockpit.ai_prompt, "Gather 20 ore");
+        crate::cockpit_computer_integration_tests::ai_console_input_journey();
     }
 
     #[test]
@@ -5487,123 +5544,7 @@ mod tests {
     }
     #[test]
     fn physical_console_fleet_click_sends_real_command_without_flight_input() {
-        let ctx = egui::Context::default();
-        let mut cockpit = view_test_cockpit(&ctx);
-        cockpit.view_mode = ViewMode::Cockpit;
-        let (tx, rx) = mpsc::channel();
-        cockpit.commands = Some(tx);
-        fn frame(
-            ctx: &egui::Context,
-            c: &mut Cockpit,
-            events: Vec<egui::Event>,
-        ) -> Vec<(String, Pos2)> {
-            ctx.run(
-                egui::RawInput {
-                    screen_rect: Some(egui::Rect::from_min_size(
-                        Pos2::ZERO,
-                        Vec2::new(1500.0, 1000.0),
-                    )),
-                    events,
-                    ..Default::default()
-                },
-                |ctx| eframe::App::update(c, ctx, &mut eframe::Frame::_new_kittest()),
-            )
-            .shapes
-            .into_iter()
-            .filter_map(|s| {
-                if let egui::Shape::Text(t) = s.shape {
-                    Some((
-                        t.galley.job.text.clone(),
-                        t.pos + t.galley.rect.center().to_vec2(),
-                    ))
-                } else {
-                    None
-                }
-            })
-            .collect()
-        }
-        for _ in 0..4 {
-            frame(&ctx, &mut cockpit, vec![]);
-        }
-        let rect = cockpit.flight_view.cockpit_console_rect().unwrap();
-        let labels = frame(&ctx, &mut cockpit, vec![]);
-        assert!(!labels.iter().any(|(s, _)| s == "Overview"));
-        let fleet = labels
-            .iter()
-            .find(|(s, p)| s == "Drones" && rect.contains(*p))
-            .unwrap()
-            .1;
-        for pressed in [true, false] {
-            frame(
-                &ctx,
-                &mut cockpit,
-                vec![
-                    egui::Event::PointerMoved(fleet),
-                    egui::Event::PointerButton {
-                        pos: fleet,
-                        button: egui::PointerButton::Primary,
-                        pressed,
-                        modifiers: egui::Modifiers::NONE,
-                    },
-                ],
-            );
-        }
-        assert!(cockpit.service_tab == ServiceTab::Drones);
-        let labels = frame(&ctx, &mut cockpit, vec![]);
-        let launch = labels
-            .iter()
-            .find(|(s, p)| s == "Launch Recon 0/5" && rect.contains(*p))
-            .unwrap()
-            .1;
-        frame(
-            &ctx,
-            &mut cockpit,
-            vec![
-                egui::Event::PointerMoved(launch),
-                egui::Event::Key {
-                    key: egui::Key::W,
-                    physical_key: None,
-                    pressed: true,
-                    repeat: false,
-                    modifiers: egui::Modifiers::NONE,
-                },
-                egui::Event::PointerButton {
-                    pos: launch,
-                    button: egui::PointerButton::Primary,
-                    pressed: true,
-                    modifiers: egui::Modifiers::NONE,
-                },
-            ],
-        );
-        assert!(
-            cockpit.controls.is_empty(),
-            "clicking console with W held must not emit thrust"
-        );
-        frame(
-            &ctx,
-            &mut cockpit,
-            vec![
-                egui::Event::Key {
-                    key: egui::Key::W,
-                    physical_key: None,
-                    pressed: false,
-                    repeat: false,
-                    modifiers: egui::Modifiers::NONE,
-                },
-                egui::Event::PointerButton {
-                    pos: launch,
-                    button: egui::PointerButton::Primary,
-                    pressed: false,
-                    modifiers: egui::Modifiers::NONE,
-                },
-            ],
-        );
-        assert!(matches!(
-            rx.try_recv().unwrap(),
-            Request::LaunchDroneClass {
-                class: DroneClass::Recon
-            }
-        ));
+        crate::cockpit_computer_integration_tests::fleet_command_input_journey();
     }
     #[test]
     fn overview_pointer_drag_persists_and_reflows_in_real_app_update() {
