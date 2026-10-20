@@ -43,8 +43,10 @@ mod effects;
 mod flight3d;
 mod layout;
 pub use layout::panel_geometry as cockpit_panel_geometry;
+mod flight_workspace;
 mod lighting_settings;
 mod motion;
+mod operations_workspace;
 mod pilot_input;
 mod remote_control_ui;
 mod resource_jobs_ui;
@@ -606,6 +608,7 @@ struct Cockpit {
     embedded: bool,
     embedded_paused: bool,
     embedded_input: bool,
+    workspace_input_waiting_release: bool,
     logo: egui::TextureHandle,
     boot: boot::Boot,
     server: String,
@@ -731,6 +734,7 @@ impl Cockpit {
             embedded: false,
             embedded_paused: false,
             embedded_input: true,
+            workspace_input_waiting_release: false,
             logo,
             #[cfg(not(target_arch = "wasm32"))]
             account_login: account_login::Login::default(),
@@ -1915,7 +1919,10 @@ impl Cockpit {
         let active = self.connected
             && (docked
                 || !in_hangar && self.flight_view.cockpit_presentation_active(self.view_mode));
-        let input_allowed = self.embedded_input
+        let input_allowed = !self.services_open
+            && self.service_tab != ServiceTab::Layouts
+            && !self.workspace_input_waiting_release
+            && self.embedded_input
             && !self.embedded_paused
             && ctx.input(|input| input.focused && !input.viewport().minimized.unwrap_or(false));
         // A real glass hit may transfer focus from an editor/overlay field.
@@ -2081,73 +2088,19 @@ impl Cockpit {
                 ServiceTab::Navigation
                     | ServiceTab::Hangar
                     | ServiceTab::Modules
-                    | ServiceTab::Drones
                     | ServiceTab::Sandbox
             )
     }
+    fn release_workspace_input(&mut self) {
+        self.workspace_input_waiting_release = true;
+        self.cockpit_computer.cancel_input();
+        let _ = self.pilot_input.update(false, Default::default());
+        self.controls.clear_flight();
+        self.stop_station_walk();
+    }
+
     fn service_tabs(&mut self, ui: &mut egui::Ui) {
-        // Every destination stays visible; narrow physical screens wrap the grid.
-        let columns = ((ui.available_width() / 72.0).floor() as usize).clamp(3, 6);
-        let width = (ui.available_width() - 4.0 * (columns - 1) as f32) / columns as f32;
-        ui.scope(|ui| {
-            ui.spacing_mut().item_spacing = Vec2::new(4.0, 3.0);
-            ui.horizontal_wrapped(|ui| {
-                for (tab, label, description) in [
-                    (ServiceTab::Navigation, "Flight", "Targets and navigation"),
-                    (ServiceTab::Hangar, "Ship", "Owned ship hangar"),
-                    (
-                        ServiceTab::Layouts,
-                        "Layouts",
-                        "Decks, rooms and proposed fittings",
-                    ),
-                    (
-                        ServiceTab::Modules,
-                        "Modules",
-                        "Mining turrets and target locks",
-                    ),
-                    (ServiceTab::Drones, "Drones", "Drone fleet and cameras"),
-                    (
-                        ServiceTab::ShipComputer,
-                        "Mining",
-                        "Repeat mining and station delivery routine",
-                    ),
-                    (ServiceTab::Cargo, "Inventory", "Cargo and station storage"),
-                    (ServiceTab::Station, "Station", "Station services"),
-                    (ServiceTab::Exchange, "Exchange", "Ore market"),
-                    (
-                        ServiceTab::Corporation,
-                        "Corp",
-                        "Corporation and shared storage",
-                    ),
-                    (ServiceTab::Activity, "Activity", "Server activity log"),
-                    (ServiceTab::Ledger, "Audit", "Ledger verification"),
-                    (
-                        ServiceTab::Settings,
-                        "Settings",
-                        "View modes, theme and layout",
-                    ),
-                    (ServiceTab::Sandbox, "Surface", "Surface construction tools"),
-                ] {
-                    if !self.service_visible(tab) {
-                        continue;
-                    }
-                    if ui
-                        .add_sized(
-                            Vec2::new(width, 24.0),
-                            egui::Button::new(label).selected(self.service_tab == tab),
-                        )
-                        .on_hover_text(description)
-                        .clicked()
-                    {
-                        self.service_tab = tab;
-                        if tab == ServiceTab::Layouts {
-                            self.services_open = true;
-                        }
-                        self.sound.cue(sound_engine::Cue::Ui);
-                    }
-                }
-            });
-        });
+        self.operations_navigation(ui);
     }
     fn service_content(&mut self, ui: &mut egui::Ui) {
         if self.own().is_some_and(|p| p.station_avatar.is_some())
@@ -2155,7 +2108,6 @@ impl Cockpit {
                 self.service_tab,
                 ServiceTab::Navigation
                     | ServiceTab::Modules
-                    | ServiceTab::Drones
                     | ServiceTab::Sandbox
                     | ServiceTab::Hangar
                     | ServiceTab::Station
@@ -3823,6 +3775,13 @@ impl eframe::App for Cockpit {
             }
         }
         self.poll();
+        if self.services_open || self.service_tab == ServiceTab::Layouts {
+            self.release_workspace_input();
+        } else if self.workspace_input_waiting_release
+            && ctx.input(|i| i.keys_down.is_empty() && !i.pointer.any_down())
+        {
+            self.workspace_input_waiting_release = false;
+        }
         if let Some(error) = self
             .snapshot
             .as_ref()
@@ -3839,6 +3798,8 @@ impl eframe::App for Cockpit {
         self.flight_view.clear_cockpit_presentation();
         self.hangar_view.clear_cockpit_presentation();
         let computer_active = self.connected
+            && !self.services_open
+            && self.service_tab != ServiceTab::Layouts
             && !self.boot.visible
             && (self.in_station_hangar() && self.verified_docked_binding().is_some()
                 || !self.in_station_hangar()
@@ -3888,7 +3849,9 @@ impl eframe::App for Cockpit {
             }
         }
         self.effects.retain(self.presentation_time());
-        if self.embedded_input
+        if !self.services_open
+            && !self.workspace_input_waiting_release
+            && self.embedded_input
             && !ctx.wants_keyboard_input()
             && !self.cockpit_computer.wants_keyboard_input()
             && !ctx.input(|input| input.pointer.any_pressed())
@@ -4020,13 +3983,13 @@ impl eframe::App for Cockpit {
                                             .own()
                                             .is_some_and(|pilot| pilot.location != Location::Docked)
                                         {
-                                            "Ship interior / autopilot"
+                                            "Ship interior"
                                         } else {
                                             "Station / interior"
                                         },
                                     );
                                 }
-                                self.view_selector(ui);
+                                self.flight_workspace_navigation(ui);
                             });
                             if !self.notice.is_empty() {
                                 ui.small(&self.notice);
@@ -4087,7 +4050,7 @@ impl eframe::App for Cockpit {
                                     "STATION HANGAR".into()
                                 });
                             }
-                            self.view_selector(ui);
+                            self.flight_workspace_navigation(ui);
                             if !self.embedded {
                                 let fullscreen = is_fullscreen(ctx);
                                 if ui
@@ -4115,161 +4078,8 @@ impl eframe::App for Cockpit {
             None,
             ctx.input(|i| i.pointer.any_down()),
         );
-        let (panel_pos, _) = self.layout.position(
-            "service_launcher_overlay",
-            bounds,
-            [0.0, 0.0],
-            Vec2::new(8.0, 156.0),
-            Vec2::new(38.0, 330.0),
-        );
-        let panel_response =
-            egui::Area::new(egui::Id::new("service_launcher_overlay").with(self.layout.generation))
-                .current_pos(panel_pos)
-                .movable(!self.layout.pinned)
-                .constrain_to(bounds)
-                .show(ctx, |ui| {
-                    self.overlay_frame(ctx).show(ui, |ui| {
-                        ui.set_width(28.0);
-                        if self.service_visible(ServiceTab::Navigation)
-                            && ui
-                                .add_sized([28.0, 26.0], egui::Button::new("◎"))
-                                .on_hover_text("Overview")
-                                .clicked()
-                        {
-                            if self.view_mode == ViewMode::Cockpit {
-                                self.service_tab = ServiceTab::Navigation;
-                            } else {
-                                self.overview_open = true;
-                            }
-                        }
-                        for (tab, icon, label) in [
-                            (ServiceTab::Station, "⌂", "Station"),
-                            (ServiceTab::Hangar, "H", "Hangar"),
-                            (ServiceTab::Layouts, "L", "Ship layouts"),
-                            (ServiceTab::Cargo, "▣", "Inventory"),
-                            (ServiceTab::Modules, "M", "Mining modules"),
-                            (ServiceTab::Drones, "D", "Drone fleet"),
-                            (ServiceTab::ShipComputer, "MI", "Mining routine"),
-                            (ServiceTab::Corporation, "C", "Corporation"),
-                            (ServiceTab::Exchange, "⇄", "Exchange"),
-                            (ServiceTab::Activity, "≡", "Activity"),
-                            (ServiceTab::Ledger, "✓", "Ledger audit"),
-                            (ServiceTab::Settings, "⚙", "Settings"),
-                        ] {
-                            if !self.service_visible(tab) {
-                                continue;
-                            }
-                            if ui
-                                .add_sized(
-                                    [28.0, 26.0],
-                                    egui::Button::new(icon)
-                                        .selected(self.services_open && self.service_tab == tab),
-                                )
-                                .on_hover_text(label)
-                                .clicked()
-                            {
-                                self.service_tab = tab;
-                                self.sound.cue(sound_engine::Cue::Ui);
-                                self.services_open = true;
-                            }
-                        }
-                    });
-                });
-        self.layout.record(
-            "service_launcher_overlay",
-            bounds,
-            panel_response.response.rect,
-            None,
-            ctx.input(|i| i.pointer.any_down()),
-        );
-        if self.view_mode != ViewMode::Cockpit && !in_hangar {
-            let mut overview_open = self.overview_open;
-            let (panel_pos, panel_size) = self.layout.position(
-                "overview",
-                bounds,
-                [1.0, 0.0],
-                Vec2::new(-8.0, 8.0),
-                Vec2::new(310.0, (bounds.height() - 260.0).max(280.0)),
-            );
-            let mut content_size = None;
-            let panel_response = egui::Window::new("Overview")
-                .id(egui::Id::new("cockpit_overview_overlay").with(self.layout.generation))
-                .open(&mut overview_open)
-                .current_pos(panel_pos)
-                .default_size(panel_size)
-                .max_width(bounds.width() - 20.0)
-                .resize(|resize| {
-                    if self.layout.reflow {
-                        resize.min_size(panel_size).max_size(panel_size)
-                    } else {
-                        resize
-                    }
-                })
-                .min_width(275.0)
-                .max_height(bounds.height() - 24.0)
-                .resizable(!self.layout.pinned)
-                .movable(!self.layout.pinned)
-                .collapsible(true)
-                .constrain_to(bounds)
-                .frame(self.overlay_frame(ctx))
-                .vscroll(true)
-                .show(ctx, |ui| {
-                    content_size = Some(ui.max_rect().size());
-                    self.overview(ui);
-                });
-            if let Some(response) = panel_response {
-                self.layout.record(
-                    "overview",
-                    bounds,
-                    response.response.rect,
-                    content_size,
-                    ctx.input(|i| i.pointer.any_down()),
-                );
-            }
-            self.overview_open = overview_open;
-        }
-        if self.view_mode != ViewMode::Cockpit && !in_hangar {
-            let ship_width = (bounds.width() - 70.0).min(760.0);
-            let (panel_pos, panel_size) = self.layout.position(
-                "ship",
-                bounds,
-                [0.5, 1.0],
-                Vec2::new(0.0, -8.0),
-                Vec2::new(ship_width, 52.0),
-            );
-            let mut content_size = None;
-            let panel_response = egui::Window::new("Ship controls")
-                .id(egui::Id::new("ship_controls_overlay").with(self.layout.generation))
-                .current_pos(panel_pos)
-                .default_size(panel_size)
-                .max_width(bounds.width() - 20.0)
-                .resize(|resize| {
-                    if self.layout.reflow {
-                        resize.min_size(panel_size).max_size(panel_size)
-                    } else {
-                        resize
-                    }
-                })
-                .min_width(570.0)
-                .resizable(!self.layout.pinned)
-                .movable(!self.layout.pinned)
-                .collapsible(true)
-                .constrain_to(bounds)
-                .frame(self.overlay_frame(ctx))
-                .show(ctx, |ui| {
-                    content_size = Some(ui.max_rect().size());
-                    self.flight_deck(ui);
-                });
-            if let Some(response) = panel_response {
-                self.layout.record(
-                    "ship",
-                    bounds,
-                    response.response.rect,
-                    content_size,
-                    ctx.input(|i| i.pointer.any_down()),
-                );
-            }
-        }
+        // Service destinations and detailed flight controls now share the
+        // deliberate task workspace, instead of competing launcher/overview panels.
         if self.services_open && self.service_tab == ServiceTab::Layouts {
             let mut open = true;
             egui::Window::new("Ship layout viewer")
@@ -4292,32 +4102,17 @@ impl eframe::App for Cockpit {
         if self.services_open && self.service_tab != ServiceTab::Layouts {
             let mut open = true;
             let (panel_pos, panel_size) = self.layout.position(
-                "services",
+                "task_workspace",
                 bounds,
-                if in_hangar { [1.0, 0.0] } else { [0.0, 0.0] },
-                if in_hangar {
-                    Vec2::new(-8.0, 164.0)
-                } else {
-                    Vec2::new(64.0, 164.0)
-                },
+                [1.0, 0.5],
+                Vec2::new(-16.0, 0.0),
                 Vec2::new(
-                    if in_hangar { 350.0 } else { 620.0 },
-                    if self.service_tab == ServiceTab::ShipComputer {
-                        (bounds.height() - 64.0).clamp(310.0, 600.0)
-                    } else {
-                        310.0
-                    },
+                    (bounds.width() * 0.52).clamp(520.0, 820.0),
+                    (bounds.height() - 72.0).clamp(280.0, 680.0),
                 ),
             );
             let mut content_size = None;
-            let panel_response =
-                egui::Window::new(if self.service_tab == ServiceTab::ShipComputer {
-                    "Mining routine"
-                } else if self.own().is_some_and(|p| p.location == Location::Docked) {
-                    "Station services"
-                } else {
-                    "Personal services"
-                })
+            let panel_response = egui::Window::new(self.operations_title())
                 .id(egui::Id::new("cockpit_services_overlay").with(self.layout.generation))
                 .open(&mut open)
                 .current_pos(panel_pos)
@@ -4330,11 +4125,11 @@ impl eframe::App for Cockpit {
                         resize
                     }
                 })
-                .min_width(if in_hangar { 280.0 } else { 400.0 })
+                .min_width((bounds.width() - 32.0).clamp(240.0, 600.0))
                 .max_height(bounds.height() - 30.0)
                 .resizable(!self.layout.pinned)
                 .movable(!self.layout.pinned)
-                .collapsible(true)
+                .collapsible(false)
                 .constrain_to(bounds)
                 .frame(self.overlay_frame(ctx))
                 .vscroll(true)
@@ -4346,14 +4141,14 @@ impl eframe::App for Cockpit {
                 });
             if let Some(response) = panel_response {
                 self.layout.record(
-                    "services",
+                    "task_workspace",
                     bounds,
                     response.response.rect,
                     content_size,
                     ctx.input(|i| i.pointer.any_down()),
                 );
             }
-            self.services_open = open;
+            self.services_open &= open;
         }
         if in_hangar || self.space_walk_available() {
             self.station_overlay(ctx);
@@ -4371,7 +4166,10 @@ impl eframe::App for Cockpit {
         self.hangar_view
             .set_docked_traversal_enabled(self.docked_navigation_present());
         self.hangar_view.set_head_look_input_allowed(
-            self.embedded_input && !self.cockpit_computer.wants_keyboard_input(),
+            self.embedded_input
+                && !self.workspace_input_waiting_release
+                && !self.services_open
+                && !self.cockpit_computer.wants_keyboard_input(),
         );
         self.hangar_view.set_room_layout(
             self.assets
@@ -4388,6 +4186,13 @@ impl eframe::App for Cockpit {
                 .as_ref()
                 .and_then(|assets| assets.pioneer_room.clone()),
         );
+        egui::TopBottomPanel::bottom("flight_authority_status")
+            .frame(
+                egui::Frame::new()
+                    .fill(self.theme.panel())
+                    .inner_margin(egui::Margin::symmetric(12, 6)),
+            )
+            .show(ctx, |ui| self.flight_workspace_status(ui));
         self.physical_engineering_window(ctx);
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
@@ -4488,7 +4293,14 @@ impl eframe::App for Cockpit {
         if self.view_mode != ViewMode::Cockpit {
             self.pilot_input.release_mouse(ctx);
         }
-        let flight_allowed = !ctx.input(|i| i.pointer.primary_down())
+        if self.services_open || self.service_tab == ServiceTab::Layouts {
+            self.release_workspace_input();
+        }
+        let workspace_allows_input = !self.services_open
+            && self.service_tab != ServiceTab::Layouts
+            && !self.workspace_input_waiting_release;
+        let flight_allowed = workspace_allows_input
+            && !ctx.input(|i| i.pointer.primary_down())
             && self.view_mode != ViewMode::Tactical
             && self.can_operate()
             && (self.manual_remote.is_none() || self.controlled_remote().is_some())
@@ -4519,7 +4331,7 @@ impl eframe::App for Cockpit {
         }
         self.sample_station_walk(
             ctx,
-            in_hangar && !self.embedded_paused && self.embedded_input,
+            in_hangar && workspace_allows_input && !self.embedded_paused && self.embedded_input,
         );
         self.boot.paint_handoff(ctx);
     }

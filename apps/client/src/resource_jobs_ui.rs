@@ -214,6 +214,7 @@ impl Cockpit {
                         }
                         Some(ship_ai::AiIntent::CancelResourceJob) => {
                             if self.can_operate()
+                                && self.resource_fresh()
                                 && self
                                     .own_resource_job()
                                     .is_some_and(|j| !j.phase.is_terminal())
@@ -248,9 +249,70 @@ impl Cockpit {
             self.ai_message.push_str("\nNot sent: take manual control of the selected worker first (or return to your own ship for an own-ship order), and wait for server confirmation.");
         }
     }
+    fn resource_authority_summary(&mut self, ui: &mut egui::Ui) {
+        let ship = self.resource_ship();
+        let job = self.own_resource_job().cloned();
+        egui::Frame::group(ui.style()).show(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.strong("ROUTINE STATUS");
+                if let Some(job) = &job {
+                    ui.colored_label(if job.phase == ResourceJobPhase::Blocked { AMBER } else { self.accent() }, format!("#{} · {}", job.id, resource_phase_label(job.phase)));
+                } else {
+                    ui.colored_label(MUTED, "No routine assigned");
+                }
+            });
+            if !self.connected {
+                ui.colored_label(AMBER, "Disconnected · last received state");
+            } else if self.embedded && self.embedded_paused {
+                ui.colored_label(MUTED, "Paused · authority clock is not advancing");
+            } else if !self.resource_fresh() {
+                ui.colored_label(AMBER, "Stale snapshot · waiting for authority");
+            }
+            egui::Grid::new("resource-authority-summary").num_columns(2).spacing(egui::vec2(22.0, 8.0)).show(ui, |ui| {
+                if let Some(job) = &job {
+                    for (label, value) in [
+                        ("Assigned goal", format!("{} ore", job.target_units)),
+                        ("Confirmed delivered", format!("{} ore", job.stored_units)),
+                        ("Mined by this routine", format!("{} ore", job.mined_units)),
+                        ("Actual stage", resource_phase_label(job.phase).to_owned()),
+                        ("Intended target", job.target_id.map_or_else(|| "Awaiting assignment".into(), |id| format!("Asteroid #{id}"))),
+                    ] { ui.colored_label(MUTED, label); ui.strong(value); ui.end_row(); }
+                }
+                if let Some(ship) = &ship {
+                    ui.colored_label(MUTED, "Current haul / hold"); ui.strong(format!("{} / {} ore", ship.ore, cargo_capacity(ship.ship_class))); ui.end_row();
+                    ui.colored_label(MUTED, "Drones in space"); ui.strong(Self::fleet(ship).len().to_string()); ui.end_row();
+                    ui.colored_label(MUTED, "Drone bay inventory"); ui.label("Not reported by authority"); ui.end_row();
+                    ui.colored_label(MUTED, "Ship capacitor"); ui.label(ship.power.as_ref().map_or_else(|| "Not reported by authority".into(), |power| format!("{} / {} J", power.charge_j, power.capacity_j))); ui.end_row();
+                    ui.colored_label(MUTED, "Location"); ui.label(format!("{} · {}", system_name(ship.system_id), location_label(&ship.location))); ui.end_row();
+                } else {
+                    ui.colored_label(MUTED, "Ship telemetry"); ui.label("Unavailable · selected ship state or permission missing"); ui.end_row();
+                }
+            });
+            if let Some(job) = &job {
+                ui.add_space(6.0);
+                ui.add(egui::ProgressBar::new((job.stored_units as f64 / job.target_units.max(1) as f64).clamp(0.0, 1.0) as f32)
+                    .text(format!("{} / {} ore delivered", job.stored_units, job.target_units)));
+                ui.label(&job.message);
+                if job.phase == ResourceJobPhase::Blocked { ui.colored_label(AMBER, format!("Blocked: {}", job.message)); }
+                if !job.phase.is_terminal() {
+                    ui.horizontal_wrapped(|ui| {
+                        if ui.add_enabled(self.can_operate() && self.resource_fresh() && self.resource_authorized(), egui::Button::new("Cancel routine")).clicked() {
+                            self.cancel_ai();
+                            self.send(Request::CancelResourceJob { pilot: self.resource_pilot.clone() });
+                        }
+                        ui.small("Cancels automation; delivered ore remains in storage.");
+                    });
+                }
+            } else {
+                ui.label("Choose a goal below to submit a new mining routine. No progress is inferred before the server accepts it.");
+            }
+            if self.request_pending { ui.colored_label(AMBER, "Awaiting authority · command not yet acknowledged"); }
+            if !self.notice.is_empty() { ui.small(format!("Last authority response: {}", self.notice)); }
+        });
+    }
     pub(super) fn resource_job_panel(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Mining routine");
-        ui.small("Travel → lock → mine → recall → return → unload → repeat");
+        ui.heading("Mining operations");
+        ui.label("Assign a delivery goal. The ship chooses targets, fills its hold and returns to unload.");
         let old = self.resource_pilot.clone();
         let workers: Vec<String> = self
             .snapshot
@@ -292,6 +354,7 @@ impl Cockpit {
             if ui
                 .add_enabled(
                     self.can_operate()
+                        && self.resource_fresh()
                         && self.resource_authorized()
                         && self.resource_name() != self.pilot,
                     egui::Button::new("Take manual control"),
@@ -310,11 +373,12 @@ impl Cockpit {
             }
             ui.small("Watch = camera only. Take manual control stops that ship's AI job.");
         });
+        self.resource_authority_summary(ui);
+        ui.add_space(8.0);
+        ui.strong("ASSIGNMENT");
         ui.label("Deposit: Automatic · nearest available local asteroid");
         ui.small("Depleted asteroids are replaced automatically. Return: starting-system station → personal storage.");
-        let capacity = self
-            .resource_ship()
-            .map_or(1, |p| cargo_capacity(p.ship_class));
+        let capacity = self.resource_ship().map(|p| cargo_capacity(p.ship_class));
         ui.horizontal_wrapped(|ui| {
             let active = self
                 .own_resource_job()
@@ -354,58 +418,20 @@ impl Cockpit {
                 "Next goal applies only to a new routine. The assigned goal below stays unchanged.",
             );
         }
-        ui.small(format!(
-            "{} ore per hold · approximately {} trips · repeats until stored",
-            capacity,
-            self.resource_goal.div_ceil(capacity.max(1))
-        ));
+        if let Some(capacity) = capacity {
+            ui.small(format!(
+                "{} ore per hold · approximately {} trips for the proposed goal",
+                capacity,
+                self.resource_goal.div_ceil(capacity.max(1))
+            ));
+        } else {
+            ui.small("Hold capacity unavailable until the selected ship is reported.");
+        }
         ui.small(
             "Goal includes ore aboard. Warp finishes and drones return before the haul proceeds.",
         );
-        if let Some(job) = self.own_resource_job().cloned() {
-            ui.separator();
-            ui.horizontal_wrapped(|ui| {
-                ui.colored_label(
-                    if job.phase == ResourceJobPhase::Blocked {
-                        AMBER
-                    } else {
-                        self.accent()
-                    },
-                    format!("Job #{} · {:?}", job.id, job.phase),
-                );
-                if ui
-                    .add_enabled(
-                        self.can_operate()
-                            && self.resource_authorized()
-                            && !job.phase.is_terminal(),
-                        egui::Button::new("Cancel routine"),
-                    )
-                    .clicked()
-                {
-                    self.cancel_ai();
-                    self.send(Request::CancelResourceJob {
-                        pilot: self.resource_pilot.clone(),
-                    });
-                }
-            });
-            if !self.connected {
-                ui.colored_label(AMBER, "Last known job state · disconnected");
-            }
-            ui.label(&job.message);
-            ui.small(format!(
-                "Assigned goal {} · confirmed mined {} · stored {}",
-                job.target_units, job.mined_units, job.stored_units
-            ));
-            ui.add(
-                egui::ProgressBar::new(
-                    (job.stored_units as f64 / job.target_units.max(1) as f64).clamp(0., 1.) as f32,
-                )
-                .text("Confirmed storage"),
-            );
-        } else {
-            ui.small("No job reported for this ship.");
-        }
         ui.separator();
+        ui.collapsing("Ship computer · text & voice orders", |ui| {
         ui.label("Ask the ship computer");
         ui.small(self.ship_ai.endpoint_label());
         ui.small(self.ship_ai.status());
@@ -494,10 +520,26 @@ impl Cockpit {
             ui.add(egui::TextEdit::singleline(&mut self.fleet_controller).hint_text("Existing controller pilot"));
             let name = self.fleet_controller.trim().to_owned();
             let valid = name != self.pilot && self.snapshot.as_ref().is_some_and(|s|s.pilots.iter().any(|p|p.name==name));
-            if ui.add_enabled(self.can_operate() && valid,egui::Button::new("Grant fleet control")).clicked() { self.send(Request::SetFleetController{controller:Some(name)}); }
-            if ui.add_enabled(self.can_operate() && controller.is_some(),egui::Button::new("Revoke control")).clicked() { self.send(Request::SetFleetController{controller:None}); }
+            if ui.add_enabled(self.can_operate() && self.resource_fresh() && valid,egui::Button::new("Grant fleet control")).clicked() { self.send(Request::SetFleetController{controller:Some(name)}); }
+            if ui.add_enabled(self.can_operate() && self.resource_fresh() && controller.is_some(),egui::Button::new("Revoke control")).clicked() { self.send(Request::SetFleetController{controller:None}); }
             ui.small("Open a second cockpit as the worker and grant your controller pilot permission here. No ships or pilots are created by the computer.");
         });
         ui.small("Manual commands override jobs. A delegated worker may log out while its controller stays connected; controller logout, worker reconnect, revocation or server restart cancels the job.");
+        });
+    }
+}
+
+fn resource_phase_label(phase: ResourceJobPhase) -> &'static str {
+    match phase {
+        ResourceJobPhase::Undocking => "Undocking",
+        ResourceJobPhase::TravelToBelt => "Travelling to belt",
+        ResourceJobPhase::AcquiringTarget => "Acquiring target",
+        ResourceJobPhase::Mining => "Mining",
+        ResourceJobPhase::ReturningToStation => "Returning to station",
+        ResourceJobPhase::Docking => "Docking",
+        ResourceJobPhase::Depositing => "Depositing",
+        ResourceJobPhase::Completed => "Completed",
+        ResourceJobPhase::Blocked => "Blocked",
+        ResourceJobPhase::Cancelled => "Cancelled",
     }
 }

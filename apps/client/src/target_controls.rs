@@ -131,10 +131,57 @@ impl Cockpit {
             .or_else(|| fleet.first().copied())
     }
     pub(super) fn drone_controls(&mut self, ui: &mut egui::Ui) {
-        let Some(p) = self.own() else { return };
-        let available = self.can_fly();
-        ui.small("DRONE FLEET / 5 PER CLASS");
+        let Some(p) = self.own() else {
+            ui.heading("Drone operations");
+            ui.label("Waiting for the owned ship and deployed drone state.");
+            return;
+        };
+        let fresh = self.connected
+            && self.snapshot.as_ref().is_some_and(|snapshot| {
+                self.presentation_time()
+                    .saturating_sub(snapshot.server_time_ms)
+                    <= 1500
+            });
+        let available = self.can_fly() && fresh;
+        ui.heading("Drone operations");
+        ui.label(format!(
+            "{} deployed · owner {}",
+            Self::fleet(&p).len(),
+            p.name
+        ));
+        if !self.connected {
+            ui.colored_label(AMBER, "Disconnected · last known fleet; orders unavailable");
+        } else if !fresh {
+            ui.colored_label(AMBER, "Fleet telemetry stale · waiting for authority");
+        }
+        if self.embedded && self.embedded_paused {
+            ui.colored_label(MUTED, "Simulation paused · telemetry is frozen");
+        }
+        if self.request_pending {
+            ui.colored_label(AMBER, "Awaiting authority · previous command pending");
+        }
+        if self.snapshot.as_ref().is_some_and(|snapshot| {
+            snapshot
+                .resource_jobs
+                .iter()
+                .any(|job| job.pilot == p.name && !job.phase.is_terminal())
+        }) {
+            ui.colored_label(
+                AMBER,
+                "Automation owns this fleet. Manual drone orders override the mining routine.",
+            );
+        }
+        ui.small("Bay inventory is not reported. Launch limit: five deployed drones per class.");
         let power = power_spec(p.ship_class);
+        if let Some(capacitor) = &p.power {
+            ui.label(format!(
+                "Shared ship capacitor · {} / {} J",
+                capacitor.charge_j, capacitor.capacity_j
+            ));
+        } else {
+            ui.label("Ship capacitor telemetry unavailable");
+        }
+        ui.small("Drones draw from the ship capacitor; separate drone batteries and cargo holds are not reported.");
         ui.small(format!(
             "Owner capacitor: {} J / mining cycle · {} J / weapon shot",
             power.drone_mining_cycle_cost_j, power.drone_attack_cost_j
@@ -189,6 +236,26 @@ impl Cockpit {
         };
         let id = drone.id;
         let controlled = available && drone.signal_strength > 0.0;
+        ui.add_space(6.0);
+        ui.strong(format!("SELECTED DRONE #{id}"));
+        egui::Grid::new("selected-drone-authority")
+            .num_columns(2)
+            .spacing(egui::vec2(20.0, 7.0))
+            .show(ui, |ui| {
+                for (label, value) in [
+                    ("Class", format!("{:?}", drone.class)),
+                    ("Actual state", drone_mode_label(&drone.mode).to_owned()),
+                    ("Assignment", drone_assignment(&drone.mode)),
+                    ("Signal", format!("{:.0}%", drone.signal_strength * 100.0)),
+                    ("Hull", format!("{} HP", drone.hit_points)),
+                    ("Cargo", "No separate drone cargo reported".into()),
+                    ("Energy", "Shared ship capacitor".into()),
+                ] {
+                    ui.colored_label(MUTED, label);
+                    ui.label(value);
+                    ui.end_row();
+                }
+            });
         ui.small(format!(
             "Selected #{id} · {} from ship",
             format_distance(
@@ -370,6 +437,9 @@ impl Cockpit {
         ui.small(
             "10 km control radius · mining needs a confirmed lock · attacks damage drones only",
         );
+        if !self.notice.is_empty() {
+            ui.small(format!("Last authority response: {}", self.notice));
+        }
     }
 }
 fn drone_mode_label(mode: &DroneMode) -> &'static str {
@@ -417,5 +487,22 @@ mod feed_tests {
         assert_eq!(feed_ids(&[9, 3, 3, 7], Some(99), true), vec![3, 7, 9]);
         assert_eq!(feed_ids(&[9, 3, 7], Some(99), false), vec![3]);
         assert!(feed_ids(&[], Some(7), true).is_empty());
+    }
+}
+
+fn drone_assignment(mode: &DroneMode) -> String {
+    match mode {
+        DroneMode::Mining { target_id } => format!("Asteroid #{target_id}"),
+        DroneMode::Attacking {
+            target_pilot,
+            target_drone_id,
+        } => format!("{target_pilot} · drone #{target_drone_id}"),
+        DroneMode::Orbit { target } => format!("Orbit {target:?}"),
+        DroneMode::FlyTo { position } => format!(
+            "System position [{:.1}, {:.1}, {:.1}] m",
+            position[0], position[1], position[2]
+        ),
+        DroneMode::Returning => "Return to owner ship".into(),
+        DroneMode::Hold => "Hold current position".into(),
     }
 }

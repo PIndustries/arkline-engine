@@ -163,8 +163,29 @@ impl Cockpit {
     }
     pub(super) fn cargo_panel(&mut self, ui: &mut egui::Ui) {
         let Some(pilot) = self.own() else { return };
-        ui.heading("Personal inventory");
-        ui.small("Your server-confirmed holdings · accessible from any location");
+        ui.heading("Cargo & storage");
+        ui.label("Confirmed holdings · shared with ship instruments and the mining routine");
+        let capacity = cargo_capacity(pilot.ship_class);
+        egui::Frame::group(ui.style()).show(ui, |ui| {
+            ui.strong(format!("ACTIVE HOLD · {}", pilot.ship_class.spec().name));
+            ui.label(format!(
+                "{} / {} ore · {} ore free",
+                pilot.ore,
+                capacity,
+                capacity.saturating_sub(pilot.ore)
+            ));
+            ui.add(
+                egui::ProgressBar::new(
+                    (pilot.ore as f64 / capacity.max(1) as f64).clamp(0.0, 1.0) as f32
+                )
+                .text("Confirmed hold use"),
+            );
+            if !self.connected {
+                ui.colored_label(AMBER, "Disconnected · last received inventory");
+            } else if self.embedded && self.embedded_paused {
+                ui.colored_label(MUTED, "Simulation paused");
+            }
+        });
         let escrow = self.snapshot.as_ref().map_or(0, |s| {
             s.orders
                 .iter()
@@ -222,7 +243,22 @@ impl Cockpit {
             stored
         ));
         ui.small("Transfers move ore between active cargo and this station's personal storage.");
-        let docked = self.can_operate() && pilot.location == Location::Docked;
+        let fresh = self.connected
+            && self.snapshot.as_ref().is_some_and(|snapshot| {
+                self.presentation_time()
+                    .saturating_sub(snapshot.server_time_ms)
+                    <= 1500
+            });
+        let docked = self.can_operate() && fresh && pilot.location == Location::Docked;
+        if !fresh {
+            ui.colored_label(
+                AMBER,
+                "Inventory may be stale · transfers disabled until authority refreshes",
+            );
+        }
+        if self.request_pending {
+            ui.colored_label(AMBER, "Awaiting authority · transfer or command pending");
+        }
         ui.horizontal_wrapped(|ui| {
             ui.add(
                 egui::DragValue::new(&mut self.transfer_amount)

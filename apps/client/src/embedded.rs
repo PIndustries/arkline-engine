@@ -245,14 +245,46 @@ impl EmbeddedClient {
 
     /// Local sound controls remain reachable while walking or editing a scene.
     pub fn open_sound_panel(&mut self) {
+        self.release_cockpit_input();
         self.cockpit.service_tab = ServiceTab::Settings;
         self.cockpit.services_open = true;
     }
 
     /// Opens deterministic mining controls without starting the clock or a job.
     pub fn open_mining_panel(&mut self) {
+        self.release_cockpit_input();
         self.cockpit.service_tab = ServiceTab::ShipComputer;
         self.cockpit.services_open = true;
+    }
+
+    /// Opens ship management without submitting a ship or clock command.
+    pub fn open_ship_panel(&mut self) {
+        self.release_cockpit_input();
+        self.cockpit.service_tab = ServiceTab::Hangar;
+        self.cockpit.services_open = true;
+    }
+
+    pub fn open_operations_panel(&mut self) {
+        self.open_mining_panel();
+    }
+
+    /// Restores the world viewport, preserving the selected camera and simulation.
+    pub fn return_to_flight(&mut self) {
+        self.release_cockpit_input();
+        self.cockpit.services_open = false;
+        self.cockpit.overview_open = false;
+        self.cockpit.service_tab = ServiceTab::Navigation;
+    }
+
+    /// Local workspace selection derived from the actual client presentation.
+    pub fn workspace_route(&self) -> &'static str {
+        if self.cockpit.services_open || self.cockpit.service_tab == ServiceTab::Layouts {
+            return self.cockpit.operations_route();
+        }
+        match self.cockpit.view_mode {
+            ViewMode::Tactical | ViewMode::Tactical3d => "Map",
+            _ => "Flight",
+        }
     }
 
     pub fn new(cc: &eframe::CreationContext<'_>, data_dir: PathBuf, pilot: String) -> Self {

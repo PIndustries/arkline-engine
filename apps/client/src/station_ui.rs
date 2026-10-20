@@ -146,10 +146,11 @@ impl Cockpit {
                         .as_ref()
                         .is_some_and(|avatar| avatar.docked_traversal.is_some())
                         || self.snapshot.as_ref().is_some_and(|snapshot| {
-                            snapshot
-                                .resource_jobs
-                                .iter()
-                                .any(|job| job.pilot == pilot.name && !job.phase.is_terminal())
+                            snapshot.resource_jobs.iter().any(|job| {
+                                job.pilot == pilot.name
+                                    && job.controller == self.pilot
+                                    && !job.phase.is_terminal()
+                            })
                         }))
             })
     }
@@ -206,7 +207,6 @@ impl Cockpit {
         let Some(binding) = self.verified_docked_binding() else {
             ui.strong("Pioneer traversal unavailable");
             ui.small("The ship registration or room layout does not match this client. Reconnect with matching sources before moving.");
-            ui.horizontal_wrapped(|ui| self.view_selector(ui));
             return true;
         };
         let Some(pilot) = self.own() else {
@@ -227,7 +227,6 @@ impl Cockpit {
         if let Some(state) = state {
             ui.horizontal_wrapped(|ui| {
                 ui.strong(docked_state_label(state));
-                self.on_foot_view_selector(ui);
                 if state.seat_transition.is_some() {
                     ui.small("Pilot seat transition");
                 } else if state.actuators.lift.moving {
@@ -419,7 +418,6 @@ impl Cockpit {
                 {
                     self.send(Request::Undock);
                 }
-                self.view_selector(ui);
             });
             ui.small(if in_space { "Leave the pilot seat to walk inside while the mining autopilot continues. Manual flight controls are unavailable away from the seat. Exterior access stays locked." } else { "Exit to hangar: leave the seat and walk to the port boarding vestibule, then use the hatches and lift. Shift + arrows look around while seated." });
         }
@@ -1179,18 +1177,114 @@ impl Cockpit {
         );
     }
 
+    fn docked_interaction_strip(&mut self, ui: &mut egui::Ui) {
+        let Some(pilot) = self.own() else {
+            return;
+        };
+        let in_space = pilot.location != Location::Docked;
+        let Some(binding) = self.verified_docked_binding() else {
+            ui.horizontal_wrapped(|ui| {
+                ui.colored_label(AMBER, "Interior registration unavailable");
+                if !self.embedded {
+                    self.flight_workspace_shortcuts(ui);
+                }
+            });
+            return;
+        };
+        let active_job = self.snapshot.as_ref().is_some_and(|snapshot| {
+            snapshot
+                .resource_jobs
+                .iter()
+                .any(|job| job.pilot == pilot.name && !job.phase.is_terminal())
+        });
+        let state = pilot
+            .station_avatar
+            .as_ref()
+            .and_then(|avatar| avatar.docked_traversal.as_ref());
+        let fresh = self.snapshot.as_ref().is_some_and(|snapshot| {
+            self.presentation_time()
+                .saturating_sub(snapshot.server_time_ms)
+                <= 1500
+        });
+        let ready = self.can_operate() && fresh;
+        ui.horizontal_wrapped(|ui| {
+            if let Some(state) = state {
+                ui.strong(docked_state_label(state));
+                if let Ok(pose) = docked_binding_pose(&binding) {
+                    let distance =
+                        station_distance(state.feet_m, seat_anchors(pose).root_station_m);
+                    let secured = state.actuators.hatches_closed()
+                        && !state.actuators.lift.moving
+                        && (state.actuators.lift.floor_station_m
+                            - lift_geometry(pose).ship_floor_m)
+                            .abs()
+                            < 0.03;
+                    if ui
+                            .add_enabled(
+                                ready
+                                    && state.grounded
+                                    && state.seat_transition.is_none()
+                                    && secured
+                                    && distance <= 1.0,
+                                egui::Button::new("Return to pilot seat"),
+                            )
+                            .on_hover_text(format!("Pilot chair: {distance:.1} m. Walk within 1 m and secure hatches to sit."))
+                            .clicked()
+                    {
+                        self.send(Request::DockedTraversal {
+                            request: DockedTraversalRequest::TakeSeat {
+                                binding: binding.clone(),
+                            },
+                        });
+                    }
+                }
+                if state.seat_transition.is_some() {
+                    ui.small("Seat transition");
+                }
+                if in_space {
+                    ui.small(if active_job { "Autopilot continues · exterior locked" } else { "Interior · exterior locked" });
+                } else if let Some(room) = self.docked_room_name(state) {
+                    ui.small(room);
+                }
+            } else {
+                ui.strong("PILOT SEAT");
+                if ui
+                    .add_enabled(ready, egui::Button::new("Leave pilot seat"))
+                    .clicked()
+                {
+                    self.send(Request::DockedTraversal {
+                        request: DockedTraversalRequest::LeaveSeat {
+                            binding: binding.clone(),
+                        },
+                    });
+                }
+                if !in_space && ui.add_enabled(ready, egui::Button::new("Undock")).clicked() {
+                    self.send(Request::Undock);
+                }
+                if in_space {
+                    ui.small(if active_job { "Walk inside · autopilot continues" } else { "Exterior access locked" });
+                }
+            }
+        });
+        if state.is_some() && !in_space {
+            ui.collapsing("Nearby controls and route", |ui| {
+                self.docked_station_actions(ui);
+            });
+        }
+    }
+
     pub(super) fn station_overlay(&mut self, ctx: &egui::Context) {
         if self.docked_navigation_present() {
             if self.embedded {
                 egui::TopBottomPanel::bottom("embedded_docked_traversal_actions")
-                    .height_range(48.0..=148.0)
+                    .height_range(34.0..=112.0)
                     .resizable(false)
                     .frame(self.overlay_frame(ctx))
                     .show(ctx, |ui| {
-                        self.docked_station_actions(ui);
+                        self.docked_interaction_strip(ui);
                     });
             } else {
-                egui::Window::new("Pioneer docked journey")
+                egui::Window::new("Ship interaction")
                     .id(egui::Id::new("docked_traversal_actions"))
                     .anchor(egui::Align2::CENTER_BOTTOM, [0.0, -14.0])
                     .resizable(false)
@@ -1198,7 +1292,7 @@ impl Cockpit {
                     .movable(false)
                     .frame(self.overlay_frame(ctx))
                     .show(ctx, |ui| {
-                        self.docked_station_actions(ui);
+                        self.docked_interaction_strip(ui);
                     });
             }
             return;

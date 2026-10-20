@@ -34,8 +34,8 @@ use arkline_client::{EmbeddedAssetGallery, EmbeddedClient, EmbeddedStatus};
 use eframe::egui::{self, Color32, RichText};
 use std::{collections::VecDeque, path::PathBuf, time::Duration};
 const BUILD: &str = include_str!("../../../BUILD_VERSION");
-const GREEN: Color32 = Color32::from_rgb(62, 233, 145);
-const MUTED: Color32 = Color32::from_rgb(140, 165, 158);
+const GREEN: Color32 = Color32::from_rgb(111, 207, 162);
+const MUTED: Color32 = Color32::from_rgb(151, 162, 176);
 struct Editor {
     cockpit: cockpit::CockpitPanel,
     imports: imports::Imports,
@@ -90,10 +90,21 @@ impl Editor {
         self.show_inspector = true;
     }
 
-    fn play_game(&mut self) {
+    // Navigation changes local presentation only. Clock controls remain explicit.
+    fn show_play_workspace(&mut self) {
         self.workspace = 0;
         self.inspector_tab = 0;
+        self.flight_focus = true;
         self.client.set_free_camera(false);
+    }
+
+    fn back_to_flight(&mut self) {
+        self.show_play_workspace();
+        self.client.return_to_flight();
+    }
+
+    fn play_game(&mut self) {
+        self.back_to_flight();
         if self.client.can_control_clock() || self.client.status() == &EmbeddedStatus::Stopped {
             self.client.play();
         }
@@ -324,111 +335,164 @@ impl eframe::App for Editor {
                 self.play_game();
             }
         }
+        let route = self.client.workspace_route();
         egui::TopBottomPanel::top("editor_toolbar")
-            .exact_height(if self.flight_focus { 44.0 } else { 58.0 })
+            .exact_height(48.0)
+            .frame(
+                egui::Frame::new()
+                    .fill(Color32::from_rgb(19, 25, 33))
+                    .inner_margin(egui::Margin::symmetric(16, 8)),
+            )
             .show(ctx, |ui| {
                 ui.horizontal_centered(|ui| {
-                    ui.add_space(10.0);
                     ui.label(
-                        RichText::new("A R K L I N E")
-                            .color(GREEN)
+                        RichText::new("ARKLINE")
                             .strong()
-                            .size(19.0),
+                            .size(17.0)
+                            .color(Color32::from_rgb(234, 235, 229)),
                     );
-                    ui.label(
-                        RichText::new(if self.flight_focus {
-                            "FLIGHT"
-                        } else {
-                            "EDITOR"
-                        })
-                        .color(MUTED)
-                        .size(11.0),
-                    );
-                    ui.separator();
-                    if ui
-                        .add_enabled(
-                            ready
-                                && (if clock_control {
-                                    !active
-                                } else {
-                                    self.client.status() == &EmbeddedStatus::Stopped
-                                } || self.workspace != 0
-                                    || self.inspector_tab == 2
-                                    || (self.inspector_tab == 6 && self.room_plan)),
-                            egui::Button::new(if clock_control {
-                                "▶  Play"
-                            } else {
-                                "Game / resume"
-                            })
-                            .min_size(egui::vec2(82., 32.)),
-                        )
-                        .clicked()
-                    {
-                        self.play_game();
+                    ui.add_space(18.0);
+                    if ui.selectable_label(self.flight_focus, "Play").clicked() {
+                        self.back_to_flight();
                     }
-                    if ui
-                        .add_enabled(
-                            active && clock_control,
-                            egui::Button::new("Ⅱ  Pause").min_size(egui::vec2(82., 32.)),
-                        )
-                        .clicked()
+                    if ui.selectable_label(!self.flight_focus, "Editor").clicked() {
+                        self.workspace = 0;
+                        self.flight_focus = false;
+                        self.client.return_to_flight();
+                    }
+                    ui.separator();
+                    let status_color = match self.client.status() {
+                        EmbeddedStatus::Running => GREEN,
+                        EmbeddedStatus::Error(_) => Color32::from_rgb(231, 134, 130),
+                        EmbeddedStatus::Paused => Color32::from_rgb(221, 187, 122),
+                        _ => MUTED,
+                    };
+                    let status_label = if matches!(self.client.status(), EmbeddedStatus::Error(_)) {
+                        "ERROR"
+                    } else {
+                        &status
+                    };
+                    ui.label(
+                        RichText::new(format!("●  {status_label}"))
+                            .size(11.0)
+                            .color(status_color),
+                    )
+                    .on_hover_text(&status);
+                    if self.flight_focus
+                        && active
                         && clock_control
+                        && ui.small_button("Pause").clicked()
                     {
                         self.client.pause();
                     }
-                    if ui
-                        .add_enabled(
-                            paused && clock_control,
-                            egui::Button::new("Step 50 ms").min_size(egui::vec2(95., 32.)),
-                        )
-                        .clicked()
-                    {
-                        self.client.step();
-                    }
-                    if ui
-                        .add_enabled(
-                            active || paused,
-                            egui::Button::new(if clock_control {
-                                "■  Stop"
-                            } else {
-                                "Suspend controls"
-                            })
-                            .min_size(egui::vec2(82., 32.)),
-                        )
-                        .clicked()
-                    {
-                        self.client.stop();
-                    }
-                    ui.separator();
-                    ui.label(RichText::new(&status).color(if active {
-                        GREEN
-                    } else {
-                        Color32::from_rgb(239, 191, 102)
-                    }));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.label(RichText::new(BUILD.trim()).color(MUTED));
-                        ui.label(RichText::new("LOCAL DEVELOPMENT").color(GREEN).small());
+                        ui.label(RichText::new(BUILD.trim()).color(MUTED).size(10.0));
+                        if ui.button("Session").clicked() {
+                            self.session_panel.open = true;
+                        }
+                        if ui.button("Sound").clicked() {
+                            self.show_play_workspace();
+                            self.client.open_sound_panel();
+                        }
+                        if ui.selectable_label(self.workspace == 8, "Models").clicked() {
+                            self.workspace = 8;
+                        }
+                        ui.label(RichText::new(&self.selected_pilot).color(MUTED).size(12.0));
                     });
                 });
             });
-        egui::TopBottomPanel::top("workspace_tabs").show(ctx, |ui| {
-            ui.horizontal_wrapped(|ui| {
-                if ui
-                    .selectable_label(self.flight_focus && self.workspace == 0, "Flight")
-                    .clicked()
-                {
-                    self.workspace = 0;
-                    self.inspector_tab = 0;
-                    self.flight_focus = true;
-                    self.client.set_free_camera(false);
-                }
-                if ui.selectable_label(!self.flight_focus, "Editor").clicked() {
-                    self.workspace = 0;
-                    self.flight_focus = false;
-                }
-                ui.separator();
-                ui.selectable_value(&mut self.workspace, 8, "Models");
-                if !self.flight_focus {
+        egui::TopBottomPanel::top("workspace_tabs")
+            .exact_height(44.0)
+            .frame(
+                egui::Frame::new()
+                    .fill(Color32::from_rgb(24, 31, 40))
+                    .inner_margin(egui::Margin::symmetric(16, 6)),
+            )
+            .show(ctx, |ui| {
+                ui.horizontal_centered(|ui| {
+                    for label in ["Flight", "Map", "Ship", "Operations"] {
+                        let selected = self.flight_focus && self.workspace == 0 && route == label;
+                        let available = label != "Map"
+                            || self
+                                .client
+                                .debug_view_state()
+                                .available
+                                .contains(&arkline_client::EmbeddedView::Tactical);
+                        if ui
+                            .add_enabled(
+                                available,
+                                egui::Button::new(label)
+                                    .selected(selected)
+                                    .min_size(egui::vec2(82.0, 30.0)),
+                            )
+                            .clicked()
+                        {
+                            self.show_play_workspace();
+                            match label {
+                                "Map" => {
+                                    self.client.return_to_flight();
+                                    if let Err(message) = self
+                                        .client
+                                        .set_debug_view(arkline_client::EmbeddedView::Tactical)
+                                    {
+                                        self.scene_message = message;
+                                    }
+                                }
+                                "Ship" => self.client.open_ship_panel(),
+                                "Operations" => self.client.open_operations_panel(),
+                                _ => {
+                                    self.client.return_to_flight();
+                                    // A deliberate Flight click selects the cockpit when
+                                    // seated; Back to Flight below preserves the camera.
+                                    if self
+                                        .client
+                                        .debug_view_state()
+                                        .available
+                                        .contains(&arkline_client::EmbeddedView::Cockpit)
+                                    {
+                                        let _ = self
+                                            .client
+                                            .set_debug_view(arkline_client::EmbeddedView::Cockpit);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    ui.separator();
+                    if ui
+                        .button("Mining")
+                        .on_hover_text("Mining routines in Operations")
+                        .clicked()
+                    {
+                        self.show_play_workspace();
+                        self.client.open_mining_panel();
+                    }
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.button("Back to Flight").clicked() {
+                            self.back_to_flight();
+                        }
+                        ui.label(
+                            RichText::new(match self.client.session_mode() {
+                                arkline_client::EmbeddedSessionMode::Local => "LOCAL",
+                                arkline_client::EmbeddedSessionMode::Host { .. } => "HOST",
+                                arkline_client::EmbeddedSessionMode::Join { .. } => "SHARED",
+                            })
+                            .color(MUTED)
+                            .size(10.0),
+                        );
+                    });
+                });
+            });
+        if !self.flight_focus {
+            egui::TopBottomPanel::top("editor_workspace_tools").show(ctx, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(RichText::new("WORKSPACE").size(10.0).color(MUTED));
+                    if ui
+                        .selectable_label(self.workspace == 0 && self.inspector_tab == 0, "Scene")
+                        .clicked()
+                    {
+                        self.open_inspector(0);
+                    }
                     if ui
                         .selectable_label(self.workspace == 0 && self.inspector_tab == 6, "Rooms")
                         .clicked()
@@ -459,33 +523,6 @@ impl eframe::App for Editor {
                             self.workspace = 0;
                         }
                     });
-                    if ui
-                        .selectable_label(
-                            self.workspace == 0 && self.inspector_tab == 0,
-                            "Play view",
-                        )
-                        .clicked()
-                    {
-                        self.open_inspector(0);
-                    }
-                }
-                if ui
-                    .button("Mining")
-                    .on_hover_text("Open the server-controlled repeat mining routine")
-                    .clicked()
-                {
-                    self.workspace = 0;
-                    self.inspector_tab = 0;
-                    self.flight_focus = true;
-                    self.client.open_mining_panel();
-                }
-                if ui.button("Sound").clicked() {
-                    self.workspace = 0;
-                    self.inspector_tab = 0;
-                    self.flight_focus = true;
-                    self.client.open_sound_panel();
-                }
-                if !self.flight_focus {
                     ui.menu_button("Tools", |ui| {
                         ui.selectable_value(&mut self.workspace, 2, "Physics lab");
                         if ui.button("Render debug").clicked() {
@@ -499,20 +536,60 @@ impl eframe::App for Editor {
                             self.community.ensure_loaded();
                         }
                     });
-                }
-                if ui.button("Session").clicked() {
-                    self.session_panel.open = true;
-                }
-                ui.label(
-                    RichText::new(match self.client.session_mode() {
-                        arkline_client::EmbeddedSessionMode::Local => "Local authority",
-                        arkline_client::EmbeddedSessionMode::Host { .. } => "Shared host",
-                        arkline_client::EmbeddedSessionMode::Join { .. } => "Shared universe",
-                    })
-                    .color(MUTED),
-                );
+                });
             });
-        });
+        }
+        if !self.flight_focus || !active {
+            egui::TopBottomPanel::top("simulation_transport").show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("SIMULATION").size(10.0).color(MUTED));
+                    if ui
+                        .add_enabled(
+                            ready
+                                && (if clock_control {
+                                    !active
+                                } else {
+                                    self.client.status() == &EmbeddedStatus::Stopped
+                                }),
+                            egui::Button::new(if clock_control {
+                                "▶  Play"
+                            } else {
+                                "Game / resume"
+                            }),
+                        )
+                        .clicked()
+                    {
+                        self.play_game();
+                    }
+                    if ui
+                        .add_enabled(active && clock_control, egui::Button::new("Ⅱ  Pause"))
+                        .clicked()
+                        && clock_control
+                    {
+                        self.client.pause();
+                    }
+                    if ui
+                        .add_enabled(paused && clock_control, egui::Button::new("Step 50 ms"))
+                        .clicked()
+                    {
+                        self.client.step();
+                    }
+                    if ui
+                        .add_enabled(
+                            active || paused,
+                            egui::Button::new(if clock_control {
+                                "■  Stop"
+                            } else {
+                                "Suspend controls"
+                            }),
+                        )
+                        .clicked()
+                    {
+                        self.client.stop();
+                    }
+                });
+            });
+        }
         if self.workspace != 0 || self.inspector_tab != 0 {
             self.flight_focus = false;
         }
@@ -548,7 +625,7 @@ impl eframe::App for Editor {
                     ui.separator();
                     ui.add_enabled_ui(self.workspace == 0, |ui| {
                         if self.flight_focus {
-                            if ui.button("World / inspector").clicked() {
+                            if ui.button("Open editor tools").clicked() {
                                 self.flight_focus = false;
                             }
                             return;
@@ -1030,12 +1107,6 @@ fn main() -> eframe::Result<()> {
         "Arkline Editor",
         options,
         Box::new(move |cc| {
-            let mut visuals = egui::Visuals::dark();
-            visuals.panel_fill = Color32::from_rgb(10, 17, 15);
-            visuals.window_fill = Color32::from_rgb(13, 23, 19);
-            visuals.selection.bg_fill = Color32::from_rgb(15, 80, 47);
-            visuals.selection.stroke.color = GREEN;
-            cc.egui_ctx.set_visuals(visuals);
             let mut editor = Editor::new(cc, project, pilot);
             editor.client.start_audio_output();
             Ok(Box::new(editor))
