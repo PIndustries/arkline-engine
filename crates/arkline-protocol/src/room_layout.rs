@@ -66,6 +66,47 @@ impl RoomLayout {
             z - DOOR_NEGATIVE_EDGE_OFFSET_M
         }
     }
+    /// Generate this room's exact wall and already-prototyped storage geometry.
+    /// Deck boundaries and the shared access-core enclosure belong to the deck
+    /// projection. Validate the containing document before live installation.
+    pub fn obstacles(&self) -> Vec<StationObstacle> {
+        let mut obstacles = Vec::new();
+        let [x, z] = self.origin_xz_m;
+        let [length, depth, height] = self.clear_lwh_m;
+        let [door_x, _door_z] = self.door_center_xz_m;
+        let [door_width, _door_height] = self.door_clear_wh_m;
+        let normalized_door_plane = self.door_wall_z();
+        let door_left = door_x - door_width / 2.0;
+        let door_right = door_x + door_width / 2.0;
+        push_if_area(
+            &mut obstacles,
+            wall(x, normalized_door_plane, door_left - x, 0.15, height),
+        );
+        push_if_area(
+            &mut obstacles,
+            wall(
+                door_right,
+                normalized_door_plane,
+                x + length - door_right,
+                0.15,
+                height,
+            ),
+        );
+        obstacles.push(wall(x - 0.15, z, 0.15, depth, height));
+        obstacles.push(wall(x + length, z, 0.15, depth, height));
+        let south = z + depth <= SOUTH_ROOM_MAX_Z_M + LIVE_GEOMETRY_EPSILON_M;
+        let rear_wall_z = if south { z } else { z + depth - 0.15 };
+        obstacles.push(wall(x, rear_wall_z, length, 0.15, height));
+
+        if is_prototyped_storage(self) {
+            obstacles.push(StationObstacle {
+                kind: StationObstacleKind::Storage,
+                min: [x + 1.0, 0.0, z + 1.0],
+                max: [x + 2.8, 1.4, z + 1.8],
+            });
+        }
+        obstacles
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -369,40 +410,7 @@ impl RoomLayoutDocument {
             ),
         ];
         for room in self.rooms.iter().filter(|room| room.deck == deck) {
-            let [x, z] = room.origin_xz_m;
-            let [length, depth, height] = room.clear_lwh_m;
-            let [door_x, _door_z] = room.door_center_xz_m;
-            let [door_width, _door_height] = room.door_clear_wh_m;
-            let normalized_door_plane = room.door_wall_z();
-            let door_left = door_x - door_width / 2.0;
-            let door_right = door_x + door_width / 2.0;
-            push_if_area(
-                &mut obstacles,
-                wall(x, normalized_door_plane, door_left - x, 0.15, height),
-            );
-            push_if_area(
-                &mut obstacles,
-                wall(
-                    door_right,
-                    normalized_door_plane,
-                    x + length - door_right,
-                    0.15,
-                    height,
-                ),
-            );
-            obstacles.push(wall(x - 0.15, z, 0.15, depth, height));
-            obstacles.push(wall(x + length, z, 0.15, depth, height));
-            let south = z + depth <= SOUTH_ROOM_MAX_Z_M + LIVE_GEOMETRY_EPSILON_M;
-            let rear_wall_z = if south { z } else { z + depth - 0.15 };
-            obstacles.push(wall(x, rear_wall_z, length, 0.15, height));
-
-            if is_prototyped_storage(room) {
-                obstacles.push(StationObstacle {
-                    kind: StationObstacleKind::Storage,
-                    min: [x + 1.0, 0.0, z + 1.0],
-                    max: [x + 2.8, 1.4, z + 1.8],
-                });
-            }
+            obstacles.extend(room.obstacles());
         }
         // This existing access-core enclosure is part of the authored baseline.
         obstacles.push(StationObstacle {
@@ -642,6 +650,122 @@ mod tests {
             obstacle_values(&baseline.obstacles(1)),
             obstacle_values(&document.obstacles(1))
         );
+    }
+
+    #[test]
+    fn room_projection_preserves_ordered_legacy_geometry_for_defaults_and_valid_edits() {
+        let baseline = default_pioneer_room_layout();
+        let mut edited = baseline.clone();
+        let north = edited
+            .rooms
+            .iter_mut()
+            .find(|room| room.source_room_id.as_deref() == Some("D1-S1"))
+            .unwrap();
+        north.origin_xz_m[0] += 0.5;
+        north.clear_lwh_m[0] -= 0.5;
+        north.door_center_xz_m[0] += 0.25;
+        let south = edited
+            .rooms
+            .iter_mut()
+            .find(|room| room.source_room_id.as_deref() == Some("D2-P2"))
+            .unwrap();
+        south.origin_xz_m[0] += 0.4;
+        south.clear_lwh_m[0] -= 0.4;
+        south.clear_lwh_m[2] = 2.9;
+        south.door_center_xz_m[0] += 0.2;
+        let mut edge = edited.clone();
+        let room = edge
+            .rooms
+            .iter_mut()
+            .find(|room| room.source_room_id.as_deref() == Some("D2-P2"))
+            .unwrap();
+        room.door_center_xz_m[0] = room.origin_xz_m[0] + room.door_clear_wh_m[0] / 2.0;
+        for document in [baseline, edited, edge] {
+            document.validate_live().unwrap();
+            for deck in [1, 2] {
+                assert_eq!(
+                    obstacle_values(&document.obstacles(deck)),
+                    obstacle_values(&legacy_deck_obstacles(&document, deck))
+                );
+                let expected = document.obstacles(deck);
+                let mut cursor = 4; // The unchanged four outer deck walls.
+                for room in document.rooms.iter().filter(|room| room.deck == deck) {
+                    let parts = room.obstacles();
+                    assert!(!parts.is_empty());
+                    assert_eq!(
+                        obstacle_values(&expected[cursor..cursor + parts.len()]),
+                        obstacle_values(&parts)
+                    );
+                    cursor += parts.len();
+                }
+                assert_eq!(cursor + 1, expected.len()); // Unchanged access-core storage.
+            }
+        }
+    }
+
+    // Preserve the pre-extraction deck recipe as an ordered regression oracle.
+    fn legacy_deck_obstacles(document: &RoomLayoutDocument, deck: u8) -> Vec<StationObstacle> {
+        let mut obstacles = vec![
+            wall(0.0, 0.0, PIONEER_INTERIOR_SIZE[0], 0.15, 3.2),
+            wall(
+                0.0,
+                PIONEER_INTERIOR_SIZE[1] - 0.15,
+                PIONEER_INTERIOR_SIZE[0],
+                0.15,
+                3.2,
+            ),
+            wall(0.0, 0.0, 0.15, PIONEER_INTERIOR_SIZE[1], 3.2),
+            wall(
+                PIONEER_INTERIOR_SIZE[0] - 0.15,
+                0.0,
+                0.15,
+                PIONEER_INTERIOR_SIZE[1],
+                3.2,
+            ),
+        ];
+        for room in document.rooms.iter().filter(|room| room.deck == deck) {
+            let [x, z] = room.origin_xz_m;
+            let [length, depth, height] = room.clear_lwh_m;
+            let [door_x, _door_z] = room.door_center_xz_m;
+            let [door_width, _door_height] = room.door_clear_wh_m;
+            let normalized_door_plane = room.door_wall_z();
+            let door_left = door_x - door_width / 2.0;
+            let door_right = door_x + door_width / 2.0;
+            push_if_area(
+                &mut obstacles,
+                wall(x, normalized_door_plane, door_left - x, 0.15, height),
+            );
+            push_if_area(
+                &mut obstacles,
+                wall(
+                    door_right,
+                    normalized_door_plane,
+                    x + length - door_right,
+                    0.15,
+                    height,
+                ),
+            );
+            obstacles.push(wall(x - 0.15, z, 0.15, depth, height));
+            obstacles.push(wall(x + length, z, 0.15, depth, height));
+            let south = z + depth <= SOUTH_ROOM_MAX_Z_M + LIVE_GEOMETRY_EPSILON_M;
+            let rear_wall_z = if south { z } else { z + depth - 0.15 };
+            obstacles.push(wall(x, rear_wall_z, length, 0.15, height));
+
+            if is_prototyped_storage(room) {
+                obstacles.push(StationObstacle {
+                    kind: StationObstacleKind::Storage,
+                    min: [x + 1.0, 0.0, z + 1.0],
+                    max: [x + 2.8, 1.4, z + 1.8],
+                });
+            }
+        }
+        // This existing access-core enclosure is part of the authored baseline.
+        obstacles.push(StationObstacle {
+            kind: StationObstacleKind::Storage,
+            min: [0.7, 0.0, 6.45],
+            max: [1.0, 1.3, 7.55],
+        });
+        obstacles
     }
 
     fn obstacle_values(
