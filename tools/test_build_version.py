@@ -131,5 +131,47 @@ raise SystemExit(int(os.environ.get("FAKE_CARGO_EXIT", "0")))
             self.assertFalse(staged.exists())
 
 
+class MacosBundleVersionTests(unittest.TestCase):
+    def test_current_build_has_valid_bundle_identity(self):
+        identity = "26.10.19.2"
+        self.assertEqual(build.macos_bundle_version(identity), "2484.0.2")
+
+    def test_daily_sequence_carries_across_two_components(self):
+        cases = {
+            "26.10.19.99": "2484.0.99",
+            "26.10.19.100": "2484.1.0",
+            "26.10.19.134": "2484.1.34",
+            "26.10.19.9999": "2484.99.99",
+        }
+        for identity, expected in cases.items():
+            with self.subTest(identity=identity):
+                self.assertEqual(build.macos_bundle_version(identity), expected)
+
+    def test_calendar_day_rollover_orders_after_maximum_previous_sequence(self):
+        previous = build.macos_bundle_version("26.10.19.9999")
+        following = build.macos_bundle_version("26.10.20.1")
+        self.assertEqual(following, "2485.0.1")
+        self.assertLess(tuple(map(int, previous.split("."))),
+                        tuple(map(int, following.split("."))))
+
+    def test_supported_calendar_day_limits(self):
+        self.assertEqual(build.macos_bundle_version("20.1.1.1"), "1.0.1")
+        self.assertEqual(build.macos_bundle_version("47.5.17.9999"), "9999.99.99")
+
+    def test_unsupported_date_and_sequence_fail_explicitly(self):
+        for identity in ["19.12.31.1", "47.5.18.1"]:
+            with self.subTest(identity=identity):
+                with self.assertRaisesRegex(ValueError, "macOS bundle build date"):
+                    build.macos_bundle_version(identity)
+        with self.assertRaisesRegex(ValueError, "macOS bundle build sequence"):
+            build.macos_bundle_version("26.10.19.10000")
+
+    def test_invalid_human_identity_is_rejected(self):
+        for identity in ["not-a-version", "26.2.30.1", "26.10.19.0", "26.10.19.-1"]:
+            with self.subTest(identity=identity):
+                with self.assertRaisesRegex(ValueError, "Invalid BUILD_VERSION"):
+                    build.macos_bundle_version(identity)
+
+
 if __name__ == "__main__":
     unittest.main()

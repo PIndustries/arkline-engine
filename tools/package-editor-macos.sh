@@ -35,19 +35,17 @@ CARGO_INCREMENTAL="${CARGO_INCREMENTAL:-0}" python3 "$ROOT/tools/build.py" \
   --version-output "$STAGING/BUILD_VERSION" \
   -- "${BUILD_ARGS[@]}" > "$STAGING/cargo-artifacts.jsonl"
 BUILD_VERSION="$(cat "$STAGING/BUILD_VERSION")"
-BUILD_NUMBER="$(python3 - "$BUILD_VERSION" <<'PY'
-import datetime, re, sys
-value = sys.argv[1]
-if not re.fullmatch(r'\d{2}\.\d{1,2}\.\d{1,2}\.\d{1,9}', value):
-    sys.exit('BUILD_VERSION must be yy.month.day.positive-build')
-year, month, day, sequence = map(int, value.split('.'))
-if sequence < 1:
-    sys.exit('BUILD_VERSION build must be positive')
+# CFBundleVersion has numeric component limits; retain the human build stamp
+# separately in ArklineBuildVersion and the bundled BUILD_VERSION file.
+BUILD_NUMBER="$(python3 -B - "$BUILD_VERSION" "$ROOT/tools" <<'PY'
+import sys
+sys.path.insert(0, sys.argv[2])
+from build import macos_bundle_version
+
 try:
-    date = datetime.date(2000 + year, month, day)
+    print(macos_bundle_version(sys.argv[1]))
 except ValueError as error:
     sys.exit(str(error))
-print(f'{date:%Y%m%d}.{sequence}')
 PY
 )"
 BINARY="$STAGING/arkline-editor"

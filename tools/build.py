@@ -105,6 +105,23 @@ def _parse_version(value: str, source: str) -> tuple[date, int]:
     return build_date, sequence
 
 
+def macos_bundle_version(value: str) -> str:
+    """Encode a human build identity within Apple's four/two/two digit limits.
+
+    The first component is the calendar day since 2020-01-01, plus one. The
+    daily sequence occupies the remaining two base-100 components, preserving
+    numeric ordering through sequence 134 and across calendar-day rollover.
+    Keep the original identity separately in ArklineBuildVersion/BUILD_VERSION.
+    """
+    build_date, sequence = _parse_version(value, "BUILD_VERSION")
+    calendar_day = (build_date - date(2020, 1, 1)).days + 1
+    if not 1 <= calendar_day <= 9999:
+        raise ValueError("macOS bundle build date must map to calendar days 1..9999 since 2020-01-01")
+    if not 1 <= sequence <= 9999:
+        raise ValueError("macOS bundle build sequence must be in 1..9999")
+    return f"{calendar_day}.{sequence // 100}.{sequence % 100}"
+
+
 def _write_atomic(path: Path, value: str) -> None:
     temporary = path.with_name(path.name + f".{os.getpid()}.tmp")
     temporary.write_text(value + "\n")
