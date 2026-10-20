@@ -265,7 +265,13 @@ impl Cockpit {
                 ] {
                     let index = usize::from(hatch == DockedHatch::Outer);
                     let motion = state.actuators.hatches.as_ref().map(|h| &h[index]);
-                    let open = motion.map_or(open, |h| h.target_open);
+                    let open = motion.map_or(open, |h| {
+                        if h.blocked {
+                            !h.target_open
+                        } else {
+                            h.target_open
+                        }
+                    });
                     if distance <= 3.0 {
                         if let Some(motion) = motion {
                             ui.small(format!(

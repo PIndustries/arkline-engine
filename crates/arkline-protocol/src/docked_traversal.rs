@@ -29,8 +29,10 @@ pub fn docked_layout_sha256(document: &RoomLayoutDocument) -> String {
 pub fn docked_binding_pose(
     binding: &DockedTraversalBinding,
 ) -> Result<crate::PioneerDockedPose, String> {
-    if binding.registration_revision != crate::PIONEER_DOCKED_REGISTRATION_REVISION
-        || binding.host_vessel_id.is_empty()
+    if binding.registration_revision != crate::PIONEER_DOCKED_REGISTRATION_REVISION {
+        return Err(format!("Pioneer geometry registration {} requires its matching build; this build uses registration {}. Preserve this world and use its matching earlier build. No automatic migration is performed.", binding.registration_revision, crate::PIONEER_DOCKED_REGISTRATION_REVISION));
+    }
+    if binding.host_vessel_id.is_empty()
         || binding.host_vessel_id.len() > 128
         || binding.layout_sha256.len() != 64
         || !binding

@@ -1310,7 +1310,7 @@ fn native_pioneer_animated_hatches_boarding_and_return() {
         let parts = pioneer_docked_scene::seated_body_parts(&cache, None, 0).unwrap();
         std::fs::write(directory.join("receipt.json"),serde_json::to_vec_pretty(&serde_json::json!({
             "native_macOS_offscreen":true,"desktop_acceptance":false,"captures":captures,"motion":motion,
-            "registered_panels":cache.geometry.panels.len(),"body_draw_parts":parts.len(),
+            "registered_panels":arkline_protocol::registered_geometry(&arkline_protocol::default_pioneer()).unwrap().panels.len(),"body_draw_parts":parts.len(),
             "source_sha256":arkline_protocol::PIONEER_DOCKED_SOURCE_SHA256,"registration_revision":arkline_protocol::PIONEER_DOCKED_REGISTRATION_REVISION,
             "returned_screen":screen,"authority_requests":h.authority_requests,"fixture":authority_fixture(&h.directory)})).unwrap()).unwrap();
     }

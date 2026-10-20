@@ -299,6 +299,7 @@ pub(super) fn stop_lifts(w: &mut World, now: u64) {
             if let Some(hatches) = &mut actuator.hatches {
                 for hatch in hatches {
                     hatch.moving = false;
+                    hatch.blocked = hatch.fraction != f64::from(hatch.target_open);
                     hatch.updated_at_ms = now;
                 }
             }
