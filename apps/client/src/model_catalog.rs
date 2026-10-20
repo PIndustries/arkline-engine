@@ -4,6 +4,9 @@ use arkline_protocol::{DroneClass, ExteriorFixtureKind, SurfacePropKind, ALL_SHI
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
+#[path = "model_catalog_windows.rs"]
+mod windows;
+
 #[derive(Clone, Debug)]
 pub struct RuntimeModelDescriptor {
     pub id: String,
@@ -37,6 +40,22 @@ pub struct RuntimeInspectionModel {
 pub(super) struct InspectionDraw {
     pub part: ModelPart,
     pub material: Material,
+    /// Expanded triangle-corner range in the existing GPU mesh: first, count.
+    /// None retains the complete runtime draw.
+    pub range: Option<(usize, usize)>,
+}
+impl InspectionDraw {
+    pub(super) fn selected_vertices<'a>(
+        &self,
+        vertices: &'a [Vertex],
+    ) -> Result<&'a [Vertex], String> {
+        let count = i32::try_from(vertices.len())
+            .map_err(|_| "Runtime inspection vertex count exceeds the GPU draw range")?;
+        let (first, count) = triangle_draw_range(count, self.range).ok_or(
+            "Runtime inspection range must be nonempty, triangle aligned and within its GPU mesh",
+        )?;
+        Ok(&vertices[first as usize..first as usize + count as usize])
+    }
 }
 
 pub fn runtime_model_catalog() -> Vec<RuntimeModelDescriptor> {
@@ -249,7 +268,9 @@ fn build_descriptors() -> Vec<RuntimeModelDescriptor> {
         );
         entry.notes.push(format!("{:?} fixture at {:?} body meters. Separate geometry uses the same runtime recipe at output 1; no powered state or pulse clock is changed.", fixture.kind, fixture.position_m));
         if fixture.kind == ExteriorFixtureKind::Window {
-            entry.unavailable = Some("This window uses the authored Pioneer Navigation glass material batch. The runtime has no separate fixture-bound triangle range; inspect the hull or its glass material group.".into());
+            entry.notes.clear();
+            entry.notes.push("Authored window pane only, selected from the existing Navigation glass GPU batch. Exact GLB hash and checked-in source/mount mappings are validated before preview; no fixture emission or gameplay state is applied.".into());
+            entry.notes.push("Source mapping is a checked-in review candidate for this exact asset snapshot, not an engineering approval or a durable identity across asset revisions.".into());
         }
         entries.push(entry);
     }
@@ -259,7 +280,7 @@ fn build_descriptors() -> Vec<RuntimeModelDescriptor> {
             &format!("room/{identity}"),
             &format!("Deck {} · {}", room.deck, room.name),
             "Rooms",
-            "crates/arkline-protocol/src/room_layout.rs::default_pioneer",
+            "apps/client/src/pioneer_interior.rs::inspection_room_parts",
         );
         entry.spec_dimensions_m = Some([
             room.clear_lwh_m[0],
@@ -270,7 +291,12 @@ fn build_descriptors() -> Vec<RuntimeModelDescriptor> {
             "Default room local ID {}; source ID {:?}; runtime ID {:?}.",
             room.id, room.source_room_id, room.runtime_room_id
         ));
-        entry.unavailable = Some(format!("Room walls and shared corridor surfaces are built together in Pioneer deck {}. Inspect that deck assembly; there is no isolated runtime room mesh.", room.deck));
+        entry.notes.push("Room cutaway: existing walls, doorway surrounds, room light and already-prototyped storage. Shared deck floors, ceilings, perimeter walls, corridor ribs/markings, lift, entry pads and access-core surfaces are omitted.".into());
+        entry.notes.push("Layout role names identify existing room shells; no additional utility or furnishing models are invented for those roles.".into());
+        if room.runtime_room_id.as_deref() == Some(arkline_protocol::PIONEER_CONNECTED_ROOM.room_id)
+        {
+            entry.notes.push("Connected airlock also includes its existing breaker/vent bodies and service conduits, with commissioned mains/light on and door closed for inspection. No live room state is changed.".into());
+        }
         entries.push(entry);
     }
     entries.extend(hangar::inspection_catalog::descriptors());
@@ -280,11 +306,24 @@ fn build_descriptors() -> Vec<RuntimeModelDescriptor> {
 fn draws(parts: impl IntoIterator<Item = ModelPart>, material: Material) -> Vec<InspectionDraw> {
     parts
         .into_iter()
-        .map(|part| InspectionDraw { part, material })
+        .map(|part| InspectionDraw {
+            part,
+            material,
+            range: None,
+        })
         .collect()
 }
 
 fn recipe(id: &str) -> Result<(Vec<InspectionDraw>, f32), String> {
+    if let Some(source_id) = id.strip_prefix("room/") {
+        return Ok((
+            draws(
+                hangar::inspection_catalog::room_parts(source_id)?,
+                Material::PaintedHull,
+            ),
+            1.0,
+        ));
+    }
     if let Some(result) = hangar::inspection_catalog::load(id) {
         return result;
     }
@@ -316,6 +355,7 @@ fn recipe(id: &str) -> Result<(Vec<InspectionDraw>, f32), String> {
                 |&((mesh, model, color, emission), material)| InspectionDraw {
                     part: (mesh, base * model, color, emission),
                     material,
+                    range: None,
                 },
             )
             .collect();
@@ -400,6 +440,9 @@ fn recipe(id: &str) -> Result<(Vec<InspectionDraw>, f32), String> {
             .iter()
             .find(|f| f.id == identity)
             .ok_or("Unknown exterior fixture")?;
+        if fixture.kind == ExteriorFixtureKind::Window {
+            return Ok((vec![windows::draw(fixture)?], 100.0));
+        }
         let part = exterior_visuals::fixture_part(fixture, Mat4::IDENTITY, 1.0)
             .ok_or("Fixture has no separate runtime geometry")?;
         return Ok((draws([part], Material::PaintedHull), 100.0));
@@ -486,9 +529,7 @@ fn measure(
             .uploads()
             .get(mesh_index(mesh))
             .ok_or("Runtime recipe refers to an unknown GPU mesh")?;
-        if vertices.is_empty() || !vertices.len().is_multiple_of(3) {
-            return Err("Runtime recipe has no triangle-aligned mesh".into());
-        }
+        let vertices = draw.selected_vertices(vertices)?;
         triangles = triangles
             .checked_add(vertices.len() / 3)
             .ok_or("Triangle count overflow")?;
@@ -562,6 +603,54 @@ mod tests {
             assert!(Arc::ptr_eq(&model, &load_runtime_model(&entry.id).unwrap()));
         }
         assert!(load_runtime_model("unknown/model").is_err());
+    }
+
+    #[test]
+    fn all_geometric_entries_are_previewable_and_room_cutaways_keep_shared_draws() {
+        let catalog = runtime_model_catalog();
+        assert_eq!(catalog.len(), 111);
+        let unavailable = catalog
+            .iter()
+            .filter(|entry| entry.unavailable.is_some())
+            .map(|entry| entry.id.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            unavailable,
+            vec![
+                "equipment/pioneer.deck1.airlock.supply",
+                "equipment/pioneer.deck1.airlock.controller",
+                "equipment/pioneer.deck1.airlock.pressure",
+            ]
+        );
+        assert_eq!(
+            catalog
+                .iter()
+                .filter(|entry| entry.unavailable.is_none())
+                .count(),
+            108
+        );
+        for room in arkline_protocol::default_pioneer().rooms {
+            let source_id = room.source_room_id.as_deref().unwrap();
+            let id = format!("room/{source_id}");
+            let entry = catalog.iter().find(|entry| entry.id == id).unwrap();
+            assert!(entry
+                .notes
+                .iter()
+                .any(|note| note.contains("floors") && note.contains("omitted")));
+            let model = load_runtime_model(&id).unwrap();
+            let expected = hangar::inspection_catalog::room_parts(source_id).unwrap();
+            assert_eq!(
+                model.parts.iter().map(|draw| draw.part).collect::<Vec<_>>(),
+                expected
+            );
+            assert!(model
+                .parts
+                .iter()
+                .all(|draw| draw.range.is_none() && draw.material == Material::PaintedHull));
+            assert_eq!(model.info.min_m, model.min.to_array());
+            assert_eq!(model.info.max_m, model.max.to_array());
+        }
+        assert!(hangar::inspection_catalog::room_parts("D3-P1").is_err());
     }
 
     #[test]

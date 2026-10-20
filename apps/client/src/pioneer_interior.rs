@@ -78,65 +78,11 @@ fn build_parts(deck: u8, document: &RoomLayoutDocument) -> Vec<ModelPart> {
         steel,
         0.0,
     );
-    for o in document.obstacles(deck) {
-        let min = Vec3::from_array(o.min.map(|v| v as f32));
-        let max = Vec3::from_array(o.max.map(|v| v as f32));
-        let fixture = matches!(o.kind, StationObstacleKind::Storage);
-        block(
-            &mut p,
-            min,
-            max,
-            if fixture {
-                Vec3::new(0.09, 0.13, 0.14)
-            } else {
-                steel
-            },
-            0.0,
-        );
-        if fixture {
-            block(
-                &mut p,
-                Vec3::new(min.x + 0.1, max.y - 0.5, max.z + 0.005),
-                Vec3::new(max.x - 0.1, max.y - 0.05, max.z + 0.02),
-                Vec3::new(0.015, 0.25, 0.1),
-                0.4,
-            );
-        }
+    for obstacle in document.obstacles(deck) {
+        p.0.extend(obstacle_model_parts(obstacle));
     }
     for room in document.rooms.iter().filter(|room| room.deck == deck) {
-        let [x, z] = room.origin_xz_m.map(|v| v as f32);
-        let [length, depth, height] = room.clear_lwh_m.map(|v| v as f32);
-        let [door, _door_z] = room.door_center_xz_m.map(|v| v as f32);
-        let [door_width, door_height] = room.door_clear_wh_m.map(|v| v as f32);
-        let face = room.door_wall_z() as f32;
-        for side in [-1.0, 1.0] {
-            let jamb_x = door + side * door_width * 0.5;
-            block(
-                &mut p,
-                Vec3::new(jamb_x - 0.025, 0.0, face - 0.01),
-                Vec3::new(jamb_x + 0.025, door_height, face + 0.17),
-                Vec3::new(0.025, 0.35, 0.14),
-                0.5,
-            );
-        }
-        block(
-            &mut p,
-            Vec3::new(door - door_width * 0.5, door_height - 0.04, face - 0.01),
-            Vec3::new(door + door_width * 0.5, door_height, face + 0.17),
-            Vec3::new(0.025, 0.35, 0.14),
-            0.5,
-        );
-        block(
-            &mut p,
-            Vec3::new(x + 0.6, (height - 0.05).min(3.15), z + depth * 0.35),
-            Vec3::new(
-                x + (length - 0.6).max(0.7),
-                (height - 0.02).min(3.18),
-                z + depth * 0.65,
-            ),
-            Vec3::new(0.5, 0.65, 0.55),
-            0.7,
-        );
+        p.0.extend(room_decoration_parts(room));
     }
     // Raised ceiling ribs and recessed light strips make the access path readable.
     for x in (2..32).step_by(3) {
@@ -193,25 +139,131 @@ fn build_parts(deck: u8, document: &RoomLayoutDocument) -> Vec<ModelPart> {
         0.3,
     );
     if deck == arkline_protocol::PIONEER_CONNECTED_ROOM.deck {
-        p.0.extend(equipment_static_parts("pioneer.deck1.airlock.breaker"));
-        block(
-            &mut p,
-            Vec3::new(4.28, 2.9, 0.3),
-            Vec3::new(4.32, 2.94, 5.3),
-            Vec3::new(0.1, 0.14, 0.12),
-            0.,
-        );
-        block(
-            &mut p,
-            Vec3::new(4.3, 2.9, 0.28),
-            Vec3::new(10.8, 2.94, 0.32),
-            Vec3::new(0.1, 0.14, 0.12),
-            0.,
-        );
-        p.0.extend(equipment_static_parts("pioneer.deck1.airlock.vent"));
+        p.0.extend(connected_room_static_parts());
     }
     p.0
 }
+
+/// The exact installed wall/storage draw recipe for one protocol obstacle.
+fn obstacle_model_parts(o: arkline_protocol::StationObstacle) -> Vec<ModelPart> {
+    let mut p = Parts(Vec::new());
+    let steel = Vec3::new(0.045, 0.065, 0.072);
+    let min = Vec3::from_array(o.min.map(|v| v as f32));
+    let max = Vec3::from_array(o.max.map(|v| v as f32));
+    let fixture = matches!(o.kind, StationObstacleKind::Storage);
+    block(
+        &mut p,
+        min,
+        max,
+        if fixture {
+            Vec3::new(0.09, 0.13, 0.14)
+        } else {
+            steel
+        },
+        0.0,
+    );
+    if fixture {
+        block(
+            &mut p,
+            Vec3::new(min.x + 0.1, max.y - 0.5, max.z + 0.005),
+            Vec3::new(max.x - 0.1, max.y - 0.05, max.z + 0.02),
+            Vec3::new(0.015, 0.25, 0.1),
+            0.4,
+        );
+    }
+    p.0
+}
+
+/// Existing doorway surrounds and ceiling light belonging to one room.
+fn room_decoration_parts(room: &arkline_protocol::RoomLayout) -> Vec<ModelPart> {
+    let mut p = Parts(Vec::new());
+    let [x, z] = room.origin_xz_m.map(|v| v as f32);
+    let [length, depth, height] = room.clear_lwh_m.map(|v| v as f32);
+    let [door, _door_z] = room.door_center_xz_m.map(|v| v as f32);
+    let [door_width, door_height] = room.door_clear_wh_m.map(|v| v as f32);
+    let face = room.door_wall_z() as f32;
+    for side in [-1.0, 1.0] {
+        let jamb_x = door + side * door_width * 0.5;
+        block(
+            &mut p,
+            Vec3::new(jamb_x - 0.025, 0.0, face - 0.01),
+            Vec3::new(jamb_x + 0.025, door_height, face + 0.17),
+            Vec3::new(0.025, 0.35, 0.14),
+            0.5,
+        );
+    }
+    block(
+        &mut p,
+        Vec3::new(door - door_width * 0.5, door_height - 0.04, face - 0.01),
+        Vec3::new(door + door_width * 0.5, door_height, face + 0.17),
+        Vec3::new(0.025, 0.35, 0.14),
+        0.5,
+    );
+    block(
+        &mut p,
+        Vec3::new(x + 0.6, (height - 0.05).min(3.15), z + depth * 0.35),
+        Vec3::new(
+            x + (length - 0.6).max(0.7),
+            (height - 0.02).min(3.18),
+            z + depth * 0.65,
+        ),
+        Vec3::new(0.5, 0.65, 0.55),
+        0.7,
+    );
+    p.0
+}
+
+/// Existing airlock bodies and their service conduits, in installed draw order.
+fn connected_room_static_parts() -> Vec<ModelPart> {
+    let mut p = Parts(Vec::new());
+    p.0.extend(equipment_static_parts("pioneer.deck1.airlock.breaker"));
+    block(
+        &mut p,
+        Vec3::new(4.28, 2.9, 0.3),
+        Vec3::new(4.32, 2.94, 5.3),
+        Vec3::new(0.1, 0.14, 0.12),
+        0.,
+    );
+    block(
+        &mut p,
+        Vec3::new(4.3, 2.9, 0.28),
+        Vec3::new(10.8, 2.94, 0.32),
+        Vec3::new(0.1, 0.14, 0.12),
+        0.,
+    );
+    p.0.extend(equipment_static_parts("pioneer.deck1.airlock.vent"));
+    p.0
+}
+
+/// A cutaway of one default room using installed runtime recipes. Shared deck
+/// floors, ceilings, corridor ribs/markings and access-core context are omitted.
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) fn inspection_room_parts(source_id: &str) -> Result<Vec<ModelPart>, String> {
+    let document = arkline_protocol::default_pioneer();
+    let room = document
+        .rooms
+        .iter()
+        .find(|room| room.source_room_id.as_deref() == Some(source_id))
+        .ok_or_else(|| format!("Unknown Pioneer source room: {source_id}"))?;
+    let mut parts: Vec<ModelPart> = room
+        .obstacles()
+        .into_iter()
+        .flat_map(obstacle_model_parts)
+        .collect();
+    parts.extend(room_decoration_parts(room));
+    if room.runtime_room_id.as_deref() == Some(arkline_protocol::PIONEER_CONNECTED_ROOM.room_id) {
+        parts.extend(connected_room_static_parts());
+        let mut state =
+            arkline_protocol::PioneerRoomState::uncommissioned("inspection-only".into());
+        state.commissioned = true;
+        state.breaker_closed = true;
+        state.light_on = true;
+        state.door_open = false;
+        parts.extend(state_parts(room.deck, Some(&state)));
+    }
+    Ok(parts)
+}
+
 /// Installed fixture bodies, kept separate from the shared room conduits.
 fn equipment_static_parts(id: &str) -> Vec<ModelPart> {
     let mut p = Parts(Vec::new());
@@ -707,6 +759,109 @@ pub(super) fn labels(
         }
     }
 }
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod room_inspection_tests {
+    use super::*;
+
+    fn installed_state() -> arkline_protocol::PioneerRoomState {
+        let mut state =
+            arkline_protocol::PioneerRoomState::uncommissioned("inspection-test".into());
+        state.commissioned = true;
+        state.breaker_closed = true;
+        state.light_on = true;
+        state.door_open = false;
+        state
+    }
+
+    #[test]
+    fn every_room_cutaway_is_an_ordered_subset_of_the_installed_deck() {
+        let document = arkline_protocol::default_pioneer();
+        let state = installed_state();
+        assert_eq!(document.rooms.len(), 12);
+        for room in &document.rooms {
+            let source_id = room.source_room_id.as_deref().unwrap();
+            let inspected = inspection_room_parts(source_id).unwrap();
+            let mut installed = build_parts(room.deck, &document);
+            installed.extend(state_parts(room.deck, Some(&state)));
+            let mut cursor = 0;
+            for part in &inspected {
+                let offset = installed[cursor..]
+                    .iter()
+                    .position(|candidate| candidate == part)
+                    .unwrap_or_else(|| {
+                        panic!("{source_id} contains a new or reordered draw: {part:?}")
+                    });
+                cursor += offset + 1;
+                assert!(part.1.is_finite() && part.1.determinant().abs() > 1e-20);
+                assert!(part.2.is_finite() && part.3.is_finite());
+            }
+            // Source roles do not create fictional equipment. Only the connected
+            // airlock has installed utilities; five existing deck-one rooms have
+            // their already-prototyped storage cabinet and display strip.
+            let expected = if source_id == "D1-P1" {
+                28
+            } else if room.deck == 1 {
+                11
+            } else {
+                9
+            };
+            assert_eq!(inspected.len(), expected, "{source_id}");
+        }
+        assert!(inspection_room_parts("unknown-room").is_err());
+    }
+
+    #[test]
+    fn room_cutaways_omit_shared_slabs_and_access_core_geometry() {
+        let mut shared = Parts(Vec::new());
+        let steel = Vec3::new(0.045, 0.065, 0.072);
+        block(
+            &mut shared,
+            Vec3::new(0.0, -0.1, 0.0),
+            Vec3::new(32.0, 0.0, 14.0),
+            steel,
+            0.0,
+        );
+        block(
+            &mut shared,
+            Vec3::new(0.0, 3.2, 0.0),
+            Vec3::new(32.0, 3.3, 14.0),
+            steel,
+            0.0,
+        );
+        shared
+            .0
+            .extend(obstacle_model_parts(arkline_protocol::StationObstacle {
+                kind: StationObstacleKind::Storage,
+                min: [0.7, 0.0, 6.45],
+                max: [1.0, 1.3, 7.55],
+            }));
+        for room in arkline_protocol::default_pioneer().rooms {
+            let inspected = inspection_room_parts(room.source_room_id.as_deref().unwrap()).unwrap();
+            assert!(shared.0.iter().all(|part| !inspected.contains(part)));
+        }
+    }
+
+    #[test]
+    fn airlock_cutaway_retains_actual_installed_bodies_conduits_and_outputs() {
+        let inspected = inspection_room_parts("D1-P1").unwrap();
+        let static_parts = connected_room_static_parts();
+        assert!(inspected
+            .windows(static_parts.len())
+            .any(|parts| parts == static_parts.as_slice()));
+        let outputs = state_parts(1, Some(&installed_state()));
+        assert!(inspected.ends_with(&outputs));
+        assert_eq!(
+            outputs.len(),
+            5,
+            "Four installed outputs and the closed door"
+        );
+        for source in ["D1-S1", "D2-P1"] {
+            let other = inspection_room_parts(source).unwrap();
+            assert!(static_parts.iter().all(|part| !other.contains(part)));
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     fn panel_pilot() -> PilotView {

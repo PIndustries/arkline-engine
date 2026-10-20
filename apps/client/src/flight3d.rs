@@ -2662,6 +2662,23 @@ impl Renderer {
         emission: f32,
         material: Material,
     ) {
+        self.draw_material_range(mesh, model, color, emission, material, None);
+    }
+    unsafe fn draw_material_range(
+        &self,
+        mesh: usize,
+        model: Mat4,
+        color: Vec3,
+        emission: f32,
+        material: Material,
+        range: Option<(usize, usize)>,
+    ) {
+        let Some(buffer) = self.meshes.get(mesh_index(mesh)) else {
+            return;
+        };
+        let Some((first, count)) = triangle_draw_range(buffer.count, range) else {
+            return;
+        };
         let graph_enabled = self.spatial_material.applied().is_some_and(|revision| {
             embedded_primitive(mesh).is_some_and(|p| {
                 p.material_index == Some(revision.binding().material_index as usize)
@@ -2733,12 +2750,12 @@ impl Renderer {
             light_color.z,
         );
         gl.bind_vertex_array(Some(self.meshes[mesh_index(mesh)].vao));
-        gl.draw_arrays(glow::TRIANGLES, 0, self.meshes[mesh_index(mesh)].count);
+        gl.draw_arrays(glow::TRIANGLES, first, count);
         #[cfg(not(target_arch = "wasm32"))]
         {
             let mut metrics = self.debug_metrics.get();
             metrics.draw_calls += 1;
-            metrics.triangles += self.meshes[mesh_index(mesh)].count as u64 / 3;
+            metrics.triangles += count as u64 / 3;
             if self.debug_wireframe {
                 let mut modes = [0; 2];
                 gl.get_parameter_i32_slice(glow::POLYGON_MODE, &mut modes);
@@ -2754,7 +2771,7 @@ impl Renderer {
                 if let Some(uniforms) = &self.spatial_uniforms {
                     uniforms.set_enabled(gl, false);
                 }
-                gl.draw_arrays(glow::TRIANGLES, 0, self.meshes[mesh_index(mesh)].count);
+                gl.draw_arrays(glow::TRIANGLES, first, count);
                 if let Some(uniforms) = &self.spatial_uniforms {
                     uniforms.set_enabled(gl, graph_enabled);
                 }
@@ -4470,6 +4487,19 @@ const TRIM_ROLE: usize = 2 << 24;
 const EMISSION_ROLE: usize = 3 << 24;
 fn mesh_index(mesh: usize) -> usize {
     mesh & 0x00ff_ffff
+}
+/// Validate expanded triangle-corner draws before measuring or submitting them.
+fn triangle_draw_range(vertex_count: i32, range: Option<(usize, usize)>) -> Option<(i32, i32)> {
+    let vertex_count = usize::try_from(vertex_count).ok()?;
+    let (first, count) = range.unwrap_or((0, vertex_count));
+    if count == 0
+        || !first.is_multiple_of(3)
+        || !count.is_multiple_of(3)
+        || first.checked_add(count)? > vertex_count
+    {
+        return None;
+    }
+    Some((i32::try_from(first).ok()?, i32::try_from(count).ok()?))
 }
 fn paint_role(mesh: usize) -> usize {
     match mesh & !0x00ff_ffff {

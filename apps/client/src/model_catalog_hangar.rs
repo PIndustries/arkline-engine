@@ -191,6 +191,10 @@ fn avatar(pose: &str) -> Option<Vec<ModelPart>> {
     Some(avatar_parts(&avatar, gait, None))
 }
 
+pub(in crate::flight3d) fn room_parts(source_id: &str) -> Result<Vec<ModelPart>, String> {
+    pioneer_interior::inspection_room_parts(source_id)
+}
+
 pub(in crate::flight3d) fn load(id: &str) -> Option<Result<(Vec<InspectionDraw>, f32), String>> {
     let (category, identity) = id.split_once('/')?;
     let parts = match category {
@@ -258,6 +262,7 @@ pub(in crate::flight3d) fn load(id: &str) -> Option<Result<(Vec<InspectionDraw>,
             .map(|part| InspectionDraw {
                 part,
                 material: Material::PaintedHull,
+                range: None,
             })
             .collect(),
         1.0,

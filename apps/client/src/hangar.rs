@@ -1047,7 +1047,14 @@ pub(super) unsafe fn paint_inspection(
     renderer.local_lights.upload_station(&renderer.gl, &lights);
     for draw in &model.parts {
         let (mesh, transform, color, emission) = draw.part;
-        renderer.draw_material(mesh, display * transform, color, emission, draw.material);
+        renderer.draw_material_range(
+            mesh,
+            display * transform,
+            color,
+            emission,
+            draw.material,
+            draw.range,
+        );
     }
     renderer.restore_shadow_texture(shadow_texture);
 }
