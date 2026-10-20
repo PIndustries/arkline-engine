@@ -988,7 +988,9 @@ fn main() -> eframe::Result<()> {
             visuals.selection.bg_fill = Color32::from_rgb(15, 80, 47);
             visuals.selection.stroke.color = GREEN;
             cc.egui_ctx.set_visuals(visuals);
-            Ok(Box::new(Editor::new(cc, project, pilot)))
+            let mut editor = Editor::new(cc, project, pilot);
+            editor.client.start_audio_output();
+            Ok(Box::new(editor))
         }),
     )
 }

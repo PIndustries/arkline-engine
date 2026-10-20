@@ -87,6 +87,14 @@ impl Default for SoundEngine {
     }
 }
 impl SoundEngine {
+    #[cfg(test)]
+    pub(super) fn test_output_state(&self) -> (bool, u64, Mix) {
+        (
+            self.cues.is_some(),
+            self.shared.callbacks.load(Ordering::Relaxed),
+            *self.shared.mix.lock().unwrap(),
+        )
+    }
     #[cfg(not(target_arch = "wasm32"))]
     pub fn start(&mut self) {
         if self.stop.is_some() {

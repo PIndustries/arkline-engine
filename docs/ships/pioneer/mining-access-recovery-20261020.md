@@ -9,3 +9,9 @@ Historical original UI patch recovered through supported task history: `/tmp/ark
 Audio cues exist, but embedded startup does not call SoundEngine::start; original audio recovery remains required. No audible acceptance is claimed.
 
 Actual running desktop remains 26.10.20.9, PID 31290, registration3 fresh QA `/tmp/arkline-registration3-candidate9-osqa-20261020`, from packaged source 9a47ca7. This Mining restoration and material commit de7c4b3 are source-only until a new validated package is launched. Desktop sprint comparison and full traversal/hatch acceptance remain inconclusive; mixed inputs and intermittent CUA timeouts prevent a controlled speed comparison. No world/build registrations were changed or reset.
+
+## Audio startup follow-up
+
+Recovered the original real-app launch boundary from supported original-target diffs (exec-a9e656bd main, exec-071e6167 embedded, exec-124b8488 client). The editor launch now explicitly starts existing output after applying saved preferences; constructors remain device-free. Existing Settings output status, Retry audio and Test sound are retained. Paused editor continuous gameplay sound is suppressed while confirmed transitions continue to be consumed. This is a bounded startup recovery, not the entire later mock-backed engine lifecycle rewrite.
+
+Explicit actual-device test passed: `.build/logs/20261020T170906625132Z.log`, embedded output received a callback from MacBook Pro Speakers at 48000 Hz with mute and zero gain preserved. This proves the device callback path, not audible content or a listening test. No supported output-audio capture tool was available; no system audio/permission settings were changed. Constructor/preference/pause regression tests join the full workspace rerun. The first workspace attempt `.build/logs/20261020T170122850835Z.log` reached its 240-second guard late in resource_jobs without an assertion failure; it is not a complete pass.

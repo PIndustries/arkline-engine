@@ -238,6 +238,11 @@ pub struct EmbeddedClient {
     editor_input: EditorInputGate,
 }
 impl EmbeddedClient {
+    /// Real application startup opts into output; constructors remain device-free.
+    pub fn start_audio_output(&mut self) {
+        self.cockpit.start_audio_output();
+    }
+
     /// Opens deterministic mining controls without starting the clock or a job.
     pub fn open_mining_panel(&mut self) {
         self.cockpit.service_tab = ServiceTab::ShipComputer;
@@ -3334,6 +3339,81 @@ mod tests {
             "positive horizontal mouse delta should turn right"
         );
         assert!(pitch > 0.0, "upward mouse delta should pitch upward");
+    }
+
+    #[test]
+    fn embedded_constructor_and_hidden_poll_leave_audio_device_unopened() {
+        let ctx = egui::Context::default();
+        let cc = eframe::CreationContext::_new_kittest(ctx);
+        let project = std::env::temp_dir().join(format!(
+            "arkline-audio-constructor-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let mut client = EmbeddedClient::new(&cc, project, "AudioConstructor".into());
+        client.poll_hidden();
+        let (requested, callbacks, _) = client.cockpit.sound.test_output_state();
+        assert!(!requested);
+        assert_eq!(callbacks, 0);
+        client.on_exit();
+    }
+
+    #[test]
+    fn embedded_audio_preferences_and_pause_suppress_continuous_mix() {
+        let (mut client, _) = debug_fixture();
+        client.cockpit.sound_settings = sound_settings::SoundSettings {
+            master: 0.12,
+            ambience: 0.23,
+            effects: 0.34,
+            muted: true,
+        };
+        let mix = client.cockpit.preferred_sound_mix(sound_engine::Mix {
+            active: true,
+            mining: 0.7,
+            ..Default::default()
+        });
+        assert_eq!((mix.master, mix.ambience, mix.effects), (0.12, 0.23, 0.34));
+        assert!(mix.muted && mix.active);
+        client.cockpit.embedded_paused = true;
+        client.cockpit.update_sound();
+        let (requested, callbacks, mix) = client.cockpit.sound.test_output_state();
+        assert!(!requested && callbacks == 0);
+        assert!(!mix.active);
+        assert_eq!((mix.engine, mix.mining, mix.warp), (0., 0., 0.));
+        assert!(mix.muted);
+    }
+
+    #[test]
+    #[ignore = "Explicitly opens the actual default output, with zero gain and mute preserved"]
+    fn actual_embedded_audio_startup_applies_preferences_and_receives_callbacks() {
+        let (mut client, _) = debug_fixture();
+        client.cockpit.sound_settings = sound_settings::SoundSettings {
+            master: 0.,
+            ambience: 0.12,
+            effects: 0.23,
+            muted: true,
+        };
+        client.start_audio_output();
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while client.cockpit.sound.test_output_state().1 == 0 && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let (requested, callbacks, mix) = client.cockpit.sound.test_output_state();
+        assert!(
+            requested && callbacks > 0,
+            "{}",
+            client.cockpit.sound.status()
+        );
+        assert_eq!((mix.master, mix.ambience, mix.effects), (0., 0.12, 0.23));
+        assert!(mix.muted && !mix.active);
+        eprintln!(
+            "Embedded output callback proof: {} callbacks; {}",
+            callbacks,
+            client.cockpit.sound.status()
+        );
     }
 
     #[test]

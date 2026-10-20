@@ -924,6 +924,19 @@ impl Cockpit {
         self.feed.push_front((text, error));
         self.feed.truncate(60);
     }
+    fn preferred_sound_mix(&self, mut mix: sound_engine::Mix) -> sound_engine::Mix {
+        mix.master = self.sound_settings.master;
+        mix.ambience = self.sound_settings.ambience;
+        mix.effects = self.sound_settings.effects;
+        mix.muted = self.sound_settings.muted || self.voice.is_listening();
+        mix.ducked = self.voice.is_speaking();
+        mix
+    }
+    fn start_audio_output(&mut self) {
+        self.sound
+            .set_mix(self.preferred_sound_mix(sound_engine::Mix::default()));
+        self.sound.start();
+    }
     fn update_sound(&mut self) {
         let now = self.timeline_origin.map_or(0, |t| {
             t.saturating_add(self.observed.elapsed().as_millis() as u64)
@@ -932,14 +945,18 @@ impl Cockpit {
         let (mut mix, cues) =
             self.sound_scene
                 .update(self.snapshot.as_ref(), &name, self.connected, now);
-        mix.master = self.sound_settings.master;
-        mix.ambience = self.sound_settings.ambience;
-        mix.effects = self.sound_settings.effects;
-        mix.muted = self.sound_settings.muted || self.voice.is_listening();
-        mix.ducked = self.voice.is_speaking();
-        self.sound.set_mix(mix);
-        for cue in cues {
-            self.sound.cue(cue);
+        let audible = !self.embedded || !self.embedded_paused;
+        if !audible {
+            mix.active = false;
+            mix.engine = 0.;
+            mix.mining = 0.;
+            mix.warp = 0.;
+        }
+        self.sound.set_mix(self.preferred_sound_mix(mix));
+        if audible {
+            for cue in cues {
+                self.sound.cue(cue);
+            }
         }
     }
     fn presentation_time(&self) -> u64 {
@@ -969,7 +986,7 @@ impl Cockpit {
             return;
         }
         #[cfg(target_arch = "wasm32")]
-        self.sound.start();
+        self.start_audio_output();
         self.sound_scene.reset();
         self.cockpit_computer.cancel_input();
         self.flight_view.clear_cockpit_presentation();
@@ -4650,7 +4667,7 @@ pub fn run_native() -> eframe::Result<()> {
             let mut cockpit = Cockpit::new(cc, server, data_dir, credential_scope);
             cockpit.account_login.config = oauth_config;
             cockpit.oauth_config_path = oauth_config_path;
-            cockpit.sound.start();
+            cockpit.start_audio_output();
             cockpit.local_server = local_server;
             if let Some(error) = startup_error {
                 cockpit.notice = error;
