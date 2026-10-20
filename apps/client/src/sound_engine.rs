@@ -70,7 +70,7 @@ struct Shared {
     nonzero_frames: AtomicU64,
     peak_bits: AtomicU64,
     rms_bits: AtomicU64,
-    started: std::time::Instant,
+    started: crate::Instant,
     last_callback_ns: AtomicU64,
 }
 pub struct SoundEngine {
@@ -93,7 +93,7 @@ impl Default for SoundEngine {
                 nonzero_frames: AtomicU64::new(0),
                 peak_bits: AtomicU64::new(0),
                 rms_bits: AtomicU64::new(0),
-                started: std::time::Instant::now(),
+                started: crate::Instant::now(),
                 last_callback_ns: AtomicU64::new(0),
             }),
             cues: None,
