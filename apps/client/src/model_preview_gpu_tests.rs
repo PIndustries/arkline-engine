@@ -491,7 +491,12 @@ fn native_shared_model_preview_catalog_import_materials_controls_and_clear() {
             .map(|mesh| (mesh.vao, mesh.buffer, mesh.count))
             .collect::<Vec<_>>();
         let catalog = model_catalog::runtime_model_catalog();
-        assert_eq!(catalog.len(), 111);
+        let source_part_count = catalog
+            .iter()
+            .filter(|entry| entry.id.starts_with("pioneer/part/"))
+            .count();
+        assert_eq!(source_part_count, 686);
+        assert_eq!(catalog.len() - source_part_count, 111);
         let unavailable = catalog
             .iter()
             .filter(|entry| entry.unavailable.is_some())
@@ -515,7 +520,13 @@ fn native_shared_model_preview_catalog_import_materials_controls_and_clear() {
         let mut window_ranges = std::collections::BTreeSet::new();
         let mut window_bounds = std::collections::BTreeSet::new();
         let mut room_count = 0;
-        for descriptor in catalog.iter().filter(|entry| entry.unavailable.is_none()) {
+        // Individual source objects have exhaustive receipt coverage and a
+        // separate representative GPU fixture; keep this established catalog
+        // acceptance bounded to its original 111 entries / 108 previews.
+        for descriptor in catalog
+            .iter()
+            .filter(|entry| entry.unavailable.is_none() && !entry.id.starts_with("pioneer/part/"))
+        {
             let model = model_catalog::load_runtime_model(&descriptor.id).unwrap();
             let before = runtime_hash(&model);
             if descriptor
@@ -762,7 +773,7 @@ fn native_shared_model_preview_catalog_import_materials_controls_and_clear() {
             "Loading/error selections must not retain an old model callback"
         );
         if let Some(directory) = &directory {
-            std::fs::write(directory.join("receipt.json"),serde_json::to_vec_pretty(&serde_json::json!({"schema_version":2,"scope":"Actual ModelPreview::show runtime/imported callbacks, real egui orbit/pan/wheel/Fit/Reset controls, private macOS CGL; no desktop window or uploads","vendor":gl.get_parameter_string(glow::VENDOR),"renderer":gl.get_parameter_string(glow::RENDERER),"gl_version":gl.get_parameter_string(glow::VERSION),"runtime_catalog_count":catalog.len(),"runtime_rendered_count":rows.len(),"unavailable_logical_entries":unavailable.iter().map(|entry|serde_json::json!({"id":entry.id,"reason":entry.unavailable})).collect::<Vec<_>>(),"room_previews":room_count,"authored_window_previews":window_bounds.len(),"runtime_models":rows,"window_range_wireframe_capture":wireframe_capture,"control_journeys":journeys,"clear_and_error_remove_old_geometry":true,"captures_after_clear":[capture(Some(directory),"cleared",&cleared),capture(Some(directory),"invalid-selection",&failed)],"limitations":["GPU buffer identity retention is verified; GPU payload byte-readback invariance is not claimed","Source geometry/material invariance uses CPU hashes and exact uploaded scalar material tuples","Room cutaways use actual per-room wall, storage, doorway and equipment geometry; shared deck floors, ceilings, corridor ribs, lift/access core and deck perimeter context are omitted, with no proxy floor","Window previews select authored Navigation glass source ranges from the unchanged shared GPU buffer; mappings apply to this asset snapshot","This offscreen acceptance does not establish OS input, app focus or simulation authority"]})).unwrap()).unwrap();
+            std::fs::write(directory.join("receipt.json"),serde_json::to_vec_pretty(&serde_json::json!({"schema_version":2,"scope":"Actual ModelPreview::show runtime/imported callbacks, real egui orbit/pan/wheel/Fit/Reset controls, private macOS CGL; no desktop window or uploads","vendor":gl.get_parameter_string(glow::VENDOR),"renderer":gl.get_parameter_string(glow::RENDERER),"gl_version":gl.get_parameter_string(glow::VERSION),"runtime_catalog_count":catalog.len(),"runtime_render_scope":"Original111 entries; individual source parts have independent exhaustive CPU and representative native GPU coverage","runtime_scope_catalog_count":catalog.len()-source_part_count,"individual_source_parts_excluded_from_this_render_loop":source_part_count,"runtime_rendered_count":rows.len(),"unavailable_logical_entries":unavailable.iter().map(|entry|serde_json::json!({"id":entry.id,"reason":entry.unavailable})).collect::<Vec<_>>(),"room_previews":room_count,"authored_window_previews":window_bounds.len(),"runtime_models":rows,"window_range_wireframe_capture":wireframe_capture,"control_journeys":journeys,"clear_and_error_remove_old_geometry":true,"captures_after_clear":[capture(Some(directory),"cleared",&cleared),capture(Some(directory),"invalid-selection",&failed)],"limitations":["GPU buffer identity retention is verified; GPU payload byte-readback invariance is not claimed","Source geometry/material invariance uses CPU hashes and exact uploaded scalar material tuples","Room cutaways use actual per-room wall, storage, doorway and equipment geometry; shared deck floors, ceilings, corridor ribs, lift/access core and deck perimeter context are omitted, with no proxy floor","Window previews select authored Navigation glass source ranges from the unchanged shared GPU buffer; mappings apply to this asset snapshot","This offscreen acceptance does not establish OS input, app focus or simulation authority"]})).unwrap()).unwrap();
         }
         drop(harness);
         assert_eq!(gl.get_error(), glow::NO_ERROR);
@@ -1040,3 +1051,6 @@ fn native_shared_model_preview_actual_repository_glbs_and_preview_normals() {
         assert_eq!(gl.get_error(), glow::NO_ERROR);
     }
 }
+
+#[path = "model_components_gpu_tests.rs"]
+mod components;

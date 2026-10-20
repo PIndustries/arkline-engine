@@ -2,8 +2,8 @@
 use crate::import_document::Verified;
 use crate::imports::{BrowserImportSnapshot, Imports};
 use arkline_client::{
-    load_runtime_model, runtime_model_catalog, ModelGeometryInfo, ModelPreview,
-    RuntimeInspectionModel, RuntimeModelDescriptor,
+    load_runtime_model, runtime_model_catalog, runtime_model_context_id, ModelGeometryInfo,
+    ModelPreview, RuntimeInspectionModel, RuntimeModelDescriptor,
 };
 use eframe::{egui, glow};
 use std::{
@@ -16,6 +16,8 @@ use std::{
 };
 #[path = "model_browser_sources.rs"]
 mod sources;
+#[path = "model_browser_tree.rs"]
+mod tree;
 
 #[derive(Clone)]
 enum Source {
@@ -29,6 +31,7 @@ struct Entry {
     id: String,
     name: String,
     category: String,
+    hierarchy: Vec<String>,
     source: String,
     identity: String,
     notes: Vec<String>,
@@ -41,19 +44,24 @@ impl Entry {
         category.is_none_or(|category| category == self.category)
             && (search.is_empty()
                 || [&self.name, &self.category, &self.source, &self.identity]
-                    .iter()
+                    .into_iter()
+                    .chain(self.hierarchy.iter())
                     .any(|text| text.to_lowercase().contains(search)))
     }
 }
 #[derive(Clone)]
 enum LoadedModel {
-    Runtime(Arc<RuntimeInspectionModel>),
+    Runtime {
+        model: Arc<RuntimeInspectionModel>,
+        context: Option<Arc<RuntimeInspectionModel>>,
+        context_error: Option<String>,
+    },
     Imported(Verified),
 }
 impl LoadedModel {
     fn info(&self) -> ModelGeometryInfo {
         match self {
-            Self::Runtime(model) => model.info.clone(),
+            Self::Runtime { model, .. } => model.info.clone(),
             Self::Imported(verified) => {
                 let report = &verified.geometry.report;
                 ModelGeometryInfo {
@@ -112,6 +120,9 @@ pub(super) struct ModelBrowser {
     search: String,
     category: Option<String>,
     selected: Option<Entry>,
+    tree_open: BTreeSet<Vec<String>>,
+    tree: Option<tree::Tree>,
+    tree_filter: Option<(String, Option<String>)>,
     state: LoadState,
     loaded: Option<LoadedModel>,
     cache: VecDeque<(String, LoadedModel)>,
@@ -136,7 +147,19 @@ impl ModelBrowser {
         Self::with_worker(runtime_model_catalog(), move |work| match work {
             Work::Scan => sources::scan(&project, &repository).map(Answer::Scanned),
             Work::Load { entry } => match entry.model {
-                Source::Runtime(id) => load_runtime_model(&id).map(LoadedModel::Runtime),
+                Source::Runtime(id) => load_runtime_model(&id).map(|model| {
+                    let context = runtime_model_context_id(&id).map(|id| load_runtime_model(&id));
+                    let (context, context_error) = match context {
+                        Some(Ok(context)) => (Some(context), None),
+                        Some(Err(error)) => (None, Some(error)),
+                        None => (None, None),
+                    };
+                    LoadedModel::Runtime {
+                        model,
+                        context,
+                        context_error,
+                    }
+                }),
                 Source::File(file) => file.load().map(LoadedModel::Imported),
                 Source::Verified(verified) => Ok(LoadedModel::Imported(verified)),
                 Source::Snapshot(bytes) => {
@@ -172,7 +195,12 @@ impl ModelBrowser {
             .map(|model| Entry {
                 id: model.id.clone(),
                 name: model.name,
-                category: model.category,
+                category: model.category.clone(),
+                hierarchy: if model.hierarchy.is_empty() {
+                    vec![model.category]
+                } else {
+                    model.hierarchy
+                },
                 source: model.source,
                 identity: model.id.clone(),
                 notes: model.notes,
@@ -189,6 +217,13 @@ impl ModelBrowser {
             search: String::new(),
             category: None,
             selected: None,
+            tree_open: BTreeSet::from([
+                vec!["Ships".into()],
+                vec!["Ships".into(), "Pioneer".into()],
+                vec!["Ships".into(), "Pioneer".into(), "Source parts".into()],
+            ]),
+            tree: None,
+            tree_filter: None,
             state: LoadState::Empty,
             loaded: None,
             cache: VecDeque::new(),
@@ -209,7 +244,13 @@ impl ModelBrowser {
         if let Some(entry) = browser
             .runtime
             .iter()
-            .find(|entry| entry.unavailable.is_none())
+            .find(|entry| entry.id == "ship/pioneer" && entry.unavailable.is_none())
+            .or_else(|| {
+                browser
+                    .runtime
+                    .iter()
+                    .find(|entry| entry.unavailable.is_none())
+            })
             .cloned()
         {
             browser.select(entry, false);
@@ -232,6 +273,7 @@ impl ModelBrowser {
             id: format!("files-snapshot:{}", self.snapshot_serial),
             name: label.clone(),
             category: "Files snapshots".into(),
+            hierarchy: vec!["Files snapshots".into()],
             source: "Files · guarded snapshot".into(),
             identity: label,
             notes: vec![
@@ -243,8 +285,8 @@ impl ModelBrowser {
             model: Source::Snapshot(Arc::new(bytes)),
         };
         self.snapshot = Some(entry.clone());
-        self.search.clear();
-        self.category = None;
+        self.tree = None;
+        self.clear_filters();
         self.select(entry, true);
         true
     }
@@ -259,6 +301,7 @@ impl ModelBrowser {
         if !force && self.selected_id() == Some(entry.id.as_str()) {
             return;
         }
+        self.reveal_entry(&entry);
         self.epoch += 1;
         self.loaded = None;
         self.waiting = None;
@@ -337,6 +380,7 @@ impl ModelBrowser {
                 id: snapshot.id,
                 name: snapshot.name,
                 category: "Imported snapshots".into(),
+                hierarchy: vec!["Imported snapshots".into()],
                 source: snapshot.source,
                 identity: snapshot.identity,
                 notes: snapshot.notes,
@@ -348,6 +392,15 @@ impl ModelBrowser {
                     .unwrap_or_else(|| Source::Snapshot(Arc::new(Vec::new()))),
             })
             .collect();
+        if previous
+            != self
+                .imports
+                .iter()
+                .map(|entry| entry.id.clone())
+                .collect::<Vec<_>>()
+        {
+            self.tree = None;
+        }
         if let Some(selected) = &self.selected {
             if previous.contains(&selected.id)
                 && !self.imports.iter().any(|entry| entry.id == selected.id)
@@ -401,6 +454,7 @@ impl ModelBrowser {
                                     id: file.id.clone(),
                                     name: file.name.clone(),
                                     category: file.category.clone(),
+                                    hierarchy: vec![file.category.clone()],
                                     source: file.source.clone(),
                                     identity: file.relative.clone(),
                                     notes: vec![format!("{} bytes", file.bytes)],
@@ -409,6 +463,7 @@ impl ModelBrowser {
                                     model: Source::File(file),
                                 })
                                 .collect();
+                            self.tree = None;
                             self.cache.retain(|(id, _)| !id.starts_with("file:"));
                             if let Some(selected) = self
                                 .selected
@@ -482,6 +537,29 @@ impl ModelBrowser {
         }
         self.dispatch();
     }
+    fn reveal_entry(&mut self, entry: &Entry) {
+        for end in 1..=entry.hierarchy.len() {
+            self.tree_open.insert(entry.hierarchy[..end].to_vec());
+        }
+    }
+    fn clear_filters(&mut self) {
+        self.search.clear();
+        self.category = None;
+        if let Some(entry) = self.selected.clone() {
+            self.reveal_entry(&entry);
+        }
+    }
+    fn rebuild_tree(&mut self) {
+        let filter = (self.search.trim().to_lowercase(), self.category.clone());
+        if self.tree.is_none() || self.tree_filter.as_ref() != Some(&filter) {
+            self.tree = Some(tree::Tree::build(
+                &self.entries().cloned().collect::<Vec<_>>(),
+                &filter.0,
+                filter.1.as_deref(),
+            ));
+            self.tree_filter = Some(filter);
+        }
+    }
     fn update_preview(&mut self, gl: Option<&Arc<glow::Context>>) {
         if self.preview.is_none() {
             self.preview = Some(ModelPreview::new(gl));
@@ -494,7 +572,9 @@ impl ModelBrowser {
         self.gpu_error = None;
         if self.state == LoadState::Ready {
             let result = match self.loaded.as_ref() {
-                Some(LoadedModel::Runtime(model)) => preview.set_runtime(model.clone()),
+                Some(LoadedModel::Runtime { model, context, .. }) => {
+                    preview.set_runtime_context(model.clone(), context.clone())
+                }
                 Some(LoadedModel::Imported(verified)) => {
                     preview.set_imported(verified.geometry.clone())
                 }
@@ -556,60 +636,51 @@ impl ModelBrowser {
                             );
                         }
                     });
-                let search = self.search.trim().to_lowercase();
-                let entries = self
-                    .entries()
-                    .filter(|entry| entry.matches(&search, self.category.as_deref()))
-                    .cloned()
-                    .collect::<Vec<_>>();
-                ui.small(format!(
-                    "{} of {} entries",
-                    entries.len(),
-                    self.entries().count()
-                ));
+                self.rebuild_tree();
+                let matching = self.tree.as_ref().unwrap().matches;
+                ui.small(format!("{} of {} models", matching, self.entries().count()));
+                if (!self.search.is_empty() || self.category.is_some())
+                    && ui.small_button("Clear filters").clicked()
+                {
+                    self.clear_filters();
+                }
                 ui.separator();
+                let auto_expand = !self.search.trim().is_empty() || self.category.is_some();
+                let selected_id = self.selected_id().map(str::to_owned);
+                let mut selection = None;
                 egui::ScrollArea::vertical()
                     .id_salt("model_browser_entries")
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
-                        if entries.is_empty() {
+                        let tree = self.tree.as_ref().unwrap();
+                        if tree.matches == 0 {
                             ui.label("No models match this search.");
-                            if ui.button("Clear filters").clicked() {
-                                self.search.clear();
-                                self.category = None;
-                            }
                         }
-                        let mut group = String::new();
-                        for entry in entries {
-                            if group != entry.category {
-                                group = entry.category.clone();
-                                ui.strong(&group);
-                            }
-                            ui.push_id(&entry.id, |ui| {
-                                let selected = ui.selectable_label(
-                                    self.selected_id() == Some(entry.id.as_str()),
-                                    &entry.name,
-                                );
-                                if selected.clicked() {
-                                    self.select(entry.clone(), false);
-                                }
-                                ui.small(format!(
-                                    "{}{}",
-                                    entry.source,
-                                    if entry.unavailable.is_some() {
-                                        " · unavailable"
-                                    } else {
-                                        ""
-                                    }
-                                ));
-                            });
+                        for node in &tree.roots {
+                            show_tree_node(
+                                ui,
+                                node,
+                                &mut self.tree_open,
+                                auto_expand,
+                                selected_id.as_deref(),
+                                &mut selection,
+                            );
                         }
                     });
+                if let Some(entry) = selection {
+                    self.select(entry, false);
+                }
                 ui.small(&self.scan_message);
             });
         egui::CentralPanel::default().show(ctx, |ui| {
             if let Some(entry) = self.selected.clone() {
+                ui.small(entry.hierarchy.join(" › "));
                 ui.heading(&entry.name);
+                if matches!(&entry.model, Source::Runtime(id) if id.starts_with("pioneer/part/")) {
+                    ui.small("Source object from this export; folders group names, not authored assemblies.");
+                } else if matches!(&entry.model, Source::Runtime(id) if id.starts_with("pioneer/material/")) {
+                    ui.small("Material batch: can include many disconnected source objects.");
+                }
                 ui.horizontal_wrapped(|ui| { ui.label(&entry.category); ui.label(format!("Source: {}", entry.source)); });
                 ui.add(egui::Label::new(&entry.identity).truncate()).on_hover_text(&entry.identity);
                 if let Some(model) = &self.loaded {
@@ -629,6 +700,9 @@ impl ModelBrowser {
                             }
                         });
                     });
+                }
+                if let Some(LoadedModel::Runtime { context_error: Some(error), .. }) = &self.loaded {
+                    ui.colored_label(egui::Color32::YELLOW, format!("Ship context unavailable: {error}"));
                 }
                 match self.state.clone() {
                     LoadState::Loading => { ui.horizontal(|ui| { ui.spinner(); ui.label("Loading selected model…"); }); },
@@ -651,6 +725,7 @@ impl ModelBrowser {
             } else { ui.heading("Models"); ui.label("Select a model from the catalog."); }
             if !self.notice.is_empty() { ui.colored_label(egui::Color32::YELLOW, &self.notice); }
             ui.separator();
+            self.update_preview(gl);
             if let Some(preview) = &mut self.preview { preview.show(ui); }
         });
         action
@@ -661,6 +736,109 @@ impl ModelBrowser {
         }
         self.sender = None;
     }
+}
+
+fn show_tree_node(
+    ui: &mut egui::Ui,
+    node: &tree::Node,
+    open: &mut BTreeSet<Vec<String>>,
+    auto_expand: bool,
+    selected: Option<&str>,
+    selection: &mut Option<Entry>,
+) {
+    let id = node
+        .entry
+        .as_ref()
+        .map(|entry| entry.id.as_str())
+        .unwrap_or("");
+    ui.push_id((&node.path, id), |ui| {
+        let expanded = auto_expand || open.contains(&node.path);
+        ui.horizontal(|ui| {
+            if node.children.is_empty() {
+                ui.add_space(18.0);
+            } else if ui
+                .small_button(if expanded { "▾" } else { "▸" })
+                .on_hover_text(if expanded {
+                    "Collapse group"
+                } else {
+                    "Expand group"
+                })
+                .clicked()
+                && !auto_expand
+            {
+                if expanded {
+                    open.remove(&node.path);
+                } else {
+                    open.insert(node.path.clone());
+                }
+            }
+            let is_selected = node
+                .entry
+                .as_ref()
+                .is_some_and(|entry| selected == Some(entry.id.as_str()));
+            let label = if is_selected || node.entry.is_none() {
+                egui::RichText::new(&node.label).strong()
+            } else {
+                egui::RichText::new(&node.label)
+            };
+            let unavailable = node
+                .entry
+                .as_ref()
+                .is_some_and(|entry| entry.unavailable.is_some());
+            let badge_width = if unavailable {
+                78.0
+            } else if !node.children.is_empty() {
+                36.0
+            } else {
+                0.0
+            };
+            let response = ui.add_sized(
+                [(ui.available_width() - badge_width).max(40.0), 18.0],
+                egui::Button::new(label)
+                    .selected(is_selected)
+                    .frame(false)
+                    .wrap(),
+            );
+            if let Some(entry) = &node.entry {
+                let response = response.on_hover_text(format!(
+                    "{}\n{}{}",
+                    entry.source,
+                    entry.identity,
+                    entry
+                        .unavailable
+                        .as_ref()
+                        .map(|reason| format!("\nUnavailable: {reason}"))
+                        .unwrap_or_default()
+                ));
+                if response.clicked() {
+                    *selection = Some(entry.clone());
+                }
+            } else if response.clicked() && !auto_expand {
+                if expanded {
+                    open.remove(&node.path);
+                } else {
+                    open.insert(node.path.clone());
+                }
+            }
+            if !node.children.is_empty() {
+                ui.weak(node.matches.to_string());
+            }
+            if node
+                .entry
+                .as_ref()
+                .is_some_and(|entry| entry.unavailable.is_some())
+            {
+                ui.weak("unavailable");
+            }
+        });
+        if expanded && !node.children.is_empty() {
+            ui.indent("children", |ui| {
+                for child in &node.children {
+                    show_tree_node(ui, child, open, auto_expand, selected, selection);
+                }
+            });
+        }
+    });
 }
 
 #[cfg(test)]

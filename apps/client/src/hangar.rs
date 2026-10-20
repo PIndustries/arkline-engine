@@ -1059,6 +1059,64 @@ pub(super) unsafe fn paint_inspection(
     renderer.restore_shadow_texture(shadow_texture);
 }
 
+/// A wireframe ship gives a piece's location without concealing it behind the hull.
+/// Both passes use the original shared buffers, source transforms and draw ranges.
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) unsafe fn paint_inspection_context(
+    renderer: &mut Renderer,
+    vp: Mat4,
+    eye: Vec3,
+    selected: &model_catalog::RuntimeInspectionModel,
+    context: &model_catalog::RuntimeInspectionModel,
+    display: Mat4,
+) {
+    let Some(shadow_texture) = begin_model_pass(renderer, vp, eye, true) else {
+        return;
+    };
+    renderer.exterior_emission.set(Default::default());
+    renderer.local_lights.upload_station(&renderer.gl, &[]);
+    let wireframe = renderer.debug_wireframe;
+    renderer.debug_wireframe = false;
+    let gl = &renderer.gl;
+    let mut polygon_modes = [0; 2];
+    gl.get_parameter_i32_slice(glow::POLYGON_MODE, &mut polygon_modes);
+    gl.polygon_mode(glow::FRONT_AND_BACK, glow::LINE);
+    // Context lines do not obscure the selected piece, including an internal part.
+    gl.depth_mask(false);
+    for draw in &context.parts {
+        let (mesh, transform, _, _) = draw.part;
+        renderer.draw_material_range(
+            mesh,
+            display * transform,
+            Vec3::new(0.06, 0.12, 0.14),
+            0.0,
+            draw.material,
+            draw.range,
+        );
+    }
+    gl.depth_mask(true);
+    gl.polygon_mode(glow::FRONT_AND_BACK, glow::FILL);
+    // Reuse the existing inspection wireframe overlay rather than modifying source
+    // colors, materials or geometry to mark selection.
+    renderer.debug_wireframe = true;
+    for draw in &selected.parts {
+        let (mesh, transform, color, emission) = draw.part;
+        renderer.draw_material_range(
+            mesh,
+            display * transform,
+            color,
+            emission,
+            draw.material,
+            draw.range,
+        );
+    }
+    renderer.debug_wireframe = wireframe;
+    renderer
+        .gl
+        .polygon_mode(glow::FRONT_AND_BACK, polygon_modes[0] as u32);
+    renderer.restore_shadow_texture(shadow_texture);
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

@@ -15,6 +15,7 @@ fn descriptor(
         id,
         name,
         category: category.into(),
+        hierarchy: vec![category.into()],
         source: source.into(),
         notes: notes.iter().map(|note| (*note).into()).collect(),
         unavailable: None,

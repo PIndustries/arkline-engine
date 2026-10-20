@@ -7,8 +7,8 @@ pub use flight3d::imported_asset::ImportedAssetPreview;
 pub use flight3d::imported_asset::{ImportReport, ImportedGeometry};
 #[cfg(not(target_arch = "wasm32"))]
 pub use flight3d::model_catalog::{
-    load_runtime_model, runtime_model_catalog, ModelGeometryInfo, RuntimeInspectionModel,
-    RuntimeModelDescriptor,
+    load_runtime_model, runtime_model_catalog, runtime_model_context_id, ModelGeometryInfo,
+    RuntimeInspectionModel, RuntimeModelDescriptor,
 };
 #[cfg(not(target_arch = "wasm32"))]
 pub use flight3d::model_preview::ModelPreview;

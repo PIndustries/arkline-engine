@@ -8,6 +8,10 @@ use model_catalog::RuntimeInspectionModel;
 #[path = "model_preview_gpu_tests.rs"]
 mod native_tests;
 
+#[cfg(test)]
+#[path = "model_components_tests.rs"]
+mod component_tests;
+
 const DEFAULT_YAW: f32 = 1.15;
 const DEFAULT_PITCH: f32 = 0.4;
 const FIELD_OF_VIEW: f32 = 45.0_f32.to_radians();
@@ -132,6 +136,8 @@ pub struct ModelPreview {
     imported: ImportedAssetPreview,
     has_gpu: bool,
     source: PreviewSource,
+    context: Option<Arc<RuntimeInspectionModel>>,
+    show_context: bool,
     framing: Option<Framing>,
     camera: PreviewCamera,
     error: Option<String>,
@@ -149,6 +155,8 @@ impl ModelPreview {
             imported: ImportedAssetPreview::new(gl),
             has_gpu: gl.is_some(),
             source: PreviewSource::Empty,
+            context: None,
+            show_context: false,
             framing: None,
             camera: PreviewCamera::default(),
             error: None,
@@ -156,25 +164,75 @@ impl ModelPreview {
     }
 
     pub fn set_runtime(&mut self, model: Arc<RuntimeInspectionModel>) -> Result<(), String> {
-        if matches!(&self.source, PreviewSource::Runtime(current) if Arc::ptr_eq(current, &model)) {
+        self.set_runtime_context(model, None)
+    }
+
+    /// Inspect a source-backed piece with optional geometry in the same source frame.
+    /// Context is never inferred from a display name or an unregistered room plan.
+    pub fn set_runtime_context(
+        &mut self,
+        model: Arc<RuntimeInspectionModel>,
+        context: Option<Arc<RuntimeInspectionModel>>,
+    ) -> Result<(), String> {
+        let same_context = match (&self.context, &context) {
+            (Some(current), Some(next)) => Arc::ptr_eq(current, next),
+            (None, None) => true,
+            _ => false,
+        };
+        if same_context
+            && matches!(&self.source, PreviewSource::Runtime(current) if Arc::ptr_eq(current, &model))
+        {
             return Ok(());
         }
         self.clear();
-        let framing = Framing::bounds(model.min, model.max).and_then(|framing| {
-            if model.parts.is_empty()
-                || model.parts.iter().any(|draw| {
-                    let (_, matrix, color, emission) = draw.part;
-                    !matrix.is_finite() || !color.is_finite() || !emission.is_finite()
-                })
-            {
-                Err("Runtime model has no finite renderable draws".into())
-            } else {
-                Ok(framing)
-            }
-        });
-        let framing = self.accept_framing(framing)?;
+        let framing = self.accept_framing(Self::runtime_framing(&model))?;
+        if let Some(context) = &context {
+            self.accept_framing(Self::runtime_framing(context))?;
+        }
         self.framing = Some(framing);
         self.source = PreviewSource::Runtime(model);
+        self.context = context;
+        Ok(())
+    }
+
+    fn runtime_framing(model: &RuntimeInspectionModel) -> Result<Framing, String> {
+        let framing = Framing::bounds(model.min, model.max)?;
+        if model.parts.is_empty()
+            || model.parts.iter().any(|draw| {
+                let (_, matrix, color, emission) = draw.part;
+                !matrix.is_finite() || !color.is_finite() || !emission.is_finite()
+            })
+        {
+            return Err("Runtime model has no finite renderable draws".into());
+        }
+        Ok(framing)
+    }
+
+    pub fn has_context(&self) -> bool {
+        self.context.is_some()
+    }
+
+    pub fn context_visible(&self) -> bool {
+        self.show_context
+    }
+
+    /// Switch inspection presentation only. No source or runtime material is edited.
+    pub fn set_context_visible(&mut self, visible: bool) -> Result<(), String> {
+        if self.show_context == visible {
+            return Ok(());
+        }
+        let model = if visible {
+            self.context
+                .as_ref()
+                .ok_or("This selection has no verified geometry in the ship frame")?
+        } else if let PreviewSource::Runtime(model) = &self.source {
+            model
+        } else {
+            return Err("Select a runtime piece before changing its context".into());
+        };
+        self.framing = Some(Self::runtime_framing(model)?);
+        self.show_context = visible;
+        self.camera.fit();
         Ok(())
     }
 
@@ -206,6 +264,8 @@ impl ModelPreview {
 
     pub fn clear(&mut self) {
         self.source = PreviewSource::Empty;
+        self.context = None;
+        self.show_context = false;
         self.framing = None;
         self.error = None;
         self.camera = PreviewCamera::default();
@@ -214,6 +274,27 @@ impl ModelPreview {
 
     pub fn show(&mut self, ui: &mut egui::Ui) -> egui::Response {
         self.camera.sanitize();
+        if self.has_context() {
+            ui.horizontal_wrapped(|ui| {
+                if ui
+                    .selectable_label(!self.show_context, "Isolate selected")
+                    .clicked()
+                {
+                    let _ = self.set_context_visible(false);
+                }
+                if ui
+                    .selectable_label(self.show_context, "Highlight in ship")
+                    .clicked()
+                {
+                    let _ = self.set_context_visible(true);
+                }
+                if self.show_context {
+                    ui.small("Ship wireframe · selected piece outlined in green");
+                } else {
+                    ui.small("Selected piece only · original source materials");
+                }
+            });
+        }
         ui.horizontal_wrapped(|ui| {
             let has_model = self.framing.is_some();
             if ui
@@ -299,18 +380,30 @@ impl ModelPreview {
                 if let Some(renderer) = &self.renderer {
                     let renderer = renderer.clone();
                     let model = model.clone();
+                    let context = self.context.clone().filter(|_| self.show_context);
                     painter.add(egui::PaintCallback {
                         rect,
                         callback: Arc::new(egui_glow::CallbackFn::new(move |_, _| {
                             if let Ok(mut renderer) = renderer.lock() {
                                 unsafe {
-                                    hangar::paint_inspection(
-                                        &mut renderer,
-                                        vp,
-                                        eye,
-                                        &model,
-                                        framing.display,
-                                    );
+                                    if let Some(context) = &context {
+                                        hangar::paint_inspection_context(
+                                            &mut renderer,
+                                            vp,
+                                            eye,
+                                            &model,
+                                            context,
+                                            framing.display,
+                                        );
+                                    } else {
+                                        hangar::paint_inspection(
+                                            &mut renderer,
+                                            vp,
+                                            eye,
+                                            &model,
+                                            framing.display,
+                                        );
+                                    }
                                     #[cfg(test)]
                                     assert_eq!(
                                         renderer.gl.get_error(),

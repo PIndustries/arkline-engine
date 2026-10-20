@@ -4,6 +4,8 @@ use arkline_protocol::{DroneClass, ExteriorFixtureKind, SurfacePropKind, ALL_SHI
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
+#[path = "model_catalog_parts.rs"]
+mod parts;
 #[path = "model_catalog_windows.rs"]
 mod windows;
 
@@ -12,6 +14,8 @@ pub struct RuntimeModelDescriptor {
     pub id: String,
     pub name: String,
     pub category: String,
+    /// Display parents only; the source name remains the final leaf.
+    pub hierarchy: Vec<String>,
     pub source: String,
     pub notes: Vec<String>,
     pub unavailable: Option<String>,
@@ -60,6 +64,38 @@ impl InspectionDraw {
 
 pub fn runtime_model_catalog() -> Vec<RuntimeModelDescriptor> {
     descriptors().clone()
+}
+
+/// A context is offered only when the selected geometry already shares its
+/// exact source coordinate frame. This does not register deck-local interiors
+/// or logical equipment inside the authored hull.
+pub fn runtime_model_context_id(id: &str) -> Option<String> {
+    if id.starts_with("pioneer/part/") {
+        parts::draw(id).ok()?;
+    } else if id.starts_with("pioneer/material/") {
+        parts::validate_installed().ok()?;
+        let index = id
+            .strip_prefix("pioneer/material/")?
+            .parse::<usize>()
+            .ok()?;
+        if id != format!("pioneer/material/{index}") || index >= pioneer_asset().ok()?.len() {
+            return None;
+        }
+    } else if let Some(identity) = id.strip_prefix("exterior/") {
+        let definition = arkline_protocol::default_pioneer_exterior();
+        let fixture = definition
+            .fixtures
+            .iter()
+            .find(|fixture| fixture.id == identity)?;
+        if fixture.kind != ExteriorFixtureKind::Window {
+            return None;
+        }
+        parts::validate_installed().ok()?;
+        windows::draw(fixture).ok()?;
+    } else {
+        return None;
+    }
+    Some("ship/pioneer".into())
 }
 
 fn descriptors() -> &'static Vec<RuntimeModelDescriptor> {
@@ -113,6 +149,7 @@ fn descriptor(id: &str, name: &str, category: &str, source: &str) -> RuntimeMode
         id: id.into(),
         name: name.into(),
         category: category.into(),
+        hierarchy: vec![category.into()],
         source: source.into(),
         notes: Vec::new(),
         unavailable: None,
@@ -259,6 +296,7 @@ fn build_descriptors() -> Vec<RuntimeModelDescriptor> {
             entries.push(entry);
         }
     }
+    entries.extend(parts::descriptors());
     for fixture in arkline_protocol::default_pioneer_exterior().fixtures {
         let mut entry = descriptor(
             &format!("exterior/{}", fixture.id),
@@ -300,7 +338,98 @@ fn build_descriptors() -> Vec<RuntimeModelDescriptor> {
         entries.push(entry);
     }
     entries.extend(hangar::inspection_catalog::descriptors());
+    assign_hierarchy(&mut entries);
     entries
+}
+
+fn assign_hierarchy(entries: &mut [RuntimeModelDescriptor]) {
+    let rooms = arkline_protocol::default_pioneer().rooms;
+    for entry in entries {
+        let path: Option<Vec<String>> = if entry
+            .id
+            .strip_prefix("ship/")
+            .and_then(ship_class)
+            .is_some()
+        {
+            Some(vec!["Ships".into()])
+        } else if let Some(class) = entry.id.strip_prefix("cockpit/").and_then(ship_class) {
+            Some(vec![
+                "Ships".into(),
+                class.spec().name.into(),
+                "Cockpit".into(),
+            ])
+        } else if let Some(class) = entry.id.strip_prefix("turret/").and_then(ship_class) {
+            Some(vec![
+                "Ships".into(),
+                class.spec().name.into(),
+                "Equipment".into(),
+            ])
+        } else if entry.id.starts_with("pioneer/material/") {
+            Some(vec![
+                "Ships".into(),
+                "Pioneer".into(),
+                "Hull material groups".into(),
+            ])
+        } else if entry.id.starts_with("exterior/") {
+            Some(vec![
+                "Ships".into(),
+                "Pioneer".into(),
+                "Exterior fixtures".into(),
+            ])
+        } else if let Some(source_id) = entry.id.strip_prefix("room/") {
+            rooms
+                .iter()
+                .find(|room| room.source_room_id.as_deref() == Some(source_id))
+                .map(|room| {
+                    vec![
+                        "Ships".into(),
+                        "Pioneer".into(),
+                        format!("Deck {}", room.deck),
+                        "Rooms".into(),
+                    ]
+                })
+        } else if let Some(deck) = entry.id.strip_prefix("interior/pioneer/deck_") {
+            Some(vec![
+                "Ships".into(),
+                "Pioneer".into(),
+                format!("Deck {deck}"),
+            ])
+        } else if entry.id.starts_with("equipment/pioneer.deck1.airlock.") {
+            Some(vec![
+                "Ships".into(),
+                "Pioneer".into(),
+                "Deck 1".into(),
+                "Airlock equipment".into(),
+            ])
+        } else if let Some((kind, slug)) = entry.id.split_once('/') {
+            if matches!(kind, "bay" | "quarters") {
+                ship_class(slug).map(|class| {
+                    vec![
+                        "Ships".into(),
+                        class.spec().name.into(),
+                        "Station context".into(),
+                    ]
+                })
+            } else if kind == "fleet" {
+                Some(vec!["Stations".into(), "Fleet hangars".into()])
+            } else if kind == "furniture" {
+                Some(vec!["Stations".into(), "Quarters furnishings".into()])
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        if let Some(path) = path {
+            entry.hierarchy = path;
+        }
+        if entry.id.starts_with("room/") || entry.id.starts_with("interior/pioneer/") {
+            entry.notes.push("Deck-local runtime geometry; this catalog relationship does not claim a physical fit or registration inside the exterior hull.".into());
+        }
+        if entry.id.starts_with("bay/") || entry.id.starts_with("quarters/") {
+            entry.notes.push("Station context associated with this ship class; quarters are station rooms, not rooms inside its hull.".into());
+        }
+    }
 }
 
 fn draws(parts: impl IntoIterator<Item = ModelPart>, material: Material) -> Vec<InspectionDraw> {
@@ -315,6 +444,9 @@ fn draws(parts: impl IntoIterator<Item = ModelPart>, material: Material) -> Vec<
 }
 
 fn recipe(id: &str) -> Result<(Vec<InspectionDraw>, f32), String> {
+    if id.starts_with("pioneer/part/") {
+        return Ok((vec![parts::draw(id)?], 100.0));
+    }
     if let Some(source_id) = id.strip_prefix("room/") {
         return Ok((
             draws(
@@ -608,7 +740,7 @@ mod tests {
     #[test]
     fn all_geometric_entries_are_previewable_and_room_cutaways_keep_shared_draws() {
         let catalog = runtime_model_catalog();
-        assert_eq!(catalog.len(), 111);
+        assert_eq!(catalog.len(), 797);
         let unavailable = catalog
             .iter()
             .filter(|entry| entry.unavailable.is_some())
@@ -627,7 +759,7 @@ mod tests {
                 .iter()
                 .filter(|entry| entry.unavailable.is_none())
                 .count(),
-            108
+            794
         );
         for room in arkline_protocol::default_pioneer().rooms {
             let source_id = room.source_room_id.as_deref().unwrap();
@@ -651,6 +783,49 @@ mod tests {
             assert_eq!(model.info.max_m, model.max.to_array());
         }
         assert!(hangar::inspection_catalog::room_parts("D3-P1").is_err());
+    }
+
+    #[test]
+    fn catalog_hierarchy_and_context_only_claim_supported_relationships() {
+        let catalog = runtime_model_catalog();
+        assert!(catalog.iter().all(|entry| !entry.hierarchy.is_empty()
+            && entry.hierarchy.iter().all(|name| !name.is_empty())));
+        assert_eq!(
+            catalog
+                .iter()
+                .filter(|entry| entry.id.starts_with("pioneer/part/"))
+                .count(),
+            686
+        );
+        for entry in &catalog {
+            let expected_context = entry.id.starts_with("pioneer/part/")
+                || entry.id.starts_with("pioneer/material/")
+                || entry.id.starts_with("exterior/pioneer.exterior.window.");
+            assert_eq!(
+                runtime_model_context_id(&entry.id).as_deref(),
+                expected_context.then_some("ship/pioneer"),
+                "{}",
+                entry.id
+            );
+            if entry.id.starts_with("room/") {
+                assert_eq!(&entry.hierarchy[..2], ["Ships", "Pioneer"]);
+                assert_eq!(entry.hierarchy.last().unwrap(), "Rooms");
+                assert!(entry.notes.iter().any(|note| note.contains("Deck-local")));
+            }
+            if entry.id.starts_with("quarters/") {
+                assert_eq!(entry.hierarchy.last().unwrap(), "Station context");
+            }
+        }
+        for invalid in [
+            "unknown",
+            "pioneer/part/invalid",
+            "pioneer/material/9",
+            "pioneer/material/00",
+            "room/D1-P1",
+            "ship/pioneer",
+        ] {
+            assert_eq!(runtime_model_context_id(invalid), None);
+        }
     }
 
     #[test]
