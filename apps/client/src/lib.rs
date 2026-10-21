@@ -610,6 +610,7 @@ struct Cockpit {
     embedded_input: bool,
     workspace_input_waiting_release: bool,
     workspace_keyboard_owned_last_frame: bool,
+    operations_search: String,
     ship_observation: bool,
     logo: egui::TextureHandle,
     boot: boot::Boot,
@@ -738,6 +739,7 @@ impl Cockpit {
             embedded_input: true,
             workspace_input_waiting_release: false,
             workspace_keyboard_owned_last_frame: false,
+            operations_search: String::new(),
             ship_observation: false,
             logo,
             #[cfg(not(target_arch = "wasm32"))]
@@ -4136,9 +4138,12 @@ impl eframe::App for Cockpit {
                 .max_height(bounds.height() - 24.0)
                 .constrain_to(bounds)
                 .vscroll(true)
-                .show(ctx, |ui| self.ship_layout_panel(ui));
+                .show(ctx, |ui| {
+                    self.service_tabs(ui);
+                    self.ship_layout_panel(ui);
+                });
             if !open {
-                self.service_tab = ServiceTab::Modules;
+                self.close_operations_workspace();
             }
         }
         if self.services_open && self.service_tab != ServiceTab::Layouts {

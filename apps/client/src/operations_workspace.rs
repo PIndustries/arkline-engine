@@ -1,6 +1,107 @@
 //! Focused workspaces over existing authoritative services and commands.
 use super::*;
 
+struct PanelDestination {
+    tab: ServiceTab,
+    label: &'static str,
+    title: &'static str,
+    keywords: &'static str,
+}
+
+const PANEL_DESTINATIONS: &[PanelDestination] = &[
+    PanelDestination {
+        tab: ServiceTab::Navigation,
+        label: "Navigation",
+        title: "Flight · Navigation",
+        keywords: "map route target warp orbit approach travel",
+    },
+    PanelDestination {
+        tab: ServiceTab::Settings,
+        label: "Preferences",
+        title: "Flight · Preferences",
+        keywords: "settings sound audio volume voice controls input appearance theme lighting shadow quality panel positioning",
+    },
+    PanelDestination {
+        tab: ServiceTab::Hangar,
+        label: "Fleet",
+        title: "Ship · Fleet",
+        keywords: "hangar vessel ship selection ownership",
+    },
+    PanelDestination {
+        tab: ServiceTab::Modules,
+        label: "Modules",
+        title: "Ship · Modules",
+        keywords: "turret mining equipment capacitor target lock manual",
+    },
+    PanelDestination {
+        tab: ServiceTab::Cargo,
+        label: "Cargo & storage",
+        title: "Ship · Cargo & storage",
+        keywords: "hold ore inventory transfer deposit",
+    },
+    PanelDestination {
+        tab: ServiceTab::Layouts,
+        label: "Layouts",
+        title: "Ship · Layouts",
+        keywords: "ship hull deck room equipment engineering design reference",
+    },
+    PanelDestination {
+        tab: ServiceTab::Sandbox,
+        label: "Surface tools",
+        title: "Ship · Surface tools",
+        keywords: "sandbox placement props ground",
+    },
+    PanelDestination {
+        tab: ServiceTab::ShipComputer,
+        label: "Mining",
+        title: "Operations · Mining",
+        keywords: "routine autopilot automation goal delivered haul ai computer",
+    },
+    PanelDestination {
+        tab: ServiceTab::Drones,
+        label: "Drones",
+        title: "Operations · Drones",
+        keywords: "fleet launch recall assignment camera feeds recon attack mining",
+    },
+    PanelDestination {
+        tab: ServiceTab::Activity,
+        label: "Activity",
+        title: "Operations · Activity",
+        keywords: "events log history messages",
+    },
+    PanelDestination {
+        tab: ServiceTab::Ledger,
+        label: "Audit",
+        title: "Operations · Audit",
+        keywords: "ledger transactions receipts conservation integrity",
+    },
+    PanelDestination {
+        tab: ServiceTab::Station,
+        label: "Services",
+        title: "Station · Services",
+        keywords: "boarding interior seat hatch airlock lift quarters",
+    },
+    PanelDestination {
+        tab: ServiceTab::Exchange,
+        label: "Exchange",
+        title: "Station · Exchange",
+        keywords: "market trading trade buy sell",
+    },
+    PanelDestination {
+        tab: ServiceTab::Corporation,
+        label: "Corporation",
+        title: "Station · Corporation",
+        keywords: "corp membership invitation organization",
+    },
+];
+
+fn panel_matches(destination: &PanelDestination, query: &str) -> bool {
+    let searchable = format!("{} {}", destination.title, destination.keywords).to_lowercase();
+    query
+        .split_whitespace()
+        .all(|token| searchable.contains(&token.to_lowercase()))
+}
+
 fn group(tab: ServiceTab) -> usize {
     match tab {
         ServiceTab::Navigation | ServiceTab::Settings => 0,
@@ -109,22 +210,11 @@ impl Cockpit {
     }
 
     pub(super) fn operations_title(&self) -> &'static str {
-        match self.service_tab {
-            ServiceTab::Navigation => "Flight · Navigation",
-            ServiceTab::Settings => "Flight · Preferences",
-            ServiceTab::Hangar => "Ship · Fleet",
-            ServiceTab::Modules => "Ship · Modules",
-            ServiceTab::Cargo => "Ship · Cargo & storage",
-            ServiceTab::Layouts => "Ship · Layouts",
-            ServiceTab::Sandbox => "Ship · Surface tools",
-            ServiceTab::ShipComputer => "Operations · Mining",
-            ServiceTab::Drones => "Operations · Drones",
-            ServiceTab::Activity => "Operations · Activity",
-            ServiceTab::Ledger => "Operations · Audit",
-            ServiceTab::Station => "Station · Services",
-            ServiceTab::Exchange => "Station · Exchange",
-            ServiceTab::Corporation => "Station · Corporation",
-        }
+        PANEL_DESTINATIONS
+            .iter()
+            .find(|destination| destination.tab == self.service_tab)
+            .expect("Every service tab has a registered panel destination")
+            .title
     }
 
     pub(super) fn operations_navigation(&mut self, ui: &mut egui::Ui) {
@@ -138,48 +228,111 @@ impl Cockpit {
             }
             ui.small("Esc · Back to Flight");
             ui.separator();
-            for (index, label, default) in [
-                (0, "Flight", ServiceTab::Navigation),
-                (1, "Ship", ServiceTab::Hangar),
-                (2, "Operations", ServiceTab::ShipComputer),
-                (3, "Station", ServiceTab::Station),
-            ] {
-                if ui
-                    .selectable_label(group(self.service_tab) == index, label)
-                    .clicked()
-                {
-                    self.service_tab = default;
-                }
-            }
         });
-        ui.add_space(4.0);
+        let search_id = ui.make_persistent_id("operations_panel_search");
+        let search_focused = ui
+            .ctx()
+            .memory(|memory| memory.focused() == Some(search_id));
+        let focus_search = (self.services_open || self.service_tab == ServiceTab::Layouts)
+            && self.embedded_input
+            && !self.cockpit_computer.wants_keyboard_input()
+            && (search_focused
+                || (!ui.ctx().wants_keyboard_input()
+                    && ui.ctx().memory(|memory| memory.focused().is_none())))
+            && ui
+                .ctx()
+                .input(|input| input.focused && !input.pointer.any_down())
+            && ui
+                .ctx()
+                .input_mut(|input| input.consume_key(egui::Modifiers::COMMAND, egui::Key::K));
         ui.horizontal_wrapped(|ui| {
-            for (tab, label) in [
-                (ServiceTab::Navigation, "Navigation"),
-                (ServiceTab::Settings, "Preferences"),
-                (ServiceTab::Hangar, "Fleet"),
-                (ServiceTab::Modules, "Modules"),
-                (ServiceTab::Cargo, "Cargo & storage"),
-                (ServiceTab::Layouts, "Layouts"),
-                (ServiceTab::Sandbox, "Surface tools"),
-                (ServiceTab::ShipComputer, "Mining"),
-                (ServiceTab::Drones, "Drones"),
-                (ServiceTab::Activity, "Activity"),
-                (ServiceTab::Ledger, "Audit"),
-                (ServiceTab::Station, "Services"),
-                (ServiceTab::Exchange, "Exchange"),
-                (ServiceTab::Corporation, "Corporation"),
-            ] {
-                if group(tab) == group(self.service_tab)
-                    && ui
-                        .selectable_label(self.service_tab == tab, label)
-                        .clicked()
-                {
-                    self.service_tab = tab;
-                    self.sound.cue(sound_engine::Cue::Ui);
-                }
+            ui.label("Search panels");
+            let width = (ui.available_width() - 110.0).clamp(80.0, 320.0);
+            let search = ui.add(
+                egui::TextEdit::singleline(&mut self.operations_search)
+                    .id(search_id)
+                    .char_limit(128)
+                    .desired_width(width)
+                    .hint_text("Mining, cargo, settings…"),
+            );
+            if focus_search {
+                search.request_focus();
+            }
+            ui.small("Cmd/Ctrl+K");
+            if ui
+                .add_enabled(
+                    !self.operations_search.is_empty(),
+                    egui::Button::new("Clear search"),
+                )
+                .clicked()
+            {
+                self.operations_search.clear();
             }
         });
+        if self.operations_search.trim().is_empty() {
+            ui.horizontal_wrapped(|ui| {
+                for (index, label, default) in [
+                    (0, "Flight", ServiceTab::Navigation),
+                    (1, "Ship", ServiceTab::Hangar),
+                    (2, "Operations", ServiceTab::ShipComputer),
+                    (3, "Station", ServiceTab::Station),
+                ] {
+                    if ui
+                        .selectable_label(group(self.service_tab) == index, label)
+                        .clicked()
+                    {
+                        self.service_tab = default;
+                    }
+                }
+            });
+            ui.add_space(4.0);
+            ui.horizontal_wrapped(|ui| {
+                for destination in PANEL_DESTINATIONS {
+                    if group(destination.tab) == group(self.service_tab)
+                        && ui
+                            .selectable_label(
+                                self.service_tab == destination.tab,
+                                destination.label,
+                            )
+                            .clicked()
+                    {
+                        self.service_tab = destination.tab;
+                        self.sound.cue(sound_engine::Cue::Ui);
+                    }
+                }
+            });
+        } else {
+            ui.small(
+                "Panel destinations only · current panel stays open until you select a result",
+            );
+            let matches: Vec<_> = PANEL_DESTINATIONS
+                .iter()
+                .filter(|destination| panel_matches(destination, &self.operations_search))
+                .collect();
+            if matches.is_empty() {
+                ui.label("No matching panels. Try a panel name or clear the search.");
+            } else {
+                egui::ScrollArea::vertical()
+                    .id_salt("operations_panel_search_results")
+                    .max_height(132.0)
+                    .min_scrolled_height(0.0)
+                    .auto_shrink([false, true])
+                    .show(ui, |ui| {
+                        for destination in matches {
+                            if ui
+                                .selectable_label(
+                                    self.service_tab == destination.tab,
+                                    destination.title,
+                                )
+                                .clicked()
+                            {
+                                self.service_tab = destination.tab;
+                                self.sound.cue(sound_engine::Cue::Ui);
+                            }
+                        }
+                    });
+            }
+        }
         // Mining owns its concise local authority state; avoid repeating its
         // pause, pending and response notices above the same summary.
         if self.service_tab != ServiceTab::ShipComputer {
@@ -211,5 +364,187 @@ impl Cockpit {
             }
         }
         ui.separator();
+    }
+}
+
+#[cfg(test)]
+mod panel_search_tests {
+    use super::*;
+
+    fn frame(
+        ctx: &egui::Context,
+        cockpit: &mut Cockpit,
+        events: Vec<egui::Event>,
+        unrelated: bool,
+    ) -> Vec<(String, Pos2)> {
+        let mut other = String::from("Other editor field");
+        ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    Pos2::ZERO,
+                    Vec2::new(1000., 800.),
+                )),
+                focused: true,
+                events,
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    if unrelated {
+                        ui.add(
+                            egui::TextEdit::singleline(&mut other)
+                                .id(egui::Id::new("other_panel_search_test")),
+                        );
+                    }
+                    cockpit.operations_navigation(ui);
+                });
+            },
+        )
+        .shapes
+        .into_iter()
+        .filter_map(|shape| {
+            if let egui::Shape::Text(text) = shape.shape {
+                Some((
+                    text.galley.job.text.clone(),
+                    text.pos + text.galley.rect.center().to_vec2(),
+                ))
+            } else {
+                None
+            }
+        })
+        .collect()
+    }
+
+    fn click(point: Pos2, pressed: bool) -> Vec<egui::Event> {
+        vec![
+            egui::Event::PointerMoved(point),
+            egui::Event::PointerButton {
+                pos: point,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            },
+        ]
+    }
+
+    fn shortcut() -> Vec<egui::Event> {
+        vec![egui::Event::Key {
+            key: egui::Key::K,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::COMMAND,
+        }]
+    }
+
+    #[test]
+    fn panel_search_registry_covers_all_destinations_and_token_matching() {
+        assert_eq!(PANEL_DESTINATIONS.len(), 14);
+        for (index, destination) in PANEL_DESTINATIONS.iter().enumerate() {
+            assert!(PANEL_DESTINATIONS[..index]
+                .iter()
+                .all(|other| other.tab != destination.tab));
+            assert!(panel_matches(destination, destination.label));
+        }
+        let results = |query| {
+            PANEL_DESTINATIONS
+                .iter()
+                .filter(|destination| panel_matches(destination, query))
+                .map(|destination| destination.tab)
+                .collect::<Vec<_>>()
+        };
+        assert!(results("  OpERATIONS   RECALL ") == vec![ServiceTab::Drones]);
+        assert!(results("station hatch") == vec![ServiceTab::Station]);
+        assert!(results("ship engineering") == vec![ServiceTab::Layouts]);
+        assert!(results("missing destination").is_empty());
+    }
+
+    #[test]
+    fn panel_search_typing_no_match_clear_and_result_click_preserve_world() {
+        let ctx = egui::Context::default();
+        let mut cockpit = crate::tests::view_test_cockpit(&ctx);
+        cockpit.services_open = true;
+        cockpit.embedded_input = true;
+        cockpit.service_tab = ServiceTab::Cargo;
+        let before = serde_json::to_value(&cockpit.snapshot).unwrap();
+        let (tx, rx) = mpsc::channel();
+        cockpit.commands = Some(tx);
+        frame(&ctx, &mut cockpit, vec![], false);
+        frame(&ctx, &mut cockpit, shortcut(), false);
+        frame(
+            &ctx,
+            &mut cockpit,
+            vec![egui::Event::Text("zznotapanel".into())],
+            false,
+        );
+        assert_eq!(cockpit.operations_search, "zznotapanel");
+        let labels = frame(&ctx, &mut cockpit, vec![], false);
+        assert!(labels
+            .iter()
+            .any(|(text, _)| text.contains("No matching panels")));
+        assert!(labels.iter().any(|(text, _)| text == "← Back to Flight"));
+        assert!(cockpit.service_tab == ServiceTab::Cargo);
+        let point = labels
+            .iter()
+            .find(|(text, _)| text == "Clear search")
+            .unwrap()
+            .1;
+        for pressed in [true, false] {
+            frame(&ctx, &mut cockpit, click(point, pressed), false);
+        }
+        assert!(cockpit.operations_search.is_empty());
+        assert!(cockpit.service_tab == ServiceTab::Cargo);
+        cockpit.operations_search = "recall".into();
+        frame(
+            &ctx,
+            &mut cockpit,
+            vec![egui::Event::Key {
+                key: egui::Key::Enter,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            }],
+            false,
+        );
+        assert!(cockpit.service_tab == ServiceTab::Cargo);
+        frame(&ctx, &mut cockpit, vec![], false);
+        let labels = frame(&ctx, &mut cockpit, vec![], false);
+        let point = labels
+            .iter()
+            .find(|(text, _)| text == "Operations · Drones")
+            .unwrap()
+            .1;
+        for pressed in [true, false] {
+            frame(&ctx, &mut cockpit, click(point, pressed), false);
+        }
+        assert!(cockpit.service_tab == ServiceTab::Drones);
+        assert!(rx.try_recv().is_err());
+        assert_eq!(serde_json::to_value(&cockpit.snapshot).unwrap(), before);
+    }
+
+    #[test]
+    fn panel_search_shortcut_respects_unrelated_text_and_viewport_ownership() {
+        for unrelated in [true, false] {
+            let ctx = egui::Context::default();
+            let mut cockpit = crate::tests::view_test_cockpit(&ctx);
+            cockpit.services_open = true;
+            cockpit.embedded_input = unrelated;
+            let before = serde_json::to_value(&cockpit.snapshot).unwrap();
+            let (tx, rx) = mpsc::channel();
+            cockpit.commands = Some(tx);
+            frame(&ctx, &mut cockpit, vec![], unrelated);
+            if unrelated {
+                ctx.memory_mut(|memory| {
+                    memory.request_focus(egui::Id::new("other_panel_search_test"))
+                });
+            }
+            let previous = ctx.memory(|memory| memory.focused());
+            frame(&ctx, &mut cockpit, shortcut(), unrelated);
+            assert_eq!(ctx.memory(|memory| memory.focused()), previous);
+            assert!(cockpit.operations_search.is_empty());
+            assert!(rx.try_recv().is_err());
+            assert_eq!(serde_json::to_value(&cockpit.snapshot).unwrap(), before);
+        }
     }
 }
