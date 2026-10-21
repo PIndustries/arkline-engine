@@ -122,7 +122,10 @@ impl CockpitSurface {
             vp * mount,
             center,
             Vec3::new(0., half.y - 0.008, half.z - 0.008),
-            center.x - 0.025 - 0.006 - 0.0001,
+            // A 1 mm physical separation from the opaque glass backing keeps
+            // the canted UI readable at the flight depth range. It remains
+            // recessed behind the case lip; pointer and emitted plane agree.
+            center.x - 0.025 - 0.006 - 0.001,
             index,
             canvas_size,
         )
@@ -729,11 +732,18 @@ pub(super) fn paint_cockpit_maps(
         } else {
             super::super::AMBER
         };
-        let authority = map_authority(connected, paused,
+        let authority = map_authority(
+            connected,
+            paused,
             own.flight.is_some() || own.location == Location::Docked,
-            now.saturating_sub(snapshot.server_time_ms) <= 1500);
-        let selected_readout = contacts.iter().find(|(object, _, _)| object == selected)
-            .map(|(_, position, name)| (name.as_str(), super::super::distance_m(*position, origin)));
+            now.saturating_sub(snapshot.server_time_ms) <= 1500,
+        );
+        let selected_readout = contacts
+            .iter()
+            .find(|(object, _, _)| object == selected)
+            .map(|(_, position, name)| {
+                (name.as_str(), super::super::distance_m(*position, origin))
+            });
         let physical_pointer = ui
             .input(|i| i.pointer.hover_pos())
             .and_then(|p| surface.unproject(p));
@@ -776,7 +786,6 @@ pub(super) fn paint_cockpit_maps(
                 points,
                 egui::Stroke::new(0.8, color.gamma_multiply(0.45)),
             ));
-
         }
         painter.line_segment(
             [
@@ -850,7 +859,6 @@ pub(super) fn paint_cockpit_maps(
                 picked = Some(ViewAction::Select(object));
             }
         }
-
     }
     picked
 }
@@ -1595,7 +1603,7 @@ mod registered_display_tests {
         let screen = surface.project(point).unwrap();
         assert!(surface.unproject(screen).unwrap().distance(point) < 0.001);
         let emitted = surface.local_point(point);
-        assert!((emitted.x + 0.0311).abs() < 0.000001);
+        assert!((emitted.x + 0.032).abs() < 0.000001);
         let wall = Mat4::from_scale_rotation_translation(
             Vec3::new(0.1, 1., 1.),
             Quat::IDENTITY,

@@ -98,8 +98,44 @@ pub(in crate::flight3d) fn physical_surface(
         return None;
     }
     let (center, half) = arkline_protocol::cockpit_screen(index)?;
-    CockpitSurface::registered(rect, vp, mount, vector(center), vector(half), index, canvas)
-        .map(|surface| surface.with_registered_occlusion(scene, vp, mount))
+    let plane_mount = screen_plane_mount(index, mount, vector(center))?;
+    let canvas = canonical_screen_canvas(index, vector(half), canvas);
+    CockpitSurface::registered(
+        rect,
+        vp,
+        plane_mount,
+        vector(center),
+        vector(half),
+        index,
+        canvas,
+    )
+    .map(|surface| surface.with_registered_occlusion(scene, vp, plane_mount))
+}
+
+// Preserve the physical proportions of text, charts and camera tiles on the
+// rebuilt peripheral glass. The central computer keeps its existing UI contract.
+fn canonical_screen_canvas(index: usize, half: Vec3, requested: egui::Vec2) -> egui::Vec2 {
+    if matches!(index, 1 | 2 | 4 | 5) {
+        egui::vec2(
+            requested.y * (half.z - 0.008) / (half.y - 0.008),
+            requested.y,
+        )
+    } else {
+        requested
+    }
+}
+
+// Mount the content and pointer plane in the canonical physical screen axes.
+// Camera matrices, GPU programs and world authority are not changed here.
+fn screen_plane_mount(index: usize, mount: Mat4, center: Vec3) -> Option<Mat4> {
+    let axes = arkline_protocol::cockpit_screen_axes(index)?;
+    let rotation = Mat4::from_cols(
+        vector(axes[0]).extend(0.0),
+        vector(axes[1]).extend(0.0),
+        vector(axes[2]).extend(0.0),
+        glam::Vec4::W,
+    );
+    Some(mount * Mat4::from_translation(center) * rotation * Mat4::from_translation(-center))
 }
 
 fn vector(point: [f64; 3]) -> Vec3 {
@@ -1244,27 +1280,57 @@ mod composition_fit_tests {
     #[test]
     fn all_five_instruments_fit_real_viewport_aspects_with_forward_clearance() {
         let eye = vector(pilot_joints(0.0).eye_m);
+        let cache = SceneCache::new(arkline_protocol::default_pioneer()).unwrap();
+        let parts = seated_body_parts(&cache, None, 0).unwrap();
+        let geometry = flight_geometry().unwrap();
+        let draws = parts
+            .iter()
+            .filter(|part| docked_source_primitive(part.0) != Some(6))
+            .map(|part| {
+                cockpit_occlusion::DepthDraw::whole(&geometry.catalog, part.0, part.1).unwrap()
+            })
+            .collect();
+        let scene = Arc::new(
+            CockpitOcclusion::new(
+                ShipClass::Pioneer,
+                geometry.catalog.clone(),
+                Vec::new(),
+                draws,
+            )
+            .unwrap(),
+        );
         for size in [
             egui::vec2(1570., 1014.),
             egui::vec2(1120., 720.),
             egui::vec2(800., 650.),
+            egui::vec2(1500., 638.),
         ] {
             let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, size);
             let vp = Mat4::perspective_rh_gl(FOV_RADIANS, viewport.aspect_ratio(), 0.02, 100.)
                 * Mat4::look_at_rh(eye, eye + Vec3::X, Vec3::Y);
             for index in 1..6 {
                 let (center, half) = arkline_protocol::cockpit_screen(index).unwrap();
-                let surface = CockpitSurface::registered(
+                let surface = physical_surface(
                     viewport,
                     vp,
                     Mat4::IDENTITY,
-                    vector(center),
-                    vector(half),
                     index,
                     egui::vec2(300., 180.),
+                    scene.clone(),
                 )
                 .unwrap();
                 let canvas = surface.canvas_rect();
+                if matches!(index, 1 | 2 | 4 | 5) {
+                    let tile = egui::Rect::from_min_size(canvas.min, egui::vec2(1.0, 1.0));
+                    let (_, a, b) = surface.feed_geometry(tile).unwrap();
+                    let diagonal = b - a;
+                    assert!(
+                        (diagonal.y.abs() - diagonal.z.abs()).abs() < 1e-5,
+                        "A square source glyph/video tile must remain square on the physical glass"
+                    );
+                } else {
+                    assert_eq!(canvas.size(), egui::vec2(300.0, 180.0));
+                }
                 for point in [
                     canvas.left_top(),
                     canvas.right_top(),
@@ -1273,12 +1339,44 @@ mod composition_fit_tests {
                 ] {
                     let projected = surface
                         .project(point)
-                        .expect("Every complete physical face must fit; no clipping fallback");
+                        .unwrap_or_else(|| panic!("Face {index}, {size:?}, canvas corner {point:?} must fit without clipping"));
                     assert!(
                         viewport.shrink(8.).contains(projected),
                         "Face {index}, {size:?}: {projected:?}"
                     );
-                    assert!(surface.unproject(projected).unwrap().distance(point) < 0.1);
+                    // Check against the actual canonical glass face, not only
+                    // a self-consistent project/unproject pair with wrong axes.
+                    let axes = arkline_protocol::cockpit_screen_axes(index).unwrap();
+                    let u = (point.x - canvas.left()) / canvas.width();
+                    let v = (point.y - canvas.top()) / canvas.height();
+                    let glass = vector(center) - vector(axes[0]) * (0.025 + 0.006 + 0.001)
+                        + vector(axes[1]) * ((0.5 - v) * 2.0 * (half[1] as f32 - 0.008))
+                        + vector(axes[2]) * ((u - 0.5) * 2.0 * (half[2] as f32 - 0.008));
+                    let hit = surface.unproject(projected);
+                    if hit.is_none_or(|hit| hit.distance(point) >= 0.1) {
+                        let direction = (glass - eye).normalize();
+                        let distance = glass.distance(eye);
+                        let mut blockers: Vec<_> = cache
+                            .geometry
+                            .panels
+                            .iter()
+                            .filter_map(|panel| {
+                                ray_mesh_hit(eye, direction, box_matrix(&panel.bounds), &cube())
+                                    .filter(|t| *t < distance - 0.00001)
+                                    .map(|t| (t, panel.id.as_str()))
+                            })
+                            .collect();
+                        blockers.sort_by(|a, b| a.0.total_cmp(&b.0));
+                        panic!("Face {index}, {size:?}, corner {point:?} hidden by {blockers:?}");
+                    }
+                    let clip = vp * glass.extend(1.0);
+                    let ndc = clip.truncate() / clip.w;
+                    let expected = viewport.min
+                        + egui::vec2((ndc.x * 0.5 + 0.5) * size.x, (0.5 - ndc.y * 0.5) * size.y);
+                    assert!(
+                        projected.distance(expected) < 0.02,
+                        "Face {index} UI plane must match its real canonical glass"
+                    );
                 }
                 if index == 3 {
                     assert!(surface.bounds().width() / size.x < 0.45);

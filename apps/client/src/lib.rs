@@ -43,22 +43,22 @@ mod effects;
 mod flight3d;
 mod layout;
 pub use layout::panel_geometry as cockpit_panel_geometry;
+mod control_bindings;
+mod controls_reference;
+mod exchange_readiness;
 mod flight_workspace;
 mod lighting_settings;
 mod motion;
-mod operations_workspace;
-mod overview_contacts;
-mod control_bindings;
-mod controls_reference;
 mod nearby_action_model;
 mod nearby_interaction_input;
+mod operations_workspace;
+mod overview_contacts;
 mod pilot_input;
 mod remote_control_ui;
 mod resource_jobs_ui;
 mod room_controls;
 mod sandbox;
 mod services;
-mod exchange_readiness;
 #[cfg(not(target_arch = "wasm32"))]
 mod ship_ai;
 #[cfg(target_arch = "wasm32")]
@@ -859,13 +859,21 @@ impl Cockpit {
         self.theme.accent()
     }
     fn settings_panel(&mut self, ui: &mut egui::Ui) {
-        if ui.button("Controls & ownership").clicked() { self.open_controls_reference(); }
+        if ui.button("Controls & ownership").clicked() {
+            self.open_controls_reference();
+        }
         let context = sound_settings::SoundContext {
             paused: self.embedded && self.embedded_paused,
-            live_world: self.operations_fresh() && self.own().is_some(), listening: self.voice.is_listening(),
+            live_world: self.operations_fresh() && self.own().is_some(),
+            listening: self.voice.is_listening(),
             speaking: self.voice.is_speaking(),
         };
-        let action = self.sound_settings.ui(ui, &self.sound.output_status(), context, &self.sound_test_notice);
+        let action = self.sound_settings.ui(
+            ui,
+            &self.sound.output_status(),
+            context,
+            &self.sound_test_notice,
+        );
         if action.changed {
             if let Err(error) = self.sound_settings.save(&self.data_dir) {
                 self.settings_notice = error;
@@ -873,10 +881,12 @@ impl Cockpit {
         }
         if action.retry {
             self.sound.retry();
-            self.sound_test_notice = "Audio retry requested · output status below reports the result".into();
+            self.sound_test_notice =
+                "Audio retry requested · output status below reports the result".into();
         }
         if action.test {
-            self.sound.set_mix(self.preferred_sound_mix(self.sound.current_mix()));
+            self.sound
+                .set_mix(self.preferred_sound_mix(self.sound.current_mix()));
             self.sound_test_notice = match self.sound.test_output() {
                 Ok(()) => "Two-tone test requested · listen to your output device".into(),
                 Err(error) => error,
@@ -3985,7 +3995,10 @@ impl eframe::App for Cockpit {
             self.nearby_shortcut.cancel();
         }
         self.operations_keyboard_navigation(ctx);
-        if self.controls_reference_open || self.services_open || self.service_tab == ServiceTab::Layouts {
+        if self.controls_reference_open
+            || self.services_open
+            || self.service_tab == ServiceTab::Layouts
+        {
             self.release_workspace_input();
         } else if self.workspace_input_waiting_release
             && ctx.input(|i| i.keys_down.is_empty() && !i.pointer.any_down())
@@ -4061,7 +4074,8 @@ impl eframe::App for Cockpit {
             }
         }
         self.effects.retain(self.presentation_time());
-        if !self.controls_reference_open && !self.services_open
+        if !self.controls_reference_open
+            && !self.services_open
             && !self.workspace_input_waiting_release
             && self.embedded_input
             && !ctx.wants_keyboard_input()
@@ -4403,7 +4417,7 @@ impl eframe::App for Cockpit {
             self.embedded_input
                 && !self.workspace_input_waiting_release
                 && !self.controls_reference_open
-            && !self.services_open
+                && !self.services_open
                 && !self.cockpit_computer.wants_keyboard_input(),
         );
         self.hangar_view.set_room_layout(
@@ -4452,11 +4466,15 @@ impl eframe::App for Cockpit {
                             self.activate_quarters_terminal(action);
                         }
                         if self.verified_docked_binding().is_some() {
+                            let selected_center_distance_m = self
+                                .selected_position()
+                                .map(|target| distance_m(motion::position(&pilot, now), target));
                             if let Some(snapshot) = self.snapshot.as_ref() {
                                 self.hangar_view.paint_docked_instruments(
                                     ui,
                                     &pilot,
                                     snapshot,
+                                    selected_center_distance_m,
                                     now,
                                     self.connected,
                                     self.embedded_paused,
@@ -4522,10 +4540,14 @@ impl eframe::App for Cockpit {
         if self.view_mode != ViewMode::Cockpit {
             self.pilot_input.release_mouse(ctx);
         }
-        if self.controls_reference_open || self.services_open || self.service_tab == ServiceTab::Layouts {
+        if self.controls_reference_open
+            || self.services_open
+            || self.service_tab == ServiceTab::Layouts
+        {
             self.release_workspace_input();
         }
-        let workspace_allows_input = !self.controls_reference_open && !self.services_open
+        let workspace_allows_input = !self.controls_reference_open
+            && !self.services_open
             && self.service_tab != ServiceTab::Layouts
             && !self.workspace_input_waiting_release;
         let flight_allowed = workspace_allows_input
@@ -6999,29 +7021,46 @@ mod tests {
         let camera = cockpit.view_mode;
         let (tx, rx) = mpsc::channel();
         cockpit.commands = Some(tx);
-        for tab in [ServiceTab::Cargo, ServiceTab::ShipComputer, ServiceTab::Layouts] {
+        for tab in [
+            ServiceTab::Cargo,
+            ServiceTab::ShipComputer,
+            ServiceTab::Layouts,
+        ] {
             cockpit.services_open = true;
             cockpit.service_tab = tab;
-            let _ = ctx.run(egui::RawInput {
-                focused: true,
-                events: vec![egui::Event::Key {
-                    key: egui::Key::Escape, physical_key: None, pressed: true,
-                    repeat: false, modifiers: egui::Modifiers::NONE,
-                }],
-                ..Default::default()
-            }, |ctx| cockpit.operations_keyboard_navigation(ctx));
+            let _ = ctx.run(
+                egui::RawInput {
+                    focused: true,
+                    events: vec![egui::Event::Key {
+                        key: egui::Key::Escape,
+                        physical_key: None,
+                        pressed: true,
+                        repeat: false,
+                        modifiers: egui::Modifiers::NONE,
+                    }],
+                    ..Default::default()
+                },
+                |ctx| cockpit.operations_keyboard_navigation(ctx),
+            );
             assert!(!cockpit.services_open);
             assert!(cockpit.service_tab == ServiceTab::Navigation);
             assert!(cockpit.workspace_input_waiting_release);
             assert_eq!(cockpit.view_mode, camera);
             assert_eq!(serde_json::to_value(&cockpit.snapshot).unwrap(), before);
             assert!(rx.try_recv().is_err());
-            let _ = ctx.run(egui::RawInput {
-                events: vec![egui::Event::Key {
-                    key: egui::Key::Escape, physical_key: None, pressed: false,
-                    repeat: false, modifiers: egui::Modifiers::NONE,
-                }], ..Default::default()
-            }, |_| {});
+            let _ = ctx.run(
+                egui::RawInput {
+                    events: vec![egui::Event::Key {
+                        key: egui::Key::Escape,
+                        physical_key: None,
+                        pressed: false,
+                        repeat: false,
+                        modifiers: egui::Modifiers::NONE,
+                    }],
+                    ..Default::default()
+                },
+                |_| {},
+            );
         }
     }
 
@@ -7038,25 +7077,33 @@ mod tests {
             if text_focus {
                 let _ = ctx.run(egui::RawInput::default(), |ctx| {
                     egui::CentralPanel::default().show(ctx, |ui| {
-                        ui.add(egui::TextEdit::singleline(&mut value).id(field)).request_focus();
+                        ui.add(egui::TextEdit::singleline(&mut value).id(field))
+                            .request_focus();
                     });
                     cockpit.record_operations_keyboard_owner(ctx);
                 });
             }
-            let _ = ctx.run(egui::RawInput {
-                focused: true,
-                events: vec![egui::Event::Key {
-                    key: egui::Key::Escape, physical_key: None, pressed: true,
-                    repeat: false, modifiers: egui::Modifiers::NONE,
-                }], ..Default::default()
-            }, |ctx| {
-                cockpit.operations_keyboard_navigation(ctx);
-                if text_focus {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        ui.add(egui::TextEdit::singleline(&mut value).id(field));
-                    });
-                }
-            });
+            let _ = ctx.run(
+                egui::RawInput {
+                    focused: true,
+                    events: vec![egui::Event::Key {
+                        key: egui::Key::Escape,
+                        physical_key: None,
+                        pressed: true,
+                        repeat: false,
+                        modifiers: egui::Modifiers::NONE,
+                    }],
+                    ..Default::default()
+                },
+                |ctx| {
+                    cockpit.operations_keyboard_navigation(ctx);
+                    if text_focus {
+                        egui::CentralPanel::default().show(ctx, |ui| {
+                            ui.add(egui::TextEdit::singleline(&mut value).id(field));
+                        });
+                    }
+                },
+            );
             assert!(cockpit.services_open);
             assert!(cockpit.service_tab == ServiceTab::Cargo);
         }

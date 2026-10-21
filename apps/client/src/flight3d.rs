@@ -107,10 +107,10 @@ pub(crate) use cockpit_maps::CockpitSurface;
 use cockpit_maps::*;
 #[path = "cockpit_displays.rs"]
 mod cockpit_displays;
-#[path = "power_instrument.rs"]
-mod power_instrument;
 #[path = "navigation_instrument.rs"]
 mod navigation_instrument;
+#[path = "power_instrument.rs"]
+mod power_instrument;
 use cockpit_displays::CockpitDisplayRenderer;
 #[path = "cockpit_occlusion.rs"]
 mod cockpit_occlusion;
@@ -1647,9 +1647,15 @@ impl FlightView {
                 }
                 if cockpit {
                     if let Some(own) = own_pilot {
+                        // One content owner per physical face: a requested
+                        // camera (including its unavailable state) replaces NAV.
+                        let mut telemetry_surfaces = instrument_surfaces.clone();
+                        if self.drone_camera || self.remote_ship.is_some() {
+                            telemetry_surfaces[1] = None;
+                        }
                         paint_instruments(
                             ui,
-                            &instrument_surfaces,
+                            &telemetry_surfaces,
                             own,
                             snapshot,
                             selected_distance,
@@ -4647,7 +4653,10 @@ fn paint_instruments(
         }
         if index == 1 {
             let readings = navigation_instrument::NavigationReadings::from_pilot(
-                own, snapshot, target_distance, now,
+                own,
+                snapshot,
+                target_distance,
+                now,
             );
             navigation_instrument::paint(&painter, inner, &rows[1][0], color, &readings);
             continue;
@@ -4680,7 +4689,6 @@ fn paint_instruments(
             ],
             egui::Stroke::new(1.0, color.gamma_multiply(0.35)),
         );
-
     }
 }
 
@@ -7565,17 +7573,32 @@ mod tests {
         assert!(full[2].contains(&"CAPACITOR FULL / WARP ENERGY READY".to_string()));
         assert_eq!(module_instrument(&pilot, 0, 1000), "T1 DATA UNAVAILABLE");
         pilot.mining_modules.push(arkline_protocol::MiningModule {
-            module_id: 0, target_id: None, cycle_started_at_ms: None,
-            cycle_completes_at_ms: None, stop_reason: Some("Insufficient capacitor".into()),
+            module_id: 0,
+            target_id: None,
+            cycle_started_at_ms: None,
+            cycle_completes_at_ms: None,
+            stop_reason: Some("Insufficient capacitor".into()),
         });
-        assert_eq!(module_instrument(&pilot, 0, 1000), "T1 STOPPED / Insufficient capacitor");
+        assert_eq!(
+            module_instrument(&pilot, 0, 1000),
+            "T1 STOPPED / Insufficient capacitor"
+        );
         pilot.mining_modules[0].stop_reason = None;
         assert_eq!(module_instrument(&pilot, 0, 1000), "T1 STANDBY");
         pilot.mining_modules[0].target_id = Some(7);
-        assert_eq!(module_instrument(&pilot, 0, 1000), "T1 #7 CYCLE UNCONFIRMED");
+        assert_eq!(
+            module_instrument(&pilot, 0, 1000),
+            "T1 #7 CYCLE UNCONFIRMED"
+        );
         pilot.flight = None;
         let missing = instrument_rows(&pilot, &snapshot, None, 1000, true);
-        for label in ["SPEED UNAVAILABLE", "FWD UNAVAILABLE", "RIGHT UNAVAILABLE", "UP UNAVAILABLE", "ATTITUDE UNAVAILABLE"] {
+        for label in [
+            "SPEED UNAVAILABLE",
+            "FWD UNAVAILABLE",
+            "RIGHT UNAVAILABLE",
+            "UP UNAVAILABLE",
+            "ATTITUDE UNAVAILABLE",
+        ] {
             assert!(missing[0].contains(&label.to_string()));
         }
         let stale = instrument_rows(&pilot, &snapshot, None, 1000, false);

@@ -222,6 +222,7 @@ impl HangarView {
         ui: &mut egui::Ui,
         pilot: &PilotView,
         snapshot: &Snapshot,
+        selected_center_distance_m: Option<f64>,
         now: u64,
         connected: bool,
         paused: bool,
@@ -231,7 +232,7 @@ impl HangarView {
             &self.docked_surfaces,
             pilot,
             snapshot,
-            None,
+            selected_center_distance_m,
             now,
             connected && !paused,
             Some(if !connected {

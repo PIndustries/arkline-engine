@@ -1597,14 +1597,14 @@ fn add_cockpit_furniture(g: &mut PioneerDockedGeometry) {
         ),
         (
             "console/forward-bridge",
-            [34.66, 0.52, 2.0],
-            [34.84, 0.58, 4.0],
+            [34.66, 0.49, 2.0],
+            [35.01, 0.53, 4.0],
             Carbon,
         ),
         (
             "console/front-support",
-            [34.76, FLOOR, 2.0],
-            [34.84, 0.52, 4.0],
+            [34.93, FLOOR, 2.0],
+            [35.01, 0.52, 4.0],
             Graphite,
         ),
         (
@@ -1673,10 +1673,25 @@ fn add_cockpit_furniture(g: &mut PioneerDockedGeometry) {
         ("starboard", 3.35, 4.0, 3.35, 3.50),
     ] {
         let mut block = |name: &str, min, max, material| {
-            g.block(
+            let mut bounds = axis_box(min, max);
+            // Only the upper shared instrument socket follows its live faces.
+            // Lower plinths, service covers and circulation remain unchanged.
+            if matches!(
+                name,
+                "housing"
+                    | "socket-bottom"
+                    | "divider"
+                    | "crown"
+                    | "socket-inner-rail"
+                    | "socket-outer-rail"
+                    | "socket-base"
+            ) {
+                bounds.center_m = cockpit_bank_point(bounds.center_m, side == "port");
+                bounds.axes = cockpit_bank_axes(side == "port");
+            }
+            g.panel(
                 format!("cockpit/bank/{side}-{name}"),
-                min,
-                max,
+                bounds,
                 material,
                 solid,
                 cell,
@@ -1708,6 +1723,14 @@ fn add_cockpit_furniture(g: &mut PioneerDockedGeometry) {
             "housing",
             [34.80, 0.58, socket0],
             [34.84, 1.0, socket1],
+            Graphite,
+        );
+        // The tilted socket has a real lower mounting web intersecting the
+        // unchanged forward console bridge, below the live display apertures.
+        block(
+            "socket-base",
+            [34.735, 0.52, socket0],
+            [34.84, 0.575, socket1],
             Graphite,
         );
         block(
@@ -1805,7 +1828,7 @@ fn add_cockpit_furniture(g: &mut PioneerDockedGeometry) {
         g.panel(
             format!("cockpit/bank/{side}-socket-shoulder"),
             PioneerDockedBox {
-                center_m: [34.645, 0.605, (inner0 + inner1) * 0.5],
+                center_m: [34.645, 0.545, (inner0 + inner1) * 0.5],
                 half_m: [length * 0.5, 0.025, (inner1 - inner0) * 0.5],
                 axes: [
                     [dx / length, dy / length, 0.0],
@@ -1844,16 +1867,134 @@ fn add_cockpit_furniture(g: &mut PioneerDockedGeometry) {
         PioneerDockedPanelKind::Furniture,
     );
 
+    // A recessed central instrument case replaces the freestanding tablet
+    // silhouette. The face stays fixed: all opaque material is behind it or
+    // outside its glass aperture, with a real support on the centre mount.
+    // Keep the rear shell shallow: a deep level roof rises into the pilot
+    // sightline through perspective even when its front lip clears the glass.
+    for (id, min, max, material) in [
+        (
+            "rearplate",
+            [34.055, 0.90, 2.785],
+            [34.065, 1.17, 3.215],
+            Graphite,
+        ),
+        (
+            "port-cheek",
+            [34.015, 0.90, 2.785],
+            [34.065, 1.17, 2.790],
+            Carbon,
+        ),
+        (
+            "starboard-cheek",
+            [34.015, 0.90, 3.210],
+            [34.065, 1.17, 3.215],
+            Carbon,
+        ),
+        (
+            "port-flange",
+            [34.02, 0.97, 2.790],
+            [34.065, 1.17, 2.795],
+            Titanium,
+        ),
+        (
+            "starboard-flange",
+            [34.02, 0.97, 3.205],
+            [34.065, 1.17, 3.210],
+            Titanium,
+        ),
+        ("brow", [34.02, 1.163, 2.785], [34.065, 1.17, 3.215], Carbon),
+        (
+            "lower-frame",
+            [34.02, 0.90, 2.785],
+            [34.065, 0.97, 3.215],
+            Titanium,
+        ),
+    ] {
+        g.block(
+            format!("cockpit/console/central-socket/{id}"),
+            min,
+            max,
+            material,
+            solid,
+            cell,
+            PioneerDockedPanelKind::Furniture,
+        );
+    }
+    let dx: f64 = 0.125;
+    let dy: f64 = 0.040;
+    let length = dx.hypot(dy);
+    g.panel(
+        "cockpit/console/central-socket/base-wedge",
+        PioneerDockedBox {
+            center_m: [34.1175, 0.93, 3.0],
+            half_m: [length * 0.5, 0.020, 0.215],
+            axes: [
+                [dx / length, dy / length, 0.0],
+                [-dy / length, dx / length, 0.0],
+                Z,
+            ],
+        },
+        Carbon,
+        solid,
+        cell,
+        PioneerDockedPanelKind::Furniture,
+    );
+
     // Index identities mirror the existing six screen slots. Slot zero is
     // transparent telemetry, not a depth-writing console panel.
     for i in 1..6 {
         let (center, half) = cockpit_screen(i).expect("five physical panels");
+        let axes = cockpit_screen_axes(i).expect("same five physical panel frames");
+        // Four real lips surround, never cover, the live glass aperture.
+        // The live content plane is local X=-.032; the lip front is -.038, giving
+        // about7mm actual recess rather than an opaque decorative overlay.
+        let rim_y = half[1] - 0.001;
+        let rim_z = half[2] - 0.001;
+        for (name, local, lip_half) in [
+            ("top", [-0.032, rim_y, 0.0], [0.006, 0.004, half[2] + 0.003]),
+            (
+                "bottom",
+                [-0.032, -rim_y, 0.0],
+                [0.006, 0.004, half[2] + 0.003],
+            ),
+            (
+                "port",
+                [-0.032, 0.0, -rim_z],
+                [0.006, half[1] - 0.005, 0.004],
+            ),
+            (
+                "starboard",
+                [-0.032, 0.0, rim_z],
+                [0.006, half[1] - 0.005, 0.004],
+            ),
+        ] {
+            let lip_center = add(
+                center,
+                add(
+                    mul(axes[0], local[0]),
+                    add(mul(axes[1], local[1]), mul(axes[2], local[2])),
+                ),
+            );
+            g.panel(
+                format!("cockpit/screen/{i}/rim/{name}"),
+                PioneerDockedBox {
+                    center_m: lip_center,
+                    half_m: lip_half,
+                    axes,
+                },
+                Titanium,
+                solid,
+                cell,
+                PioneerDockedPanelKind::Instrument,
+            );
+        }
         g.panel(
             format!("cockpit/screen/{i}/bezel"),
             PioneerDockedBox {
                 center_m: center,
                 half_m: half,
-                axes: [X, Y, Z],
+                axes,
             },
             Graphite,
             solid,
@@ -1863,9 +2004,9 @@ fn add_cockpit_furniture(g: &mut PioneerDockedGeometry) {
         g.panel(
             format!("cockpit/screen/{i}/backing"),
             PioneerDockedBox {
-                center_m: add(center, [-0.025, 0.0, 0.0]),
+                center_m: add(center, mul(axes[0], -0.025)),
                 half_m: [0.006, half[1] - 0.008, half[2] - 0.008],
-                axes: [X, Y, Z],
+                axes,
             },
             PioneerDockedMaterial::Glass,
             solid,
@@ -1890,7 +2031,54 @@ pub fn cockpit_screen(index: usize) -> Option<([f64; 3], [f64; 3])> {
         5 => ([35.76, 0.56, 3.75], [0.012, 0.085, 0.25]),
         _ => return None,
     };
-    Some((workstation_point(center), half))
+    let center = workstation_point(center);
+    let center = match index {
+        1 | 4 => cockpit_bank_point(center, true),
+        2 | 5 => cockpit_bank_point(center, false),
+        _ => center,
+    };
+    Some((center, half))
+}
+
+/// Body-space axes for the exact physical screen mount. Rendering, collision,
+/// projection and pointer mapping consume the same frame. The central screen
+/// and canopy telemetry retain their original identity orientation.
+pub fn cockpit_screen_axes(index: usize) -> Option<[[f64; 3]; 3]> {
+    match index {
+        0 | 3 => Some([X, Y, Z]),
+        1 | 4 => Some(cockpit_bank_axes(true)),
+        2 | 5 => Some(cockpit_bank_axes(false)),
+        _ => None,
+    }
+}
+
+/// One mounting transform: yaw about body Y, then pitch about body Z (Rz*Ry).
+/// The side screens and upper socket share this body-space pivot and axes.
+fn cockpit_bank_axes(port: bool) -> [[f64; 3]; 3] {
+    let yaw = if port { 18.0_f64 } else { -18.0_f64 }.to_radians();
+    let pitch = -14.0_f64.to_radians();
+    let (sy, cy) = yaw.sin_cos();
+    let (sp, cp) = pitch.sin_cos();
+    [
+        [cp * cy, sp * cy, -sy],
+        [-sp, cp, 0.0],
+        [cp * sy, sp * sy, cy],
+    ]
+}
+
+fn cockpit_bank_point(point: [f64; 3], port: bool) -> [f64; 3] {
+    let pivot = [34.76, 0.80, if port { 2.25 } else { 3.75 }];
+    let d = sub(point, pivot);
+    let axes = cockpit_bank_axes(port);
+    // The physical forward/lower mounting offset is shared by faces, bezels
+    // and sockets, preserving strict narrow- and tall-viewport margins.
+    add(
+        add(pivot, [0.17, -0.030, 0.0]),
+        add(
+            mul(axes[0], d[0]),
+            add(mul(axes[1], d[1]), mul(axes[2], d[2])),
+        ),
+    )
 }
 
 /// Paired inward-opening leaves, shared by rendering, collision and sweep checks.

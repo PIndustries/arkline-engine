@@ -1570,8 +1570,11 @@ fn native_pioneer_cockpit_mining_composition() {
         if let Ok(height) = std::env::var("ARKLINE_COCKPIT_EXPECT_SCENE_HEIGHT") {
             let expected: f32 = height.parse().expect("Numeric scene height");
             assert!((viewport.width() - 1500.0).abs() < 0.1);
-            assert!((viewport.height() - expected).abs() < 0.1,
-                "Actual scene aperture {:?} differs from measured target {expected}", viewport);
+            assert!(
+                (viewport.height() - expected).abs() < 0.1,
+                "Actual scene aperture {:?} differs from measured target {expected}",
+                viewport
+            );
         }
         let clear = egui::Rect::from_min_max(
             viewport.min + viewport.size() * egui::vec2(0.33, 0.12),
@@ -1599,8 +1602,10 @@ fn native_pioneer_cockpit_mining_composition() {
                         (b.max.y-viewport.min.y)/viewport.height()
                     ],"intersects_protected":b.intersects(clear)})
                 }).collect::<Vec<_>>()
-            })).unwrap(),
-        ).unwrap();
+            }))
+            .unwrap(),
+        )
+        .unwrap();
         assert!(
             instrument_fraction < 0.26,
             "Actual instrument faces must not bury the world: {instrument_fraction}"
@@ -1608,6 +1613,38 @@ fn native_pioneer_cockpit_mining_composition() {
         assert!(
             instruments.iter().all(|s| !s.bounds().intersects(clear)),
             "Primary forward target region must remain clear"
+        );
+        let mut glass_corners = Vec::new();
+        let mut blocked_corners = Vec::new();
+        for (index, surface) in instruments.iter().enumerate() {
+            let canvas = surface.canvas_rect();
+            for (corner, point) in [
+                canvas.left_top(),
+                canvas.right_top(),
+                canvas.left_bottom(),
+                canvas.right_bottom(),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                let projected = surface.project(point).expect("Full glass projection");
+                let hit = surface.unproject(projected);
+                let clear = hit.is_some_and(|hit| hit.distance(point) < 0.1);
+                glass_corners.push(serde_json::json!({"surface":index+1,"corner":corner,
+                    "canvas":[point.x,point.y],"projected":[projected.x,projected.y],"clear":clear}));
+                if !clear {
+                    blocked_corners.push((index + 1, corner));
+                }
+            }
+        }
+        std::fs::write(
+            directory.join("glass-corner-visibility.json"),
+            serde_json::to_vec_pretty(&glass_corners).unwrap(),
+        )
+        .unwrap();
+        assert!(
+            blocked_corners.is_empty(),
+            "Real cases must not mask displayed glass/input corners: {blocked_corners:?}"
         );
         assert!(!mining.registered_route);
         same_seated_view(&docked, &mining);
@@ -1617,7 +1654,8 @@ fn native_pioneer_cockpit_mining_composition() {
         // Use this actual frame's body transform and the SAME protected region.
         let surface = mining.surface.as_ref().unwrap();
         let (body_to_clip, _, _) = surface.feed_geometry(surface.canvas_rect()).unwrap();
-        let canonical = arkline_protocol::registered_geometry(&arkline_protocol::default_pioneer()).unwrap();
+        let canonical =
+            arkline_protocol::registered_geometry(&arkline_protocol::default_pioneer()).unwrap();
         let mut opaque_bounds = Vec::new();
         let mut opaque_intrusions = Vec::new();
         for panel in canonical.panels.iter().filter(|panel| {
@@ -1630,14 +1668,23 @@ fn native_pioneer_cockpit_mining_composition() {
             for sx in [-1.0, 1.0] {
                 for sy in [-1.0, 1.0] {
                     for sz in [-1.0, 1.0] {
-                        let point: [f64;3] = std::array::from_fn(|axis| b.center_m[axis]
-                            + b.axes[0][axis]*b.half_m[0]*sx
-                            + b.axes[1][axis]*b.half_m[1]*sy
-                            + b.axes[2][axis]*b.half_m[2]*sz);
-                        let clip = body_to_clip * Vec3::from_array(point.map(|v|v as f32)).extend(1.0);
+                        let point: [f64; 3] = std::array::from_fn(|axis| {
+                            b.center_m[axis]
+                                + b.axes[0][axis] * b.half_m[0] * sx
+                                + b.axes[1][axis] * b.half_m[1] * sy
+                                + b.axes[2][axis] * b.half_m[2] * sz
+                        });
+                        let clip =
+                            body_to_clip * Vec3::from_array(point.map(|v| v as f32)).extend(1.0);
                         assert!(clip.is_finite() && clip.w > 1e-6);
-                        projected.extend_with(viewport.min + viewport.size()*egui::vec2(
-                            (clip.x/clip.w+1.0)*0.5, (1.0-clip.y/clip.w)*0.5));
+                        projected.extend_with(
+                            viewport.min
+                                + viewport.size()
+                                    * egui::vec2(
+                                        (clip.x / clip.w + 1.0) * 0.5,
+                                        (1.0 - clip.y / clip.w) * 0.5,
+                                    ),
+                        );
                     }
                 }
             }
@@ -1648,11 +1695,19 @@ fn native_pioneer_cockpit_mining_composition() {
                     (projected.max.x-viewport.min.x)/viewport.width(),
                     (projected.max.y-viewport.min.y)/viewport.height()],
                 "intersects_protected":intersects}));
-            if intersects { opaque_intrusions.push(panel.id.clone()); }
+            if intersects {
+                opaque_intrusions.push(panel.id.clone());
+            }
         }
-        std::fs::write(directory.join("opaque-forward-visibility.json"),
-            serde_json::to_vec_pretty(&opaque_bounds).unwrap()).unwrap();
-        assert!(opaque_intrusions.is_empty(), "Opaque console intrudes into unchanged protected target area: {opaque_intrusions:?}");
+        std::fs::write(
+            directory.join("opaque-forward-visibility.json"),
+            serde_json::to_vec_pretty(&opaque_bounds).unwrap(),
+        )
+        .unwrap();
+        assert!(
+            opaque_intrusions.is_empty(),
+            "Opaque console intrudes into unchanged protected target area: {opaque_intrusions:?}"
+        );
         let parts = pioneer_docked_scene::seated_body_parts(&cache, None, 0).unwrap();
         let geometry = flight_geometry().unwrap();
         let eye = cockpit_fit::eye_body_meters(ShipClass::Pioneer);

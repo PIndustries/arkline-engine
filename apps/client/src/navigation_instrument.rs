@@ -181,7 +181,6 @@ pub(super) fn paint(
     );
     line(readings.confirmed_label(), 71.0, 10.0, ink);
     line(readings.pending_label(), 87.0, 10.0, ink);
-    line("LOCK SUCCESS REQUIRES AUTHORITY".into(), 103.0, 9.0, color);
 }
 
 #[cfg(test)]
