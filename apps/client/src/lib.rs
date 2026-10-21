@@ -47,6 +47,8 @@ mod flight_workspace;
 mod lighting_settings;
 mod motion;
 mod operations_workspace;
+mod nearby_action_model;
+mod nearby_interaction_input;
 mod pilot_input;
 mod remote_control_ui;
 mod resource_jobs_ui;
@@ -611,6 +613,8 @@ struct Cockpit {
     workspace_input_waiting_release: bool,
     workspace_keyboard_owned_last_frame: bool,
     operations_search: String,
+    nearby_geometry: nearby_action_model::NearbyGeometryCache,
+    nearby_shortcut: nearby_interaction_input::NearbyGesture,
     ship_observation: bool,
     logo: egui::TextureHandle,
     boot: boot::Boot,
@@ -740,6 +744,8 @@ impl Cockpit {
             workspace_input_waiting_release: false,
             workspace_keyboard_owned_last_frame: false,
             operations_search: String::new(),
+            nearby_geometry: nearby_action_model::NearbyGeometryCache::default(),
+            nearby_shortcut: nearby_interaction_input::NearbyGesture::default(),
             ship_observation: false,
             logo,
             #[cfg(not(target_arch = "wasm32"))]
@@ -2097,6 +2103,7 @@ impl Cockpit {
         true
     }
     fn release_workspace_input(&mut self) {
+        self.nearby_shortcut.cancel();
         self.workspace_input_waiting_release = true;
         self.cockpit_computer.cancel_input();
         let _ = self.pilot_input.update(false, Default::default());
@@ -3801,6 +3808,9 @@ impl eframe::App for Cockpit {
             }
         }
         self.poll();
+        if !self.docked_navigation_present() {
+            self.nearby_shortcut.cancel();
+        }
         self.operations_keyboard_navigation(ctx);
         if self.services_open || self.service_tab == ServiceTab::Layouts {
             self.release_workspace_input();

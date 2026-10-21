@@ -683,6 +683,7 @@ impl EmbeddedClient {
     }
 
     fn release_cockpit_input(&mut self) {
+        self.cockpit.nearby_shortcut.cancel();
         self.cockpit.cockpit_computer.cancel_input();
         self.cockpit.flight_view.set_computer_keyboard_owned(false);
         self.cockpit.hangar_view.set_computer_keyboard_owned(false);

@@ -239,6 +239,7 @@ impl eframe::App for Editor {
         self.client.set_editor_input_blocked(
             !ctx.input(|input| input.focused)
                 || ctx.wants_keyboard_input()
+                || self.session_panel.open
                 || self.workspace != 0
                 || self.inspector_tab == 2
                 || (self.inspector_tab == 6 && self.room_plan),
@@ -999,7 +1000,9 @@ impl eframe::App for Editor {
                 self.client.send_command(request);
             }
             self.client.set_editor_input_blocked(
-                !ctx.input(|input| input.focused) || ctx.wants_keyboard_input(),
+                !ctx.input(|input| input.focused)
+                    || ctx.wants_keyboard_input()
+                    || self.session_panel.open,
             );
             self.client.update(ctx, frame);
         }

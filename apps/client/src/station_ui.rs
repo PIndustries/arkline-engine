@@ -208,7 +208,7 @@ impl Cockpit {
         })
     }
 
-    fn traversal_transition_block_reason(&self) -> Option<&'static str> {
+    pub(super) fn traversal_transition_block_reason(&self) -> Option<&'static str> {
         if !self.connected {
             Some("Reconnect before changing seats or undocking")
         } else if self.embedded_paused {
@@ -222,9 +222,38 @@ impl Cockpit {
         }
     }
 
+    pub(super) fn docked_leave_seat_block_reason(&self) -> Option<&'static str> {
+        if let Some(reason) = self.traversal_transition_block_reason() {
+            return Some(reason);
+        }
+        let pilot = self.own()?;
+        let job = self.snapshot.as_ref().and_then(|snapshot| {
+            snapshot
+                .resource_jobs
+                .iter()
+                .find(|job| job.pilot == pilot.name && !job.phase.is_terminal())
+        });
+        let owned = job.is_some_and(|job| job.controller == self.pilot);
+        if job.is_some() && !owned {
+            Some("Only your own mining routine permits interior traversal")
+        } else if !owned
+            && pilot.flight.as_ref().is_some_and(|flight| {
+                !matches!(flight.mode, NavigationMode::Stop | NavigationMode::Manual)
+                    || flight.velocity.iter().any(|value| value.abs() >= 0.001)
+            })
+        {
+            Some("Stop vessel automation and motion before leaving the pilot seat")
+        } else {
+            None
+        }
+    }
+
     /// Mirrors TakeSeat's grounding/range checks and can_undock's boarding
     /// equipment checks. These are UI explanations; the server still decides.
-    fn docked_seat_block_reason(&self, state: &DockedTraversalState) -> Option<&'static str> {
+    pub(super) fn docked_seat_block_reason(
+        &self,
+        state: &DockedTraversalState,
+    ) -> Option<&'static str> {
         if let Some(reason) = self.traversal_transition_block_reason() {
             return Some(reason);
         }
@@ -371,7 +400,7 @@ impl Cockpit {
                 ui.strong("PIONEER · PILOT SEAT");
                 if ui
                     .add_enabled(
-                        transition_block.is_none(),
+                        self.docked_leave_seat_block_reason().is_none(),
                         egui::Button::new("Leave pilot seat"),
                     )
                     .clicked()
@@ -390,6 +419,11 @@ impl Cockpit {
                     self.send(Request::Undock);
                 }
             });
+            if transition_block.is_none() {
+                if let Some(reason) = self.docked_leave_seat_block_reason() {
+                    ui.small(reason);
+                }
+            }
             ui.small(if in_space { "Leave the pilot seat to walk inside. Manual flight controls are unavailable away from the seat. Exterior access stays locked." } else { "Exit to hangar: leave the seat and walk to the port boarding vestibule, then use the hatches and lift. Shift + arrows look around while seated." });
         }
         if let Some(reason) = transition_block {
@@ -1177,7 +1211,10 @@ impl Cockpit {
         );
     }
 
-    fn boarding_control_block_reason(&self, state: &DockedTraversalState) -> Option<&'static str> {
+    pub(super) fn boarding_control_block_reason(
+        &self,
+        state: &DockedTraversalState,
+    ) -> Option<&'static str> {
         if !self.connected {
             Some("Reconnect to operate boarding equipment")
         } else if self.embedded_paused {
@@ -1213,6 +1250,106 @@ impl Cockpit {
         }
     }
 
+    pub(super) fn boarding_hatch_open_intent(state: &DockedTraversalState, index: usize) -> bool {
+        state.actuators.hatches.as_ref().map_or(
+            state.actuators.hatch_fractions()[index] < 1.0,
+            |hatches| {
+                if hatches[index].blocked {
+                    hatches[index].target_open
+                } else {
+                    !hatches[index].target_open
+                }
+            },
+        )
+    }
+
+    pub(super) fn boarding_hatch_block_reason(
+        &self,
+        state: &DockedTraversalState,
+        hatch: DockedHatch,
+        next_open: bool,
+    ) -> Option<&'static str> {
+        let Ok(pose) = docked_binding_pose(&state.binding) else {
+            return Some("Hatch geometry unavailable · reconnect");
+        };
+        let (index, geometry_hatch) = match hatch {
+            DockedHatch::Inner => (0, PioneerDockedHatch::Inner),
+            DockedHatch::Outer => (1, PioneerDockedHatch::Outer),
+        };
+        let fraction = state.actuators.hatch_fractions()[index];
+        let sweep = hatch_leaf_sweep_bounds(geometry_hatch, fraction, f64::from(next_open));
+        let sweep_occupied = sweep.as_ref().is_ok_and(|bounds| {
+            self.snapshot.as_ref().is_some_and(|snapshot| {
+                snapshot
+                    .pilots
+                    .iter()
+                    .filter_map(|pilot| pilot.station_avatar.as_ref()?.docked_traversal.as_ref())
+                    .filter(|occupant| {
+                        occupant.binding.host_vessel_id == state.binding.host_vessel_id
+                    })
+                    .any(|occupant| {
+                        let feet = station_to_body(pose, occupant.feet_m);
+                        bounds.iter().any(|bounds| {
+                            box_intersects_capsule(
+                                *bounds,
+                                feet,
+                                AVATAR_HEIGHT_M,
+                                STATION_AVATAR_RADIUS_M,
+                            )
+                        })
+                    })
+            })
+        });
+        let doorway_occupied = !next_open
+            && self.snapshot.as_ref().is_some_and(|snapshot| {
+                snapshot
+                    .pilots
+                    .iter()
+                    .filter_map(|pilot| pilot.station_avatar.as_ref()?.docked_traversal.as_ref())
+                    .filter(|occupant| {
+                        occupant.binding.host_vessel_id == state.binding.host_vessel_id
+                    })
+                    .any(|occupant| hatch_occupied(pose, geometry_hatch, occupant.feet_m))
+            });
+        let other = 1 - index;
+        self.boarding_control_block_reason(state).or_else(|| {
+            if sweep.is_err() {
+                Some("Hatch geometry unavailable · reconnect")
+            } else if next_open && !state.actuators.hatch_closed(other) {
+                Some("Close the other hatch first")
+            } else if next_open
+                && hatch == DockedHatch::Outer
+                && (state.actuators.lift.moving
+                    || (state.actuators.lift.floor_station_m - lift_geometry(pose).ship_floor_m)
+                        .abs()
+                        > 0.015)
+            {
+                Some("Call and stop the lift at ship level first")
+            } else if doorway_occupied {
+                Some("Step clear of the hatch doorway")
+            } else if sweep_occupied {
+                Some("Step clear of the hatch leaf sweep")
+            } else {
+                None
+            }
+        })
+    }
+
+    pub(super) fn boarding_lift_block_reason(
+        &self,
+        state: &DockedTraversalState,
+    ) -> Option<&'static str> {
+        self.boarding_control_block_reason(state).or_else(|| {
+            if !state.actuators.hatches_closed() {
+                Some("Close both boarding hatches before moving the lift")
+            } else if state.actuators.lift.moving {
+                Some("Boarding lift moving · remain on the platform")
+            } else {
+                None
+            }
+        })
+    }
+
     /// Primary and detailed panels submit the same bound commands. These are
     /// snapshot interlocks, not local door animation or pressure simulation.
     fn boarding_hatch_controls(&mut self, ui: &mut egui::Ui, state: &DockedTraversalState) {
@@ -1230,10 +1367,9 @@ impl Cockpit {
         let common_block = self.boarding_control_block_reason(state);
         let mut nearest = f64::INFINITY;
         let mut visible = false;
-        for (hatch, geometry_hatch, index, name, inside, outside) in [
+        for (hatch, index, name, inside, outside) in [
             (
                 DockedHatch::Inner,
-                PioneerDockedHatch::Inner,
                 0,
                 "inner hatch",
                 anchors.inner_inside_station_m,
@@ -1241,7 +1377,6 @@ impl Cockpit {
             ),
             (
                 DockedHatch::Outer,
-                PioneerDockedHatch::Outer,
                 1,
                 "outer hatch",
                 anchors.outer_inside_station_m,
@@ -1261,13 +1396,7 @@ impl Cockpit {
                 .hatches
                 .as_ref()
                 .map(|hatches| &hatches[index]);
-            let next_open = motion.map_or(fraction < 1.0, |motion| {
-                if motion.blocked {
-                    motion.target_open
-                } else {
-                    !motion.target_open
-                }
-            });
+            let next_open = Self::boarding_hatch_open_intent(state, index);
             let status = if motion.is_some_and(|motion| motion.blocked) {
                 format!(
                     "Held {:.0}% → {}",
@@ -1295,67 +1424,7 @@ impl Cockpit {
             } else {
                 format!("Stopped {:.0}%", fraction * 100.0)
             };
-            let sweep = hatch_leaf_sweep_bounds(geometry_hatch, fraction, f64::from(next_open));
-            let sweep_occupied = sweep.as_ref().is_ok_and(|bounds| {
-                self.snapshot.as_ref().is_some_and(|snapshot| {
-                    snapshot
-                        .pilots
-                        .iter()
-                        .filter_map(|pilot| {
-                            pilot.station_avatar.as_ref()?.docked_traversal.as_ref()
-                        })
-                        .filter(|occupant| {
-                            occupant.binding.host_vessel_id == state.binding.host_vessel_id
-                        })
-                        .any(|occupant| {
-                            let feet = station_to_body(pose, occupant.feet_m);
-                            bounds.iter().any(|bounds| {
-                                box_intersects_capsule(
-                                    *bounds,
-                                    feet,
-                                    AVATAR_HEIGHT_M,
-                                    STATION_AVATAR_RADIUS_M,
-                                )
-                            })
-                        })
-                })
-            });
-            let doorway_occupied = !next_open
-                && self.snapshot.as_ref().is_some_and(|snapshot| {
-                    snapshot
-                        .pilots
-                        .iter()
-                        .filter_map(|pilot| {
-                            pilot.station_avatar.as_ref()?.docked_traversal.as_ref()
-                        })
-                        .filter(|occupant| {
-                            occupant.binding.host_vessel_id == state.binding.host_vessel_id
-                        })
-                        .any(|occupant| hatch_occupied(pose, geometry_hatch, occupant.feet_m))
-                });
-            let other = 1 - index;
-            let blocked = common_block.or_else(|| {
-                if sweep.is_err() {
-                    Some("Hatch geometry unavailable · reconnect")
-                } else if next_open && !state.actuators.hatch_closed(other) {
-                    Some("Close the other hatch first")
-                } else if next_open
-                    && hatch == DockedHatch::Outer
-                    && (state.actuators.lift.moving
-                        || (state.actuators.lift.floor_station_m
-                            - lift_geometry(pose).ship_floor_m)
-                            .abs()
-                            > 0.015)
-                {
-                    Some("Call and stop the lift at ship level first")
-                } else if doorway_occupied {
-                    Some("Step clear of the hatch doorway")
-                } else if sweep_occupied {
-                    Some("Step clear of the hatch leaf sweep")
-                } else {
-                    None
-                }
-            });
+            let blocked = self.boarding_hatch_block_reason(state, hatch, next_open);
             let purpose = if hatch == DockedHatch::Inner {
                 "Cabin ↔ vestibule"
             } else {
@@ -1446,15 +1515,7 @@ impl Cockpit {
             format!("Boarding lift stopped between landings · target {target}")
         };
         ui.small(status);
-        let blocked = self.boarding_control_block_reason(state).or_else(|| {
-            if !state.actuators.hatches_closed() {
-                Some("Close both boarding hatches before moving the lift")
-            } else if state.actuators.lift.moving {
-                Some("Boarding lift moving · remain on the platform")
-            } else {
-                None
-            }
-        });
+        let blocked = self.boarding_lift_block_reason(state);
         for (stop, label, height) in [
             (DockedLiftStop::Ship, "Lift to ship", geometry.ship_floor_m),
             (
@@ -1491,6 +1552,7 @@ impl Cockpit {
     }
 
     fn docked_interaction_strip(&mut self, ui: &mut egui::Ui) {
+        self.nearby_interaction_prompt(ui);
         let Some(pilot) = self.own() else {
             return;
         };
@@ -1571,8 +1633,16 @@ impl Cockpit {
                 }
             } else {
                 ui.strong("PILOT SEAT");
+                if transition_block.is_none() {
+                    if let Some(reason) = self.docked_leave_seat_block_reason() {
+                        ui.small(reason);
+                    }
+                }
                 if ui
-                    .add_enabled(ready, egui::Button::new("Leave pilot seat"))
+                    .add_enabled(
+                        self.docked_leave_seat_block_reason().is_none(),
+                        egui::Button::new("Leave pilot seat"),
+                    )
                     .clicked()
                 {
                     self.send(Request::DockedTraversal {
@@ -2018,6 +2088,81 @@ mod tests {
                 modifiers: egui::Modifiers::NONE,
             },
         ]
+    }
+
+    #[test]
+    fn nearby_interaction_model_pins_bound_seat_intent_and_revalidates_stale_state() {
+        for walking in [false, true] {
+            let ctx = egui::Context::default();
+            let mut cockpit = docked_fixture(&ctx, walking);
+            let before = serde_json::to_value(&cockpit.snapshot).unwrap();
+            let (tx, rx) = mpsc::channel();
+            cockpit.commands = Some(tx);
+            let action = cockpit
+                .nearby_ship_action()
+                .expect("Known pilot chair is discoverable");
+            assert!(action.blocked_reason.is_none());
+            let binding = cockpit.verified_docked_binding().unwrap();
+            if walking {
+                assert!(
+                    matches!(&action.request, DockedTraversalRequest::TakeSeat {binding: actual} if *actual == binding)
+                );
+            } else {
+                assert!(
+                    matches!(&action.request, DockedTraversalRequest::LeaveSeat {binding: actual} if *actual == binding)
+                );
+            }
+            cockpit.frozen_time = Some(5000);
+            let stale = cockpit.nearby_ship_action().unwrap();
+            assert!(stale.request == action.request);
+            assert!(stale.target_id == action.target_id);
+            assert!(stale.blocked_reason.unwrap().contains("fresh world update"));
+            assert!(rx.try_recv().is_err());
+            assert_eq!(serde_json::to_value(&cockpit.snapshot).unwrap(), before);
+        }
+    }
+
+    #[test]
+    fn nearby_interaction_hatch_intent_is_explicit_and_ambiguity_suppresses_shortcut() {
+        let ctx = egui::Context::default();
+        let mut cockpit = docked_fixture(&ctx, true);
+        let state = cockpit.snapshot.as_mut().unwrap().pilots[0]
+            .station_avatar
+            .as_mut()
+            .unwrap()
+            .docked_traversal
+            .as_mut()
+            .unwrap();
+        assert!(Cockpit::boarding_hatch_open_intent(state, 0));
+        state.actuators.inner_hatch_open = true;
+        assert!(!Cockpit::boarding_hatch_open_intent(state, 0));
+        let binding = state.binding.clone();
+        let first = crate::nearby_action_model::NearbyAction {
+            request: DockedTraversalRequest::SetHatch {
+                binding: binding.clone(),
+                hatch: DockedHatch::Inner,
+                open: false,
+            },
+            label: "Close inner hatch".into(),
+            blocked_reason: None,
+            distance_m: 1.0,
+            target_id: "inner/inside".into(),
+        };
+        let mut second = first.clone();
+        second.target_id = "outer/inside".into();
+        second.distance_m = 1.1;
+        assert!(crate::nearby_action_model::unambiguous_action(vec![
+            first.clone(),
+            second.clone()
+        ])
+        .is_none());
+        second.distance_m = 2.0;
+        assert!(
+            crate::nearby_action_model::unambiguous_action(vec![first.clone(), second])
+                .unwrap()
+                .request
+                == first.request
+        );
     }
 
     #[test]
