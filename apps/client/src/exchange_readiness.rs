@@ -7,6 +7,18 @@ pub(super) enum ExchangeAction {
     Cancel { order_id: u64 },
 }
 impl Cockpit {
+    /// Command buttons must use live telemetry age, never frozen presentation time.
+    pub(super) fn live_command_snapshot_fresh(&self) -> bool {
+        self.connected
+            && self.snapshot.as_ref().is_some_and(|snapshot| {
+                self.timeline_origin.is_some_and(|origin| {
+                    origin
+                        .saturating_add(self.observed.elapsed().as_millis() as u64)
+                        .saturating_sub(snapshot.server_time_ms)
+                        <= 1500
+                })
+            })
+    }
     pub(super) fn exchange_readiness_reason(&self) -> Option<&'static str> {
         if !self.connected {
             Some("Disconnected · reconnect before trading.")
@@ -14,14 +26,7 @@ impl Cockpit {
             Some("Resume simulation before trading. Opening Play does not advance time.")
         } else if self.request_pending {
             Some("Awaiting authority · previous command pending.")
-        } else if self.snapshot.as_ref().is_none_or(|snapshot| {
-            self.timeline_origin.is_none_or(|origin| {
-                origin
-                    .saturating_add(self.observed.elapsed().as_millis() as u64)
-                    .saturating_sub(snapshot.server_time_ms)
-                    > 1500
-            })
-        }) {
+        } else if !self.live_command_snapshot_fresh() {
             Some("Exchange data may be stale · wait for a fresh authority snapshot.")
         } else if self.manual_remote.is_some() {
             Some("Return to your own ship before trading.")
@@ -113,6 +118,66 @@ impl Cockpit {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn navigation_live_readiness_keeps_readouts_but_blocks_stale_target_orders() {
+        let ctx = egui::Context::default();
+        let mut cockpit = crate::tests::view_test_cockpit(&ctx);
+        cockpit.selected_object = SelectedObject::Station;
+        cockpit.frozen_time = Some(1000);
+        cockpit.observed = crate::Instant::now() - std::time::Duration::from_secs(2);
+        let (tx, rx) = mpsc::channel();
+        cockpit.commands = Some(tx);
+        let before = serde_json::to_value(&cockpit.snapshot).unwrap();
+        let render = |c: &mut Cockpit, events| {
+            ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, Vec2::new(900., 800.))),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| c.navigation_controls(ui));
+                },
+            )
+        };
+        let output = render(&mut cockpit, vec![]);
+        let text: Vec<_> = output
+            .shapes
+            .iter()
+            .filter_map(|shape| {
+                if let egui::Shape::Text(t) = &shape.shape {
+                    Some((
+                        t.galley.job.text.clone(),
+                        t.pos + t.galley.rect.center().to_vec2(),
+                    ))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        assert!(text
+            .iter()
+            .any(|(t, _)| t.contains("fresh authority snapshot")));
+        assert!(text.iter().any(|(t, _)| t.starts_with("Range ")));
+        let point = text.iter().find(|(t, _)| t == "Approach").unwrap().1;
+        for pressed in [true, false] {
+            render(
+                &mut cockpit,
+                vec![
+                    egui::Event::PointerMoved(point),
+                    egui::Event::PointerButton {
+                        pos: point,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ],
+            );
+        }
+        assert!(rx.try_recv().is_err());
+        assert_eq!(serde_json::to_value(&cockpit.snapshot).unwrap(), before);
+        assert!(matches!(cockpit.selected_object, SelectedObject::Station));
+    }
     #[test]
     fn exchange_readiness_reports_stale_pause_pending_and_actual_action_limits() {
         let ctx = egui::Context::default();

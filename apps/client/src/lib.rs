@@ -2186,6 +2186,13 @@ impl Cockpit {
     }
     fn flight_deck(&mut self, ui: &mut egui::Ui) {
         let Some(pilot) = self.own() else { return };
+        let fresh = self.live_command_snapshot_fresh();
+        if !fresh {
+            ui.colored_label(
+                AMBER,
+                "Flight orders unavailable · waiting for fresh authority telemetry",
+            );
+        }
         let speed = pilot.flight.as_ref().map_or(0.0, |f| {
             distance_m(
                 f.warp
@@ -2211,7 +2218,8 @@ impl Cockpit {
         ui.horizontal_wrapped(|ui| {
             if ui
                 .add_enabled(
-                    self.can_operate()
+                    fresh
+                        && self.can_operate()
                         && pilot.station_avatar.is_none()
                         && pilot.location == Location::Docked,
                     egui::Button::new("Undock").small(),
@@ -2221,13 +2229,16 @@ impl Cockpit {
                 self.send(Request::Undock);
             }
             if ui
-                .add_enabled(self.can_dock(&pilot), egui::Button::new("Dock").small())
+                .add_enabled(
+                    fresh && self.can_dock(&pilot),
+                    egui::Button::new("Dock").small(),
+                )
                 .clicked()
             {
                 self.send(Request::Dock);
             }
             if ui
-                .add_enabled(self.can_fly(), egui::Button::new("Stop").small())
+                .add_enabled(fresh && self.can_fly(), egui::Button::new("Stop").small())
                 .clicked()
             {
                 self.send(Request::Navigate {
@@ -2409,6 +2420,11 @@ impl Cockpit {
         }
     }
     fn navigation_controls(&mut self, ui: &mut egui::Ui) {
+        let fresh = self.live_command_snapshot_fresh();
+        if !fresh {
+            ui.colored_label(AMBER, "Navigation orders unavailable · wait for a fresh authority snapshot. Contacts and last reported ranges remain visible.");
+        }
+        ui.add_enabled_ui(fresh, |ui| {
         if matches!(
             self.selected_object,
             SelectedObject::Planet(_) | SelectedObject::Prop(_)
@@ -2627,6 +2643,7 @@ impl Cockpit {
                 "Ctrl+Space: stop · RMB: aim · Release controls: assisted braking"
             },
         );
+        });
     }
     fn overview(&mut self, ui: &mut egui::Ui) {
         let system = self.current_system();

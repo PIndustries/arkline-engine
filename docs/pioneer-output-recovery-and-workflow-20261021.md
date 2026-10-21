@@ -15,8 +15,9 @@ Four native recovery lifecycle/policy checks pass, including fake-stream drop-be
 ## Prioritized queue
 
 1. Deliver recovery + Exchange with actual app output/UI inspection, preserving live Pioneer and FirstProject.
-2. Add a truthful Session current-to-selected world/pilot preview and last-reported routine/disconnect consequences, without changing persistence policy.
-3. Review remaining map/target command freshness and ownership consistency using real state; implement only an evidenced independent gap.
-4. Persistent standalone server/reconnect and live asset workflow remain architectural work: do not change disconnect/mining semantics implicitly.
+2. Session consequence preview blocked: approval review rejected the worker edit as read-only; it was not executed or rerouted. The actual policy cancels routines only when the pilot’s last session disconnects.
+3. Navigation and Flight-deck order widgets now require fresh live telemetry, independently of frozen visual time. Contact selection, readouts and panel access stay available; manual input and global command handling are unchanged. Focused stale Approach click/no-dispatch check passed.
+4. Overview contact filtering/readability review is next independently permitted UI scope.
+5. Persistent standalone server/reconnect and live asset workflow remain architectural work: do not change disconnect/mining semantics implicitly.
 
 Denied camera initialization, walking-key integration, developer-console integration and renderer edits remain untouched. No uploads/publication or cleanup.
