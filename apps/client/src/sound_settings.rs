@@ -178,7 +178,9 @@ impl SoundSettings {
             ui.label(test_notice);
         }
         if status.tests_queued > 0 {
-            if status.tests_consumed >= status.tests_queued {
+            if status.last_test_interrupted {
+                ui.label("Last queued test interrupted by output recovery · test again when the stream opens");
+            } else if status.tests_consumed + status.tests_interrupted >= status.tests_queued {
                 ui.label(format!(
                     "Test #{} received by synthesis callback · hearing not confirmed",
                     status.tests_queued
@@ -191,10 +193,14 @@ impl SoundSettings {
             }
         }
         ui.small("Listen for two sustained tones. Callback activity and generated signal do not confirm audible speaker output.");
-        ui.small("The opened device is retained until Retry audio reopens the current system default. Voice input and spoken replies have separate controls.");
+        #[cfg(not(target_arch = "wasm32"))]
+        ui.small("Device errors or stalled callbacks trigger up to five automatic retries on the current default output. Retry audio starts a fresh attempt immediately. Queued sounds are discarded, never replayed.");
+        #[cfg(target_arch = "wasm32")]
+        ui.small("Browser audio may require a click on Retry audio to resume. Automatic device recovery is available in the desktop app.");
+        ui.small("No system output setting is changed. Voice input and spoken replies have separate controls.");
         ui.collapsing("Audio diagnostics", |ui| {
             ui.label(&status.diagnostics);
-            ui.small("Peak is the maximum since this stream opened; RMS is the latest block. Both measure generated samples before device-format conversion.");
+            ui.small("Peak is the maximum since this audio engine started; RMS is the latest block. Both measure generated samples before device-format conversion.");
         });
         action
     }

@@ -4,7 +4,7 @@
 use cpal::traits::HostTrait;
 use cpal::traits::{DeviceTrait, StreamTrait};
 use std::sync::{
-    atomic::{AtomicU64, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
     mpsc::{self, Receiver, SyncSender},
     Arc, Mutex,
 };
@@ -72,6 +72,8 @@ pub struct OutputStatus {
     pub diagnostics: String,
     pub tests_queued: u64,
     pub tests_consumed: u64,
+    pub tests_interrupted: u64,
+    pub last_test_interrupted: bool,
 }
 struct Shared {
     mix: Mutex<Mix>,
@@ -81,6 +83,11 @@ struct Shared {
     consumed: AtomicU64,
     tests_queued: AtomicU64,
     tests_consumed: AtomicU64,
+    tests_interrupted: AtomicU64,
+    test_bookkeeping: Mutex<()>,
+    last_test_interrupted: AtomicBool,
+    output_failed: AtomicBool,
+    pending_cues: Mutex<Option<SyncSender<Cue>>>,
     dropped: AtomicU64,
     nonzero_frames: AtomicU64,
     peak_bits: AtomicU64,
@@ -91,7 +98,7 @@ struct Shared {
 pub struct SoundEngine {
     shared: Arc<Shared>,
     cues: Option<SyncSender<Cue>>,
-    stop: Option<mpsc::Sender<()>>,
+    stop: Option<mpsc::Sender<OutputCommand>>,
     #[cfg(target_arch = "wasm32")]
     stream: Option<cpal::Stream>,
 }
@@ -106,6 +113,11 @@ impl Default for SoundEngine {
                 consumed: AtomicU64::new(0),
                 tests_queued: AtomicU64::new(0),
                 tests_consumed: AtomicU64::new(0),
+                tests_interrupted: AtomicU64::new(0),
+                test_bookkeeping: Mutex::new(()),
+                last_test_interrupted: AtomicBool::new(false),
+                output_failed: AtomicBool::new(false),
+                pending_cues: Mutex::new(None),
                 dropped: AtomicU64::new(0),
                 nonzero_frames: AtomicU64::new(0),
                 peak_bits: AtomicU64::new(0),
@@ -140,16 +152,7 @@ impl SoundEngine {
         self.stop = Some(stop);
         *self.shared.status.lock().unwrap() = "Opening audio output…".into();
         let shared = self.shared.clone();
-        std::thread::spawn(move || match open_stream(shared.clone(), receiver) {
-            Ok(stream) => {
-                let _ = done.recv();
-                drop(stream);
-            }
-            Err(error) => {
-                *shared.status.lock().unwrap() =
-                    format!("Audio unavailable: {error}. Retry audio output in Settings.");
-            }
-        });
+        std::thread::spawn(move || output_worker(shared, done, receiver, open_stream));
     }
     #[cfg(target_arch = "wasm32")]
     pub fn start(&mut self) {
@@ -168,8 +171,15 @@ impl SoundEngine {
     }
     pub fn set_mix(&mut self, mix: Mix) {
         *self.shared.mix.lock().unwrap() = mix;
+        self.refresh_cue_queue();
+    }
+    fn refresh_cue_queue(&mut self) {
+        if let Some(queue) = self.shared.pending_cues.lock().unwrap().take() {
+            self.cues = Some(queue);
+        }
     }
     pub fn cue(&mut self, cue: Cue) {
+        self.refresh_cue_queue();
         if let Some(queue) = &self.cues {
             if queue.try_send(cue).is_ok() {
                 self.shared.queued.fetch_add(1, Ordering::Relaxed);
@@ -183,10 +193,14 @@ impl SoundEngine {
     }
     /// Queue acceptance and callback receipt are separate from speaker audibility.
     pub fn test_output(&mut self) -> Result<(), String> {
+        self.refresh_cue_queue();
         let queue = self
             .cues
             .as_ref()
             .ok_or("Audio output is not started · Retry audio first")?;
+        // Recovery must not account for a discarded test between queue
+        // acceptance and its receipt counters. The audio callback never locks this.
+        let _receipt = self.shared.test_bookkeeping.lock().unwrap();
         queue
             .try_send(Cue::TestOutput)
             .map_err(|error| match error {
@@ -199,6 +213,9 @@ impl SoundEngine {
             })?;
         self.shared.queued.fetch_add(1, Ordering::Relaxed);
         self.shared.tests_queued.fetch_add(1, Ordering::Relaxed);
+        self.shared
+            .last_test_interrupted
+            .store(false, Ordering::Relaxed);
         Ok(())
     }
     pub fn output_status(&self) -> OutputStatus {
@@ -208,6 +225,8 @@ impl SoundEngine {
             diagnostics: self.status(),
             tests_queued: self.shared.tests_queued.load(Ordering::Relaxed),
             tests_consumed: self.shared.tests_consumed.load(Ordering::Relaxed),
+            tests_interrupted: self.shared.tests_interrupted.load(Ordering::Relaxed),
+            last_test_interrupted: self.shared.last_test_interrupted.load(Ordering::Relaxed),
         }
     }
     pub fn status(&self) -> String {
@@ -226,22 +245,169 @@ impl SoundEngine {
             mix.master*100.,mix.effects*100.,if mix.muted { " · MUTED" } else { "" },if mix.ducked { " · voice ducking" } else { "" })
     }
     pub fn retry(&mut self) {
-        if let Some(stop) = self.stop.take() {
-            let _ = stop.send(());
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if self
+                .stop
+                .as_ref()
+                .is_some_and(|sender| sender.send(OutputCommand::Retry).is_ok())
+            {
+                return;
+            }
+            self.stop = None;
+            self.cues = None;
+            self.start();
         }
-        let mix = *self.shared.mix.lock().unwrap();
-        *self = Self::default();
-        self.set_mix(mix);
-        self.start();
+        #[cfg(target_arch = "wasm32")]
+        {
+            // Browser contexts may require the user's gesture. Do not spin
+            // automatic retries against suspended/permission-blocked WebAudio.
+            let mix = *self.shared.mix.lock().unwrap();
+            *self = Self::default();
+            self.set_mix(mix);
+            self.start();
+        }
     }
 }
 impl Drop for SoundEngine {
     fn drop(&mut self) {
         if let Some(stop) = self.stop.take() {
-            let _ = stop.send(());
+            let _ = stop.send(OutputCommand::Stop);
         }
     }
 }
+enum OutputCommand {
+    #[cfg(not(target_arch = "wasm32"))]
+    Retry,
+    Stop,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Default)]
+struct RecoveryBudget(u32);
+#[cfg(not(target_arch = "wasm32"))]
+impl RecoveryBudget {
+    fn next_delay(&mut self) -> Option<std::time::Duration> {
+        if self.0 >= 5 {
+            return None;
+        }
+        let delay = std::time::Duration::from_secs(1 << self.0);
+        self.0 += 1;
+        Some(delay)
+    }
+    fn reset(&mut self) {
+        self.0 = 0;
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn interrupt_output_tests(shared: &Shared) {
+    let _receipt = shared.test_bookkeeping.lock().unwrap();
+    let lost = shared
+        .tests_queued
+        .load(Ordering::Relaxed)
+        .saturating_sub(shared.tests_consumed.load(Ordering::Relaxed))
+        .saturating_sub(shared.tests_interrupted.load(Ordering::Relaxed));
+    if lost > 0 {
+        shared.tests_interrupted.fetch_add(lost, Ordering::Relaxed);
+        shared.last_test_interrupted.store(true, Ordering::Relaxed);
+    }
+}
+
+// One worker owns stream creation AND destruction. Retry never joins a device
+// thread on the UI/callback, and the next stream opens only after the old drops.
+#[cfg(not(target_arch = "wasm32"))]
+fn output_worker<S>(
+    shared: Arc<Shared>,
+    commands: Receiver<OutputCommand>,
+    initial: Receiver<Cue>,
+    mut open: impl FnMut(Arc<Shared>, Receiver<Cue>) -> Result<S, String>,
+) {
+    use std::time::{Duration, Instant};
+    let mut initial = Some(initial);
+    let mut budget = RecoveryBudget::default();
+    loop {
+        shared.output_failed.store(false, Ordering::Release);
+        *shared.status.lock().unwrap() = "Opening audio output on current default…".into();
+        let (sender, cues) = if let Some(cues) = initial.take() {
+            (None, cues)
+        } else {
+            let (sender, cues) = mpsc::sync_channel(32);
+            (Some(sender), cues)
+        };
+        let mut immediate = false;
+        let error = match open(shared.clone(), cues) {
+            Ok(stream) => {
+                if let Some(sender) = sender {
+                    *shared.pending_cues.lock().unwrap() = Some(sender);
+                }
+                let opened = Instant::now();
+                let mut last_activity = Instant::now();
+                let mut callbacks = shared.callbacks.load(Ordering::Relaxed);
+                let error = loop {
+                    match commands.recv_timeout(Duration::from_millis(250)) {
+                        Ok(OutputCommand::Stop) | Err(mpsc::RecvTimeoutError::Disconnected) => {
+                            return
+                        }
+                        Ok(OutputCommand::Retry) => {
+                            budget.reset();
+                            immediate = true;
+                            break String::new();
+                        }
+                        Err(mpsc::RecvTimeoutError::Timeout) => {}
+                    }
+                    if shared.output_failed.load(Ordering::Acquire) {
+                        break "Device reported a stream error".into();
+                    }
+                    let next = shared.callbacks.load(Ordering::Relaxed);
+                    if next != callbacks {
+                        callbacks = next;
+                        last_activity = Instant::now();
+                    }
+                    if last_activity.elapsed() >= Duration::from_secs(8) {
+                        break "No output callbacks for 8 seconds".into();
+                    }
+                    if opened.elapsed() >= Duration::from_secs(15) {
+                        budget.reset();
+                    }
+                };
+                drop(stream);
+                error
+            }
+            Err(error) => error,
+        };
+        // Destroying the stream destroys its cue receiver. Never replay old
+        // mechanism events/test tones after a device becomes available again.
+        shared.pending_cues.lock().unwrap().take();
+        interrupt_output_tests(&shared);
+        if immediate {
+            continue;
+        }
+        let wait = budget.next_delay();
+        *shared.status.lock().unwrap() = match wait {
+            Some(delay) => format!(
+                "Audio unavailable: {error} · automatic retry {}/5 in {} s",
+                budget.0,
+                delay.as_secs()
+            ),
+            None => format!(
+                "Audio unavailable: {error} · automatic retries exhausted · use Retry audio"
+            ),
+        };
+        let command = match wait {
+            Some(delay) => commands.recv_timeout(delay),
+            None => commands
+                .recv()
+                .map_err(|_| mpsc::RecvTimeoutError::Disconnected),
+        };
+        match command {
+            Ok(OutputCommand::Stop) | Err(mpsc::RecvTimeoutError::Disconnected) => return,
+            Ok(OutputCommand::Retry) => budget.reset(),
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+        }
+    }
+}
+
 fn open_stream(shared: Arc<Shared>, cues: Receiver<Cue>) -> Result<cpal::Stream, String> {
     #[cfg(not(target_arch = "wasm32"))]
     let device = cpal::default_host()
@@ -336,8 +502,14 @@ fn stream<T: cpal::SizedSample + cpal::FromSample<f32>>(
                 shared.callbacks.fetch_add(1, Ordering::Relaxed);
             },
             move |error| {
+                errors.output_failed.store(true, Ordering::Release);
                 if let Ok(mut status) = errors.status.try_lock() {
-                    *status = format!("Audio output stopped: {error}. Retry in Settings.");
+                    let recovery = if cfg!(target_arch = "wasm32") {
+                        "Click Retry audio to resume browser output."
+                    } else {
+                        "Automatic recovery pending."
+                    };
+                    *status = format!("Audio output error: {error}. {recovery}");
                 }
             },
             None,
@@ -619,6 +791,119 @@ impl Synth {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn audio_recovery_budget_is_capped_and_manual_retry_resets_it() {
+        let mut budget = RecoveryBudget::default();
+        assert_eq!(
+            (0..5)
+                .map(|_| budget.next_delay().unwrap().as_secs())
+                .collect::<Vec<_>>(),
+            [1, 2, 4, 8, 16]
+        );
+        assert!(budget.next_delay().is_none());
+        budget.reset();
+        assert_eq!(budget.next_delay().unwrap().as_secs(), 1);
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn audio_recovery_drops_failed_stream_before_reopen_and_discards_test() {
+        struct Held {
+            generation: u32,
+            events: Arc<Mutex<Vec<String>>>,
+            _cues: Receiver<Cue>,
+        }
+        impl Drop for Held {
+            fn drop(&mut self) {
+                self.events
+                    .lock()
+                    .unwrap()
+                    .push(format!("drop{}", self.generation));
+            }
+        }
+        let mut engine = SoundEngine::default();
+        let mix = Mix {
+            master: 0.7,
+            effects: 0.3,
+            muted: true,
+            ducked: true,
+            ..Mix::default()
+        };
+        engine.set_mix(mix);
+        let (sender, initial) = mpsc::sync_channel(32);
+        engine.cues = Some(sender);
+        engine.test_output().unwrap();
+        let (commands, receiver) = mpsc::channel();
+        let shared = engine.shared.clone();
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let trace = events.clone();
+        let mut generation = 0;
+        output_worker(shared.clone(), receiver, initial, |shared, cues| {
+            generation += 1;
+            trace.lock().unwrap().push(format!("open{generation}"));
+            if generation == 1 {
+                shared.output_failed.store(true, Ordering::Release);
+            } else {
+                assert!(cues.try_recv().is_err());
+                commands.send(OutputCommand::Stop).unwrap();
+            }
+            Ok::<_, String>(Held {
+                generation,
+                events: trace.clone(),
+                _cues: cues,
+            })
+        });
+        assert_eq!(
+            *events.lock().unwrap(),
+            ["open1", "drop1", "open2", "drop2"]
+        );
+        assert_eq!(engine.current_mix().master, mix.master);
+        assert!(engine.current_mix().muted && engine.current_mix().ducked);
+        assert_eq!(shared.tests_consumed.load(Ordering::Relaxed), 0);
+        assert_eq!(shared.tests_interrupted.load(Ordering::Relaxed), 1);
+        assert!(shared.last_test_interrupted.load(Ordering::Relaxed));
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn audio_recovery_interruption_waits_for_accepted_test_bookkeeping() {
+        let engine = SoundEngine::default();
+        let shared = engine.shared.clone();
+        let accepted = shared.test_bookkeeping.lock().unwrap();
+        let (ready, waiting) = mpsc::channel();
+        let worker_shared = shared.clone();
+        let worker = std::thread::spawn(move || {
+            ready.send(()).unwrap();
+            interrupt_output_tests(&worker_shared);
+        });
+        waiting.recv().unwrap();
+        // Force recovery to encounter the exact acceptance/accounting window.
+        // It must wait for the same metadata lock used by test_output().
+        shared.tests_queued.fetch_add(1, Ordering::Relaxed);
+        shared.last_test_interrupted.store(false, Ordering::Relaxed);
+        drop(accepted);
+        worker.join().unwrap();
+        assert_eq!(shared.tests_interrupted.load(Ordering::Relaxed), 1);
+        assert!(shared.last_test_interrupted.load(Ordering::Relaxed));
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn audio_recovery_initial_open_failure_can_retry_without_restarting_engine() {
+        let engine = SoundEngine::default();
+        let (commands, receiver) = mpsc::channel();
+        let (_sender, initial) = mpsc::sync_channel(32);
+        let mut attempts = 0;
+        output_worker(engine.shared.clone(), receiver, initial, |_, _| {
+            attempts += 1;
+            if attempts == 1 {
+                commands.send(OutputCommand::Retry).unwrap();
+                Err("device missing".into())
+            } else {
+                commands.send(OutputCommand::Stop).unwrap();
+                Ok(())
+            }
+        });
+        assert_eq!(attempts, 2);
+    }
     #[test]
     fn audio_feedback_test_reports_unavailable_busy_and_queued_without_claiming_hearing() {
         let mut engine = SoundEngine::default();

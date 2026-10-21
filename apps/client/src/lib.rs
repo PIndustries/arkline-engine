@@ -57,6 +57,7 @@ mod resource_jobs_ui;
 mod room_controls;
 mod sandbox;
 mod services;
+mod exchange_readiness;
 #[cfg(not(target_arch = "wasm32"))]
 mod ship_ai;
 #[cfg(target_arch = "wasm32")]
@@ -2950,24 +2951,30 @@ impl Cockpit {
         ui.small("An audit checks the exported economic rules and history. It does not prove every gameplay event occurred or certify server honesty.");
     }
     fn market(&mut self, ui: &mut egui::Ui) {
+        use exchange_readiness::ExchangeAction;
         ui.label(
             egui::RichText::new("STATION EXCHANGE")
                 .color(self.accent())
                 .strong(),
         );
-        let own = self.own();
         let cargo_limit = self.own_cargo_capacity();
-        let docked =
-            self.can_operate() && own.as_ref().is_some_and(|p| p.location == Location::Docked);
+        let readiness = self.exchange_readiness_reason();
         ui.small("Player sell orders · ore · credits per unit");
-        ui.horizontal(|ui| {
+        if let Some(reason) = readiness {
+            ui.colored_label(AMBER, reason);
+        }
+        ui.horizontal_wrapped(|ui| {
             ui.label("Sell");
             ui.add(egui::DragValue::new(&mut self.sell_amount).range(1..=cargo_limit));
             ui.label("at");
             ui.add(egui::DragValue::new(&mut self.price).range(1..=1_000_000));
-            let can_sell = docked && own.as_ref().is_some_and(|p| p.ore >= self.sell_amount);
+            let reason = self.exchange_action_reason(ExchangeAction::List {
+                units: self.sell_amount,
+                unit_price: self.price,
+            });
             if ui
-                .add_enabled(can_sell, egui::Button::new("List ore"))
+                .add_enabled(reason.is_none(), egui::Button::new("List ore"))
+                .on_disabled_hover_text(reason.unwrap_or(""))
                 .clicked()
             {
                 self.send(Request::PlaceSell {
@@ -2975,18 +2982,20 @@ impl Cockpit {
                     unit_price: self.price,
                 });
             }
+            if readiness.is_none() {
+                if let Some(reason) = reason {
+                    ui.small(reason);
+                }
+            }
         });
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             ui.label("Buy quantity");
             ui.add(egui::DragValue::new(&mut self.buy_amount).range(1..=cargo_limit));
         });
-        if !docked {
-            ui.colored_label(AMBER, "Dock at the station to place or fill orders.");
-        }
         let orders = self
             .snapshot
             .as_ref()
-            .map(|s| s.orders.clone())
+            .map(|snapshot| snapshot.orders.clone())
             .unwrap_or_default();
         egui::ScrollArea::vertical()
             .max_height(190.0)
@@ -2994,51 +3003,54 @@ impl Cockpit {
                 if orders.is_empty() {
                     ui.colored_label(
                         MUTED,
-                        "No listings yet. Mine ore and create the first order.",
+                        if self.snapshot.is_none() {
+                            "Waiting for exchange listings."
+                        } else if readiness.is_some() {
+                            "No listings in the last received snapshot."
+                        } else {
+                            "No listings yet. Mine ore and create the first order."
+                        },
                     );
                 }
                 for order in orders {
-                    ui.horizontal_wrapped(|ui| {
-                        ui.label(format!(
-                            "#{}   {}   {} ore × {} CR",
-                            order.id, order.seller, order.units, order.unit_price
-                        ));
-                        if order.seller == self.pilot {
-                            if ui
-                                .add_enabled(
-                                    docked
-                                        && own.as_ref().is_some_and(|p| {
-                                            p.ore.saturating_add(order.units)
-                                                <= cargo_capacity(p.ship_class)
-                                        }),
-                                    egui::Button::new("Cancel"),
+                    ui.push_id(order.id, |ui| {
+                        ui.horizontal_wrapped(|ui| {
+                            ui.label(format!(
+                                "#{}   {}   {} ore × {} CR",
+                                order.id, order.seller, order.units, order.unit_price
+                            ));
+                            let (label, action) = if order.seller == self.pilot {
+                                ("Cancel", ExchangeAction::Cancel { order_id: order.id })
+                            } else {
+                                (
+                                    "Buy",
+                                    ExchangeAction::Buy {
+                                        order_id: order.id,
+                                        units: self.buy_amount,
+                                    },
                                 )
+                            };
+                            let reason = self.exchange_action_reason(action);
+                            if ui
+                                .add_enabled(reason.is_none(), egui::Button::new(label))
+                                .on_disabled_hover_text(reason.unwrap_or(""))
                                 .clicked()
                             {
-                                self.send(Request::CancelSell { order_id: order.id });
+                                if order.seller == self.pilot {
+                                    self.send(Request::CancelSell { order_id: order.id });
+                                } else {
+                                    self.send(Request::Buy {
+                                        order_id: order.id,
+                                        units: self.buy_amount,
+                                    });
+                                }
                             }
-                        } else {
-                            let affordable = own.as_ref().is_some_and(|p| {
-                                order
-                                    .unit_price
-                                    .checked_mul(self.buy_amount)
-                                    .is_some_and(|cost| cost <= p.credits)
-                                    && p.ore.saturating_add(self.buy_amount)
-                                        <= cargo_capacity(p.ship_class)
-                            });
-                            if ui
-                                .add_enabled(
-                                    docked && affordable && self.buy_amount <= order.units,
-                                    egui::Button::new("Buy"),
-                                )
-                                .clicked()
-                            {
-                                self.send(Request::Buy {
-                                    order_id: order.id,
-                                    units: self.buy_amount,
-                                });
+                            if readiness.is_none() {
+                                if let Some(reason) = reason {
+                                    ui.small(reason);
+                                }
                             }
-                        }
+                        });
                     });
                     ui.separator();
                 }
