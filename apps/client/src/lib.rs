@@ -1650,7 +1650,10 @@ impl Cockpit {
                 .strong()
                 .color(self.accent()),
         );
-        self.target_chips(ui);
+        let seated = self
+            .own()
+            .is_some_and(|pilot| pilot.station_avatar.is_none());
+        ui.add_enabled_ui(seated, |ui| self.target_chips(ui));
         let (status, progress) = self.mining_status();
         ui.small(status);
         if let Some(progress) = progress {
@@ -1716,7 +1719,7 @@ impl Cockpit {
                             });
                             if ui
                                 .add_enabled(
-                                    self.can_operate(),
+                                    self.can_operate() && seated,
                                     egui::Button::new("Stop turret").small(),
                                 )
                                 .clicked()
@@ -1766,7 +1769,7 @@ impl Cockpit {
                 || !Self::confirmed_locks(&pilot).is_empty())
                 && ui
                     .add_enabled(
-                        self.can_operate(),
+                        self.can_operate() && seated,
                         egui::Button::new(
                             if Self::pending_locks(&pilot).len()
                                 + Self::confirmed_locks(&pilot).len()
@@ -1966,7 +1969,9 @@ impl Cockpit {
             } else if self.embedded_paused {
                 "Paused · display held · controls locked"
             } else if self.snapshot.as_ref().is_some_and(|snapshot| {
-                self.presentation_time().saturating_sub(snapshot.server_time_ms) > 1500
+                self.presentation_time()
+                    .saturating_sub(snapshot.server_time_ms)
+                    > 1500
             }) {
                 "Stale world data · values may be out of date"
             } else if self.ship_observation {
@@ -2097,15 +2102,25 @@ impl Cockpit {
         self.operations_navigation(ui);
     }
     fn service_content(&mut self, ui: &mut egui::Ui) {
-        if self.own().is_some_and(|p| p.station_avatar.is_some())
+        let on_foot = self
+            .own()
+            .is_some_and(|pilot| pilot.station_avatar.is_some());
+        if on_foot
             && matches!(
                 self.service_tab,
-                ServiceTab::Navigation | ServiceTab::Modules | ServiceTab::Sandbox
+                ServiceTab::Navigation | ServiceTab::Modules
             )
         {
-            self.station_actions(ui);
+            ui.colored_label(
+                AMBER,
+                "Inspection only · return to the physical pilot seat to use ship controls.",
+            );
             ui.separator();
-            ui.label("Ship controls are unavailable on foot. Inventory, room plans and account services remain accessible.");
+        }
+        if on_foot && self.service_tab == ServiceTab::Sandbox {
+            ui.heading("Surface tools");
+            self.surface_status(ui);
+            ui.colored_label(AMBER, "Surface editing requires the physical pilot seat. Your current body and camera remain unchanged.");
             return;
         }
         match self.service_tab {
@@ -2113,6 +2128,7 @@ impl Cockpit {
                 ui.label("Ship layout viewer is open in its own window.");
             }
             ServiceTab::Navigation => {
+                ui.heading("Navigation");
                 self.flight_deck(ui);
                 self.surface_status(ui);
                 self.overview(ui);
@@ -2163,7 +2179,9 @@ impl Cockpit {
         ui.horizontal_wrapped(|ui| {
             if ui
                 .add_enabled(
-                    self.can_operate() && pilot.location == Location::Docked,
+                    self.can_operate()
+                        && pilot.station_avatar.is_none()
+                        && pilot.location == Location::Docked,
                     egui::Button::new("Undock").small(),
                 )
                 .clicked()
@@ -2279,6 +2297,7 @@ impl Cockpit {
     }
     fn can_dock(&self, pilot: &PilotView) -> bool {
         self.can_operate()
+            && pilot.station_avatar.is_none()
             && in_navigation_range(
                 pilot,
                 STATION_POSITION,
@@ -2291,6 +2310,7 @@ impl Cockpit {
     }
     fn can_mine(&self, pilot: &PilotView) -> bool {
         self.can_operate()
+            && pilot.station_avatar.is_none()
             && pilot.ore < cargo_capacity(pilot.ship_class)
             && self.snapshot.as_ref().is_some_and(|snapshot| {
                 snapshot.asteroids.iter().any(|a| {
@@ -2564,7 +2584,16 @@ impl Cockpit {
         {
             ui.small("Select another vessel or a location to navigate.");
         }
-        ui.small("Ctrl+Space: stop · RMB: aim · Release controls: assisted braking");
+        ui.small(
+            if self
+                .own()
+                .is_some_and(|pilot| pilot.station_avatar.is_some())
+            {
+                "Read-only navigation · selecting a contact does not move your body or ship"
+            } else {
+                "Ctrl+Space: stop · RMB: aim · Release controls: assisted braking"
+            },
+        );
     }
     fn overview(&mut self, ui: &mut egui::Ui) {
         let system = self.current_system();
@@ -5053,6 +5082,114 @@ mod tests {
         cockpit.timeline_origin = Some(1000);
         cockpit
     }
+    #[test]
+    fn pioneer_completion_onfoot_destinations_keep_readouts_and_disable_ship_commands() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        let pilot = &mut cockpit.snapshot.as_mut().unwrap().pilots[0];
+        pilot.station_avatar = Some(
+            serde_json::from_value(serde_json::json!({
+                "position":[0.0,0.0,0.0], "heading":0.0, "moving":false,
+                "updated_at_ms":1000, "onboard_interior":true, "interior_deck":2
+            }))
+            .unwrap(),
+        );
+        pilot.flight.as_mut().unwrap().position = STATION_POSITION;
+        pilot.locked_asteroid = Some(7);
+        pilot.locked_asteroids = vec![7];
+        pilot.mining_modules[0].target_id = Some(7);
+        pilot.mining_modules[0].cycle_started_at_ms = Some(1000);
+        pilot.mining_modules[0].cycle_completes_at_ms = Some(2000);
+        let before = serde_json::to_value(&cockpit.snapshot).unwrap();
+        let (tx, rx) = mpsc::channel();
+        cockpit.commands = Some(tx);
+        fn content_frame(
+            ctx: &egui::Context,
+            cockpit: &mut Cockpit,
+            events: Vec<egui::Event>,
+        ) -> egui::FullOutput {
+            ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        Pos2::ZERO,
+                        Vec2::new(1000.0, 850.0),
+                    )),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| cockpit.service_content(ui));
+                },
+            )
+        }
+        for (tab, expected) in [
+            (ServiceTab::Navigation, "SELECTED OBJECT"),
+            (ServiceTab::Modules, "MINING MODULE"),
+        ] {
+            cockpit.service_tab = tab;
+            let output = content_frame(&ctx, &mut cockpit, vec![]);
+            let labels: Vec<_> = output
+                .shapes
+                .iter()
+                .filter_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) => Some(text.galley.text()),
+                    _ => None,
+                })
+                .collect();
+            assert!(
+                labels.contains(&expected),
+                "Selected destination must keep its actual content"
+            );
+            assert!(labels
+                .iter()
+                .any(|label| label.contains("physical pilot seat")));
+            assert!(!labels.contains(&"Pioneer traversal unavailable"));
+            assert!(cockpit.service_tab == tab);
+            if tab == ServiceTab::Modules {
+                let point = output
+                    .shapes
+                    .iter()
+                    .find_map(|shape| match &shape.shape {
+                        egui::Shape::Text(text) if text.galley.text() == "Stop turret" => {
+                            Some(text.pos + text.galley.rect.center().to_vec2())
+                        }
+                        _ => None,
+                    })
+                    .expect("Actual turret command remains visibly present");
+                for pressed in [true, false] {
+                    content_frame(
+                        &ctx,
+                        &mut cockpit,
+                        vec![
+                            egui::Event::PointerMoved(point),
+                            egui::Event::PointerButton {
+                                pos: point,
+                                button: egui::PointerButton::Primary,
+                                pressed,
+                                modifiers: egui::Modifiers::NONE,
+                            },
+                        ],
+                    );
+                }
+                assert!(
+                    cockpit.notice.is_empty(),
+                    "Disabled command must not reach send rejection"
+                );
+            }
+        }
+        assert!(!cockpit.can_fly());
+        assert!(!cockpit.can_dock(&cockpit.own().unwrap()));
+        cockpit.service_tab = ServiceTab::Sandbox;
+        let output = content_frame(&ctx, &mut cockpit, vec![]);
+        assert!(output.shapes.iter().any(|shape| matches!(&shape.shape,
+            egui::Shape::Text(text) if text.galley.text().contains("Surface editing requires the physical pilot seat"))));
+        assert!(
+            rx.try_recv().is_err(),
+            "Inspection must issue no gameplay commands"
+        );
+        assert_eq!(serde_json::to_value(&cockpit.snapshot).unwrap(), before);
+    }
+
     fn ui_test_frame(
         ctx: &egui::Context,
         cockpit: &mut Cockpit,

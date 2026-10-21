@@ -431,7 +431,7 @@ impl eframe::App for Editor {
                                     .selected(selected)
                                     .min_size(egui::vec2(82.0, 30.0)),
                             )
-                            .on_disabled_hover_text("Map uses ship cameras. Walk back to the pilot seat and physically reseat to use them.")
+                            .on_disabled_hover_text("Map is available after a vessel snapshot is connected. Ship camera observation does not grant pilot controls.")
                             .clicked()
                         {
                             self.show_play_workspace();
@@ -448,19 +448,9 @@ impl eframe::App for Editor {
                                 "Ship" => self.client.open_ship_panel(),
                                 "Operations" => self.client.open_operations_panel(),
                                 _ => {
+                                    // A workspace change preserves the selected player or
+                                    // observer camera and never changes physical embodiment.
                                     self.client.return_to_flight();
-                                    // A deliberate Flight click selects the cockpit when
-                                    // seated; Back to Flight below preserves the camera.
-                                    if self
-                                        .client
-                                        .debug_view_state()
-                                        .available
-                                        .contains(&arkline_client::EmbeddedView::Cockpit)
-                                    {
-                                        let _ = self
-                                            .client
-                                            .set_debug_view(arkline_client::EmbeddedView::Cockpit);
-                                    }
                                 }
                             }
                         }
@@ -2105,7 +2095,7 @@ mod tests {
         }
     }
     #[test]
-    fn flight_editor_focus_keeps_tools_accessible_and_preserves_paused_world() {
+    fn pioneer_completion_flight_focus_preserves_onfoot_camera_and_paused_world() {
         let ctx = egui::Context::default();
         let cc = eframe::CreationContext::_new_kittest(ctx.clone());
         let project = std::env::temp_dir().join(format!(
@@ -2123,6 +2113,24 @@ mod tests {
             std::thread::sleep(Duration::from_millis(10));
         }
         assert!(editor.client.paused());
+        editor
+            .client
+            .set_scene_state(EditorSceneState::InteriorDeck2)
+            .unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while editor.client.scene_state_pending() && std::time::Instant::now() < deadline {
+            editor.client.poll();
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(
+            editor.client.scene_state(),
+            Some(EditorSceneState::InteriorDeck2)
+        );
+        editor
+            .client
+            .set_debug_view(arkline_client::EmbeddedView::ThirdPerson)
+            .unwrap();
+        let view_before = editor.client.debug_view_state().current;
         let before = serde_json::to_value(editor.client.snapshot().unwrap()).unwrap();
         let frame = |editor: &mut Editor, events| {
             ctx.run(
@@ -2187,6 +2195,8 @@ mod tests {
         let output = frame(&mut editor, vec![]);
         assert!(editor.flight_focus);
         assert!(!has(&output, "World outliner") && !has(&output, "Inspector"));
+        assert_eq!(editor.client.debug_view_state().current, view_before,
+            "Flight route must retain the physical on-foot camera instead of entering ship observation");
         assert_eq!(
             serde_json::to_value(editor.client.snapshot().unwrap()).unwrap(),
             before
