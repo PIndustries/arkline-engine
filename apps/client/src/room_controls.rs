@@ -171,6 +171,22 @@ pub(crate) fn show(
                 }
             }
         });
+        if s.door_commanded_open != s.door_open {
+            if ui
+                .add_enabled(
+                    s.commissioned && !s.door_manual,
+                    egui::Button::new("Apply pending request manually"),
+                )
+                .on_hover_text("Keep the requested door target and use manual actuation. The server still enforces pressure and doorway occupancy interlocks.")
+                .clicked()
+            {
+                action = Some(Command::Door {
+                    open: s.door_commanded_open,
+                    manual: true,
+                });
+            }
+        }
+        ui.small("Manual actuation does not bypass pressure or occupied-doorway interlocks.");
     });
     ui.small("Single-room pressure and electrical loads are simulated. Whole-ship atmosphere, plumbing and life support remain proposed. Door safety interlocks are enforced by the server.");
     ui.collapsing("Equipment and connections", |ui| {
@@ -238,16 +254,15 @@ mod tests {
         };
         run(vec![]);
         let output = run(vec![]);
-        let point = output
-            .shapes
-            .into_iter()
-            .find_map(|s| match s.shape {
-                egui::Shape::Text(t) if t.galley.job.text == label => {
-                    Some(t.pos + t.galley.rect.center().to_vec2())
-                }
-                _ => None,
-            })
-            .unwrap();
+        let point = output.shapes.into_iter().find_map(|s| match s.shape {
+            egui::Shape::Text(t) if t.galley.job.text == label => {
+                Some(t.pos + t.galley.rect.center().to_vec2())
+            }
+            _ => None,
+        });
+        let Some(point) = point else {
+            return None;
+        };
         for pressed in [true, false] {
             run(vec![
                 egui::Event::PointerMoved(point),
@@ -311,6 +326,42 @@ mod tests {
             !s.door_commanded_open && s.door_open,
             "UI must not predict cancellation or physical closing"
         );
+    }
+    #[test]
+    fn room_controls_manual_pending_preserves_target_and_interlocks() {
+        for open in [false, true] {
+            let mut s = PioneerRoomState::uncommissioned("owned".into());
+            s.commissioned = true;
+            s.door_manual = false;
+            s.door_commanded_open = open;
+            s.door_open = !open;
+            s.interlock = Some(
+                if open {
+                    "Pressure difference exceeds 5 kPa"
+                } else {
+                    "Doorway occupied"
+                }
+                .into(),
+            );
+            let before = serde_json::to_value(&s).unwrap();
+            assert!(
+                matches!(click("Apply pending request manually", true, &s), Some(Command::Door { open: target, manual: true }) if target == open)
+            );
+            assert!(click("Apply pending request manually", false, &s).is_none());
+            assert_eq!(
+                serde_json::to_value(&s).unwrap(),
+                before,
+                "UI must preserve confirmed outputs and interlock"
+            );
+            s.door_manual = true;
+            assert!(click("Apply pending request manually", true, &s).is_none());
+            s.door_manual = false;
+            s.commissioned = false;
+            assert!(click("Apply pending request manually", true, &s).is_none());
+            s.commissioned = true;
+            s.door_open = open;
+            assert!(click("Apply pending request manually", true, &s).is_none());
+        }
     }
     #[test]
     fn room_controls_show_requested_and_actual_outputs_when_interlocked() {

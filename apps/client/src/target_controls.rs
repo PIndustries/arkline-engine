@@ -241,19 +241,21 @@ impl Cockpit {
                     let selected = self
                         .selected_drone_view(&p)
                         .is_some_and(|d| d.id == drone.id);
-                    if ui
-                        .selectable_label(
-                            selected,
-                            format!(
-                                "#{:02} {:?} · {} · {}% signal · {} HP",
-                                drone.id,
-                                drone.class,
-                                drone_mode_label(&drone.mode),
-                                (drone.signal_strength * 100.0).round(),
-                                drone.hit_points
-                            ),
-                        )
-                        .clicked()
+                    if fleet_row_button(
+                        ui,
+                        &p.name,
+                        drone.id,
+                        selected,
+                        &format!(
+                            "#{:02} {:?} · {} · {}% signal · {} HP",
+                            drone.id,
+                            drone.class,
+                            drone_mode_label(&drone.mode),
+                            (drone.signal_strength * 100.0).round(),
+                            drone.hit_points
+                        ),
+                    )
+                    .clicked()
                     {
                         self.selected_drone = Some(drone.id);
                     }
@@ -508,6 +510,54 @@ impl Cockpit {
         }
     }
 }
+// The actual interaction ID must follow the vessel and drone, not its row slot.
+// A scoped push_id does not replace selectable_label's positional response ID.
+fn fleet_row_button(
+    ui: &mut egui::Ui,
+    owner: &str,
+    drone_id: u64,
+    selected: bool,
+    label: &str,
+) -> egui::Response {
+    let id = ui.make_persistent_id(("fleet-drone", owner, drone_id));
+    let padding = ui.spacing().button_padding;
+    let text = egui::WidgetText::from(label).into_galley(
+        ui,
+        None,
+        (ui.available_width() - 2.0 * padding.x).max(40.0),
+        egui::TextStyle::Button,
+    );
+    let size = egui::vec2(
+        text.size().x + 2.0 * padding.x,
+        (text.size().y + 2.0 * padding.y).max(ui.spacing().interact_size.y),
+    );
+    let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
+    let response = ui.interact(rect, id, egui::Sense::click());
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(
+            egui::WidgetType::SelectableLabel,
+            ui.is_enabled(),
+            selected,
+            label,
+        )
+    });
+    if ui.is_rect_visible(rect) {
+        let visual = ui.style().interact_selectable(&response, selected);
+        if selected || response.hovered() || response.has_focus() {
+            ui.painter().rect(
+                rect,
+                visual.corner_radius,
+                visual.weak_bg_fill,
+                visual.bg_stroke,
+                egui::StrokeKind::Inside,
+            );
+        }
+        ui.painter()
+            .galley(rect.min + padding, text, visual.text_color());
+    }
+    response
+}
+
 fn drone_mode_label(mode: &DroneMode) -> &'static str {
     match mode {
         DroneMode::Hold => "Holding",
@@ -570,5 +620,111 @@ fn drone_assignment(mode: &DroneMode) -> String {
         ),
         DroneMode::Returning => "Return to owner ship".into(),
         DroneMode::Hold => "Hold current position".into(),
+    }
+}
+
+#[cfg(test)]
+mod fleet_identity_tests {
+    use super::*;
+
+    fn render(
+        ctx: &egui::Context,
+        cockpit: &mut Cockpit,
+        events: Vec<egui::Event>,
+    ) -> Vec<(String, Pos2)> {
+        let output = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    Pos2::ZERO,
+                    Vec2::new(900.0, 1100.0),
+                )),
+                events,
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| cockpit.drone_controls(ui));
+            },
+        );
+        output
+            .shapes
+            .iter()
+            .filter_map(|shape| {
+                if let egui::Shape::Text(text) = &shape.shape {
+                    Some((
+                        text.galley.job.text.clone(),
+                        text.visual_bounding_rect().center(),
+                    ))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    #[test]
+    fn drone_fleet_identity_removal_or_reorder_during_click_never_selects_replacement() {
+        for remove in [false, true] {
+            let ctx = egui::Context::default();
+            let mut cockpit = crate::tests::view_test_cockpit(&ctx);
+            let drone = |id| DroneView {
+                id,
+                class: DroneClass::Recon,
+                hit_points: 100,
+                signal_strength: 1.0,
+                mining_cycle: None,
+                attack_ready_at_ms: None,
+                position: BELT_POSITION,
+                velocity: [0.0; 3],
+                heading: [1.0, 0.0, 0.0],
+                mode: DroneMode::Hold,
+                updated_at_ms: 1000,
+            };
+            cockpit.snapshot.as_mut().unwrap().pilots[0].drones = vec![drone(1), drone(2)];
+            cockpit.selected_drone = Some(1);
+            let (tx, rx) = std::sync::mpsc::channel();
+            cockpit.commands = Some(tx);
+            render(&ctx, &mut cockpit, vec![]);
+            let labels = render(&ctx, &mut cockpit, vec![]);
+            let point = labels
+                .iter()
+                .find(|(text, _)| text.starts_with("#01 "))
+                .unwrap()
+                .1;
+            let event = |pressed| {
+                vec![
+                    egui::Event::PointerMoved(point),
+                    egui::Event::PointerButton {
+                        pos: point,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ]
+            };
+            render(&ctx, &mut cockpit, event(true));
+            let fleet = &mut cockpit.snapshot.as_mut().unwrap().pilots[0].drones;
+            if remove {
+                fleet.remove(0);
+            } else {
+                fleet.reverse();
+            }
+            let authority = serde_json::to_value(&cockpit.snapshot).unwrap();
+            let labels = render(&ctx, &mut cockpit, event(false));
+            assert_eq!(
+                cockpit.selected_drone,
+                Some(1),
+                "replacement drone must not inherit a pressed row"
+            );
+            assert!(
+                rx.try_recv().is_err(),
+                "selection gesture must not dispatch an order"
+            );
+            assert_eq!(serde_json::to_value(&cockpit.snapshot).unwrap(), authority);
+            if remove {
+                assert!(labels
+                    .iter()
+                    .any(|(text, _)| text.contains("Selected drone #1 is no longer reported")));
+            }
+        }
     }
 }
