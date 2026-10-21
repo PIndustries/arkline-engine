@@ -1761,6 +1761,7 @@ impl FlightView {
                                 snapshot,
                                 now,
                                 connected,
+                                false,
                                 selected,
                                 &mut self.map_range,
                             ) {

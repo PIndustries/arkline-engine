@@ -255,7 +255,8 @@ impl HangarView {
                     pilot,
                     snapshot,
                     now,
-                    connected && !paused,
+                    connected,
+                    paused,
                     &super::super::SelectedObject::Station,
                     &mut range,
                 );
@@ -275,8 +276,15 @@ impl HangarView {
         if let Some(surface) = &self.passive_console {
             paint_passive_flight_console(ui, surface, pilot, snapshot, now, connected, paused);
         }
-        for surface in self.docked_surfaces.iter().flatten() {
-            paint_passive_authority(ui, surface, snapshot, now, connected, paused);
+        for (index, surface) in self.docked_surfaces.iter().enumerate() {
+            // These cards own their authority header; a second top-right badge
+            // would obscure real data on the small physical display canvas.
+            if index == 2 || index == 4 {
+                continue;
+            }
+            if let Some(surface) = surface {
+                paint_passive_authority(ui, surface, snapshot, now, connected, paused);
+            }
         }
         if self.passive_console.is_some() {
             if let Some(surface) = &self.docked_surfaces[1] {

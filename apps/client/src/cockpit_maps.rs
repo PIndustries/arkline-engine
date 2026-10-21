@@ -632,6 +632,7 @@ pub(super) fn paint_cockpit_maps(
     snapshot: &Snapshot,
     now: u64,
     connected: bool,
+    paused: bool,
     selected: &super::super::SelectedObject,
     range: &mut f64,
 ) -> Option<ViewAction> {
@@ -723,20 +724,14 @@ pub(super) fn paint_cockpit_maps(
             0.0,
             egui::Color32::from_rgba_unmultiplied(0, 20, 15, 235),
         );
-        let color = if connected && now.saturating_sub(snapshot.server_time_ms) <= 1500 {
+        let color = if connected && !paused && now.saturating_sub(snapshot.server_time_ms) <= 1500 {
             super::super::TEAL
         } else {
             super::super::AMBER
         };
-        let authority = if !connected {
-            "NAV LOCAL / DISCONNECTED"
-        } else if own.flight.is_none() && own.location != Location::Docked {
-            "NAV LOCAL / DATA UNAVAILABLE"
-        } else if now.saturating_sub(snapshot.server_time_ms) > 1500 {
-            "NAV LOCAL / STALE"
-        } else {
-            "NAV LOCAL / LIVE"
-        };
+        let authority = map_authority(connected, paused,
+            own.flight.is_some() || own.location == Location::Docked,
+            now.saturating_sub(snapshot.server_time_ms) <= 1500);
         let selected_readout = contacts.iter().find(|(object, _, _)| object == selected)
             .map(|(_, position, name)| (name.as_str(), super::super::distance_m(*position, origin)));
         let physical_pointer = ui
@@ -860,6 +855,20 @@ pub(super) fn paint_cockpit_maps(
     picked
 }
 
+fn map_authority(connected: bool, paused: bool, available: bool, fresh: bool) -> &'static str {
+    if !connected {
+        "NAV LOCAL / DISCONNECTED"
+    } else if paused {
+        "NAV LOCAL / PAUSED"
+    } else if !available {
+        "NAV LOCAL / DATA UNAVAILABLE"
+    } else if !fresh {
+        "NAV LOCAL / STALE"
+    } else {
+        "NAV LOCAL / LIVE"
+    }
+}
+
 /// Bounded text bands over actual selected-contact data; no dispatch or scene work.
 fn paint_map_readouts(
     painter: &egui::Painter,
@@ -908,6 +917,53 @@ fn paint_map_readouts(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn map_paused_connected_paints_held_state_without_claiming_disconnection() {
+        assert_eq!(map_authority(true, true, true, true), "NAV LOCAL / PAUSED");
+        assert_eq!(
+            map_authority(false, true, true, true),
+            "NAV LOCAL / DISCONNECTED"
+        );
+        assert_eq!(
+            map_authority(true, true, false, false),
+            "NAV LOCAL / PAUSED"
+        );
+        assert_eq!(
+            map_authority(true, false, false, false),
+            "NAV LOCAL / DATA UNAVAILABLE"
+        );
+        assert_eq!(map_authority(true, false, true, false), "NAV LOCAL / STALE");
+        assert_eq!(map_authority(true, false, true, true), "NAV LOCAL / LIVE");
+        let ctx = egui::Context::default();
+        let output = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                paint_map_readouts(
+                    ui.painter(),
+                    egui::Rect::from_min_size(egui::pos2(8.0, 8.0), egui::vec2(256.0, 128.0)),
+                    map_authority(true, true, true, true),
+                    Some(("Station", 5000.0)),
+                    10_000.0,
+                    super::super::super::AMBER,
+                );
+            });
+        });
+        let labels: Vec<_> = output
+            .shapes
+            .iter()
+            .filter_map(|shape| {
+                if let egui::Shape::Text(text) = &shape.shape {
+                    Some(text.galley.job.text.as_str())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        assert!(labels.contains(&"NAV LOCAL / PAUSED"));
+        assert!(!labels
+            .iter()
+            .any(|label| label.contains("DISCONNECTED") || label.contains(" / LIVE")));
+    }
+
     #[test]
     fn map_readouts_bound_actual_selection_and_range_at_both_canvas_sizes() {
         for size in [egui::vec2(256.0, 128.0), egui::vec2(300.0, 180.0)] {

@@ -10,7 +10,7 @@ pub(super) enum PowerPanelId {
 pub(super) enum PowerReadingId {
     CapacitorChargeJ,
     CapacitorCapacityJ,
-    ReactorOutputW,
+    RegenerationRatingW,
     WarpCostJ,
 }
 
@@ -35,7 +35,7 @@ impl PowerReadings {
         match id {
             PowerReadingId::CapacitorChargeJ => self.confirmed.as_ref().map(|p| p.charge_j),
             PowerReadingId::CapacitorCapacityJ => self.confirmed.as_ref().map(|p| p.capacity_j),
-            PowerReadingId::ReactorOutputW => self.confirmed.as_ref().map(|p| p.regen_w),
+            PowerReadingId::RegenerationRatingW => self.confirmed.as_ref().map(|p| p.regen_w),
             PowerReadingId::WarpCostJ => Some(self.warp_cost_j),
         }
     }
@@ -115,10 +115,10 @@ pub(super) fn paint(
         }
     }
     let reactor = readings
-        .reading(PowerReadingId::ReactorOutputW)
+        .reading(PowerReadingId::RegenerationRatingW)
         .map_or_else(
-            || "REACTOR UNKNOWN".into(),
-            |watts| format!("REACTOR {watts} W"),
+            || "REGEN RATING UNKNOWN".into(),
+            |watts| format!("REGEN RATING {watts} W"),
         );
     let warp = readings
         .reading(PowerReadingId::WarpCostJ)
@@ -181,7 +181,7 @@ mod tests {
                     known.then_some(120_000)
                 );
                 assert_eq!(
-                    readings.reading(PowerReadingId::ReactorOutputW),
+                    readings.reading(PowerReadingId::RegenerationRatingW),
                     known.then_some(1200)
                 );
                 assert_eq!(readings.fill_fraction(), known.then_some(0.5));
@@ -225,6 +225,7 @@ mod tests {
                     }
                 }
                 assert!(labels.contains(&"POWER / PAUSED / SNAPSHOT HELD"));
+                assert!(labels.iter().any(|label| label.starts_with("REGEN RATING")));
                 assert!(labels.contains(&if known {
                     "120.0 / 240.0 kJ"
                 } else {
