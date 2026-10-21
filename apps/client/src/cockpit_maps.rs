@@ -596,8 +596,12 @@ pub(super) fn paint_camera_signal(
                 "TELEMETRY STALE"
             } else if drone.is_none() {
                 "NO CAMERA SELECTED"
-            } else {
+            } else if drone
+                .is_some_and(|drone| matches!(drone.mode, arkline_protocol::DroneMode::Returning))
+            {
                 "SIGNAL LOST / RETURNING"
+            } else {
+                "SIGNAL LOST"
             },
             egui::FontId::monospace(11.0),
             super::super::AMBER,
@@ -724,17 +728,17 @@ pub(super) fn paint_cockpit_maps(
         } else {
             super::super::AMBER
         };
-        painter.text(
-            rect.left_top() + egui::vec2(4.0, 2.0),
-            egui::Align2::LEFT_TOP,
-            if tactical {
-                "HOLO / SHIP RELATIVE"
-            } else {
-                "NAV / 2D LOCAL"
-            },
-            egui::FontId::monospace(10.0),
-            color,
-        );
+        let authority = if !connected {
+            "NAV LOCAL / DISCONNECTED"
+        } else if own.flight.is_none() && own.location != Location::Docked {
+            "NAV LOCAL / DATA UNAVAILABLE"
+        } else if now.saturating_sub(snapshot.server_time_ms) > 1500 {
+            "NAV LOCAL / STALE"
+        } else {
+            "NAV LOCAL / LIVE"
+        };
+        let selected_readout = contacts.iter().find(|(object, _, _)| object == selected)
+            .map(|(_, position, name)| (name.as_str(), super::super::distance_m(*position, origin)));
         let physical_pointer = ui
             .input(|i| i.pointer.hover_pos())
             .and_then(|p| surface.unproject(p));
@@ -755,7 +759,12 @@ pub(super) fn paint_cockpit_maps(
             }
             response.clone().on_hover_text("Scroll to change sensor range. Click a contact to select it. Map axes follow ship heading and roll.");
         }
-        let map = rect.shrink2(egui::vec2(9.0, 18.0));
+        paint_map_readouts(&painter, rect, authority, selected_readout, *range, color);
+        // Reserve independent text bands; contact geometry stays in the map field.
+        let map = egui::Rect::from_min_max(
+            rect.min + egui::vec2(9.0, 29.0),
+            rect.max - egui::vec2(9.0, 20.0),
+        );
         let radius = map.width().min(map.height()) * 0.46;
         let center = map.center();
         for fraction in [0.25, 0.5, 1.0] {
@@ -772,13 +781,7 @@ pub(super) fn paint_cockpit_maps(
                 points,
                 egui::Stroke::new(0.8, color.gamma_multiply(0.45)),
             ));
-            painter.text(
-                center + egui::vec2(radius * fraction, 2.0),
-                egui::Align2::LEFT_TOP,
-                super::super::format_distance(*range * fraction as f64),
-                egui::FontId::monospace(8.0),
-                color.gamma_multiply(0.65),
-            );
+
         }
         painter.line_segment(
             [
@@ -804,7 +807,7 @@ pub(super) fn paint_cockpit_maps(
             egui::Stroke::NONE,
         ));
         let mut nearest: Option<(f32, super::super::SelectedObject)> = None;
-        for (object, position, label) in &contacts {
+        for (object, position, _) in &contacts {
             let relative = std::array::from_fn(|i| position[i] - origin[i]);
             if relative.iter().map(|v| v * v).sum::<f64>().sqrt() > *range {
                 continue;
@@ -823,15 +826,6 @@ pub(super) fn paint_cockpit_maps(
                 );
             }
             painter.circle_filled(point, if object == selected { 3.5 } else { 2.0 }, color);
-            if object == selected {
-                painter.text(
-                    point + egui::vec2(5.0, 0.0),
-                    egui::Align2::LEFT_CENTER,
-                    label,
-                    egui::FontId::monospace(9.0),
-                    color,
-                );
-            }
             if let Some(pointer) = response
                 .interact_pointer_pos()
                 .and_then(|p| surface.unproject(p))
@@ -861,20 +855,172 @@ pub(super) fn paint_cockpit_maps(
                 picked = Some(ViewAction::Select(object));
             }
         }
-        painter.text(
-            rect.left_bottom() + egui::vec2(4.0, -2.0),
-            egui::Align2::LEFT_BOTTOM,
-            format!("RANGE {} / SCROLL", super::super::format_distance(*range)),
-            egui::FontId::monospace(9.0),
-            color,
-        );
+
     }
     picked
+}
+
+/// Bounded text bands over actual selected-contact data; no dispatch or scene work.
+fn paint_map_readouts(
+    painter: &egui::Painter,
+    rect: egui::Rect,
+    authority: &str,
+    selected: Option<(&str, f64)>,
+    range: f64,
+    color: egui::Color32,
+) {
+    let line = |text: String, y: f32, size| {
+        let mut job = egui::text::LayoutJob::simple(
+            text,
+            egui::FontId::monospace(size),
+            color,
+            rect.width() - 8.0,
+        );
+        job.wrap.max_rows = 1;
+        job.wrap.break_anywhere = true;
+        job.wrap.overflow_character = Some('…');
+        painter.galley(
+            rect.min + egui::vec2(4.0, y),
+            painter.layout_job(job),
+            color,
+        );
+    };
+    line(authority.into(), 2.0, 10.0);
+    let selection = selected.map_or_else(
+        || "SELECTED CONTACT UNAVAILABLE".into(),
+        |(name, distance)| {
+            if distance.is_finite() {
+                // Keep actual range first, so a long contact name never hides it.
+                format!("{} · {name}", super::super::format_distance(distance))
+            } else {
+                format!("RANGE UNAVAILABLE · {name}")
+            }
+        },
+    );
+    line(selection, 16.0, 10.0);
+    line(
+        format!("RANGE {} / SCROLL", super::super::format_distance(range)),
+        rect.height() - 13.0,
+        9.0,
+    );
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn map_readouts_bound_actual_selection_and_range_at_both_canvas_sizes() {
+        for size in [egui::vec2(256.0, 128.0), egui::vec2(300.0, 180.0)] {
+            for selected in [
+                None,
+                Some((
+                    "Asteroid Alpha with a deliberately long authoritative name",
+                    5000.0,
+                )),
+            ] {
+                let rect = egui::Rect::from_min_size(egui::pos2(8.0, 8.0), size).shrink(3.0);
+                let ctx = egui::Context::default();
+                let output = ctx.run(Default::default(), |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        paint_map_readouts(
+                            &ui.painter().with_clip_rect(rect),
+                            rect,
+                            "NAV LOCAL / STALE",
+                            selected,
+                            10_000.0,
+                            super::super::super::AMBER,
+                        );
+                    });
+                });
+                let labels: Vec<_> = output
+                    .shapes
+                    .iter()
+                    .filter_map(|shape| {
+                        if let egui::Shape::Text(text) = &shape.shape {
+                            assert!(
+                                rect.contains_rect(text.visual_bounding_rect()),
+                                "{:?}",
+                                text.galley.job.text
+                            );
+                            Some(text.galley.job.text.as_str())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                assert_eq!(
+                    labels.len(),
+                    3,
+                    "one authority, one selection, one calibrated range; no overlapping ring labels"
+                );
+                assert!(labels.contains(&"NAV LOCAL / STALE"));
+                assert!(labels
+                    .iter()
+                    .any(|label| label.starts_with("RANGE ") && label.ends_with(" / SCROLL")));
+                if let Some((name, distance)) = selected {
+                    assert!(labels.contains(
+                        &format!(
+                            "{} · {name}",
+                            super::super::super::format_distance(distance)
+                        )
+                        .as_str()
+                    ));
+                } else {
+                    assert!(labels.contains(&"SELECTED CONTACT UNAVAILABLE"));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn camera_signal_labels_follow_actual_mode_and_freshness() {
+        let ctx = egui::Context::default();
+        let mut drone = arkline_protocol::DroneView {
+            id: 1,
+            class: arkline_protocol::DroneClass::Recon,
+            hit_points: 100,
+            signal_strength: 0.0,
+            mining_cycle: None,
+            attack_ready_at_ms: None,
+            position: [0.0; 3],
+            velocity: [0.0; 3],
+            heading: [1.0, 0.0, 0.0],
+            mode: arkline_protocol::DroneMode::Hold,
+            updated_at_ms: 1000,
+        };
+        let render = |drone: Option<&arkline_protocol::DroneView>, fresh| {
+            let output = ctx.run(egui::RawInput::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    paint_camera_signal(
+                        ui.painter(),
+                        egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(300.0, 180.0)),
+                        drone,
+                        1000,
+                        fresh,
+                    );
+                });
+            });
+            output
+                .shapes
+                .iter()
+                .filter_map(|shape| {
+                    if let egui::Shape::Text(text) = &shape.shape {
+                        Some(text.galley.job.text.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(render(Some(&drone), true), ["SIGNAL LOST"]);
+        drone.mode = arkline_protocol::DroneMode::Returning;
+        assert_eq!(render(Some(&drone), true), ["SIGNAL LOST / RETURNING"]);
+        assert_eq!(render(Some(&drone), false), ["TELEMETRY STALE"]);
+        assert_eq!(render(None, true), ["NO CAMERA SELECTED"]);
+        drone.signal_strength = 1.0;
+        assert!(render(Some(&drone), true).is_empty());
+    }
+
     #[test]
     fn ship_relative_contacts_follow_heading_and_preserve_distance_scale() {
         let ahead = map_offset([1000.0, 0.0, 0.0], Quat::IDENTITY, 10_000.0, 100.0, false);

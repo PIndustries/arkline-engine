@@ -1457,6 +1457,89 @@ fn hatch_frame(
     );
 }
 
+/// Serviceable case inside its declared solid envelope. The opaque case box is
+/// replaced, not retained behind a decorative inset: the shallow cover, seam,
+/// flange and fastener caps are real depth. Every new solid is a subset of the
+/// declared envelope; this detail recipe does not add protrusions.
+fn serviceable_bank_case(g: &mut PioneerDockedGeometry, id: &str, min: [f64; 3], max: [f64; 3]) {
+    use PioneerDockedMaterial::{Carbon, Graphite, Titanium};
+    let recess = ((max[0] - min[0]) * 0.375).min(0.003);
+    let rear = min[0] + recess * 2.0;
+    let flange_front = min[0] + recess / 3.0;
+    let rim = 0.012;
+    let cover_margin = rim + 0.002;
+    let mut part = |suffix: &str, a, b, material| {
+        let name = if suffix.is_empty() {
+            id.to_owned()
+        } else {
+            format!("{id}/{suffix}")
+        };
+        g.block(
+            name,
+            a,
+            b,
+            material,
+            PioneerDockedCollision::Solid,
+            PioneerDockedCell::Cockpit,
+            PioneerDockedPanelKind::Furniture,
+        );
+    };
+    part("carcass", [rear, min[1], min[2]], max, Graphite);
+    // Keep the canonical base ID on the removable, non-operating service cover.
+    part(
+        "",
+        [
+            min[0] + recess,
+            min[1] + cover_margin,
+            min[2] + cover_margin,
+        ],
+        [rear, max[1] - cover_margin, max[2] - cover_margin],
+        Carbon,
+    );
+    for (index, a, b) in [
+        (
+            0,
+            [flange_front, min[1], min[2]],
+            [rear, min[1] + rim, max[2]],
+        ),
+        (
+            1,
+            [flange_front, max[1] - rim, min[2]],
+            [rear, max[1], max[2]],
+        ),
+        (
+            2,
+            [flange_front, min[1] + rim, min[2]],
+            [rear, max[1] - rim, min[2] + rim],
+        ),
+        (
+            3,
+            [flange_front, min[1] + rim, max[2] - rim],
+            [rear, max[1] - rim, max[2]],
+        ),
+    ] {
+        part(&format!("flange/{index}"), a, b, Titanium);
+    }
+    // Four small square captive-fastener caps sit proud of the flange but never
+    // beyond the original case face. They are passive hardware, not controls.
+    for (row, y) in [min[1] + rim * 0.5, max[1] - rim * 0.5]
+        .into_iter()
+        .enumerate()
+    {
+        for (column, z) in [min[2] + rim * 0.5, max[2] - rim * 0.5]
+            .into_iter()
+            .enumerate()
+        {
+            part(
+                &format!("fastener/{}", row * 2 + column),
+                [min[0], y - 0.004, z - 0.004],
+                [min[0] + recess * 0.5, y + 0.004, z + 0.004],
+                Graphite,
+            );
+        }
+    }
+}
+
 fn add_cockpit_furniture(g: &mut PioneerDockedGeometry) {
     use PioneerDockedMaterial::{Carbon, Graphite, Titanium};
     let cell = PioneerDockedCell::Cockpit;
@@ -1507,14 +1590,14 @@ fn add_cockpit_furniture(g: &mut PioneerDockedGeometry) {
     for (id, min, max, material) in [
         (
             "console/worktop",
-            [33.88, 0.82, 2.25],
-            [34.44, 0.89, 3.75],
+            [33.88, 0.52, 2.25],
+            [34.84, 0.58, 3.75],
             Carbon,
         ),
         (
             "console/front-support",
-            [34.36, FLOOR, 2.25],
-            [34.44, 0.82, 3.75],
+            [34.76, FLOOR, 2.25],
+            [34.84, 0.52, 3.75],
             Graphite,
         ),
         (
@@ -1525,20 +1608,20 @@ fn add_cockpit_furniture(g: &mut PioneerDockedGeometry) {
         ),
         (
             "console/center-mount",
-            [34.06, 0.89, 2.82],
-            [34.12, 1.00, 3.18],
+            [34.06, 0.58, 2.78],
+            [34.12, 0.98, 3.22],
             Titanium,
         ),
         (
             "console/port-mount",
-            [34.38, 0.89, 2.30],
-            [34.43, 1.25, 2.60],
+            [34.765, 0.58, 2.30],
+            [34.83, 0.97, 2.60],
             Titanium,
         ),
         (
             "console/starboard-mount",
-            [34.38, 0.89, 3.40],
-            [34.43, 1.25, 3.70],
+            [34.765, 0.58, 3.40],
+            [34.83, 0.97, 3.70],
             Titanium,
         ),
         // The inner canopy perimeter joins the existing roof and front floor;
@@ -1587,98 +1670,109 @@ fn add_cockpit_furniture(g: &mut PioneerDockedGeometry) {
             PioneerDockedPanelKind::Furniture,
         );
     }
-    // Integrated side pedestals and instrument housings occupy the existing
-    // desk footprint. Keep the central knee/foot well and aft circulation open.
+    // Low side pedestals and housings share the deeper, lowered desk footprint.
+    // The central knee/foot well and aft circulation remain open; the forward
+    // fascia starts beyond the unchanged footrest.
     for (id, min, max, material) in [
         (
             "bank/port-plinth",
             [33.88, FLOOR, 2.25],
-            [34.36, 0.82, 2.65],
+            [34.76, 0.52, 2.65],
             Graphite,
         ),
         (
             "bank/starboard-plinth",
             [33.88, FLOOR, 3.35],
-            [34.36, 0.82, 3.75],
+            [34.76, 0.52, 3.75],
             Graphite,
         ),
         (
             "bank/forward-fascia",
-            [34.26, FLOOR, 2.65],
-            [34.36, 0.82, 3.35],
+            [34.66, FLOOR, 2.65],
+            [34.76, 0.52, 3.35],
             Carbon,
         ),
         (
             "bank/port-access-face",
             [33.872, -0.18, 2.29],
-            [33.88, 0.72, 2.61],
+            [33.88, 0.45, 2.61],
             Carbon,
         ),
         (
             "bank/starboard-access-face",
             [33.872, -0.18, 3.39],
-            [33.88, 0.72, 3.71],
+            [33.88, 0.45, 3.71],
             Carbon,
         ),
         (
             "bank/port-toe",
             [33.89, FLOOR, 2.26],
-            [34.35, -0.23, 2.64],
+            [34.75, -0.23, 2.64],
             Titanium,
         ),
         (
             "bank/starboard-toe",
             [33.89, FLOOR, 3.36],
-            [34.35, -0.23, 3.74],
+            [34.75, -0.23, 3.74],
             Titanium,
         ),
         // Backing is behind each live display plane, not across its aperture.
         (
             "bank/port-housing",
-            [34.38, 0.89, 2.25],
-            [34.44, 1.355, 2.60],
+            [34.78, 0.58, 2.25],
+            [34.84, 1.00, 2.60],
             Graphite,
         ),
         (
             "bank/starboard-housing",
-            [34.38, 0.89, 3.40],
-            [34.44, 1.355, 3.75],
+            [34.78, 0.58, 3.40],
+            [34.84, 1.00, 3.75],
             Graphite,
         ),
         (
             "bank/port-divider",
-            [34.365, 1.105, 2.26],
-            [34.38, 1.16, 2.60],
+            [34.765, 0.795, 2.26],
+            [34.78, 0.82, 2.60],
             Titanium,
         ),
         (
             "bank/starboard-divider",
-            [34.365, 1.105, 3.40],
-            [34.38, 1.16, 3.74],
+            [34.765, 0.795, 3.40],
+            [34.78, 0.82, 3.74],
             Titanium,
         ),
         (
             "bank/port-crown",
-            [34.37, 1.335, 2.26],
-            [34.44, 1.355, 2.60],
+            [34.77, 0.995, 2.26],
+            [34.84, 1.00, 2.60],
             Carbon,
         ),
         (
             "bank/starboard-crown",
-            [34.37, 1.335, 3.40],
-            [34.44, 1.355, 3.74],
+            [34.77, 0.995, 3.40],
+            [34.84, 1.00, 3.74],
             Carbon,
         ),
     ] {
-        g.block(
-            format!("cockpit/{id}"),
-            min,
-            max,
-            material,
-            solid,
-            cell,
-            PioneerDockedPanelKind::Furniture,
-        );
+        if matches!(
+            id,
+            "bank/port-housing"
+                | "bank/starboard-housing"
+                | "bank/port-access-face"
+                | "bank/starboard-access-face"
+        ) {
+            serviceable_bank_case(g, &format!("cockpit/{id}"), min, max);
+        } else {
+            g.block(
+                format!("cockpit/{id}"),
+                min,
+                max,
+                material,
+                solid,
+                cell,
+                PioneerDockedPanelKind::Furniture,
+            );
+        }
     }
 
     // Index identities mirror the existing six screen slots. Slot zero is
@@ -1715,17 +1809,16 @@ fn add_cockpit_furniture(g: &mut PioneerDockedGeometry) {
 /// Existing screen slot identities, now fitted to the same physical console.
 /// Returns body-space centre and half extents; zero is canopy telemetry only.
 pub fn cockpit_screen(index: usize) -> Option<([f64; 3], [f64; 3])> {
-    // Measured to keep every complete face inside the neutral55-degree view,
-    // with the central interactive display below the forward sightline.
-    // Side banks sit 40 mm outboard of the former fit: their complete faces
-    // clear the unchanged central target region at the actual desktop aspect.
+    // Low side banks are farther forward and outboard for the wide viewport.
+    // The central interactive display and all face extents remain unchanged;
+    // strict projection checks cover the unchanged forward target region.
     let (center, half) = match index {
         0 => ([34.94, 1.112, 3.0], [0.020, 0.075, 0.18]),
-        1 => ([35.36, 0.65, 2.45], [0.012, 0.10, 0.17]),
-        2 => ([35.36, 0.65, 3.55], [0.012, 0.10, 0.17]),
+        1 => ([35.76, 0.34, 2.42], [0.012, 0.10, 0.17]),
+        2 => ([35.76, 0.34, 3.58], [0.012, 0.10, 0.17]),
         3 => ([35.05, 0.72, 3.0], [0.020, 0.100, 0.210]),
-        4 => ([35.36, 0.90, 2.45], [0.012, 0.085, 0.17]),
-        5 => ([35.36, 0.90, 3.55], [0.012, 0.085, 0.17]),
+        4 => ([35.76, 0.56, 2.42], [0.012, 0.085, 0.17]),
+        5 => ([35.76, 0.56, 3.58], [0.012, 0.085, 0.17]),
         _ => return None,
     };
     Some((workstation_point(center), half))
@@ -2677,6 +2770,84 @@ mod tests {
             .all(|(a, b)| (a - b).abs() < EPS));
         assert_eq!(half, [0.020, 0.100, 0.210]);
         assert!(cockpit_screen(6).is_none());
+    }
+
+    #[test]
+    fn serviceable_bank_cases_stay_within_declared_envelopes() {
+        let g = registered_geometry(&crate::default_pioneer()).unwrap();
+        let mut count = 0;
+        for (id, min, max) in [
+            (
+                "cockpit/bank/port-housing",
+                [34.78, 0.58, 2.25],
+                [34.84, 1.00, 2.60],
+            ),
+            (
+                "cockpit/bank/starboard-housing",
+                [34.78, 0.58, 3.40],
+                [34.84, 1.00, 3.75],
+            ),
+            (
+                "cockpit/bank/port-access-face",
+                [33.872, -0.18, 2.29],
+                [33.88, 0.45, 2.61],
+            ),
+            (
+                "cockpit/bank/starboard-access-face",
+                [33.872, -0.18, 3.39],
+                [33.88, 0.45, 3.71],
+            ),
+        ] {
+            let parts: Vec<_> = g
+                .panels
+                .iter()
+                .filter(|p| p.id == id || p.id.starts_with(&format!("{id}/")))
+                .collect();
+            assert_eq!(
+                parts.len(),
+                10,
+                "Bounded cover/frame/hardware recipe for {id}"
+            );
+            count += parts.len();
+            let cover = parts.iter().find(|p| p.id == id).unwrap();
+            assert_eq!(cover.material, PioneerDockedMaterial::Carbon);
+            assert!(
+                (cover.bounds.center_m[0] - cover.bounds.half_m[0] - min[0] - 0.003).abs() < EPS,
+                "Service cover must be physically recessed, not hidden by its old opaque parent"
+            );
+            for part in parts {
+                assert_eq!(part.collision, PioneerDockedCollision::Solid);
+                assert!(matches!(
+                    part.material,
+                    PioneerDockedMaterial::Graphite
+                        | PioneerDockedMaterial::Carbon
+                        | PioneerDockedMaterial::Titanium
+                ));
+                for x in [-1.0, 1.0] {
+                    for y in [-1.0, 1.0] {
+                        for z in [-1.0, 1.0] {
+                            let point = add(
+                                part.bounds.center_m,
+                                add(
+                                    mul(part.bounds.axes[0], x * part.bounds.half_m[0]),
+                                    add(
+                                        mul(part.bounds.axes[1], y * part.bounds.half_m[1]),
+                                        mul(part.bounds.axes[2], z * part.bounds.half_m[2]),
+                                    ),
+                                ),
+                            );
+                            assert!(
+                                (0..3).all(|axis| point[axis] >= min[axis] - EPS
+                                    && point[axis] <= max[axis] + EPS),
+                                "{} leaves its declared physical envelope",
+                                part.id
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        assert_eq!(count, 40);
     }
 
     #[test]

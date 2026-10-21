@@ -107,6 +107,8 @@ pub(crate) use cockpit_maps::CockpitSurface;
 use cockpit_maps::*;
 #[path = "cockpit_displays.rs"]
 mod cockpit_displays;
+#[path = "power_instrument.rs"]
+mod power_instrument;
 use cockpit_displays::CockpitDisplayRenderer;
 #[path = "cockpit_occlusion.rs"]
 mod cockpit_occlusion;
@@ -4528,11 +4530,31 @@ fn instrument_rows(
         vec![
             format!("{} / {status}", own.ship_class.spec().name.to_uppercase()),
             mode,
-            format!("SPEED {}", super::format_speed(speed)),
-            format!("FWD {:+.1} m/s", body.x),
-            format!("RIGHT {:+.1} m/s", body.z),
-            format!("UP {:+.1} m/s", body.y),
-            format!("HDG {bearing:05.1}  PITCH {pitch:+.1}"),
+            if own.flight.is_some() {
+                format!("SPEED {}", super::format_speed(speed))
+            } else {
+                "SPEED UNAVAILABLE".into()
+            },
+            if own.flight.is_some() {
+                format!("FWD {:+.1} m/s", body.x)
+            } else {
+                "FWD UNAVAILABLE".into()
+            },
+            if own.flight.is_some() {
+                format!("RIGHT {:+.1} m/s", body.z)
+            } else {
+                "RIGHT UNAVAILABLE".into()
+            },
+            if own.flight.is_some() {
+                format!("UP {:+.1} m/s", body.y)
+            } else {
+                "UP UNAVAILABLE".into()
+            },
+            if own.flight.is_some() {
+                format!("HDG {bearing:05.1}  PITCH {pitch:+.1}")
+            } else {
+                "ATTITUDE UNAVAILABLE".into()
+            },
             own.surface
                 .as_ref()
                 .map_or("BODY-AXIS VELOCITY".into(), |s| {
@@ -4581,8 +4603,10 @@ fn instrument_rows(
             own.power.as_ref().map_or("CAPACITOR UNKNOWN".into(), |p| {
                 if p.charge_j < arkline_protocol::power_spec(own.ship_class).warp_cost_j {
                     "LOW POWER / WARP UNAVAILABLE".into()
+                } else if p.capacity_j > 0 && p.charge_j >= p.capacity_j {
+                    "CAPACITOR FULL / WARP ENERGY READY".into()
                 } else {
-                    "CAPACITOR / CHARGED".into()
+                    "WARP ENERGY READY".into()
                 }
             }),
         ],
@@ -4618,6 +4642,11 @@ fn paint_instruments(
         if index != 0 {
             painter.rect_filled(inner, 0.0, egui::Color32::from_rgb(2, 14, 10));
         }
+        if index == 2 {
+            let readings = power_instrument::PowerReadings::from_pilot(own, now);
+            power_instrument::paint(&painter, inner, &rows[2][0], color, &readings);
+            continue;
+        }
         let row_height = inner.height() / 10.0;
         let font = (inner.width() / 18.0).min(row_height * 0.75);
         for (row, text) in rows[index].iter().enumerate() {
@@ -4641,20 +4670,7 @@ fn paint_instruments(
             ],
             egui::Stroke::new(1.0, color.gamma_multiply(0.35)),
         );
-        if index == 2 {
-            let width = inner.width()
-                * own.power.as_ref().map_or(0.0, |p| {
-                    (p.charge_j as f32 / p.capacity_j.max(1) as f32).clamp(0.0, 1.0)
-                });
-            painter.rect_filled(
-                egui::Rect::from_min_size(
-                    egui::pos2(inner.left(), baseline + 3.0),
-                    egui::vec2(width, row_height * 0.45),
-                ),
-                0.0,
-                color,
-            );
-        }
+
     }
 }
 
@@ -4777,8 +4793,24 @@ fn module_instrument(pilot: &PilotView, module_id: u8, now: u64) -> String {
             cycle.target_id,
             cycle.remaining_ms as f64 / 1000.0
         )
+    } else if let Some(module) = pilot
+        .mining_modules
+        .iter()
+        .find(|m| m.module_id == module_id)
+    {
+        if let Some(target_id) = module.target_id {
+            format!("T{} #{} CYCLE UNCONFIRMED", module_id + 1, target_id)
+        } else if let Some(reason) = module
+            .stop_reason
+            .as_deref()
+            .filter(|reason| !reason.is_empty())
+        {
+            format!("T{} STOPPED / {}", module_id + 1, reason)
+        } else {
+            format!("T{} STANDBY", module_id + 1)
+        }
     } else {
-        format!("T{} STANDBY", module_id + 1)
+        format!("T{} DATA UNAVAILABLE", module_id + 1)
     }
 }
 struct TurretState {
@@ -7512,6 +7544,30 @@ mod tests {
         let powered = instrument_rows(&pilot, &snapshot, None, 1000, true);
         assert!(powered[2].contains(&"CAP 25.0/240.0 kJ".to_string()));
         assert!(powered[2].contains(&"LOW POWER / WARP UNAVAILABLE".to_string()));
+        let warp_cost = arkline_protocol::power_spec(pilot.ship_class).warp_cost_j;
+        pilot.power.as_mut().unwrap().capacity_j = warp_cost * 2;
+        pilot.power.as_mut().unwrap().charge_j = warp_cost;
+        let partial = instrument_rows(&pilot, &snapshot, None, 1000, true);
+        assert!(partial[2].contains(&"WARP ENERGY READY".to_string()));
+        assert!(!partial[2].iter().any(|row| row.contains("FULL")));
+        pilot.power.as_mut().unwrap().charge_j = warp_cost * 2;
+        let full = instrument_rows(&pilot, &snapshot, None, 1000, true);
+        assert!(full[2].contains(&"CAPACITOR FULL / WARP ENERGY READY".to_string()));
+        assert_eq!(module_instrument(&pilot, 0, 1000), "T1 DATA UNAVAILABLE");
+        pilot.mining_modules.push(arkline_protocol::MiningModule {
+            module_id: 0, target_id: None, cycle_started_at_ms: None,
+            cycle_completes_at_ms: None, stop_reason: Some("Insufficient capacitor".into()),
+        });
+        assert_eq!(module_instrument(&pilot, 0, 1000), "T1 STOPPED / Insufficient capacitor");
+        pilot.mining_modules[0].stop_reason = None;
+        assert_eq!(module_instrument(&pilot, 0, 1000), "T1 STANDBY");
+        pilot.mining_modules[0].target_id = Some(7);
+        assert_eq!(module_instrument(&pilot, 0, 1000), "T1 #7 CYCLE UNCONFIRMED");
+        pilot.flight = None;
+        let missing = instrument_rows(&pilot, &snapshot, None, 1000, true);
+        for label in ["SPEED UNAVAILABLE", "FWD UNAVAILABLE", "RIGHT UNAVAILABLE", "UP UNAVAILABLE", "ATTITUDE UNAVAILABLE"] {
+            assert!(missing[0].contains(&label.to_string()));
+        }
         let stale = instrument_rows(&pilot, &snapshot, None, 1000, false);
         assert!(stale.iter().all(|rows| rows[0].contains("STALE DATA")));
         assert!(stale[1].contains(&"NO SELECTION".to_string()));

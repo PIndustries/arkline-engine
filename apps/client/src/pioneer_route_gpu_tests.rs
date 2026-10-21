@@ -120,6 +120,7 @@ struct Harness {
     updates: mpsc::Sender<crate::Update>,
     requests: mpsc::Receiver<Request>,
     input_time: f64,
+    input_height: f32,
     modifiers: egui::Modifiers,
     ui_undocks: usize,
     authority_requests: Vec<serde_json::Value>,
@@ -207,6 +208,7 @@ impl Harness {
             updates,
             requests,
             input_time: 0.0,
+            input_height: HEIGHT as f32,
             modifiers: egui::Modifiers::NONE,
             ui_undocks: 0,
             authority_requests: Vec::new(),
@@ -405,7 +407,7 @@ impl Harness {
             egui::RawInput {
                 screen_rect: Some(egui::Rect::from_min_size(
                     egui::Pos2::ZERO,
-                    egui::vec2(WIDTH as f32, HEIGHT as f32),
+                    egui::vec2(WIDTH as f32, self.input_height),
                 )),
                 time: Some(self.input_time),
                 predicted_dt: 0.05,
@@ -1524,6 +1526,12 @@ fn native_pioneer_cockpit_mining_composition() {
         std::fs::create_dir(&directory).unwrap();
         let (_context, gl) = PrivateContext::create();
         let mut h = Harness::new(gl, Some(directory.clone()));
+        // Match the measured editor scene aperture without claiming this bare
+        // client harness renders editor chrome. The protected ROI stays fixed.
+        if let Ok(height) = std::env::var("ARKLINE_COCKPIT_FRAME_HEIGHT") {
+            h.input_height = height.parse().expect("Numeric frame height");
+            assert!(h.input_height > 200.0 && h.input_height <= HEIGHT as f32);
+        }
         h.cockpit.service_tab = crate::ServiceTab::Drones;
         h.cockpit.drone_camera = true;
         h.cockpit.drone_split = true;
@@ -1559,6 +1567,12 @@ fn native_pioneer_cockpit_mining_composition() {
             .any(|(text, _)| text == "Mining routine"));
         computer_evidence(&mining);
         let viewport = mining.viewport.unwrap();
+        if let Ok(height) = std::env::var("ARKLINE_COCKPIT_EXPECT_SCENE_HEIGHT") {
+            let expected: f32 = height.parse().expect("Numeric scene height");
+            assert!((viewport.width() - 1500.0).abs() < 0.1);
+            assert!((viewport.height() - expected).abs() < 0.1,
+                "Actual scene aperture {:?} differs from measured target {expected}", viewport);
+        }
         let clear = egui::Rect::from_min_max(
             viewport.min + viewport.size() * egui::vec2(0.33, 0.12),
             viewport.min + viewport.size() * egui::vec2(0.67, 0.70),
