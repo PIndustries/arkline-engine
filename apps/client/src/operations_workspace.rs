@@ -139,6 +139,7 @@ impl Cockpit {
         let previously_owned = std::mem::take(&mut self.workspace_keyboard_owned_last_frame);
         let open = self.services_open || self.service_tab == ServiceTab::Layouts;
         if !open
+            || self.controls_reference_open
             || previously_owned
             || !self.embedded_input
             || ctx.wants_keyboard_input()
@@ -148,7 +149,7 @@ impl Cockpit {
         {
             return;
         }
-        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
+        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, crate::control_bindings::WORKSPACE_BACK)) {
             self.close_operations_workspace();
         }
     }
@@ -234,6 +235,7 @@ impl Cockpit {
             .ctx()
             .memory(|memory| memory.focused() == Some(search_id));
         let focus_search = (self.services_open || self.service_tab == ServiceTab::Layouts)
+            && !self.controls_reference_open
             && self.embedded_input
             && !self.cockpit_computer.wants_keyboard_input()
             && (search_focused
@@ -244,7 +246,7 @@ impl Cockpit {
                 .input(|input| input.focused && !input.pointer.any_down())
             && ui
                 .ctx()
-                .input_mut(|input| input.consume_key(egui::Modifiers::COMMAND, egui::Key::K));
+                .input_mut(|input| input.consume_key(egui::Modifiers::COMMAND, crate::control_bindings::PANEL_SEARCH));
         ui.horizontal_wrapped(|ui| {
             ui.label("Search panels");
             let width = (ui.available_width() - 110.0).clamp(80.0, 320.0);
@@ -429,7 +431,7 @@ mod panel_search_tests {
 
     fn shortcut() -> Vec<egui::Event> {
         vec![egui::Event::Key {
-            key: egui::Key::K,
+            key: crate::control_bindings::PANEL_SEARCH,
             physical_key: None,
             pressed: true,
             repeat: false,

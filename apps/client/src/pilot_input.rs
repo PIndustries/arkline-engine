@@ -1,4 +1,5 @@
 //! Latest-value direct controls; neutral release is emitted once, never queued repeatedly.
+use super::control_bindings::{FLIGHT_ROTATION, FLIGHT_TRANSLATION, LOOK_BUTTON};
 use arkline_protocol::Request;
 use eframe::egui;
 use std::sync::{Arc, Mutex};
@@ -181,8 +182,8 @@ impl PilotInput {
         });
         let (held, pressed, escape, absolute_delta) = ctx.input(|i| {
             (
-                i.pointer.secondary_down(),
-                i.pointer.secondary_pressed(),
+                i.pointer.button_down(LOOK_BUTTON),
+                i.pointer.button_pressed(LOOK_BUTTON),
                 i.key_pressed(egui::Key::Escape),
                 i.pointer.delta(),
             )
@@ -209,10 +210,6 @@ impl PilotInput {
             }
         }
         let control = ctx.input(|i| {
-            let axis = |positive, negative| {
-                f64::from(i.key_down(positive) || i.key_pressed(positive))
-                    - f64::from(i.key_down(negative) || i.key_pressed(negative))
-            };
             let aiming = self.aiming && (self.captured || over_world);
             let delta = if aiming {
                 i.pointer.motion().unwrap_or_else(|| i.pointer.delta())
@@ -222,21 +219,15 @@ impl PilotInput {
             let dt = i.stable_dt.max(1.0 / 240.0) as f64;
             // Mouse rates are normalized to angular speed, independent of render cadence.
             Controls {
-                translation: [
-                    axis(egui::Key::W, egui::Key::S),
-                    axis(egui::Key::Space, egui::Key::C),
-                    axis(egui::Key::D, egui::Key::A),
-                ],
+                translation: FLIGHT_TRANSLATION.map(|binding| binding.sample(i, true)),
                 rotation: if i.modifiers.shift {
                     [0.0; 3]
                 } else {
                     [
-                        axis(egui::Key::E, egui::Key::Q),
-                        (axis(egui::Key::ArrowLeft, egui::Key::ArrowRight)
-                            - delta.x as f64 * 0.002 / dt)
+                        FLIGHT_ROTATION[0].sample(i, true),
+                        (FLIGHT_ROTATION[1].sample(i, true) - delta.x as f64 * 0.002 / dt)
                             .clamp(-1.0, 1.0),
-                        (axis(egui::Key::ArrowUp, egui::Key::ArrowDown)
-                            - delta.y as f64 * 0.002 / dt)
+                        (FLIGHT_ROTATION[2].sample(i, true) - delta.y as f64 * 0.002 / dt)
                             .clamp(-1.0, 1.0),
                     ]
                 },
@@ -249,7 +240,7 @@ impl PilotInput {
 mod tests {
     use super::*;
     #[test]
-    fn shift_arrows_do_not_send_ship_rotation() {
+    fn controls_reference_shift_arrows_do_not_send_ship_rotation() {
         let ctx = egui::Context::default();
         let mut pilot = PilotInput::default();
         let _ = ctx.run(

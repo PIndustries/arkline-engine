@@ -47,6 +47,8 @@ mod flight_workspace;
 mod lighting_settings;
 mod motion;
 mod operations_workspace;
+mod control_bindings;
+mod controls_reference;
 mod nearby_action_model;
 mod nearby_interaction_input;
 mod pilot_input;
@@ -613,6 +615,7 @@ struct Cockpit {
     workspace_input_waiting_release: bool,
     workspace_keyboard_owned_last_frame: bool,
     operations_search: String,
+    controls_reference_open: bool,
     nearby_geometry: nearby_action_model::NearbyGeometryCache,
     nearby_shortcut: nearby_interaction_input::NearbyGesture,
     ship_observation: bool,
@@ -744,6 +747,7 @@ impl Cockpit {
             workspace_input_waiting_release: false,
             workspace_keyboard_owned_last_frame: false,
             operations_search: String::new(),
+            controls_reference_open: false,
             nearby_geometry: nearby_action_model::NearbyGeometryCache::default(),
             nearby_shortcut: nearby_interaction_input::NearbyGesture::default(),
             ship_observation: false,
@@ -849,6 +853,7 @@ impl Cockpit {
         self.theme.accent()
     }
     fn settings_panel(&mut self, ui: &mut egui::Ui) {
+        if ui.button("Controls & ownership").clicked() { self.open_controls_reference(); }
         let action = self.sound_settings.ui(ui, &self.sound.status());
         if action.changed {
             if let Err(error) = self.sound_settings.save(&self.data_dir) {
@@ -1916,6 +1921,7 @@ impl Cockpit {
             && (docked
                 || !in_hangar && self.flight_view.cockpit_presentation_active(self.view_mode));
         let input_allowed = !self.ship_observation
+            && !self.controls_reference_open
             && !self.services_open
             && self.service_tab != ServiceTab::Layouts
             && !self.workspace_input_waiting_release
@@ -3812,7 +3818,7 @@ impl eframe::App for Cockpit {
             self.nearby_shortcut.cancel();
         }
         self.operations_keyboard_navigation(ctx);
-        if self.services_open || self.service_tab == ServiceTab::Layouts {
+        if self.controls_reference_open || self.services_open || self.service_tab == ServiceTab::Layouts {
             self.release_workspace_input();
         } else if self.workspace_input_waiting_release
             && ctx.input(|i| i.keys_down.is_empty() && !i.pointer.any_down())
@@ -3836,6 +3842,7 @@ impl eframe::App for Cockpit {
         self.hangar_view.clear_cockpit_presentation();
         let computer_active = !self.ship_observation
             && self.connected
+            && !self.controls_reference_open
             && !self.services_open
             && self.service_tab != ServiceTab::Layouts
             && !self.boot.visible
@@ -3887,7 +3894,7 @@ impl eframe::App for Cockpit {
             }
         }
         self.effects.retain(self.presentation_time());
-        if !self.services_open
+        if !self.controls_reference_open && !self.services_open
             && !self.workspace_input_waiting_release
             && self.embedded_input
             && !ctx.wants_keyboard_input()
@@ -4001,6 +4008,7 @@ impl eframe::App for Cockpit {
                     .inner_margin(egui::Margin::symmetric(12, 6)),
             )
             .show(ctx, |ui| self.flight_workspace_status(ui));
+        self.controls_reference(ctx);
         let bounds = ctx.available_rect().shrink(8.0);
         self.layout.begin_frame(bounds);
         // Floating layers are registered before the background consumes pointer input.
@@ -4227,7 +4235,8 @@ impl eframe::App for Cockpit {
         self.hangar_view.set_head_look_input_allowed(
             self.embedded_input
                 && !self.workspace_input_waiting_release
-                && !self.services_open
+                && !self.controls_reference_open
+            && !self.services_open
                 && !self.cockpit_computer.wants_keyboard_input(),
         );
         self.hangar_view.set_room_layout(
@@ -4346,10 +4355,10 @@ impl eframe::App for Cockpit {
         if self.view_mode != ViewMode::Cockpit {
             self.pilot_input.release_mouse(ctx);
         }
-        if self.services_open || self.service_tab == ServiceTab::Layouts {
+        if self.controls_reference_open || self.services_open || self.service_tab == ServiceTab::Layouts {
             self.release_workspace_input();
         }
-        let workspace_allows_input = !self.services_open
+        let workspace_allows_input = !self.controls_reference_open && !self.services_open
             && self.service_tab != ServiceTab::Layouts
             && !self.workspace_input_waiting_release;
         let flight_allowed = workspace_allows_input

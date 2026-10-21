@@ -4,10 +4,10 @@ Research direction is an original interface over Arkline authority, not a promis
 
 | Feature group | Current evidence / remaining scope |
 |---|---|
-| Cockpit/flight instruments | Shipped snapshot-backed physical display painters in `pioneer_docked_scene.rs`, `flight3d.rs`; complete flagship composition remains partial. |
-| Doors, seats, lift | Shipped bound authoritative commands/interlocks in `station_ui.rs`, server `docked_traversal.rs`; this milestone adds consistent seat readiness/reasons, real lift landing/target and nearby range guidance. No universal single-key interact action is claimed. |
+| Cockpit/flight instruments | Shipped snapshot-backed physical display painters in `pioneer_docked_scene.rs`, `flight3d.rs`; complete flagship composition remains partial. A context-sensitive ownership/reference panel now uses the shared sampled flight bindings; shared walking-key integration remains blocked by worker approval. |
+| Doors, seats, lift | Shipped bound authoritative commands/interlocks in `station_ui.rs`, server `docked_traversal.rs`; this milestone adds consistent seat readiness/reasons, real lift landing/target and nearby range guidance. F nearby-action coverage shipped in 26.10.21.4 for seat, same-side hatches and unambiguous lift controls; arbitrary authored doors/consoles remain missing. |
 | Map/target management | Shipped persistent view selection and real target/drone controls (`target_controls.rs`, `flight_workspace.rs` where applicable); fleet/map breadth remains partial. |
-| System workspaces | Shipped grouped destinations in `operations_workspace.rs`; text search remains missing. |
+| System workspaces | Shipped grouped destinations in `operations_workspace.rs`; destination text search shipped in 26.10.21.3; query preserves selected content. |
 | Transitions/input | Shipped held-input release guards; this milestone adds focus-aware Escape back to Flight without camera/body/clock commands. The separately denied scene-init camera correction remains unresolved. |
 | Logs/console/reconnect | Existing activity/audit and reconnect uncertainty handling in `lib.rs`; console draft remains unintegrated under its denial; persistent-server reconnect policy is not changed. |
 | Lighting | Existing raster/PBR settings in `lighting_settings.rs`; denied renderer changes remain untouched. No hardware ray tracing claim. |

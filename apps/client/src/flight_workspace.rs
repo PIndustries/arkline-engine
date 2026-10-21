@@ -104,8 +104,10 @@ impl Cockpit {
         }
     }
 
-    pub(super) fn flight_workspace_status(&self, ui: &mut egui::Ui) {
+    pub(super) fn flight_workspace_status(&mut self, ui: &mut egui::Ui) {
         ui.horizontal_wrapped(|ui| {
+            if ui.button("Controls & ownership").clicked() { self.open_controls_reference(); }
+            ui.separator();
             let Some(snapshot) = self.snapshot.as_ref() else {
                 ui.colored_label(
                     AMBER,

@@ -65,7 +65,7 @@ impl Cockpit {
             Some("Return focus to the body viewport")
         } else if self.boot.visible {
             Some("Wait for the world viewport handoff")
-        } else if self.services_open
+        } else if self.controls_reference_open || self.services_open
             || self.service_tab == ServiceTab::Layouts
             || self.engineering_panel.is_some()
         {
@@ -109,7 +109,7 @@ impl Cockpit {
             let mut release = false;
             for event in &i.events {
                 if let egui::Event::Key {
-                    key: egui::Key::F,
+                    key: crate::control_bindings::INTERACT,
                     pressed,
                     repeat,
                     modifiers,
@@ -124,7 +124,7 @@ impl Cockpit {
                     }
                 }
             }
-            (press, release, i.key_down(egui::Key::F))
+            (press, release, i.key_down(crate::control_bindings::INTERACT))
         });
         let prompt = if let Some(action) = &action {
             ui.horizontal_wrapped(|ui| {
