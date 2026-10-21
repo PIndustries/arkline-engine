@@ -1624,6 +1624,26 @@ fn native_pioneer_cockpit_mining_composition() {
         std::fs::write(directory.join("feed-capture-budget.json"), serde_json::to_vec_pretty(
             &serde_json::json!({"actual_capture_keys_per_frame":capture_trace,"capture_counts":capture_counts,
                 "max_multi_captures_per_presented_frame":1,"authority":"normal isolated five-drone mining fixture"})).unwrap()).unwrap();
+        // Selected turret sources use their real prepared barrel pose and the
+        // same physical display/capture budget. View changes issue no orders.
+        let turret_ids = [0_u8, 1_u8].map(|slot| crate::flight3d::camera_source_key(
+            &h.cockpit.own().unwrap().name, None, None, crate::flight3d::DroneCameraMode::Raised, Some(slot)));
+        let commands_before = h.ui_undocks;
+        h.cockpit.camera_source = crate::camera_sources::CameraSource::AllTurrets;
+        let both_turrets = h.settle();
+        capture(Some(&directory), "both-turrets-rendered-pov", &both_turrets);
+        {
+            let renderer = h.cockpit.flight_view.renderer.as_ref().unwrap().lock().unwrap();
+            assert!(turret_ids.iter().all(|key| renderer.feed_cache.iter()
+                .any(|cache| cache.key == *key && cache.captured_ui_ms.is_some())),
+                "Both actual turret source caches must capture");
+        }
+        h.cockpit.camera_source = crate::camera_sources::CameraSource::Turret(1);
+        let single_turret = h.settle();
+        capture(Some(&directory), "single-turret-rendered-pov", &single_turret);
+        assert_eq!(h.ui_undocks, commands_before, "View-only selection must issue no ship order");
+        h.cockpit.camera_source = crate::camera_sources::CameraSource::Drones;
+        h.settle();
         assert!(!h.cockpit.cockpit_console_detail && !h.cockpit.services_open);
         assert!(mining
             .computer_labels

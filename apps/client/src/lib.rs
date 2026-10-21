@@ -74,6 +74,7 @@ mod sound_scene;
 mod sound_settings;
 mod station_ui;
 mod target_controls;
+mod camera_sources;
 mod theme;
 mod transport;
 #[cfg(test)]
@@ -682,6 +683,7 @@ struct Cockpit {
     ship_layout: ship_layouts::LayoutViewer,
     selected_object: SelectedObject,
     mining_target: Option<u64>,
+    camera_source: camera_sources::CameraSource,
     drone_camera: bool,
     selected_drone: Option<u64>,
     drone_camera_mode: flight3d::DroneCameraMode,
@@ -822,6 +824,7 @@ impl Cockpit {
             ship_layout: ship_layouts::LayoutViewer::default(),
             selected_object: SelectedObject::Station,
             mining_target: None,
+            camera_source: Default::default(),
             drone_camera: true,
             selected_drone: None,
             drone_camera_mode: flight3d::DroneCameraMode::Raised,
@@ -4520,6 +4523,7 @@ impl eframe::App for Cockpit {
                     let display = self.snapshot.as_ref().map(|s| self.motion.sample(s, now));
                     if let Some(snapshot) = &display {
                         self.flight_view.set_drone_camera(self.drone_camera);
+                        self.flight_view.set_camera_source(self.camera_source);
                         self.flight_view.set_drone_view(self.selected_drone, false);
                         self.flight_view
                             .set_drone_camera_mode(self.drone_camera_mode);

@@ -381,6 +381,7 @@ pub struct FlightView {
     tactical: bool,
     other_camera: (f32, f32, f32),
     tactical_overlay: bool,
+    camera_source: super::camera_sources::CameraSource,
     drone_camera: bool,
     selected_drone: Option<u64>,
     drone_mode: DroneCameraMode,
@@ -439,6 +440,7 @@ impl FlightView {
             tactical: false,
             other_camera: (0.72, 0.65, 350.0),
             tactical_overlay: true,
+            camera_source: Default::default(),
             drone_camera: true,
             selected_drone: None,
             drone_mode: DroneCameraMode::Raised,
@@ -509,6 +511,9 @@ impl FlightView {
     }
     pub fn set_remote_ship(&mut self, pilot: Option<String>) {
         self.remote_ship = pilot;
+    }
+    pub fn set_camera_source(&mut self, source: super::camera_sources::CameraSource) {
+        self.camera_source = source;
     }
     pub fn set_drone_camera(&mut self, enabled: bool) {
         self.drone_camera = enabled;
@@ -1232,10 +1237,32 @@ impl FlightView {
                 let mut camera_feeds = Vec::new();
                 if cockpit && self.remote_ship.is_some() {
                     if let Some(feed) = remote_frame {
-                        camera_feeds.push((drone_screen, feed, None));
+                        camera_feeds.push((drone_screen, feed, None, None));
+                    }
+                } else if cockpit && self.drone_camera
+                    && self.camera_source != super::camera_sources::CameraSource::Drones
+                    && connected && now.saturating_sub(snapshot.server_time_ms) <= 1500
+                {
+                    let slots: Vec<u8> = match self.camera_source {
+                        super::camera_sources::CameraSource::Turret(slot) if slot < 2 => vec![slot],
+                        super::camera_sources::CameraSource::AllTurrets => vec![0, 1],
+                        _ => Vec::new(),
+                    };
+                    if let Some(pilot) = own_pilot {
+                        let poses = renderer.lock().ok().map(|renderer| slots.iter().map(|slot|
+                            renderer.turrets.get(&(pilot_name.to_owned(), *slot)).map(|state| state.rotation))
+                            .collect::<Vec<_>>()).unwrap_or_default();
+                        let screens = feed_tiles(drone_screen, slots.len());
+                        for ((slot, rotation), screen) in slots.into_iter().zip(poses).zip(screens) {
+                            if let Some(feed) = rotation.and_then(|rotation|
+                                turret_camera_frame(&frame, pilot, slot, rotation, screen.aspect_ratio())) {
+                                camera_feeds.push((screen, feed, None, Some(slot)));
+                            }
+                        }
                     }
                 } else if cockpit
                     && self.drone_camera
+                    && self.camera_source == super::camera_sources::CameraSource::Drones
                     && connected
                     && now.saturating_sub(snapshot.server_time_ms) <= 1500
                 {
@@ -1289,7 +1316,7 @@ impl FlightView {
                         feed.camera_drone =
                             (self.drone_mode == DroneCameraMode::Pov).then_some(drone.id);
                         feed.docking = None;
-                        camera_feeds.push((screen, feed, Some(drone)));
+                        camera_feeds.push((screen, feed, Some(drone), None));
                     }
                 }
                 let drone_renderer = renderer.clone();
@@ -1667,11 +1694,11 @@ impl FlightView {
                             let capture_pass = ui.ctx().cumulative_pass_nr();
                             let capture_ui_ms = ui.input(|input| (input.time.max(0.0) * 1000.0) as u64);
                             let capture_keys: Arc<Vec<u64>> = Arc::new(camera_feeds.iter()
-                                .filter(|(screen, _, drone)| drone.is_none_or(|d| d.signal_strength > 0.0)
+                                .filter(|(screen, _, drone, _)| drone.is_none_or(|d| d.signal_strength > 0.0)
                                     && surface.feed_geometry(*screen).is_some())
-                                .map(|(_, _, drone)| egui::Id::new((pilot_name, drone.map(|d| d.id),
-                                    self.remote_ship.as_deref(), self.drone_mode)).value()).collect());
-                            for (screen, feed, drone) in camera_feeds {
+                                .map(|(_, _, drone, turret)| camera_source_key(pilot_name, drone.map(|d| d.id),
+                                    self.remote_ship.as_deref(), self.drone_mode, *turret)).collect());
+                            for (screen, feed, drone, turret) in camera_feeds {
                                 let fresh = connected
                                     && now.saturating_sub(snapshot.server_time_ms) <= 1500;
                                 if drone.is_none_or(|d| d.signal_strength > 0.0) {
@@ -1681,13 +1708,8 @@ impl FlightView {
                                     let renderer = send_wrapper::SendWrapper::new(renderer);
                                     #[cfg(target_arch = "wasm32")]
                                     let surface = send_wrapper::SendWrapper::new(surface);
-                                    let key = egui::Id::new((
-                                        pilot_name,
-                                        drone.map(|d| d.id),
-                                        self.remote_ship.as_deref(),
-                                        self.drone_mode,
-                                    ))
-                                    .value();
+                                    let key = camera_source_key(pilot_name, drone.map(|d| d.id),
+                                        self.remote_ship.as_deref(), self.drone_mode, turret);
                                     let capture_keys = capture_keys.clone();
                                     painter.add(egui::PaintCallback {
                                         rect,
@@ -1710,8 +1732,8 @@ impl FlightView {
                                         )),
                                     });
                                 }
-                                let capture_key = egui::Id::new((pilot_name, drone.map(|d| d.id),
-                                    self.remote_ship.as_deref(), self.drone_mode)).value();
+                                let capture_key = camera_source_key(pilot_name, drone.map(|d| d.id),
+                                    self.remote_ship.as_deref(), self.drone_mode, turret);
                                 let capture_size = feed_resolution(screen.width().round() as i32, screen.height().round() as i32);
                                 let captured_at = drone_renderer.lock().ok().and_then(|renderer|
                                     renderer.feed_cache.iter().find(|cache| cache.key == capture_key
@@ -1732,6 +1754,8 @@ impl FlightView {
                                         egui::Align2::LEFT_TOP,
                                         if let Some(worker) = remote_worker {
                                             format!("{} / REMOTE SHIP", worker.name)
+                                        } else if let Some(slot) = turret {
+                                            format!("TURRET {} / RENDERED POV", slot + 1)
                                         } else {
                                             format!(
                                                 "#{} / {}",
@@ -1742,6 +1766,13 @@ impl FlightView {
                                         egui::FontId::monospace(11.),
                                         super::TEAL,
                                     );
+                                    if let Some(slot) = turret {
+                                        let status = own_pilot.map(|pilot| module_instrument(pilot, slot, now))
+                                            .unwrap_or_else(|| "MODULE DATA UNAVAILABLE".to_owned());
+                                        overlay.text(screen.left_top() + egui::vec2(3., 17.),
+                                            egui::Align2::LEFT_TOP, status,
+                                            egui::FontId::monospace(10.), super::MUTED);
+                                    }
                                     if let Some(drone) = drone {
                                         paint_camera_signal(
                                             &overlay,
@@ -1773,6 +1804,10 @@ impl FlightView {
                                 && feed_count == 0
                             {
                                 surface.paint(ui, |overlay| {
+                                    if self.camera_source != super::camera_sources::CameraSource::Drones {
+                                        overlay.text(drone_screen.center(), egui::Align2::CENTER_CENTER,
+                                            "TURRET VIEW UNAVAILABLE / STALE", egui::FontId::monospace(11.), super::AMBER);
+                                    } else {
                                     paint_camera_signal(
                                         overlay,
                                         drone_screen,
@@ -1781,6 +1816,7 @@ impl FlightView {
                                         connected
                                             && now.saturating_sub(snapshot.server_time_ms) <= 1500,
                                     )
+                                    }
                                 });
                             }
                         }
@@ -4847,6 +4883,34 @@ fn paint_passive_flight_console(
             );
         }
     });
+}
+
+fn camera_source_key(pilot: &str, drone: Option<u64>, remote: Option<&str>, mode: DroneCameraMode, turret: Option<u8>) -> u64 {
+    turret.map_or_else(|| egui::Id::new((pilot, drone, remote, mode)).value(),
+        |slot| egui::Id::new((pilot, "turret", slot)).value())
+}
+
+fn turret_camera_frame(frame: &Frame, pilot: &PilotView, slot: u8, rotation: Quat, aspect: f32) -> Option<Frame> {
+    if slot >= 2 || pilot.flight.is_none() || !rotation.is_finite() || !aspect.is_finite() || aspect <= 0.0 { return None; }
+    let ship = transform(frame.space.position(pilot, frame.now), Vec3::ONE, ship_orientation_at(pilot, frame.now));
+    // Observation offset, in the same scene units as the rendered mount:
+    // 2.2 m above the bore clears its existing 1.4 m visual beam envelope.
+    // This is a barrel-tracking view, not an authoritative sensor entity.
+    let eye = ship.transform_point3(turret_muzzle(pilot.ship_class, rotation, slot)
+        + rotation * Vec3::Y * 0.022);
+    let forward = ship.transform_vector3(rotation * Vec3::X).normalize_or_zero();
+    let up = ship.transform_vector3(rotation * Vec3::Y).normalize_or_zero();
+    if !eye.is_finite() || forward.length_squared() < 0.5 || up.length_squared() < 0.5 { return None; }
+    let view = Mat4::look_at_rh(eye, eye + forward, up);
+    let mut feed = frame.clone();
+    feed.eye = eye;
+    feed.vp = Mat4::perspective_rh_gl(1.05, aspect, 0.002, 1200.0) * view;
+    feed.planet_vp = Mat4::perspective_rh_gl(1.05, aspect, 1.0, 300_000.0) * view;
+    feed.cockpit = false;
+    feed.drone_camera = true;
+    feed.camera_drone = None;
+    feed.docking = None;
+    Some(feed)
 }
 
 fn module_instrument(pilot: &PilotView, module_id: u8, now: u64) -> String {

@@ -261,6 +261,14 @@ impl Cockpit {
                     }
                 }
             });
+        ui.separator();
+        let camera_chosen = camera_sources::selector(ui, &mut self.camera_source, &mut self.drone_camera);
+        if camera_chosen && !matches!(self.camera_source, camera_sources::CameraSource::Drones) {
+            self.remote_ship = None;
+        }
+        if self.remote_ship.is_some() {
+            ui.colored_label(AMBER, "Worker camera overrides the selected source. Choose a turret camera to switch to its rendered POV.");
+        }
         let Some(drone) = self.selected_drone_view(&p) else {
             if let Some(id) = self.selected_drone {
                 ui.colored_label(
@@ -427,69 +435,70 @@ impl Cockpit {
                 });
             }
         }
-        ui.separator();
-        ui.small("LIVE CAMERA / VIEW ONLY");
-        ui.horizontal_wrapped(|ui| {
-            ui.checkbox(&mut self.drone_camera, "Drone screen");
-            ui.selectable_value(&mut self.drone_split, false, "Single feed");
-            ui.selectable_value(&mut self.drone_split, true, "Split feeds");
-        });
-        ui.horizontal_wrapped(|ui| {
-            for (mode, label) in [
-                (flight3d::DroneCameraMode::Pov, "POV"),
-                (flight3d::DroneCameraMode::Raised, "Raised"),
-                (flight3d::DroneCameraMode::TopDown, "Top down"),
-                (flight3d::DroneCameraMode::Orbit, "Orbit camera"),
-            ] {
-                ui.selectable_value(&mut self.drone_camera_mode, mode, label);
-            }
-        });
-        let mut ids: Vec<_> = Self::fleet(&p).iter().map(|d| d.id).collect();
-        ids.sort_unstable();
-        let feeds = feed_ids(&ids, self.selected_drone, self.drone_split);
-        if self.drone_split && !ids.is_empty() {
-            let page = ids
-                .iter()
-                .position(|id| Some(*id) == self.selected_drone)
-                .unwrap_or(0)
-                / 4;
-            let pages = ids.len().div_ceil(4);
+        if matches!(self.camera_source, camera_sources::CameraSource::Drones) {
+            ui.separator();
+            ui.small("DRONE CAMERA OPTIONS / VIEW ONLY");
             ui.horizontal_wrapped(|ui| {
-                if ui
-                    .add_enabled(page > 0, egui::Button::new("Previous feeds").small())
-                    .clicked()
-                {
-                    self.selected_drone = ids.get((page - 1) * 4).copied();
-                }
-                ui.small(format!("Page {} / {pages}", page + 1));
-                if ui
-                    .add_enabled(page + 1 < pages, egui::Button::new("Next feeds").small())
-                    .clicked()
-                {
-                    self.selected_drone = ids.get((page + 1) * 4).copied();
+                ui.selectable_value(&mut self.drone_split, false, "Single feed");
+                ui.selectable_value(&mut self.drone_split, true, "Split feeds");
+            });
+            ui.horizontal_wrapped(|ui| {
+                for (mode, label) in [
+                    (flight3d::DroneCameraMode::Pov, "POV"),
+                    (flight3d::DroneCameraMode::Raised, "Raised"),
+                    (flight3d::DroneCameraMode::TopDown, "Top down"),
+                    (flight3d::DroneCameraMode::Orbit, "Orbit camera"),
+                ] {
+                    ui.selectable_value(&mut self.drone_camera_mode, mode, label);
                 }
             });
-        }
-        let feed_label = if self.remote_ship.is_some() {
-            "Selected drone feeds · worker screen active"
-        } else if !self.drone_camera {
-            "Selected drone feeds · screen off"
-        } else {
-            "Drone screen"
-        };
-        ui.small(format!(
-            "{feed_label}: {}",
-            feeds
-                .iter()
-                .map(|id| format!("#{id}"))
-                .collect::<Vec<_>>()
-                .join(" · ")
-        ));
-        ui.small("Select a fleet row to switch cameras. Split view shows at most four live feeds.");
-        if self.remote_ship.is_some() {
-            ui.colored_label(AMBER, "Worker feed overrides drone screen.");
-            if ui.small_button("Restore drone feed").clicked() {
-                self.remote_ship = None;
+            let mut ids: Vec<_> = Self::fleet(&p).iter().map(|d| d.id).collect();
+            ids.sort_unstable();
+            let feeds = feed_ids(&ids, self.selected_drone, self.drone_split);
+            if self.drone_split && !ids.is_empty() {
+                let page = ids
+                    .iter()
+                    .position(|id| Some(*id) == self.selected_drone)
+                    .unwrap_or(0)
+                    / 4;
+                let pages = ids.len().div_ceil(4);
+                ui.horizontal_wrapped(|ui| {
+                    if ui
+                        .add_enabled(page > 0, egui::Button::new("Previous feeds").small())
+                        .clicked()
+                    {
+                        self.selected_drone = ids.get((page - 1) * 4).copied();
+                    }
+                    ui.small(format!("Page {} / {pages}", page + 1));
+                    if ui
+                        .add_enabled(page + 1 < pages, egui::Button::new("Next feeds").small())
+                        .clicked()
+                    {
+                        self.selected_drone = ids.get((page + 1) * 4).copied();
+                    }
+                });
+            }
+            let feed_label = if self.remote_ship.is_some() {
+                "Selected drone feeds · worker screen active"
+            } else if !self.drone_camera {
+                "Selected drone feeds · screen off"
+            } else {
+                "Drone screen"
+            };
+            ui.small(format!(
+                "{feed_label}: {}",
+                feeds
+                    .iter()
+                    .map(|id| format!("#{id}"))
+                    .collect::<Vec<_>>()
+                    .join(" · ")
+            ));
+            ui.small("Select a fleet row to switch drone cameras. Split view shows at most four cached feeds.");
+            if self.remote_ship.is_some() {
+                ui.colored_label(AMBER, "Worker feed overrides drone screen.");
+                if ui.small_button("Restore drone feed").clicked() {
+                    self.remote_ship = None;
+                }
             }
         }
         if drone.signal_strength <= 0.0 {
