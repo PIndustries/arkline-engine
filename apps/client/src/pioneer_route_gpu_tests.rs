@@ -1,5 +1,8 @@
 //! Whole-client native route acceptance against a disposable editor authority.
 //! Included under `flight3d::hangar`; no desktop window or OS input is used.
+#[path = "cockpit_performance_gpu_tests.rs"]
+mod cockpit_performance_gpu_tests;
+
 use super::*;
 use arkline_protocol::{
     DockedSupport, DockedTraversalRequest, EditorSceneState, Request, Response,
@@ -1838,5 +1841,49 @@ fn operations_safety_native_workspace_review() {
             "job":h.cockpit.snapshot.as_ref().unwrap().resource_jobs.iter().find(|job|job.pilot==PILOT),
             "limits":"No performance or desktop acceptance claim; no fabricated drone fleet; commands and lost-selection cases covered by focused pointer tests"
         })).unwrap()).unwrap();
+    }
+}
+
+#[test]
+#[ignore = "Explicit first-person cursor/HUD review in retained disposable authority"]
+fn native_pioneer_first_person_cursor_and_hud_review() {
+    unsafe {
+        let directory = PathBuf::from(std::env::var_os("ARKLINE_FIRST_PERSON_EVIDENCE").expect("Retained review path"));
+        std::fs::create_dir(&directory).unwrap();
+        let (_context, gl) = PrivateContext::create();
+        let mut h = Harness::new(gl, Some(directory.clone()));
+        h.input_height = 772.0;
+        let binding = h.cockpit.verified_docked_binding().unwrap();
+        h.command(Request::DockedTraversal { request: DockedTraversalRequest::LeaveSeat { binding } });
+        h.advance_time(900);
+        h.refresh();
+        h.cockpit.hangar_view.on_foot_view = OnFootView::FirstPerson;
+        let ready = h.settle();
+        let viewport = ready.viewport.expect("Actual body viewport");
+        let point = egui::pos2(viewport.center().x, viewport.top() + 30.0);
+        h.frame(vec![egui::Event::PointerMoved(point)]);
+        h.frame(vec![]);
+        assert!(h.cockpit.hangar_view.first_person_mouse_captured(), "First-person entry arms mouse-look without a button");
+        let before = [h.cockpit.hangar_view.yaw, h.cockpit.hangar_view.pitch];
+        h.frame(vec![egui::Event::MouseMoved(egui::vec2(35.0, -8.0))]);
+        assert_ne!([h.cockpit.hangar_view.yaw, h.cockpit.hangar_view.pitch], before, "Raw mouse motion looks without RMB");
+        let hud_point = egui::pos2(viewport.center().x, viewport.bottom() - 70.0);
+        h.frame(vec![egui::Event::PointerMoved(hud_point)]);
+        h.frame(vec![egui::Event::MouseMoved(egui::vec2(2.0, 0.0))]);
+        assert!(h.cockpit.hangar_view.first_person_mouse_captured(), "Passive body HUD must retain existing capture");
+        let active = h.frame(vec![]);
+        capture(Some(&directory), "first-person-hud-captured", &active);
+        h.frame(vec![egui::Event::Key { key:egui::Key::Escape, physical_key:None, pressed:true, repeat:false, modifiers:egui::Modifiers::NONE }]);
+        assert!(!h.cockpit.hangar_view.first_person_mouse_captured());
+        h.frame(vec![egui::Event::Key { key:egui::Key::Escape, physical_key:None, pressed:false, repeat:false, modifiers:egui::Modifiers::NONE }]);
+        h.frame(vec![]);
+        assert!(!h.cockpit.hangar_view.first_person_mouse_captured(), "No surprise recapture");
+        h.click(point);
+        assert!(h.cockpit.hangar_view.first_person_mouse_captured());
+        h.cockpit.controls_reference_open = true;
+        h.frame(vec![]);
+        assert!(!h.cockpit.hangar_view.first_person_mouse_captured());
+        assert!(h.cockpit.own().unwrap().station_avatar.is_some(), "No reseat or authority switch");
+        std::fs::write(directory.join("receipt.json"), serde_json::to_vec_pretty(&serde_json::json!({"scope":"Native isolated body-view capture and HUD; not OS pointer-lock verification or runtime FPS benchmark", "raw_mouse_without_rmb":true,"escape_release":true,"deliberate_recapture":true,"management_release":true,"authority_fixture":authority_fixture(&h.directory)})).unwrap()).unwrap();
     }
 }

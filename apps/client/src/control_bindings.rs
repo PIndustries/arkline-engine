@@ -79,6 +79,8 @@ pub(super) const JUMP: Key = Key::Space;
 pub(super) const INTERACT: Key = Key::F;
 pub(super) const PANEL_SEARCH: Key = Key::K;
 pub(super) const WORKSPACE_BACK: Key = Key::Escape;
+/// First-person cursor ownership; does not replace editor or workspace Escape handling.
+pub(super) const MOUSE_LOOK_RELEASE: Key = Key::Escape;
 pub(super) const LOOK_BUTTON: PointerButton = PointerButton::Secondary;
 
 pub(super) fn key_label(key: Key) -> String {

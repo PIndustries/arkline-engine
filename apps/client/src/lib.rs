@@ -47,6 +47,7 @@ mod control_bindings;
 mod controls_reference;
 mod exchange_readiness;
 mod flight_workspace;
+mod first_person_hud;
 mod lighting_settings;
 mod motion;
 mod nearby_action_model;
@@ -4043,6 +4044,9 @@ impl eframe::App for Cockpit {
             }
         }
         self.poll();
+        if !self.first_person_capture_allowed(ctx) {
+            self.hangar_view.release_first_person_mouse(ctx);
+        }
         if !self.docked_navigation_present() {
             self.nearby_shortcut.cancel();
         }
@@ -4584,6 +4588,10 @@ impl eframe::App for Cockpit {
                     self.scene(ui);
                 }
             });
+        self.first_person_hud(ctx);
+        if !self.first_person_capture_allowed(ctx) {
+            self.hangar_view.release_first_person_mouse(ctx);
+        }
         performance_overlay::show(ctx, &mut self.performance_open, performance_overlay::PerformanceSamples {
             frame_intervals_s: &self.frame_intervals,
             snapshot_age_ms: self.snapshot.as_ref().and(self.performance_snapshot_received).map(|received| received.elapsed().as_millis().min(u64::MAX as u128) as u64),

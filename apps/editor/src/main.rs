@@ -666,14 +666,14 @@ impl eframe::App for Editor {
         });
         }
         if self.workspace == 6 {
-            self.client.poll_hidden();
+            self.client.poll_hidden_with_context(ctx);
             self.git_workspace.show(ctx, &self.project);
             self.session_controls(ctx);
             ctx.request_repaint_after(Duration::from_millis(50));
             return;
         }
         if self.workspace == 7 {
-            self.client.poll_hidden();
+            self.client.poll_hidden_with_context(ctx);
             if self.files_close_blocked {
                 egui::TopBottomPanel::top("source_close_guard").show(ctx, |ui| {
                     ui.colored_label(egui::Color32::YELLOW, "Source tabs have unsaved changes or a Save is pending. Save them before closing the editor.");
@@ -696,7 +696,7 @@ impl eframe::App for Editor {
             return;
         }
         if self.workspace == 4 {
-            self.client.poll_hidden();
+            self.client.poll_hidden_with_context(ctx);
             if let Some(request) = self
                 .cockpit
                 .show(ctx, &cockpit::Live::from_client(&self.client))
@@ -708,7 +708,7 @@ impl eframe::App for Editor {
             return;
         }
         if self.workspace == 8 {
-            self.client.poll_hidden();
+            self.client.poll_hidden_with_context(ctx);
             let action = self
                 .model_browser
                 .get_or_insert_with(|| model_browser::ModelBrowser::open(&self.project))
@@ -728,7 +728,7 @@ impl eframe::App for Editor {
             return;
         }
         if self.workspace == 5 {
-            self.client.poll_hidden();
+            self.client.poll_hidden_with_context(ctx);
             if self.imports.show(ctx, self.graphics.as_ref()) {
                 self.workspace = 8;
             }
@@ -737,7 +737,7 @@ impl eframe::App for Editor {
             return;
         }
         if self.workspace == 3 && self.surface_mode {
-            self.client.poll_hidden();
+            self.client.poll_hidden_with_context(ctx);
             egui::SidePanel::right("surface_material_inspector")
                 .resizable(true)
                 .default_width(310.)
@@ -783,7 +783,7 @@ impl eframe::App for Editor {
             return;
         }
         if self.workspace == 3 {
-            self.client.poll_hidden();
+            self.client.poll_hidden_with_context(ctx);
             egui::SidePanel::right("fleet_materials_inspector")
                 .resizable(true)
                 .default_width(280.)
@@ -831,14 +831,14 @@ impl eframe::App for Editor {
             return;
         }
         if self.workspace == 2 {
-            self.client.poll_hidden();
+            self.client.poll_hidden_with_context(ctx);
             self.physics_lab.show(ctx);
             self.session_controls(ctx);
             ctx.request_repaint_after(Duration::from_millis(16));
             return;
         }
         if self.workspace == 1 {
-            self.client.poll_hidden();
+            self.client.poll_hidden_with_context(ctx);
             self.community.show(ctx, &self.project);
             self.session_controls(ctx);
             ctx.request_repaint_after(Duration::from_millis(100));
@@ -981,12 +981,12 @@ impl eframe::App for Editor {
         self.client.set_debug_wireframe(self.wireframe);
         self.client.set_material_preview(self.materials.preview());
         if self.inspector_tab == 2 {
-            self.client.poll_hidden();
+            self.client.poll_hidden_with_context(ctx);
             egui::CentralPanel::default().show(ctx, |ui| {
                 self.engineering.viewport(ui);
             });
         } else if self.inspector_tab == 6 && self.room_plan {
-            self.client.poll_hidden();
+            self.client.poll_hidden_with_context(ctx);
             egui::CentralPanel::default().show(ctx, |ui| {
                 egui::ScrollArea::vertical()
                     .id_salt("room_plan_scroll")

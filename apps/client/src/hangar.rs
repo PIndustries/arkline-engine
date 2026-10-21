@@ -38,6 +38,104 @@ pub enum OnFootView {
     ThirdPerson,
 }
 
+/// Local cursor ownership only: never changes a ship or avatar snapshot.
+#[derive(Default)]
+struct FirstPersonMouseLook {
+    active: bool,
+    captured: bool,
+    suspended: bool,
+    await_release: bool,
+    eligible: bool,
+}
+impl FirstPersonMouseLook {
+    fn release(&mut self, ctx: &egui::Context) {
+        if self.captured {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CursorGrab(egui::CursorGrab::None));
+            ctx.send_viewport_cmd(egui::ViewportCommand::CursorVisible(true));
+        }
+        self.captured = false;
+        self.eligible = false;
+    }
+    fn suspend(&mut self, ctx: &egui::Context) {
+        self.release(ctx);
+        self.suspended = true;
+        self.await_release = true;
+    }
+    fn begin(&mut self, ctx: &egui::Context, active: bool, allowed: bool) -> egui::Vec2 {
+        if !active {
+            self.release(ctx);
+            self.active = false;
+            self.suspended = false;
+            self.await_release = false;
+            return egui::Vec2::ZERO;
+        }
+        self.active = true;
+        let (focused, escape, any_down, keys_down, delta) = ctx.input(|input| {
+            (
+                input.focused && !input.viewport().minimized.unwrap_or(false),
+                input.key_pressed(crate::control_bindings::MOUSE_LOOK_RELEASE),
+                input.pointer.any_down(),
+                !input.keys_down.is_empty(),
+                input
+                    .pointer
+                    .motion()
+                    .unwrap_or_else(|| input.pointer.delta()),
+            )
+        });
+        if !focused || escape {
+            self.suspend(ctx);
+            return egui::Vec2::ZERO;
+        }
+        if !allowed {
+            if self.captured || self.suspended {
+                self.suspend(ctx);
+            } else {
+                // Initial entry can wait for clear viewport ownership without
+                // turning the first mouse-look into a mandatory click.
+                self.release(ctx);
+            }
+            return egui::Vec2::ZERO;
+        }
+        if self.await_release {
+            if any_down || keys_down {
+                return egui::Vec2::ZERO;
+            }
+            self.await_release = false;
+        }
+        self.eligible = true;
+        if self.captured && delta.is_finite() && !ctx.input(|input| input.pointer.any_pressed()) {
+            delta
+        } else {
+            egui::Vec2::ZERO
+        }
+    }
+    fn finish(&mut self, ctx: &egui::Context, over_clear_world: bool) {
+        if !self.active
+            || !self.eligible
+            || self.captured
+            || self.await_release
+            || !over_clear_world
+        {
+            return;
+        }
+        let (pressed, modifiers, keyboard_owned) = ctx.input(|input| {
+            (
+                input.pointer.primary_pressed(),
+                !input.modifiers.is_none(),
+                !input.keys_down.is_empty(),
+            )
+        });
+        if modifiers || keyboard_owned || self.suspended && !pressed {
+            return;
+        }
+        ctx.send_viewport_cmd(egui::ViewportCommand::CursorGrab(egui::CursorGrab::Locked));
+        ctx.send_viewport_cmd(egui::ViewportCommand::CursorVisible(false));
+        self.captured = true;
+        self.suspended = false;
+        // The capture frame's old absolute movement is intentionally discarded.
+    }
+}
+
 pub struct HangarView {
     pub on_foot_view: OnFootView,
     renderer: Option<Arc<Mutex<Renderer>>>,
@@ -67,6 +165,7 @@ pub struct HangarView {
     docked_initialized: bool,
     head_look_input_allowed: bool,
     head_look: [f32; 2],
+    first_person_mouse: FirstPersonMouseLook,
     computer_keyboard_owned: bool,
     docked_surfaces: [Option<CockpitSurface>; 6],
     passive_console: Option<CockpitSurface>,
@@ -115,6 +214,7 @@ impl HangarView {
             docked_initialized: false,
             head_look_input_allowed: true,
             head_look: [0.0; 2],
+            first_person_mouse: FirstPersonMouseLook::default(),
             computer_keyboard_owned: false,
             docked_surfaces: std::array::from_fn(|_| None),
             passive_console: None,
@@ -166,6 +266,58 @@ impl HangarView {
     }
     pub fn set_head_look_input_allowed(&mut self, allowed: bool) {
         self.head_look_input_allowed = allowed;
+    }
+    /// Release on a hidden viewport, editor/menu ownership, or session change.
+    /// Resuming mouse look then requires a deliberate clear-viewport click.
+    pub(crate) fn release_first_person_mouse(&mut self, ctx: &egui::Context) {
+        if self.first_person_mouse.active {
+            self.first_person_mouse.suspend(ctx);
+        } else {
+            self.first_person_mouse.release(ctx);
+            self.first_person_mouse.suspended = false;
+            self.first_person_mouse.await_release = false;
+        }
+    }
+    pub(crate) fn first_person_mouse_captured(&self) -> bool {
+        self.first_person_mouse.captured
+    }
+    fn begin_first_person_mouse(
+        &mut self,
+        ui: &egui::Ui,
+        rect: egui::Rect,
+        active: bool,
+    ) -> egui::Vec2 {
+        let clear_layer = ui.ctx().pointer_latest_pos().is_some_and(|point| {
+            let layer = ui.ctx().layer_id_at(point);
+            let passive_body_hud = egui::LayerId::new(
+                egui::Order::Foreground, egui::Id::new("body-context-hud"));
+            rect.contains(point) && (layer == Some(ui.layer_id())
+                || self.first_person_mouse.captured && layer == Some(passive_body_hud))
+        });
+        let allowed = self.head_look_input_allowed
+            && !self.editor_free_camera_active
+            && !self.computer_keyboard_owned
+            && !ui.ctx().wants_keyboard_input()
+            && clear_layer;
+        self.first_person_mouse.begin(ui.ctx(), active, allowed)
+    }
+    fn finish_first_person_mouse(&mut self, ui: &egui::Ui, rect: egui::Rect) {
+        // Use THIS frame's exact projected/depth-gated faces. A screen click
+        // must reach its interface rather than recapturing the camera.
+        let over_clear_world = ui.ctx().pointer_latest_pos().is_some_and(|point| {
+            rect.contains(point)
+                && ui.ctx().layer_id_at(point) == Some(ui.layer_id())
+                && !self
+                    .docked_surfaces
+                    .iter()
+                    .flatten()
+                    .any(|surface| surface.contains(point))
+                && !self
+                    .passive_console
+                    .as_ref()
+                    .is_some_and(|surface| surface.contains(point))
+        });
+        self.first_person_mouse.finish(ui.ctx(), over_clear_world);
     }
     #[cfg(test)]
     pub fn head_look_angles(&self) -> [f32; 2] {
@@ -392,7 +544,6 @@ impl HangarView {
             .as_ref()
             .is_some_and(|a| a.onboard_interior);
         let interior_deck = pilot.station_avatar.as_ref().map_or(1, |a| a.interior_deck);
-        let room_document = self.room_layout.as_ref().map(|layout| &layout.document);
         let reset_heading = self.fleet_mode != fleet.is_some()
             || self.walking != walking
             || self.interior != interior
@@ -423,9 +574,15 @@ impl HangarView {
         let dragging = !self.editor_free_camera_active
             && (response.dragged_by(egui::PointerButton::Secondary)
                 || (!walking && response.dragged_by(egui::PointerButton::Primary)));
+        let first_person = walking && self.on_foot_view == OnFootView::FirstPerson;
+        let mouse_delta = self.begin_first_person_mouse(ui, rect, first_person);
+        if first_person {
+            self.yaw += mouse_delta.x * 0.007;
+            self.pitch = (self.pitch + mouse_delta.y * 0.005).clamp(-0.8, 1.25);
+        }
         if unobstructed {
             ui.input(|i| {
-                if dragging {
+                if dragging && !first_person {
                     // Dragging right should look/turn right with the pointer.
                     self.yaw += i.pointer.delta().x * 0.007;
                     self.pitch = (self.pitch + i.pointer.delta().y * 0.005)
@@ -437,6 +594,7 @@ impl HangarView {
                 }
             });
         }
+        let room_document = self.room_layout.as_ref().map(|layout| &layout.document);
         let layout = hangar_layout(pilot.ship_class);
         let target = if let Some(avatar) = &pilot.station_avatar {
             let next = Vec3::from_array(avatar.position.map(|v| v as f32));
@@ -639,6 +797,12 @@ impl HangarView {
                 pilot.ship_class.spec().name,
                 if self.editor_free_camera_active {
                     "EDITOR FREE CAMERA · WASD move · E/Q or Space/C vertical · Shift fast · RMB look"
+                } else if walking && self.on_foot_view == OnFootView::FirstPerson {
+                    if self.first_person_mouse_captured() {
+                        "ON FOOT · Mouse look · Esc cursor · W/S move · A/D turn · Q/E strafe · Space jump"
+                    } else {
+                        "ON FOOT · Click clear viewport for mouse look · Esc cursor · W/S move · Q/E strafe · Space jump"
+                    }
                 } else if walking {
                     "ON FOOT · W/S or Up/Down move · A/D or Left/Right turn · Q/E strafe · RMB look · Space jump"
                 } else {
@@ -648,7 +812,7 @@ impl HangarView {
             egui::FontId::proportional(14.0),
             egui::Color32::from_rgb(150, 220, 185),
         );
-        if interior {
+        let action = if interior {
             pioneer_interior::labels(ui, rect, vp, pilot, live, room_document);
             pioneer_interior::device_panel(
                 ui,
@@ -668,7 +832,10 @@ impl HangarView {
             })
         } else {
             quarters::terminals(ui, rect, vp, eye, pilot, unobstructed, live)
-        }
+        };
+        // All borrowed room-document uses finish before changing local cursor ownership.
+        self.finish_first_person_mouse(ui, rect);
+        action
     }
 }
 
@@ -2002,5 +2169,165 @@ mod tests {
             CGLSetCurrentContext(std::ptr::null_mut());
             CGLDestroyContext(context);
         }
+    }
+}
+
+#[cfg(test)]
+mod first_person_mouse_tests {
+    use super::*;
+
+    fn frame(
+        ctx: &egui::Context,
+        state: &mut FirstPersonMouseLook,
+        events: Vec<egui::Event>,
+        focused: bool,
+        allowed: bool,
+        clear_world: bool,
+    ) -> (egui::Vec2, egui::FullOutput) {
+        let mut delta = egui::Vec2::ZERO;
+        let output = ctx.run(
+            egui::RawInput {
+                focused,
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(640.0, 480.0),
+                )),
+                events,
+                ..Default::default()
+            },
+            |ctx| {
+                delta = state.begin(ctx, true, allowed);
+                state.finish(ctx, clear_world);
+            },
+        );
+        (delta, output)
+    }
+    fn key(key: egui::Key, pressed: bool) -> egui::Event {
+        egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed,
+            repeat: false,
+            modifiers: Default::default(),
+        }
+    }
+    fn press() -> Vec<egui::Event> {
+        vec![
+            egui::Event::PointerMoved(egui::pos2(200.0, 200.0)),
+            egui::Event::PointerButton {
+                pos: egui::pos2(200.0, 200.0),
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: Default::default(),
+            },
+        ]
+    }
+    #[test]
+    fn first_person_defaults_to_mouse_look_and_escape_requires_deliberate_recapture() {
+        let ctx = egui::Context::default();
+        let mut state = FirstPersonMouseLook::default();
+        let (delta, output) = frame(
+            &ctx,
+            &mut state,
+            vec![egui::Event::PointerMoved(egui::pos2(200.0, 200.0))],
+            true,
+            true,
+            true,
+        );
+        assert_eq!(delta, egui::Vec2::ZERO);
+        assert!(state.captured);
+        assert!(output.viewport_output[&egui::ViewportId::ROOT]
+            .commands
+            .iter()
+            .any(|command| matches!(
+                command,
+                egui::ViewportCommand::CursorGrab(egui::CursorGrab::Locked)
+            )));
+        let (delta, _) = frame(
+            &ctx,
+            &mut state,
+            vec![egui::Event::MouseMoved(egui::vec2(12.0, -4.0))],
+            true,
+            true,
+            true,
+        );
+        assert_eq!(delta, egui::vec2(12.0, -4.0));
+        let (delta, output) = frame(
+            &ctx,
+            &mut state,
+            vec![key(egui::Key::Escape, true)],
+            true,
+            true,
+            true,
+        );
+        assert_eq!(delta, egui::Vec2::ZERO);
+        assert!(!state.captured);
+        assert!(output.viewport_output[&egui::ViewportId::ROOT]
+            .commands
+            .iter()
+            .any(|command| matches!(
+                command,
+                egui::ViewportCommand::CursorGrab(egui::CursorGrab::None)
+            )));
+        frame(
+            &ctx,
+            &mut state,
+            vec![key(egui::Key::Escape, false)],
+            true,
+            true,
+            true,
+        );
+        assert!(!state.captured, "Escape must not immediately recapture");
+        frame(&ctx, &mut state, press(), true, true, true);
+        assert!(state.captured);
+    }
+    #[test]
+    fn first_person_focus_or_ui_ownership_releases_and_screen_click_does_not_recapture() {
+        let ctx = egui::Context::default();
+        let mut state = FirstPersonMouseLook::default();
+        frame(&ctx, &mut state, vec![], true, true, true);
+        assert!(state.captured);
+        let (delta, _) = frame(
+            &ctx,
+            &mut state,
+            vec![egui::Event::MouseMoved(egui::vec2(8.0, 9.0))],
+            false,
+            true,
+            true,
+        );
+        assert_eq!(delta, egui::Vec2::ZERO);
+        assert!(!state.captured);
+        frame(&ctx, &mut state, vec![], true, true, true);
+        assert!(!state.captured, "Focus recovery requires an explicit click");
+        frame(&ctx, &mut state, press(), true, true, false);
+        assert!(!state.captured, "An actual screen hit keeps its cursor");
+        frame(
+            &ctx,
+            &mut state,
+            vec![egui::Event::PointerButton {
+                pos: egui::pos2(200.0, 200.0),
+                button: egui::PointerButton::Primary,
+                pressed: false,
+                modifiers: Default::default(),
+            }],
+            true,
+            true,
+            true,
+        );
+        frame(&ctx, &mut state, press(), true, true, true);
+        assert!(state.captured);
+        let (delta, _) = frame(
+            &ctx,
+            &mut state,
+            vec![egui::Event::MouseMoved(egui::vec2(8.0, 9.0))],
+            true,
+            false,
+            true,
+        );
+        assert_eq!(delta, egui::Vec2::ZERO);
+        assert!(
+            !state.captured,
+            "Menu/text/editor ownership releases mouse look"
+        );
     }
 }

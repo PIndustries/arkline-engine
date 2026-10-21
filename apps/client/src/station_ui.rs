@@ -387,9 +387,9 @@ impl Cockpit {
                     .as_ref()
                     .is_some_and(|snapshot| snapshot.walk_sprint_v1)
                 {
-                    "W/S or arrows move/turn · Q/E strafe · RMB turn · Shift sprint · Space jump"
+                    format!("W/S or arrows move/turn · Q/E strafe · {} · Shift sprint · Space jump", self.on_foot_look_hint())
                 } else {
-                    "W/S or arrows move/turn · Q/E strafe · RMB turn · Space jump"
+                    format!("W/S or arrows move/turn · Q/E strafe · {} · Space jump", self.on_foot_look_hint())
                 },
             );
             if !state.actuators.service_power_available {
@@ -704,7 +704,7 @@ impl Cockpit {
                             .map_or("CORRIDOR / ACCESS CORE", |(name, _, _)| *name)
                     });
                 ui.label(room);
-                ui.small("W/S or Up/Down move · A/D or Left/Right turn · Q/E strafe · RMB look · Space jump");
+                ui.small(format!("W/S or Up/Down move · A/D or Left/Right turn · Q/E strafe · {} · Space jump", self.on_foot_look_hint()));
                 ui.small(
                     "Airlock engineering uses server-confirmed devices. Other room fixtures remain prototypes.",
                 );
@@ -817,7 +817,7 @@ impl Cockpit {
                 ui.small("Only your vessels at this station are shown. Corporate berths are not available yet.");
             }
             ui.small(
-                "W/S or Up/Down move · A/D or Left/Right turn · Q/E strafe · hold RMB to look · Space jump",
+                format!("W/S or Up/Down move · A/D or Left/Right turn · Q/E strafe · {} · Space jump", self.on_foot_look_hint()),
             );
             ui.small(
                 "Follow the green path to your quarters. Approach a terminal and click to use it.",
@@ -1126,7 +1126,7 @@ impl Cockpit {
         }
         ui.add(
             egui::Label::new(
-                egui::RichText::new("W/S move · A/D turn · Q/E strafe · RMB look · Space jump")
+                egui::RichText::new(format!("W/S move · A/D turn · Q/E strafe · {} · Space jump", self.on_foot_look_hint()))
                     .small(),
             )
             .wrap(),
@@ -1204,7 +1204,7 @@ impl Cockpit {
         }
         ui.add(
             egui::Label::new(
-                egui::RichText::new("W/S move · A/D turn · Q/E strafe · RMB look · Space jump")
+                egui::RichText::new(format!("W/S move · A/D turn · Q/E strafe · {} · Space jump", self.on_foot_look_hint()))
                     .small(),
             )
             .wrap(),
@@ -1552,7 +1552,7 @@ impl Cockpit {
     }
 
     fn docked_interaction_strip(&mut self, ui: &mut egui::Ui) {
-        self.nearby_interaction_prompt(ui);
+        if !self.first_person_hud_active() { self.nearby_interaction_prompt(ui); }
         let Some(pilot) = self.own() else {
             return;
         };
@@ -1674,9 +1674,9 @@ impl Cockpit {
                     .as_ref()
                     .is_some_and(|snapshot| snapshot.walk_sprint_v1)
                 {
-                    "W/S move · Q/E strafe · RMB turn · Shift sprint · Space jump"
+                    format!("W/S move · Q/E strafe · {} · Shift sprint · Space jump", self.on_foot_look_hint())
                 } else {
-                    "W/S move · Q/E strafe · RMB turn · Space jump"
+                    format!("W/S move · Q/E strafe · {} · Space jump", self.on_foot_look_hint())
                 },
             );
         }

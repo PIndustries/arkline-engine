@@ -696,6 +696,12 @@ impl EmbeddedClient {
     }
 
     /// Poll a hidden viewport without treating workspace absence as a rendered frame.
+    /// Release native pointer capture before a non-viewport editor workspace.
+    pub fn poll_hidden_with_context(&mut self, ctx: &egui::Context) {
+        self.cockpit.hangar_view.release_first_person_mouse(ctx);
+        self.cockpit.pilot_input.release_mouse(ctx);
+        self.poll_hidden();
+    }
     pub fn poll_hidden(&mut self) {
         self.release_cockpit_input();
         self.cockpit.flight_view.clear_cockpit_presentation();

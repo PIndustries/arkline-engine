@@ -776,7 +776,16 @@ pub(super) fn show(
             view.zoom = (view.zoom * (-scroll * 0.002).exp()).clamp(0.45, 2.5);
         }
     }
-    if hovered && dragging {
+    let automatic_mouse_look = state.is_some()
+        && state.is_some_and(|state| state.seat_transition.is_none())
+        && view.on_foot_view == OnFootView::FirstPerson
+        && !view.editor_free_camera_active;
+    let mouse_delta = view.begin_first_person_mouse(ui, rect, automatic_mouse_look);
+    if automatic_mouse_look {
+        view.yaw += mouse_delta.x * 0.007;
+        view.pitch = (view.pitch + mouse_delta.y * 0.005).clamp(-1.25, 1.25);
+    }
+    if hovered && dragging && !automatic_mouse_look {
         let delta = ui.input(|input| {
             if input.pointer.any_pressed() {
                 egui::Vec2::ZERO
@@ -921,6 +930,7 @@ pub(super) fn show(
         }
         view.docked_layer = Some(ui.layer_id());
     }
+    view.finish_first_person_mouse(ui, rect);
     #[cfg(not(target_arch = "wasm32"))]
     let scene_prepare_ns = scene_preparation.elapsed().as_nanos().min(u64::MAX as u128) as u64;
     #[cfg(target_arch = "wasm32")]

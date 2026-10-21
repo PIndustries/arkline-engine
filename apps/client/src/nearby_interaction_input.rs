@@ -65,7 +65,7 @@ impl Cockpit {
             Some("Return focus to the body viewport")
         } else if self.boot.visible {
             Some("Wait for the world viewport handoff")
-        } else if self.controls_reference_open || self.services_open
+        } else if self.performance_open || self.controls_reference_open || self.services_open
             || self.service_tab == ServiceTab::Layouts
             || self.engineering_panel.is_some()
         {
@@ -89,7 +89,8 @@ impl Cockpit {
             } else {
                 self.flight_view.input_surface()
             };
-            if surface.is_some_and(|(rect, layer)| {
+            if self.first_person_hud_active() && self.hangar_view.first_person_mouse_captured()
+                || surface.is_some_and(|(rect, layer)| {
                 ctx.pointer_latest_pos().is_some_and(|point| {
                     rect.contains(point) && ctx.layer_id_at(point) == Some(layer)
                 })

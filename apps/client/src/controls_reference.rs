@@ -55,6 +55,10 @@ impl Cockpit {
                     ui.label("Return to the body view to walk, or physically return to the pilot seat for manual flight.");
                 } else if pilot.as_ref().is_some_and(|p| p.station_avatar.is_some()) {
                     ui.label("These keys move your body; manual ship controls remain locked while on foot.");
+                    ui.label(self.on_foot_look_hint());
+                    if self.first_person_hud_active() {
+                        ui.small("Escape, interface interaction or focus loss releases mouse-look. Click clear world space to capture again; instrument and menu clicks keep the cursor.");
+                    }
                     ui.label("Use the nearby movement hints for this body. The same flight keys have different meanings while walking.");
                     ui.monospace(format!("{} · press/release the displayed nearby action", bindings::INTERACT.name()));
                     if pilot.as_ref().is_some_and(|p| p.location != Location::Docked) {
