@@ -143,9 +143,10 @@ impl Cockpit {
     }
     pub(super) fn selected_drone_view<'a>(&self, p: &'a PilotView) -> Option<&'a DroneView> {
         let fleet = Self::fleet(p);
-        self.selected_drone
-            .and_then(|id| fleet.iter().copied().find(|d| d.id == id))
-            .or_else(|| fleet.first().copied())
+        match self.selected_drone {
+            Some(id) => fleet.into_iter().find(|drone| drone.id == id),
+            None => fleet.first().copied(),
+        }
     }
     pub(super) fn drone_controls(&mut self, ui: &mut egui::Ui) {
         let Some(p) = self.own() else {
@@ -198,17 +199,7 @@ impl Cockpit {
         if self.request_pending {
             ui.colored_label(AMBER, "Awaiting authority · previous command pending");
         }
-        if self.snapshot.as_ref().is_some_and(|snapshot| {
-            snapshot
-                .resource_jobs
-                .iter()
-                .any(|job| job.pilot == p.name && !job.phase.is_terminal())
-        }) {
-            ui.colored_label(
-                AMBER,
-                "Automation owns this fleet. Manual drone orders override the mining routine.",
-            );
-        }
+        self.manual_operations_summary(ui);
         ui.small("Bay inventory is not reported. Launch limit: five deployed drones per class.");
         let power = power_spec(p.ship_class);
         if let Some(capacitor) = &p.power {
@@ -269,10 +260,19 @@ impl Cockpit {
                 }
             });
         let Some(drone) = self.selected_drone_view(&p) else {
-            ui.label("No deployed drones reported for this ship.");
-            if available {
-                ui.small("Choose a drone class above to request deployment.");
+            if let Some(id) = self.selected_drone {
+                ui.colored_label(
+                    AMBER,
+                    format!(
+                        "Selected drone #{id} is no longer reported · choose a current drone above"
+                    ),
+                );
             } else {
+                ui.label("No deployed drones reported for this ship.");
+            }
+            if available && Self::fleet(&p).is_empty() {
+                ui.small("Choose a drone class above to request deployment.");
+            } else if !available {
                 ui.small("Deployment controls are unavailable in the current state; the reason is shown above.");
             }
             return;
@@ -357,9 +357,14 @@ impl Cockpit {
             }
             if drone.class == DroneClass::Mining {
                 let target = self.module_target(&p);
+                if p.ore >= cargo_capacity(p.ship_class) {
+                    ui.colored_label(MUTED, "Ship hold full · mining assignment unavailable");
+                } else if target.is_none() {
+                    ui.small("Confirm an asteroid lock before assigning this mining drone");
+                }
                 if ui
                     .add_enabled(
-                        controlled && target.is_some(),
+                        controlled && target.is_some() && p.ore < cargo_capacity(p.ship_class),
                         egui::Button::new("Mine locked target").small(),
                     )
                     .clicked()

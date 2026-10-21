@@ -1620,3 +1620,50 @@ fn native_pioneer_cockpit_mining_composition() {
         std::fs::write(directory.join("receipt.json"),serde_json::to_vec_pretty(&serde_json::json!({"scope":"Actual Cockpit and native renderers; ordinary disposable 5000-ore authority job; no desktop/user-world mutation","captures":captures,"pilot":mining_snapshot.pilots.iter().find(|p|p.name==PILOT),"job":mining_snapshot.resource_jobs,"body_rays":rays,"instrument_face_fraction":instrument_fraction,"clear_forward_viewport_normalized":[0.33,0.12,0.67,0.70],"default_detailed_management_visible":false})).unwrap()).unwrap();
     }
 }
+
+#[test]
+#[ignore = "Explicit isolated native operations workspace review; no live user world"]
+fn operations_safety_native_workspace_review() {
+    unsafe {
+        let directory = PathBuf::from(
+            std::env::var_os("ARKLINE_OPERATIONS_EVIDENCE").expect("Retained review path"),
+        );
+        std::fs::create_dir(&directory).unwrap();
+        let (_context, gl) = PrivateContext::create();
+        let mut h = Harness::new(gl, Some(directory.clone()));
+        h.placement(EditorSceneState::Cockpit);
+        h.command(Request::StartResourceJob {
+            target_units: 1200,
+            pilot: None,
+        });
+        h.refresh();
+        assert!(h
+            .cockpit
+            .snapshot
+            .as_ref()
+            .unwrap()
+            .resource_jobs
+            .iter()
+            .any(|job| job.pilot == PILOT && !job.phase.is_terminal()));
+        let mut captures = Vec::new();
+        for (tab, name) in [
+            (crate::ServiceTab::ShipComputer, "mining-goal-and-stage"),
+            (crate::ServiceTab::Modules, "modules-control-ownership"),
+            (crate::ServiceTab::Drones, "drones-control-ownership"),
+        ] {
+            h.cockpit.services_open = true;
+            h.cockpit.service_tab = tab;
+            let shot = h.settle();
+            assert!(h.cockpit.services_open && h.cockpit.service_tab == tab);
+            assert!(shot.occupied() > 1000);
+            captures.push(capture(Some(&directory), name, &shot));
+        }
+        std::fs::write(directory.join("receipt.json"), serde_json::to_vec_pretty(&serde_json::json!({
+            "scope":"1500x960 actual whole-client management workspaces in isolated native authority fixture; no desktop input or live user world",
+            "authority_fixture":authority_fixture(&h.directory),
+            "captures":captures,
+            "job":h.cockpit.snapshot.as_ref().unwrap().resource_jobs.iter().find(|job|job.pilot==PILOT),
+            "limits":"No performance or desktop acceptance claim; no fabricated drone fleet; commands and lost-selection cases covered by focused pointer tests"
+        })).unwrap()).unwrap();
+    }
+}

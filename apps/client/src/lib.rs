@@ -1650,6 +1650,8 @@ impl Cockpit {
                 .strong()
                 .color(self.accent()),
         );
+        self.manual_operations_summary(ui);
+        let fresh = self.operations_fresh();
         let seated = self
             .own()
             .is_some_and(|pilot| pilot.station_avatar.is_none());
@@ -1719,7 +1721,7 @@ impl Cockpit {
                             });
                             if ui
                                 .add_enabled(
-                                    self.can_operate() && seated,
+                                    self.can_operate() && seated && fresh,
                                     egui::Button::new("Stop turret").small(),
                                 )
                                 .clicked()
@@ -1769,7 +1771,7 @@ impl Cockpit {
                 || !Self::confirmed_locks(&pilot).is_empty())
                 && ui
                     .add_enabled(
-                        self.can_operate() && seated,
+                        self.can_operate() && seated && fresh,
                         egui::Button::new(
                             if Self::pending_locks(&pilot).len()
                                 + Self::confirmed_locks(&pilot).len()
@@ -2310,6 +2312,7 @@ impl Cockpit {
     }
     fn can_mine(&self, pilot: &PilotView) -> bool {
         self.can_operate()
+            && self.operations_fresh()
             && pilot.station_avatar.is_none()
             && pilot.ore < cargo_capacity(pilot.ship_class)
             && self.snapshot.as_ref().is_some_and(|snapshot| {
@@ -5983,6 +5986,215 @@ mod tests {
             Request::UnlockAsteroid { id: 7 }
         ));
     }
+    fn operations_safety_frame(
+        ctx: &egui::Context,
+        cockpit: &mut Cockpit,
+        section: usize,
+        events: Vec<egui::Event>,
+    ) -> Vec<(String, Pos2)> {
+        ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    Pos2::ZERO,
+                    Vec2::new(950.0, 1100.0),
+                )),
+                events,
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| match section {
+                    0 => cockpit.drone_controls(ui),
+                    1 => cockpit.mining_module(ui),
+                    _ => cockpit.resource_job_panel(ui),
+                });
+            },
+        )
+        .shapes
+        .into_iter()
+        .filter_map(|shape| match shape.shape {
+            egui::Shape::Text(text) => Some((
+                text.galley.text().to_owned(),
+                text.pos + text.galley.rect.center().to_vec2(),
+            )),
+            _ => None,
+        })
+        .collect()
+    }
+    fn operations_safety_click(
+        ctx: &egui::Context,
+        cockpit: &mut Cockpit,
+        section: usize,
+        point: Pos2,
+    ) {
+        for pressed in [true, false] {
+            operations_safety_frame(
+                ctx,
+                cockpit,
+                section,
+                vec![
+                    egui::Event::PointerMoved(point),
+                    egui::Event::PointerButton {
+                        pos: point,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ],
+            );
+        }
+    }
+    fn operations_safety_drone(id: u64, class: DroneClass) -> DroneView {
+        DroneView {
+            id,
+            class,
+            hit_points: 100,
+            signal_strength: 1.0,
+            mining_cycle: None,
+            attack_ready_at_ms: None,
+            position: BELT_POSITION,
+            velocity: [0.0; 3],
+            heading: [1.0, 0.0, 0.0],
+            mode: DroneMode::Hold,
+            updated_at_ms: 1000,
+        }
+    }
+    #[test]
+    fn operations_safety_disappearing_drone_requires_explicit_reselection() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        let (tx, rx) = mpsc::channel();
+        cockpit.commands = Some(tx);
+        cockpit.snapshot.as_mut().unwrap().pilots[0].drones = vec![
+            operations_safety_drone(2, DroneClass::Recon),
+            operations_safety_drone(7, DroneClass::Recon),
+        ];
+        cockpit.selected_drone = Some(7);
+        assert_eq!(
+            cockpit
+                .selected_drone_view(&cockpit.own().unwrap())
+                .unwrap()
+                .id,
+            7
+        );
+        cockpit.snapshot.as_mut().unwrap().pilots[0]
+            .drones
+            .retain(|d| d.id != 7);
+        let before = serde_json::to_value(&cockpit.snapshot).unwrap();
+        assert!(cockpit
+            .selected_drone_view(&cockpit.own().unwrap())
+            .is_none());
+        let labels = operations_safety_frame(&ctx, &mut cockpit, 0, vec![]);
+        assert!(labels
+            .iter()
+            .any(|(text, _)| text.contains("Selected drone #7 is no longer reported")));
+        assert!(!labels
+            .iter()
+            .any(|(text, _)| text == "Recall drone" || text == "Hold drone"));
+        assert_eq!(cockpit.selected_drone, Some(7));
+        assert!(rx.try_recv().is_err());
+        let point = labels
+            .iter()
+            .find(|(text, _)| text.starts_with("#02 "))
+            .unwrap()
+            .1;
+        operations_safety_click(&ctx, &mut cockpit, 0, point);
+        assert_eq!(cockpit.selected_drone, Some(2));
+        assert!(rx.try_recv().is_err());
+        let labels = operations_safety_frame(&ctx, &mut cockpit, 0, vec![]);
+        operations_safety_click(
+            &ctx,
+            &mut cockpit,
+            0,
+            labels
+                .iter()
+                .find(|(text, _)| text == "Recall drone")
+                .unwrap()
+                .1,
+        );
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(Request::RecallDroneById { id: 2 })
+        ));
+        assert_eq!(serde_json::to_value(&cockpit.snapshot).unwrap(), before);
+    }
+    #[test]
+    fn operations_safety_stale_turret_orders_wait_for_fresh_authority() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        let pilot = &mut cockpit.snapshot.as_mut().unwrap().pilots[0];
+        pilot.locked_asteroids = vec![7];
+        pilot.mining_modules[0].target_id = Some(7);
+        cockpit.timeline_origin = Some(3000);
+        let (tx, rx) = mpsc::channel();
+        cockpit.commands = Some(tx);
+        let before = serde_json::to_value(&cockpit.snapshot).unwrap();
+        assert!(!cockpit.can_mine(&cockpit.own().unwrap()));
+        let labels = operations_safety_frame(&ctx, &mut cockpit, 1, vec![]);
+        assert!(labels
+            .iter()
+            .any(|(text, _)| text.contains("Stale telemetry")));
+        for name in ["Stop turret", "Unlock target"] {
+            let point = labels.iter().find(|(text, _)| text == name).unwrap().1;
+            operations_safety_click(&ctx, &mut cockpit, 1, point);
+        }
+        assert!(rx.try_recv().is_err());
+        assert_eq!(serde_json::to_value(&cockpit.snapshot).unwrap(), before);
+        cockpit.timeline_origin = Some(1000);
+        let labels = operations_safety_frame(&ctx, &mut cockpit, 1, vec![]);
+        operations_safety_click(
+            &ctx,
+            &mut cockpit,
+            1,
+            labels
+                .iter()
+                .find(|(text, _)| text == "Stop turret")
+                .unwrap()
+                .1,
+        );
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(Request::StopMining { module_id: 0 })
+        ));
+    }
+    #[test]
+    fn operations_safety_reports_real_stage_and_full_hold_without_manual_orders() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        let pilot = &mut cockpit.snapshot.as_mut().unwrap().pilots[0];
+        pilot.locked_asteroids = vec![7];
+        pilot.ore = cargo_capacity(pilot.ship_class);
+        pilot.drones = vec![operations_safety_drone(7, DroneClass::Mining)];
+        let job:ResourceJob=serde_json::from_value(serde_json::json!({"controller":"pilot","pilot":"pilot","id":8,"target_units":10000,"mined_units":200,"stored_units":1000,"target_id":7,"phase":"mining","message":"Waiting for all mining drones to return","started_at_ms":1000,"updated_at_ms":1000})).unwrap();
+        cockpit.snapshot.as_mut().unwrap().resource_jobs.push(job);
+        let (tx, rx) = mpsc::channel();
+        cockpit.commands = Some(tx);
+        let before = serde_json::to_value(&cockpit.snapshot).unwrap();
+        let labels = operations_safety_frame(&ctx, &mut cockpit, 0, vec![]);
+        assert!(labels
+            .iter()
+            .any(|(text, _)| text.contains("manual orders cancel this mining routine")));
+        assert!(labels
+            .iter()
+            .any(|(text, _)| text.contains("Ship hold full")));
+        operations_safety_click(
+            &ctx,
+            &mut cockpit,
+            0,
+            labels
+                .iter()
+                .find(|(text, _)| text == "Mine locked target")
+                .unwrap()
+                .1,
+        );
+        assert!(rx.try_recv().is_err());
+        let labels = operations_safety_frame(&ctx, &mut cockpit, 2, vec![]);
+        assert!(labels
+            .iter()
+            .any(|(text, _)| text
+                .contains("Authority stage: Waiting for all mining drones to return")));
+        assert_eq!(serde_json::to_value(&cockpit.snapshot).unwrap(), before);
+    }
+
     #[test]
     fn drone_controls_emit_real_launch_hold_recall_and_selected_position() {
         let ctx = egui::Context::default();

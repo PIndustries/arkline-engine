@@ -268,6 +268,20 @@ impl Cockpit {
                     ui.colored_label(MUTED, "No routine assigned");
                 }
             });
+            if let Some(job) = &job {
+                ui.add(
+                    egui::Label::new(format!(
+                        "{}: {}",
+                        if job.phase == ResourceJobPhase::Blocked {
+                            "Blocked"
+                        } else {
+                            "Authority stage"
+                        },
+                        job.message
+                    ))
+                    .wrap(),
+                );
+            }
             if !self.connected {
                 ui.colored_label(AMBER, "Disconnected · last received state");
             } else if self.embedded && self.embedded_paused {
@@ -335,9 +349,6 @@ impl Cockpit {
                         job.stored_units, job.target_units
                     )),
                 );
-                if job.phase == ResourceJobPhase::Blocked {
-                    ui.colored_label(AMBER, format!("Blocked: {}", job.message));
-                }
                 if !job.phase.is_terminal() {
                     ui.horizontal_wrapped(|ui| {
                         if ui

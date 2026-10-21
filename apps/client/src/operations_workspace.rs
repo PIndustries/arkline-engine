@@ -18,6 +18,59 @@ fn group(tab: ServiceTab) -> usize {
 }
 
 impl Cockpit {
+    pub(super) fn operations_fresh(&self) -> bool {
+        self.connected
+            && self.snapshot.as_ref().is_some_and(|snapshot| {
+                self.presentation_time()
+                    .saturating_sub(snapshot.server_time_ms)
+                    <= 1500
+            })
+    }
+
+    pub(super) fn manual_operations_summary(&self, ui: &mut egui::Ui) {
+        let Some(ship) = self.own() else {
+            return;
+        };
+        egui::Frame::group(ui.style()).show(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.strong("CONTROL OWNERSHIP");
+                ui.label(format!("Ship · {}", ship.name));
+            });
+            if let Some(job) = self.snapshot.as_ref().and_then(|snapshot| {
+                snapshot
+                    .resource_jobs
+                    .iter()
+                    .find(|job| job.pilot == ship.name && !job.phase.is_terminal())
+            }) {
+                ui.colored_label(
+                    AMBER,
+                    format!(
+                        "Routine #{} active · manual orders cancel this mining routine",
+                        job.id
+                    ),
+                );
+                ui.small("Viewing telemetry or selecting a drone does not take control.");
+            } else {
+                ui.small("Manual operations · no active mining routine reported for this ship");
+            }
+            let reason = if !self.connected {
+                Some("Disconnected · commands unavailable")
+            } else if self.embedded_paused {
+                Some("Paused · resume simulation to issue commands")
+            } else if !self.operations_fresh() {
+                Some("Stale telemetry · waiting for authority before issuing commands")
+            } else if self.request_pending {
+                Some("Command pending · waiting for authority confirmation")
+            } else if ship.station_avatar.is_some() {
+                Some("On foot · manual ship orders require the pilot seat")
+            } else {
+                None
+            };
+            if let Some(reason) = reason {
+                ui.colored_label(MUTED, reason);
+            }
+        });
+    }
     pub(super) fn operations_route(&self) -> &'static str {
         ["Flight", "Ship", "Operations", "Station"][group(self.service_tab)]
     }
