@@ -290,130 +290,374 @@ fn obstacle_model_parts(
 
     let min = Vec3::from_array(o.min.map(|v| v as f32));
     let max = Vec3::from_array(o.max.map(|v| v as f32));
-    // Only the upper service-spine faces receive this bounded architectural
-    // slice. Installed rooms, cutaways and registered ship views reuse it.
-    if o.kind == StationObstacleKind::Wall
-        && room.is_some_and(|r| {
-            r.deck == 2 && (o.min[2] - r.door_wall_z()).abs() < 1e-8 && o.max[2] - o.min[2] < 0.16
-        })
-    {
-        return architectural_bulkhead_parts(min, max, 0., Vec3::new(0.46, 0.43, 0.35), false);
+    if o.kind == StationObstacleKind::Wall && room.is_some() {
+        // Every installed room uses the same in-envelope construction vocabulary.
+        // Bay density remains metre-scaled, including both deck corridor faces.
+        return architectural_bulkhead_parts(min, max, 0., wall_finish(room), false);
     }
-    if o.kind == StationObstacleKind::Table {
-        surface_block(
-            &mut p,
-            Vec3::new(min.x, max.y - 0.06, min.z),
-            max,
-            Vec3::new(0.055, 0.075, 0.068),
-            0.0,
-            SurfaceRole::Composite,
-        );
-        for x in [min.x + 0.1, max.x - 0.18] {
-            for z in [min.z + 0.1, max.z - 0.18] {
-                surface_block(
-                    &mut p,
-                    Vec3::new(x, min.y, z),
-                    Vec3::new(x + 0.08, max.y - 0.06, z + 0.08),
-                    Vec3::splat(0.18),
-                    0.0,
-                    SurfaceRole::ExposedAlloy,
-                );
-            }
-        }
-        return p.0;
+    if matches!(
+        o.kind,
+        StationObstacleKind::Table | StationObstacleKind::Sofa | StationObstacleKind::Storage
+    ) {
+        return fitted_furniture_parts(o, room);
     }
-    if o.kind == StationObstacleKind::Sofa {
-        surface_block(
-            &mut p,
-            min,
-            Vec3::new(max.x, 0.25, max.z),
-            Vec3::new(0.035, 0.045, 0.04),
-            0.0,
-            SurfaceRole::ExposedAlloy,
-        );
-        surface_block(
-            &mut p,
-            Vec3::new(min.x + 0.03, 0.25, min.z + 0.02),
-            Vec3::new(max.x - 0.03, 0.44, max.z - 0.02),
-            Vec3::new(0.045, 0.08, 0.065),
-            0.0,
-            SurfaceRole::Composite,
-        );
-        surface_block(
-            &mut p,
-            Vec3::new(min.x + 0.03, 0.44, max.z - 0.08),
-            max,
-            Vec3::new(0.045, 0.08, 0.065),
-            0.0,
-            SurfaceRole::Composite,
-        );
-        return p.0;
-    }
-    if o.kind == StationObstacleKind::Storage && max.y < 1.1 && max.x - min.x > 2.0 {
-        // Closed fitted counter/cupboards, no invented powered device or UI.
-        surface_block(
-            &mut p,
-            min,
-            max,
-            Vec3::new(0.024, 0.07, 0.044),
-            0.0,
-            SurfaceRole::Composite,
-        );
-        surface_block(
-            &mut p,
-            Vec3::new(min.x, max.y - 0.04, min.z),
-            max,
-            Vec3::splat(0.21),
-            0.0,
-            SurfaceRole::ExposedAlloy,
-        );
-        for i in 0..3 {
-            let x = min.x + (max.x - min.x) * i as f32 / 3.0;
-            let w = (max.x - min.x) / 3.0;
-            surface_block(
-                &mut p,
-                Vec3::new(x + 0.02, min.y + 0.12, min.z - 0.002),
-                Vec3::new(x + w - 0.02, max.y - 0.07, min.z + 0.015),
-                Vec3::new(0.032, 0.095, 0.06),
-                0.0,
-                SurfaceRole::EnamelTrim,
-            );
-            surface_block(
-                &mut p,
-                Vec3::new(x + w - 0.14, max.y - 0.25, min.z - 0.012),
-                Vec3::new(x + w - 0.07, max.y - 0.12, min.z),
-                Vec3::splat(0.18),
-                0.0,
-                SurfaceRole::ExposedAlloy,
-            );
-        }
-        return p.0;
-    }
-    let fixture = matches!(o.kind, StationObstacleKind::Storage);
     surface_block(
         &mut p,
         min,
         max,
-        if fixture {
-            Vec3::new(0.09, 0.13, 0.14)
-        } else {
-            wall_finish(room)
-        },
-        0.0,
-        if fixture {
-            SurfaceRole::Composite
-        } else {
-            SurfaceRole::CoatedPanel
-        },
+        wall_finish(room),
+        0.,
+        SurfaceRole::CoatedPanel,
     );
-    if fixture {
-        surface_block(
-            &mut p,
-            Vec3::new(min.x + 0.1, max.y - 0.5, max.z + 0.005),
-            Vec3::new(max.x - 0.1, max.y - 0.05, max.z + 0.02),
-            Vec3::new(0.015, 0.25, 0.1),
-            0.4,
-            SurfaceRole::InstrumentGlass,
+    p.0
+}
+
+/// Passive construction of already installed furniture. All dimensions are
+/// fractions of the original authoritative obstacle, including handles/seams.
+fn fitted_furniture_parts(
+    obstacle: arkline_protocol::StationObstacle,
+    room: Option<&arkline_protocol::RoomLayout>,
+) -> Vec<ModelPart> {
+    let mut p = Parts(Vec::new());
+    let min = Vec3::from_array(obstacle.min.map(|v| v as f32));
+    let max = Vec3::from_array(obstacle.max.map(|v| v as f32));
+    let size = max - min;
+    let graphite = Vec3::new(0.025, 0.036, 0.039);
+    let alloy = Vec3::new(0.20, 0.25, 0.26);
+    let upholstery = Vec3::new(0.055, 0.095, 0.078);
+    let front_bench = obstacle.kind == StationObstacleKind::Sofa
+        && room.is_some_and(|r| {
+            (obstacle.min[2] + obstacle.max[2]) * 0.5 < r.origin_xz_m[1] + r.clear_lwh_m[1] * 0.5
+        });
+    let at = |mut point: Vec3| {
+        if front_bench {
+            point.z = 1.0 - point.z;
+        }
+        min + size * point
+    };
+    let mut block = |a: [f32; 3], b: [f32; 3], color: Vec3, role: SurfaceRole| {
+        let a = at(Vec3::from_array(a));
+        let b = at(Vec3::from_array(b));
+        surface_block(&mut p, a.min(b), a.max(b), color, 0., role);
+    };
+    match obstacle.kind {
+        StationObstacleKind::Table => {
+            block(
+                [0., 0.90, 0.],
+                [1., 0.95, 1.],
+                alloy,
+                SurfaceRole::ExposedAlloy,
+            );
+            block(
+                [0.035, 0.95, 0.045],
+                [0.965, 0.99, 0.955],
+                graphite,
+                SurfaceRole::Composite,
+            );
+            for (a, b) in [
+                ([0., 0.95, 0.], [0.035, 1., 1.]),
+                ([0.965, 0.95, 0.], [1., 1., 1.]),
+                ([0.035, 0.95, 0.], [0.965, 1., 0.045]),
+                ([0.035, 0.95, 0.955], [0.965, 1., 1.]),
+            ] {
+                block(a, b, alloy, SurfaceRole::ExposedAlloy);
+            }
+            for x in [0.08, 0.86] {
+                for z in [0.08, 0.86] {
+                    block(
+                        [x, 0.025, z],
+                        [x + 0.06, 0.90, z + 0.06],
+                        alloy,
+                        SurfaceRole::ExposedAlloy,
+                    );
+                    block(
+                        [x - 0.025, 0., z - 0.025],
+                        [x + 0.085, 0.025, z + 0.085],
+                        graphite,
+                        SurfaceRole::Composite,
+                    );
+                }
+            }
+            block(
+                [0.12, 0.20, 0.46],
+                [0.88, 0.25, 0.54],
+                alloy,
+                SurfaceRole::ExposedAlloy,
+            );
+        }
+        StationObstacleKind::Sofa => {
+            block(
+                [0., 0., 0.],
+                [1., 0.33, 1.],
+                graphite,
+                SurfaceRole::Composite,
+            );
+            block(
+                [0.015, 0.33, 0.80],
+                [0.985, 1., 1.],
+                graphite,
+                SurfaceRole::Composite,
+            );
+            for i in 0..2 {
+                let x0 = i as f32 * 0.5 + 0.025;
+                let x1 = (i + 1) as f32 * 0.5 - 0.025;
+                block(
+                    [x0, 0.35, 0.035],
+                    [x1, 0.62, 0.79],
+                    upholstery,
+                    SurfaceRole::Composite,
+                );
+                block(
+                    [x0, 0.65, 0.79],
+                    [x1, 0.97, 0.95],
+                    upholstery,
+                    SurfaceRole::Composite,
+                );
+            }
+            block(
+                [0.015, 0.24, 0.01],
+                [0.985, 0.29, 0.035],
+                alloy,
+                SurfaceRole::ExposedAlloy,
+            );
+        }
+        StationObstacleKind::Storage => {
+            let counter = size.y < 1.1 && size.x > 2.;
+            let count = if counter { 3 } else { 2 };
+            let door_color = if room.is_some_and(|r| r.deck == 2) {
+                Vec3::new(0.045, 0.105, 0.077)
+            } else {
+                Vec3::new(0.10, 0.15, 0.16)
+            };
+            block(
+                [0., 0., 0.],
+                [1., 0.06, 1.],
+                graphite,
+                SurfaceRole::Composite,
+            );
+            block(
+                [0.01, 0.06, 0.025],
+                [0.99, 0.95, 0.99],
+                graphite,
+                SurfaceRole::Composite,
+            );
+            block(
+                [0., 0.95, 0.],
+                [1., 1., 1.],
+                alloy,
+                SurfaceRole::ExposedAlloy,
+            );
+            for i in 0..count {
+                let x0 = i as f32 / count as f32 + 0.012;
+                let x1 = (i + 1) as f32 / count as f32 - 0.012;
+                block(
+                    [x0, 0.10, 0.005],
+                    [x1, 0.91, 0.020],
+                    door_color,
+                    SurfaceRole::EnamelTrim,
+                );
+                // Recessed, non-powered latch and ventilation slots.
+                block(
+                    [x1 - 0.045, 0.53, 0.001],
+                    [x1 - 0.025, 0.70, 0.004],
+                    alloy,
+                    SurfaceRole::ExposedAlloy,
+                );
+                if !counter {
+                    for y in [0.20, 0.24, 0.28] {
+                        block(
+                            [x0 + 0.025, y, 0.001],
+                            [x1 - 0.07, y + 0.012, 0.004],
+                            graphite,
+                            SurfaceRole::Composite,
+                        );
+                    }
+                }
+            }
+        }
+        _ => return Vec::new(),
+    }
+    p.0
+}
+
+fn room_plaque_wall(
+    room: &arkline_protocol::RoomLayout,
+) -> Option<arkline_protocol::StationObstacle> {
+    let face = room.door_wall_z();
+    room.obstacles()
+        .into_iter()
+        .filter(|o| {
+            o.kind == StationObstacleKind::Wall
+                && (o.min[2] - face).abs() < 1e-6
+                && o.max[0] - o.min[0] >= 1.55
+                && o.max[1] - o.min[1] >= 2.0
+                && o.max[2] - o.min[2] >= 0.04
+        })
+        .max_by(|a, b| (a.max[0] - a.min[0]).total_cmp(&(b.max[0] - b.min[0])))
+}
+
+fn plaque_glyph(ch: char) -> [u8; 5] {
+    match ch {
+        'A' => [2, 5, 7, 5, 5],
+        'B' => [6, 5, 6, 5, 6],
+        'C' => [7, 4, 4, 4, 7],
+        'D' => [6, 5, 5, 5, 6],
+        'E' => [7, 4, 6, 4, 7],
+        'F' => [7, 4, 6, 4, 4],
+        'G' => [7, 4, 5, 5, 7],
+        'H' => [5, 5, 7, 5, 5],
+        'I' => [7, 2, 2, 2, 7],
+        'J' => [1, 1, 1, 5, 7],
+        'K' => [5, 5, 6, 5, 5],
+        'L' => [4, 4, 4, 4, 7],
+        'M' => [5, 7, 7, 5, 5],
+        'N' => [5, 7, 7, 7, 5],
+        'O' => [7, 5, 5, 5, 7],
+        'P' => [7, 5, 7, 4, 4],
+        'Q' => [7, 5, 5, 7, 1],
+        'R' => [6, 5, 6, 5, 5],
+        'S' => [7, 4, 7, 1, 7],
+        'T' => [7, 2, 2, 2, 2],
+        'U' => [5, 5, 5, 5, 7],
+        'V' => [5, 5, 5, 5, 2],
+        'W' => [5, 5, 7, 7, 5],
+        'X' => [5, 5, 2, 5, 5],
+        'Y' => [5, 5, 2, 2, 2],
+        'Z' => [7, 1, 2, 4, 7],
+        '0' => [7, 5, 5, 5, 7],
+        '1' => [2, 6, 2, 2, 7],
+        '2' => [7, 1, 7, 4, 7],
+        '3' => [7, 1, 7, 1, 7],
+        '4' => [5, 5, 7, 1, 1],
+        '5' => [7, 4, 7, 1, 7],
+        '6' => [7, 4, 7, 5, 7],
+        '7' => [7, 1, 1, 1, 1],
+        '8' => [7, 5, 7, 5, 7],
+        '9' => [7, 5, 7, 1, 7],
+        '-' => [0, 0, 7, 0, 0],
+        '/' => [1, 1, 2, 4, 4],
+        _ => [0; 5],
+    }
+}
+
+fn plaque_text(p: &mut Parts, text: &str, center: Vec3, face: f32, max_width: f32, cell: f32) {
+    let count = text.chars().count();
+    if count == 0 {
+        return;
+    }
+    let cell = cell.min(max_width / (count * 4 - 1) as f32);
+    let width = (count * 4 - 1) as f32 * cell;
+    for (letter, ch) in text.chars().enumerate() {
+        for (row, bits) in plaque_glyph(ch).into_iter().enumerate() {
+            // Merge adjacent pixels into strokes rather than emitting dense cubes.
+            let mut column = 0;
+            while column < 3 {
+                if bits & (1 << (2 - column)) == 0 {
+                    column += 1;
+                    continue;
+                }
+                let first = column;
+                column += 1;
+                while column < 3 && bits & (1 << (2 - column)) != 0 {
+                    column += 1;
+                }
+                let x = -width * 0.5 + (letter * 4 + first) as f32 * cell;
+                let x1 = x + (column - first) as f32 * cell * 0.91;
+                let y = (2.0 - row as f32) * cell;
+                let a = center + Vec3::new(face * x, y - cell * 0.43, -0.00015);
+                let b = center + Vec3::new(face * x1, y + cell * 0.43, 0.00015);
+                surface_block(
+                    p,
+                    a.min(b),
+                    a.max(b),
+                    Vec3::new(0.74, 0.76, 0.70),
+                    0.,
+                    SurfaceRole::CoatedPanel,
+                );
+            }
+        }
+    }
+}
+
+/// One fixed room identity at the actual doorway, contained in its wall solid.
+/// Paint and an arrow describe the room/location only, never equipment state.
+fn room_plaque_parts(room: &arkline_protocol::RoomLayout) -> Vec<ModelPart> {
+    let Some(wall) = room_plaque_wall(room) else {
+        return Vec::new();
+    };
+    let min = Vec3::from_array(wall.min.map(|v| v as f32));
+    let max = Vec3::from_array(wall.max.map(|v| v as f32));
+    let door_x = room.door_center_xz_m[0] as f32;
+    let face = if room.origin_xz_m[1] + room.clear_lwh_m[1] * 0.5 < room.door_wall_z() {
+        1.0
+    } else {
+        -1.0
+    };
+    let x = if max.x <= door_x {
+        max.x - 0.78
+    } else {
+        min.x + 0.78
+    };
+    let outer_z = if face > 0. { max.z } else { min.z };
+    let mut p = Parts(Vec::new());
+    surface_block(
+        &mut p,
+        Vec3::new(x - 0.625, 1.25, outer_z - face * 0.006).min(Vec3::new(
+            x + 0.625,
+            1.85,
+            outer_z - face * 0.0005,
+        )),
+        Vec3::new(x - 0.625, 1.25, outer_z - face * 0.006).max(Vec3::new(
+            x + 0.625,
+            1.85,
+            outer_z - face * 0.0005,
+        )),
+        Vec3::new(0.026, 0.038, 0.042),
+        0.,
+        SurfaceRole::Composite,
+    );
+    let id = room
+        .source_room_id
+        .clone()
+        .unwrap_or_else(|| format!("R{}", room.id));
+    let name: String = room
+        .name
+        .to_ascii_uppercase()
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric() || matches!(ch, ' ' | '-' | '/'))
+        .take(18)
+        .collect();
+    let z = outer_z - face * 0.0002;
+    plaque_text(
+        &mut p,
+        &id,
+        Vec3::new(x - face * 0.12, 1.69, z),
+        face,
+        0.87,
+        0.032,
+    );
+    plaque_text(&mut p, &name, Vec3::new(x, 1.42, z), face, 1.10, 0.028);
+    // Direction points to the actual opening on either corridor wall.
+    let direction = if door_x > x { 1.0 } else { -1.0 };
+    let arrow = Vec3::new(x + face * 0.45, 1.69, z);
+    for (offset, angle, half) in [
+        (Vec3::ZERO, 0., Vec3::new(0.052, 0.007, 0.00015)),
+        (
+            Vec3::new(direction * 0.026, 0.024, 0.),
+            -direction * std::f32::consts::FRAC_PI_4,
+            Vec3::new(0.035, 0.007, 0.00015),
+        ),
+        (
+            Vec3::new(direction * 0.026, -0.024, 0.),
+            direction * std::f32::consts::FRAC_PI_4,
+            Vec3::new(0.035, 0.007, 0.00015),
+        ),
+    ] {
+        p.draw(
+            SurfaceRole::EnamelTrim.cube(),
+            transform(arrow + offset, half, Quat::from_rotation_z(angle)),
+            Vec3::new(0.37, 0.27, 0.08),
+            0.,
         );
     }
     p.0
@@ -421,7 +665,7 @@ fn obstacle_model_parts(
 
 /// Existing doorway surrounds and ceiling light belonging to one room.
 fn room_decoration_parts(room: &arkline_protocol::RoomLayout) -> Vec<ModelPart> {
-    let mut p = Parts(Vec::new());
+    let mut p = Parts(room_plaque_parts(room));
     let [x, z] = room.origin_xz_m.map(|v| v as f32);
     let [length, depth, height] = room.clear_lwh_m.map(|v| v as f32);
     let [door, _door_z] = room.door_center_xz_m.map(|v| v as f32);
@@ -1430,6 +1674,108 @@ mod tests {
 #[cfg(test)]
 mod architectural_finish_tests {
     use super::*;
+
+    fn contained_parts(parts: &[ModelPart], min: Vec3, max: Vec3, label: &str) {
+        for (mesh, model, _, emission) in parts {
+            assert_eq!(mesh_index(*mesh), 0, "{label}: only existing box geometry");
+            assert_eq!(
+                *emission, 0.,
+                "{label}: passive finish cannot invent output"
+            );
+            assert!(model.is_finite() && model.determinant() > 0.);
+            for x in [-1., 1.] {
+                for y in [-1., 1.] {
+                    for z in [-1., 1.] {
+                        let vertex = model.transform_point3(Vec3::new(x, y, z));
+                        assert!(
+                            (0..3)
+                                .all(|i| vertex[i] >= min[i] - 1e-5 && vertex[i] <= max[i] + 1e-5),
+                            "{label}: {vertex:?} escapes original solid {min:?}..{max:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn pioneer_completion_both_decks_and_room_identities_retain_solid_envelopes() {
+        let document = arkline_protocol::default_pioneer();
+        let original = document.clone();
+        let mut walls = [0; 2];
+        let mut wall_parts = 0;
+        let mut plaque_parts = 0;
+        for room in &document.rooms {
+            for obstacle in room
+                .obstacles()
+                .into_iter()
+                .filter(|o| o.kind == StationObstacleKind::Wall)
+            {
+                let parts = obstacle_model_parts(obstacle, Some(room));
+                assert!(!parts.is_empty() && parts.len() <= 16);
+                walls[usize::from(room.deck - 1)] += 1;
+                wall_parts += parts.len();
+                contained_parts(
+                    &parts,
+                    Vec3::from_array(obstacle.min.map(|v| v as f32)),
+                    Vec3::from_array(obstacle.max.map(|v| v as f32)),
+                    &room.name,
+                );
+            }
+            let wall =
+                room_plaque_wall(room).expect("Every existing doorway has a solid label mount");
+            let plaque = room_plaque_parts(room);
+            assert!(
+                !plaque.is_empty() && plaque.len() <= 160,
+                "One bounded, readable room plaque"
+            );
+            plaque_parts += plaque.len();
+            contained_parts(
+                &plaque,
+                Vec3::from_array(wall.min.map(|v| v as f32)),
+                Vec3::from_array(wall.max.map(|v| v as f32)),
+                &room.name,
+            );
+        }
+        assert!(walls.into_iter().all(|count| count > 0));
+        assert_eq!(
+            document, original,
+            "Presentation must not edit layout, roles, IDs or collision"
+        );
+        eprintln!("Passive room completion: walls per deck={walls:?}, wall parts={wall_parts}, plaques={}, plaque parts={plaque_parts}, added emitters=0 (part counts only, not GPU timing)", document.rooms.len());
+    }
+
+    #[test]
+    fn pioneer_completion_existing_furniture_is_passive_and_stays_inside_its_obstacles() {
+        let document = arkline_protocol::default_pioneer();
+        let mut roles = [0; 3];
+        let mut total = 0;
+        for room in &document.rooms {
+            for obstacle in room.obstacles() {
+                let index = match obstacle.kind {
+                    StationObstacleKind::Table => 0,
+                    StationObstacleKind::Sofa => 1,
+                    StationObstacleKind::Storage => 2,
+                    _ => continue,
+                };
+                let parts = fitted_furniture_parts(obstacle, Some(room));
+                assert!(
+                    !parts.is_empty() && parts.len() <= 20,
+                    "One bounded existing furniture recipe"
+                );
+                total += parts.len();
+                roles[index] += 1;
+                contained_parts(
+                    &parts,
+                    Vec3::from_array(obstacle.min.map(|v| v as f32)),
+                    Vec3::from_array(obstacle.max.map(|v| v as f32)),
+                    &room.name,
+                );
+            }
+        }
+        assert!(roles.into_iter().all(|count| count > 0));
+        eprintln!("Passive fitted furniture: table/bench/storage={roles:?}, parts={total}, emitters=0; real equipment and ceiling output recipes unchanged");
+    }
 
     #[test]
     fn fitted_finishes_remain_inside_existing_solid_wall_envelopes() {
