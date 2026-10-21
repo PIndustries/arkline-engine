@@ -263,6 +263,9 @@ impl Cockpit {
             });
         ui.separator();
         let camera_chosen = camera_sources::selector(ui, &mut self.camera_source, &mut self.drone_camera);
+        if p.location == Location::Docked || p.station_avatar.is_some() {
+            ui.colored_label(MUTED, "Camera video appears in the free-flight Cockpit view. Docked/interior instruments keep their navigation display.");
+        }
         if camera_chosen && !matches!(self.camera_source, camera_sources::CameraSource::Drones) {
             self.remote_ship = None;
         }

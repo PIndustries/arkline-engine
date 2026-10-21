@@ -2439,13 +2439,158 @@ fn add_cockpit_furniture(g: &mut PioneerDockedGeometry) {
             add_cockpit_button_cartridges(g, center, half, axes);
         }
     }
+    add_cockpit_sculpted_console(g);
 }
 
-/// Rendering replaces this one whole backing with the passive pocket substrate
-/// below. The original panel remains the exact authoritative collision proxy.
+/// Rendering replaces only these declared whole faces and furniture proxies.
+/// Their original panels remain the exact authoritative collision recipe.
 /// This predicate never applies to collision, ray permission or command logic.
 pub fn cockpit_panel_has_visual_replacement(id: &str) -> bool {
-    id == "cockpit/screen/3/backing"
+    matches!(id,
+        "cockpit/screen/3/backing"
+        | "cockpit/bank/port-plinth" | "cockpit/bank/starboard-plinth"
+        | "cockpit/bank/port-toe" | "cockpit/bank/starboard-toe"
+        | "cockpit/bank/port-crossmember-seat" | "cockpit/bank/starboard-crossmember-seat"
+        | "cockpit/bank/port-shoulder-deck" | "cockpit/bank/starboard-shoulder-deck"
+        | "cockpit/bank/port-shoulder-carcass" | "cockpit/bank/starboard-shoulder-carcass"
+        | "cockpit/bank/port-shoulder-edge" | "cockpit/bank/starboard-shoulder-edge"
+        | "cockpit/dashboard/pod/front-fascia"
+        | "cockpit/dashboard/pod/sloped-service-shelf"
+    ) || [
+        "cockpit/bank/port-access-face", "cockpit/bank/starboard-access-face",
+        "cockpit/bank/port-service-rib", "cockpit/bank/starboard-service-rib",
+    ].iter().any(|prefix| id == *prefix
+        || id.strip_prefix(*prefix).is_some_and(|suffix| suffix.starts_with('/')))
+}
+
+/// One passive construction piece. Opaque proxy solids are retained separately
+/// and every replacement stays inside its corresponding existing envelope.
+fn cockpit_console_visual_part(
+    g: &mut PioneerDockedGeometry,
+    id: String,
+    bounds: PioneerDockedBox,
+    material: PioneerDockedMaterial,
+) {
+    g.panel(id, bounds, material, PioneerDockedCollision::Decoration,
+        PioneerDockedCell::Cockpit, PioneerDockedPanelKind::Furniture);
+}
+
+/// Closed octagonal plate, expressed as the union of two central rectangles and
+/// four diagonal squares. The corners are true facets rather than stair steps.
+/// All six OBBs fit inside the old shoulder's local half extents.
+fn add_cockpit_chamfered_deck(
+    g: &mut PioneerDockedGeometry,
+    id: &str,
+    center: [f64; 3],
+    axes: [[f64; 3]; 3],
+    half_height: f64,
+    material: PioneerDockedMaterial,
+) {
+    let q = std::f64::consts::FRAC_1_SQRT_2;
+    for (name, half) in [
+        ("long", [0.365, half_height, 0.235]),
+        ("wide", [0.285, half_height, 0.315]),
+    ] {
+        cockpit_console_visual_part(g, format!("{id}/{name}"),
+            PioneerDockedBox { center_m: center, half_m: half, axes }, material);
+    }
+    let diagonal_axes = [mul(add(axes[0], axes[2]), q), axes[1],
+        mul(sub(axes[2], axes[0]), q)];
+    for (i, a, b) in [(0, -0.285, -0.235), (1, -0.285, 0.235),
+        (2, 0.285, -0.235), (3, 0.285, 0.235)] {
+        cockpit_console_visual_part(g, format!("{id}/corner/{i}"),
+            PioneerDockedBox {
+                center_m: add(center, add(mul(axes[0], a), mul(axes[2], b))),
+                half_m: [0.08 * q, half_height, 0.08 * q],
+                axes: diagonal_axes,
+            }, material);
+    }
+}
+
+/// Forty-four passive parts replace forty-two visible furniture instances:
+/// two bevelled cabinets, two chamfered desk shells and a narrowing centre pod.
+/// The net cost is two instances; no gauge tessellation or input mount changes.
+fn add_cockpit_sculpted_console(g: &mut PioneerDockedGeometry) {
+    use PioneerDockedMaterial::{Carbon, Graphite, Titanium};
+    let q = std::f64::consts::FRAC_1_SQRT_2;
+    for (side, z0, z1) in [("port", 2.0, 2.65), ("starboard", 3.35, 4.0)] {
+        // These overlapping closed prisms form a single cabinet with a 180 mm
+        // bevel below its pilot-facing apron, entirely inside the old plinth.
+        for (name, min, max, material) in [
+            ("upper-body", [33.90, -0.06, z0 + 0.01], [34.74, 0.32, z1 - 0.01], Graphite),
+            ("lower-body", [34.08, -0.24, z0 + 0.01], [34.74, -0.06, z1 - 0.01], Graphite),
+            ("service-cover", [33.895, 0.005, z0 + 0.06], [33.902, 0.25, z1 - 0.06], Carbon),
+            ("upper-cap", [33.92, 0.32, z0 + 0.02], [34.72, 0.33, z1 - 0.02], Carbon),
+            ("foot", [34.10, -0.245, z0 + 0.05], [34.72, -0.235, z1 - 0.05], Titanium),
+        ] {
+            cockpit_console_visual_part(g,
+                format!("cockpit/console-sculpt/{side}/cabinet/{name}"),
+                axis_box(min, max), material);
+        }
+        cockpit_console_visual_part(g,
+            format!("cockpit/console-sculpt/{side}/cabinet/lower-bevel"),
+            PioneerDockedBox {
+                center_m: [34.08, -0.06, (z0 + z1) * 0.5],
+                half_m: [0.18 * q, 0.18 * q, (z1 - z0) * 0.5 - 0.01],
+                axes: [[q, q, 0.0], [-q, q, 0.0], Z],
+            }, Graphite);
+        let length = 0.74_f64.hypot(0.14);
+        let axes = [[0.74 / length, 0.14 / length, 0.0],
+            [-0.14 / length, 0.74 / length, 0.0], Z];
+        // The broad surfaces and their closed lower shell meet the existing
+        // bridge/socket shoulders; nothing is raised into a live instrument.
+        for (name, y, half_height, material) in [
+            ("desk-top", 0.475, 0.025, Carbon),
+            ("desk-shell", 0.372, 0.080, Graphite),
+        ] {
+            add_cockpit_chamfered_deck(g,
+                &format!("cockpit/console-sculpt/{side}/{name}"),
+                [34.31, y, (z0 + z1) * 0.5], axes, half_height, material);
+        }
+    }
+    // A broad saddle narrows into a recessed web and two angled cheeks inside
+    // the former fascia. The web still meets the unchanged centre mount.
+    for (name, min, max, material) in [
+        ("web", [34.065, 0.64, 2.88], [34.080, 0.93, 3.12], Graphite),
+        ("saddle", [34.062, 0.90, 2.79], [34.083, 0.94, 3.21], Carbon),
+    ] {
+        cockpit_console_visual_part(g, format!("cockpit/console-sculpt/pedestal/{name}"),
+            axis_box(min, max), material);
+    }
+    for (side, z0, z1) in [("port", 2.885, 2.805), ("starboard", 3.115, 3.195)] {
+        let delta = [0.0, 0.270, z1 - z0];
+        let length = dot(delta, delta).sqrt();
+        let along = mul(delta, length.recip());
+        cockpit_console_visual_part(g, format!("cockpit/console-sculpt/pedestal/{side}-cheek"),
+            PioneerDockedBox {
+                center_m: [34.073, 0.790, (z0 + z1) * 0.5],
+                half_m: [0.010, length * 0.5, 0.008],
+                axes: [X, along, cross(X, along)],
+            }, Graphite);
+    }
+    // Four closed OBBs make a wide aft cover with two clipped forward corners,
+    // following the existing sloped sidewalls down to the narrow rear web.
+    let delta = [0.37, -0.11, 0.0];
+    let length = dot(delta, delta).sqrt();
+    let along = mul(delta, length.recip());
+    let up = [-along[1], along[0], 0.0];
+    let center = [34.265, 0.875, 3.0];
+    for (name, offset, half) in [
+        ("wide", -0.05, [0.14, 0.012, 0.21]),
+        ("tongue", 0.0, [0.19, 0.012, 0.11]),
+    ] {
+        cockpit_console_visual_part(g, format!("cockpit/console-sculpt/pod-cover/{name}"),
+            PioneerDockedBox { center_m: add(center, mul(along, offset)),
+                half_m: half, axes: [along, up, Z] }, Carbon);
+    }
+    for (i, z) in [(0, -0.11), (1, 0.11)] {
+        cockpit_console_visual_part(g, format!("cockpit/console-sculpt/pod-cover/corner/{i}"),
+            PioneerDockedBox {
+                center_m: add(center, add(mul(along, 0.09), mul(Z, z))),
+                half_m: [0.10 * q, 0.012, 0.10 * q],
+                axes: [mul(add(along, Z), q), up, mul(sub(Z, along), q)],
+            }, Carbon);
+    }
 }
 
 /// Physical cartridges under the existing BERTH and STOP widgets. Rectangles

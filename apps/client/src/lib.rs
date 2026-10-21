@@ -2025,30 +2025,29 @@ impl Cockpit {
             || "No target reported".into(),
             |job| format!("{} / {} ore", job.stored_units, job.target_units),
         );
-        ui.horizontal(|ui| {
-            ui.label(egui::RichText::new("SPEED").size(16.0).color(MUTED));
-            ui.label(
-                egui::RichText::new(speed)
-                    .monospace()
-                    .size(42.0)
-                    .color(self.accent()),
-            );
+        // Two compact readout groups leave the live control bank and view
+        // unobstructed. The expanded pages retain detailed management.
+        ui.columns(2, |columns| {
+            egui::Frame::new().fill(Color32::from_rgb(7, 17, 23))
+                .inner_margin(egui::Margin::same(6)).show(&mut columns[0], |ui| {
+                    ui.label(egui::RichText::new("SPEED").size(16.0).color(MUTED));
+                    ui.label(egui::RichText::new(speed).monospace().size(32.0).color(self.accent()));
+                    ui.label(egui::RichText::new(mode).size(18.0));
+                });
+            egui::Frame::new().fill(Color32::from_rgb(7, 17, 23))
+                .inner_margin(egui::Margin::same(6)).show(&mut columns[1], |ui| {
+                    ui.label(egui::RichText::new("Routine").size(16.0).color(MUTED));
+                    ui.label(egui::RichText::new(mining).size(24.0).color(self.accent()));
+                    ui.label(egui::RichText::new("Delivered").size(16.0).color(MUTED));
+                    ui.label(egui::RichText::new(delivery).monospace().size(22.0));
+                });
         });
-        ui.label(mode).on_hover_text("Server-confirmed navigation mode. Braking / holding is a navigation order, not proof of zero velocity.");
-        ui.horizontal(|ui| {
-            ui.colored_label(MUTED, "Routine");
-            ui.label(mining);
-        });
-        ui.horizontal(|ui| {
-            ui.colored_label(MUTED, "Delivered");
-            ui.label(delivery);
-        });
-        ui.label(format!(
+        ui.label(egui::RichText::new(format!(
             "Hold {} / {} ore · {} drones",
             pilot.ore,
             cargo_capacity(pilot.ship_class),
             Self::fleet(&pilot).len()
-        ))
+        )).size(18.0))
         .on_hover_text("Current ship ore and reported hold capacity; drones counts deployed craft, not craft in the bay. Power and regeneration ratings are available in the expanded console.");
     }
     /// Build the physical computer in one fixed logical canvas. Perspective

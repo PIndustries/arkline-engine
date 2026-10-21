@@ -1497,7 +1497,7 @@ fn native_pioneer_bridge_corridor_finish_review() {
             collision, geometry.supports, geometry.portals
         );
         let parts = pioneer_docked_scene::default_body_parts().unwrap();
-        assert!(parts.len() <= 650, "Bounded architectural instance budget");
+        assert!(parts.len() <= 650, "Bounded architectural instance budget: {} actual body instances exceeds 650", parts.len());
         assert_eq!(
             parts.iter().filter(|p| p.3 > 0.).count(),
             63,
