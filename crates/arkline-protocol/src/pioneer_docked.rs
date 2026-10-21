@@ -2593,7 +2593,7 @@ fn add_cockpit_sculpted_console(g: &mut PioneerDockedGeometry) {
     }
 }
 
-/// Physical cartridges under the existing BERTH and STOP widgets. Rectangles
+/// Physical cartridges under the BERTH/STOP controls and workspace selectors. Rectangles
 /// are absolute coordinates on the unchanged 560 x 380 computer canvas; they
 /// describe construction only, with no eligibility, command or input model.
 fn add_cockpit_button_cartridges(
@@ -2630,11 +2630,16 @@ fn add_cockpit_button_cartridges(
             PioneerDockedPanelKind::Instrument,
         );
     };
-    // Exact complement of the two pockets [9,29..147,73] and [161,29..263,73].
-    // These five strips retain the old backing front, depth and outer extent.
+    // Exact complement of the two command pockets and three workspace-key
+    // pockets. The shared backing extent and fixed input plane are unchanged.
     for (name, rect) in [
         ("substrate/top", [0.0, 0.0, 560.0, 29.0]),
-        ("substrate/bottom", [0.0, 73.0, 560.0, 380.0]),
+        ("substrate/middle", [0.0, 73.0, 560.0, 327.0]),
+        ("substrate/bottom", [0.0, 377.0, 560.0, 380.0]),
+        ("substrate/workspace-port", [0.0, 327.0, 9.0, 377.0]),
+        ("substrate/workspace-flight-drone", [183.0, 327.0, 193.0, 377.0]),
+        ("substrate/workspace-drone-mining", [367.0, 327.0, 377.0, 377.0]),
+        ("substrate/workspace-starboard", [551.0, 327.0, 560.0, 377.0]),
         ("substrate/port", [0.0, 29.0, 9.0, 73.0]),
         ("substrate/between", [147.0, 29.0, 161.0, 73.0]),
         ("substrate/starboard", [263.0, 29.0, 560.0, 73.0]),
@@ -2659,6 +2664,33 @@ fn add_cockpit_button_cartridges(
         }
         // A separate base seats on the recessed floor. The cap body projects
         // 6.2 mm from its base, with a smaller face forming a stepped edge.
+        part(&format!("{name}/base"),
+            [left - 1.0, top - 1.0, right + 1.0, bottom + 1.0],
+            -0.0255, -0.0216, Carbon);
+        part(&format!("{name}/cap-body"), [left, top, right, bottom],
+            -0.0297, -0.0255, Graphite);
+        part(&format!("{name}/cap-face"),
+            [left + 1.5, top + 1.5, right - 1.5, bottom - 1.5],
+            -0.0317, -0.0297, Titanium);
+    }
+    // The workspace row is a single recessed cartridge rail with three
+    // independent stepped keys. Shared floor/edge pieces avoid duplicating a
+    // full eight-piece command-button housing for each view selector. These
+    // keys select existing workspaces; they do not represent ship commands.
+    part("workspace/pocket-floor", [9.0, 327.0, 551.0, 377.0],
+        -0.022, -0.019, Carbon);
+    for (edge, rect) in [
+        ("top", [9.0, 327.0, 551.0, 328.0]),
+        ("bottom", [9.0, 376.0, 551.0, 377.0]),
+    ] {
+        part(&format!("workspace/pocket-liner/{edge}"), rect,
+            -0.0305, -0.022, Titanium);
+    }
+    for (name, [left, top, right, bottom]) in [
+        ("workspace-flight", [12.0, 330.0, 180.0, 374.0]),
+        ("workspace-drone", [196.0, 330.0, 364.0, 374.0]),
+        ("workspace-mining", [380.0, 330.0, 548.0, 374.0]),
+    ] {
         part(&format!("{name}/base"),
             [left - 1.0, top - 1.0, right + 1.0, bottom + 1.0],
             -0.0255, -0.0216, Carbon);

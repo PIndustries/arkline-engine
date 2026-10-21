@@ -1540,6 +1540,25 @@ fn native_pioneer_cockpit_mining_composition() {
         h.cockpit.drone_split = true;
         // Reproduce the actual physical command path in this isolated world:
         // pointer release → queued request → authority response → free-flight view.
+        // Exercise the real perspective-mapped workspace key faces before
+        // the separate authority Undock journey. UI destinations issue no orders.
+        for (label, tab) in [("FLIGHT", crate::ServiceTab::Navigation),
+            ("DRONES", crate::ServiceTab::Drones), ("MINING", crate::ServiceTab::ShipComputer)] {
+            h.cockpit.services_open = false;
+            let shot = h.settle();
+            let canvas = shot.computer_labels.iter().find(|(text, p)| text == label && p.y >= 330.0)
+                .expect("Visible physical workspace label").1;
+            let point = shot.surface.as_ref().unwrap().project(canvas).unwrap();
+            let before = h.authority_requests.len();
+            let selected = h.click(point);
+            assert!(h.cockpit.services_open, "{label} did not open its workspace");
+            assert!(h.cockpit.service_tab == tab, "{label} opened a different workspace");
+            assert_eq!(h.authority_requests.len(), before, "Workspace key issued an authority command");
+            capture(Some(&directory), &format!("workspace-{}", label.to_lowercase()), &selected);
+            h.cockpit.services_open = false;
+            h.frame(vec![egui::Event::PointerGone]);
+        }
+        h.cockpit.service_tab = crate::ServiceTab::Drones;
         let ready = h.settle();
         capture(Some(&directory), "undock-button-before", &ready);
         let click_point = ready.physical_label("UNDOCK");

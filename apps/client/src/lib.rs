@@ -1948,6 +1948,31 @@ impl Cockpit {
         }
 
     }
+    /// Workspace selectors share their fixed canvas faces with the modeled
+    /// cartridges. These change local UI context, never ship authority.
+    fn cockpit_workspace_keys(&mut self, ui: &mut egui::Ui) {
+        for (label, id, tab, left, right) in [
+            ("FLIGHT", "cockpit.workspace.flight", ServiceTab::Navigation, 12.0, 180.0),
+            ("DRONES", "cockpit.workspace.drones", ServiceTab::Drones, 196.0, 364.0),
+            ("MINING", "cockpit.workspace.mining", ServiceTab::ShipComputer, 380.0, 548.0),
+        ] {
+            let rect = egui::Rect::from_min_max(Pos2::new(left, 330.0), Pos2::new(right, 374.0));
+            let mut key_ui = ui.new_child(egui::UiBuilder::new().id_salt(id).max_rect(rect));
+            let response = key_ui.put(rect, egui::Button::new(
+                egui::RichText::new(label).strong().size(24.0)).frame(false));
+            let selected = self.services_open && self.service_tab == tab;
+            if selected || response.hovered() || response.is_pointer_button_down_on() {
+                ui.painter().rect_stroke(rect.shrink(2.0), 2.0,
+                    egui::Stroke::new(if selected || response.is_pointer_button_down_on() { 2.0 } else { 1.0 }, self.accent()),
+                    egui::StrokeKind::Inside);
+            }
+            response.clone().on_hover_text("Open workspace · view selection only; ship control remains unchanged");
+            if response.clicked() {
+                self.service_tab = tab;
+                self.services_open = true;
+            }
+        }
+    }
     fn power_gauge(&self, ui: &mut egui::Ui) {
         let Some(pilot) = self.own() else { return };
         if let Some(power) = &pilot.power {
@@ -2157,26 +2182,17 @@ impl Cockpit {
                     .min_scrolled_height(0.0)
                     .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
                     .id_salt("cockpit_console_content")
-                    .max_height(ui.available_height().max(0.0))
+                    .max_height((322.0 - ui.cursor().top()).max(0.0))
                     .show(ui, |ui| self.service_content(ui));
             } else {
                 self.compact_flight_summary(ui);
-                ui.horizontal(|ui| {
-                    for (label, tab) in [
-                        ("Flight", ServiceTab::Navigation),
-                        ("Drones", ServiceTab::Drones),
-                        ("Mining", ServiceTab::ShipComputer),
-                    ] {
-                        if ui.button(label).clicked() {
-                            self.service_tab = tab;
-                            self.services_open = true;
-                        }
-                    }
-                    if ui.button("Console pages").clicked() {
-                        self.cockpit_console_detail = true;
-                    }
-                });
+                if ui.put(egui::Rect::from_min_max(Pos2::new(380.0, 300.0), Pos2::new(548.0, 324.0)),
+                    egui::Button::new(egui::RichText::new("DETAILS").size(16.0)).small())
+                    .on_hover_text("Expand console pages").clicked() {
+                    self.cockpit_console_detail = true;
+                }
             }
+            self.cockpit_workspace_keys(ui);
             #[cfg(test)]
             {
                 // Observe the actual secondary-context widgets for CPU input
@@ -5347,6 +5363,46 @@ mod tests {
         }
     }
     #[test]
+    fn physical_workspace_keys_select_only_the_displayed_local_workspace() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        let (tx, rx) = mpsc::channel();
+        cockpit.commands = Some(tx);
+        let authority = serde_json::to_value(&cockpit.snapshot).unwrap();
+        let render = |c: &mut Cockpit, events: Vec<egui::Event>, enabled: bool| {
+            ctx.run(egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, Vec2::new(560.0, 380.0))),
+                events, ..Default::default()
+            }, |ctx| { egui::CentralPanel::default().frame(egui::Frame::NONE).show(ctx, |ui| {
+                if !enabled { ui.disable(); }
+                c.cockpit_workspace_keys(ui);
+            }); })
+        };
+        for (label, tab, x) in [("FLIGHT", ServiceTab::Navigation, 96.0),
+            ("DRONES", ServiceTab::Drones, 280.0), ("MINING", ServiceTab::ShipComputer, 464.0)] {
+            cockpit.services_open = false;
+            let out = render(&mut cockpit, vec![], true);
+            let center = out.shapes.iter().find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.job.text == label =>
+                    Some(text.pos + text.galley.rect.center().to_vec2()), _ => None,
+            }).unwrap();
+            assert!((center.x - x).abs() < 1.0 && (center.y - 352.0).abs() < 1.0);
+            for enabled in [false, true] {
+                cockpit.services_open = false;
+                render(&mut cockpit, vec![], enabled);
+                for pressed in [true, false] {
+                    render(&mut cockpit, vec![egui::Event::PointerMoved(center),
+                        egui::Event::PointerButton { pos: center, button: egui::PointerButton::Primary,
+                            pressed, modifiers: egui::Modifiers::NONE }], enabled);
+                }
+                assert_eq!(cockpit.services_open, enabled, "{label} eligibility");
+                if enabled { assert!(cockpit.service_tab == tab, "{label} opened a different workspace"); }
+                assert!(rx.try_recv().is_err(), "Workspace key issued a ship command");
+                assert_eq!(serde_json::to_value(&cockpit.snapshot).unwrap(), authority);
+            }
+        }
+    }
+    #[test]
     fn compact_flight_summary_actual_canvas_fits_and_selects_current_owned_routine() {
         let ctx = egui::Context::default();
         let mut cockpit = view_test_cockpit(&ctx);
@@ -5403,6 +5459,9 @@ mod tests {
                         "widget clips {:?}",
                         text.galley.job.text
                     );
+                    if text.galley.job.text == "DETAILS" {
+                        assert!(bounds.bottom() <= 324.0, "Details label overlaps physical key row");
+                    }
                     Some(text.galley.job.text.as_str())
                 } else {
                     None
@@ -5418,9 +5477,10 @@ mod tests {
             "Delivered",
             "1200 / 5000 ore",
             "Hold 25 / 1000 ore · 0 drones",
-            "Flight",
-            "Drones",
-            "Console pages",
+            "FLIGHT",
+            "DRONES",
+            "MINING",
+            "DETAILS",
         ] {
             assert!(labels.contains(&label), "missing {label:?}: {labels:?}");
         }
