@@ -26,3 +26,7 @@ opt-level = 1
 
 [profile.dev.package.arkline-server]
 opt-level = 1
+
+# Matrix inversion/transform kernels must not use unoptimized dependency code.
+[profile.dev.package.glam]
+opt-level = 3
