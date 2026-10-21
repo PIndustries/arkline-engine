@@ -2435,6 +2435,93 @@ fn add_cockpit_furniture(g: &mut PioneerDockedGeometry) {
             cell,
             PioneerDockedPanelKind::Instrument,
         );
+        if i == 3 {
+            add_cockpit_button_cartridges(g, center, half, axes);
+        }
+    }
+}
+
+/// Rendering replaces this one whole backing with the passive pocket substrate
+/// below. The original panel remains the exact authoritative collision proxy.
+/// This predicate never applies to collision, ray permission or command logic.
+pub fn cockpit_panel_has_visual_replacement(id: &str) -> bool {
+    id == "cockpit/screen/3/backing"
+}
+
+/// Physical cartridges under the existing BERTH and STOP widgets. Rectangles
+/// are absolute coordinates on the unchanged 560 x 380 computer canvas; they
+/// describe construction only, with no eligibility, command or input model.
+fn add_cockpit_button_cartridges(
+    g: &mut PioneerDockedGeometry,
+    center: [f64; 3],
+    half: [f64; 3],
+    axes: [[f64; 3]; 3],
+) {
+    use PioneerDockedMaterial::{Carbon, Glass, Graphite, Titanium};
+    let width = 2.0 * (half[2] - 0.008);
+    let height = 2.0 * (half[1] - 0.008);
+    let mut part = |name: &str, rect: [f64; 4], front: f64, rear: f64, material| {
+        let [left, top, right, bottom] = rect;
+        let local = [
+            (front + rear) * 0.5,
+            (0.5 - (top + bottom) * 0.5 / 380.0) * height,
+            ((left + right) * 0.5 / 560.0 - 0.5) * width,
+        ];
+        g.panel(
+            format!("cockpit/screen/3/button-construction/{name}"),
+            PioneerDockedBox {
+                center_m: add(center, add(mul(axes[0], local[0]),
+                    add(mul(axes[1], local[1]), mul(axes[2], local[2])))),
+                half_m: [
+                    (rear - front) * 0.5,
+                    (bottom - top) * height / 760.0,
+                    (right - left) * width / 1120.0,
+                ],
+                axes,
+            },
+            material,
+            PioneerDockedCollision::Decoration,
+            PioneerDockedCell::Cockpit,
+            PioneerDockedPanelKind::Instrument,
+        );
+    };
+    // Exact complement of the two pockets [9,29..147,73] and [161,29..263,73].
+    // These five strips retain the old backing front, depth and outer extent.
+    for (name, rect) in [
+        ("substrate/top", [0.0, 0.0, 560.0, 29.0]),
+        ("substrate/bottom", [0.0, 73.0, 560.0, 380.0]),
+        ("substrate/port", [0.0, 29.0, 9.0, 73.0]),
+        ("substrate/between", [147.0, 29.0, 161.0, 73.0]),
+        ("substrate/starboard", [263.0, 29.0, 560.0, 73.0]),
+    ] {
+        part(name, rect, -0.031, -0.019, Glass);
+    }
+    for (name, [left, top, right, bottom]) in [
+        ("berth", [12.0, 32.0, 144.0, 70.0]),
+        ("stop", [164.0, 32.0, 260.0, 70.0]),
+    ] {
+        let pocket = [left - 3.0, top - 3.0, right + 3.0, bottom + 3.0];
+        part(&format!("{name}/pocket-floor"), pocket, -0.022, -0.019, Carbon);
+        // Narrow metal liners expose the pocket's real depth outside the live
+        // response rectangle. Their fronts never cross the fixed input face.
+        for (edge, rect) in [
+            ("top", [left - 3.0, top - 3.0, right + 3.0, top - 2.0]),
+            ("bottom", [left - 3.0, bottom + 2.0, right + 3.0, bottom + 3.0]),
+            ("port", [left - 3.0, top - 2.0, left - 2.0, bottom + 2.0]),
+            ("starboard", [right + 2.0, top - 2.0, right + 3.0, bottom + 2.0]),
+        ] {
+            part(&format!("{name}/pocket-liner/{edge}"), rect, -0.0305, -0.022, Titanium);
+        }
+        // A separate base seats on the recessed floor. The cap body projects
+        // 6.2 mm from its base, with a smaller face forming a stepped edge.
+        part(&format!("{name}/base"),
+            [left - 1.0, top - 1.0, right + 1.0, bottom + 1.0],
+            -0.0255, -0.0216, Carbon);
+        part(&format!("{name}/cap-body"), [left, top, right, bottom],
+            -0.0297, -0.0255, Graphite);
+        part(&format!("{name}/cap-face"),
+            [left + 1.5, top + 1.5, right - 1.5, bottom - 1.5],
+            -0.0317, -0.0297, Titanium);
     }
 }
 

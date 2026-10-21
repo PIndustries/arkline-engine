@@ -1900,77 +1900,50 @@ impl Cockpit {
         } else {
             16.0
         };
-        let recess = Color32::from_rgb(7, 14, 20);
-        let edge = Color32::from_rgb(47, 64, 74);
-        let bank = egui::Frame::new()
-            .fill(Color32::from_rgb(18, 28, 35))
-            .stroke(egui::Stroke::new(1.0, edge))
-            .corner_radius(egui::CornerRadius::same(3))
-            .inner_margin(egui::Margin::same(4))
-            .show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    egui::Frame::new().fill(recess).stroke(egui::Stroke::new(1.0, edge))
-                        .corner_radius(egui::CornerRadius::same(2)).inner_margin(egui::Margin::same(4)).show(ui, |ui| {
-                        ui.vertical(|ui| {
-                            ui.label(egui::RichText::new("BERTH").size(caption_size).color(MUTED));
-                            let (label, enabled, command) = if docked {
-                                ("UNDOCK", ready && self.can_operate() && pilot.station_avatar.is_none(), Request::Undock)
-                            } else { ("DOCK", ready && self.can_dock(&pilot), Request::Dock) };
-                            // Projected single-pass instruments keep help in the bank below.
-                            // A floating tooltip sizing layer can intercept the next press.
-                            let response = ui.add_enabled(enabled, egui::Button::new(egui::RichText::new(label).strong().size(text_size))
-                                .min_size(Vec2::new(108.0, 30.0)).fill(self.accent().gamma_multiply(0.20)));
-                            #[cfg(test)]
-                            if std::env::var_os("ARKLINE_COCKPIT_TRACE_INPUT").is_some()
-                                && ui.input(|input| input.events.iter().any(|event| matches!(event, egui::Event::PointerButton { .. } | egui::Event::PointerMoved(_))))
-                            {
-                                eprintln!("COCKPIT_BERTH label={label:?} enabled={enabled} rect={:?} clicked={} hovered={} down={} can_operate={} pending={} events={:?}",
-                                    response.rect, response.clicked(), response.hovered(), response.is_pointer_button_down_on(), self.can_operate(), self.request_pending,
-                                    ui.input(|input| input.events.clone()));
-                                ui.ctx().interaction_snapshot(|i|eprintln!("BERTH id={:?} contains={} clicked_id={:?} dragged={:?} hovered_ids={:?} contains_ids={:?}", response.id,response.contains_pointer(),i.clicked,i.dragged,i.hovered,i.contains_pointer));
-                                let ids=ui.ctx().interaction_snapshot(|i| i.hovered.iter().copied().collect::<Vec<_>>());
-                                for id in ids { eprintln!("HOVER WIDGET {:?}",ui.ctx().read_response(id).map(|r|(r.id,r.layer_id,r.rect,r.sense))); }
-                            }
-                            if response.clicked() { self.send(command); }
-                        });
-                    });
-                    egui::Frame::new().fill(recess).stroke(egui::Stroke::new(1.0, edge))
-                        .corner_radius(egui::CornerRadius::same(2)).inner_margin(egui::Margin::same(4)).show(ui, |ui| {
-                        ui.vertical(|ui| {
-                            ui.label(egui::RichText::new("FLIGHT").size(caption_size).color(MUTED));
-                            let braking = matches!(pilot.location, Location::Station | Location::Belt)
-                                && pilot.flight.as_ref().is_some_and(|flight| matches!(flight.mode, NavigationMode::Stop));
-                            if ui.add_enabled(ready && self.can_fly(), egui::Button::new(egui::RichText::new("STOP").size(text_size))
-                                .min_size(Vec2::new(76.0, 30.0)).selected(braking))
-                                .clicked() { self.send(Request::Navigate { mode: NavigationMode::Stop }); }
-                        });
-                    });
-                    ui.vertical(|ui| {
-                        ui.label(egui::RichText::new("AUTHORITY").size(caption_size).color(MUTED));
-                        ui.colored_label(state_color, egui::RichText::new(status).size(caption_size).strong());
-                        if ui.small_button("Expand panel").clicked() {
-                            self.services_open = true;
-                        }
-                    });
-                });
-            });
+        // Absolute canvas rectangles are shared with the physical cartridges.
+        // Help/status length and compact/detail typography cannot move the hit faces.
+        ui.allocate_space(Vec2::new(560.0, 82.0));
+        for (label, x) in [("BERTH", 12.0), ("FLIGHT", 164.0), ("AUTHORITY", 280.0)] {
+            ui.painter().text(Pos2::new(x, 12.0), egui::Align2::LEFT_TOP,
+                label, egui::FontId::proportional(caption_size), MUTED);
+        }
+        let (label, enabled, command) = if docked {
+            ("UNDOCK", ready && self.can_operate() && pilot.station_avatar.is_none(), Request::Undock)
+        } else { ("DOCK", ready && self.can_dock(&pilot), Request::Dock) };
+        let berth_rect = egui::Rect::from_min_max(Pos2::new(12.0, 32.0), Pos2::new(144.0, 70.0));
+        let mut berth_ui = ui.new_child(egui::UiBuilder::new().id_salt("physical_berth").max_rect(berth_rect));
+        berth_ui.set_enabled(enabled);
+        let berth = berth_ui.put(berth_rect,
+            egui::Button::new(egui::RichText::new(label).strong().size(text_size)).frame(false));
+        if berth.clicked() { self.send(command); }
+        let braking = matches!(pilot.location, Location::Station | Location::Belt)
+            && pilot.flight.as_ref().is_some_and(|flight| matches!(flight.mode, NavigationMode::Stop));
+        let stop_rect = egui::Rect::from_min_max(Pos2::new(164.0, 32.0), Pos2::new(260.0, 70.0));
+        let mut stop_ui = ui.new_child(egui::UiBuilder::new().id_salt("physical_stop").max_rect(stop_rect));
+        stop_ui.set_enabled(ready && self.can_fly());
+        let stop = stop_ui.put(stop_rect,
+            egui::Button::new(egui::RichText::new("STOP").size(text_size)).frame(false));
+        if stop.clicked() { self.send(Request::Navigate { mode: NavigationMode::Stop }); }
+        // Real hover/pressed and confirmed braking feedback belongs to the
+        // unchanged input face; no opaque UI rectangle conceals modeled relief.
+        for (response, confirmed) in [(&berth, false), (&stop, braking)] {
+            if response.hovered() || response.is_pointer_button_down_on() || confirmed {
+                ui.painter().rect_stroke(response.rect.shrink(1.0), 2.0,
+                    egui::Stroke::new(if response.is_pointer_button_down_on() { 2.0 } else { 1.0 }, self.accent()),
+                    egui::StrokeKind::Inside);
+            }
+        }
+        ui.painter().text(Pos2::new(280.0, 33.0), egui::Align2::LEFT_TOP,
+            status, egui::FontId::proportional(caption_size), state_color);
+        if ui.put(egui::Rect::from_min_max(Pos2::new(280.0, 54.0), Pos2::new(420.0, 78.0)),
+            egui::Button::new("Expand panel").small()).clicked() { self.services_open = true; }
         ui.label(egui::RichText::new(help).size(14.0).color(MUTED));
         if self.snapshot.as_ref().is_some_and(|snapshot| snapshot.resource_jobs.iter()
             .any(|job| job.pilot == pilot.name && !job.phase.is_terminal())) {
             ui.label(egui::RichText::new("Manual ship orders can cancel the active mining routine")
                 .size(14.0).color(AMBER));
         }
-        // A restrained bevel belongs to the UI module; it does not alter the
-        // physical computer plane, ray hit testing, or world materials.
-        let rect = bank.response.rect.shrink(1.0);
-        ui.painter().line_segment(
-            [rect.left_top(), rect.right_top()],
-            egui::Stroke::new(1.0, Color32::from_rgb(69, 87, 96)),
-        );
-        ui.painter().line_segment(
-            [rect.left_bottom(), rect.right_bottom()],
-            egui::Stroke::new(1.0, Color32::from_rgb(3, 8, 12)),
-        );
+
     }
     fn power_gauge(&self, ui: &mut egui::Ui) {
         let Some(pilot) = self.own() else { return };

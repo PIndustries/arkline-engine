@@ -349,6 +349,9 @@ fn panel_parts(
         .iter()
         .filter(move |panel| {
             panel.collision != arkline_protocol::PioneerDockedCollision::TraversalBarrier
+                // The exact solid remains the collision proxy. Canonical
+                // recessed visual strips replace only this full glass face.
+                && !arkline_protocol::cockpit_panel_has_visual_replacement(&panel.id)
                 && (!skip_rooms || panel.kind != PioneerDockedPanelKind::RoomObstacle)
         })
         .flat_map(move |panel| {
