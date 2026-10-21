@@ -9,6 +9,8 @@ pub(super) enum NavigationPanelId {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum NavigationReadingId {
     SelectedCenterDistanceM,
+    SystemAzimuthRad,
+    SpeedMps,
     SystemId,
     LocalShips,
     LocalAsteroids,
@@ -17,6 +19,8 @@ pub(super) enum NavigationReadingId {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) enum NavigationReadingValue {
     Meters(f64),
+    Radians(f32),
+    MetersPerSecond(f64),
     Identifier(u64),
     Count(usize),
 }
@@ -100,6 +104,8 @@ impl NavigationReadings {
 
     pub(super) fn reading(&self, id: NavigationReadingId) -> Option<NavigationReadingValue> {
         match id {
+            NavigationReadingId::SystemAzimuthRad => self.heading_rad.map(NavigationReadingValue::Radians),
+            NavigationReadingId::SpeedMps => self.speed_mps.map(NavigationReadingValue::MetersPerSecond),
             NavigationReadingId::SelectedCenterDistanceM => self
                 .selected_center_distance_m
                 .map(NavigationReadingValue::Meters),
@@ -153,6 +159,38 @@ impl NavigationReadings {
     }
 }
 
+/// Same units/rounding as the other ship interfaces, separated from the number
+/// so a narrow instrument can never hide its unit behind an ellipsis.
+fn quantity_parts(value: Option<f64>, speed: bool) -> Option<(String, String)> {
+    let value = value.filter(|v| v.is_finite() && *v >= 0.0)?;
+    let formatted = if speed { super::super::format_speed(value) }
+        else { super::super::format_distance(value) };
+    let (number, unit) = formatted.rsplit_once(' ')?;
+    let number = if number.len() > 6 {
+        format!("{:.2e}", number.parse::<f64>().ok()?)
+    } else { number.to_owned() };
+    Some((number, unit.to_owned()))
+}
+
+/// Fit actual ink rather than row leading. No wrapping, elision or lost units.
+fn face_text(painter: &egui::Painter, bounds: egui::Rect, content: String,
+    size: f32, tone: egui::Color32, centered: bool) {
+    if bounds.width() <= 0.0 || bounds.height() <= 0.0 { return; }
+    let mut font_size = size;
+    let mut galley = painter.layout_no_wrap(content.clone(), egui::FontId::monospace(font_size), tone);
+    for _ in 0..4 {
+        let ink = galley.mesh_bounds;
+        let fit = (bounds.width() / ink.width().max(0.01))
+            .min(bounds.height() / ink.height().max(0.01)).min(1.0);
+        if fit >= 1.0 { break; }
+        font_size *= fit * 0.99;
+        galley = painter.layout_no_wrap(content.clone(), egui::FontId::monospace(font_size), tone);
+    }
+    let ink = galley.mesh_bounds;
+    let x = if centered { bounds.center().x - ink.width() * 0.5 } else { bounds.left() };
+    painter.galley(egui::pos2(x, bounds.center().y - ink.height() * 0.5) - ink.min.to_vec2(), galley, tone);
+}
+
 pub(super) fn paint(
     painter: &egui::Painter,
     rect: egui::Rect,
@@ -165,144 +203,103 @@ pub(super) fn paint(
     let ink = egui::Color32::from_rgb(202, 228, 215);
     let muted = egui::Color32::from_rgb(114, 147, 137);
     let origin = |u: f32, v: f32| rect.min + egui::vec2(u * rect.width(), v * rect.height());
-    let text = |bounds: egui::Rect, content: String, size: f32, tone, align| {
-        let mut job = egui::text::LayoutJob::simple(
-            content,
-            egui::FontId::monospace(size * scale),
-            tone,
-            bounds.width(),
-        );
-        job.wrap.max_rows = 1;
-        job.wrap.break_anywhere = true;
-        job.wrap.overflow_character = Some('…');
-        let galley = painter.layout_job(job);
-        let pos = match align {
-            egui::Align::Center => bounds.center_top() - egui::vec2(galley.size().x * 0.5, 0.0),
-            _ => bounds.left_top(),
-        };
-        painter.galley(pos, galley, tone);
-    };
-    text(
-        egui::Rect::from_min_max(origin(0.02, 0.005), origin(0.98, 0.12)),
-        authority_header.into(),
-        13.,
-        color,
-        egui::Align::Min,
-    );
+    let text = |bounds, content, size, tone, centered| face_text(painter, bounds, content, size * scale, tone, centered);
+    text(egui::Rect::from_min_max(origin(0.02, 0.005), origin(0.98, 0.13)),
+        authority_header.into(), 13., color, false);
     let dial = arkline_protocol::PIONEER_DIAL_CENTERS[0];
     let center = origin(dial[0] as f32, dial[1] as f32);
     let radius = rect.height() * arkline_protocol::PIONEER_DIAL_RADIUS_HEIGHT as f32;
     painter.circle_filled(center, radius, egui::Color32::from_rgb(5, 12, 13));
-    painter.circle_stroke(
-        center,
-        radius * 0.94,
-        egui::Stroke::new(1.2, color.gamma_multiply(0.5)),
-    );
+    painter.circle_stroke(center, radius * 0.94, egui::Stroke::new(1.2, color.gamma_multiply(0.5)));
     for tick in 0..24 {
         let angle = tick as f32 * std::f32::consts::TAU / 24.;
         let dir = egui::vec2(angle.sin(), -angle.cos());
-        painter.line_segment(
-            [
-                center + dir * radius * 0.87,
-                center + dir * radius * if tick % 6 == 0 { 0.68 } else { 0.78 },
-            ],
-            egui::Stroke::new(if tick % 6 == 0 { 1.4 } else { 0.7 }, muted),
-        );
+        painter.line_segment([center + dir * radius * 0.87,
+            center + dir * radius * if tick % 6 == 0 { 0.68 } else { 0.78 }],
+            egui::Stroke::new(if tick % 6 == 0 { 1.4 } else { 0.7 }, muted));
     }
     if let Some(angle) = readings.heading_rad {
         let dir = egui::vec2(angle.sin(), -angle.cos());
-        painter.line_segment(
-            [center - dir * radius * 0.45, center + dir * radius * 0.72],
-            egui::Stroke::new(2., color),
-        );
+        painter.line_segment([center - dir * radius * 0.45, center + dir * radius * 0.72],
+            egui::Stroke::new(2., color));
         painter.circle_filled(center, 2. * scale, color);
     }
-    let label = if readings.docked {
-        "DOCKED".into()
-    } else {
-        readings.heading_rad.map_or("NO AZIMUTH".into(), |r| {
-            format!("{:03.0}°", r.to_degrees().rem_euclid(360.))
-        })
-    };
-    text(
-        egui::Rect::from_min_max(
-            center + egui::vec2(-radius * 0.83, -radius * 0.27),
-            center + egui::vec2(radius * 0.83, radius * 0.15),
-        ),
-        label,
-        15.,
-        ink,
-        egui::Align::Center,
-    );
-    text(
-        egui::Rect::from_min_max(origin(0.10, 0.645), origin(0.40, 0.735)),
-        "+X 0° / +Z 90°".into(),
-        9.,
-        muted,
-        egui::Align::Center,
-    );
+    let (heading, heading_size) = if readings.docked { ("DOCKED".into(), 15.) }
+        else { readings.heading_rad.map_or(("NO AZIMUTH".into(), 11.), |r| {
+            (format!("{:03}°", (r.to_degrees().rem_euclid(360.).round() as u32) % 360), 21.)
+        }) };
+    let heading_window = egui::Rect::from_min_max(center + egui::vec2(-radius * 0.83, -radius * 0.38),
+        center + egui::vec2(radius * 0.83, radius * 0.38));
+    // Recessed-looking digital window keeps the real needle from crossing the
+    // heading glyphs. Needle and tick positions remain unchanged around it.
+    painter.rect_filled(heading_window, 2., egui::Color32::from_rgb(4, 10, 12));
+    text(heading_window, heading, heading_size, ink, true);
+    text(egui::Rect::from_min_max(origin(0.06, 0.705), origin(0.44, 0.78)),
+        "+X 0° / +Z 90°".into(), 10., muted, true);
     let [[u0, v0], [u1, v1]] = arkline_protocol::PIONEER_RANGE_MODULE_RECT;
-    let range =
-        egui::Rect::from_min_max(origin(u0 as f32, v0 as f32), origin(u1 as f32, v1 as f32));
+    let range = egui::Rect::from_min_max(origin(u0 as f32, v0 as f32), origin(u1 as f32, v1 as f32));
     painter.rect_filled(range, 2., egui::Color32::from_rgb(4, 11, 13));
-    text(
-        egui::Rect::from_min_max(origin(0.60, 0.18), origin(0.95, 0.28)),
-        "SELECTED RANGE".into(),
-        12.,
-        color,
-        egui::Align::Min,
-    );
-    text(
-        egui::Rect::from_min_max(origin(0.60, 0.30), origin(0.95, 0.51)),
-        readings
-            .selected_center_distance_m
-            .map_or("RANGE UNAVAILABLE".into(), super::super::format_distance),
-        if readings.selected_center_distance_m.is_some() {
-            25.
-        } else {
-            12.
-        },
-        ink,
-        egui::Align::Min,
-    );
-    text(
-        egui::Rect::from_min_max(origin(0.60, 0.53), origin(0.95, 0.63)),
-        readings.speed_mps.map_or("SPEED UNAVAILABLE".into(), |v| {
-            super::super::format_speed(v)
-        }),
-        13.,
-        ink,
-        egui::Align::Min,
-    );
-    text(
-        egui::Rect::from_min_max(origin(0.60, 0.63), origin(0.95, 0.70)),
-        format!(
-            "SYS {} · {} CONTACTS",
-            readings.system_id, readings.local_ships
-        ),
-        9.,
-        muted,
-        egui::Align::Min,
-    );
-    text(
-        egui::Rect::from_min_max(origin(0.02, 0.75), origin(0.98, 0.86)),
-        readings.confirmed_label(),
-        12.,
-        ink,
-        egui::Align::Min,
-    );
-    text(
-        egui::Rect::from_min_max(origin(0.02, 0.875), origin(0.98, 0.99)),
-        readings.pending_label(),
-        12.,
-        color,
-        egui::Align::Min,
-    );
+    let range_parts = quantity_parts(readings.selected_center_distance_m, false);
+    text(egui::Rect::from_min_max(origin(0.60, 0.18), origin(0.95, 0.28)),
+        range_parts.as_ref().map_or("RANGE".into(), |(_, u)| format!("RANGE · {u}")), 12., color, false);
+    text(egui::Rect::from_min_max(origin(0.60, 0.29), origin(0.95, 0.51)),
+        range_parts.as_ref().map_or("UNAVAILABLE".into(), |(v, _)| v.clone()),
+        if range_parts.is_some() { 28. } else { 12. }, ink, false);
+    let speed = quantity_parts(readings.speed_mps, true).map_or("SPEED UNAVAILABLE".into(), |(v, u)| format!("{v} {u}"));
+    text(egui::Rect::from_min_max(origin(0.60, 0.53), origin(0.95, 0.70)), speed, 20., ink, false);
+    // Small identifiers stay secondary; primary measured values occupy the
+    // actual dial/range backings. Full target lists remain in target management.
+    text(egui::Rect::from_min_max(origin(0.02, 0.79), origin(0.98, 0.855)),
+        format!("SYS {} · {} CONTACTS", readings.system_id, readings.local_ships), 10., muted, false);
+    let awaiting = readings.pending.iter().filter(|lock| lock.completes_at_ms <= readings.now_ms).count();
+    text(egui::Rect::from_min_max(origin(0.02, 0.88), origin(0.44, 0.99)),
+        format!("LOCKED {}", readings.confirmed_ids.len()), 13., ink, false);
+    text(egui::Rect::from_min_max(origin(0.46, 0.88), origin(0.98, 0.99)),
+        if awaiting == 0 { format!("ACQ {}", readings.pending.len()) }
+        else { format!("ACQ{} · WAIT CONF{}", readings.pending.len(), awaiting) }, 12., color, false);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn physical_quantity_units_and_frame_identity_are_explicit() {
+        let au = arkline_protocol::AU_METERS;
+        for (value, unit) in [(999.0, "m"), (1000.0, "km"), (1_000_000.0, "km"),
+            (au * 0.01, "AU"), (au * 2.0, "AU"), (f64::MAX, "AU")] {
+            let (number, actual_unit) = quantity_parts(Some(value), false).unwrap();
+            assert_eq!(actual_unit, unit);
+            assert!(number.parse::<f64>().unwrap().is_finite());
+        }
+        for (value, unit) in [(0.0, "m/s"), (1000.0, "km/s"), (au * 0.001, "AU/s")] {
+            assert_eq!(quantity_parts(Some(value), true).unwrap().1, unit);
+        }
+        for value in [None, Some(-1.0), Some(f64::NAN), Some(f64::INFINITY)] {
+            assert!(quantity_parts(value, false).is_none());
+        }
+        let ctx = egui::Context::default();
+        let cockpit = crate::tests::view_test_cockpit(&ctx);
+        let snapshot = cockpit.snapshot.unwrap();
+        let mut own = snapshot.pilots[0].clone();
+        own.location = Location::Station;
+        for (heading, degrees) in [([1.0, 0.0, 0.0], 0.0_f32), ([0.0, 0.0, 1.0], 90.0),
+            ([-1.0, 0.0, 0.0], 180.0), ([0.0, 0.0, -1.0], 270.0)] {
+            let flight = own.flight.as_mut().unwrap();
+            flight.heading = heading;
+            flight.velocity = [3.0, 4.0, 0.0];
+            flight.warp = None;
+            let readings = NavigationReadings::from_pilot(&own, &snapshot, None, 2500);
+            assert_eq!(readings.reading(NavigationReadingId::SpeedMps), Some(NavigationReadingValue::MetersPerSecond(5.0)));
+            let Some(NavigationReadingValue::Radians(angle)) = readings.reading(NavigationReadingId::SystemAzimuthRad) else { panic!("Missing system azimuth"); };
+            assert!((angle.to_degrees().rem_euclid(360.0) - degrees).abs() < 0.001);
+        }
+        own.location = Location::Docked;
+        assert_eq!(NavigationReadings::from_pilot(&own, &snapshot, None, 2500).reading(NavigationReadingId::SystemAzimuthRad), None);
+        own.location = Location::Station;
+        own.flight.as_mut().unwrap().heading = [0.0, 1.0, 0.0];
+        assert_eq!(NavigationReadings::from_pilot(&own, &snapshot, None, 2500).reading(NavigationReadingId::SystemAzimuthRad), None);
+    }
 
     #[test]
     fn navigation_card_merges_actual_locks_without_predicting_success_and_fits() {
@@ -349,8 +346,8 @@ mod tests {
             Some(NavigationReadingValue::Identifier(u64::MAX))
         );
         let before = serde_json::to_value(&snapshot).unwrap();
-        for size in [egui::vec2(256.0, 128.0), egui::vec2(300.0, 180.0)] {
-            for distance in [Some(5000.0), None] {
+        for size in [egui::vec2(256.0, 128.0), egui::vec2(246.0, 118.0), egui::vec2(200.0, 100.0), egui::vec2(300.0, 180.0)] {
+            for distance in [Some(5000.0), Some(2.0 * arkline_protocol::AU_METERS), Some(f64::MAX), None] {
                 let readings =
                     NavigationReadings::from_pilot(&snapshot.pilots[0], &snapshot, distance, 2500);
                 assert_eq!(readings.confirmed_ids, [7, 8]);
@@ -432,16 +429,25 @@ mod tests {
                     })
                     .collect();
                 assert!(labels.contains(&"NAV / PAUSED"));
-                assert!(labels.contains(&"LOCKED 2 · #7 #8"));
-                assert!(labels.iter().any(|label| label.starts_with("ACQUIRING 2")));
-                assert!(labels.contains(
-                    &distance
-                        .map_or_else(
-                            || "RANGE UNAVAILABLE".into(),
-                            super::super::super::format_distance
-                        )
-                        .as_str()
-                ));
+                assert!(labels.contains(&"LOCKED 2"));
+                assert!(labels.contains(&"ACQ2 · WAIT CONF1"));
+                let parts = quantity_parts(distance, false);
+                assert!(labels.contains(&parts.as_ref().map_or("UNAVAILABLE".into(), |(v, _)| v.clone()).as_str()));
+                assert!(labels.contains(&parts.as_ref().map_or("RANGE".into(), |(_, u)| format!("RANGE · {u}")).as_str()));
+                for text in &text_shapes {
+                    assert!(!text.galley.elided, "Elided real instrument reading");
+                    let rendered: String = text.galley.rows.iter().flat_map(|row| row.glyphs.iter()).map(|g| g.chr).collect();
+                    assert_eq!(rendered, text.galley.job.text, "Lost visible glyphs");
+                    let primary = parts.as_ref().is_some_and(|(v, u)|
+                        text.galley.job.text == *v || text.galley.job.text == format!("RANGE · {u}"));
+                    if primary {
+                        let [[u0, v0], [u1, v1]] = arkline_protocol::PIONEER_RANGE_MODULE_RECT;
+                        let module = egui::Rect::from_min_max(
+                            rect.min + egui::vec2(u0 as f32 * rect.width(), v0 as f32 * rect.height()),
+                            rect.min + egui::vec2(u1 as f32 * rect.width(), v1 as f32 * rect.height()));
+                        assert!(module.contains_rect(text.visual_bounding_rect()), "Primary reading escaped its physical module");
+                    }
+                }
                 assert_eq!(serde_json::to_value(&snapshot).unwrap(), before);
             }
         }
