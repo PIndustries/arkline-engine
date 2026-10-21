@@ -1567,6 +1567,26 @@ fn native_pioneer_cockpit_mining_composition() {
         assert_eq!(instruments.len(), 5);
         let instrument_fraction =
             instruments.iter().map(|s| s.bounds().area()).sum::<f32>() / viewport.area();
+        // Retain the actual image and projected bounds even when acceptance fails.
+        // This adds evidence; the protected region and assertions below stay unchanged.
+        captures.push(capture(Some(&directory), "belt-mining-forward", &mining));
+        std::fs::write(
+            directory.join("forward-visibility.json"),
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "viewport": [viewport.min.x, viewport.min.y, viewport.max.x, viewport.max.y],
+                "protected_normalized": [0.33, 0.12, 0.67, 0.70],
+                "instrument_fraction": instrument_fraction,
+                "surfaces": instruments.iter().enumerate().map(|(index, surface)| {
+                    let b = surface.bounds();
+                    serde_json::json!({"index":index,"bounds_normalized":[
+                        (b.min.x-viewport.min.x)/viewport.width(),
+                        (b.min.y-viewport.min.y)/viewport.height(),
+                        (b.max.x-viewport.min.x)/viewport.width(),
+                        (b.max.y-viewport.min.y)/viewport.height()
+                    ],"intersects_protected":b.intersects(clear)})
+                }).collect::<Vec<_>>()
+            })).unwrap(),
+        ).unwrap();
         assert!(
             instrument_fraction < 0.26,
             "Actual instrument faces must not bury the world: {instrument_fraction}"
@@ -1575,7 +1595,6 @@ fn native_pioneer_cockpit_mining_composition() {
             instruments.iter().all(|s| !s.bounds().intersects(clear)),
             "Primary forward target region must remain clear"
         );
-        captures.push(capture(Some(&directory), "belt-mining-forward", &mining));
         assert!(!mining.registered_route);
         same_seated_view(&docked, &mining);
         let cache =

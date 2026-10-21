@@ -1587,6 +1587,100 @@ fn add_cockpit_furniture(g: &mut PioneerDockedGeometry) {
             PioneerDockedPanelKind::Furniture,
         );
     }
+    // Integrated side pedestals and instrument housings occupy the existing
+    // desk footprint. Keep the central knee/foot well and aft circulation open.
+    for (id, min, max, material) in [
+        (
+            "bank/port-plinth",
+            [33.88, FLOOR, 2.25],
+            [34.36, 0.82, 2.65],
+            Graphite,
+        ),
+        (
+            "bank/starboard-plinth",
+            [33.88, FLOOR, 3.35],
+            [34.36, 0.82, 3.75],
+            Graphite,
+        ),
+        (
+            "bank/forward-fascia",
+            [34.26, FLOOR, 2.65],
+            [34.36, 0.82, 3.35],
+            Carbon,
+        ),
+        (
+            "bank/port-access-face",
+            [33.872, -0.18, 2.29],
+            [33.88, 0.72, 2.61],
+            Carbon,
+        ),
+        (
+            "bank/starboard-access-face",
+            [33.872, -0.18, 3.39],
+            [33.88, 0.72, 3.71],
+            Carbon,
+        ),
+        (
+            "bank/port-toe",
+            [33.89, FLOOR, 2.26],
+            [34.35, -0.23, 2.64],
+            Titanium,
+        ),
+        (
+            "bank/starboard-toe",
+            [33.89, FLOOR, 3.36],
+            [34.35, -0.23, 3.74],
+            Titanium,
+        ),
+        // Backing is behind each live display plane, not across its aperture.
+        (
+            "bank/port-housing",
+            [34.38, 0.89, 2.25],
+            [34.44, 1.355, 2.635],
+            Graphite,
+        ),
+        (
+            "bank/starboard-housing",
+            [34.38, 0.89, 3.365],
+            [34.44, 1.355, 3.75],
+            Graphite,
+        ),
+        (
+            "bank/port-divider",
+            [34.365, 1.105, 2.26],
+            [34.38, 1.16, 2.625],
+            Titanium,
+        ),
+        (
+            "bank/starboard-divider",
+            [34.365, 1.105, 3.375],
+            [34.38, 1.16, 3.74],
+            Titanium,
+        ),
+        (
+            "bank/port-crown",
+            [34.37, 1.335, 2.26],
+            [34.44, 1.355, 2.625],
+            Carbon,
+        ),
+        (
+            "bank/starboard-crown",
+            [34.37, 1.335, 3.375],
+            [34.44, 1.355, 3.74],
+            Carbon,
+        ),
+    ] {
+        g.block(
+            format!("cockpit/{id}"),
+            min,
+            max,
+            material,
+            solid,
+            cell,
+            PioneerDockedPanelKind::Furniture,
+        );
+    }
+
     // Index identities mirror the existing six screen slots. Slot zero is
     // transparent telemetry, not a depth-writing console panel.
     for i in 1..6 {
@@ -1623,13 +1717,15 @@ fn add_cockpit_furniture(g: &mut PioneerDockedGeometry) {
 pub fn cockpit_screen(index: usize) -> Option<([f64; 3], [f64; 3])> {
     // Measured to keep every complete face inside the neutral55-degree view,
     // with the central interactive display below the forward sightline.
+    // Side banks sit 40 mm outboard of the former fit: their complete faces
+    // clear the unchanged central target region at the actual desktop aspect.
     let (center, half) = match index {
         0 => ([34.94, 1.112, 3.0], [0.020, 0.075, 0.18]),
-        1 => ([35.36, 0.65, 2.49], [0.012, 0.10, 0.17]),
-        2 => ([35.36, 0.65, 3.51], [0.012, 0.10, 0.17]),
+        1 => ([35.36, 0.65, 2.45], [0.012, 0.10, 0.17]),
+        2 => ([35.36, 0.65, 3.55], [0.012, 0.10, 0.17]),
         3 => ([35.05, 0.72, 3.0], [0.020, 0.100, 0.210]),
-        4 => ([35.36, 0.90, 2.49], [0.012, 0.085, 0.17]),
-        5 => ([35.36, 0.90, 3.51], [0.012, 0.085, 0.17]),
+        4 => ([35.36, 0.90, 2.45], [0.012, 0.085, 0.17]),
+        5 => ([35.36, 0.90, 3.55], [0.012, 0.085, 0.17]),
         _ => return None,
     };
     Some((workstation_point(center), half))
@@ -2581,6 +2677,31 @@ mod tests {
             .all(|(a, b)| (a - b).abs() < EPS));
         assert_eq!(half, [0.020, 0.100, 0.210]);
         assert!(cockpit_screen(6).is_none());
+    }
+
+    #[test]
+    fn cockpit_instrument_banks_preserve_leg_well_through_seat_transition() {
+        let g = registered_geometry(&crate::default_pioneer()).unwrap();
+        let bank: Vec<_> = g
+            .panels
+            .iter()
+            .filter(|p| p.id.starts_with("cockpit/bank/"))
+            .collect();
+        assert!(!bank.is_empty());
+        for i in 0..=100 {
+            let joints = pilot_joints(i as f64 / 100.0);
+            for joint in joints.feet_m.iter().chain(joints.knees_m.iter()) {
+                for panel in &bank {
+                    let feet = add(*joint, [0.0, -0.065, 0.0]);
+                    assert!(
+                        !box_intersects_capsule(panel.bounds, feet, 0.13, 0.065),
+                        "{} clips pilot leg at transition {}",
+                        panel.id,
+                        i
+                    );
+                }
+            }
+        }
     }
 
     #[test]

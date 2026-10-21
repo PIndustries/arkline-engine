@@ -639,7 +639,7 @@ impl Cockpit {
     }
 }
 
-fn resource_phase_label(phase: ResourceJobPhase) -> &'static str {
+pub(super) fn resource_phase_label(phase: ResourceJobPhase) -> &'static str {
     match phase {
         ResourceJobPhase::Undocking => "Undocking",
         ResourceJobPhase::TravelToBelt => "Travelling to belt",

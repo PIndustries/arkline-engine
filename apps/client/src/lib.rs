@@ -1918,6 +1918,99 @@ impl Cockpit {
             ui.small("Capacitor data unavailable");
         }
     }
+    /// Read-only content; physical placement and input authority remain external.
+    fn compact_flight_summary(&self, ui: &mut egui::Ui) {
+        ui.heading("FLIGHT CONSOLE");
+        let Some(pilot) = self.own() else {
+            ui.label("Waiting for vessel telemetry");
+            return;
+        };
+        let mode = match pilot.location {
+            Location::Docked => "Docked",
+            Location::InTransit { .. } => "Warp transit",
+            Location::Jumping { .. } => "Gate transit",
+            _ => pilot
+                .flight
+                .as_ref()
+                .map_or("Unavailable", |flight| match flight.mode {
+                    NavigationMode::Stop => "Braking / holding",
+                    NavigationMode::Manual => "Manual flight",
+                    NavigationMode::Approach { .. } => "Approaching",
+                    NavigationMode::Orbit { .. } => "Orbiting",
+                    NavigationMode::KeepRange { .. } => "Keeping range",
+                    NavigationMode::FlyTo { .. } => "Flying to waypoint",
+                }),
+        };
+        let speed: String = pilot.flight.as_ref().map_or_else(
+            || "Unavailable".into(),
+            |flight| {
+                let velocity = flight.warp.as_ref().map_or(flight.velocity, |warp| {
+                    sample_warp(warp, self.presentation_time()).1
+                });
+                let speed = distance_m(velocity, [0.0; 3]);
+                if speed.is_finite() {
+                    format_speed(speed)
+                } else {
+                    "Unavailable".into()
+                }
+            },
+        );
+        let power = pilot.power.as_ref().map_or_else(
+            || "Unavailable".into(),
+            |power| {
+                format!(
+                    "{:.1} / {:.1} kJ",
+                    power.charge_j as f64 / 1000.0,
+                    power.capacity_j as f64 / 1000.0
+                )
+            },
+        );
+        let reactor = pilot.power.as_ref().map_or_else(
+            || "Unavailable".into(),
+            |power| format!("{} W", power.regen_w),
+        );
+        let job = self.snapshot.as_ref().and_then(|snapshot| {
+            snapshot
+                .resource_jobs
+                .iter()
+                .filter(|job| job.pilot == pilot.name)
+                .max_by_key(|job| (!job.phase.is_terminal(), job.updated_at_ms, job.id))
+        });
+        let mining = job.map_or_else(
+            || "No routine reported".into(),
+            |job| resource_jobs_ui::resource_phase_label(job.phase).to_owned(),
+        );
+        let delivery = job.map_or_else(
+            || "No target reported".into(),
+            |job| format!("{} / {} ore", job.stored_units, job.target_units),
+        );
+        egui::Grid::new("compact-flight-readings")
+            .num_columns(2)
+            .spacing(Vec2::new(14.0, 2.0))
+            .max_col_width((ui.available_width() - 120.0).max(80.0))
+            .show(ui, |ui| {
+                for (label, value) in [
+                    ("Flight", format!("{mode} · {speed}")),
+                    ("Power", power),
+                    ("Reactor", reactor),
+                    ("Mining", mining),
+                    ("Delivered", delivery),
+                    (
+                        "Hold",
+                        format!(
+                            "{} / {} ore · {} drones",
+                            pilot.ore,
+                            cargo_capacity(pilot.ship_class),
+                            Self::fleet(&pilot).len()
+                        ),
+                    ),
+                ] {
+                    ui.colored_label(MUTED, label);
+                    ui.label(value);
+                    ui.end_row();
+                }
+            });
+    }
     /// Build the physical computer in one fixed logical canvas. Perspective
     /// changes only its 3D vertices and ray map, never egui's allocation sizes.
     fn render_cockpit_computer(&mut self, ctx: &egui::Context, in_hangar: bool) {
@@ -2002,11 +2095,7 @@ impl Cockpit {
                 "Synchronizing · waiting for world data"
             } else if self.embedded_paused {
                 "Paused · display held · controls locked"
-            } else if self.snapshot.as_ref().is_some_and(|snapshot| {
-                self.presentation_time()
-                    .saturating_sub(snapshot.server_time_ms)
-                    > 1500
-            }) {
+            } else if !self.live_command_snapshot_fresh() {
                 "Stale world data · values may be out of date"
             } else if self.ship_observation {
                 "Observation only · pilot remains on foot · controls locked"
@@ -2031,24 +2120,7 @@ impl Cockpit {
                     .max_height(ui.available_height().max(0.0))
                     .show(ui, |ui| self.service_content(ui));
             } else {
-                ui.heading("FLIGHT CONSOLE");
-                if let Some(pilot) = self.own() {
-                    ui.label(format!(
-                        "Hold {} / {}",
-                        pilot.ore,
-                        cargo_capacity(pilot.ship_class)
-                    ));
-                    if let Some(job) = self
-                        .snapshot
-                        .as_ref()
-                        .and_then(|s| s.resource_jobs.iter().find(|j| j.pilot == pilot.name))
-                    {
-                        ui.label(format!(
-                            "{:?} · stored {} / {}",
-                            job.phase, job.stored_units, job.target_units
-                        ));
-                    }
-                }
+                self.compact_flight_summary(ui);
                 ui.horizontal(|ui| {
                     for (label, tab) in [
                         ("Flight", ServiceTab::Navigation),
@@ -5128,6 +5200,96 @@ mod tests {
         assert!(cockpit.tactical_pan[0] < 0.0 && cockpit.tactical_pan[1] < 0.0);
         assert!(cockpit.selected_object == original);
         assert!(rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn compact_flight_summary_actual_canvas_fits_and_selects_current_owned_routine() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        let job = |id, phase, updated_at_ms, stored_units| ResourceJob {
+            controller: "pilot".into(),
+            pilot: "pilot".into(),
+            id,
+            target_units: 5000,
+            mined_units: stored_units,
+            stored_units,
+            target_id: None,
+            phase,
+            message: String::new(),
+            started_at_ms: 1000,
+            updated_at_ms,
+        };
+        cockpit.snapshot.as_mut().unwrap().resource_jobs = vec![
+            job(1, ResourceJobPhase::Completed, 3000, 5000),
+            job(2, ResourceJobPhase::Mining, 2000, 1200),
+        ];
+        let (tx, rx) = mpsc::channel();
+        cockpit.commands = Some(tx);
+        let before = serde_json::to_value(&cockpit.snapshot).unwrap();
+        for frame in 0..4 {
+            let _ = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        Pos2::ZERO,
+                        Vec2::new(1280.0, 800.0),
+                    )),
+                    time: Some(frame as f64 / 60.0),
+                    ..Default::default()
+                },
+                |ctx| eframe::App::update(&mut cockpit, ctx, &mut eframe::Frame::_new_kittest()),
+            );
+        }
+        let canvas =
+            egui::Rect::from_min_size(Pos2::ZERO, flight3d::cockpit_computer::COMPUTER_CANVAS_SIZE);
+        let labels: Vec<_> = cockpit
+            .cockpit_computer
+            .last_shapes
+            .iter()
+            .filter_map(|shape| {
+                if let egui::Shape::Text(text) = &shape.shape {
+                    let bounds = text.visual_bounding_rect();
+                    assert!(
+                        canvas.contains_rect(bounds),
+                        "canvas clips {:?}: {:?}",
+                        text.galley.job.text,
+                        bounds
+                    );
+                    assert!(
+                        shape.clip_rect.contains_rect(bounds),
+                        "widget clips {:?}",
+                        text.galley.job.text
+                    );
+                    Some(text.galley.job.text.as_str())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        for label in [
+            "FLIGHT CONSOLE",
+            "Power",
+            "Reactor",
+            "Mining",
+            "Delivered",
+            "1200 / 5000 ore",
+            "Flight",
+            "Drones",
+            "Console pages",
+        ] {
+            assert!(labels.contains(&label), "missing {label:?}: {labels:?}");
+        }
+        assert!(!labels.contains(&"5000 / 5000 ore"));
+        assert!(rx.try_recv().is_err());
+        assert_eq!(serde_json::to_value(&cockpit.snapshot).unwrap(), before);
+        cockpit.snapshot.as_mut().unwrap().resource_jobs[1].phase = ResourceJobPhase::Completed;
+        // A newer terminal result wins when no active routine remains.
+        let authority = serde_json::to_value(&cockpit.snapshot).unwrap();
+        let summary_ctx = egui::Context::default();
+        let output = summary_ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| cockpit.compact_flight_summary(ui));
+        });
+        assert!(output.shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text == "5000 / 5000 ore")));
+        assert_eq!(serde_json::to_value(&cockpit.snapshot).unwrap(), authority);
     }
 
     pub(crate) fn view_test_cockpit(ctx: &egui::Context) -> Cockpit {
