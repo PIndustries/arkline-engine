@@ -14,65 +14,57 @@ impl Cockpit {
         let on_foot = self
             .own()
             .is_some_and(|pilot| pilot.station_avatar.is_some());
-        if on_foot {
-            for (view, label) in [
-                (OnFootView::FirstPerson, "First person"),
-                (OnFootView::ThirdPerson, "Third person"),
-            ] {
-                if ui
-                    .selectable_label(
-                        !self.ship_observation && self.hangar_view.on_foot_view == view,
-                        label,
-                    )
-                    .clicked()
-                {
-                    self.hangar_view.on_foot_view = view;
-                    self.ship_observation = false;
+        ui.scope(|ui| {
+            ui.set_max_width(440.0);
+            ui.horizontal_wrapped(|ui| {
+                if on_foot {
+                    let body_label = if self.ship_observation { "Body view" }
+                        else if self.hangar_view.on_foot_view == OnFootView::FirstPerson { "Body · First person" }
+                        else { "Body · Third person" };
+                    egui::ComboBox::from_id_salt("body-view-mode").selected_text(body_label).show_ui(ui, |ui| {
+                        for (view, label) in [(OnFootView::FirstPerson, "First person"), (OnFootView::ThirdPerson, "Third person")] {
+                            if ui.selectable_label(!self.ship_observation && self.hangar_view.on_foot_view == view, label).clicked() {
+                                self.hangar_view.on_foot_view = view;
+                                self.ship_observation = false;
+                            }
+                        }
+                    });
                 }
+                ui.add_enabled_ui(owned, |ui| {
+                    for (mode, label, description) in [
+                        (ViewMode::Tactical, "2D", "2D Tactical · local and system map"),
+                        (ViewMode::Tactical3d, "3D", "3D Tactical · spatial navigation view"),
+                        (ViewMode::External, "External", "3D External · observe the ship"),
+                        (ViewMode::Cockpit, "Cockpit", "Cockpit · ship instrument view"),
+                    ] {
+                        if ui.selectable_label((!on_foot || self.ship_observation) && self.view_mode == mode, label).on_hover_text(description).clicked() {
+                            self.view_mode = mode;
+                            self.ship_observation = on_foot;
+                        }
+                    }
+                });
+            });
+            if on_foot && self.ship_observation {
+                ui.horizontal_wrapped(|ui| {
+                    if ui.button("Return to body").clicked() { self.ship_observation = false; }
+                    ui.small("Observing ship · controls locked").on_hover_text("Your body stays in place. Return to body to walk, or physically reseat for manual flight.");
+                });
             }
-            ui.separator();
-        }
-        ui.add_enabled_ui(owned, |ui| {
-            for (mode, label) in [
-                (ViewMode::Tactical, "2D Tactical"),
-                (ViewMode::Tactical3d, "3D Tactical"),
-                (ViewMode::External, "3D External"),
-                (ViewMode::Cockpit, "Cockpit"),
-            ] {
-                if ui
-                    .selectable_label(
-                        (!on_foot || self.ship_observation) && self.view_mode == mode,
-                        label,
-                    )
-                    .clicked()
-                {
-                    self.view_mode = mode;
-                    self.ship_observation = on_foot;
-                }
+            if (!on_foot || self.ship_observation) && self.view_mode == ViewMode::Tactical {
+                ui.menu_button("Map options", |ui| {
+                    let previous_scope = self.tactical_system;
+                    ui.selectable_value(&mut self.tactical_system, false, "Local");
+                    ui.selectable_value(&mut self.tactical_system, true, "System");
+                    if previous_scope != self.tactical_system || ui.button("Reset map").clicked() {
+                        self.tactical_pan = [0.0; 2]; self.tactical_zoom = 1.0;
+                    }
+                    if ui.button("Focus my ship").clicked() {
+                        self.tactical_system = false; self.tactical_pan = [0.0; 2]; self.tactical_zoom = 1.0;
+                    }
+                    ui.small("Wheel: zoom at cursor · drag empty space: pan");
+                });
             }
         });
-        if on_foot && self.ship_observation {
-            if ui.button("Return to body").clicked() {
-                self.ship_observation = false;
-            }
-            ui.small("Ship camera · on foot · controls locked")
-                .on_hover_text("Camera observation only. Your body remains in place. Return to body to walk or physically reseat for manual flight.");
-        }
-        if (!on_foot || self.ship_observation) && self.view_mode == ViewMode::Tactical {
-            let previous_scope = self.tactical_system;
-            ui.selectable_value(&mut self.tactical_system, false, "Local");
-            ui.selectable_value(&mut self.tactical_system, true, "System");
-            if previous_scope != self.tactical_system || ui.button("Reset map").clicked() {
-                self.tactical_pan = [0.0; 2];
-                self.tactical_zoom = 1.0;
-            }
-            if ui.button("Focus my ship").clicked() {
-                self.tactical_system = false;
-                self.tactical_pan = [0.0; 2];
-                self.tactical_zoom = 1.0;
-            }
-            ui.small("Wheel: zoom at cursor · drag empty space: pan");
-        }
         if self.view_mode != previous
             || self.hangar_view.on_foot_view != previous_foot
             || self.ship_observation != previous_observation
@@ -106,7 +98,9 @@ impl Cockpit {
 
     pub(super) fn flight_workspace_status(&mut self, ui: &mut egui::Ui) {
         ui.horizontal_wrapped(|ui| {
-            if ui.button("Controls & ownership").clicked() { self.open_controls_reference(); }
+            if ui.button("Controls & ownership").clicked() {
+                self.open_controls_reference();
+            }
             ui.separator();
             let Some(snapshot) = self.snapshot.as_ref() else {
                 ui.colored_label(
@@ -119,9 +113,11 @@ impl Cockpit {
                 );
                 return;
             };
-            let age = self
-                .presentation_time()
-                .saturating_sub(snapshot.server_time_ms);
+            let age = self.timeline_origin.map_or(u64::MAX, |origin| {
+                origin
+                    .saturating_add(self.observed.elapsed().as_millis() as u64)
+                    .saturating_sub(snapshot.server_time_ms)
+            });
             let (authority, color) = if !self.connected {
                 ("Disconnected · last known state".to_owned(), AMBER)
             } else if self.embedded_paused {
@@ -229,5 +225,55 @@ impl Cockpit {
                 }
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod visual_strip_tests {
+    use super::*;
+    #[test]
+    fn compact_view_strip_retains_routes_with_readable_type_at_both_viewport_sizes() {
+        for width in [1280.0, 3000.0] {
+            let ctx = egui::Context::default();
+            let mut cockpit = crate::tests::view_test_cockpit(&ctx);
+            cockpit.theme.apply(&ctx);
+            cockpit.snapshot.as_mut().unwrap().pilots[0].station_avatar = Some(serde_json::from_value(serde_json::json!({"position":[0,0,0],"heading":0,"moving":false,"updated_at_ms":1000})).unwrap());
+            let output = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        Pos2::ZERO,
+                        Vec2::new(width, 800.),
+                    )),
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        cockpit.flight_workspace_view_selector(ui);
+                    });
+                },
+            );
+            let labels: Vec<_> = output
+                .shapes
+                .iter()
+                .filter_map(|s| {
+                    if let egui::Shape::Text(t) = &s.shape {
+                        Some((t.galley.job.text.clone(), t.pos, t.galley.size()))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            for label in ["2D", "3D", "External", "Cockpit"] {
+                let (_, pos, size) = labels.iter().find(|(text, _, _)| text == label).unwrap();
+                assert!(
+                    pos.x + size.x <= 460.0 && pos.y + size.y <= 140.0,
+                    "{label} outside compact strip at {width}"
+                );
+            }
+            assert!(ctx.style().text_styles[&egui::TextStyle::Button].size >= 14.0);
+            assert!(cockpit.snapshot.as_ref().unwrap().pilots[0]
+                .station_avatar
+                .is_some());
+        }
     }
 }

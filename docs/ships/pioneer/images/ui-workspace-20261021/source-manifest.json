@@ -1,0 +1,13 @@
+{
+  "scope": "Actual1500x960 native offscreen authority fixture; not live user-world desktop or newly implemented cargo geometry",
+  "base_checkpoint": "389c881",
+  "candidate_source_sha256": {
+    "apps/client/src/theme.rs": "78064458dd7da406517e80d0f9096246f7359ae43df3d65690ca36a3035c8e84",
+    "apps/client/src/flight_workspace.rs": "4c3cf6ca6ea18e44c58dcf4279ed82c85b0393e61bee3b98e27f40e615f0ec4b",
+    "apps/client/src/operations_workspace.rs": "e727ec1542b57623a43c936c22db2f9229b4d591a874e7af8b0468355f17f153",
+    "apps/client/src/overview_contacts.rs": "5b821d4494590569e3f3ab7ca5a031ed66b3723fdfdebc02201e7ab54472f354",
+    "apps/client/src/lib.rs": "41c580c890ffe5225595f60081770e0d131ff513e539d0900cac6f3ec5188bdf",
+    "apps/client/src/sound_engine.rs": "ce17486b2e2adf8a2578ee5845fc0521d23ae7e36b0a2060de0ce5fba99548b9"
+  },
+  "final_capture_receipt": ".build/logs/20261021T160226618737Z.json"
+}

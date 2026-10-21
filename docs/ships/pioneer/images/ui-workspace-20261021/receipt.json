@@ -1,0 +1,179 @@
+{
+  "authority_fixture": {
+    "database": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/tmp/arkline-native-pioneer-routes-71906-1792598547307832000/world.sqlite",
+    "directory": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/tmp/arkline-native-pioneer-routes-71906-1792598547307832000",
+    "pilot": "NativePioneerRoutes",
+    "retained_for_evidence": true,
+    "schema_version": 1
+  },
+  "captures": [
+    {
+      "authority_frame": 1792598547778,
+      "body_eye_m": [
+        33.220001220703125,
+        1.350000023841858,
+        3.0
+      ],
+      "computer_surface": true,
+      "frame_wall_ms_including_readback": 131.699,
+      "height": 960,
+      "name": "mining-goal-and-stage",
+      "occupied_depth_pixels": 591280,
+      "orientation": "top-left RGBA8",
+      "physical_screen_projection": {
+        "canonical_inset_px": 8,
+        "corner_order": [
+          "left_top",
+          "right_top",
+          "left_bottom",
+          "right_bottom"
+        ],
+        "frustum_clipped_corners": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "raw_viewport_normalized_corners": [
+          [
+            0.37008655071258545,
+            0.7306846380233765
+          ],
+          [
+            0.6299134492874146,
+            0.7306846380233765
+          ],
+          [
+            0.37008655071258545,
+            0.9425884485244751
+          ],
+          [
+            0.6299134492874146,
+            0.9425884485244751
+          ]
+        ]
+      },
+      "png": "mining-goal-and-stage.png",
+      "registered_route": false,
+      "rgba_sha256": "1a143474a1dfbdc8b1271965e03011a8862b14860b4ae73b2a9eaf61c5cc6a84",
+      "width": 1500
+    },
+    {
+      "authority_frame": 1792598548228,
+      "body_eye_m": [
+        33.220001220703125,
+        1.350000023841858,
+        3.0
+      ],
+      "computer_surface": true,
+      "frame_wall_ms_including_readback": 130.39991600000002,
+      "height": 960,
+      "name": "modules-control-ownership",
+      "occupied_depth_pixels": 591280,
+      "orientation": "top-left RGBA8",
+      "physical_screen_projection": {
+        "canonical_inset_px": 8,
+        "corner_order": [
+          "left_top",
+          "right_top",
+          "left_bottom",
+          "right_bottom"
+        ],
+        "frustum_clipped_corners": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "raw_viewport_normalized_corners": [
+          [
+            0.37008655071258545,
+            0.7306846380233765
+          ],
+          [
+            0.6299134492874146,
+            0.7306846380233765
+          ],
+          [
+            0.37008655071258545,
+            0.9425884485244751
+          ],
+          [
+            0.6299134492874146,
+            0.9425884485244751
+          ]
+        ]
+      },
+      "png": "modules-control-ownership.png",
+      "registered_route": false,
+      "rgba_sha256": "3bd9ab02d20f15cfc42ec3040daf8dcd85d4450bf98d7be344d68e5138ff5e3d",
+      "width": 1500
+    },
+    {
+      "authority_frame": 1792598548678,
+      "body_eye_m": [
+        33.220001220703125,
+        1.350000023841858,
+        3.0
+      ],
+      "computer_surface": true,
+      "frame_wall_ms_including_readback": 125.88712499999998,
+      "height": 960,
+      "name": "drones-control-ownership",
+      "occupied_depth_pixels": 591280,
+      "orientation": "top-left RGBA8",
+      "physical_screen_projection": {
+        "canonical_inset_px": 8,
+        "corner_order": [
+          "left_top",
+          "right_top",
+          "left_bottom",
+          "right_bottom"
+        ],
+        "frustum_clipped_corners": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "raw_viewport_normalized_corners": [
+          [
+            0.37008655071258545,
+            0.7306846380233765
+          ],
+          [
+            0.6299134492874146,
+            0.7306846380233765
+          ],
+          [
+            0.37008655071258545,
+            0.9425884485244751
+          ],
+          [
+            0.6299134492874146,
+            0.9425884485244751
+          ]
+        ]
+      },
+      "png": "drones-control-ownership.png",
+      "registered_route": false,
+      "rgba_sha256": "5f33df4bb737906db16f4fb0042979234e041ceff43b34456451aa34db9d7d39",
+      "width": 1500
+    }
+  ],
+  "job": {
+    "controller": "NativePioneerRoutes",
+    "id": 1,
+    "message": "Warping to local asteroid belt",
+    "mined_units": 0,
+    "phase": "travel_to_belt",
+    "pilot": "NativePioneerRoutes",
+    "started_at_ms": 1792598547328,
+    "stored_units": 0,
+    "target_id": null,
+    "target_units": 1200,
+    "updated_at_ms": 1792598548678
+  },
+  "limits": "No performance or desktop acceptance claim; no fabricated drone fleet; commands and lost-selection cases covered by focused pointer tests",
+  "scope": "1500x960 actual whole-client management workspaces in isolated native authority fixture; no desktop input or live user world"
+}

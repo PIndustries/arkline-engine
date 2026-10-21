@@ -221,7 +221,7 @@ impl Cockpit {
     pub(super) fn operations_navigation(&mut self, ui: &mut egui::Ui) {
         ui.horizontal_wrapped(|ui| {
             if ui
-                .button("← Back to Flight")
+                .button("Back to Flight")
                 .on_hover_text("Escape returns to Flight when no text field owns the keyboard.")
                 .clicked()
             {
@@ -484,7 +484,7 @@ mod panel_search_tests {
         assert!(labels
             .iter()
             .any(|(text, _)| text.contains("No matching panels")));
-        assert!(labels.iter().any(|(text, _)| text == "← Back to Flight"));
+        assert!(labels.iter().any(|(text, _)| text == "Back to Flight"));
         assert!(cockpit.service_tab == ServiceTab::Cargo);
         let point = labels
             .iter()

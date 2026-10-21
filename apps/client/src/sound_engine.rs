@@ -87,6 +87,7 @@ struct Shared {
     test_bookkeeping: Mutex<()>,
     last_test_interrupted: AtomicBool,
     output_failed: AtomicBool,
+    stream_generation: AtomicU64,
     pending_cues: Mutex<Option<SyncSender<Cue>>>,
     dropped: AtomicU64,
     nonzero_frames: AtomicU64,
@@ -117,6 +118,7 @@ impl Default for SoundEngine {
                 test_bookkeeping: Mutex::new(()),
                 last_test_interrupted: AtomicBool::new(false),
                 output_failed: AtomicBool::new(false),
+                stream_generation: AtomicU64::new(0),
                 pending_cues: Mutex::new(None),
                 dropped: AtomicU64::new(0),
                 nonzero_frames: AtomicU64::new(0),
@@ -437,12 +439,14 @@ fn open_stream(shared: Arc<Shared>, cues: Receiver<Cue>) -> Result<cpal::Stream,
         format => return Err(format!("Unsupported output format {format:?}")),
     }?;
     stream.play().map_err(|e| e.to_string())?;
+    let generation = shared.stream_generation.fetch_add(1, Ordering::Relaxed) + 1;
     *shared.status.lock().unwrap() = format!(
-        "Audio output opened · {} · {} Hz · {:?} · {} channels",
+        "Audio output opened · {} · {} Hz · {:?} · {} channels · stream {}",
         device.name().unwrap_or_else(|_| "Default output".into()),
         config.sample_rate.0,
         supported.sample_format(),
-        config.channels
+        config.channels,
+        generation
     );
     Ok(stream)
 }

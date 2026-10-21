@@ -47,6 +47,7 @@ mod flight_workspace;
 mod lighting_settings;
 mod motion;
 mod operations_workspace;
+mod overview_contacts;
 mod control_bindings;
 mod controls_reference;
 mod nearby_action_model;
@@ -713,6 +714,7 @@ struct Cockpit {
     services_open: bool,
     engineering_panel: Option<String>,
     overview_nearest_first: bool,
+    overview_query: String,
     overview_open: bool,
 }
 impl Cockpit {
@@ -849,6 +851,7 @@ impl Cockpit {
             services_open: false,
             engineering_panel: None,
             overview_nearest_first: true,
+            overview_query: String::new(),
             overview_open: true,
         }
     }
@@ -2653,13 +2656,25 @@ impl Cockpit {
                 .color(self.accent())
                 .strong(),
         );
-        ui.small("Connected space / local objects");
+        ui.small(if !self.connected {
+            "DISCONNECTED · last reported contacts"
+        } else if self.embedded_paused {
+            "PAUSED · last reported local contacts"
+        } else if !self.live_command_snapshot_fresh() {
+            "STALE · waiting for current contact telemetry"
+        } else {
+            "LOCAL CONTACTS · authoritative snapshot"
+        });
         ui.separator();
         ui.label(
             egui::RichText::new("SELECTED OBJECT")
                 .size(11.0)
                 .color(MUTED),
         );
+        ui.small(format!(
+            "Selection · {}",
+            overview_contacts::identity(&self.selected_object)
+        ));
         match self.selected_object.clone() {
             SelectedObject::Station => {
                 ui.heading("Arkline Station");
@@ -2748,6 +2763,20 @@ impl Cockpit {
             ui.selectable_value(&mut self.overview_filter, OverviewFilter::Mining, "Mining");
             ui.selectable_value(&mut self.overview_filter, OverviewFilter::Travel, "Travel");
             ui.selectable_value(&mut self.overview_filter, OverviewFilter::Pilots, "Pilots");
+        });
+        ui.horizontal(|ui| {
+            ui.add(
+                egui::TextEdit::singleline(&mut self.overview_query)
+                    .hint_text("Search contacts · name, type or ID")
+                    .char_limit(128)
+                    .desired_width(240.0),
+            );
+            if ui
+                .add_enabled(!self.overview_query.is_empty(), egui::Button::new("Clear"))
+                .clicked()
+            {
+                self.overview_query.clear();
+            }
         });
         let mut rows: Vec<(SelectedObject, String, &str, Option<[f64; 3]>)> = vec![];
         if matches!(
@@ -2839,6 +2868,31 @@ impl Cockpit {
                 }
             }
         }
+        let total = rows.len();
+        let selected_in_category = rows.iter().any(|row| row.0 == self.selected_object);
+        rows.retain(|(object, name, kind, _)| {
+            overview_contacts::matches(&self.overview_query, object, name, kind)
+        });
+        ui.horizontal_wrapped(|ui| {
+            ui.small(format!("{} / {} contacts", rows.len(), total));
+            if !rows.iter().any(|row| row.0 == self.selected_object) {
+                ui.small(if selected_in_category {
+                    "Selection hidden by search · unchanged"
+                } else {
+                    "Selection outside this category or current local snapshot · unchanged"
+                });
+            }
+        });
+        if rows.is_empty() {
+            ui.colored_label(
+                MUTED,
+                if self.overview_query.trim().is_empty() {
+                    "No contacts reported in this category."
+                } else {
+                    "No matching contacts · clear search or choose another category."
+                },
+            );
+        }
         let own_position = self
             .own()
             .map(|p| motion::position(&p, self.presentation_time()));
@@ -2878,12 +2932,13 @@ impl Cockpit {
                         }
                         ui.end_row();
                         for (object, name, kind, position) in rows {
-                            if ui
-                                .selectable_label(
-                                    self.selected_object == object,
-                                    egui::RichText::new(name).size(12.0),
-                                )
-                                .clicked()
+                            if overview_contacts::button(
+                                ui,
+                                &object,
+                                self.selected_object == object,
+                                &name,
+                            )
+                            .clicked()
                             {
                                 self.selected_object = object;
                             }
@@ -4091,8 +4146,8 @@ impl eframe::App for Cockpit {
                                         },
                                     );
                                 }
-                                self.flight_workspace_navigation(ui);
                             });
+                            self.flight_workspace_navigation(ui);
                             if !self.notice.is_empty() {
                                 ui.small(&self.notice);
                             }
@@ -5338,9 +5393,9 @@ mod tests {
         cockpit.commands = Some(tx);
         let before = serde_json::to_string(cockpit.snapshot.as_ref().unwrap()).unwrap();
         for (label, mode) in [
-            ("2D Tactical", ViewMode::Tactical),
-            ("3D Tactical", ViewMode::Tactical3d),
-            ("3D External", ViewMode::External),
+            ("2D", ViewMode::Tactical),
+            ("3D", ViewMode::Tactical3d),
+            ("External", ViewMode::External),
             ("Cockpit", ViewMode::Cockpit),
         ] {
             let labels = ui_test_frame(&ctx, &mut cockpit, vec![], true);

@@ -38,7 +38,7 @@ impl Theme {
         }
     }
     pub fn panel(self) -> Color32 {
-        Color32::from_rgb(24, 31, 40)
+        Color32::from_rgb(18, 29, 40)
     }
     pub fn load(directory: &Path) -> Self {
         read_preferences(&directory.join("appearance.json"))
@@ -98,40 +98,75 @@ impl Theme {
 
     pub fn apply(self, context: &egui::Context) {
         let mut style = (*context.style()).clone();
+        let accent = self.accent();
+        let text = Color32::from_rgb(230, 239, 246);
+        let edge = Color32::from_rgb(54, 75, 92);
+        let control = Color32::from_rgb(25, 40, 54);
         style.visuals = egui::Visuals::dark();
-        style.visuals.override_text_color = Some(Color32::from_rgb(226, 229, 225));
-        style.visuals.panel_fill = Color32::from_rgb(19, 25, 33);
+        // Let widget state supply its text color so focus and disabled states
+        // remain legible instead of applying one global color to every control.
+        style.visuals.override_text_color = None;
+        style.visuals.panel_fill = Color32::from_rgb(11, 19, 29);
         style.visuals.window_fill = self.panel();
-        style.visuals.extreme_bg_color = Color32::from_rgb(13, 18, 25);
-        style.visuals.faint_bg_color = self.panel();
-        style.visuals.selection.bg_fill = self.accent().gamma_multiply(0.23);
-        style.visuals.selection.stroke = egui::Stroke::new(1.0, self.accent());
-        style.visuals.widgets.noninteractive.fg_stroke =
-            egui::Stroke::new(1.0, Color32::from_rgb(151, 162, 176));
-        style.visuals.widgets.noninteractive.bg_stroke =
-            egui::Stroke::new(1.0, Color32::from_rgb(48, 59, 73));
-        style.visuals.widgets.inactive.bg_stroke =
-            egui::Stroke::new(1.0, Color32::from_rgb(48, 59, 73));
-        style.visuals.widgets.inactive.fg_stroke =
-            egui::Stroke::new(1.0, Color32::from_rgb(226, 229, 225));
-        style.visuals.warn_fg_color = Color32::from_rgb(224, 186, 116);
-        style.visuals.error_fg_color = Color32::from_rgb(231, 134, 130);
-        style.visuals.hyperlink_color = self.accent();
-        style.visuals.widgets.inactive.bg_fill = Color32::from_rgb(33, 42, 53);
-        style.visuals.widgets.inactive.weak_bg_fill = Color32::from_rgb(33, 42, 53);
-        style.visuals.widgets.hovered.bg_fill = self.accent().gamma_multiply(0.16);
-        style.visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.0, self.accent());
-        style.visuals.widgets.active.bg_fill = self.accent().gamma_multiply(0.24);
-        style.visuals.widgets.active.fg_stroke = egui::Stroke::new(1.0, self.accent());
-        style.spacing.item_spacing = egui::vec2(8.0, 8.0);
-        style.spacing.button_padding = egui::vec2(12.0, 7.0);
-        style.spacing.interact_size = egui::vec2(36.0, 30.0);
+        style.visuals.extreme_bg_color = Color32::from_rgb(7, 14, 23);
+        style.visuals.faint_bg_color = Color32::from_rgb(21, 34, 46);
+        style.visuals.code_bg_color = Color32::from_rgb(9, 21, 31);
+        style.visuals.window_corner_radius = egui::CornerRadius::same(8);
+        style.visuals.menu_corner_radius = egui::CornerRadius::same(5);
+        style.visuals.window_stroke = egui::Stroke::new(1.0, edge);
+        style.visuals.selection.bg_fill = accent.gamma_multiply(0.20);
+        style.visuals.selection.stroke = egui::Stroke::new(1.25, accent);
+        style.visuals.text_cursor.stroke = egui::Stroke::new(2.0, accent);
+        style.visuals.slider_trailing_fill = true;
+        style.visuals.warn_fg_color = Color32::from_rgb(239, 194, 119);
+        style.visuals.error_fg_color = Color32::from_rgb(249, 143, 145);
+        style.visuals.hyperlink_color = accent;
+        let widgets = &mut style.visuals.widgets;
+        widgets.noninteractive.bg_fill = self.panel();
+        widgets.noninteractive.weak_bg_fill = Color32::TRANSPARENT;
+        widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, edge);
+        widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, text);
+        widgets.inactive.bg_fill = control;
+        widgets.inactive.weak_bg_fill = control;
+        widgets.inactive.bg_stroke = egui::Stroke::new(1.0, edge);
+        widgets.inactive.fg_stroke = egui::Stroke::new(1.0, text);
+        widgets.hovered.bg_fill = accent.gamma_multiply(0.17);
+        widgets.hovered.weak_bg_fill = widgets.hovered.bg_fill;
+        widgets.hovered.bg_stroke = egui::Stroke::new(1.0, accent.gamma_multiply(0.8));
+        widgets.hovered.fg_stroke = egui::Stroke::new(1.0, Color32::WHITE);
+        widgets.active.bg_fill = accent.gamma_multiply(0.26);
+        widgets.active.weak_bg_fill = widgets.active.bg_fill;
+        widgets.active.bg_stroke = egui::Stroke::new(1.25, accent);
+        widgets.active.fg_stroke = egui::Stroke::new(1.5, accent);
+        widgets.open.bg_fill = accent.gamma_multiply(0.19);
+        widgets.open.weak_bg_fill = widgets.open.bg_fill;
+        widgets.open.bg_stroke = egui::Stroke::new(1.0, accent.gamma_multiply(0.75));
+        widgets.open.fg_stroke = egui::Stroke::new(1.0, text);
+        for widget in [
+            &mut widgets.noninteractive,
+            &mut widgets.inactive,
+            &mut widgets.hovered,
+            &mut widgets.active,
+            &mut widgets.open,
+        ] {
+            widget.corner_radius = egui::CornerRadius::same(4);
+            // Keep hover/focus feedback within its allotted layout rectangle.
+            widget.expansion = 0.0;
+        }
+        style.animation_time = 0.12;
+        style.spacing.item_spacing = egui::vec2(9.0, 8.0);
+        style.spacing.button_padding = egui::vec2(12.0, 6.0);
+        style.spacing.interact_size = egui::vec2(36.0, 32.0);
         style.spacing.window_margin = egui::Margin::same(16);
+        style.spacing.menu_margin = egui::Margin::same(8);
+        style.spacing.icon_width = 16.0;
+        style.spacing.icon_width_inner = 10.0;
+        style.spacing.icon_spacing = 7.0;
         for (kind, size) in [
-            (egui::TextStyle::Heading, 20.0),
-            (egui::TextStyle::Body, 14.0),
-            (egui::TextStyle::Button, 13.0),
-            (egui::TextStyle::Small, 11.0),
+            (egui::TextStyle::Heading, 22.0),
+            (egui::TextStyle::Body, 15.0),
+            (egui::TextStyle::Button, 14.0),
+            (egui::TextStyle::Small, 12.0),
         ] {
             style
                 .text_styles
@@ -139,7 +174,7 @@ impl Theme {
         }
         style
             .text_styles
-            .insert(egui::TextStyle::Monospace, egui::FontId::monospace(12.5));
+            .insert(egui::TextStyle::Monospace, egui::FontId::monospace(13.0));
         context.set_style(style);
     }
 }
