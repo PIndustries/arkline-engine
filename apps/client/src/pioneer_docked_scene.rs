@@ -119,6 +119,16 @@ fn box_matrix(bounds: &PioneerDockedBox) -> Mat4 {
         vector(bounds.center_m).extend(1.0),
     )
 }
+/// Symmetric presentation cubes preserve the exact protocol envelope while
+/// keeping outward face winding for either handedness of authored box axes.
+fn outward_box_matrix(bounds: &PioneerDockedBox) -> Mat4 {
+    let matrix = box_matrix(bounds);
+    if matrix.determinant() < 0.0 {
+        matrix * Mat4::from_scale(Vec3::new(-1.0, 1.0, 1.0))
+    } else {
+        matrix
+    }
+}
 fn surface(material: PioneerDockedMaterial) -> (Vec3, f32) {
     match material {
         PioneerDockedMaterial::FittedBulkhead => (Vec3::new(0.46, 0.43, 0.35), 0.0),
@@ -328,7 +338,7 @@ fn panel_parts(
                 let (color, emission) = surface(panel.material);
                 vec![(
                     panel_surface_role(panel.material).cube(),
-                    frame * box_matrix(&panel.bounds),
+                    frame * outward_box_matrix(&panel.bounds),
                     color,
                     emission,
                 )]
@@ -947,6 +957,39 @@ pub(super) fn show(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn pioneer_completion_registered_panel_faces_keep_outward_winding_and_exact_collision_envelopes(
+    ) {
+        let cache = SceneCache::new(arkline_protocol::default_pioneer()).unwrap();
+        let pose = PioneerDockedPose::private();
+        let dynamic = dynamic_geometry(pose, actuator_pose(None, pose, None, 0)).unwrap();
+        let mut corrected = Vec::new();
+        for panel in cache.geometry.panels.iter().chain(&dynamic.panels) {
+            let original = box_matrix(&panel.bounds);
+            let fitted = outward_box_matrix(&panel.bounds);
+            assert!(fitted.determinant() > 0.0, "{}", panel.id);
+            if original.determinant() < 0.0 {
+                corrected.push(panel.id.as_str());
+            }
+            let local = original.inverse() * fitted;
+            for x in [-1.0, 1.0] {
+                for y in [-1.0, 1.0] {
+                    for z in [-1.0, 1.0] {
+                        let corner = local.transform_point3(Vec3::new(x, y, z)).abs();
+                        assert!(
+                            (corner - Vec3::ONE).abs().max_element() < 0.001,
+                            "{}: occupied envelope changed",
+                            panel.id
+                        );
+                    }
+                }
+            }
+        }
+        assert!(corrected.contains(&"vestibule/floor"));
+        assert!(corrected.iter().any(|id| id.starts_with("vestibule/wall/")));
+        println!("Outward-winding presentation correction preserves bounds for: {corrected:?}");
+    }
+
     #[test]
     fn airlock_finish_stays_inside_authoritative_frame_and_moving_leaf_boxes() {
         let cache = SceneCache::new(arkline_protocol::default_pioneer()).unwrap();

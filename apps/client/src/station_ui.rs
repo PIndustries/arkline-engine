@@ -200,6 +200,52 @@ impl Cockpit {
         live_room_name(&document, deck, position).map(str::to_owned)
     }
 
+    fn traversal_snapshot_fresh(&self) -> bool {
+        self.snapshot.as_ref().is_some_and(|snapshot| {
+            self.presentation_time()
+                .saturating_sub(snapshot.server_time_ms)
+                <= 1500
+        })
+    }
+
+    fn traversal_transition_block_reason(&self) -> Option<&'static str> {
+        if !self.connected {
+            Some("Reconnect before changing seats or undocking")
+        } else if self.embedded_paused {
+            Some("Resume simulation before changing seats or undocking")
+        } else if !self.traversal_snapshot_fresh() {
+            Some("Waiting for a fresh world update before changing seats or undocking")
+        } else if self.request_pending {
+            Some("Waiting for command confirmation")
+        } else {
+            None
+        }
+    }
+
+    fn space_walk_routine_status(&self) -> &'static str {
+        if !self.connected {
+            "Disconnected · mining routine status unavailable"
+        } else if !self.traversal_snapshot_fresh() {
+            "Stale world data · mining routine status unavailable"
+        } else if self.snapshot.as_ref().is_some_and(|snapshot| {
+            self.own().is_some_and(|pilot| {
+                snapshot.resource_jobs.iter().any(|job| {
+                    job.pilot == pilot.name
+                        && job.controller == self.pilot
+                        && !job.phase.is_terminal()
+                })
+            })
+        }) {
+            if self.embedded_paused {
+                "Mining routine paused · resume simulation to continue"
+            } else {
+                "Mining autopilot active"
+            }
+        } else {
+            "No active owned mining routine · manual flight locked while on foot"
+        }
+    }
+
     fn docked_station_actions(&mut self, ui: &mut egui::Ui) -> bool {
         if !self.docked_navigation_present() {
             return false;
@@ -216,6 +262,7 @@ impl Cockpit {
             return true;
         };
         let in_space = pilot.location != Location::Docked;
+        let transition_block = self.traversal_transition_block_reason();
         let state = pilot
             .station_avatar
             .as_ref()
@@ -238,7 +285,8 @@ impl Cockpit {
             if let Some(room) = self.docked_room_name(state) {
                 ui.small(format!("Room: {room}"));
             }
-            let ready = self.can_operate() && state.grounded && state.seat_transition.is_none();
+            let ready =
+                transition_block.is_none() && state.grounded && state.seat_transition.is_none();
             let seats = seat_anchors(pose);
             let seat_distance = station_distance(state.feet_m, seats.root_station_m);
             let secured = state.actuators.hatches_closed()
@@ -269,7 +317,12 @@ impl Cockpit {
                     self.boarding_lift_controls(ui, state);
                 }
             });
-            ui.small(if in_space { "Autopilot continues. Walk back to the cockpit chair to return to the pilot seat. Exterior access is locked in space." } else { docked_exit_guidance(state) });
+            if in_space {
+                ui.small(self.space_walk_routine_status());
+                ui.small("Walk back to the cockpit chair to return to the pilot seat. Exterior access is locked in space.");
+            } else {
+                ui.small(docked_exit_guidance(state));
+            }
             ui.small(
                 if self
                     .snapshot
@@ -288,7 +341,10 @@ impl Cockpit {
             ui.horizontal_wrapped(|ui| {
                 ui.strong("PIONEER · PILOT SEAT");
                 if ui
-                    .add_enabled(self.can_operate(), egui::Button::new("Leave pilot seat"))
+                    .add_enabled(
+                        transition_block.is_none(),
+                        egui::Button::new("Leave pilot seat"),
+                    )
                     .clicked()
                 {
                     self.send(Request::DockedTraversal {
@@ -299,13 +355,16 @@ impl Cockpit {
                 }
                 if !in_space
                     && ui
-                        .add_enabled(self.can_operate(), egui::Button::new("Undock"))
+                        .add_enabled(transition_block.is_none(), egui::Button::new("Undock"))
                         .clicked()
                 {
                     self.send(Request::Undock);
                 }
             });
-            ui.small(if in_space { "Leave the pilot seat to walk inside while the mining autopilot continues. Manual flight controls are unavailable away from the seat. Exterior access stays locked." } else { "Exit to hangar: leave the seat and walk to the port boarding vestibule, then use the hatches and lift. Shift + arrows look around while seated." });
+            ui.small(if in_space { "Leave the pilot seat to walk inside. Manual flight controls are unavailable away from the seat. Exterior access stays locked." } else { "Exit to hangar: leave the seat and walk to the port boarding vestibule, then use the hatches and lift. Shift + arrows look around while seated." });
+        }
+        if let Some(reason) = transition_block {
+            ui.small(reason);
         }
         true
     }
@@ -406,16 +465,24 @@ impl Cockpit {
 
     pub(super) fn on_foot_view_selector(&mut self, ui: &mut egui::Ui) {
         use flight3d::hangar::OnFootView;
-        ui.selectable_value(
-            &mut self.hangar_view.on_foot_view,
-            OnFootView::FirstPerson,
-            "First person",
-        );
-        ui.selectable_value(
-            &mut self.hangar_view.on_foot_view,
-            OnFootView::ThirdPerson,
-            "Third person",
-        );
+        for (view, label) in [
+            (OnFootView::FirstPerson, "First person"),
+            (OnFootView::ThirdPerson, "Third person"),
+        ] {
+            if ui
+                .selectable_label(
+                    !self.ship_observation && self.hangar_view.on_foot_view == view,
+                    label,
+                )
+                .clicked()
+            {
+                // Match the main view selector's body-return path: camera
+                // choice changes presentation only and releases old input.
+                self.hangar_view.on_foot_view = view;
+                self.ship_observation = false;
+                self.release_workspace_input();
+            }
+        }
     }
 
     pub(super) fn activate_quarters_terminal(&mut self, action: flight3d::hangar::HangarAction) {
@@ -1384,12 +1451,9 @@ impl Cockpit {
             .station_avatar
             .as_ref()
             .and_then(|avatar| avatar.docked_traversal.as_ref());
-        let fresh = self.snapshot.as_ref().is_some_and(|snapshot| {
-            self.presentation_time()
-                .saturating_sub(snapshot.server_time_ms)
-                <= 1500
-        });
-        let ready = self.can_operate() && fresh;
+        let fresh = self.traversal_snapshot_fresh();
+        let transition_block = self.traversal_transition_block_reason();
+        let ready = transition_block.is_none();
         let routine_status = if !self.connected {
             "Disconnected · last known mining routine"
         } else if self.embedded_paused {
@@ -1461,10 +1525,15 @@ impl Cockpit {
                     ui.small("Walk inside · exterior access locked");
                 }
             }
-            if active_job {
+            if in_space && state.is_some() {
+                ui.small(self.space_walk_routine_status());
+            } else if active_job {
                 ui.small(routine_status);
             }
         });
+        if let Some(reason) = transition_block {
+            ui.small(reason);
+        }
         if state.is_some() && !in_space {
             ui.collapsing("Nearby controls and route", |ui| {
                 ui.small("Route: cabin → inner hatch → vestibule → outer hatch → lift. Close the other hatch before opening one.");
@@ -1825,6 +1894,214 @@ mod tests {
             });
         }
         cockpit
+    }
+
+    fn transition_test_frame(
+        ctx: &egui::Context,
+        cockpit: &mut Cockpit,
+        frame: u32,
+        events: Vec<egui::Event>,
+        body: impl Fn(&mut Cockpit, &mut egui::Ui),
+    ) -> Vec<(String, Pos2)> {
+        ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    Pos2::ZERO,
+                    Vec2::new(1000., 700.),
+                )),
+                time: Some(frame as f64 / 60.0),
+                events,
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| body(cockpit, ui));
+            },
+        )
+        .shapes
+        .into_iter()
+        .filter_map(|shape| {
+            if let egui::Shape::Text(text) = shape.shape {
+                Some((
+                    text.galley.job.text.clone(),
+                    text.pos + text.galley.rect.center().to_vec2(),
+                ))
+            } else {
+                None
+            }
+        })
+        .collect()
+    }
+
+    fn transition_click(point: Pos2, pressed: bool) -> Vec<egui::Event> {
+        vec![
+            egui::Event::PointerMoved(point),
+            egui::Event::PointerButton {
+                pos: point,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            },
+        ]
+    }
+
+    #[test]
+    fn pioneer_completion_registered_detailed_and_primary_stale_transitions_send_no_commands() {
+        for primary in [false, true] {
+            for walking in [false, true] {
+                let ctx = egui::Context::default();
+                let mut cockpit = docked_fixture(&ctx, walking);
+                let snapshot_time = cockpit.snapshot.as_ref().unwrap().server_time_ms;
+                cockpit.frozen_time = None;
+                cockpit.timeline_origin = Some(snapshot_time.saturating_add(2000));
+                cockpit.observed = Instant::now();
+                let before = serde_json::to_value(&cockpit.snapshot).unwrap();
+                let (tx, rx) = mpsc::channel();
+                cockpit.commands = Some(tx);
+                let draw = |cockpit: &mut Cockpit, ui: &mut egui::Ui| {
+                    if primary {
+                        cockpit.docked_interaction_strip(ui);
+                    } else {
+                        assert!(cockpit.docked_station_actions(ui));
+                    }
+                };
+                transition_test_frame(&ctx, &mut cockpit, 0, vec![], draw);
+                let labels = transition_test_frame(&ctx, &mut cockpit, 1, vec![], draw);
+                assert!(labels
+                    .iter()
+                    .any(|(text, _)| text.contains("fresh world update")));
+                let actions: &[&str] = if walking {
+                    if primary {
+                        &["Return to pilot seat"]
+                    } else {
+                        &["Take pilot seat"]
+                    }
+                } else {
+                    &["Leave pilot seat", "Undock"]
+                };
+                for (index, action) in actions.iter().enumerate() {
+                    let point = labels
+                        .iter()
+                        .find(|(text, _)| text.as_str() == *action)
+                        .expect(action)
+                        .1;
+                    for (offset, pressed) in [true, false].into_iter().enumerate() {
+                        transition_test_frame(
+                            &ctx,
+                            &mut cockpit,
+                            2 + index as u32 * 2 + offset as u32,
+                            transition_click(point, pressed),
+                            draw,
+                        );
+                    }
+                }
+                assert!(rx.try_recv().is_err(), "stale transition emitted a command");
+                assert_eq!(serde_json::to_value(&cockpit.snapshot).unwrap(), before);
+            }
+        }
+    }
+
+    #[test]
+    fn pioneer_completion_legacy_body_camera_selection_returns_from_observation_without_moving_avatar(
+    ) {
+        use flight3d::hangar::OnFootView;
+        for (view, label) in [
+            (OnFootView::FirstPerson, "First person"),
+            (OnFootView::ThirdPerson, "Third person"),
+        ] {
+            let ctx = egui::Context::default();
+            let mut cockpit = docked_fixture(&ctx, true);
+            cockpit.snapshot.as_mut().unwrap().pilots[0]
+                .station_avatar
+                .as_mut()
+                .unwrap()
+                .docked_traversal = None;
+            cockpit.ship_observation = true;
+            cockpit.station_walk_active = true;
+            cockpit.controls.publish_station(1., 0., 0., false);
+            let before = serde_json::to_value(&cockpit.snapshot).unwrap();
+            let (tx, rx) = mpsc::channel();
+            cockpit.commands = Some(tx);
+            let draw = |cockpit: &mut Cockpit, ui: &mut egui::Ui| cockpit.station_actions(ui);
+            transition_test_frame(&ctx, &mut cockpit, 0, vec![], draw);
+            let labels = transition_test_frame(&ctx, &mut cockpit, 1, vec![], draw);
+            let point = labels
+                .iter()
+                .find(|(text, _)| text == label)
+                .expect(label)
+                .1;
+            for (offset, pressed) in [true, false].into_iter().enumerate() {
+                transition_test_frame(
+                    &ctx,
+                    &mut cockpit,
+                    2 + offset as u32,
+                    transition_click(point, pressed),
+                    draw,
+                );
+            }
+            assert!(!cockpit.ship_observation);
+            assert_eq!(cockpit.hangar_view.on_foot_view, view);
+            assert!(cockpit.workspace_input_waiting_release);
+            assert!(!cockpit.station_walk_active);
+            assert!(matches!(
+                cockpit.controls.take(),
+                Some(Request::StationWalk {
+                    forward: 0.,
+                    strafe: 0.,
+                    turn: 0.,
+                    sprint: false
+                })
+            ));
+            assert!(
+                rx.try_recv().is_err(),
+                "camera selection must not issue gameplay commands"
+            );
+            assert_eq!(serde_json::to_value(&cockpit.snapshot).unwrap(), before);
+        }
+    }
+
+    #[test]
+    fn pioneer_completion_space_walk_guidance_tracks_owned_active_and_terminal_routines() {
+        let ctx = egui::Context::default();
+        let mut cockpit = docked_fixture(&ctx, true);
+        let pilot = cockpit.own().unwrap().name;
+        let snapshot = cockpit.snapshot.as_mut().unwrap();
+        snapshot.pilots[0].location = Location::Belt;
+        snapshot.resource_jobs = vec![ResourceJob {
+            controller: cockpit.pilot.clone(),
+            pilot,
+            id: 8,
+            target_units: 10000,
+            mined_units: 10000,
+            stored_units: 10000,
+            target_id: None,
+            phase: ResourceJobPhase::Mining,
+            message: String::new(),
+            started_at_ms: 1000,
+            updated_at_ms: 1000,
+        }];
+        assert_eq!(
+            cockpit.space_walk_routine_status(),
+            "Mining autopilot active"
+        );
+        cockpit.embedded_paused = true;
+        assert!(cockpit.space_walk_routine_status().contains("paused"));
+        cockpit.embedded_paused = false;
+        for phase in [
+            ResourceJobPhase::Completed,
+            ResourceJobPhase::Cancelled,
+            ResourceJobPhase::Blocked,
+        ] {
+            cockpit.snapshot.as_mut().unwrap().resource_jobs[0].phase = phase;
+            let before = serde_json::to_value(&cockpit.snapshot).unwrap();
+            assert!(cockpit
+                .space_walk_routine_status()
+                .contains("No active owned mining routine"));
+            assert!(
+                cockpit.space_walk_available(),
+                "completed routine does not revoke an existing walk"
+            );
+            assert_eq!(serde_json::to_value(&cockpit.snapshot).unwrap(), before);
+        }
     }
 
     #[test]
