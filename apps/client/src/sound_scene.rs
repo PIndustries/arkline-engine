@@ -225,6 +225,7 @@ fn loops(snapshot: &Snapshot, p: &PilotView, now: u64, lifecycle: bool) -> Mix {
 }
 fn transitions(previous: &Sample, s: &Snapshot, p: &PilotView, cues: &mut Vec<Cue>) {
     let old = &previous.pilot;
+    mechanical_transitions(old, p, previous.time, s.server_time_ms, cues);
     if old.location == Location::Docked && normal(p) {
         cues.push(Cue::Undock);
     }
@@ -345,6 +346,86 @@ fn transitions(previous: &Sample, s: &Snapshot, p: &PilotView, cues: &mut Vec<Cu
     }
 }
 
+// Snapshot edges only: no UI acknowledgement, local deadline completion, or
+// continuous motor loop that could outlive a dropped/stale connection.
+fn mechanical_transitions(
+    old: &PilotView,
+    current: &PilotView,
+    before: u64,
+    now: u64,
+    cues: &mut Vec<Cue>,
+) {
+    fn traversal(pilot: &PilotView) -> Option<&DockedTraversalState> {
+        pilot.station_avatar.as_ref()?.docked_traversal.as_ref()
+    }
+    let previous = traversal(old);
+    let Some(next) = traversal(current) else {
+        return;
+    };
+    if next.binding != next.actuators.binding {
+        return;
+    }
+    // A seated pilot has no actuator clone. Only an explicitly new Leaving
+    // sequence can be heard on that boundary; avatar spawning alone is silent.
+    let compatible = previous
+        .as_ref()
+        .is_some_and(|p| p.binding == next.binding && p.actuators.binding == next.binding);
+    let leaving_seat = previous.is_none()
+        && old.station_avatar.is_none()
+        && next
+            .seat_transition
+            .as_ref()
+            .is_some_and(|t| t.phase == DockedSeatPhase::Leaving);
+    if compatible || leaving_seat {
+        if let Some(t) = &next.seat_transition {
+            if t.started_at_ms >= before
+                && t.started_at_ms <= now
+                && now < t.ends_at_ms
+                && previous.as_ref().and_then(|p| p.seat_transition.as_ref()) != Some(t)
+            {
+                cues.push(Cue::SeatMove);
+            }
+        }
+    }
+    let Some(previous) = previous.filter(|_| compatible) else {
+        return;
+    };
+    let old = &previous.actuators;
+    let next = &next.actuators;
+    if let (Some(old), Some(next)) = (&old.hatches, &next.hatches) {
+        for (old, next) in old.iter().zip(next) {
+            if !old.fraction.is_finite()
+                || !next.fraction.is_finite()
+                || !(0.0..=1.0).contains(&old.fraction)
+                || !(0.0..=1.0).contains(&next.fraction)
+            {
+                continue;
+            }
+            if next.blocked && !old.blocked {
+                cues.push(Cue::HatchBlocked);
+            } else if next.moving && (!old.moving || old.target_open != next.target_open) {
+                cues.push(Cue::HatchMove);
+            } else if old.moving && !next.moving {
+                cues.push(
+                    if !next.blocked && !next.target_open && next.fraction == 0.0 {
+                        Cue::HatchLatch
+                    } else {
+                        Cue::HatchStop
+                    },
+                );
+            }
+        }
+    }
+    if old.lift.floor_station_m.is_finite() && next.lift.floor_station_m.is_finite() {
+        if next.lift.moving && (!old.lift.moving || old.lift.target != next.lift.target) {
+            cues.push(Cue::LiftMove);
+        } else if old.lift.moving && !next.lift.moving {
+            // Motor stopping is not a claim of arrival: no landing chime.
+            cues.push(Cue::LiftStop);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -353,6 +434,177 @@ mod tests {
     }
     fn drone(id: u64) -> DroneView {
         serde_json::from_value(serde_json::json!({"id":id,"position":[0,0,0],"velocity":[0,0,0],"heading":[1,0,0],"mode":{"kind":"hold"},"updated_at_ms":0,"hit_points":100})).unwrap()
+    }
+    fn mechanical_snapshot(t: u64) -> Snapshot {
+        let mut s = snapshot(t);
+        let binding = DockedTraversalBinding {
+            host_vessel_id: "owned-pioneer".into(),
+            registration_revision: PIONEER_DOCKED_REGISTRATION_REVISION,
+            layout_sha256: "fixture".into(),
+            fleet_layout: FleetLayoutRevision::LinearV1,
+            fleet_hangar: false,
+        };
+        let hatch = DockedHatchState {
+            fraction: 0.0,
+            target_open: false,
+            moving: false,
+            blocked: false,
+            updated_at_ms: t,
+        };
+        let traversal = DockedTraversalState {
+            version: DOCKED_TRAVERSAL_VERSION,
+            binding: binding.clone(),
+            feet_m: [0.0; 3],
+            heading: 0.0,
+            support: DockedSupport::Deck1,
+            surface_id: "deck1/floor/0".into(),
+            moving: false,
+            sprinting: false,
+            grounded: true,
+            vertical_velocity_mps: 0.0,
+            updated_at_ms: t,
+            seat_transition: None,
+            actuators: DockedVesselActuators {
+                binding,
+                hatches: Some([hatch.clone(), hatch]),
+                inner_hatch_open: false,
+                outer_hatch_open: false,
+                lift: DockedLiftState {
+                    floor_station_m: 12.68,
+                    target: DockedLiftStop::Ship,
+                    moving: false,
+                    updated_at_ms: t,
+                },
+                service_power_available: true,
+            },
+        };
+        s.pilots[0].station_avatar = Some(StationAvatar {
+            docked_traversal: Some(traversal),
+            onboard_interior: true,
+            interior_deck: 1,
+            jump_started_ms: None,
+            seated: false,
+            position: [0.0; 3],
+            heading: 0.0,
+            moving: false,
+            sprinting: false,
+            updated_at_ms: t,
+        });
+        s
+    }
+    fn mechanism(s: &mut Snapshot) -> &mut DockedTraversalState {
+        s.pilots[0]
+            .station_avatar
+            .as_mut()
+            .unwrap()
+            .docked_traversal
+            .as_mut()
+            .unwrap()
+    }
+    #[test]
+    fn mechanical_audio_edges_rejections_repeats_and_blocked_stop() {
+        let mut scene = Scene::default();
+        let mut s = mechanical_snapshot(1000);
+        scene.update(Some(&s), "Pilot", true, 1000);
+        s.server_time_ms = 1100;
+        let a = &mut mechanism(&mut s).actuators;
+        a.hatches.as_mut().unwrap()[0].moving = true;
+        a.hatches.as_mut().unwrap()[0].target_open = true;
+        a.lift.moving = true;
+        assert!(matches!(
+            scene.update(Some(&s), "Pilot", true, 1100).1.as_slice(),
+            [Cue::HatchMove, Cue::LiftMove]
+        ));
+        assert!(scene.update(Some(&s), "Pilot", true, 1100).1.is_empty());
+        s.server_time_ms = 1200; // repeated motion/rejected action causes no sound
+        assert!(scene.update(Some(&s), "Pilot", true, 1200).1.is_empty());
+        s.server_time_ms = 1300;
+        let a = &mut mechanism(&mut s).actuators;
+        a.hatches.as_mut().unwrap()[0].moving = false;
+        a.hatches.as_mut().unwrap()[0].blocked = true;
+        a.lift.moving = false;
+        assert!(matches!(
+            scene.update(Some(&s), "Pilot", true, 1300).1.as_slice(),
+            [Cue::HatchBlocked, Cue::LiftStop]
+        ));
+        s.server_time_ms = 1400;
+        let h = &mut mechanism(&mut s).actuators.hatches.as_mut().unwrap()[0];
+        h.blocked = false;
+        h.target_open = false;
+        h.moving = true;
+        h.fraction = 0.4;
+        assert!(matches!(
+            scene.update(Some(&s), "Pilot", true, 1400).1.as_slice(),
+            [Cue::HatchMove]
+        ));
+        s.server_time_ms = 1500;
+        let h = &mut mechanism(&mut s).actuators.hatches.as_mut().unwrap()[0];
+        h.moving = false;
+        h.fraction = 0.0;
+        assert!(matches!(
+            scene.update(Some(&s), "Pilot", true, 1500).1.as_slice(),
+            [Cue::HatchLatch]
+        ));
+    }
+    #[test]
+    fn mechanical_audio_rebind_stale_reconnect_and_initial_motion_are_silent() {
+        let mut scene = Scene::default();
+        let mut s = mechanical_snapshot(1000);
+        mechanism(&mut s).actuators.lift.moving = true;
+        assert!(matches!(
+            scene.update(Some(&s), "Pilot", true, 1000).1.as_slice(),
+            [Cue::Connect]
+        ));
+        s.server_time_ms = 1100;
+        let t = mechanism(&mut s);
+        t.binding.layout_sha256 = "other".into();
+        t.actuators.binding = t.binding.clone();
+        t.actuators.lift.moving = false;
+        assert!(scene.update(Some(&s), "Pilot", true, 1100).1.is_empty());
+        s.server_time_ms = 3000;
+        mechanism(&mut s).actuators.lift.moving = true;
+        assert!(scene.update(Some(&s), "Pilot", true, 3000).1.is_empty());
+        scene.update(None, "Pilot", false, 3100);
+        s.server_time_ms = 3200;
+        assert!(matches!(
+            scene.update(Some(&s), "Pilot", true, 3200).1.as_slice(),
+            [Cue::Connect]
+        ));
+    }
+    #[test]
+    fn mechanical_audio_explicit_seat_sequence_only_once_without_completion_guess() {
+        let mut scene = Scene::default();
+        let mut s = mechanical_snapshot(1000);
+        s.pilots[0].station_avatar = None;
+        scene.update(Some(&s), "Pilot", true, 1000);
+        s = mechanical_snapshot(1100);
+        mechanism(&mut s).seat_transition = Some(DockedSeatTransition {
+            phase: DockedSeatPhase::Leaving,
+            started_at_ms: 1050,
+            ends_at_ms: 1950,
+        });
+        assert!(matches!(
+            scene.update(Some(&s), "Pilot", true, 1100).1.as_slice(),
+            [Cue::SeatMove]
+        ));
+        s.server_time_ms = 1200;
+        assert!(scene.update(Some(&s), "Pilot", true, 1200).1.is_empty());
+        s.server_time_ms = 2000;
+        mechanism(&mut s).seat_transition = None;
+        assert!(scene.update(Some(&s), "Pilot", true, 2000).1.is_empty());
+        s.server_time_ms = 2100;
+        mechanism(&mut s).seat_transition = Some(DockedSeatTransition {
+            phase: DockedSeatPhase::Entering,
+            started_at_ms: 2050,
+            ends_at_ms: 2950,
+        });
+        assert!(matches!(
+            scene.update(Some(&s), "Pilot", true, 2100).1.as_slice(),
+            [Cue::SeatMove]
+        ));
+        s.server_time_ms = 2200;
+        s.pilots[0].station_avatar = None; // cancelled/removed is not a successful latch
+        assert!(scene.update(Some(&s), "Pilot", true, 2200).1.is_empty());
     }
     #[test]
     fn connection_source_stale_and_reordered_snapshots_never_replay_history() {

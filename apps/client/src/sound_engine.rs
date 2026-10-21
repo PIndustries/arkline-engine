@@ -59,6 +59,13 @@ pub enum Cue {
     CargoFull,
     Ui,
     TestOutput,
+    HatchMove,
+    HatchStop,
+    HatchLatch,
+    HatchBlocked,
+    LiftMove,
+    LiftStop,
+    SeatMove,
 }
 pub struct OutputStatus {
     pub device: String,
@@ -447,6 +454,13 @@ impl Synth {
                 self.layer(660., 0., 0.45, 0.20, 0., 0., 0.025, 0.12, 0.12);
                 self.layer(880., 0., 0.55, 0.20, 0., 0.55, 0.025, 0.15, 0.12);
             }
+            Cue::HatchMove => self.layer(155., 55., 0.55, 0.12, 0.004, 0., 0.025, 0.2, 0.35),
+            Cue::HatchStop => self.layer(120., -40., 0.22, 0.10, 0.005, 0., 0.02, 0.16, 0.4),
+            Cue::HatchLatch => self.layer(235., -110., 0.18, 0.13, 0.008, 0., 0.015, 0.12, 0.5),
+            Cue::HatchBlocked => self.layer(95., -15., 0.32, 0.10, 0.003, 0., 0.025, 0.2, 0.4),
+            Cue::LiftMove => self.layer(68., 35., 0.7, 0.14, 0.004, 0., 0.06, 0.25, 0.5),
+            Cue::LiftStop => self.layer(90., -38., 0.4, 0.12, 0.006, 0., 0.025, 0.25, 0.5),
+            Cue::SeatMove => self.layer(210., -55., 0.55, 0.10, 0.003, 0., 0.025, 0.2, 0.3),
             Cue::Ui => self.layer(720., -60., 0.06, 0.055, 0., 0., 0.01, 0.045, 0.1),
         }
     }
@@ -743,6 +757,13 @@ mod tests {
             Cue::LowPower,
             Cue::CargoFull,
             Cue::Ui,
+            Cue::HatchMove,
+            Cue::HatchStop,
+            Cue::HatchLatch,
+            Cue::HatchBlocked,
+            Cue::LiftMove,
+            Cue::LiftStop,
+            Cue::SeatMove,
         ] {
             let mut synth = Synth::new(48000.);
             synth.mix.master = 1.;
@@ -844,6 +865,46 @@ mod tests {
         assert!(nonzero > count as u64 / 4);
         eprintln!("Preview {path}: 22.000s mono PCM16 48000Hz; peak={peak:.6}, RMS={:.6}, nonzero={nonzero}/{count}",(squares/count as f64).sqrt());
         eprintln!("Timeline: 0–1 silence;1 Connect;2–4.5 Undock+engine;4.5–6 fade/silence;6 MiningStart;6–10.5 mining loop;8.5 MiningCycle;10.5 MiningStop;11.2–12 silence;12 WarpCharge;12–14 buildup;14 WarpEnter;14–16 transit;16 WarpArrival;17.5–18 silence;18 Lock;18.5 LowPower;19.5 CargoFull;20.1–22 silence.");
+    }
+    #[test]
+    fn mechanical_audio_uses_saved_gains_mute_and_bounded_decay() {
+        for cue in [
+            Cue::HatchMove,
+            Cue::HatchStop,
+            Cue::HatchLatch,
+            Cue::HatchBlocked,
+            Cue::LiftMove,
+            Cue::LiftStop,
+            Cue::SeatMove,
+        ] {
+            for (muted, master, effects, audible) in [
+                (false, 0.45, 0.65, true),
+                (true, 0.45, 0.65, false),
+                (false, 0.0, 0.65, false),
+                (false, 0.45, 0.0, false),
+            ] {
+                let mut synth = Synth::new(48000.);
+                synth.mix = Mix {
+                    muted,
+                    master,
+                    effects,
+                    ..Mix::default()
+                };
+                synth.cue(cue);
+                let mut peak = 0.0_f32;
+                for _ in 0..48000 {
+                    let sample = synth.next();
+                    assert!(sample.is_finite());
+                    peak = peak.max(sample.abs());
+                }
+                if audible {
+                    assert!(peak > 0.001 && peak < 0.2, "{cue:?}: {peak}");
+                } else {
+                    assert_eq!(peak, 0.0, "{cue:?}");
+                }
+                assert!(synth.next().abs() < 1.0e-8, "{cue:?} did not decay");
+            }
+        }
     }
     #[test]
     fn output_test_is_distinct_sustained_and_honors_mute_and_zero_effects() {
