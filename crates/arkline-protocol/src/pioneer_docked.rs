@@ -1843,8 +1843,8 @@ fn add_cockpit_furniture(g: &mut PioneerDockedGeometry) {
         (
             "console/center-mount",
             [34.06, 0.58, 2.78],
-            [34.12, 0.98, 3.22],
-            Titanium,
+            [34.46, 0.64, 3.22],
+            Graphite,
         ),
         // The inner canopy perimeter joins the existing roof and front floor;
         // source glazing and diagonal structure remain intact ahead of it.
@@ -1892,6 +1892,114 @@ fn add_cockpit_furniture(g: &mut PioneerDockedGeometry) {
             PioneerDockedPanelKind::Furniture,
         );
     }
+    // A hollow centre pod is carried by the same cross-member rather than a
+    // freestanding tablet stalk. Its inclined cover and tapered side chassis
+    // join the low console through an actual descending structural spine.
+    // Open side reliefs are passive construction, not fictional cooling state.
+    for (id, min, max, material) in [
+        (
+            "front-fascia",
+            [34.06, 0.64, 2.78],
+            [34.085, 0.94, 3.22],
+            Carbon,
+        ),
+        (
+            "rear-web",
+            [34.43, 0.64, 2.88],
+            [34.46, 0.82, 3.12],
+            Graphite,
+        ),
+    ] {
+        g.block(
+            format!("cockpit/dashboard/pod/{id}"),
+            min,
+            max,
+            material,
+            solid,
+            cell,
+            PioneerDockedPanelKind::Furniture,
+        );
+    }
+    for (side, z0, z1) in [("port", 2.80, 2.88), ("starboard", 3.20, 3.12)] {
+        let delta = [0.37, 0.0, z1 - z0];
+        let length = dot(delta, delta).sqrt();
+        let axis = mul(delta, length.recip());
+        g.panel(
+            format!("cockpit/dashboard/pod/{side}-sidewall"),
+            PioneerDockedBox {
+                center_m: [34.265, 0.73, (z0 + z1) * 0.5],
+                half_m: [length * 0.5, 0.09, 0.014],
+                axes: [axis, Y, cross(axis, Y)],
+            },
+            Graphite,
+            solid,
+            cell,
+            PioneerDockedPanelKind::Furniture,
+        );
+    }
+    let delta: [f64; 3] = [0.37, -0.11, 0.0];
+    let length = dot(delta, delta).sqrt();
+    let along = mul(delta, length.recip());
+    let up = [-along[1], along[0], 0.0];
+    g.panel(
+        "cockpit/dashboard/pod/sloped-service-shelf",
+        PioneerDockedBox {
+            center_m: [34.265, 0.875, 3.0],
+            half_m: [length * 0.5, 0.012, 0.22],
+            axes: [along, up, Z],
+        },
+        Carbon,
+        solid,
+        cell,
+        PioneerDockedPanelKind::Furniture,
+    );
+    // No tactile controls are fabricated on this shelf. Real button bodies
+    // require the same authoritative command and ray/widget mapping as their UI.
+    for (name, a, b, half_height, half_width, material) in [
+        (
+            "center-spine",
+            [34.40, 0.60, 3.0],
+            [34.76, 0.51, 3.0],
+            0.02,
+            0.20,
+            Graphite,
+        ),
+        (
+            "port-low-brow",
+            [34.64, 0.50, 2.64],
+            [34.90, 0.50, 2.82],
+            0.018,
+            0.04,
+            Carbon,
+        ),
+        (
+            "starboard-low-brow",
+            [34.64, 0.50, 3.36],
+            [34.90, 0.50, 3.18],
+            0.018,
+            0.04,
+            Carbon,
+        ),
+    ] {
+        let delta = sub(b, a);
+        let length = dot(delta, delta).sqrt();
+        let along = mul(delta, length.recip());
+        let across = normalized(cross(along, Y));
+        let up = cross(across, along);
+        g.panel(
+            format!("cockpit/dashboard/{name}"),
+            PioneerDockedBox {
+                center_m: mul(add(a, b), 0.5),
+                half_m: [length * 0.5, half_height, half_width],
+                axes: [along, up, across],
+            },
+            material,
+            solid,
+            cell,
+            PioneerDockedPanelKind::Furniture,
+        );
+    }
+
     // The two shoulders form one low wraparound chassis. The lower solid
     // plinths stay outside the same leg well; real sloping OBB decks and their
     // carcasses replace the old full-width tabletop and rectangular towers.
@@ -3580,7 +3688,11 @@ mod tests {
         let bank: Vec<_> = g
             .panels
             .iter()
-            .filter(|p| p.id.starts_with("cockpit/bank/"))
+            .filter(|p| {
+                p.id.starts_with("cockpit/bank/")
+                    || p.id.starts_with("cockpit/dashboard/")
+                    || p.id == "cockpit/console/center-mount"
+            })
             .collect();
         assert!(!bank.is_empty());
         for i in 0..=100 {

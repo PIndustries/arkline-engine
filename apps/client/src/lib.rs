@@ -54,6 +54,7 @@ mod nearby_interaction_input;
 mod operations_workspace;
 mod overview_contacts;
 mod pilot_input;
+mod performance_overlay;
 mod remote_control_ui;
 mod resource_jobs_ui;
 mod room_controls;
@@ -618,6 +619,9 @@ struct Cockpit {
     workspace_keyboard_owned_last_frame: bool,
     operations_search: String,
     controls_reference_open: bool,
+    performance_open: bool,
+    performance_snapshot_received: Option<Instant>,
+    performance_server_tick: Option<(u64, u64)>,
     nearby_geometry: nearby_action_model::NearbyGeometryCache,
     nearby_shortcut: nearby_interaction_input::NearbyGesture,
     ship_observation: bool,
@@ -752,6 +756,9 @@ impl Cockpit {
             workspace_keyboard_owned_last_frame: false,
             operations_search: String::new(),
             controls_reference_open: false,
+            performance_open: false,
+            performance_snapshot_received: None,
+            performance_server_tick: None,
             nearby_geometry: nearby_action_model::NearbyGeometryCache::default(),
             nearby_shortcut: nearby_interaction_input::NearbyGesture::default(),
             ship_observation: false,
@@ -1355,6 +1362,7 @@ impl Cockpit {
                             self.observed = Instant::now();
                         }
                         self.motion.observe(&snapshot);
+                        self.performance_snapshot_received = Some(Instant::now());
                         self.snapshot = Some(snapshot);
                     }
                     if visible || !response.ok {
@@ -2084,6 +2092,7 @@ impl Cockpit {
                 || !in_hangar && self.flight_view.cockpit_presentation_active(self.view_mode));
         let input_allowed = !self.ship_observation
             && !self.controls_reference_open
+            && !self.performance_open
             && !self.services_open
             && self.service_tab != ServiceTab::Layouts
             && !self.workspace_input_waiting_release
@@ -4037,8 +4046,8 @@ impl eframe::App for Cockpit {
         if !self.docked_navigation_present() {
             self.nearby_shortcut.cancel();
         }
-        self.operations_keyboard_navigation(ctx);
-        if self.controls_reference_open
+        if !self.performance_open { self.operations_keyboard_navigation(ctx); }
+        if self.performance_open || self.controls_reference_open
             || self.services_open
             || self.service_tab == ServiceTab::Layouts
         {
@@ -4066,6 +4075,7 @@ impl eframe::App for Cockpit {
         let computer_active = !self.ship_observation
             && self.connected
             && !self.controls_reference_open
+            && !self.performance_open
             && !self.services_open
             && self.service_tab != ServiceTab::Layouts
             && !self.boot.visible
@@ -4117,7 +4127,7 @@ impl eframe::App for Cockpit {
             }
         }
         self.effects.retain(self.presentation_time());
-        if !self.controls_reference_open
+        if !self.performance_open && !self.controls_reference_open
             && !self.services_open
             && !self.workspace_input_waiting_release
             && self.embedded_input
@@ -4460,6 +4470,7 @@ impl eframe::App for Cockpit {
             self.embedded_input
                 && !self.workspace_input_waiting_release
                 && !self.controls_reference_open
+            && !self.performance_open
                 && !self.services_open
                 && !self.cockpit_computer.wants_keyboard_input(),
         );
@@ -4573,6 +4584,14 @@ impl eframe::App for Cockpit {
                     self.scene(ui);
                 }
             });
+        performance_overlay::show(ctx, &mut self.performance_open, performance_overlay::PerformanceSamples {
+            frame_intervals_s: &self.frame_intervals,
+            snapshot_age_ms: self.snapshot.as_ref().and(self.performance_snapshot_received).map(|received| received.elapsed().as_millis().min(u64::MAX as u128) as u64),
+            connected: self.connected,
+            paused: self.embedded && self.embedded_paused,
+            session: if self.embedded { "Embedded local session" } else { "Remote server session" },
+            server_tick: self.performance_server_tick,
+        });
         self.render_cockpit_computer(ctx, in_hangar);
         if let Err(error) = self
             .layout
@@ -4583,13 +4602,13 @@ impl eframe::App for Cockpit {
         if self.view_mode != ViewMode::Cockpit {
             self.pilot_input.release_mouse(ctx);
         }
-        if self.controls_reference_open
+        if self.performance_open || self.controls_reference_open
             || self.services_open
             || self.service_tab == ServiceTab::Layouts
         {
             self.release_workspace_input();
         }
-        let workspace_allows_input = !self.controls_reference_open
+        let workspace_allows_input = !self.performance_open && !self.controls_reference_open
             && !self.services_open
             && self.service_tab != ServiceTab::Layouts
             && !self.workspace_input_waiting_release;

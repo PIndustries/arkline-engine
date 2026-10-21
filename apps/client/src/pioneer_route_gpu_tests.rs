@@ -1699,6 +1699,7 @@ fn native_pioneer_cockpit_mining_composition() {
         let mut opaque_intrusions = Vec::new();
         for panel in canonical.panels.iter().filter(|panel| {
             panel.id.starts_with("cockpit/bank/")
+                || panel.id.starts_with("cockpit/dashboard/")
                 || panel.id.starts_with("cockpit/console/")
                 || panel.id.starts_with("cockpit/screen/")
         }) {
@@ -1784,6 +1785,11 @@ fn native_pioneer_cockpit_mining_composition() {
                 same_seated_view(&mining, &shot);
             }
         }
+        h.cockpit.performance_open = true;
+        let diagnostics = h.settle();
+        captures.push(capture(Some(&directory), "performance-overlay", &diagnostics));
+        assert!(!h.cockpit.cockpit_computer.wants_keyboard_input());
+        h.cockpit.performance_open = false;
         std::fs::write(directory.join("receipt.json"),serde_json::to_vec_pretty(&serde_json::json!({"scope":"Actual Cockpit and native renderers; ordinary disposable 5000-ore authority job; no desktop/user-world mutation","captures":captures,"pilot":mining_snapshot.pilots.iter().find(|p|p.name==PILOT),"job":mining_snapshot.resource_jobs,"body_rays":rays,"instrument_face_fraction":instrument_fraction,"clear_forward_viewport_normalized":[0.33,0.12,0.67,0.70],"default_detailed_management_visible":false})).unwrap()).unwrap();
     }
 }

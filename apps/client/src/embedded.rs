@@ -743,6 +743,10 @@ impl EmbeddedClient {
         self.cockpit
             .hangar_view
             .set_head_look_input_allowed(self.cockpit.embedded_input);
+        self.cockpit.performance_server_tick = self.graph_state.as_ref().and_then(|state| {
+            state.debug.trace.iter().rev().find(|trace| trace.kind == "tick" || trace.kind == "tick_failed")
+                .map(|trace| (trace.host_duration_us, trace.simulation_time_ms))
+        });
         self.cockpit.update(ctx, frame);
         if self.free_camera_enabled && self.free_camera.is_none() {
             self.free_camera = self.active_scene_camera_pose();

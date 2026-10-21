@@ -101,6 +101,9 @@ impl Cockpit {
             if ui.button("Controls & ownership").clicked() {
                 self.open_controls_reference();
             }
+            if ui.selectable_label(self.performance_open, "Performance").clicked() {
+                self.performance_open = !self.performance_open;
+            }
             ui.separator();
             let Some(snapshot) = self.snapshot.as_ref() else {
                 ui.colored_label(
