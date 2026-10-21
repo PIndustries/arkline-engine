@@ -109,6 +109,8 @@ use cockpit_maps::*;
 mod cockpit_displays;
 #[path = "power_instrument.rs"]
 mod power_instrument;
+#[path = "navigation_instrument.rs"]
+mod navigation_instrument;
 use cockpit_displays::CockpitDisplayRenderer;
 #[path = "cockpit_occlusion.rs"]
 mod cockpit_occlusion;
@@ -4642,6 +4644,13 @@ fn paint_instruments(
         let painter = paint.painter().with_clip_rect(inner);
         if index != 0 {
             painter.rect_filled(inner, 0.0, egui::Color32::from_rgb(2, 14, 10));
+        }
+        if index == 1 {
+            let readings = navigation_instrument::NavigationReadings::from_pilot(
+                own, snapshot, target_distance, now,
+            );
+            navigation_instrument::paint(&painter, inner, &rows[1][0], color, &readings);
+            continue;
         }
         if index == 2 {
             let readings = power_instrument::PowerReadings::from_pilot(own, now);

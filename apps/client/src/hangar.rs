@@ -279,27 +279,15 @@ impl HangarView {
         for (index, surface) in self.docked_surfaces.iter().enumerate() {
             // These cards own their authority header; a second top-right badge
             // would obscure real data on the small physical display canvas.
-            if index == 2 || index == 4 {
+            if index == 1 || index == 2 || index == 4 {
                 continue;
             }
             if let Some(surface) = surface {
                 paint_passive_authority(ui, surface, snapshot, now, connected, paused);
             }
         }
-        if self.passive_console.is_some() {
-            if let Some(surface) = &self.docked_surfaces[1] {
-                surface.paint(ui, |painter| {
-                    let rect = surface.canvas_rect().shrink(6.0);
-                    painter.text(
-                        rect.center_bottom(),
-                        egui::Align2::CENTER_BOTTOM,
-                        "CAMERA VIEW AT PILOT SEAT",
-                        egui::FontId::monospace(10.0),
-                        super::super::AMBER,
-                    );
-                });
-            }
-        }
+        // The passive navigation card owns its full bounded canvas. Camera feeds
+        // remain available through the existing seated drone view.
     }
     pub(crate) fn set_space_snapshot(&mut self, snapshot: Option<Arc<Snapshot>>) {
         self.space_snapshot = snapshot;
