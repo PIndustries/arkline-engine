@@ -2115,7 +2115,7 @@ mod tests {
         assert!(editor.client.paused());
         editor
             .client
-            .set_scene_state(EditorSceneState::InteriorDeck2)
+            .set_scene_state(arkline_protocol::EditorSceneState::InteriorDeck2)
             .unwrap();
         let deadline = std::time::Instant::now() + Duration::from_secs(5);
         while editor.client.scene_state_pending() && std::time::Instant::now() < deadline {
@@ -2124,7 +2124,7 @@ mod tests {
         }
         assert_eq!(
             editor.client.scene_state(),
-            Some(EditorSceneState::InteriorDeck2)
+            Some(arkline_protocol::EditorSceneState::InteriorDeck2)
         );
         editor
             .client

@@ -971,13 +971,26 @@ mod tests {
             if original.determinant() < 0.0 {
                 corrected.push(panel.id.as_str());
             }
-            let local = original.inverse() * fitted;
+            let old_corners: Vec<_> = [-1.0, 1.0]
+                .into_iter()
+                .flat_map(|x| {
+                    [-1.0, 1.0].into_iter().flat_map(move |y| {
+                        [-1.0, 1.0]
+                            .into_iter()
+                            .map(move |z| original.transform_point3(Vec3::new(x, y, z)))
+                    })
+                })
+                .collect();
             for x in [-1.0, 1.0] {
                 for y in [-1.0, 1.0] {
                     for z in [-1.0, 1.0] {
-                        let corner = local.transform_point3(Vec3::new(x, y, z)).abs();
+                        let corner = fitted.transform_point3(Vec3::new(x, y, z));
+                        // Compare actual metre-space vertices. Inverting micrometre-thick
+                        // label boxes amplifies f32 cancellation and loses physical units.
                         assert!(
-                            (corner - Vec3::ONE).abs().max_element() < 0.001,
+                            old_corners
+                                .iter()
+                                .any(|old| (*old - corner).abs().max_element() <= 0.00001),
                             "{}: occupied envelope changed",
                             panel.id
                         );
