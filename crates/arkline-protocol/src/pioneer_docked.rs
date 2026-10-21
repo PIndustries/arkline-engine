@@ -1683,6 +1683,71 @@ fn add_cockpit_dial_rim(
         );
     }
     let radius = PIONEER_DIAL_RADIUS_HEIGHT * height;
+    // The dial is a cartridge rather than a thin ring stuck to a rectangular
+    // screen. Three stepped annular sections run aft from the existing face:
+    // a retaining collar, the instrument barrel, and its mounting flange.
+    // Their fronts stay behind the unchanged live needle/label/input plane.
+    // Passive detail does not change the registered solid collision recipe.
+    for (name, front, rear, inner, outer, material) in [
+        ("retaining-collar", 0.002, 0.012, radius + 0.004, radius + 0.010,
+            PioneerDockedMaterial::Titanium),
+        ("barrel", 0.012, 0.045, radius + 0.002, radius + 0.006,
+            PioneerDockedMaterial::Graphite),
+        ("mounting-flange", 0.045, 0.052, radius + 0.002, radius + 0.014,
+            PioneerDockedMaterial::Carbon),
+    ] {
+        let middle = (inner + outer) * 0.5;
+        let tangent_half = middle * (std::f64::consts::PI / 16.0).tan();
+        for segment in 0..16 {
+            let angle = segment as f64 * std::f64::consts::TAU / 16.0;
+            let (sin, cos) = angle.sin_cos();
+            let radial = add(mul(axes[1], cos), mul(axes[2], sin));
+            let tangent = add(mul(axes[1], -sin), mul(axes[2], cos));
+            g.panel(
+                format!("cockpit/screen/{slot}/dial/{dial}/housing/{name}/{segment}"),
+                PioneerDockedBox {
+                    center_m: add(dial_center,
+                        add(mul(axes[0], (front + rear) * 0.5), mul(radial, middle))),
+                    half_m: [(rear - front) * 0.5, (outer - inner) * 0.5, tangent_half],
+                    axes: [axes[0], radial, tangent],
+                },
+                material,
+                PioneerDockedCollision::Decoration,
+                PioneerDockedCell::Cockpit,
+                PioneerDockedPanelKind::Instrument,
+            );
+        }
+    }
+    // Four diagonal ears and recessed captive fasteners give each separate
+    // cartridge an actual mounting interface. The ears bridge aft into the
+    // existing shared case backplate. No marks imply a control/state.
+    for ear in 0..4 {
+        let angle = std::f64::consts::FRAC_PI_4
+            + ear as f64 * std::f64::consts::FRAC_PI_2;
+        let (sin, cos) = angle.sin_cos();
+        let radial = add(mul(axes[1], cos), mul(axes[2], sin));
+        let tangent = add(mul(axes[1], -sin), mul(axes[2], cos));
+        for (name, depth, half_depth, radial_center, half_radial, half_tangent, material) in [
+            ("ear", 0.062, 0.012, radius + 0.013, 0.009, 0.006,
+                PioneerDockedMaterial::Graphite),
+            ("fastener", 0.048, 0.002, radius + 0.016, 0.003, 0.003,
+                PioneerDockedMaterial::Titanium),
+        ] {
+            g.panel(
+                format!("cockpit/screen/{slot}/dial/{dial}/housing/{name}/{ear}"),
+                PioneerDockedBox {
+                    center_m: add(dial_center,
+                        add(mul(axes[0], depth), mul(radial, radial_center))),
+                    half_m: [half_depth, half_radial, half_tangent],
+                    axes: [axes[0], radial, tangent],
+                },
+                material,
+                PioneerDockedCollision::Decoration,
+                PioneerDockedCell::Cockpit,
+                PioneerDockedPanelKind::Instrument,
+            );
+        }
+    }
     let radial_half = 0.002;
     let middle = radius + 0.001 + radial_half;
     let tangent_half = middle * (std::f64::consts::PI / 16.0).tan() * 0.96;

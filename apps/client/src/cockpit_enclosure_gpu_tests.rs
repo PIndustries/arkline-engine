@@ -731,6 +731,7 @@ fn native_cockpit_cached_feed_tracks_physical_quad_under_head_look_and_roll() {
                 1,
                 None,
                 Some((&surface, tile)),
+                None,
             );
             assert_eq!(
                 gl.get_error(),

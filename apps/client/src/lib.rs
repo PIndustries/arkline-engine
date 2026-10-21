@@ -56,6 +56,8 @@ mod operations_workspace;
 mod overview_contacts;
 mod pilot_input;
 mod performance_overlay;
+#[cfg(test)]
+mod presentation_clock;
 mod remote_control_ui;
 mod resource_jobs_ui;
 mod room_controls;

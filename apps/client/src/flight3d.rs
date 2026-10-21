@@ -1,4 +1,6 @@
 //! Desktop and WebGL2 GPU flight view. Presentation only: never issues simulation commands.
+#[path = "camera_feed_budget.rs"]
+mod camera_feed_budget;
 use crate::material_program::{
     compile_material_program, MaterialShaderSource, SpatialMaterialUniforms,
 };
@@ -1662,6 +1664,13 @@ impl FlightView {
                         );
                         let feed_count = camera_feeds.len();
                         if let Some(surface) = &drone_surface {
+                            let capture_pass = ui.ctx().cumulative_pass_nr();
+                            let capture_ui_ms = ui.input(|input| (input.time.max(0.0) * 1000.0) as u64);
+                            let capture_keys: Arc<Vec<u64>> = Arc::new(camera_feeds.iter()
+                                .filter(|(screen, _, drone)| drone.is_none_or(|d| d.signal_strength > 0.0)
+                                    && surface.feed_geometry(*screen).is_some())
+                                .map(|(_, _, drone)| egui::Id::new((pilot_name, drone.map(|d| d.id),
+                                    self.remote_ship.as_deref(), self.drone_mode)).value()).collect());
                             for (screen, feed, drone) in camera_feeds {
                                 let fresh = connected
                                     && now.saturating_sub(snapshot.server_time_ms) <= 1500;
@@ -1679,6 +1688,7 @@ impl FlightView {
                                         self.drone_mode,
                                     ))
                                     .value();
+                                    let capture_keys = capture_keys.clone();
                                     painter.add(egui::PaintCallback {
                                         rect,
                                         callback: Arc::new(egui_glow::CallbackFn::new(
@@ -1689,9 +1699,10 @@ impl FlightView {
                                                             &feed,
                                                             key,
                                                             info,
-                                                            feed_count,
+                                                            capture_keys.len(),
                                                             painter.intermediate_fbo(),
                                                             Some((&surface, screen)),
+                                                            Some((capture_pass, capture_ui_ms, capture_keys.as_slice())),
                                                         );
                                                     }
                                                 }
@@ -1699,8 +1710,23 @@ impl FlightView {
                                         )),
                                     });
                                 }
+                                let capture_key = egui::Id::new((pilot_name, drone.map(|d| d.id),
+                                    self.remote_ship.as_deref(), self.drone_mode)).value();
+                                let capture_size = feed_resolution(screen.width().round() as i32, screen.height().round() as i32);
+                                let captured_at = drone_renderer.lock().ok().and_then(|renderer|
+                                    renderer.feed_cache.iter().find(|cache| cache.key == capture_key
+                                        && (cache.width, cache.height) == capture_size)
+                                        .and_then(|cache| cache.captured_ui_ms));
                                 surface.paint(ui, |overlay| {
                                     let overlay = overlay.with_clip_rect(screen);
+                                    let capture_label = if !fresh || drone.is_some_and(|d| d.signal_strength <= 0.0) {
+                                        "UNAVAILABLE".to_owned()
+                                    } else { captured_at.filter(|captured| *captured <= capture_ui_ms)
+                                        .map_or_else(|| "WARMING UP".to_owned(),
+                                        |captured| format!("CACHED · {} ms", capture_ui_ms.saturating_sub(captured))) };
+                                    overlay.text(screen.left_bottom() + egui::vec2(3., -3.),
+                                        egui::Align2::LEFT_BOTTOM, capture_label,
+                                        egui::FontId::monospace(10.), super::MUTED);
                                     overlay.text(
                                         screen.left_top() + egui::vec2(3., 3.),
                                         egui::Align2::LEFT_TOP,
@@ -2494,6 +2520,7 @@ struct CachedFeed {
     width: i32,
     height: i32,
     painted_ms: Option<u64>,
+    captured_ui_ms: Option<u64>,
 }
 impl CachedFeed {
     unsafe fn create(
@@ -2564,6 +2591,7 @@ impl CachedFeed {
             width,
             height,
             painted_ms: None,
+            captured_ui_ms: None,
         };
         if gl.check_framebuffer_status(glow::FRAMEBUFFER) != glow::FRAMEBUFFER_COMPLETE {
             cache.destroy(gl);
@@ -2772,6 +2800,7 @@ struct Renderer {
     station_batches: Vec<(usize, Vec3, f32)>,
     drone_parts: [Arc<Vec<ModelPart>>; 3],
     feed_cache: Vec<CachedFeed>,
+    feed_capture_budget: camera_feed_budget::FeedCaptureBudget,
     destroyed: bool,
     sun_shadows: Vec<sun_shadows::SunShadows>,
     shadow_fallback: glow::Texture,
@@ -2904,6 +2933,7 @@ impl Renderer {
             station_batches,
             drone_parts: geometry.drone_parts.clone(),
             feed_cache: Vec::new(),
+            feed_capture_budget: Default::default(),
             destroyed: false,
             material_preview: None,
             spatial_material: Default::default(),
@@ -3138,7 +3168,7 @@ impl Renderer {
         count: usize,
         callback_target: Option<glow::Framebuffer>,
     ) {
-        self.paint_cached_feed_on_surface(frame, key, info, count, callback_target, None);
+        self.paint_cached_feed_on_surface(frame, key, info, count, callback_target, None, None);
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -3150,6 +3180,7 @@ impl Renderer {
         count: usize,
         callback_target: Option<glow::Framebuffer>,
         geometry: Option<(&CockpitSurface, egui::Rect)>,
+        capture_schedule: Option<(u64, u64, &[u64])>,
     ) {
         if self.destroyed {
             return;
@@ -3251,7 +3282,9 @@ impl Renderer {
         }
         if !self.feed_cache.iter().any(|cache| cache.key == key) {
             if self.feed_cache.len() >= 4 {
-                self.feed_cache.remove(0).destroy(&gl);
+                let evict = capture_schedule.and_then(|(_, _, visible)| self.feed_cache.iter()
+                    .position(|cache| !visible.contains(&cache.key))).unwrap_or(0);
+                self.feed_cache.remove(evict).destroy(&gl);
             }
             if let Ok(cache) = CachedFeed::create(&gl, key, width, height) {
                 self.feed_cache.push(cache);
@@ -3259,7 +3292,19 @@ impl Renderer {
         }
         if let Some(index) = self.feed_cache.iter().position(|cache| cache.key == key) {
             let framebuffer = self.feed_cache[index].framebuffer;
-            if feed_due(self.feed_cache[index].painted_ms, frame.now, count) {
+            let due = feed_due(self.feed_cache[index].painted_ms, frame.now, count);
+            let capture_granted = due && capture_schedule.map_or(true, |(pass, ui_ms, visible)| {
+                let candidates = visible.iter().map(|key| camera_feed_budget::FeedCaptureCandidate {
+                    key: *key,
+                    painted_ms: self.feed_cache.iter().find(|cache| cache.key == *key
+                        && cache.width == width && cache.height == height)
+                        .and_then(|cache| if feed_due(cache.painted_ms, frame.now, count) {
+                            cache.captured_ui_ms
+                        } else { Some(ui_ms) }),
+                }).collect::<Vec<_>>();
+                self.feed_capture_budget.should_capture(pass, ui_ms, key, &candidates)
+            });
+            if due && capture_granted {
                 gl.bind_framebuffer(glow::FRAMEBUFFER, Some(framebuffer));
                 gl.viewport(0, 0, width, height);
                 gl.disable(glow::SCISSOR_TEST);
@@ -3269,11 +3314,15 @@ impl Renderer {
                 gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
                 self.paint(frame, Some(framebuffer));
                 self.feed_cache[index].painted_ms = Some(frame.now);
+                self.feed_cache[index].captured_ui_ms = capture_schedule.map(|(_, ui_ms, _)| ui_ms);
             }
             gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, draw);
             gl.bind_framebuffer(glow::READ_FRAMEBUFFER, read);
             // A color-only target cannot enforce the physical display's depth.
-            if surface_geometry.is_none() || draw_framebuffer_depth_bits(&gl) > 0 {
+            if self.feed_cache[index].painted_ms.is_some()
+                && capture_schedule.is_none_or(|(_, ui_ms, _)| self.feed_cache[index]
+                    .captured_ui_ms.is_some_and(|captured| captured <= ui_ms))
+                && (surface_geometry.is_none() || draw_framebuffer_depth_bits(&gl) > 0) {
                 gl.viewport(
                     viewport.left_px,
                     viewport.from_bottom_px,

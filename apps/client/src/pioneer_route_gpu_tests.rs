@@ -1598,6 +1598,32 @@ fn native_pioneer_cockpit_mining_composition() {
         );
         let mining_snapshot = h.cockpit.snapshot.clone().unwrap();
         let mining = h.settle();
+        // Observe actual renderer-owned capture acknowledgements, not predicted
+        // scheduler decisions. Every split frame may refresh at most one tile.
+        let mut previous = std::collections::BTreeMap::<u64, u64>::new();
+        let mut capture_counts = std::collections::BTreeMap::<u64, usize>::new();
+        let mut capture_trace = Vec::new();
+        for _ in 0..12 {
+            h.render_frame(vec![], false);
+            let renderer = h.cockpit.flight_view.renderer.as_ref().unwrap().lock().unwrap();
+            let current = renderer.feed_cache.iter().filter_map(|cache|
+                cache.captured_ui_ms.map(|time| (cache.key, time)))
+                .collect::<std::collections::BTreeMap<_, _>>();
+            let changed = current.iter().filter(|(key, time)| previous.get(*key) != Some(*time))
+                .map(|(key, _)| *key).collect::<Vec<_>>();
+            // The first observation establishes a baseline after warmup.
+            if !previous.is_empty() {
+                assert!(changed.len() <= 1, "Actual split capture burst: {changed:?}");
+                for key in &changed { *capture_counts.entry(*key).or_default() += 1; }
+                capture_trace.push(changed);
+            }
+            previous = current;
+        }
+        assert_eq!(previous.len(), 4, "All four real visible feeds warmed");
+        assert_eq!(capture_counts.len(), 4, "Fair rotation refreshed every visible source");
+        std::fs::write(directory.join("feed-capture-budget.json"), serde_json::to_vec_pretty(
+            &serde_json::json!({"actual_capture_keys_per_frame":capture_trace,"capture_counts":capture_counts,
+                "max_multi_captures_per_presented_frame":1,"authority":"normal isolated five-drone mining fixture"})).unwrap()).unwrap();
         assert!(!h.cockpit.cockpit_console_detail && !h.cockpit.services_open);
         assert!(mining
             .computer_labels
