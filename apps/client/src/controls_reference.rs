@@ -26,8 +26,9 @@ impl Cockpit {
         }
         self.release_workspace_input();
         let mut open = true;
-        egui::Window::new("Controls & ownership")
+        let response = egui::Window::new("Controls & ownership")
             .id(egui::Id::new("controls_ownership_reference"))
+            .order(egui::Order::Foreground)
             .open(&mut open).collapsible(false)
             .default_width(480.0).max_width((ctx.screen_rect().width()-24.0).max(200.0))
             .max_height((ctx.available_rect().height()-24.0).max(160.0))
@@ -83,6 +84,9 @@ impl Cockpit {
                 ui.small(format!("Management: Cmd/Ctrl+{} focuses panel search. {} leaves text editing first, then returns to Flight. Back to Flight is always available.", bindings::PANEL_SEARCH.name(), bindings::WORKSPACE_BACK.name()));
                 if ui.button("Close controls reference").clicked() { self.controls_reference_open = false; }
             });
+        if let Some(response) = response {
+            ctx.move_to_top(response.response.layer_id);
+        }
         self.controls_reference_open &= open;
     }
 }

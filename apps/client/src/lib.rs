@@ -4008,7 +4008,6 @@ impl eframe::App for Cockpit {
                     .inner_margin(egui::Margin::symmetric(12, 6)),
             )
             .show(ctx, |ui| self.flight_workspace_status(ui));
-        self.controls_reference(ctx);
         let bounds = ctx.available_rect().shrink(8.0);
         self.layout.begin_frame(bounds);
         // Floating layers are registered before the background consumes pointer input.
@@ -4140,6 +4139,7 @@ impl eframe::App for Cockpit {
             None,
             ctx.input(|i| i.pointer.any_down()),
         );
+        self.controls_reference(ctx);
         // Service destinations and detailed flight controls now share the
         // deliberate task workspace, instead of competing launcher/overview panels.
         if self.services_open && self.service_tab == ServiceTab::Layouts {
