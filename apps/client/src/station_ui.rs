@@ -222,6 +222,34 @@ impl Cockpit {
         }
     }
 
+    /// Mirrors TakeSeat's grounding/range checks and can_undock's boarding
+    /// equipment checks. These are UI explanations; the server still decides.
+    fn docked_seat_block_reason(&self, state: &DockedTraversalState) -> Option<&'static str> {
+        if let Some(reason) = self.traversal_transition_block_reason() {
+            return Some(reason);
+        }
+        let Ok(pose) = docked_binding_pose(&state.binding) else {
+            return Some("Pilot chair registration unavailable · reconnect");
+        };
+        if state.seat_transition.is_some() {
+            Some("Finish the pilot-seat transition first")
+        } else if !state.grounded {
+            Some("Land before returning to the pilot seat")
+        } else if station_distance(state.feet_m, seat_anchors(pose).root_station_m) > 1.0 {
+            Some("Walk within 1 m of the pilot chair")
+        } else if !state.actuators.hatches_closed() {
+            Some("Close both boarding hatches before piloting")
+        } else if state.actuators.lift.moving {
+            Some("Wait for the boarding lift to stop at ship level")
+        } else if (state.actuators.lift.floor_station_m - lift_geometry(pose).ship_floor_m).abs()
+            > 0.015
+        {
+            Some("Stow the boarding lift at ship level before piloting")
+        } else {
+            None
+        }
+    }
+
     fn space_walk_routine_status(&self) -> &'static str {
         if !self.connected {
             "Disconnected · mining routine status unavailable"
@@ -285,19 +313,14 @@ impl Cockpit {
             if let Some(room) = self.docked_room_name(state) {
                 ui.small(format!("Room: {room}"));
             }
-            let ready =
-                transition_block.is_none() && state.grounded && state.seat_transition.is_none();
             let seats = seat_anchors(pose);
             let seat_distance = station_distance(state.feet_m, seats.root_station_m);
-            let secured = state.actuators.hatches_closed()
-                && !state.actuators.lift.moving
-                && (state.actuators.lift.floor_station_m - lift_geometry(pose).ship_floor_m).abs()
-                    < 0.03;
+            let seat_block = self.docked_seat_block_reason(state);
             ui.horizontal_wrapped(|ui| {
                 if seat_distance <= 1.5
                     && ui
                         .add_enabled(
-                            ready && secured && seat_distance <= 1.0,
+                            seat_block.is_none(),
                             egui::Button::new(if in_space {
                                 "Return to pilot seat"
                             } else {
@@ -317,6 +340,12 @@ impl Cockpit {
                     self.boarding_lift_controls(ui, state);
                 }
             });
+            ui.small(format!("Pilot chair · {seat_distance:.1} m"));
+            if transition_block.is_none() {
+                if let Some(reason) = seat_block {
+                    ui.small(reason);
+                }
+            }
             if in_space {
                 ui.small(self.space_walk_routine_status());
                 ui.small("Walk back to the cockpit chair to return to the pilot seat. Exterior access is locked in space.");
@@ -1384,13 +1413,39 @@ impl Cockpit {
             return;
         };
         let calls = lift_call_anchors(pose);
-        if state.support != DockedSupport::BoardingLift
-            && station_distance(state.feet_m, calls.ship_station_m)
-                .min(station_distance(state.feet_m, calls.station_station_m))
-                > 3.0
-        {
+        let nearest = station_distance(state.feet_m, calls.ship_station_m)
+            .min(station_distance(state.feet_m, calls.station_station_m));
+        if state.support != DockedSupport::BoardingLift && nearest > 3.0 {
+            if nearest <= 12.0
+                && matches!(
+                    state.support,
+                    DockedSupport::Station | DockedSupport::Connector
+                )
+            {
+                ui.small(format!(
+                    "Boarding-lift control · {nearest:.1} m away · walk within 3 m"
+                ));
+            }
             return;
         }
+        let geometry = lift_geometry(pose);
+        let lift = &state.actuators.lift;
+        let target = match lift.target {
+            DockedLiftStop::Ship => "ship",
+            DockedLiftStop::Station => "station",
+        };
+        let at_ship = (lift.floor_station_m - geometry.ship_floor_m).abs() <= 1.0e-8;
+        let at_station = (lift.floor_station_m - geometry.station_floor_m).abs() <= 1.0e-8;
+        let status = if lift.moving {
+            format!("Boarding lift moving to {target}")
+        } else if at_ship {
+            format!("Boarding lift at ship · target {target}")
+        } else if at_station {
+            format!("Boarding lift at station · target {target}")
+        } else {
+            format!("Boarding lift stopped between landings · target {target}")
+        };
+        ui.small(status);
         let blocked = self.boarding_control_block_reason(state).or_else(|| {
             if !state.actuators.hatches_closed() {
                 Some("Close both boarding hatches before moving the lift")
@@ -1400,7 +1455,6 @@ impl Cockpit {
                 None
             }
         });
-        let geometry = lift_geometry(pose);
         for (stop, label, height) in [
             (DockedLiftStop::Ship, "Lift to ship", geometry.ship_floor_m),
             (
@@ -1409,11 +1463,20 @@ impl Cockpit {
                 geometry.station_floor_m,
             ),
         ] {
-            let at_stop = (state.actuators.lift.floor_station_m - height).abs() < 0.00000001;
-            if ui
-                .add_enabled(blocked.is_none() && !at_stop, egui::Button::new(label))
-                .clicked()
-            {
+            let at_stop = (state.actuators.lift.floor_station_m - height).abs() <= 1.0e-8;
+            let response = ui.add_enabled(blocked.is_none() && !at_stop, egui::Button::new(label));
+            let response = if at_stop && !state.actuators.lift.moving {
+                response.on_disabled_hover_text(format!(
+                    "Already at {} level",
+                    match stop {
+                        DockedLiftStop::Ship => "ship",
+                        DockedLiftStop::Station => "station",
+                    }
+                ))
+            } else {
+                response
+            };
+            if response.clicked() {
                 self.send(Request::DockedTraversal {
                     request: DockedTraversalRequest::CallLift {
                         binding: state.binding.clone(),
@@ -1473,29 +1536,29 @@ impl Cockpit {
                 if let Ok(pose) = docked_binding_pose(&binding) {
                     let distance =
                         station_distance(state.feet_m, seat_anchors(pose).root_station_m);
-                    let secured = state.actuators.hatches_closed()
-                        && !state.actuators.lift.moving
-                        && (state.actuators.lift.floor_station_m
-                            - lift_geometry(pose).ship_floor_m)
-                            .abs()
-                            < 0.03;
+                    let seat_block = self.docked_seat_block_reason(state);
                     if ui
-                            .add_enabled(
-                                ready
-                                    && state.grounded
-                                    && state.seat_transition.is_none()
-                                    && secured
-                                    && distance <= 1.0,
-                                egui::Button::new("Return to pilot seat"),
-                            )
-                            .on_hover_text(format!("Pilot chair: {distance:.1} m. Walk within 1 m and secure hatches to sit."))
-                            .clicked()
+                        .add_enabled(
+                            seat_block.is_none(),
+                            egui::Button::new("Return to pilot seat"),
+                        )
+                        .on_hover_text(format!(
+                            "Pilot chair: {distance:.1} m. {}",
+                            seat_block.unwrap_or("Ready to return to the pilot seat")
+                        ))
+                        .clicked()
                     {
                         self.send(Request::DockedTraversal {
                             request: DockedTraversalRequest::TakeSeat {
                                 binding: binding.clone(),
                             },
                         });
+                    }
+                    ui.small(format!("Pilot chair · {distance:.1} m"));
+                    if transition_block.is_none() {
+                        if let Some(reason) = seat_block {
+                            ui.small(reason);
+                        }
                     }
                 }
                 if state.seat_transition.is_some() {
@@ -1533,6 +1596,19 @@ impl Cockpit {
         });
         if let Some(reason) = transition_block {
             ui.small(reason);
+        }
+        if state.is_some() {
+            ui.small(
+                if self
+                    .snapshot
+                    .as_ref()
+                    .is_some_and(|snapshot| snapshot.walk_sprint_v1)
+                {
+                    "W/S move · Q/E strafe · RMB turn · Shift sprint · Space jump"
+                } else {
+                    "W/S move · Q/E strafe · RMB turn · Space jump"
+                },
+            );
         }
         if state.is_some() && !in_space {
             ui.collapsing("Nearby controls and route", |ui| {
@@ -1942,6 +2018,164 @@ mod tests {
                 modifiers: egui::Modifiers::NONE,
             },
         ]
+    }
+
+    #[test]
+    fn contextual_interactions_seat_stow_matches_authority_in_both_panels() {
+        for primary in [false, true] {
+            for (offset, permitted) in [(0.02, false), (0.014, true)] {
+                let ctx = egui::Context::default();
+                let mut cockpit = docked_fixture(&ctx, true);
+                let state = cockpit.snapshot.as_mut().unwrap().pilots[0]
+                    .station_avatar
+                    .as_mut()
+                    .unwrap()
+                    .docked_traversal
+                    .as_mut()
+                    .unwrap();
+                state.actuators.lift.floor_station_m += offset;
+                let binding = state.binding.clone();
+                let before = serde_json::to_value(&cockpit.snapshot).unwrap();
+                let (tx, rx) = mpsc::channel();
+                cockpit.commands = Some(tx);
+                let draw = |cockpit: &mut Cockpit, ui: &mut egui::Ui| {
+                    if primary {
+                        cockpit.docked_interaction_strip(ui);
+                    } else {
+                        assert!(cockpit.docked_station_actions(ui));
+                    }
+                };
+                transition_test_frame(&ctx, &mut cockpit, 0, vec![], draw);
+                let labels = transition_test_frame(&ctx, &mut cockpit, 1, vec![], draw);
+                assert!(labels
+                    .iter()
+                    .any(|(text, _)| text.contains("Pilot chair · 0.0 m")));
+                assert_eq!(
+                    labels
+                        .iter()
+                        .any(|(text, _)| text.contains("Stow the boarding lift")),
+                    !permitted
+                );
+                let label = if primary {
+                    "Return to pilot seat"
+                } else {
+                    "Take pilot seat"
+                };
+                let point = labels.iter().find(|(text, _)| text == label).unwrap().1;
+                for (frame, pressed) in [true, false].into_iter().enumerate() {
+                    transition_test_frame(
+                        &ctx,
+                        &mut cockpit,
+                        2 + frame as u32,
+                        transition_click(point, pressed),
+                        draw,
+                    );
+                }
+                if permitted {
+                    assert!(
+                        matches!(rx.try_recv(), Ok(Request::DockedTraversal {request: DockedTraversalRequest::TakeSeat {binding: actual}}) if actual == binding)
+                    );
+                }
+                assert!(rx.try_recv().is_err());
+                assert_eq!(serde_json::to_value(&cockpit.snapshot).unwrap(), before);
+            }
+        }
+    }
+
+    #[test]
+    fn contextual_interactions_seat_reasons_match_actual_equipment_gates() {
+        for (scenario, expected) in [
+            ("airborne", "Land before"),
+            ("hatch", "Close both boarding hatches"),
+            ("moving", "Wait for the boarding lift"),
+            ("unstowed", "Stow the boarding lift"),
+            ("distant", "Walk within 1 m"),
+            ("power_off", ""),
+        ] {
+            let ctx = egui::Context::default();
+            let mut cockpit = docked_fixture(&ctx, true);
+            let state = cockpit.snapshot.as_mut().unwrap().pilots[0]
+                .station_avatar
+                .as_mut()
+                .unwrap()
+                .docked_traversal
+                .as_mut()
+                .unwrap();
+            match scenario {
+                "airborne" => state.grounded = false,
+                "hatch" => state.actuators.inner_hatch_open = true,
+                "moving" => state.actuators.lift.moving = true,
+                "unstowed" => state.actuators.lift.floor_station_m -= 0.02,
+                "distant" => state.feet_m[0] += 2.0,
+                "power_off" => state.actuators.service_power_available = false,
+                _ => unreachable!(),
+            }
+            let state = state.clone();
+            let before = serde_json::to_value(&cockpit.snapshot).unwrap();
+            let reason = cockpit.docked_seat_block_reason(&state);
+            if expected.is_empty() {
+                assert!(
+                    reason.is_none(),
+                    "Seat authority does not require service power"
+                );
+            } else {
+                assert!(reason.unwrap().contains(expected), "{scenario}: {reason:?}");
+            }
+            assert_eq!(serde_json::to_value(&cockpit.snapshot).unwrap(), before);
+        }
+    }
+
+    #[test]
+    fn contextual_interactions_lift_reports_landing_target_and_control_distance() {
+        for scenario in ["at_ship", "at_station", "moving", "between", "nearby"] {
+            let ctx = egui::Context::default();
+            let mut cockpit = docked_fixture(&ctx, true);
+            let state = cockpit.snapshot.as_mut().unwrap().pilots[0]
+                .station_avatar
+                .as_mut()
+                .unwrap()
+                .docked_traversal
+                .as_mut()
+                .unwrap();
+            let pose = docked_binding_pose(&state.binding).unwrap();
+            let geometry = lift_geometry(pose);
+            state.support = DockedSupport::BoardingLift;
+            state.feet_m = lift_call_anchors(pose).ship_station_m;
+            state.actuators.lift.target = DockedLiftStop::Station;
+            if scenario == "at_station" {
+                state.actuators.lift.floor_station_m = geometry.station_floor_m;
+            }
+            if scenario == "moving" || scenario == "between" {
+                state.actuators.lift.floor_station_m =
+                    (geometry.ship_floor_m + geometry.station_floor_m) * 0.5;
+                state.actuators.lift.moving = scenario == "moving";
+            }
+            if scenario == "nearby" {
+                state.support = DockedSupport::Connector;
+                state.feet_m[0] += 8.0;
+            }
+            let state = state.clone();
+            let before = serde_json::to_value(&cockpit.snapshot).unwrap();
+            let labels = transition_test_frame(&ctx, &mut cockpit, 0, vec![], |cockpit, ui| {
+                cockpit.boarding_lift_controls(ui, &state)
+            });
+            let expected = match scenario {
+                "at_ship" => "Boarding lift at ship · target station",
+                "at_station" => "Boarding lift at station · target station",
+                "moving" => "Boarding lift moving to station",
+                "between" => "Boarding lift stopped between landings · target station",
+                "nearby" => "walk within 3 m",
+                _ => unreachable!(),
+            };
+            assert!(
+                labels.iter().any(|(text, _)| text.contains(expected)),
+                "{scenario}: {labels:?}"
+            );
+            if scenario == "nearby" {
+                assert!(!labels.iter().any(|(text, _)| text == "Lift to ship"));
+            }
+            assert_eq!(serde_json::to_value(&cockpit.snapshot).unwrap(), before);
+        }
     }
 
     #[test]

@@ -18,6 +18,39 @@ fn group(tab: ServiceTab) -> usize {
 }
 
 impl Cockpit {
+    /// A local navigation action: never submits a ship, avatar or clock command.
+    pub(super) fn close_operations_workspace(&mut self) {
+        self.services_open = false;
+        self.overview_open = false;
+        self.service_tab = ServiceTab::Navigation;
+        self.release_workspace_input();
+    }
+
+    pub(super) fn record_operations_keyboard_owner(&mut self, ctx: &egui::Context) {
+        self.workspace_keyboard_owned_last_frame = ctx.wants_keyboard_input()
+            || ctx.memory(|memory| memory.focused().is_some())
+            || self.cockpit_computer.wants_keyboard_input();
+    }
+
+    pub(super) fn operations_keyboard_navigation(&mut self, ctx: &egui::Context) {
+        // egui can surrender a TextEdit's focus at begin-pass on Escape. Preserve
+        // its previous-frame ownership so the same key cannot also close a task.
+        let previously_owned = std::mem::take(&mut self.workspace_keyboard_owned_last_frame);
+        let open = self.services_open || self.service_tab == ServiceTab::Layouts;
+        if !open
+            || previously_owned
+            || !self.embedded_input
+            || ctx.wants_keyboard_input()
+            || ctx.memory(|memory| memory.focused().is_some())
+            || self.cockpit_computer.wants_keyboard_input()
+            || !ctx.input(|i| i.focused && !i.pointer.any_down())
+        {
+            return;
+        }
+        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
+            self.close_operations_workspace();
+        }
+    }
     pub(super) fn operations_fresh(&self) -> bool {
         self.connected
             && self.snapshot.as_ref().is_some_and(|snapshot| {
@@ -96,12 +129,14 @@ impl Cockpit {
 
     pub(super) fn operations_navigation(&mut self, ui: &mut egui::Ui) {
         ui.horizontal_wrapped(|ui| {
-            if ui.button("← Back to Flight").clicked() {
-                self.services_open = false;
-                self.overview_open = false;
-                self.service_tab = ServiceTab::Navigation;
-                self.release_workspace_input();
+            if ui
+                .button("← Back to Flight")
+                .on_hover_text("Escape returns to Flight when no text field owns the keyboard.")
+                .clicked()
+            {
+                self.close_operations_workspace();
             }
+            ui.small("Esc · Back to Flight");
             ui.separator();
             for (index, label, default) in [
                 (0, "Flight", ServiceTab::Navigation),

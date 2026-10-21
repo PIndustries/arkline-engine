@@ -609,6 +609,7 @@ struct Cockpit {
     embedded_paused: bool,
     embedded_input: bool,
     workspace_input_waiting_release: bool,
+    workspace_keyboard_owned_last_frame: bool,
     ship_observation: bool,
     logo: egui::TextureHandle,
     boot: boot::Boot,
@@ -736,6 +737,7 @@ impl Cockpit {
             embedded_paused: false,
             embedded_input: true,
             workspace_input_waiting_release: false,
+            workspace_keyboard_owned_last_frame: false,
             ship_observation: false,
             logo,
             #[cfg(not(target_arch = "wasm32"))]
@@ -3797,6 +3799,7 @@ impl eframe::App for Cockpit {
             }
         }
         self.poll();
+        self.operations_keyboard_navigation(ctx);
         if self.services_open || self.service_tab == ServiceTab::Layouts {
             self.release_workspace_input();
         } else if self.workspace_input_waiting_release
@@ -4368,6 +4371,7 @@ impl eframe::App for Cockpit {
             ctx,
             in_hangar && workspace_allows_input && !self.embedded_paused && self.embedded_input,
         );
+        self.record_operations_keyboard_owner(ctx);
         self.boot.paint_handoff(ctx);
     }
 }
@@ -6705,6 +6709,78 @@ mod tests {
             Request::WithdrawCorporationOre { units: 25 }
         ));
     }
+    #[test]
+    fn contextual_interactions_escape_returns_without_commands_or_state_changes() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        cockpit.embedded_input = true;
+        let before = serde_json::to_value(&cockpit.snapshot).unwrap();
+        let camera = cockpit.view_mode;
+        let (tx, rx) = mpsc::channel();
+        cockpit.commands = Some(tx);
+        for tab in [ServiceTab::Cargo, ServiceTab::ShipComputer, ServiceTab::Layouts] {
+            cockpit.services_open = true;
+            cockpit.service_tab = tab;
+            let _ = ctx.run(egui::RawInput {
+                focused: true,
+                events: vec![egui::Event::Key {
+                    key: egui::Key::Escape, physical_key: None, pressed: true,
+                    repeat: false, modifiers: egui::Modifiers::NONE,
+                }],
+                ..Default::default()
+            }, |ctx| cockpit.operations_keyboard_navigation(ctx));
+            assert!(!cockpit.services_open);
+            assert!(cockpit.service_tab == ServiceTab::Navigation);
+            assert!(cockpit.workspace_input_waiting_release);
+            assert_eq!(cockpit.view_mode, camera);
+            assert_eq!(serde_json::to_value(&cockpit.snapshot).unwrap(), before);
+            assert!(rx.try_recv().is_err());
+            let _ = ctx.run(egui::RawInput {
+                events: vec![egui::Event::Key {
+                    key: egui::Key::Escape, physical_key: None, pressed: false,
+                    repeat: false, modifiers: egui::Modifiers::NONE,
+                }], ..Default::default()
+            }, |_| {});
+        }
+    }
+
+    #[test]
+    fn contextual_interactions_escape_respects_parent_and_text_focus() {
+        for text_focus in [false, true] {
+            let ctx = egui::Context::default();
+            let mut cockpit = view_test_cockpit(&ctx);
+            cockpit.services_open = true;
+            cockpit.service_tab = ServiceTab::Cargo;
+            cockpit.embedded_input = text_focus;
+            let field = egui::Id::new("contextual_focus_fixture");
+            let mut value = String::from("do not close my editor");
+            if text_focus {
+                let _ = ctx.run(egui::RawInput::default(), |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        ui.add(egui::TextEdit::singleline(&mut value).id(field)).request_focus();
+                    });
+                    cockpit.record_operations_keyboard_owner(ctx);
+                });
+            }
+            let _ = ctx.run(egui::RawInput {
+                focused: true,
+                events: vec![egui::Event::Key {
+                    key: egui::Key::Escape, physical_key: None, pressed: true,
+                    repeat: false, modifiers: egui::Modifiers::NONE,
+                }], ..Default::default()
+            }, |ctx| {
+                cockpit.operations_keyboard_navigation(ctx);
+                if text_focus {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        ui.add(egui::TextEdit::singleline(&mut value).id(field));
+                    });
+                }
+            });
+            assert!(cockpit.services_open);
+            assert!(cockpit.service_tab == ServiceTab::Cargo);
+        }
+    }
+
     #[test]
     fn docking_opens_station_once_and_missing_assets_never_claim_empty_inventory() {
         let ctx = egui::Context::default();
