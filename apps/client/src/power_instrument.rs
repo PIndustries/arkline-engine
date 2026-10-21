@@ -68,7 +68,8 @@ pub(super) fn paint(
     readings: &PowerReadings,
 ) {
     debug_assert_eq!(readings.panel_id, PowerPanelId::ShipPower);
-    // The same logical card fits 256x128 and the current 300x180 canvas.
+    // Keep the real power card readable after the physical side glass
+    // projects to roughly 200x80 px; detailed management remains available.
     let scale = (rect.width() / 246.0).min(rect.height() / 118.0);
     let ink = egui::Color32::from_rgb(185, 226, 208);
     let line = |text: String, y: f32, size: f32, color| {
@@ -85,7 +86,7 @@ pub(super) fn paint(
         let galley = painter.layout_job(job);
         painter.galley(rect.left_top() + egui::vec2(3.0, y * scale), galley, color);
     };
-    line(authority_header.to_owned(), 0.0, 10.0, color);
+    line(authority_header.to_owned(), 0.0, 13.0, color);
     let charge = readings.reading(PowerReadingId::CapacitorChargeJ);
     let capacity = readings.reading(PowerReadingId::CapacitorCapacityJ);
     let energy = match (charge, capacity) {
@@ -96,7 +97,7 @@ pub(super) fn paint(
         ),
         _ => "POWER UNAVAILABLE".into(),
     };
-    line(energy, 15.0, 20.0, ink);
+    line(energy, 15.0, 24.0, ink);
     if let Some(fraction) = readings.fill_fraction() {
         let bar = egui::Rect::from_min_size(
             rect.left_top() + egui::vec2(3.0, 42.0 * scale),
@@ -126,12 +127,12 @@ pub(super) fn paint(
     line(
         format!("{reactor} · WARP {:.1} kJ", warp as f64 / 1000.0),
         54.0,
-        9.0,
+        12.0,
         ink,
     );
-    line(readings.modules[0].clone(), 69.0, 10.0, ink);
-    line(readings.modules[1].clone(), 83.0, 10.0, ink);
-    line(readings.energy_status().into(), 102.0, 9.0, color);
+    line(readings.modules[0].clone(), 69.0, 13.0, ink);
+    line(readings.modules[1].clone(), 83.0, 13.0, ink);
+    line(readings.energy_status().into(), 102.0, 12.0, color);
 }
 
 #[cfg(test)]

@@ -158,29 +158,33 @@ pub(super) fn paint(
             color,
         );
     };
-    line(authority_header.into(), 0.0, 10.0, color);
+    line(authority_header.into(), 0.0, 14.0, color);
     line(
         match readings.reading(NavigationReadingId::SelectedCenterDistanceM) {
             Some(NavigationReadingValue::Meters(meters)) => super::super::format_distance(meters),
             _ => "RANGE UNAVAILABLE".into(),
         },
-        15.0,
-        20.0,
+        18.0,
+        if readings.selected_center_distance_m.is_some() {
+            28.0
+        } else {
+            20.0
+        },
         ink,
     );
-    line("SELECTED CENTER DISTANCE".into(), 41.0, 9.0, ink);
+    line("SELECTED CENTER DISTANCE".into(), 52.0, 12.0, ink);
     // Integer identity/counts retain exact formatting, not floating-point labels.
     line(
         format!(
             "SYSTEM {} · SHIPS {} · ROCKS {}",
             readings.system_id, readings.local_ships, readings.local_asteroids
         ),
-        55.0,
-        10.0,
+        68.0,
+        12.0,
         ink,
     );
-    line(readings.confirmed_label(), 71.0, 10.0, ink);
-    line(readings.pending_label(), 87.0, 10.0, ink);
+    line(readings.confirmed_label(), 84.0, 13.0, ink);
+    line(readings.pending_label(), 101.0, 13.0, ink);
 }
 
 #[cfg(test)]
@@ -283,6 +287,32 @@ mod tests {
                         );
                     });
                 });
+                let text_shapes: Vec<_> = output
+                    .shapes
+                    .iter()
+                    .filter_map(|shape| {
+                        if let egui::Shape::Text(text) = &shape.shape {
+                            Some(text)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                assert_eq!(text_shapes.len(), 6, "all six glance readings stay visible");
+                for pair in text_shapes.windows(2) {
+                    assert!(
+                        pair[0].visual_bounding_rect().bottom()
+                            <= pair[1].visual_bounding_rect().top(),
+                        "reading bands overlap"
+                    );
+                }
+                let scale = (rect.width() / 246.0).min(rect.height() / 118.0);
+                assert!(text_shapes[0].galley.job.sections[0].format.font_id.size >= 14.0 * scale);
+                if distance.is_some() {
+                    assert!(
+                        text_shapes[1].galley.job.sections[0].format.font_id.size >= 28.0 * scale
+                    );
+                }
                 let labels: Vec<_> = output
                     .shapes
                     .iter()
