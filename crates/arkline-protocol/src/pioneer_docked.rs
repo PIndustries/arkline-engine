@@ -16,6 +16,14 @@ use serde::{Deserialize, Serialize};
 pub const PIONEER_DOCKED_REGISTRATION_REVISION: u32 = 4;
 pub const PIONEER_DOCKED_SOURCE_SHA256: &str =
     "8125644f007537437942d34169e527c08ddd2dfaed575c874e2263ff2b7cb123";
+/// Dial coordinates in the complete canonical glass rectangle (u right, v down).
+/// Physical bezels and authoritative instrument painting share this contract.
+pub const PIONEER_DIAL_CENTERS: [[f64; 2]; 2] = [[0.25, 0.42], [0.75, 0.42]];
+pub const PIONEER_DIAL_RADIUS_HEIGHT: f64 = 0.28;
+/// Dedicated rectangular range module in the navigation glass coordinate frame.
+pub const PIONEER_RANGE_MODULE_RECT: [[f64; 2]; 2] = [[0.58, 0.16], [0.97, 0.70]];
+
+
 const EPS: f64 = 1.0e-8;
 const FLOOR: f64 = -0.32;
 // Fitted interior authoring choices in the unchanged canonical body frame.
@@ -1540,6 +1548,225 @@ fn serviceable_bank_case(g: &mut PioneerDockedGeometry, id: &str, min: [f64; 3],
     }
 }
 
+/// Replace one solid mounting strip with actual removable-face construction.
+/// All parts are subsets of its previous local OBB, then share the exact bank
+/// transform. The retained base ID is the structural carcass; these are passive
+/// service parts, not powered controls or simulated cooling equipment.
+fn serviceable_bank_strip(
+    g: &mut PioneerDockedGeometry,
+    id: &str,
+    min: [f64; 3],
+    max: [f64; 3],
+    port: bool,
+) {
+    use PioneerDockedMaterial::{Carbon, Graphite, Titanium};
+    let rim = 0.003;
+    let inset = 0.003;
+    let rear = min[0] + inset * 2.0;
+    let mut part = |suffix: &str, a, b, material| {
+        let mut bounds = axis_box(a, b);
+        bounds.center_m = cockpit_bank_point(bounds.center_m, port);
+        bounds.axes = cockpit_bank_axes(port);
+        g.panel(
+            if suffix.is_empty() {
+                id.to_owned()
+            } else {
+                format!("{id}/{suffix}")
+            },
+            bounds,
+            material,
+            PioneerDockedCollision::Solid,
+            PioneerDockedCell::Cockpit,
+            PioneerDockedPanelKind::Furniture,
+        );
+    };
+    part("", [rear, min[1], min[2]], max, Graphite);
+    // A millimetre-wide reveal exposes the recessed carcass around the cover.
+    part(
+        "service-cover",
+        [min[0] + inset, min[1] + rim + 0.001, min[2] + rim + 0.001],
+        [rear, max[1] - rim - 0.001, max[2] - rim - 0.001],
+        Carbon,
+    );
+    for (i, a, b) in [
+        (
+            0,
+            [min[0] + 0.001, min[1], min[2]],
+            [rear, min[1] + rim, max[2]],
+        ),
+        (
+            1,
+            [min[0] + 0.001, max[1] - rim, min[2]],
+            [rear, max[1], max[2]],
+        ),
+        (
+            2,
+            [min[0] + 0.001, min[1] + rim, min[2]],
+            [rear, max[1] - rim, min[2] + rim],
+        ),
+        (
+            3,
+            [min[0] + 0.001, min[1] + rim, max[2] - rim],
+            [rear, max[1] - rim, max[2]],
+        ),
+    ] {
+        part(&format!("flange/{i}"), a, b, Titanium);
+    }
+    for (row, y) in [min[1] + rim * 0.5, max[1] - rim * 0.5]
+        .into_iter()
+        .enumerate()
+    {
+        for (column, z) in [min[2] + rim * 0.5, max[2] - rim * 0.5]
+            .into_iter()
+            .enumerate()
+        {
+            part(
+                &format!("captive-fastener/{}", row * 2 + column),
+                [min[0], y - 0.0013, z - 0.0013],
+                [min[0] + 0.0015, y + 0.0013, z + 0.0013],
+                Graphite,
+            );
+        }
+    }
+}
+
+/// Passive physical bezel around a real instrument, in the same canonical
+/// content frame. Tangential boxes leave the complete dial radius uncovered.
+fn add_cockpit_dial_rim(
+    g: &mut PioneerDockedGeometry,
+    slot: usize,
+    dial: usize,
+    center: [f64; 3],
+    half: [f64; 3],
+    axes: [[f64; 3]; 3],
+) {
+    let [u, v] = PIONEER_DIAL_CENTERS[dial];
+    let width = 2.0 * (half[2] - 0.008);
+    let height = 2.0 * (half[1] - 0.008);
+    let dial_center = add(
+        center,
+        add(
+            mul(axes[0], -0.032),
+            add(
+                mul(axes[1], (0.5 - v) * height),
+                mul(axes[2], (u - 0.5) * width),
+            ),
+        ),
+    );
+    // Sixteen overlapping inscribed diameter chords form a genuinely round
+    // backing. Its front is 2mm behind the live content plane; there is no
+    // surviving whole-face rectangular glass or opaque slab in front of it.
+    let backing_radius = PIONEER_DIAL_RADIUS_HEIGHT * height + 0.002;
+    let alpha = std::f64::consts::PI / 32.0;
+    for chord in 0..16 {
+        let angle = chord as f64 * std::f64::consts::PI / 16.0;
+        let (sin, cos) = angle.sin_cos();
+        g.panel(
+            format!("cockpit/screen/{slot}/dial/{dial}/backing/chord/{chord}"),
+            PioneerDockedBox {
+                center_m: add(dial_center, mul(axes[0], 0.006)),
+                half_m: [
+                    0.004,
+                    backing_radius * alpha.cos(),
+                    backing_radius * alpha.sin(),
+                ],
+                axes: [
+                    axes[0],
+                    add(mul(axes[1], cos), mul(axes[2], sin)),
+                    add(mul(axes[1], -sin), mul(axes[2], cos)),
+                ],
+            },
+            PioneerDockedMaterial::Carbon,
+            PioneerDockedCollision::Solid,
+            PioneerDockedCell::Cockpit,
+            PioneerDockedPanelKind::Instrument,
+        );
+    }
+    let radius = PIONEER_DIAL_RADIUS_HEIGHT * height;
+    let radial_half = 0.002;
+    let middle = radius + 0.001 + radial_half;
+    let tangent_half = middle * (std::f64::consts::PI / 16.0).tan() * 0.96;
+    for segment in 0..16 {
+        let angle = segment as f64 * std::f64::consts::TAU / 16.0;
+        let (sin, cos) = angle.sin_cos();
+        let radial = add(mul(axes[1], cos), mul(axes[2], sin));
+        let tangent = add(mul(axes[1], -sin), mul(axes[2], cos));
+        g.panel(
+            format!("cockpit/screen/{slot}/dial/{dial}/rim/{segment}"),
+            PioneerDockedBox {
+                center_m: add(dial_center, mul(radial, middle)),
+                half_m: [0.006, radial_half, tangent_half],
+                axes: [axes[0], radial, tangent],
+            },
+            PioneerDockedMaterial::Titanium,
+            PioneerDockedCollision::Solid,
+            PioneerDockedCell::Cockpit,
+            PioneerDockedPanelKind::Instrument,
+        );
+    }
+}
+
+/// Separate navigation range readout, not a second circular gauge.
+fn add_cockpit_range_module(
+    g: &mut PioneerDockedGeometry,
+    center: [f64; 3],
+    half: [f64; 3],
+    axes: [[f64; 3]; 3],
+) {
+    let [[u0, v0], [u1, v1]] = PIONEER_RANGE_MODULE_RECT;
+    let width = 2.0 * (half[2] - 0.008);
+    let height = 2.0 * (half[1] - 0.008);
+    let mid = add(
+        center,
+        add(
+            mul(axes[0], -0.026),
+            add(
+                mul(axes[1], (0.5 - (v0 + v1) * 0.5) * height),
+                mul(axes[2], ((u0 + u1) * 0.5 - 0.5) * width),
+            ),
+        ),
+    );
+    let y = (v1 - v0) * height * 0.5;
+    let z = (u1 - u0) * width * 0.5;
+    g.panel(
+        "cockpit/screen/1/range/backing",
+        PioneerDockedBox {
+            center_m: mid,
+            half_m: [0.004, y, z],
+            axes,
+        },
+        PioneerDockedMaterial::Carbon,
+        PioneerDockedCollision::Solid,
+        PioneerDockedCell::Cockpit,
+        PioneerDockedPanelKind::Instrument,
+    );
+    for (name, dy, dz, half_y, half_z) in [
+        ("top", y + 0.002, 0.0, 0.002, z + 0.004),
+        ("bottom", -y - 0.002, 0.0, 0.002, z + 0.004),
+        ("port", 0.0, -z - 0.002, y, 0.002),
+        ("starboard", 0.0, z + 0.002, y, 0.002),
+    ] {
+        g.panel(
+            format!("cockpit/screen/1/range/rim/{name}"),
+            PioneerDockedBox {
+                center_m: add(
+                    mid,
+                    add(
+                        mul(axes[0], -0.006),
+                        add(mul(axes[1], dy), mul(axes[2], dz)),
+                    ),
+                ),
+                half_m: [0.006, half_y, half_z],
+                axes,
+            },
+            PioneerDockedMaterial::Titanium,
+            PioneerDockedCollision::Solid,
+            PioneerDockedCell::Cockpit,
+            PioneerDockedPanelKind::Instrument,
+        );
+    }
+}
+
 fn add_cockpit_furniture(g: &mut PioneerDockedGeometry) {
     use PioneerDockedMaterial::{Carbon, Graphite, Titanium};
     let cell = PioneerDockedCell::Cockpit;
@@ -1673,6 +1900,16 @@ fn add_cockpit_furniture(g: &mut PioneerDockedGeometry) {
         ("starboard", 3.35, 4.0, 3.35, 3.50),
     ] {
         let mut block = |name: &str, min, max, material| {
+            if matches!(name, "divider" | "socket-inner-rail") {
+                serviceable_bank_strip(
+                    g,
+                    &format!("cockpit/bank/{side}-{name}"),
+                    min,
+                    max,
+                    side == "port",
+                );
+                return;
+            }
             let mut bounds = axis_box(min, max);
             // Only the upper shared instrument socket follows its live faces.
             // Lower plinths, service covers and circulation remain unchanged.
@@ -1946,6 +2183,18 @@ fn add_cockpit_furniture(g: &mut PioneerDockedGeometry) {
     for i in 1..6 {
         let (center, half) = cockpit_screen(i).expect("five physical panels");
         let axes = cockpit_screen_axes(i).expect("same five physical panel frames");
+        if i == 1 || i == 2 {
+            add_cockpit_dial_rim(g, i, 0, center, half, axes);
+            if i == 2 {
+                add_cockpit_dial_rim(g, i, 1, center, half, axes);
+            }
+            if i == 1 {
+                add_cockpit_range_module(g, center, half, axes);
+            }
+            // Metadata and pointer plane stay canonical, but these lower
+            // instruments no longer have a full rectangular screen silhouette.
+            continue;
+        }
         // Four real lips surround, never cover, the live glass aperture.
         // The live content plane is local X=-.032; the lip front is -.038, giving
         // about7mm actual recess rather than an opaque decorative overlay.
@@ -3027,6 +3276,234 @@ mod tests {
             .all(|(a, b)| (a - b).abs() < EPS));
         assert_eq!(half, [0.020, 0.100, 0.210]);
         assert!(cockpit_screen(6).is_none());
+    }
+
+    #[test]
+    fn physical_dial_rims_share_content_frames_and_leave_dials_open() {
+        let g = registered_geometry(&crate::default_pioneer()).unwrap();
+        let mut total = 0;
+        for (slot, dial_count) in [(1, 1), (2, 2)] {
+            let (center, half) = cockpit_screen(slot).unwrap();
+            let axes = cockpit_screen_axes(slot).unwrap();
+            let height = 2.0 * (half[1] - 0.008);
+            let width = 2.0 * (half[2] - 0.008);
+            let radius = PIONEER_DIAL_RADIUS_HEIGHT * height;
+            for dial in 0..dial_count {
+                let [u, v] = PIONEER_DIAL_CENTERS[dial];
+                let dial_center = add(
+                    center,
+                    add(
+                        mul(axes[0], -0.032),
+                        add(
+                            mul(axes[1], (0.5 - v) * height),
+                            mul(axes[2], (u - 0.5) * width),
+                        ),
+                    ),
+                );
+                let prefix = format!("cockpit/screen/{slot}/dial/{dial}/rim/");
+                let parts: Vec<_> = g
+                    .panels
+                    .iter()
+                    .filter(|p| p.id.starts_with(&prefix))
+                    .collect();
+                assert_eq!(parts.len(), 16);
+                total += parts.len();
+                for part in parts {
+                    let d = sub(part.bounds.center_m, dial_center);
+                    assert!(
+                        dot(d, part.bounds.axes[1]) - part.bounds.half_m[1] >= radius + 0.001 - EPS,
+                        "{} covers its real dial interior",
+                        part.id
+                    );
+                    for x in [-1.0, 1.0] {
+                        for y in [-1.0, 1.0] {
+                            for z in [-1.0, 1.0] {
+                                let corner = add(
+                                    part.bounds.center_m,
+                                    add(
+                                        mul(part.bounds.axes[0], x * part.bounds.half_m[0]),
+                                        add(
+                                            mul(part.bounds.axes[1], y * part.bounds.half_m[1]),
+                                            mul(part.bounds.axes[2], z * part.bounds.half_m[2]),
+                                        ),
+                                    ),
+                                );
+                                let local = sub(corner, center);
+                                assert!(
+                                    dot(local, axes[0]) >= -0.038 - EPS
+                                        && dot(local, axes[0]) <= -0.026 + EPS
+                                );
+                                assert!(dot(local, axes[1]).abs() <= half[1] - 0.008 + EPS);
+                                assert!(
+                                    dot(local, axes[2]).abs() <= half[2] - 0.008 + EPS,
+                                    "{} leaves its existing power/navigation case envelope",
+                                    part.id
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assert_eq!(total, 48);
+        assert!(
+            !g.panels
+                .iter()
+                .any(|p| p.id.starts_with("cockpit/screen/1/dial/1/")),
+            "Navigation range is a rectangular readout, not a second dial"
+        );
+    }
+
+    #[test]
+    fn lower_instruments_have_round_backings_and_open_center_rays() {
+        let g = registered_geometry(&crate::default_pioneer()).unwrap();
+        for (slot, count) in [(1, 1), (2, 2)] {
+            assert!(
+                !g.panels
+                    .iter()
+                    .any(|p| p.id == format!("cockpit/screen/{slot}/backing")
+                        || p.id == format!("cockpit/screen/{slot}/bezel")
+                        || p.id.starts_with(&format!("cockpit/screen/{slot}/rim/"))),
+                "Lower modules must not retain the old whole rectangular face"
+            );
+            let (center, half) = cockpit_screen(slot).unwrap();
+            let axes = cockpit_screen_axes(slot).unwrap();
+            let width = 2.0 * (half[2] - 0.008);
+            let height = 2.0 * (half[1] - 0.008);
+            let radius = PIONEER_DIAL_RADIUS_HEIGHT * height;
+            for dial in 0..count {
+                let [u, v] = PIONEER_DIAL_CENTERS[dial];
+                let mid = add(
+                    center,
+                    add(
+                        mul(axes[0], -0.032),
+                        add(
+                            mul(axes[1], (0.5 - v) * height),
+                            mul(axes[2], (u - 0.5) * width),
+                        ),
+                    ),
+                );
+                let prefix = format!("cockpit/screen/{slot}/dial/{dial}/");
+                let backing: Vec<_> = g
+                    .panels
+                    .iter()
+                    .filter(|p| p.id.starts_with(&format!("{prefix}backing/")))
+                    .collect();
+                assert_eq!(backing.len(), 16);
+                for part in &backing {
+                    assert!(
+                        part.bounds.half_m[1].hypot(part.bounds.half_m[2]) <= radius + 0.002 + EPS
+                    );
+                    assert!(
+                        part.bounds.half_m[1] >= radius,
+                        "Backing must cover the full real dial"
+                    );
+                    let d = sub(part.bounds.center_m, mid);
+                    assert!((dot(d, axes[0]) - 0.006).abs() < EPS);
+                    assert!(dot(d, axes[1]).abs() < EPS && dot(d, axes[2]).abs() < EPS);
+                }
+                let intersects = |panel: &PioneerDockedPanel, a, b| {
+                    let local = |point| {
+                        let d = sub(point, panel.bounds.center_m);
+                        panel.bounds.axes.map(|axis| dot(d, axis))
+                    };
+                    segment_box_first_hit(local(a), local(b), panel.bounds.half_m, 0.0).is_some()
+                };
+                let rims: Vec<_> = g
+                    .panels
+                    .iter()
+                    .filter(|p| p.id.starts_with(&format!("{prefix}rim/")))
+                    .collect();
+                for offset in [
+                    [0.0, 0.0],
+                    [radius, 0.0],
+                    [-radius, 0.0],
+                    [0.0, radius],
+                    [0.0, -radius],
+                ] {
+                    let target = add(mid, add(mul(axes[1], offset[0]), mul(axes[2], offset[1])));
+                    let before = add(target, mul(axes[0], -0.020));
+                    assert!(
+                        rims.iter().all(|p| !intersects(p, before, target)),
+                        "Physical rim blocks a dial center/edge ray"
+                    );
+                    let after = add(target, mul(axes[0], 0.020));
+                    assert!(
+                        backing.iter().any(|p| intersects(p, target, after)),
+                        "Visible dial lacks a physical backing"
+                    );
+                }
+            }
+        }
+        assert_eq!(
+            g.panels
+                .iter()
+                .filter(|p| p.id.starts_with("cockpit/screen/1/range/"))
+                .count(),
+            5
+        );
+    }
+
+    #[test]
+    fn serviceable_socket_strips_stay_inside_previous_oriented_solids() {
+        let g = registered_geometry(&crate::default_pioneer()).unwrap();
+        let mut total = 0;
+        for (side, port, z0, z1, rail0, rail1) in [
+            ("port", true, 2.0, 2.55, 2.50, 2.55),
+            ("starboard", false, 3.45, 4.0, 3.45, 3.50),
+        ] {
+            for (name, min, max) in [
+                ("divider", [34.735, 0.795, z0], [34.84, 0.82, z1]),
+                (
+                    "socket-inner-rail",
+                    [34.735, 0.58, rail0],
+                    [34.84, 1.0, rail1],
+                ),
+            ] {
+                let id = format!("cockpit/bank/{side}-{name}");
+                let original = axis_box(min, max);
+                let center = cockpit_bank_point(original.center_m, port);
+                let axes = cockpit_bank_axes(port);
+                let parts: Vec<_> = g
+                    .panels
+                    .iter()
+                    .filter(|p| p.id == id || p.id.starts_with(&format!("{id}/")))
+                    .collect();
+                assert_eq!(parts.len(), 10, "Bounded service strip recipe for {id}");
+                total += parts.len();
+                assert_eq!(
+                    parts.iter().find(|p| p.id == id).unwrap().material,
+                    PioneerDockedMaterial::Graphite
+                );
+                for part in parts {
+                    assert_eq!(part.collision, PioneerDockedCollision::Solid);
+                    for x in [-1.0, 1.0] {
+                        for y in [-1.0, 1.0] {
+                            for z in [-1.0, 1.0] {
+                                let corner = add(
+                                    part.bounds.center_m,
+                                    add(
+                                        mul(part.bounds.axes[0], x * part.bounds.half_m[0]),
+                                        add(
+                                            mul(part.bounds.axes[1], y * part.bounds.half_m[1]),
+                                            mul(part.bounds.axes[2], z * part.bounds.half_m[2]),
+                                        ),
+                                    ),
+                                );
+                                let d = sub(corner, center);
+                                assert!(
+                                    (0..3)
+                                        .all(|i| dot(d, axes[i]).abs() <= original.half_m[i] + EPS),
+                                    "{} protrudes beyond its previous oriented case envelope",
+                                    part.id
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assert_eq!(total, 40);
     }
 
     #[test]

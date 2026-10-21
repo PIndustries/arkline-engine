@@ -463,6 +463,16 @@ impl CockpitComputer {
             },
             pointer,
         );
+        #[cfg(test)]
+        if std::env::var_os("ARKLINE_COCKPIT_TRACE_INPUT").is_some()
+            && source.events.iter().any(|event| matches!(event, Event::PointerButton { .. }))
+        {
+            let events: Vec<_> = raw.events.iter().filter(|event| matches!(event,
+                Event::PointerButton { .. } | Event::PointerMoved(_) | Event::PointerGone)).collect();
+            eprintln!("COMPUTER INPUT active={} pointer={} keyboard={} source_focus={} mapped_focus={} owned={} held={:?} mapped={events:?}",
+                permission.active,permission.pointer,permission.keyboard,source.focused,raw.focused,
+                self.input.keyboard_owned,self.input.buttons);
+        }
         if !self.input.keyboard_owned {
             self.context.memory_mut(|memory| {
                 if let Some(focused) = memory.focused() {

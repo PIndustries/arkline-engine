@@ -1375,6 +1375,142 @@ mod tests {
         eprintln!("saved-world copy: edge departure held; retry rejected without mutation; centred fixture arrived; reopen and live tick passed; avatar/job/ledger/geometry preserved");
     }
 
+    #[test]
+    #[ignore = "Explicit read-only backup input; creates a fresh retained nested copy, never opens a live world"]
+    fn saved_seated_pioneer_copy_undocks_and_persists_free_flight() {
+        use sha2::{Digest, Sha256};
+        let source = PathBuf::from(
+            std::env::var_os("ARKLINE_UNDOCK_SOURCE_BACKUP")
+                .expect("explicit immutable backup input required"),
+        );
+        assert!(source.starts_with("/tmp/pioneer-readable-console-handoff-20261021"));
+        assert_eq!(source.file_name().unwrap(), "pioneer-before.sqlite");
+        assert!(!std::fs::symlink_metadata(&source)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        let source_bytes = std::fs::read(&source).unwrap();
+        let source_hash = Sha256::digest(&source_bytes);
+        let directory = source
+            .parent()
+            .unwrap()
+            .join(format!("undock-authority-copy-{}", rand::random::<u64>()));
+        let realm = directory.join(".arkline-studio");
+        std::fs::create_dir_all(&realm).unwrap();
+        let path = realm.join("world.sqlite");
+        std::fs::write(&path, source_bytes).unwrap();
+        let db = rusqlite::Connection::open_with_flags(
+            &path,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+        )
+        .unwrap();
+        let raw: String = db
+            .query_row("SELECT json FROM world WHERE id=1", [], |row| row.get(0))
+            .unwrap();
+        let before: World = serde_json::from_str(&raw).unwrap();
+        let ledger = |db: &rusqlite::Connection| -> Vec<(i64, String)> {
+            db.prepare("SELECT sequence,json FROM ledger ORDER BY sequence")
+                .unwrap()
+                .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+                .unwrap()
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap()
+        };
+        let before_ledger = ledger(&db);
+        drop(db);
+        let name = "PioneerFinish11QA";
+        assert_eq!(before.pilots[name].view.location, Location::Docked);
+        assert!(before.pilots[name].view.station_avatar.is_none());
+        assert_eq!(
+            before.resource_jobs[name].view.phase,
+            ResourceJobPhase::Completed
+        );
+        docked_traversal::can_undock(&before, name).unwrap();
+        let before_jobs = serde_json::to_value(&before.resource_jobs).unwrap();
+        let mut world = EditorWorld::open(&realm).unwrap();
+        let now = world.time();
+        assert!(world.is_paused());
+        // Exercise the already-authenticated authority boundary without a new
+        // Connect/resume action that could change the fixture's job/session data.
+        // Embedded transport pause admission is tested separately in the client.
+        let mut session = Some(name.to_owned());
+        let response = world.handle(&mut session, Request::Undock);
+        assert!(response.ok, "Undock rejected: {}", response.message);
+        assert_eq!(response.message, "Undocked");
+        let current = response
+            .snapshot
+            .as_ref()
+            .unwrap()
+            .pilots
+            .iter()
+            .find(|p| p.name == name)
+            .unwrap();
+        assert_eq!(current.location, Location::Station);
+        assert!(current.station_avatar.is_none());
+        assert_eq!(current.ore, before.pilots[name].view.ore);
+        let departure = current.flight.as_ref().unwrap().position;
+        assert_eq!(
+            departure,
+            flight::berth(name, Destination::Station, ShipClass::Pioneer)
+        );
+        assert_ne!(departure, STATION_POSITION);
+        assert_eq!(
+            world.time(),
+            now,
+            "Accepted Undock is atomic; it has no unfinished clock-driven phase"
+        );
+        let target = [departure[0] + 1000.0, departure[1], departure[2]];
+        let navigating = world.handle(
+            &mut session,
+            Request::Navigate {
+                mode: NavigationMode::FlyTo { position: target },
+            },
+        );
+        assert!(
+            navigating.ok,
+            "Normal free-flight navigation rejected: {}",
+            navigating.message
+        );
+        world.play();
+        world.advance(250).unwrap();
+        assert_eq!(world.time(), now + 250);
+        let after: World = serde_json::from_str(&persisted_world(&world)).unwrap();
+        assert_eq!(after.pilots[name].view.location, Location::Station);
+        assert!(
+            flight::distance(
+                after.pilots[name].view.flight.as_ref().unwrap().position,
+                departure
+            ) > 0.0
+        );
+        assert!(after.pilots[name].view.station_avatar.is_none());
+        assert_eq!(after.pilots[name].view.ore, before.pilots[name].view.ore);
+        assert_eq!(
+            serde_json::to_value(&after.resource_jobs).unwrap(),
+            before_jobs
+        );
+        assert_eq!(ledger(&world.server.db), before_ledger);
+        let final_position = after.pilots[name].view.flight.as_ref().unwrap().position;
+        drop(world);
+        let reopened = EditorWorld::open(&realm).unwrap();
+        let saved: World = serde_json::from_str(&persisted_world(&reopened)).unwrap();
+        assert!(reopened.is_paused());
+        assert_eq!(saved.pilots[name].view.location, Location::Station);
+        assert_eq!(
+            saved.pilots[name].view.flight.as_ref().unwrap().position,
+            final_position
+        );
+        assert_eq!(
+            serde_json::to_value(&saved.resource_jobs).unwrap(),
+            before_jobs
+        );
+        assert_eq!(ledger(&reopened.server.db), before_ledger);
+        assert_eq!(
+            Sha256::digest(std::fs::read(&source).unwrap()),
+            source_hash,
+            "Source backup must remain byte-for-byte untouched"
+        );
+        eprintln!("saved-copy Undock accepted→Station→normal navigation→250ms movement→reopen passed; original backup byte-identical; completed job/cargo/avatar/{} ledger entries preserved; retained copy {}", before_ledger.len(), directory.display());
+    }
     fn persisted_world(world: &EditorWorld) -> String {
         world
             .server

@@ -1581,7 +1581,7 @@ impl Cockpit {
                     self.accent(),
                 ),
                 _ => (
-                    "UNDOCKING CONFIRMED".into(),
+                    "UNDOCKED".into(),
                     "Navigation available".into(),
                     Some(1.0),
                     self.accent(),
@@ -1836,72 +1836,130 @@ impl Cockpit {
 
     fn cockpit_actions(&mut self, ui: &mut egui::Ui) {
         let Some(pilot) = self.own() else { return };
-        ui.horizontal_wrapped(|ui| {
-            let docked = pilot.location == Location::Docked;
-            let (label, enabled, command) = if docked {
-                (
-                    "UNDOCK",
-                    self.can_operate() && pilot.station_avatar.is_none(),
-                    Request::Undock,
-                )
-            } else {
-                ("DOCK", self.can_dock(&pilot), Request::Dock)
-            };
-            if ui
-                .add_enabled(
-                    enabled,
-                    egui::Button::new(egui::RichText::new(label).strong().size(
-                        if self.cockpit_console_detail {
-                            16.0
-                        } else {
-                            24.0
-                        },
-                    ))
-                    .min_size(Vec2::new(108.0, 32.0))
-                    .fill(self.accent().gamma_multiply(0.26)),
-                )
-                .clicked()
-            {
-                self.send(command);
-            }
-            if ui
-                .add_enabled(
-                    self.can_fly(),
-                    egui::Button::new(egui::RichText::new("STOP").size(
-                        if self.cockpit_console_detail {
-                            14.0
-                        } else {
-                            22.0
-                        },
-                    ))
-                    .min_size(Vec2::new(76.0, 32.0)),
-                )
-                .clicked()
-            {
-                self.send(Request::Navigate {
-                    mode: NavigationMode::Stop,
+        let readiness = self.navigation_order_reason();
+        let ready = readiness.is_none() && self.live_command_snapshot_fresh();
+        let docked = pilot.location == Location::Docked;
+        let (status, help) = if !self.connected {
+            (
+                "OFFLINE",
+                "Reconnect to the authority before issuing ship orders",
+            )
+        } else if self.embedded_paused {
+            ("PAUSED", "Resume simulation before issuing ship orders")
+        } else if self.request_pending {
+            ("PENDING", "Command queued; awaiting the authority response")
+        } else if !self.live_command_snapshot_fresh() {
+            (
+                "STALE",
+                "Last received readings; waiting for a fresh authority snapshot",
+            )
+        } else if pilot.station_avatar.is_some() {
+            (
+                "ON FOOT",
+                "Physically return to the pilot seat for ship orders",
+            )
+        } else if docked {
+            ("DOCKED", "Authority reports the ship docked")
+        } else if matches!(pilot.location, Location::InTransit { .. }) {
+            (
+                "WARP",
+                "Transit in progress; berth and stop controls unavailable",
+            )
+        } else if matches!(pilot.location, Location::Jumping { .. }) {
+            (
+                "JUMP",
+                "Gate transit in progress; berth and stop controls unavailable",
+            )
+        } else if self.can_dock(&pilot) {
+            (
+                "PORT IN RANGE",
+                "Authority reports the docking port within range",
+            )
+        } else {
+            ("IN FLIGHT", "Approach the station docking port to dock")
+        };
+        let state_color = if ready { self.accent() } else { AMBER };
+        let text_size = if self.cockpit_console_detail {
+            14.0
+        } else {
+            22.0
+        };
+        let caption_size = if self.cockpit_console_detail {
+            12.0
+        } else {
+            16.0
+        };
+        let recess = Color32::from_rgb(7, 14, 20);
+        let edge = Color32::from_rgb(47, 64, 74);
+        let bank = egui::Frame::new()
+            .fill(Color32::from_rgb(18, 28, 35))
+            .stroke(egui::Stroke::new(1.0, edge))
+            .corner_radius(egui::CornerRadius::same(3))
+            .inner_margin(egui::Margin::same(4))
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    egui::Frame::new().fill(recess).stroke(egui::Stroke::new(1.0, edge))
+                        .corner_radius(egui::CornerRadius::same(2)).inner_margin(egui::Margin::same(4)).show(ui, |ui| {
+                        ui.vertical(|ui| {
+                            ui.label(egui::RichText::new("BERTH").size(caption_size).color(MUTED));
+                            let (label, enabled, command) = if docked {
+                                ("UNDOCK", ready && self.can_operate() && pilot.station_avatar.is_none(), Request::Undock)
+                            } else { ("DOCK", ready && self.can_dock(&pilot), Request::Dock) };
+                            // Projected single-pass instruments keep help in the bank below.
+                            // A floating tooltip sizing layer can intercept the next press.
+                            let response = ui.add_enabled(enabled, egui::Button::new(egui::RichText::new(label).strong().size(text_size))
+                                .min_size(Vec2::new(108.0, 30.0)).fill(self.accent().gamma_multiply(0.20)));
+                            #[cfg(test)]
+                            if std::env::var_os("ARKLINE_COCKPIT_TRACE_INPUT").is_some()
+                                && ui.input(|input| input.events.iter().any(|event| matches!(event, egui::Event::PointerButton { .. } | egui::Event::PointerMoved(_))))
+                            {
+                                eprintln!("COCKPIT_BERTH label={label:?} enabled={enabled} rect={:?} clicked={} hovered={} down={} can_operate={} pending={} events={:?}",
+                                    response.rect, response.clicked(), response.hovered(), response.is_pointer_button_down_on(), self.can_operate(), self.request_pending,
+                                    ui.input(|input| input.events.clone()));
+                                ui.ctx().interaction_snapshot(|i|eprintln!("BERTH id={:?} contains={} clicked_id={:?} dragged={:?} hovered_ids={:?} contains_ids={:?}", response.id,response.contains_pointer(),i.clicked,i.dragged,i.hovered,i.contains_pointer));
+                                let ids=ui.ctx().interaction_snapshot(|i| i.hovered.iter().copied().collect::<Vec<_>>());
+                                for id in ids { eprintln!("HOVER WIDGET {:?}",ui.ctx().read_response(id).map(|r|(r.id,r.layer_id,r.rect,r.sense))); }
+                            }
+                            if response.clicked() { self.send(command); }
+                        });
+                    });
+                    egui::Frame::new().fill(recess).stroke(egui::Stroke::new(1.0, edge))
+                        .corner_radius(egui::CornerRadius::same(2)).inner_margin(egui::Margin::same(4)).show(ui, |ui| {
+                        ui.vertical(|ui| {
+                            ui.label(egui::RichText::new("FLIGHT").size(caption_size).color(MUTED));
+                            let braking = matches!(pilot.location, Location::Station | Location::Belt)
+                                && pilot.flight.as_ref().is_some_and(|flight| matches!(flight.mode, NavigationMode::Stop));
+                            if ui.add_enabled(ready && self.can_fly(), egui::Button::new(egui::RichText::new("STOP").size(text_size))
+                                .min_size(Vec2::new(76.0, 30.0)).selected(braking))
+                                .clicked() { self.send(Request::Navigate { mode: NavigationMode::Stop }); }
+                        });
+                    });
+                    ui.vertical(|ui| {
+                        ui.label(egui::RichText::new("AUTHORITY").size(caption_size).color(MUTED));
+                        ui.colored_label(state_color, egui::RichText::new(status).size(caption_size).strong());
+                        if ui.small_button("Expand panel").clicked() {
+                            self.services_open = true;
+                        }
+                    });
                 });
-            }
-            let (status, help) = if !self.connected {
-                ("OFFLINE", "Reconnect to operate")
-            } else if self.request_pending {
-                ("PENDING", "Awaiting server confirmation")
-            } else if docked {
-                ("DOCKED", "Undock to begin flight")
-            } else if !self.can_dock(&pilot) {
-                ("IN FLIGHT", "Approach the station docking port to dock")
-            } else {
-                ("IN RANGE", "Station is within docking range")
-            };
-            ui.small(status).on_hover_text(help);
-            if ui
-                .small_button("Expand panel")
-                .on_hover_text("Open this page at normal interface size")
-                .clicked()
-            {
-                self.services_open = true;
-            }
-        });
+            });
+        ui.label(egui::RichText::new(help).size(14.0).color(MUTED));
+        if self.snapshot.as_ref().is_some_and(|snapshot| snapshot.resource_jobs.iter()
+            .any(|job| job.pilot == pilot.name && !job.phase.is_terminal())) {
+            ui.label(egui::RichText::new("Manual ship orders can cancel the active mining routine")
+                .size(14.0).color(AMBER));
+        }
+        // A restrained bevel belongs to the UI module; it does not alter the
+        // physical computer plane, ray hit testing, or world materials.
+        let rect = bank.response.rect.shrink(1.0);
+        ui.painter().line_segment(
+            [rect.left_top(), rect.right_top()],
+            egui::Stroke::new(1.0, Color32::from_rgb(69, 87, 96)),
+        );
+        ui.painter().line_segment(
+            [rect.left_bottom(), rect.right_bottom()],
+            egui::Stroke::new(1.0, Color32::from_rgb(3, 8, 12)),
+        );
     }
     fn power_gauge(&self, ui: &mut egui::Ui) {
         let Some(pilot) = self.own() else { return };
@@ -1916,11 +1974,11 @@ impl Cockpit {
                     .desired_height(18.0)
                     .fill(self.accent())
                     .text(format!(
-                        "Capacitor {:.1}/{:.1} kJ · reactor {} W{}",
+                        "Capacitor {:.1}/{:.1} kJ · regen rating {} W{}",
                         power.charge_j as f64 / 1000.0,
                         power.capacity_j as f64 / 1000.0,
                         power.regen_w,
-                        if self.connected { "" } else { " · last known" }
+                        if !self.connected { " · last known" } else if self.embedded_paused { " · paused" } else if !self.live_command_snapshot_fresh() { " · stale" } else { "" }
                     )),
             )
             .on_hover_text({let spec=power_spec(pilot.ship_class);format!("Server-confirmed energy. Warp {} J; turret cycle {} J; mining drone cycle {} J; drone weapon shot {} J.",spec.warp_cost_j,spec.mining_cycle_cost_j,spec.drone_mining_cycle_cost_j,spec.drone_attack_cost_j)});
@@ -1930,7 +1988,7 @@ impl Cockpit {
     }
     /// Read-only content; physical placement and input authority remain external.
     fn compact_flight_summary(&self, ui: &mut egui::Ui) {
-        ui.heading("FLIGHT CONSOLE");
+        ui.label(egui::RichText::new("FLIGHT CONSOLE").size(16.0).color(MUTED));
         let Some(pilot) = self.own() else {
             ui.label("Waiting for vessel telemetry");
             return;
@@ -1965,20 +2023,6 @@ impl Cockpit {
                 }
             },
         );
-        let power = pilot.power.as_ref().map_or_else(
-            || "Unavailable".into(),
-            |power| {
-                format!(
-                    "{:.1} / {:.1} kJ",
-                    power.charge_j as f64 / 1000.0,
-                    power.capacity_j as f64 / 1000.0
-                )
-            },
-        );
-        let reactor = pilot.power.as_ref().map_or_else(
-            || "Unavailable".into(),
-            |power| format!("{} W", power.regen_w),
-        );
         let job = self.snapshot.as_ref().and_then(|snapshot| {
             snapshot
                 .resource_jobs
@@ -1994,32 +2038,31 @@ impl Cockpit {
             || "No target reported".into(),
             |job| format!("{} / {} ore", job.stored_units, job.target_units),
         );
-        egui::Grid::new("compact-flight-readings")
-            .num_columns(2)
-            .spacing(Vec2::new(14.0, 2.0))
-            .max_col_width((ui.available_width() - 120.0).max(80.0))
-            .show(ui, |ui| {
-                for (label, value) in [
-                    ("Flight", format!("{mode} · {speed}")),
-                    ("Power", power),
-                    ("Reactor", reactor),
-                    ("Mining", mining),
-                    ("Delivered", delivery),
-                    (
-                        "Hold",
-                        format!(
-                            "{} / {} ore · {} drones",
-                            pilot.ore,
-                            cargo_capacity(pilot.ship_class),
-                            Self::fleet(&pilot).len()
-                        ),
-                    ),
-                ] {
-                    ui.colored_label(MUTED, label);
-                    ui.label(value);
-                    ui.end_row();
-                }
-            });
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new("SPEED").size(16.0).color(MUTED));
+            ui.label(
+                egui::RichText::new(speed)
+                    .monospace()
+                    .size(42.0)
+                    .color(self.accent()),
+            );
+        });
+        ui.label(mode).on_hover_text("Server-confirmed navigation mode. Braking / holding is a navigation order, not proof of zero velocity.");
+        ui.horizontal(|ui| {
+            ui.colored_label(MUTED, "Routine");
+            ui.label(mining);
+        });
+        ui.horizontal(|ui| {
+            ui.colored_label(MUTED, "Delivered");
+            ui.label(delivery);
+        });
+        ui.label(format!(
+            "Hold {} / {} ore · {} drones",
+            pilot.ore,
+            cargo_capacity(pilot.ship_class),
+            Self::fleet(&pilot).len()
+        ))
+        .on_hover_text("Current ship ore and reported hold capacity; drones counts deployed craft, not craft in the bay. Power and regeneration ratings are available in the expanded console.");
     }
     /// Build the physical computer in one fixed logical canvas. Perspective
     /// changes only its 3D vertices and ray map, never egui's allocation sizes.
@@ -5225,6 +5268,80 @@ mod tests {
     }
 
     #[test]
+    fn cockpit_control_bank_preserves_commands_and_blocks_unready_orders() {
+        let ctx = egui::Context::default();
+        let mut cockpit = view_test_cockpit(&ctx);
+        cockpit.snapshot.as_mut().unwrap().pilots[0].location = Location::Docked;
+        let (tx, rx) = mpsc::channel();
+        cockpit.commands = Some(tx);
+        let render = |c: &mut Cockpit, events| {
+            ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        Pos2::ZERO,
+                        Vec2::new(560.0, 380.0),
+                    )),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| c.cockpit_actions(ui));
+                },
+            )
+        };
+        let output = render(&mut cockpit, vec![]);
+        let point = output
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.job.text == "UNDOCK" => {
+                    Some(text.pos + text.galley.rect.center().to_vec2())
+                }
+                _ => None,
+            })
+            .unwrap();
+        let click = |c: &mut Cockpit| {
+            for pressed in [true, false] {
+                render(
+                    c,
+                    vec![
+                        egui::Event::PointerMoved(point),
+                        egui::Event::PointerButton {
+                            pos: point,
+                            button: egui::PointerButton::Primary,
+                            pressed,
+                            modifiers: egui::Modifiers::NONE,
+                        },
+                    ],
+                );
+            }
+        };
+        let before = serde_json::to_value(&cockpit.snapshot).unwrap();
+        click(&mut cockpit);
+        assert!(matches!(rx.try_recv(), Ok(Request::Undock)));
+        assert!(cockpit.request_pending);
+        assert_eq!(serde_json::to_value(&cockpit.snapshot).unwrap(), before);
+        for condition in [0, 1, 2, 3, 4] {
+            cockpit.request_pending = false;
+            cockpit.connected = true;
+            cockpit.embedded_paused = false;
+            cockpit.observed = Instant::now();
+            cockpit.snapshot.as_mut().unwrap().pilots[0].station_avatar = None;
+            match condition {
+                0 => cockpit.request_pending = true,
+                1 => cockpit.connected = false,
+                2 => cockpit.embedded_paused = true,
+                3 => cockpit.observed = Instant::now() - std::time::Duration::from_secs(2),
+                _ => cockpit.snapshot.as_mut().unwrap().pilots[0].station_avatar = Some(serde_json::from_value(serde_json::json!({"position":[0,0,0],"heading":0,"moving":false,"updated_at_ms":1000})).unwrap()),
+            }
+            click(&mut cockpit);
+            assert!(
+                rx.try_recv().is_err(),
+                "unready condition {condition} dispatched"
+            );
+        }
+    }
+    #[test]
     fn compact_flight_summary_actual_canvas_fits_and_selects_current_owned_routine() {
         let ctx = egui::Context::default();
         let mut cockpit = view_test_cockpit(&ctx);
@@ -5289,11 +5406,13 @@ mod tests {
             .collect();
         for label in [
             "FLIGHT CONSOLE",
-            "Power",
-            "Reactor",
+            "SPEED",
+            "Braking / holding",
+            "Routine",
             "Mining",
             "Delivered",
             "1200 / 5000 ore",
+            "Hold 25 / 1000 ore · 0 drones",
             "Flight",
             "Drones",
             "Console pages",

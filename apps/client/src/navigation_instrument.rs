@@ -30,6 +30,9 @@ pub(super) struct NavigationReadings {
     confirmed_ids: Vec<u64>,
     pending: Vec<arkline_protocol::TargetLock>,
     now_ms: u64,
+    docked: bool,
+    heading_rad: Option<f32>,
+    speed_mps: Option<f64>,
 }
 
 impl NavigationReadings {
@@ -52,8 +55,26 @@ impl NavigationReadings {
         confirmed_ids.dedup();
         // Conflicting compatibility fields cannot manufacture confirmed success.
         confirmed_ids.retain(|id| !pending.contains_key(id));
+        let docked = own.location == Location::Docked;
+        let heading_rad = own.flight.as_ref().filter(|_| !docked).and_then(|flight| {
+            let h = flight.warp.as_ref().map_or(flight.heading, |warp| {
+                arkline_protocol::sample_warp_heading(warp, now_ms)
+            });
+            (h.iter().all(|v| v.is_finite()) && h[0].hypot(h[2]) > 1e-8)
+                .then(|| h[2].atan2(h[0]) as f32)
+        });
+        let speed_mps = own.flight.as_ref().and_then(|flight| {
+            let velocity = flight.warp.as_ref().map_or(flight.velocity, |warp| {
+                arkline_protocol::sample_warp(warp, now_ms).1
+            });
+            let speed = velocity.iter().map(|v| v * v).sum::<f64>().sqrt();
+            speed.is_finite().then_some(speed)
+        });
         Self {
             panel_id: NavigationPanelId::ShipNavigation,
+            docked,
+            heading_rad,
+            speed_mps,
             selected_center_distance_m: selected_center_distance_m
                 .filter(|m| m.is_finite() && *m >= 0.0),
             system_id: u64::from(own.system_id),
@@ -140,51 +161,143 @@ pub(super) fn paint(
     readings: &NavigationReadings,
 ) {
     debug_assert_eq!(readings.panel_id, NavigationPanelId::ShipNavigation);
-    let scale = (rect.width() / 246.0).min(rect.height() / 118.0);
-    let ink = egui::Color32::from_rgb(185, 226, 208);
-    let line = |text: String, y: f32, size, color| {
+    let scale = rect.height() / 118.0;
+    let ink = egui::Color32::from_rgb(202, 228, 215);
+    let muted = egui::Color32::from_rgb(114, 147, 137);
+    let origin = |u: f32, v: f32| rect.min + egui::vec2(u * rect.width(), v * rect.height());
+    let text = |bounds: egui::Rect, content: String, size: f32, tone, align| {
         let mut job = egui::text::LayoutJob::simple(
-            text,
+            content,
             egui::FontId::monospace(size * scale),
-            color,
-            rect.width() - 6.0,
+            tone,
+            bounds.width(),
         );
         job.wrap.max_rows = 1;
         job.wrap.break_anywhere = true;
         job.wrap.overflow_character = Some('…');
-        painter.galley(
-            rect.min + egui::vec2(3.0, y * scale),
-            painter.layout_job(job),
-            color,
-        );
+        let galley = painter.layout_job(job);
+        let pos = match align {
+            egui::Align::Center => bounds.center_top() - egui::vec2(galley.size().x * 0.5, 0.0),
+            _ => bounds.left_top(),
+        };
+        painter.galley(pos, galley, tone);
     };
-    line(authority_header.into(), 0.0, 14.0, color);
-    line(
-        match readings.reading(NavigationReadingId::SelectedCenterDistanceM) {
-            Some(NavigationReadingValue::Meters(meters)) => super::super::format_distance(meters),
-            _ => "RANGE UNAVAILABLE".into(),
-        },
-        18.0,
-        if readings.selected_center_distance_m.is_some() {
-            28.0
-        } else {
-            20.0
-        },
-        ink,
+    text(
+        egui::Rect::from_min_max(origin(0.02, 0.005), origin(0.98, 0.12)),
+        authority_header.into(),
+        13.,
+        color,
+        egui::Align::Min,
     );
-    line("SELECTED CENTER DISTANCE".into(), 52.0, 12.0, ink);
-    // Integer identity/counts retain exact formatting, not floating-point labels.
-    line(
-        format!(
-            "SYSTEM {} · SHIPS {} · ROCKS {}",
-            readings.system_id, readings.local_ships, readings.local_asteroids
+    let dial = arkline_protocol::PIONEER_DIAL_CENTERS[0];
+    let center = origin(dial[0] as f32, dial[1] as f32);
+    let radius = rect.height() * arkline_protocol::PIONEER_DIAL_RADIUS_HEIGHT as f32;
+    painter.circle_filled(center, radius, egui::Color32::from_rgb(5, 12, 13));
+    painter.circle_stroke(
+        center,
+        radius * 0.94,
+        egui::Stroke::new(1.2, color.gamma_multiply(0.5)),
+    );
+    for tick in 0..24 {
+        let angle = tick as f32 * std::f32::consts::TAU / 24.;
+        let dir = egui::vec2(angle.sin(), -angle.cos());
+        painter.line_segment(
+            [
+                center + dir * radius * 0.87,
+                center + dir * radius * if tick % 6 == 0 { 0.68 } else { 0.78 },
+            ],
+            egui::Stroke::new(if tick % 6 == 0 { 1.4 } else { 0.7 }, muted),
+        );
+    }
+    if let Some(angle) = readings.heading_rad {
+        let dir = egui::vec2(angle.sin(), -angle.cos());
+        painter.line_segment(
+            [center - dir * radius * 0.45, center + dir * radius * 0.72],
+            egui::Stroke::new(2., color),
+        );
+        painter.circle_filled(center, 2. * scale, color);
+    }
+    let label = if readings.docked {
+        "DOCKED".into()
+    } else {
+        readings.heading_rad.map_or("NO AZIMUTH".into(), |r| {
+            format!("{:03.0}°", r.to_degrees().rem_euclid(360.))
+        })
+    };
+    text(
+        egui::Rect::from_min_max(
+            center + egui::vec2(-radius * 0.83, -radius * 0.27),
+            center + egui::vec2(radius * 0.83, radius * 0.15),
         ),
-        68.0,
-        12.0,
+        label,
+        15.,
         ink,
+        egui::Align::Center,
     );
-    line(readings.confirmed_label(), 84.0, 13.0, ink);
-    line(readings.pending_label(), 101.0, 13.0, ink);
+    text(
+        egui::Rect::from_min_max(origin(0.10, 0.645), origin(0.40, 0.735)),
+        "+X 0° / +Z 90°".into(),
+        9.,
+        muted,
+        egui::Align::Center,
+    );
+    let [[u0, v0], [u1, v1]] = arkline_protocol::PIONEER_RANGE_MODULE_RECT;
+    let range =
+        egui::Rect::from_min_max(origin(u0 as f32, v0 as f32), origin(u1 as f32, v1 as f32));
+    painter.rect_filled(range, 2., egui::Color32::from_rgb(4, 11, 13));
+    text(
+        egui::Rect::from_min_max(origin(0.60, 0.18), origin(0.95, 0.28)),
+        "SELECTED RANGE".into(),
+        12.,
+        color,
+        egui::Align::Min,
+    );
+    text(
+        egui::Rect::from_min_max(origin(0.60, 0.30), origin(0.95, 0.51)),
+        readings
+            .selected_center_distance_m
+            .map_or("RANGE UNAVAILABLE".into(), super::super::format_distance),
+        if readings.selected_center_distance_m.is_some() {
+            25.
+        } else {
+            12.
+        },
+        ink,
+        egui::Align::Min,
+    );
+    text(
+        egui::Rect::from_min_max(origin(0.60, 0.53), origin(0.95, 0.63)),
+        readings.speed_mps.map_or("SPEED UNAVAILABLE".into(), |v| {
+            super::super::format_speed(v)
+        }),
+        13.,
+        ink,
+        egui::Align::Min,
+    );
+    text(
+        egui::Rect::from_min_max(origin(0.60, 0.63), origin(0.95, 0.70)),
+        format!(
+            "SYS {} · {} CONTACTS",
+            readings.system_id, readings.local_ships
+        ),
+        9.,
+        muted,
+        egui::Align::Min,
+    );
+    text(
+        egui::Rect::from_min_max(origin(0.02, 0.75), origin(0.98, 0.86)),
+        readings.confirmed_label(),
+        12.,
+        ink,
+        egui::Align::Min,
+    );
+    text(
+        egui::Rect::from_min_max(origin(0.02, 0.875), origin(0.98, 0.99)),
+        readings.pending_label(),
+        12.,
+        color,
+        egui::Align::Min,
+    );
 }
 
 #[cfg(test)]
@@ -298,21 +411,10 @@ mod tests {
                         }
                     })
                     .collect();
-                assert_eq!(text_shapes.len(), 6, "all six glance readings stay visible");
-                for pair in text_shapes.windows(2) {
-                    assert!(
-                        pair[0].visual_bounding_rect().bottom()
-                            <= pair[1].visual_bounding_rect().top(),
-                        "reading bands overlap"
-                    );
-                }
-                let scale = (rect.width() / 246.0).min(rect.height() / 118.0);
-                assert!(text_shapes[0].galley.job.sections[0].format.font_id.size >= 14.0 * scale);
-                if distance.is_some() {
-                    assert!(
-                        text_shapes[1].galley.job.sections[0].format.font_id.size >= 28.0 * scale
-                    );
-                }
+                assert!(
+                    text_shapes.len() >= 8,
+                    "dedicated bearing/range plus real lock status"
+                );
                 let labels: Vec<_> = output
                     .shapes
                     .iter()

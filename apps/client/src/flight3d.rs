@@ -1203,7 +1203,10 @@ impl FlightView {
             self.input_surface = None;
         }
         world_input &= !pointer_on_display;
-        let drone_surface = self.physical_surface(1, egui::vec2(344., 244.));
+        // Keep dedicated lower instruments available while camera video owns
+        // the upper-left multipurpose display instead of its usual local map.
+        let camera_display = self.drone_camera || self.remote_ship.is_some();
+        let drone_surface = self.physical_surface(4, egui::vec2(344., 244.));
         match &self.renderer {
             Ok(renderer) => {
                 let renderer = renderer.clone();
@@ -1647,15 +1650,9 @@ impl FlightView {
                 }
                 if cockpit {
                     if let Some(own) = own_pilot {
-                        // One content owner per physical face: a requested
-                        // camera (including its unavailable state) replaces NAV.
-                        let mut telemetry_surfaces = instrument_surfaces.clone();
-                        if self.drone_camera || self.remote_ship.is_some() {
-                            telemetry_surfaces[1] = None;
-                        }
                         paint_instruments(
                             ui,
-                            &telemetry_surfaces,
+                            &instrument_surfaces,
                             own,
                             snapshot,
                             selected_distance,
@@ -1761,7 +1758,8 @@ impl FlightView {
                                 });
                             }
                         }
-                        if let Some(surface) = self.physical_surface(4, NAV_CANVAS_SIZE) {
+                        if let Some(surface) = (!camera_display)
+                            .then(|| self.physical_surface(4, NAV_CANVAS_SIZE)).flatten() {
                             if let Some(action) = paint_cockpit_maps(
                                 ui,
                                 &surface,
@@ -4648,9 +4646,6 @@ fn paint_instruments(
         let paint = surface.begin_paint(ui);
         let inner = surface.canvas_rect().shrink(5.);
         let painter = paint.painter().with_clip_rect(inner);
-        if index != 0 {
-            painter.rect_filled(inner, 0.0, egui::Color32::from_rgb(2, 14, 10));
-        }
         if index == 1 {
             let readings = navigation_instrument::NavigationReadings::from_pilot(
                 own,
@@ -4658,12 +4653,14 @@ fn paint_instruments(
                 target_distance,
                 now,
             );
-            navigation_instrument::paint(&painter, inner, &rows[1][0], color, &readings);
+            navigation_instrument::paint(&paint.painter().with_clip_rect(surface.canvas_rect()),
+                surface.canvas_rect(), &rows[1][0], color, &readings);
             continue;
         }
         if index == 2 {
             let readings = power_instrument::PowerReadings::from_pilot(own, now);
-            power_instrument::paint(&painter, inner, &rows[2][0], color, &readings);
+            power_instrument::paint(&paint.painter().with_clip_rect(surface.canvas_rect()),
+                surface.canvas_rect(), &rows[2][0], color, &readings);
             continue;
         }
         let row_height = inner.height() / 10.0;

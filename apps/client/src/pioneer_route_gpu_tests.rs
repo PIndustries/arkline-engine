@@ -1535,6 +1535,45 @@ fn native_pioneer_cockpit_mining_composition() {
         h.cockpit.service_tab = crate::ServiceTab::Drones;
         h.cockpit.drone_camera = true;
         h.cockpit.drone_split = true;
+        // Reproduce the actual physical command path in this isolated world:
+        // pointer release → queued request → authority response → free-flight view.
+        let ready = h.settle();
+        capture(Some(&directory), "undock-button-before", &ready);
+        let click_point = ready.physical_label("UNDOCK");
+        let hit = ready.surface.as_ref().and_then(|surface| surface.unproject(click_point));
+        std::fs::write(directory.join("undock-button-diagnostic.json"), serde_json::to_vec_pretty(&serde_json::json!({
+            "projected":[click_point.x,click_point.y], "unprojected":hit.map(|p|[p.x,p.y]),
+            "actual_hit_tester":h.cockpit.hangar_view.computer_hit_tester(&h.ctx)(click_point).map(|p|[p.x,p.y]),
+            "layer_at_click":format!("{:?}",h.ctx.layer_id_at(click_point)),
+            "expected_layer":format!("{:?}",h.cockpit.hangar_view.docked_layer),
+            "workspace_release":h.cockpit.workspace_input_waiting_release,
+            "parent_wants_keyboard":h.ctx.wants_keyboard_input(),
+            "input_enabled":h.cockpit.embedded_input,
+            "readiness":h.cockpit.navigation_order_reason(),
+            "pending":h.cockpit.request_pending,
+            "paused":h.cockpit.embedded_paused,
+            "keyboard_owned":h.cockpit.cockpit_computer.wants_keyboard_input(),
+            "labels":ready.computer_labels.iter().map(|(label,p)|serde_json::json!([label,p.x,p.y])).collect::<Vec<_>>()
+        })).unwrap()).unwrap();
+        let undocks_before = h.ui_undocks;
+        let clicked = h.click(click_point);
+        capture(Some(&directory), "undock-button-after", &clicked);
+        assert_eq!(h.ui_undocks, undocks_before + 1);
+        assert_eq!(h.cockpit.own().unwrap().location, Location::Station);
+        assert!(
+            !h.cockpit.request_pending,
+            "Undock response must clear pending"
+        );
+        // Release the hovered instrument before measuring the world input
+        // aperture: hovering a physical display deliberately gates world input.
+        h.frame(vec![egui::Event::PointerGone]);
+        let free = h.settle();
+        capture(Some(&directory), "physical-undock-free-flight", &free);
+        assert!(
+            !free.registered_route,
+            "Accepted undock must leave the station interior route"
+        );
+        h.command(Request::Dock);
         let docked = h.settle();
         let mut captures = vec![capture(Some(&directory), "docked-forward", &docked)];
         h.command(Request::StartResourceJob {
