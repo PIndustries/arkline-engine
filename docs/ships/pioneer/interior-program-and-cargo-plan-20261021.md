@@ -1,6 +1,6 @@
 # Pioneer interior program and visible cargo plan
 
-Status: **compatible design proposal; cargo mesh implementation blocked before execution**. This document is not evidence of a shipped cargo hold. The current source geometry and runtime room document remain authoritative. No cargo mesh, collision, registration or world changes were applied.
+Status: **compatible geometry proposal; cargo mesh implementation blocked before execution**. The later physical-capacity requirement supersedes treating this cabinet as a whole-hold gauge: see [the physical cargo contract](physical-cargo-contract-20261021.md). The current 1,000-unit limit is legacy gameplay, not a physical rating. This document is not evidence of a shipped cargo hold. The current source geometry and runtime room document remain authoritative. No cargo mesh, collision, registration or world changes were applied.
 
 ## One ship, one circulation model
 

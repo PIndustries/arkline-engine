@@ -123,7 +123,9 @@ impl Theme {
         style.visuals.hyperlink_color = accent;
         let widgets = &mut style.visuals.widgets;
         widgets.noninteractive.bg_fill = self.panel();
-        widgets.noninteractive.weak_bg_fill = Color32::TRANSPARENT;
+        // egui uses this as the disabled-UI fade target. Transparent is its
+        // invisible-painter sentinel, which hides whole disabled groups.
+        widgets.noninteractive.weak_bg_fill = self.panel();
         widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, edge);
         widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, text);
         widgets.inactive.bg_fill = control;
@@ -208,5 +210,40 @@ mod tests {
         fs::write(directory.join("appearance.json"), r#"{"theme":"unknown"}"#).unwrap();
         assert_eq!(Theme::load(&directory), Theme::Emerald);
         fs::remove_dir_all(directory).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod disabled_visibility_tests {
+    use super::*;
+    #[test]
+    fn navigation_disabled_theme_keeps_controls_and_readouts_visible() {
+        let ctx = egui::Context::default();
+        Theme::Emerald.apply(&ctx);
+        assert_ne!(
+            ctx.style().visuals.fade_out_to_color(),
+            Color32::TRANSPARENT
+        );
+        let output = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                ui.add_enabled_ui(false, |ui| {
+                    ui.label("Last reported range 250 m");
+                    assert!(!ui.button("Approach").clicked());
+                });
+            });
+        });
+        let labels: Vec<_> = output
+            .shapes
+            .iter()
+            .filter_map(|s| {
+                if let egui::Shape::Text(t) = &s.shape {
+                    Some(t.galley.job.text.as_str())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        assert!(labels.contains(&"Last reported range 250 m"));
+        assert!(labels.contains(&"Approach"));
     }
 }

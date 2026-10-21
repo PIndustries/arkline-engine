@@ -19,6 +19,23 @@ impl Cockpit {
                 })
             })
     }
+    pub(super) fn navigation_order_reason(&self) -> Option<&'static str> {
+        if !self.connected {
+            Some("Navigation orders unavailable · disconnected from authority.")
+        } else if self.embedded_paused {
+            Some("Navigation orders unavailable · resume simulation first. Contacts remain available for inspection.")
+        } else if self.request_pending {
+            Some("Navigation orders unavailable · awaiting the previous command response.")
+        } else if !self.live_command_snapshot_fresh() {
+            Some("Navigation orders unavailable · wait for a fresh authority snapshot. Contacts and last reported ranges remain visible.")
+        } else if self.own().is_none() {
+            Some("Navigation orders unavailable · waiting for the controlled vessel.")
+        } else if self.own().is_some_and(|p| p.station_avatar.is_some()) {
+            Some("Read-only navigation while on foot · physically return to the pilot seat for ship orders.")
+        } else {
+            None
+        }
+    }
     pub(super) fn exchange_readiness_reason(&self) -> Option<&'static str> {
         if !self.connected {
             Some("Disconnected · reconnect before trading.")
@@ -140,6 +157,7 @@ mod tests {
                 },
             )
         };
+        let _ = render(&mut cockpit, vec![]); // settle the changed typography/layout before pointer coordinates
         let output = render(&mut cockpit, vec![]);
         let text: Vec<_> = output
             .shapes
@@ -158,7 +176,11 @@ mod tests {
         assert!(text
             .iter()
             .any(|(t, _)| t.contains("fresh authority snapshot")));
-        assert!(text.iter().any(|(t, _)| t.starts_with("Range ")));
+        assert!(
+            text.iter().any(|(t, _)| t.starts_with("Range ")),
+            "readouts: {:?}",
+            text.iter().map(|(t, _)| t).collect::<Vec<_>>()
+        );
         let point = text.iter().find(|(t, _)| t == "Approach").unwrap().1;
         for pressed in [true, false] {
             render(
@@ -177,6 +199,21 @@ mod tests {
         assert!(rx.try_recv().is_err());
         assert_eq!(serde_json::to_value(&cockpit.snapshot).unwrap(), before);
         assert!(matches!(cockpit.selected_object, SelectedObject::Station));
+        cockpit.embedded_paused = true;
+        assert!(cockpit
+            .navigation_order_reason()
+            .unwrap()
+            .contains("resume simulation first"));
+        cockpit.request_pending = true;
+        assert!(cockpit
+            .navigation_order_reason()
+            .unwrap()
+            .contains("resume simulation first"));
+        cockpit.connected = false;
+        assert!(cockpit
+            .navigation_order_reason()
+            .unwrap()
+            .contains("disconnected"));
     }
     #[test]
     fn exchange_readiness_reports_stale_pause_pending_and_actual_action_limits() {

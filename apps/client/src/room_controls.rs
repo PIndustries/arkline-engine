@@ -62,16 +62,28 @@ pub(crate) fn show(
         s.emergency_remaining_ms as f64 / 1000.
     ));
     ui.label(format!(
-        "Main light: {} · ventilation: {} · door: {}",
-        if s.light_on { "ON" } else { "OFF" },
-        if s.vent_running { "RUNNING" } else { "STOPPED" },
+        "Main light · requested {} · actual {}",
+        if s.light_commanded { "ON" } else { "OFF" },
+        if s.light_on { "ON" } else { "OFF" }
+    ));
+    ui.label(format!(
+        "Ventilation · requested {:?} · actual {}",
+        s.vent_commanded,
+        if s.vent_running { "RUNNING" } else { "STOPPED" }
+    ));
+    ui.label(format!(
+        "Door · requested {} ({}) · actual {}",
+        if s.door_commanded_open {
+            "OPEN"
+        } else {
+            "CLOSED"
+        },
+        if s.door_manual { "manual" } else { "powered" },
         if s.door_open { "OPEN" } else { "CLOSED" }
     ));
     ui.small(format!(
-        "Commanded: breaker {} · light {} · vent {:?}",
-        if s.breaker_closed { "closed" } else { "open" },
-        if s.light_commanded { "on" } else { "off" },
-        s.vent_commanded
+        "Breaker command: {}",
+        if s.breaker_closed { "closed" } else { "open" }
     ));
     ui.small(format!("Gameplay loads: controller {} W · light {} W · vent {} W. Outputs above show what is running.", arkline_protocol::ROOM_CONTROLLER_W, arkline_protocol::ROOM_LIGHT_W, arkline_protocol::ROOM_VENT_W));
     if s.emergency_light_on {
@@ -139,13 +151,21 @@ pub(crate) fn show(
                         egui::Button::new(format!(
                             "{} · {}",
                             label,
-                            if s.door_open { "close" } else { "open" }
+                            if s.door_commanded_open && !s.door_open {
+                                "cancel open request"
+                            } else if !s.door_commanded_open && s.door_open {
+                                "cancel close request"
+                            } else if s.door_commanded_open {
+                                "close"
+                            } else {
+                                "open"
+                            }
                         )),
                     )
                     .clicked()
                 {
                     action = Some(Command::Door {
-                        open: !s.door_open,
+                        open: !s.door_commanded_open,
                         manual,
                     });
                 }
@@ -253,6 +273,82 @@ mod tests {
             !s.commissioned,
             "click must not predict authoritative success"
         );
+    }
+    #[test]
+    fn room_controls_pending_open_and_close_can_be_cancelled_without_predicting_success() {
+        let mut s = PioneerRoomState::uncommissioned("owned".into());
+        s.commissioned = true;
+        s.door_open = false;
+        s.door_commanded_open = true;
+        s.pressure_pa = 0;
+        s.interlock = Some("Pressure difference exceeds 5 kPa".into());
+        for manual in [false, true] {
+            let label = if manual {
+                "Manual door · cancel open request"
+            } else {
+                "Powered door · cancel open request"
+            };
+            assert!(
+                matches!(click(label, true, &s), Some(Command::Door { open: false, manual: mode }) if mode == manual)
+            );
+            assert!(click(label, false, &s).is_none());
+        }
+        assert!(
+            s.door_commanded_open && !s.door_open,
+            "UI must not predict cancellation or physical opening"
+        );
+        s.door_open = true;
+        s.door_commanded_open = false;
+        s.interlock = Some("Doorway occupied".into());
+        assert!(matches!(
+            click("Powered door · cancel close request", true, &s),
+            Some(Command::Door {
+                open: true,
+                manual: false
+            })
+        ));
+        assert!(
+            !s.door_commanded_open && s.door_open,
+            "UI must not predict cancellation or physical closing"
+        );
+    }
+    #[test]
+    fn room_controls_show_requested_and_actual_outputs_when_interlocked() {
+        let mut s = PioneerRoomState::uncommissioned("owned".into());
+        s.commissioned = true;
+        s.door_open = false;
+        s.door_commanded_open = true;
+        s.light_commanded = true;
+        s.light_on = false;
+        s.vent_commanded = VentMode::Equalize;
+        s.vent_running = false;
+        s.interlock = Some("Door motor has no power; manual actuation available".into());
+        let ctx = egui::Context::default();
+        let output = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                assert!(show(ui, Some(&s), false).is_none());
+            });
+        });
+        let labels: Vec<_> = output
+            .shapes
+            .into_iter()
+            .filter_map(|shape| match shape.shape {
+                egui::Shape::Text(text) => Some(text.galley.job.text.clone()),
+                _ => None,
+            })
+            .collect();
+        assert!(labels
+            .iter()
+            .any(|text| text == "Main light · requested ON · actual OFF"));
+        assert!(labels
+            .iter()
+            .any(|text| text == "Ventilation · requested Equalize · actual STOPPED"));
+        assert!(labels
+            .iter()
+            .any(|text| text == "Door · requested OPEN (powered) · actual CLOSED"));
+        assert!(labels
+            .iter()
+            .any(|text| text == s.interlock.as_ref().unwrap()));
     }
     #[test]
     fn manual_door_is_explicit_and_vent_choice_is_real() {

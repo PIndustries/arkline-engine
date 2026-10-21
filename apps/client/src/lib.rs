@@ -2189,12 +2189,10 @@ impl Cockpit {
     }
     fn flight_deck(&mut self, ui: &mut egui::Ui) {
         let Some(pilot) = self.own() else { return };
-        let fresh = self.live_command_snapshot_fresh();
-        if !fresh {
-            ui.colored_label(
-                AMBER,
-                "Flight orders unavailable · waiting for fresh authority telemetry",
-            );
+        let readiness = self.navigation_order_reason();
+        let fresh = readiness.is_none();
+        if let Some(reason) = readiness {
+            ui.colored_label(AMBER, reason);
         }
         let speed = pilot.flight.as_ref().map_or(0.0, |f| {
             distance_m(
@@ -2423,9 +2421,10 @@ impl Cockpit {
         }
     }
     fn navigation_controls(&mut self, ui: &mut egui::Ui) {
-        let fresh = self.live_command_snapshot_fresh();
-        if !fresh {
-            ui.colored_label(AMBER, "Navigation orders unavailable · wait for a fresh authority snapshot. Contacts and last reported ranges remain visible.");
+        let readiness = self.navigation_order_reason();
+        let fresh = readiness.is_none();
+        if let Some(reason) = readiness {
+            ui.colored_label(AMBER, reason);
         }
         ui.add_enabled_ui(fresh, |ui| {
         if matches!(
