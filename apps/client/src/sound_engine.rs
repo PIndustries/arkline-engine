@@ -60,12 +60,20 @@ pub enum Cue {
     Ui,
     TestOutput,
 }
+pub struct OutputStatus {
+    pub device: String,
+    pub diagnostics: String,
+    pub tests_queued: u64,
+    pub tests_consumed: u64,
+}
 struct Shared {
     mix: Mutex<Mix>,
     status: Mutex<String>,
     callbacks: AtomicU64,
     queued: AtomicU64,
     consumed: AtomicU64,
+    tests_queued: AtomicU64,
+    tests_consumed: AtomicU64,
     dropped: AtomicU64,
     nonzero_frames: AtomicU64,
     peak_bits: AtomicU64,
@@ -89,6 +97,8 @@ impl Default for SoundEngine {
                 callbacks: AtomicU64::new(0),
                 queued: AtomicU64::new(0),
                 consumed: AtomicU64::new(0),
+                tests_queued: AtomicU64::new(0),
+                tests_consumed: AtomicU64::new(0),
                 dropped: AtomicU64::new(0),
                 nonzero_frames: AtomicU64::new(0),
                 peak_bits: AtomicU64::new(0),
@@ -161,6 +171,38 @@ impl SoundEngine {
             }
         }
     }
+    pub fn current_mix(&self) -> Mix {
+        *self.shared.mix.lock().unwrap()
+    }
+    /// Queue acceptance and callback receipt are separate from speaker audibility.
+    pub fn test_output(&mut self) -> Result<(), String> {
+        let queue = self
+            .cues
+            .as_ref()
+            .ok_or("Audio output is not started · Retry audio first")?;
+        queue
+            .try_send(Cue::TestOutput)
+            .map_err(|error| match error {
+                mpsc::TrySendError::Full(_) => {
+                    "Audio queue is busy · wait and retry the test".to_owned()
+                }
+                mpsc::TrySendError::Disconnected(_) => {
+                    "Audio output is unavailable · Retry audio first".to_owned()
+                }
+            })?;
+        self.shared.queued.fetch_add(1, Ordering::Relaxed);
+        self.shared.tests_queued.fetch_add(1, Ordering::Relaxed);
+        Ok(())
+    }
+    pub fn output_status(&self) -> OutputStatus {
+        let device = self.shared.status.lock().unwrap().clone();
+        OutputStatus {
+            device,
+            diagnostics: self.status(),
+            tests_queued: self.shared.tests_queued.load(Ordering::Relaxed),
+            tests_consumed: self.shared.tests_consumed.load(Ordering::Relaxed),
+        }
+    }
     pub fn status(&self) -> String {
         let mix = *self.shared.mix.lock().unwrap();
         let age = self
@@ -170,7 +212,7 @@ impl SoundEngine {
             .as_nanos()
             .min(u64::MAX as u128) as u64;
         let last = self.shared.last_callback_ns.load(Ordering::Relaxed);
-        format!("{} · callbacks {} ({} ms ago) · cues {}/{} (dropped {}) · signal peak {:.4}, current RMS {:.4} · master {:.0}%, effects {:.0}%{}{}",
+        format!("{} · callbacks {} ({} ms ago) · cues {}/{} (dropped {}) · preconversion lifetime peak {:.4}, current RMS {:.4} · master {:.0}%, effects {:.0}%{}{}",
             self.shared.status.lock().unwrap(), self.shared.callbacks.load(Ordering::Relaxed), age.saturating_sub(last)/1_000_000,
             self.shared.consumed.load(Ordering::Relaxed), self.shared.queued.load(Ordering::Relaxed), self.shared.dropped.load(Ordering::Relaxed),
             f32::from_bits(self.shared.peak_bits.load(Ordering::Relaxed) as u32), f32::from_bits(self.shared.rms_bits.load(Ordering::Relaxed) as u32),
@@ -250,6 +292,9 @@ fn stream<T: cpal::SizedSample + cpal::FromSample<f32>>(
                 for _ in 0..32 {
                     match cues.try_recv() {
                         Ok(cue) => {
+                            if matches!(cue, Cue::TestOutput) {
+                                shared.tests_consumed.fetch_add(1, Ordering::Relaxed);
+                            }
                             synth.cue(cue);
                             shared.consumed.fetch_add(1, Ordering::Relaxed);
                         }
@@ -560,6 +605,22 @@ impl Synth {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn audio_feedback_test_reports_unavailable_busy_and_queued_without_claiming_hearing() {
+        let mut engine = SoundEngine::default();
+        assert!(engine.test_output().unwrap_err().contains("not started"));
+        let (tx, rx) = mpsc::sync_channel(1);
+        engine.cues = Some(tx);
+        engine.test_output().unwrap();
+        let status = engine.output_status();
+        assert_eq!(status.tests_queued, 1);
+        assert_eq!(status.tests_consumed, 0);
+        assert!(engine.test_output().unwrap_err().contains("busy"));
+        assert!(matches!(rx.try_recv().unwrap(), Cue::TestOutput));
+        drop(rx);
+        assert!(engine.test_output().unwrap_err().contains("unavailable"));
+        assert_eq!(engine.output_status().tests_queued, 1);
+    }
     #[test]
     fn offline_mix_is_finite_limited_and_mute_fades() {
         let engine = SoundEngine::default();

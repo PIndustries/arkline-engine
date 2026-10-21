@@ -32,6 +32,13 @@ pub struct SoundAction {
     pub retry: bool,
     pub changed: bool,
 }
+#[derive(Clone, Copy, Default)]
+pub struct SoundContext {
+    pub paused: bool,
+    pub live_world: bool,
+    pub listening: bool,
+    pub speaking: bool,
+}
 impl SoundSettings {
     fn valid(&self) -> bool {
         [self.master, self.ambience, self.effects]
@@ -109,7 +116,26 @@ impl SoundSettings {
             result.map_err(|e| format!("Could not save sound preferences: {e}"))
         }
     }
-    pub fn ui(&mut self, ui: &mut egui::Ui, status: &str) -> SoundAction {
+    fn test_block_reason(&self, context: SoundContext) -> Option<&'static str> {
+        if context.listening {
+            Some("Game sound is muted during microphone listening · finish voice capture before testing")
+        } else if self.muted {
+            Some("Game sound is muted · turn off Mute game sound to test")
+        } else if self.master == 0.0 {
+            Some("Master is zero · raise the game Master level to test")
+        } else if self.effects == 0.0 {
+            Some("Effects is zero · raise the game Effects level to test")
+        } else {
+            None
+        }
+    }
+    pub fn ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        status: &super::sound_engine::OutputStatus,
+        context: SoundContext,
+        test_notice: &str,
+    ) -> SoundAction {
         let mut action = SoundAction::default();
         if !self.valid() {
             *self = Self::default();
@@ -126,21 +152,50 @@ impl SoundSettings {
         action.changed |= ui
             .add(egui::Slider::new(&mut self.effects, 0.0..=1.0).text("Effects"))
             .changed();
+        let blocked = self.test_block_reason(context);
+        if let Some(reason) = blocked {
+            ui.colored_label(egui::Color32::YELLOW, reason);
+        }
+        if context.paused {
+            ui.small("World machinery is paused. The two-tone output test can still run.");
+        } else if !context.live_world {
+            ui.small("World sound is suppressed without fresh connected telemetry. The output test is independent of the world.");
+        }
+        if context.speaking {
+            ui.small("Spoken reply active · game sound is temporarily reduced");
+        }
         ui.horizontal_wrapped(|ui| {
             action.test = ui
-                .button("Test sound")
+                .add_enabled(blocked.is_none(), egui::Button::new("Test sound"))
                 .on_hover_text("Two sustained mid-range tones through your saved game-sound levels")
                 .clicked();
-            action.retry = ui.button("Retry audio").clicked();
+            action.retry = ui.button("Retry audio")
+                .on_hover_text("Reopen game audio on the current system default output; does not change system settings")
+                .clicked();
         });
-        ui.label(format!("Output: {status}"));
-        if self.muted || self.master == 0. || self.effects == 0. {
-            ui.colored_label(
-                egui::Color32::YELLOW,
-                "Test sound is silent while mute is on or Master/Effects is zero.",
-            );
+        ui.label(format!("Output stream: {}", status.device));
+        if !test_notice.is_empty() {
+            ui.label(test_notice);
         }
-        ui.small("Uses the system default output. Voice input and spoken replies have separate controls.");
+        if status.tests_queued > 0 {
+            if status.tests_consumed >= status.tests_queued {
+                ui.label(format!(
+                    "Test #{} received by synthesis callback · hearing not confirmed",
+                    status.tests_queued
+                ));
+            } else {
+                ui.label(format!(
+                    "Test #{} queued · waiting for synthesis callback",
+                    status.tests_queued
+                ));
+            }
+        }
+        ui.small("Listen for two sustained tones. Callback activity and generated signal do not confirm audible speaker output.");
+        ui.small("The opened device is retained until Retry audio reopens the current system default. Voice input and spoken replies have separate controls.");
+        ui.collapsing("Audio diagnostics", |ui| {
+            ui.label(&status.diagnostics);
+            ui.small("Peak is the maximum since this stream opened; RMS is the latest block. Both measure generated samples before device-format conversion.");
+        });
         action
     }
 }
@@ -148,6 +203,40 @@ impl SoundSettings {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn audio_feedback_effective_mute_and_paused_test_rules_are_explicit() {
+        let mut settings = SoundSettings::default();
+        assert!(settings
+            .test_block_reason(SoundContext {
+                paused: true,
+                ..Default::default()
+            })
+            .is_none());
+        assert!(settings
+            .test_block_reason(SoundContext {
+                listening: true,
+                ..Default::default()
+            })
+            .unwrap()
+            .contains("microphone"));
+        settings.muted = true;
+        assert!(settings
+            .test_block_reason(SoundContext::default())
+            .unwrap()
+            .contains("muted"));
+        settings.muted = false;
+        settings.master = 0.;
+        assert!(settings
+            .test_block_reason(SoundContext::default())
+            .unwrap()
+            .contains("Master"));
+        settings.master = 0.4;
+        settings.effects = 0.;
+        assert!(settings
+            .test_block_reason(SoundContext::default())
+            .unwrap()
+            .contains("Effects"));
+    }
     fn directory() -> std::path::PathBuf {
         static NEXT: AtomicU64 = AtomicU64::new(0);
         std::env::temp_dir().join(format!(

@@ -10,6 +10,7 @@ Research direction is an original interface over Arkline authority, not a promis
 | System workspaces | Shipped grouped destinations in `operations_workspace.rs`; destination text search shipped in 26.10.21.3; query preserves selected content. |
 | Transitions/input | Shipped held-input release guards; this milestone adds focus-aware Escape back to Flight without camera/body/clock commands. The separately denied scene-init camera correction remains unresolved. |
 | Logs/console/reconnect | Existing activity/audit and reconnect uncertainty handling in `lib.rs`; console draft remains unintegrated under its denial; persistent-server reconnect policy is not changed. |
+| Audio | Output device and confirmed-world cues exist; Sound feedback now separates effective mute, pause, test queue/callback receipt and unconfirmed hearing. Mechanical hatch/lift/seat cues and automatic device-change recovery remain missing. |
 | Lighting | Existing raster/PBR settings in `lighting_settings.rs`; denied renderer changes remain untouched. No hardware ray tracing claim. |
 
 ## New behavior

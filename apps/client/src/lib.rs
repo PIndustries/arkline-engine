@@ -703,6 +703,7 @@ struct Cockpit {
     sound: sound_engine::SoundEngine,
     sound_scene: sound_scene::Scene,
     sound_settings: sound_settings::SoundSettings,
+    sound_test_notice: String,
     theme: theme::Theme,
     settings_notice: String,
     navigation_range: f64,
@@ -838,6 +839,7 @@ impl Cockpit {
             sound: sound_engine::SoundEngine::default(),
             sound_scene: sound_scene::Scene::default(),
             sound_settings,
+            sound_test_notice: String::new(),
             theme,
             settings_notice: String::new(),
             navigation_range: 500.0,
@@ -854,7 +856,12 @@ impl Cockpit {
     }
     fn settings_panel(&mut self, ui: &mut egui::Ui) {
         if ui.button("Controls & ownership").clicked() { self.open_controls_reference(); }
-        let action = self.sound_settings.ui(ui, &self.sound.status());
+        let context = sound_settings::SoundContext {
+            paused: self.embedded && self.embedded_paused,
+            live_world: self.operations_fresh() && self.own().is_some(), listening: self.voice.is_listening(),
+            speaking: self.voice.is_speaking(),
+        };
+        let action = self.sound_settings.ui(ui, &self.sound.output_status(), context, &self.sound_test_notice);
         if action.changed {
             if let Err(error) = self.sound_settings.save(&self.data_dir) {
                 self.settings_notice = error;
@@ -862,9 +869,14 @@ impl Cockpit {
         }
         if action.retry {
             self.sound.retry();
+            self.sound_test_notice = "Audio retry requested · output status below reports the result".into();
         }
         if action.test {
-            self.sound.cue(sound_engine::Cue::TestOutput);
+            self.sound.set_mix(self.preferred_sound_mix(self.sound.current_mix()));
+            self.sound_test_notice = match self.sound.test_output() {
+                Ok(()) => "Two-tone test requested · listen to your output device".into(),
+                Err(error) => error,
+            };
         }
         ui.separator();
         ui.label("LIGHTING QUALITY");

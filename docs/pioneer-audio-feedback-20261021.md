@@ -1,0 +1,11 @@
+# Audio feedback and diagnosis — 2026-10-21
+
+Already correct: CPAL opens the then-current default device, status names that device/configuration, F32/I16/U16 conversion tests and prior .12 callback evidence found no conversion silence. Confirmed-world cues and stale/paused loop suppression remain unchanged. Prior generated PCM and callback receipt never established acoustic audibility.
+
+New independently permitted changes: Sound explains effective microphone-listening mute, saved mute/zero Master/Effects, speech ducking, and paused/stale/missing-pilot world silence. Two-tone test is disabled for known effective silence; paused world simulation still permits that independent test. Current saved gains are copied into the existing mix immediately before test enqueue without modifying preferences, OS volume, device selection or voice policy.
+
+The test path now reports no stream, busy queue and disconnected queue separately. Test-specific accepted/consumed counters distinguish request acceptance from receipt by the synthesis callback, independently of gameplay cues. Neither is labeled heard/played/acoustic success. Peak is explicitly lifetime since stream open; RMS is latest callback, both before sample conversion. Technical counts are collapsible; output state and actual device/config remain visible. Retry reopens the current default; an already-open stream does not automatically follow a device change.
+
+Missing/remaining: hatch, lift and seat mechanical cues are not implemented in this bounded diagnostics slice. Automatic device-change recovery is not added. Hearing confirmation remains required from a listener; no system/microphone output capture or OS settings changes are performed. Denied walking, camera-init, console and renderer edits remain untouched.
+
+Focused checks exercise no-device/busy/accepted/disconnected test queue and effective silence/paused test rules. Reuse prior conversion evidence because conversion itself is unchanged; compile via one guarded target after disk guard. Live acceptance must inspect the real Sound UI, queue/consume result and device while preserving the current Pioneer avatar/job/ledger and FirstProject. No routine or traversal commands are needed to test audio.
