@@ -15,6 +15,7 @@ pub(in crate::flight3d) const FOV_RADIANS: f32 = 55.0 * std::f32::consts::PI / 1
 pub(in crate::flight3d) struct SceneCache {
     document: RoomLayoutDocument,
     geometry: Arc<PioneerDockedGeometry>,
+    immutable_parts: Arc<Vec<ModelPart>>,
     rooms: Arc<Vec<ModelPart>>,
 }
 impl SceneCache {
@@ -29,9 +30,23 @@ impl SceneCache {
                 |(mesh, matrix, color, emission)| (mesh, registration * matrix, color, emission),
             ));
         }
+        let source = docked_pioneer_parts()?;
+        let mut immutable_parts = source
+            .iter()
+            .map(|&(mesh, model, color, emission)| {
+                (
+                    mesh,
+                    Mat4::from_scale(Vec3::splat(100.0)) * model,
+                    color,
+                    emission,
+                )
+            })
+            .collect::<Vec<_>>();
+        immutable_parts.extend(panel_parts(&geometry, Mat4::IDENTITY, true));
         Ok(Self {
             document,
             geometry,
+            immutable_parts: Arc::new(immutable_parts),
             rooms: Arc::new(rooms),
         })
     }
@@ -46,19 +61,7 @@ pub(in crate::flight3d) fn body_parts(
     cache: &SceneCache,
     dynamic: &PioneerDockedGeometry,
 ) -> Result<Vec<ModelPart>, String> {
-    let source = docked_pioneer_parts()?;
-    let mut parts = source
-        .iter()
-        .map(|&(mesh, model, color, emission)| {
-            (
-                mesh,
-                Mat4::from_scale(Vec3::splat(100.0)) * model,
-                color,
-                emission,
-            )
-        })
-        .collect::<Vec<_>>();
-    parts.extend(panel_parts(&cache.geometry, Mat4::IDENTITY, true));
+    let mut parts = cache.immutable_parts.as_ref().clone();
     parts.extend(panel_parts(dynamic, Mat4::IDENTITY, false));
     parts.extend(cache.rooms.iter().copied());
     Ok(parts)
@@ -1003,6 +1006,64 @@ pub(super) fn show(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cached_body_parts_preserve_legacy_order_and_live_actuators() {
+        let cache = SceneCache::new(arkline_protocol::default_pioneer()).unwrap();
+        let cloned = cache.clone();
+        assert!(Arc::ptr_eq(&cache.immutable_parts, &cloned.immutable_parts));
+        let pose = PioneerDockedPose::private();
+        let closed = actuator_pose(None, pose, None, 0);
+        let mut moved = actuator_pose(None, pose, None, 0);
+        moved.hatch_fractions = Some([0.35, 0.8]);
+        moved.room_door_open = true;
+        moved.lift_floor_station_m -= 1.0;
+        moved.chair_fold = 1.0;
+        let mut outputs = Vec::new();
+        for actuators in [closed, moved] {
+            let dynamic = dynamic_geometry(pose, actuators).unwrap();
+            let source = docked_pioneer_parts().unwrap();
+            let mut expected = source
+                .iter()
+                .map(|&(mesh, model, color, emission)| {
+                    (
+                        mesh,
+                        Mat4::from_scale(Vec3::splat(100.0)) * model,
+                        color,
+                        emission,
+                    )
+                })
+                .collect::<Vec<_>>();
+            expected.extend(panel_parts(&cache.geometry, Mat4::IDENTITY, true));
+            let prefix_len = expected.len();
+            assert_eq!(cache.immutable_parts.as_ref(), &expected);
+            expected.extend(panel_parts(&dynamic, Mat4::IDENTITY, false));
+            let dynamic_end = expected.len();
+            expected.extend(cache.rooms.iter().copied());
+            let actual = body_parts(&cache, &dynamic).unwrap();
+            assert_eq!(actual, expected);
+            outputs.push(actual[prefix_len..dynamic_end].to_vec());
+        }
+        assert_ne!(outputs[0], outputs[1]);
+    }
+
+    #[test]
+    fn immutable_body_cache_is_bound_to_the_complete_layout_document() {
+        let document = arkline_protocol::default_pioneer();
+        let cache = SceneCache::new(document.clone()).unwrap();
+        assert!(cache.matches(&document));
+        let mut edited = document.clone();
+        edited.rooms[0].name.push_str(" revised");
+        assert!(!cache.matches(&edited));
+        let replacement = SceneCache::new(edited.clone()).unwrap();
+        assert!(replacement.matches(&edited));
+        assert!(!replacement.matches(&document));
+        assert!(!Arc::ptr_eq(
+            &cache.immutable_parts,
+            &replacement.immutable_parts
+        ));
+    }
+
     #[test]
     fn pioneer_completion_registered_panel_faces_keep_outward_winding_and_exact_collision_envelopes(
     ) {
