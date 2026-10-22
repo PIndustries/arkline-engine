@@ -390,6 +390,7 @@ pub struct FlightView {
     remote_ship: Option<String>,
     console_rect: Option<egui::Rect>,
     map_range: f64,
+    radar_paused: bool,
     space: Space,
     /// Editor-only camera, expressed in the rendered scene's local coordinates.
     free_camera: Option<(Vec3, f32, f32)>,
@@ -449,6 +450,7 @@ impl FlightView {
             remote_ship: None,
             console_rect: None,
             map_range: 1_000_000.0,
+            radar_paused: false,
             space: Space::default(),
             free_camera: None,
             editor_free_camera_active: false,
@@ -461,6 +463,9 @@ impl FlightView {
     }
     pub(crate) fn set_pioneer_layout(&mut self, layout: Option<arkline_protocol::RoomLayoutState>) {
         self.pioneer_layout = layout;
+    }
+    pub(crate) fn set_radar_paused(&mut self, paused: bool) {
+        self.radar_paused = paused;
     }
     pub(crate) fn set_pioneer_room(&mut self, room: Option<arkline_protocol::PioneerRoomState>) {
         self.pioneer_room = room;
@@ -1846,6 +1851,7 @@ impl FlightView {
                                 snapshot,
                                 now,
                                 connected,
+                                self.radar_paused,
                                 self.map_range,
                             );
                         }

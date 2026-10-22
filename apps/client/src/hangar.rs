@@ -422,7 +422,8 @@ impl HangarView {
                 pilot,
                 snapshot,
                 now,
-                connected && !paused,
+                connected,
+                paused,
                 range,
             );
         }
@@ -432,7 +433,7 @@ impl HangarView {
         for (index, surface) in self.docked_surfaces.iter().enumerate() {
             // These cards own their authority header; a second top-right badge
             // would obscure real data on the small physical display canvas.
-            if index == 1 || index == 2 || index == 4 {
+            if index == 1 || index == 2 || index == 4 || index == 5 {
                 continue;
             }
             if let Some(surface) = surface {

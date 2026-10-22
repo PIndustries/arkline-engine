@@ -197,10 +197,12 @@ fn native_five_instrument_readability() {
         for (view, slot, label, floor) in [
             (0, 3, "0 m/s", 14.),
             (0, 4, "NO CAMERA SELECTED", 11.),
-            (0, 5, "SHIP RADAR", 8.),
+            (0, 5, "RADAR", 14.),
+            (0, 5, "LIVE", 14.),
             (0, 5, "1000 km", 8.),
             (1, 4, "NAV LOCAL / LIVE", 9.),
-            (1, 5, "SHIP RADAR", 11.),
+            (1, 5, "RADAR", 14.),
+            (1, 5, "LIVE", 14.),
         ] {
             let row = views[view]["text"]
                 .as_array()

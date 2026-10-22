@@ -4494,6 +4494,7 @@ impl eframe::App for Cockpit {
                 .as_ref()
                 .and_then(|a| a.pioneer_room_layout.clone()),
         );
+        self.flight_view.set_radar_paused(self.embedded_paused);
         self.flight_view.set_pioneer_layout(
             self.assets
                 .as_ref()
