@@ -1,0 +1,194 @@
+{
+  "study_only": true,
+  "glb": "forward-bay-proof.glb",
+  "sha256": "8ca7618e6a8b60897a675929fccc4bb8dc20425da47ac9566967fd4e73a52646",
+  "byte_length": 225124,
+  "mesh_count": 9,
+  "material_count": 3,
+  "triangle_count": 2588,
+  "instrument": {
+    "center": [
+      0.932,
+      1.0,
+      0
+    ],
+    "half": [
+      0.02,
+      0.183,
+      0.308
+    ],
+    "axes": [
+      [
+        1,
+        0,
+        0
+      ],
+      [
+        0,
+        1,
+        0
+      ],
+      [
+        0,
+        0,
+        1
+      ]
+    ],
+    "plane_x": 0.9,
+    "canvas": [
+      400,
+      240
+    ],
+    "id": "pioneer.study.central.primary",
+    "size_m": [
+      0.6,
+      0.35
+    ],
+    "backing_front_x": 0.914,
+    "content_policy": "Recorded or authoritative data only; no modeled telemetry"
+  },
+  "components": [
+    {
+      "id": "panorama.structural-surround",
+      "node": 0,
+      "mesh": 0,
+      "bounds_min": [
+        1.55,
+        0.39,
+        -1.58
+      ],
+      "bounds_max": [
+        1.68,
+        2.36,
+        1.58
+      ]
+    },
+    {
+      "id": "panorama.metal-reveal",
+      "node": 1,
+      "mesh": 1,
+      "bounds_min": [
+        1.548,
+        0.497,
+        -1.483
+      ],
+      "bounds_max": [
+        1.568,
+        2.253,
+        1.483
+      ]
+    },
+    {
+      "id": "instrument.central-sculpted-case",
+      "node": 2,
+      "mesh": 2,
+      "bounds_min": [
+        0.83,
+        0.73,
+        -0.39
+      ],
+      "bounds_max": [
+        1.05,
+        1.27,
+        0.39
+      ]
+    },
+    {
+      "id": "instrument.recessed-liner",
+      "node": 3,
+      "mesh": 3,
+      "bounds_min": [
+        0.85,
+        0.796,
+        -0.325
+      ],
+      "bounds_max": [
+        0.882,
+        1.204,
+        0.325
+      ]
+    },
+    {
+      "id": "instrument.central-substrate",
+      "node": 4,
+      "mesh": 4,
+      "bounds_min": [
+        0.914,
+        0.823,
+        -0.302
+      ],
+      "bounds_max": [
+        0.924,
+        1.177,
+        0.302
+      ]
+    },
+    {
+      "id": "console.continuous-dashboard-shell",
+      "node": 5,
+      "mesh": 5,
+      "bounds_min": [
+        0.679375,
+        0.25,
+        -0.46
+      ],
+      "bounds_max": [
+        1.6,
+        0.890380859375,
+        1.1
+      ]
+    },
+    {
+      "id": "console.rising-central-shoulder",
+      "node": 6,
+      "mesh": 6,
+      "bounds_min": [
+        0.73,
+        0.72,
+        0.345
+      ],
+      "bounds_max": [
+        1.43,
+        1.035,
+        0.72
+      ]
+    },
+    {
+      "id": "console.front-construction-seam",
+      "node": 7,
+      "mesh": 7,
+      "bounds_min": [
+        0.675375,
+        0.553,
+        -0.46
+      ],
+      "bounds_max": [
+        0.887,
+        0.565,
+        1.1
+      ]
+    },
+    {
+      "id": "console.starboard-inset-worktop",
+      "node": 8,
+      "mesh": 8,
+      "bounds_min": [
+        0.7906249999999998,
+        0.69,
+        0.66
+      ],
+      "bounds_max": [
+        1.495,
+        0.887,
+        1.055
+      ]
+    }
+  ],
+  "proof_eye": [
+    0,
+    1.35,
+    0
+  ],
+  "coordinate_frame": "+X forward,+Y up,+Z right; metres",
+  "remaining_validation": "Runtime matched-view appearance, readability and occlusion; not canonical or shipped."
+}

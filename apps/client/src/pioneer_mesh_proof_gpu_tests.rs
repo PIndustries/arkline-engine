@@ -123,6 +123,52 @@ fn native_authored_forward_bay_proof() {
         let telemetry:serde_json::Value=serde_json::from_slice(&telemetry_bytes).unwrap();
         let geometry=ImportedGeometry::decode(&bytes).unwrap();
         assert!(!geometry.uses_generated_normals(),"Strict authored normals required");
+        assert_eq!(manifest["study_only"].as_bool(),Some(true));
+        assert_eq!(manifest["sha256"].as_str().unwrap(),hex::encode(Sha256::digest(&bytes)));
+        assert_eq!(manifest["byte_length"].as_u64().unwrap(),bytes.len() as u64);
+        let document=gltf::Gltf::from_slice(&bytes).unwrap();
+        let components=manifest["components"].as_array().unwrap();
+        let nodes=document.default_scene().unwrap().nodes().collect::<Vec<_>>();
+        assert_eq!(nodes.len(),components.len());
+        assert_eq!(geometry.parts.len(),components.len());
+        assert_eq!(manifest["mesh_count"].as_u64().unwrap(),components.len() as u64);
+        assert_eq!(manifest["material_count"].as_u64().unwrap(),document.materials().count() as u64);
+        let mut ids=std::collections::HashSet::new();
+        let mut triangle_count=0;
+        let mut collision_boxes=Vec::new();
+        for ((node,component),part) in nodes.iter().zip(components).zip(&geometry.parts) {
+            let id=component["id"].as_str().unwrap();
+            assert!(ids.insert(id));
+            assert_eq!(node.index(),component["node"].as_u64().unwrap() as usize);
+            assert_eq!(node.name(),Some(id));
+            let mesh=node.mesh().unwrap();
+            assert_eq!(mesh.index(),component["mesh"].as_u64().unwrap() as usize);
+            assert_eq!(mesh.name(),Some(id));
+            assert_eq!(mesh.primitives().count(),1);
+            assert_eq!(node.transform().matrix(),Mat4::IDENTITY.to_cols_array_2d());
+            let mut min=Vec3::splat(f32::INFINITY);
+            let mut max=Vec3::splat(f32::NEG_INFINITY);
+            for v in part.vertices.iter() { min=min.min(v.p*100.); max=max.max(v.p*100.); }
+            assert!((min-vec3(&component["bounds_min"])).abs().max_element()<1e-5);
+            assert!((max-vec3(&component["bounds_max"])).abs().max_element()<1e-5);
+            triangle_count+=part.vertices.len()/3;
+            // Conservative per-component clearance proxy, not exact mesh collision.
+            collision_boxes.push(arkline_protocol::PioneerDockedBox {
+                center_m:((min+max)*0.5).to_array().map(f64::from),
+                half_m:((max-min)*0.5).to_array().map(f64::from),
+                axes:[[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]],
+            });
+        }
+        assert_eq!(manifest["triangle_count"].as_u64().unwrap(),triangle_count as u64);
+        let capsule_blocked=|feet| collision_boxes.iter().any(|bounds|
+            arkline_protocol::box_intersects_capsule(*bounds,feet,
+                arkline_protocol::AVATAR_HEIGHT_M,arkline_protocol::STATION_AVATAR_RADIUS_M));
+        for i in 0..=16 {
+            let t=i as f64/16.;
+            assert!(!capsule_blocked([-0.85*t,0.,0.65*t]),"Study pose/path component-envelope obstruction");
+        }
+        let blocked_control=collision_boxes.last().unwrap().center_m;
+        assert!(capsule_blocked([blocked_control[0],0.,blocked_control[2]]),"Collision proxy must reject a console-intersecting pose");
         let instrument=&manifest["instrument"];
         let center=vec3(&instrument["center"]);
         let half=vec3(&instrument["half"]);
@@ -195,7 +241,7 @@ fn native_authored_forward_bay_proof() {
             image::save_buffer_with_format(out.join(format!("{name}.png")),&top_down,WIDTH as u32,HEIGHT as u32,image::ColorType::Rgba8,image::ImageFormat::Png).unwrap();
             captures.push(serde_json::json!({"view":name,"eye_m":eye.to_array(),"look_target_m":look.to_array(),"width":WIDTH,"height":HEIGHT,"all_5_display_points_clear":clear==5,"display_points":corners,"minimum_label_projected_px":label_pixels,"minimum_value_projected_px":value_pixels,"seated_label_target_px":14,"seated_value_target_px":24,"readability_target_pass":label_pixels>=14. && value_pixels>=24.,"rgba_sha256":hex::encode(Sha256::digest(&top_down))}));
         }
-        let receipt=serde_json::json!({"scope":"Isolated original GLB asset preview with actual engine imported-mesh and cockpit-display code; no production registration or command dispatch","geometry_sha256":hex::encode(Sha256::digest(&bytes)),"manifest_sha256":hex::encode(Sha256::digest(&manifest_bytes)),"recorded_telemetry_sha256":hex::encode(Sha256::digest(&telemetry_bytes)),"telemetry":telemetry,"import_report":geometry.report,"captures":captures,"limits":["Preview lighting is not live cockpit lighting","Recorded confirmed values, not live simulation or fabricated progress","Projected font em size is not human reading certification","Full canonical collision/server admission not established by importpreview"]});
+        let receipt=serde_json::json!({"scope":"Isolated original GLB asset preview with actual engine imported-mesh and cockpit-display code; no production registration or command dispatch","component_identity_verified":true,"clearance_proxy":"17 sampled standing capsules clear of conservative per-component AABBs; console-intersection control blocked; no floor/seat/grounding or exact triangle collision", "geometry_sha256":hex::encode(Sha256::digest(&bytes)),"manifest_sha256":hex::encode(Sha256::digest(&manifest_bytes)),"recorded_telemetry_sha256":hex::encode(Sha256::digest(&telemetry_bytes)),"telemetry":telemetry,"import_report":geometry.report,"captures":captures,"limits":["Preview lighting is not live cockpit lighting","Recorded confirmed values, not live simulation or fabricated progress","Projected font em size is not human reading certification","Full canonical collision/server admission not established by importpreview"]});
         std::fs::write(out.join("receipt.json"),serde_json::to_vec_pretty(&receipt).unwrap()).unwrap();
         painter.destroy(); preview.destroy(); display.lock().unwrap().destroy(); target.destroy(&gl);
     }
