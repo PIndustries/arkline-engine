@@ -802,6 +802,12 @@ pub(super) fn show(
         view.yaw += delta.x * 0.007;
         view.pitch = (view.pitch + delta.y * 0.005).clamp(-1.25, 1.25);
     }
+    // Sitting confirms the seat's body frame. Discard the previous walking
+    // steering target so the next seat exit cannot resurrect an old look/turn.
+    // This does not initialize or relocate the camera, avatar or binding.
+    if state.is_none() {
+        view.yaw = heading as f32;
+    }
     let allowed = hovered
         && !view.computer_keyboard_owned
         && view.head_look_input_allowed
@@ -1310,7 +1316,7 @@ mod tests {
                 assert_eq!(view.head_look_angles(), [0.2, -0.1]);
                 frame(&mut view, &ctx, &seated, 2200, time + 0.1);
                 assert!(view.editor_camera_pose().unwrap().0.distance(expected) < 1e-4);
-                assert_eq!((view.yaw, view.pitch, view.zoom), (0.3, -0.15, 1.4));
+                assert_eq!((view.yaw, view.pitch, view.zoom), (pose.yaw as f32, -0.15, 1.4));
             });
             let _ = sender.send(result);
         });
@@ -1348,6 +1354,25 @@ mod tests {
         let error = (third.1 - heading + std::f32::consts::PI)
             .rem_euclid(std::f32::consts::TAU) - std::f32::consts::PI;
         assert!(error.abs() < 1e-4, "Third person must still follow authoritative body heading");
+    }
+    #[test]
+    fn registered_seat_cycle_does_not_restore_an_old_walking_look_target() {
+        let ctx = egui::Context::default();
+        let mut view = HangarView::new(None);
+        view.set_docked_traversal_enabled(true);
+        let actor = pilot(Some(standing_state()));
+        frame(&mut view, &ctx, &actor, 1000, 0.0);
+        view.yaw += std::f32::consts::FRAC_PI_2;
+        frame(&mut view, &ctx, &actor, 1000, 0.016);
+        frame(&mut view, &ctx, &pilot(None), 1000, 0.032);
+        // Same authoritative standing direction after leaving the forward seat.
+        frame(&mut view, &ctx, &actor, 1000, 0.048);
+        let heading = actor.station_avatar.as_ref().unwrap()
+            .docked_traversal.as_ref().unwrap().heading;
+        assert!(view.walk_turn(heading).abs() < 1e-6,
+            "Seat exit must not send turn toward the old walking look");
+        let yaw = view.editor_camera_pose().unwrap().1;
+        assert!((yaw - heading as f32).abs() < 1e-4);
     }
     #[test]
     fn registered_box_adapter_keeps_orthonormal_frame_and_exact_body_metre_extents() {
