@@ -1873,8 +1873,6 @@ fn add_cockpit_low_console(g: &mut PioneerDockedGeometry) {
         ("center-pedestal/core", [34.26, 0.43, 2.86], [34.66, 0.83, 3.14], Graphite),
         ("port-instrument-foot/core", [34.80, 0.43, 2.13], [35.02, 0.50, 2.55], Graphite),
         ("starboard-instrument-foot/core", [34.80, 0.43, 3.45], [35.02, 0.50, 3.87], Graphite),
-        ("port-task-foot", [34.90, 0.43, 2.13], [35.08, 0.79, 2.55], WallPanel),
-        ("starboard-task-foot", [34.90, 0.43, 3.45], [35.08, 0.79, 3.87], WallPanel),
     ] {
         g.block(format!("cockpit/console/{id}"), min, max, material,
             PioneerDockedCollision::Solid, cell, PioneerDockedPanelKind::Furniture);
@@ -1965,21 +1963,13 @@ fn add_cockpit_low_console(g: &mut PioneerDockedGeometry) {
                     PioneerDockedBox { center_m: point(local), half_m: extents, axes },
                     material, PioneerDockedCollision::Solid, cell, PioneerDockedPanelKind::Furniture);
             }
-            for (side, sign) in [("port", -1.0_f64), ("starboard", 1.0_f64)] {
-                let (sin, cos) = (sign * 12.0).to_radians().sin_cos();
-                let along = add(mul(axes[1], cos), mul(axes[2], sin));
-                let across = add(mul(axes[1], -sin), mul(axes[2], cos));
-                g.panel(format!("cockpit/console/mount/{slot}/{side}-cheek"),
-                    PioneerDockedBox { center_m: point([0.070, -0.030, sign * 0.210]),
-                        half_m: [0.052, 0.055, 0.014], axes: [axes[0], along, across] },
-                    WallPanel, PioneerDockedCollision::Solid, cell, PioneerDockedPanelKind::Furniture);
-            }
             continue;
         }
-        // The case front ends at local -.018, behind the live plane at -.032.
-        // Task displays have a real 43 mm shallow case so their backs do not
-        // intersect sightlines to the dedicated instruments below them.
-        let (case_center, case_depth) = if slot >= 4 { (0.0035, 0.0215) } else { (0.091, 0.109) };
+        if slot >= 4 {
+            continue; // Task faces belong to the shared physical pods below.
+        }
+        // The unchanged central case remains behind its live input plane.
+        let (case_center, case_depth) = (0.091, 0.109);
         for (name, local, extents, material) in [
             ("case", [case_center, 0.0, 0.0], [case_depth, half[1] + 0.018, half[2] + 0.018], Graphite),
             ("top-return", [-0.020, half[1] + 0.010, 0.0], [0.010, 0.009, half[2] + 0.018], WallPanel),
@@ -1991,6 +1981,72 @@ fn add_cockpit_low_console(g: &mut PioneerDockedGeometry) {
                 PioneerDockedBox { center_m: point(local), half_m: extents, axes },
                 material, PioneerDockedCollision::Solid, cell, PioneerDockedPanelKind::Furniture);
         }
+    }
+    add_cockpit_shared_instrument_pods(g);
+
+}
+
+/// Each closed pod physically joins one dedicated instrument deck and its
+/// forward task surface. The old independent task box and rectangular support
+/// foot are absent; common side facets and a raked rear web carry both mounts.
+fn add_cockpit_shared_instrument_pods(g: &mut PioneerDockedGeometry) {
+    use PioneerDockedMaterial::{Carbon, Graphite, Titanium, WallPanel};
+    let cell = PioneerDockedCell::Cockpit;
+    for (side, lower_slot, task_slot) in [("port", 1, 4), ("starboard", 2, 5)] {
+        let (low_center, _) = cockpit_screen(lower_slot).unwrap();
+        let low_axes = cockpit_screen_axes(lower_slot).unwrap();
+        let (task_center, task_half) = cockpit_screen(task_slot).unwrap();
+        let task_axes = cockpit_screen_axes(task_slot).unwrap();
+        let point = |center, axes: [[f64; 3]; 3], local: [f64; 3]| add(center,
+            add(mul(axes[0], local[0]), add(mul(axes[1], local[1]), mul(axes[2], local[2]))));
+        let mut part = |name: &str, bounds, material| {
+            g.panel(format!("cockpit/console/shared-pod/{side}/{name}"), bounds,
+                material, PioneerDockedCollision::Solid, cell, PioneerDockedPanelKind::Furniture);
+        };
+        for (edge, sign) in [("port", -1.0_f64), ("starboard", 1.0_f64)] {
+            let a = point(low_center, low_axes, [0.050, -0.090, sign * 0.232]);
+            let b = point(task_center, task_axes, [0.045, 0.085, sign * 0.232]);
+            let delta = sub(b, a);
+            let length = dot(delta, delta).sqrt();
+            let along = mul(delta, length.recip());
+            let shared_right = normalized(add(low_axes[2], task_axes[2]));
+            let across = normalized(sub(shared_right, mul(along, dot(shared_right, along))));
+            part(&format!("{edge}-facet"), PioneerDockedBox {
+                center_m: mul(add(a, b), 0.5), half_m: [0.040, length * 0.5, 0.009],
+                axes: [cross(along, across), along, across] }, WallPanel);
+        }
+        // The task hood is genuinely shallow: a 5 mm back and two open-ended
+        // closures join the common facets, leaving the accepted glass/lips free.
+        for (name, local, half, material) in [
+            ("hood-back", [0.0225, 0.0, 0.0], [0.0025, task_half[1] + 0.012, task_half[2] + 0.018], Graphite),
+            ("hood-crown", [0.0015, task_half[1] + 0.010, 0.0], [0.0195, 0.009, task_half[2] + 0.018], WallPanel),
+            ("hood-lower-return", [0.0015, -task_half[1] - 0.010, 0.0], [0.0195, 0.009, task_half[2] + 0.018], Carbon),
+        ] {
+            part(name, PioneerDockedBox { center_m: point(task_center, task_axes, local),
+                half_m: half, axes: task_axes }, material);
+        }
+        let web_a = point(low_center, low_axes, [0.100, -0.050, 0.0]);
+        let web_b = point(task_center, task_axes, [0.025, -0.075, 0.0]);
+        let web_delta = sub(web_b, web_a);
+        let web_length = dot(web_delta, web_delta).sqrt();
+        let web_along = mul(web_delta, web_length.recip());
+        let web_right = normalized(sub(task_axes[2], mul(web_along, dot(task_axes[2], web_along))));
+        part("raked-rear-web", PioneerDockedBox { center_m: mul(add(web_a, web_b), 0.5),
+            half_m: [0.012, web_length * 0.5, 0.212],
+            axes: [cross(web_along, web_right), web_along, web_right] }, Graphite);
+        let base = [35.0, 0.45, low_center[2]];
+        let support_delta = sub(web_b, base);
+        let support_length = dot(support_delta, support_delta).sqrt();
+        let support_along = mul(support_delta, support_length.recip());
+        let support_right = normalized(cross(X, support_along));
+        part("inclined-cabinet-support", PioneerDockedBox {
+            // Rearward seating keeps every support corner behind the task
+            // plane while retaining overlap with the web, shoe and cabinet.
+            center_m: add(mul(add(base, web_b), 0.5), mul(task_axes[0], 0.032)),
+            half_m: [0.025, support_length * 0.5, 0.205],
+            axes: [cross(support_along, support_right), support_along, support_right] }, Graphite);
+        part("deck-shoe", axis_box([34.92, 0.43, low_center[2] - 0.205],
+            [35.08, 0.46, low_center[2] + 0.205]), Titanium);
     }
 }
 
@@ -3259,7 +3315,7 @@ mod tests {
             let prefix = format!("cockpit/console/mount/{slot}/");
             let parts: Vec<_> = g.panels.iter().filter(|p| p.id.starts_with(&prefix)).collect();
             if slot <= 2 {
-                assert_eq!(parts.len(), 6);
+                assert_eq!(parts.len(), 4);
                 assert!(!parts.iter().any(|p| p.id.ends_with("/case") || p.id.ends_with("-return")));
                 for part in &parts {
                     assert_eq!(part.collision, PioneerDockedCollision::Solid);
@@ -3282,6 +3338,19 @@ mod tests {
                     assert!((n - backer.bounds.half_m[0] + 0.0305).abs() < EPS);
                     assert!((n + backer.bounds.half_m[0] - 0.022).abs() < EPS);
                 }
+                continue;
+            }
+            if slot >= 4 {
+                assert!(parts.is_empty(), "No independent task-case proxy remains");
+                let side = if slot == 4 { "port" } else { "starboard" };
+                let pod_prefix = format!("cockpit/console/shared-pod/{side}/");
+                let pod: Vec<_> = g.panels.iter().filter(|p| p.id.starts_with(&pod_prefix)).collect();
+                assert_eq!(pod.len(), 8);
+                assert!(pod.iter().all(|p| p.collision == PioneerDockedCollision::Solid));
+                let hood = pod.iter().find(|p| p.id.ends_with("/hood-back")).unwrap();
+                let local = sub(hood.bounds.center_m, center);
+                assert!((dot(local, axes[0]) - hood.bounds.half_m[0] - 0.020).abs() < EPS);
+                assert!((dot(local, axes[0]) + hood.bounds.half_m[0] - 0.025).abs() < EPS);
                 continue;
             }
             assert_eq!(parts.len(), 5);
