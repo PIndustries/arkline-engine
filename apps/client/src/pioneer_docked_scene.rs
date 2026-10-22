@@ -860,7 +860,16 @@ pub(super) fn show(
     let cache = view.docked_scene.as_ref().unwrap();
     let first_person =
         view.on_foot_view == OnFootView::FirstPerson && !view.editor_free_camera_active;
-    let yaw = body_heading as f32 - view.head_look[0];
+    // Mouse look is local presentation, not an acknowledgement of body motion.
+    // Keep the physical avatar/eye anchor authoritative; only an on-foot,
+    // settled first-person direction follows the already sampled local input.
+    // Seat transitions and seated head-look retain the body frame.
+    let look_heading = if first_person && state.is_some() && !transition {
+        view.yaw
+    } else {
+        body_heading as f32
+    };
+    let yaw = look_heading - view.head_look[0];
     let pitch = (-view.pitch + view.head_look[1]).clamp(-1.45, 1.45);
     let direction = editor_camera_direction(yaw, pitch);
     let mut eye = if first_person {
@@ -1311,6 +1320,34 @@ mod tests {
         {
             std::panic::resume_unwind(panic);
         }
+    }
+    #[test]
+    fn registered_first_person_look_does_not_wait_for_body_turn_acknowledgement() {
+        let ctx = egui::Context::default();
+        let mut view = HangarView::new(None);
+        view.set_docked_traversal_enabled(true);
+        let actor = pilot(Some(standing_state()));
+        let source = serde_json::to_vec(&actor).unwrap();
+        frame(&mut view, &ctx, &actor, 1000, 0.0);
+        let initial = view.editor_camera_pose().unwrap();
+        view.yaw += std::f32::consts::FRAC_PI_2;
+        let expected = view.yaw;
+        // Same authoritative snapshot: no simulated turn or transport reply.
+        frame(&mut view, &ctx, &actor, 1000, 0.016);
+        let current = view.editor_camera_pose().unwrap();
+        let error = (current.1 - expected + std::f32::consts::PI)
+            .rem_euclid(std::f32::consts::TAU) - std::f32::consts::PI;
+        assert!(error.abs() < 1e-4, "Local look must be visible in the next frame");
+        assert!(current.0.distance(initial.0) < 1e-4, "Looking cannot move the eye anchor");
+        assert_eq!(serde_json::to_vec(&actor).unwrap(), source);
+        view.on_foot_view = OnFootView::ThirdPerson;
+        frame(&mut view, &ctx, &actor, 1000, 0.032);
+        let third = view.editor_camera_pose().unwrap();
+        let heading = actor.station_avatar.as_ref().unwrap()
+            .docked_traversal.as_ref().unwrap().heading as f32;
+        let error = (third.1 - heading + std::f32::consts::PI)
+            .rem_euclid(std::f32::consts::TAU) - std::f32::consts::PI;
+        assert!(error.abs() < 1e-4, "Third person must still follow authoritative body heading");
     }
     #[test]
     fn registered_box_adapter_keeps_orthonormal_frame_and_exact_body_metre_extents() {
