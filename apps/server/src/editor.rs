@@ -2465,3 +2465,33 @@ mod graph_tests {
         std::fs::remove_dir_all(path).unwrap();
     }
 }
+
+
+/// Explicit read-only validation of a coherent disposable saved-world copy.
+/// Unlike EditorWorld::open this does not stop controls or cancel jobs.
+#[cfg(test)]
+#[test]
+#[ignore = "Explicit isolated SQLite backup only; never opens the live world as authority"]
+fn pioneer_saved_mount_copy_compatibility() {
+    let directory = PathBuf::from(std::env::var_os("ARKLINE_PIONEER_COMPAT_COPY")
+        .expect("Explicit isolated compatibility copy"));
+    assert!(directory.to_string_lossy().starts_with("/tmp/pioneer-mount-compat-"));
+    assert_eq!(std::fs::read_to_string(directory.join("COPY_ONLY")).unwrap(),
+        "isolated compatibility backup; never a live authority\n");
+    let path = directory.join("world.sqlite");
+    let connection = rusqlite::Connection::open_with_flags(&path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY
+            | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX).unwrap();
+    let before: String = connection.query_row("SELECT json FROM world WHERE id=1", [],
+        |row| row.get(0)).unwrap();
+    let world: World = serde_json::from_str(&before).unwrap();
+    let layout = load_room_layout(&directory.join("room_layout.json")).unwrap();
+    layout.document.validate_live().unwrap();
+    station::validate_room_layout(&world, &layout.document).unwrap();
+    docked_traversal::validate(&world, Some(&layout.document)).unwrap();
+    let after: String = connection.query_row("SELECT json FROM world WHERE id=1", [],
+        |row| row.get(0)).unwrap();
+    assert_eq!(before, after, "Pure validation must preserve the copied world exactly");
+    eprintln!("Read-only saved mount compatibility passed for {} pilots in {}",
+        world.pilots.len(), path.display());
+}

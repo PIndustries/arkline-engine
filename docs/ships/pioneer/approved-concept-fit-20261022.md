@@ -38,3 +38,15 @@ The bounded coaming/cabinet changes compiled and the five-view native review pas
 This checkpoint is WIP, not a polished handoff. Pale breakup remains on horizontal skins after eliminating known coplanar plate overlap and increasing shell clearance; the remaining shading cause is unproven. The five fixed mounts still determine the overall silhouette. No new app package or restart is justified as concept completion from these results. Current delivered build remains 26.10.21.29. The separately rejected new enamel material was not integrated or retried; existing materials remain.
 
 Retained evidence: /tmp/pioneer-concept-fit-before-20261022, /tmp/pioneer-concept-fit-corrected-20261022, and /tmp/pioneer-concept-fit-composition-20261022. Native captures are actual engine images, not desktop acceptance, acoustic confirmation, FPS benchmarks or input-latency measurements. The seated aft capture is chair-occluded and must not be presented as a useful concept-equivalent rear-enclosure view.
+
+## Mount reconstruction recovery checkpoint
+
+A subsequent source pass replaces the upright sockets with true inclined cases and a low chassis. Runtime rendering and pointer mapping already consume the shared canonical screen frames; the central 560 × 380 canvas remains. The native opaque-visibility test now removes the central instrument's own rotation before projecting body-space case geometry, preserving its original protected region.
+
+The first refit compiled and rendered, but failed seated visual acceptance: instruments were below/outside the fixed 55-degree camera. Its isolated saved-copy capsule/support validation passed, as did leg-well and rear-route checks. These results apply to that earlier candidate, not every later coordinate change.
+
+The currently staged correction is still unfit: NAV/POWER centers [34.80, .73, 2.25/3.75], task centers [34.80, .90, 2.25/3.75], and central MFD [34.40, .95, 3]. Analytical projection identifies narrow-aspect side clipping and wide-aspect case intrusion into the unchanged protected ROI. Do not package this candidate.
+
+A further inward/down correction was rejected before execution by automatic approval review, citing the historical read-only diagnostic restriction. No approval request ID was returned. The proposed correction remains unapplied: side Z centers 2.34/3.66, NAV Y .715, task Y .875, with corresponding supports. Pure pinhole checks pass glass margins and case ROI for those proposed values, but they are not rendered or accepted geometry. No alternate writer or equivalent patch was used.
+
+The rejected enamel variant and earlier renderer/camera/cache/power/backlight operations remain untouched. No app restart, user-avatar movement or live authority operation occurred. The last verified running package remains 26.10.21.29. This is a recovery checkpoint, not delivery or completion.

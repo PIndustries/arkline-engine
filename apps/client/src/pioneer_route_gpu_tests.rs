@@ -1760,7 +1760,22 @@ fn native_pioneer_cockpit_mining_composition() {
         // Include opaque housings and supports, not only display apertures.
         // Use this actual frame's body transform and the SAME protected region.
         let surface = mining.surface.as_ref().unwrap();
-        let (body_to_clip, _, _) = surface.feed_geometry(surface.canvas_rect()).unwrap();
+        let (plane_to_clip, _, _) = surface.feed_geometry(surface.canvas_rect()).unwrap();
+        // feed_geometry includes the canonical instrument rotation. Opaque
+        // panels below are already expressed in body coordinates, so remove
+        // that local plane transform rather than rotating the whole cockpit.
+        let (center, _) = arkline_protocol::cockpit_screen(3).unwrap();
+        let center = Vec3::from_array(center.map(|v| v as f32));
+        let axes = arkline_protocol::cockpit_screen_axes(3).unwrap();
+        let rotation = Mat4::from_cols(
+            Vec3::from_array(axes[0].map(|v| v as f32)).extend(0.0),
+            Vec3::from_array(axes[1].map(|v| v as f32)).extend(0.0),
+            Vec3::from_array(axes[2].map(|v| v as f32)).extend(0.0),
+            glam::Vec4::W,
+        );
+        let instrument_frame = Mat4::from_translation(center) * rotation
+            * Mat4::from_translation(-center);
+        let body_to_clip = plane_to_clip * instrument_frame.inverse();
         let canonical =
             arkline_protocol::registered_geometry(&arkline_protocol::default_pioneer()).unwrap();
         let mut opaque_bounds = Vec::new();
