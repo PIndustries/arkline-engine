@@ -1,9 +1,13 @@
-//! Actual registered docked scene in a private CGL context; no desktop window.
+//! Actual registered docked scene in private CGL/macOS or EGL/Linux; no desktop window.
 use super::*;
 use sha2::{Digest, Sha256};
+#[cfg(target_os = "macos")]
 use std::ffi::{c_void, CString};
+#[cfg(target_os = "linux")]
+use crate::flight3d::exterior_gpu_tests::Egl as PrivateContext;
 use std::path::Path;
 
+#[cfg(target_os = "macos")]
 #[link(name = "OpenGL", kind = "framework")]
 unsafe extern "C" {
     fn CGLChoosePixelFormat(a: *const u32, f: *mut *mut c_void, n: *mut i32) -> i32;
@@ -13,14 +17,17 @@ unsafe extern "C" {
     fn CGLDestroyContext(c: *mut c_void) -> i32;
     fn CGLDestroyPixelFormat(f: *mut c_void) -> i32;
 }
+#[cfg(target_os = "macos")]
 unsafe extern "C" {
     fn dlsym(handle: *mut c_void, name: *const std::ffi::c_char) -> *mut c_void;
 }
 
+#[cfg(target_os = "macos")]
 struct PrivateContext {
     current: *mut c_void,
     previous: *mut c_void,
 }
+#[cfg(target_os = "macos")]
 impl PrivateContext {
     unsafe fn create() -> (Self, Arc<glow::Context>) {
         let previous = CGLGetCurrentContext();
@@ -52,6 +59,7 @@ impl PrivateContext {
         (guard, gl)
     }
 }
+#[cfg(target_os = "macos")]
 impl Drop for PrivateContext {
     fn drop(&mut self) {
         unsafe {
@@ -63,6 +71,115 @@ impl Drop for PrivateContext {
 
 const WIDTH: usize = 1280;
 const HEIGHT: usize = 720;
+
+#[test]
+#[ignore = "Explicit actual runtime enclosure boundary captures; fixture snapshots only"]
+fn native_registered_enclosure_boundary_views() {
+    unsafe {
+        let directory = std::path::PathBuf::from(
+            std::env::var_os("ARKLINE_PIONEER_DOCKED_EVIDENCE")
+                .expect("New retained evidence directory"),
+        );
+        std::fs::create_dir(&directory).unwrap();
+        let (_context, gl) = PrivateContext::create();
+        let mut harness = Harness::new(gl.clone());
+        let mut captures = Vec::new();
+        let seated = pilot(None);
+        let shot = harness.settle(&seated, 1000);
+        let surface = harness
+            .view
+            .computer_surface()
+            .expect("Actual seated computer");
+        let center = surface.canvas_rect().center();
+        let point = surface.project(center).unwrap();
+        assert!(
+            harness.view.computer_hit_tester(&harness.ctx)(point)
+                .unwrap()
+                .distance(center)
+                < 0.1
+        );
+        captures.push(capture(Some(&directory), "pilot-seat", &shot));
+        for (name, body, heading, pitch) in [
+            ("rear-entry", [32.1, -0.32, 0.], 0., 0.),
+            ("retained-starboard-space", [32.1, -0.32, 4.84], 0., 0.),
+            ("overhead-from-aisle", [33.36, -0.32, 0.], 0., -0.55),
+        ] {
+            let state = supported_state_at(body, heading, arkline_protocol::DockedSupport::Cockpit);
+            let pilot = pilot(Some(state));
+            let before = serde_json::to_vec(&pilot).unwrap();
+            harness.view.pitch = pitch;
+            let shot = harness.settle(&pilot, 3300);
+            assert!(shot.occupied > 1000);
+            assert_eq!(serde_json::to_vec(&pilot).unwrap(), before);
+            captures.push(capture(Some(&directory), name, &shot));
+        }
+        let mut loaded_saves = Vec::new();
+        if let Some(paths) = std::env::var_os("ARKLINE_PIONEER_RUNTIME_SNAPSHOTS") {
+            let paths: Vec<std::path::PathBuf> =
+                serde_json::from_str(paths.to_str().unwrap()).unwrap();
+            assert_eq!(
+                paths.len(),
+                3,
+                "Private and both fleet fixture snapshots required"
+            );
+            for (index, path) in paths.iter().enumerate() {
+                let bytes = std::fs::read(path).unwrap();
+                let snapshot: Snapshot = serde_json::from_slice(&bytes).unwrap();
+                assert_eq!(
+                    snapshot.docked_traversal_capability,
+                    Some(arkline_protocol::docked_traversal_capability())
+                );
+                let pilot = snapshot.pilots.iter().find(|p| p.name == "Walker").unwrap();
+                let state = pilot
+                    .station_avatar
+                    .as_ref()
+                    .unwrap()
+                    .docked_traversal
+                    .as_ref()
+                    .unwrap();
+                let pose = arkline_protocol::docked_binding_pose(&state.binding).unwrap();
+                let geometry = registered_geometry(&arkline_protocol::default_pioneer()).unwrap();
+                let dynamic = dynamic_geometry(
+                    pose,
+                    actuator_pose(Some(state), pose, None, snapshot.server_time_ms),
+                )
+                .unwrap();
+                assert!(arkline_protocol::capsule_clear_station(
+                    &geometry,
+                    &dynamic,
+                    pose,
+                    state.feet_m
+                ));
+                assert!(arkline_protocol::support_at_station(
+                    &geometry,
+                    &dynamic,
+                    pose,
+                    state.feet_m,
+                    None,
+                    0.01
+                )
+                .is_some());
+                let before = serde_json::to_vec(pilot).unwrap();
+                harness.view.pitch = -0.35;
+                let shot = harness.settle(pilot, snapshot.server_time_ms);
+                assert!(shot.occupied > 1000);
+                assert_eq!(serde_json::to_vec(pilot).unwrap(), before);
+                captures.push(capture(
+                    Some(&directory),
+                    &format!("loaded-save-{index}"),
+                    &shot,
+                ));
+                loaded_saves.push(serde_json::json!({"snapshot_sha256":hex::encode(Sha256::digest(&bytes)),"binding":state.binding,"feet_station_m":state.feet_m}));
+            }
+        }
+        std::fs::write(directory.join("boundary-receipt.json"), serde_json::to_vec_pretty(&serde_json::json!({
+            "scope":"Actual HangarView runtime scene and instrument callbacks; deterministic fixture snapshots, not live telemetry or desktop input",
+            "capability":arkline_protocol::docked_traversal_capability(),"captures":captures,
+            "seated_computer_pointer_roundtrip":true,"camera_code_unchanged":true,
+            "renderer":gl.get_parameter_string(glow::RENDERER),"loaded_fixture_saves":loaded_saves
+        })).unwrap()).unwrap();
+    }
+}
 
 struct Capture {
     rgba: Vec<u8>,
@@ -440,7 +557,7 @@ unsafe fn source_gpu_hash(gl: &glow::Context, renderer: &Renderer) -> String {
 }
 
 #[test]
-#[ignore = "Explicit registered Pioneer native scene, physical displays, transition and per-view visibility in private macOS CGL"]
+#[ignore = "Explicit registered Pioneer native scene, physical displays, transition and per-view visibility in private native OpenGL"]
 fn native_pioneer_registered_docked_scene_displays_continuity_and_visibility() {
     unsafe {
         let directory =
@@ -775,7 +892,7 @@ fn native_pioneer_registered_docked_scene_displays_continuity_and_visibility() {
         );
         assert_eq!(original, source_gpu_hash(&gl, &renderer.lock().unwrap()));
         if let Some(directory) = &directory {
-            std::fs::write(directory.join("receipt.json"),serde_json::to_vec_pretty(&serde_json::json!({"schema_version":2,"scope":"Actual HangarView::ui registered docked callback and physical instrument surfaces in private macOS CGL; no desktop window","source_glb_sha256":arkline_protocol::PIONEER_DOCKED_SOURCE_SHA256,"registration_revision":arkline_protocol::PIONEER_DOCKED_REGISTRATION_REVISION,"captures":captures,"supplemental_grounded_useful_views":useful_views,"retained_original_forward_bulkhead_views":["registered-upper-deck","registered-lower-deck"],"visibility_comparisons":comparisons,"source_gpu_payload_sha256":original,"canonical_gpu_payload_unchanged":true,"all_buffer_identities_retained":true,"physical_computer_face_roundtrip":true,"actual_instrument_pixels_on_backing":instrument_pixels,"visible_hatch_changed_pixels":hatch_changed_pixels,"headlook_preserves_eye_and_authority":true,"limitations":["Checkpoint snapshots exercise rendering; authority collision, hatch interlocks and continuous walking are verified by separate server tests","Original x=18 deck checkpoints honestly face the forward bulkhead; supplemental grounded corridor/stair views separately verify visible actual floor/tread landmarks", "Both deck checkpoints and supplemental views use one registered scene but do not alone prove the complete stair walk","Each view retains an independent conservative frustum decision; this does not establish portal occlusion or LOD","CPU submit and optional delayed GPU timings are samples, not a performance guarantee or a vsync FPS measurement","No OS focus, desktop input, packaged app launch or engineering approval is established"]})).unwrap()).unwrap();
+            std::fs::write(directory.join("receipt.json"),serde_json::to_vec_pretty(&serde_json::json!({"schema_version":2,"scope":"Actual HangarView::ui registered docked callback and physical instrument surfaces in a private native OpenGL context; no desktop window","source_glb_sha256":arkline_protocol::PIONEER_DOCKED_SOURCE_SHA256,"registration_revision":arkline_protocol::PIONEER_DOCKED_REGISTRATION_REVISION,"captures":captures,"supplemental_grounded_useful_views":useful_views,"retained_original_forward_bulkhead_views":["registered-upper-deck","registered-lower-deck"],"visibility_comparisons":comparisons,"source_gpu_payload_sha256":original,"canonical_gpu_payload_unchanged":true,"all_buffer_identities_retained":true,"physical_computer_face_roundtrip":true,"actual_instrument_pixels_on_backing":instrument_pixels,"visible_hatch_changed_pixels":hatch_changed_pixels,"headlook_preserves_eye_and_authority":true,"limitations":["Checkpoint snapshots exercise rendering; authority collision, hatch interlocks and continuous walking are verified by separate server tests","Original x=18 deck checkpoints honestly face the forward bulkhead; supplemental grounded corridor/stair views separately verify visible actual floor/tread landmarks", "Both deck checkpoints and supplemental views use one registered scene but do not alone prove the complete stair walk","Each view retains an independent conservative frustum decision; this does not establish portal occlusion or LOD","CPU submit and optional delayed GPU timings are samples, not a performance guarantee or a vsync FPS measurement","No OS focus, desktop input, packaged app launch or engineering approval is established"]})).unwrap()).unwrap();
         }
         drop(harness);
         assert_eq!(gl.get_error(), glow::NO_ERROR);

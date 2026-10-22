@@ -339,6 +339,54 @@ fn airlock_finish(id: &str, bounds: &PioneerDockedBox, frame: Mat4) -> Vec<Model
     parts
 }
 
+/// Recess construction into existing solid envelopes; never move the interior
+/// boundary into legal avatar space. Same material/role as the original box.
+fn recessed_enclosure_parts(
+    panel: &arkline_protocol::PioneerDockedPanel,
+    frame: Mat4,
+) -> Option<Vec<ModelPart>> {
+    let thin = match panel.id.as_str() {
+        "cockpit/ceiling" => 1,
+        "cockpit/canopy/header" | "cockpit/canopy/sill" => 0,
+        _ => return None,
+    };
+    let half = vector(panel.bounds.half_m);
+    let face: Vec<_> = (0..3).filter(|axis| *axis != thin).collect();
+    let mount = frame * box_matrix(&panel.bounds) * Mat4::from_scale(half.recip());
+    let (color, emission) = surface(panel.material);
+    let mesh = panel_surface_role(panel.material).cube();
+    let mut parts = Vec::new();
+    let mut block = |center, half| {
+        parts.push((
+            mesh,
+            mount * Mat4::from_scale_rotation_translation(half, Quat::IDENTITY, center),
+            color,
+            emission,
+        ))
+    };
+    // Continuous backing closes every coffer; 35 mm maximum recess is away
+    // from the room, in the positive local thin-axis direction.
+    let recess = 0.035_f32.min(half[thin] * 0.7);
+    let mut center = Vec3::ZERO;
+    let mut backing = half;
+    center[thin] = recess * 0.5;
+    backing[thin] -= recess * 0.5;
+    block(center, backing);
+    for axis in face {
+        let bays = ((half[axis] * 2.0 / 1.4).ceil() as usize).max(1);
+        let rib_half = 0.030_f32.min(half[axis] * 0.1);
+        for index in 0..=bays {
+            let mut center = Vec3::ZERO;
+            let mut rib = half;
+            rib[axis] = rib_half;
+            center[axis] = (-half[axis] + index as f32 * half[axis] * 2.0 / bays as f32)
+                .clamp(-half[axis] + rib_half, half[axis] - rib_half);
+            block(center, rib);
+        }
+    }
+    Some(parts)
+}
+
 fn panel_parts(
     geometry: &PioneerDockedGeometry,
     frame: Mat4,
@@ -363,6 +411,8 @@ fn panel_parts(
                 || panel.id == "boarding/outer/header"
             {
                 airlock_finish(&panel.id, &panel.bounds, frame)
+            } else if let Some(parts) = recessed_enclosure_parts(panel, frame) {
+                parts
             } else if panel.material == PioneerDockedMaterial::FittedBulkhead {
                 let center = vector(panel.bounds.center_m);
                 let half = vector(panel.bounds.half_m);
@@ -1406,13 +1456,112 @@ mod tests {
     }
 }
 
-#[cfg(all(test, target_os = "macos"))]
+#[cfg(all(test, any(target_os = "macos", target_os = "linux")))]
 #[path = "pioneer_docked_gpu_tests.rs"]
 mod native_tests;
 
 #[cfg(test)]
 mod composition_fit_tests {
     use super::*;
+    #[test]
+    fn recessed_enclosure_is_contained_in_existing_solids_in_every_placement() {
+        let geometry = registered_geometry(&arkline_protocol::default_pioneer()).unwrap();
+        let original = geometry.clone();
+        let mut replaced = 0;
+        for panel in &geometry.panels {
+            for pose in [
+                PioneerDockedPose::private(),
+                PioneerDockedPose::fleet(arkline_protocol::FleetLayoutRevision::LinearV1),
+                PioneerDockedPose::fleet(arkline_protocol::FleetLayoutRevision::CircularV1),
+            ] {
+                let frame = body_frame(pose);
+                let Some(parts) = recessed_enclosure_parts(panel, frame) else {
+                    continue;
+                };
+                assert_eq!(
+                    panel.collision,
+                    arkline_protocol::PioneerDockedCollision::Solid
+                );
+                assert!(parts.len() > 5 && parts.len() < 24);
+                let (color, emission) = surface(panel.material);
+                let inverse = (frame * box_matrix(&panel.bounds)).inverse();
+                for (mesh, model, actual_color, actual_emission) in parts {
+                    assert_eq!(mesh, panel_surface_role(panel.material).cube());
+                    assert_eq!(actual_color, color);
+                    assert_eq!(actual_emission, emission);
+                    for vertex in mesh_vertices(mesh) {
+                        let local = inverse.transform_point3(model.transform_point3(vertex.p));
+                        assert!(
+                            local.abs().max_element() <= 1.0005,
+                            "{} escapes its preexisting solid: {local:?}",
+                            panel.id
+                        );
+                    }
+                }
+                replaced += 1;
+            }
+        }
+        assert_eq!(replaced, 9);
+        assert_eq!(
+            geometry, original,
+            "Presentation must not rewrite authority geometry"
+        );
+    }
+
+    #[test]
+    fn recessed_enclosure_preserves_registered_accessible_boundary_regions() {
+        let g = registered_geometry(&arkline_protocol::default_pioneer()).unwrap();
+        let mut checked = 0;
+        for pose in [
+            PioneerDockedPose::private(),
+            PioneerDockedPose::fleet(arkline_protocol::FleetLayoutRevision::LinearV1),
+            PioneerDockedPose::fleet(arkline_protocol::FleetLayoutRevision::CircularV1),
+        ] {
+            let d = dynamic_geometry(pose, actuator_pose(None, pose, None, 0)).unwrap();
+            for x in [31.92, 32.1, 32.5, 33., 33.36, 34.1, 34.48] {
+                for z in [-6.48, -4., -0.84, 0., 1., 2., 3., 4.2, 4.84, 5.48] {
+                    let feet = [x, arkline_protocol::deck_floor_y(2).unwrap(), z];
+                    let station = body_to_station(pose, feet);
+                    if !arkline_protocol::capsule_clear_station(&g, &d, pose, station)
+                        || arkline_protocol::support_at_station(&g, &d, pose, station, None, 0.01)
+                            .is_none()
+                    {
+                        continue;
+                    }
+                    // Each visible box is a subset of a preexisting solid. This
+                    // sample check complements that universal containment proof.
+                    for panel in &g.panels {
+                        let Some(parts) = recessed_enclosure_parts(panel, Mat4::IDENTITY) else {
+                            continue;
+                        };
+                        for (_, model, _, _) in parts {
+                            let bounds = PioneerDockedBox {
+                                center_m: model.w_axis.truncate().to_array().map(f64::from),
+                                half_m: [
+                                    model.x_axis.truncate().length() as f64,
+                                    model.y_axis.truncate().length() as f64,
+                                    model.z_axis.truncate().length() as f64,
+                                ],
+                                axes: [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]],
+                            };
+                            assert!(!arkline_protocol::box_intersects_capsule(
+                                bounds,
+                                feet,
+                                arkline_protocol::AVATAR_HEIGHT_M,
+                                arkline_protocol::STATION_AVATAR_RADIUS_M
+                            ));
+                        }
+                    }
+                    checked += 1;
+                }
+            }
+        }
+        assert!(
+            checked > 100,
+            "Boundary coverage must include all three placements"
+        );
+        eprintln!("Registered clear/supported boundary samples preserved: {checked}");
+    }
     #[test]
     fn all_five_instruments_fit_real_viewport_aspects_with_forward_clearance() {
         let eye = vector(pilot_joints(0.0).eye_m);

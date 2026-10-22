@@ -487,6 +487,176 @@ fn canonical_enclosure_candidate_intersects_a_reachable_v4_sqlite_save() {
 }
 
 #[test]
+fn registered_boundary_space_reopens_fixture_saves_in_all_placements() {
+    for (scene, fleet) in [
+        (SceneLayoutRevision::LegacyV1, false),
+        (SceneLayoutRevision::LegacyV1, true),
+        (SceneLayoutRevision::OrbitalV1, true),
+    ] {
+        let directory = std::env::temp_dir().join(format!(
+            "arkline-boundary-save-{}-{}",
+            std::process::id(),
+            rand::random::<u64>()
+        ));
+        std::fs::create_dir(&directory).unwrap();
+        let database = directory.join("world.sqlite");
+        let open =
+            || Server::open_editor_realm_with_scene(&database, default_pioneer(), scene).unwrap();
+        let connect = |token| {
+            let mut request = connect_request(true, token);
+            if let Request::Connect {
+                supports_fleet_hangar,
+                ..
+            } = &mut request
+            {
+                *supports_fleet_hangar = fleet;
+            }
+            request
+        };
+        let mut server = open();
+        let mut session = None;
+        let token = ok(server.handle_at(&mut session, connect(None), CONNECTED_AT))
+            .resume_token
+            .unwrap();
+        let world: World = serde_json::from_str(&durable(&server)).unwrap();
+        assert_eq!(world.scene_layout, scene);
+        let binding = docked_traversal_binding(
+            world.accounts["Walker"]
+                .vessel_id(ShipClass::Pioneer)
+                .unwrap()
+                .into(),
+            &default_pioneer(),
+            scene.definition().fleet_layout,
+            fleet,
+        );
+        let pose = docked_binding_pose(&binding).unwrap();
+        assert_eq!(binding.registration_revision, 4);
+        ok(command(
+            &mut server,
+            &mut session,
+            DockedTraversalRequest::LeaveSeat {
+                binding: binding.clone(),
+            },
+            LEFT_AT,
+        ));
+        let mut now = STANDING_AT;
+        snapshot(&mut server, &mut session, now);
+        let mut receipts = Vec::new();
+        // Both sides of the rejected local bay and the actual far rear corner.
+        // Intermediate waypoints avoid the existing chair, not its collision.
+        for (body, persist) in [
+            ([33.36, -0.32, 3.], false),
+            ([33.36, -0.32, 0.], false),
+            ([32.1, -0.32, 0.], false),
+            ([32.1, -0.32, -0.84], true),
+            ([32.1, -0.32, 4.84], true),
+            ([31.92, -0.32, 5.48], true),
+        ] {
+            let target = body_to_station(pose, body);
+            let deadline = now + 10_000;
+            let wall_deadline = std::time::Instant::now() + std::time::Duration::from_secs(12);
+            loop {
+                let response = snapshot(&mut server, &mut session, now);
+                let state = traversal(&response);
+                let dx = target[0] - state.feet_m[0];
+                let dz = target[2] - state.feet_m[2];
+                if dx.hypot(dz) <= WAYPOINT_TOLERANCE_M {
+                    break;
+                }
+                assert!(
+                    now < deadline && std::time::Instant::now() < wall_deadline,
+                    "Boundary route stalled at {:?} toward {body:?}",
+                    state.feet_m
+                );
+                let scale = dx.hypot(dz).max(WALK_SPEED_MPS * 0.025);
+                let (sin, cos) = state.heading.sin_cos();
+                ok(command(
+                    &mut server,
+                    &mut session,
+                    DockedTraversalRequest::Walk {
+                        binding: binding.clone(),
+                        forward: (cos * dx + sin * dz) / scale,
+                        strafe: (-sin * dx + cos * dz) / scale,
+                        turn: 0.,
+                        sprint: false,
+                    },
+                    now,
+                ));
+                now += WALK_TICK_MS;
+            }
+            let stopped = ok(command(
+                &mut server,
+                &mut session,
+                DockedTraversalRequest::Walk {
+                    binding: binding.clone(),
+                    forward: 0.,
+                    strafe: 0.,
+                    turn: 0.,
+                    sprint: false,
+                },
+                now,
+            ));
+            let feet = traversal(&stopped).feet_m;
+            assert!(traversal(&stopped).grounded);
+            if !persist {
+                continue;
+            }
+            let before: World = serde_json::from_str(&durable(&server)).unwrap();
+            docked_traversal::validate(&before, None).unwrap();
+            let ledger = |s: &Server| -> Vec<String> {
+                s.db.prepare("SELECT json FROM ledger ORDER BY sequence")
+                    .unwrap()
+                    .query_map([], |r| r.get(0))
+                    .unwrap()
+                    .collect::<Result<_, _>>()
+                    .unwrap()
+            };
+            let ledger_before = ledger(&server);
+            drop(server);
+            server = open();
+            let after: World = serde_json::from_str(&durable(&server)).unwrap();
+            let state = after.pilots["Walker"]
+                .view
+                .station_avatar
+                .as_ref()
+                .unwrap()
+                .docked_traversal
+                .as_ref()
+                .unwrap();
+            assert_eq!(state.feet_m, feet);
+            assert_eq!(state.binding, binding);
+            assert_eq!(ledger_before, ledger(&server));
+            assert_eq!(
+                serde_json::to_value(&before.resource_jobs).unwrap(),
+                serde_json::to_value(&after.resource_jobs).unwrap()
+            );
+            assert_eq!(
+                (
+                    before.pilots["Walker"].view.ore,
+                    before.pilots["Walker"].view.credits
+                ),
+                (
+                    after.pilots["Walker"].view.ore,
+                    after.pilots["Walker"].view.credits
+                )
+            );
+            docked_traversal::validate(&after, None).unwrap();
+            receipts.push(serde_json::json!({"feet_body_m":station_to_body(pose,feet),"feet_station_m":feet,"binding":binding,"roundtrip_preserved":true}));
+            session = None;
+            now += 1;
+            let loaded = ok(server.handle_at(&mut session, connect(Some(token.clone())), now));
+            std::fs::write(
+                directory.join("runtime-snapshot.json"),
+                serde_json::to_vec_pretty(&loaded.snapshot.unwrap()).unwrap(),
+            )
+            .unwrap();
+        }
+        std::fs::write(directory.join("boundary-receipt.json"), serde_json::to_vec_pretty(&serde_json::json!({"scope":"New disposable fixtures only; actual authority walks and SQLite reopen","capability":docked_traversal_capability(),"placement_scene":scene,"fleet":fleet,"points":receipts})).unwrap()).unwrap();
+        eprintln!("Boundary save evidence: {}", directory.display());
+    }
+}
+
+#[test]
 fn authority_legacy_capability_latches_only_after_authentication_until_last_disconnect() {
     let mut server = Server::open(":memory:").unwrap();
     let mut capable = None;
