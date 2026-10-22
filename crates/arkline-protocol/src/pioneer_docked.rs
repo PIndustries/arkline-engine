@@ -1866,13 +1866,13 @@ fn add_cockpit_low_console(g: &mut PioneerDockedGeometry) {
     use PioneerDockedMaterial::{Carbon, Graphite, Titanium, WallPanel};
     let cell = PioneerDockedCell::Cockpit;
     for (id, min, max, material) in [
-        ("port-cabinet", [33.90, FLOOR, 2.0], [35.01, 0.43, 2.65], WallPanel),
-        ("starboard-cabinet", [33.90, FLOOR, 3.35], [35.01, 0.43, 4.0], WallPanel),
-        ("forward-bridge", [34.66, FLOOR, 2.65], [35.01, 0.45, 3.35], Graphite),
+        ("port-cabinet/core", [34.12, FLOOR, 2.0], [35.01, 0.28, 2.65], Graphite),
+        ("starboard-cabinet/core", [34.12, FLOOR, 3.35], [35.01, 0.28, 4.0], Graphite),
+        ("forward-bridge/core", [34.78, FLOOR, 2.65], [35.01, 0.32, 3.35], Graphite),
         ("footrest", [33.85, FLOOR, 2.68], [34.18, 0.085, 3.32], Carbon),
         ("center-pedestal/core", [34.26, 0.43, 2.86], [34.66, 0.83, 3.14], Graphite),
-        ("port-instrument-foot", [34.74, 0.43, 2.13], [35.02, 0.555, 2.55], WallPanel),
-        ("starboard-instrument-foot", [34.74, 0.43, 3.45], [35.02, 0.555, 3.87], WallPanel),
+        ("port-instrument-foot/core", [34.80, 0.43, 2.13], [35.02, 0.50, 2.55], Graphite),
+        ("starboard-instrument-foot/core", [34.80, 0.43, 3.45], [35.02, 0.50, 3.87], Graphite),
         ("port-task-foot", [34.90, 0.43, 2.13], [35.08, 0.79, 2.55], WallPanel),
         ("starboard-task-foot", [34.90, 0.43, 3.45], [35.08, 0.79, 3.87], WallPanel),
     ] {
@@ -1893,15 +1893,58 @@ fn add_cockpit_low_console(g: &mut PioneerDockedGeometry) {
                 half_m: [0.20, length * 0.5, 0.008], axes: [X, along, cross(X, along)] },
             WallPanel, PioneerDockedCollision::Solid, cell, PioneerDockedPanelKind::Furniture);
     }
-    // Cabinet service insets occupy their own front plane, rather than laying
-    // coplanar colored panels over the cream skin.
-    for (side, z0, z1) in [("port", 2.04, 2.61), ("starboard", 3.39, 3.96)] {
-        g.block(format!("cockpit/console/{side}/service-inset"),
-            [33.894, -0.20, z0], [33.899, 0.30, z1], Carbon,
-            PioneerDockedCollision::Decoration, cell, PioneerDockedPanelKind::Furniture);
-        g.block(format!("cockpit/console/{side}/lower-edge"),
-            [33.892, -0.23, z0], [33.899, -0.22, z1], Titanium,
-            PioneerDockedCollision::Decoration, cell, PioneerDockedPanelKind::Furniture);
+    // Three closed facets form each side of the low horseshoe. The raked
+    // apron retreats toward its dark lower core; the Carbon shoulder slopes up
+    // toward the actual instrument feet. These replace, rather than skin, the
+    // former flat cream cabinet blocks, and remain inside their exact bounds.
+    let apron_delta: [f64; 3] = [-0.14, 0.38, 0.0];
+    let apron_length = dot(apron_delta, apron_delta).sqrt();
+    let apron_along = mul(apron_delta, apron_length.recip());
+    let apron_normal = [apron_along[1], -apron_along[0], 0.0];
+    let shoulder_length = 1.02_f64.hypot(0.11);
+    let shoulder_axes = [[1.02 / shoulder_length, 0.11 / shoulder_length, 0.0],
+        [-0.11 / shoulder_length, 1.02 / shoulder_length, 0.0], Z];
+    for (side, z0, z1) in [("port", 2.0, 2.65), ("starboard", 3.35, 4.0)] {
+        let mid_z = (z0 + z1) * 0.5;
+        let apron_center = [34.05, 0.10, mid_z];
+        g.panel(format!("cockpit/console/{side}-cabinet/raked-apron"),
+            PioneerDockedBox { center_m: apron_center,
+                half_m: [0.060, apron_length * 0.5, (z1 - z0) * 0.5],
+                axes: [apron_normal, apron_along, Z] },
+            WallPanel, PioneerDockedCollision::Solid, cell, PioneerDockedPanelKind::Furniture);
+        g.panel(format!("cockpit/console/{side}-cabinet/sloping-shoulder"),
+            PioneerDockedBox { center_m: [34.49, 0.35, mid_z],
+                half_m: [shoulder_length * 0.5, 0.025, (z1 - z0) * 0.5], axes: shoulder_axes },
+            Carbon, PioneerDockedCollision::Solid, cell, PioneerDockedPanelKind::Furniture);
+        // Covers sit 1 mm clear of the real apron face, with their own depth;
+        // no coplanar cream skins or floating fronts at the obsolete X plane.
+        for (name, along, half, material) in [
+            ("service-inset", 0.0, [0.001, 0.13, 0.25], Carbon),
+            ("lower-edge", -0.15, [0.001, 0.003, 0.25], Titanium),
+        ] {
+            g.panel(format!("cockpit/console/{side}/{name}"),
+                PioneerDockedBox {
+                    center_m: add(apron_center, add(mul(apron_normal, -0.062), mul(apron_along, along))),
+                    half_m: half, axes: [apron_normal, apron_along, Z] },
+                material, PioneerDockedCollision::Decoration, cell, PioneerDockedPanelKind::Furniture);
+        }
+    }
+    // The original forward connection remains a single narrow bridge, now
+    // capped by a sloped structural cross-member instead of a broad flat slab.
+    let bridge_length = 0.30_f64.hypot(0.04);
+    g.panel("cockpit/console/forward-bridge/sloped-cap",
+        PioneerDockedBox { center_m: [34.84, 0.34, 3.0], half_m: [bridge_length * 0.5, 0.025, 0.35],
+            axes: [[0.30 / bridge_length, 0.04 / bridge_length, 0.0],
+                [-0.04 / bridge_length, 0.30 / bridge_length, 0.0], Z] },
+        Graphite, PioneerDockedCollision::Solid, cell, PioneerDockedPanelKind::Furniture);
+    let foot_length = 0.22_f64.hypot(0.055);
+    for (side, z0, z1) in [("port", 2.13, 2.55), ("starboard", 3.45, 3.87)] {
+        g.panel(format!("cockpit/console/{side}-instrument-foot/inclined-attachment"),
+            PioneerDockedBox { center_m: [34.88, 0.5075, (z0 + z1) * 0.5],
+                half_m: [foot_length * 0.5, 0.018, (z1 - z0) * 0.5],
+                axes: [[0.22 / foot_length, 0.055 / foot_length, 0.0],
+                    [-0.055 / foot_length, 0.22 / foot_length, 0.0], Z] },
+            WallPanel, PioneerDockedCollision::Solid, cell, PioneerDockedPanelKind::Furniture);
     }
     for slot in 1..6 {
         let (center, half) = cockpit_screen(slot).expect("five mounted instruments");
@@ -3269,7 +3312,11 @@ mod tests {
             let panel = g.panels.iter().find(|p| p.id == id).unwrap();
             assert_eq!(panel.collision, PioneerDockedCollision::Decoration);
             assert_eq!(panel.material, PioneerDockedMaterial::Carbon);
-            assert!(panel.bounds.center_m[0] + panel.bounds.half_m[0] < 33.90);
+            let apron = g.panels.iter().find(|p| p.id == format!("cockpit/console/{side}-cabinet/raked-apron")).unwrap();
+            assert_eq!(panel.bounds.axes, apron.bounds.axes);
+            let separation = dot(sub(panel.bounds.center_m, apron.bounds.center_m), apron.bounds.axes[0]);
+            assert!((separation + 0.062).abs() < EPS);
+            assert!(separation + panel.bounds.half_m[0] < -apron.bounds.half_m[0]);
             assert!(panel.bounds.center_m[2] - panel.bounds.half_m[2] >= z0);
             assert!(panel.bounds.center_m[2] + panel.bounds.half_m[2] <= z1);
         }
