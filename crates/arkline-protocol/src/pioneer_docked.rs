@@ -2446,6 +2446,13 @@ fn add_cockpit_furniture(g: &mut PioneerDockedGeometry) {
 /// Their original panels remain the exact authoritative collision recipe.
 /// This predicate never applies to collision, ray permission or command logic.
 pub fn cockpit_panel_has_visual_replacement(id: &str) -> bool {
+    // Keep the existing captive fasteners visible on the new recessed skins.
+    if ["cockpit/bank/port-divider", "cockpit/bank/starboard-divider",
+        "cockpit/bank/port-socket-inner-rail", "cockpit/bank/starboard-socket-inner-rail"]
+        .iter().any(|prefix| id.strip_prefix(*prefix)
+            .is_some_and(|suffix| suffix.starts_with("/captive-fastener/"))) {
+        return false;
+    }
     matches!(id,
         "cockpit/screen/3/backing"
         | "cockpit/bank/port-plinth" | "cockpit/bank/starboard-plinth"
@@ -2456,9 +2463,21 @@ pub fn cockpit_panel_has_visual_replacement(id: &str) -> bool {
         | "cockpit/bank/port-shoulder-edge" | "cockpit/bank/starboard-shoulder-edge"
         | "cockpit/dashboard/pod/front-fascia"
         | "cockpit/dashboard/pod/sloped-service-shelf"
+        | "cockpit/bank/port-housing" | "cockpit/bank/starboard-housing"
+        | "cockpit/bank/port-crown" | "cockpit/bank/starboard-crown"
+        | "cockpit/bank/port-socket-base" | "cockpit/bank/starboard-socket-base"
+        | "cockpit/bank/port-socket-bottom" | "cockpit/bank/starboard-socket-bottom"
+        | "cockpit/bank/port-socket-outer-rail" | "cockpit/bank/starboard-socket-outer-rail"
+        | "cockpit/console/central-socket/rearplate"
+        | "cockpit/console/central-socket/port-cheek"
+        | "cockpit/console/central-socket/starboard-cheek"
+        | "cockpit/console/central-socket/brow"
+        | "cockpit/console/central-socket/lower-frame"
     ) || [
         "cockpit/bank/port-access-face", "cockpit/bank/starboard-access-face",
         "cockpit/bank/port-service-rib", "cockpit/bank/starboard-service-rib",
+        "cockpit/bank/port-divider", "cockpit/bank/starboard-divider",
+        "cockpit/bank/port-socket-inner-rail", "cockpit/bank/starboard-socket-inner-rail",
     ].iter().any(|prefix| id == *prefix
         || id.strip_prefix(*prefix).is_some_and(|suffix| suffix.starts_with('/')))
 }
@@ -2475,9 +2494,11 @@ fn cockpit_console_visual_part(
         PioneerDockedCell::Cockpit, PioneerDockedPanelKind::Furniture);
 }
 
-/// Closed octagonal plate, expressed as the union of two central rectangles and
-/// four diagonal squares. The corners are true facets rather than stair steps.
-/// All six OBBs fit inside the old shoulder's local half extents.
+/// A closed stepped octagonal skin, assembled from one central plate, two
+/// edge strips and four diagonal corner inserts. The strips meet the central
+/// plate without overlapping it; corner inserts are recessed 4 mm so their
+/// necessary internal overlap never puts two visible faces on the same plane.
+/// All components remain inside the old shoulder envelope.
 fn add_cockpit_chamfered_deck(
     g: &mut PioneerDockedGeometry,
     id: &str,
@@ -2487,12 +2508,15 @@ fn add_cockpit_chamfered_deck(
     material: PioneerDockedMaterial,
 ) {
     let q = std::f64::consts::FRAC_1_SQRT_2;
-    for (name, half) in [
-        ("long", [0.365, half_height, 0.235]),
-        ("wide", [0.285, half_height, 0.315]),
-    ] {
-        cockpit_console_visual_part(g, format!("{id}/{name}"),
-            PioneerDockedBox { center_m: center, half_m: half, axes }, material);
+    cockpit_console_visual_part(g, format!("{id}/long"),
+        PioneerDockedBox { center_m: center,
+            half_m: [0.365, half_height, 0.235], axes }, material);
+    for (i, offset) in [(0, -0.275), (1, 0.275)] {
+        cockpit_console_visual_part(g, format!("{id}/edge-strip/{i}"),
+            PioneerDockedBox {
+                center_m: add(center, mul(axes[2], offset)),
+                half_m: [0.285, half_height - 0.002, 0.040], axes,
+            }, material);
     }
     let diagonal_axes = [mul(add(axes[0], axes[2]), q), axes[1],
         mul(sub(axes[2], axes[0]), q)];
@@ -2501,26 +2525,27 @@ fn add_cockpit_chamfered_deck(
         cockpit_console_visual_part(g, format!("{id}/corner/{i}"),
             PioneerDockedBox {
                 center_m: add(center, add(mul(axes[0], a), mul(axes[2], b))),
-                half_m: [0.08 * q, half_height, 0.08 * q],
+                half_m: [0.08 * q, half_height - 0.004, 0.08 * q],
                 axes: diagonal_axes,
             }, material);
     }
 }
 
-/// Forty-four passive parts replace forty-two visible furniture instances:
-/// two bevelled cabinets, two chamfered desk shells and a narrowing centre pod.
-/// The net cost is two instances; no gauge tessellation or input mount changes.
+/// Closed cream cabinet shells and stepped instrument coamings share the old
+/// solid furniture envelopes. Graphite recesses and metal reveals articulate
+/// construction without adding indicators, controls or changing live apertures.
 fn add_cockpit_sculpted_console(g: &mut PioneerDockedGeometry) {
-    use PioneerDockedMaterial::{Carbon, Graphite, Titanium};
+    use PioneerDockedMaterial::{Carbon, Graphite, Titanium, WallPanel};
+    add_cockpit_instrument_coaming(g);
     let q = std::f64::consts::FRAC_1_SQRT_2;
     for (side, z0, z1) in [("port", 2.0, 2.65), ("starboard", 3.35, 4.0)] {
         // These overlapping closed prisms form a single cabinet with a 180 mm
         // bevel below its pilot-facing apron, entirely inside the old plinth.
         for (name, min, max, material) in [
-            ("upper-body", [33.90, -0.06, z0 + 0.01], [34.74, 0.32, z1 - 0.01], Graphite),
+            ("upper-body", [33.90, -0.06, z0 + 0.01], [34.74, 0.32, z1 - 0.01], WallPanel),
             ("lower-body", [34.08, -0.24, z0 + 0.01], [34.74, -0.06, z1 - 0.01], Graphite),
             ("service-cover", [33.895, 0.005, z0 + 0.06], [33.902, 0.25, z1 - 0.06], Carbon),
-            ("upper-cap", [33.92, 0.32, z0 + 0.02], [34.72, 0.33, z1 - 0.02], Carbon),
+            ("upper-cap", [33.92, 0.32, z0 + 0.02], [34.72, 0.33, z1 - 0.02], Titanium),
             ("foot", [34.10, -0.245, z0 + 0.05], [34.72, -0.235, z1 - 0.05], Titanium),
         ] {
             cockpit_console_visual_part(g,
@@ -2541,7 +2566,7 @@ fn add_cockpit_sculpted_console(g: &mut PioneerDockedGeometry) {
         // bridge/socket shoulders; nothing is raised into a live instrument.
         for (name, y, half_height, material) in [
             ("desk-top", 0.475, 0.025, Carbon),
-            ("desk-shell", 0.372, 0.080, Graphite),
+            ("desk-shell", 0.372, 0.075, WallPanel),
         ] {
             add_cockpit_chamfered_deck(g,
                 &format!("cockpit/console-sculpt/{side}/{name}"),
@@ -2552,7 +2577,9 @@ fn add_cockpit_sculpted_console(g: &mut PioneerDockedGeometry) {
     // the former fascia. The web still meets the unchanged centre mount.
     for (name, min, max, material) in [
         ("web", [34.065, 0.64, 2.88], [34.080, 0.93, 3.12], Graphite),
-        ("saddle", [34.062, 0.90, 2.79], [34.083, 0.94, 3.21], Carbon),
+        ("saddle", [34.062, 0.90, 2.79], [34.083, 0.94, 3.21], WallPanel),
+        ("port-wing", [34.065, 0.64, 2.78], [34.083, 0.90, 2.88], WallPanel),
+        ("starboard-wing", [34.065, 0.64, 3.12], [34.083, 0.90, 3.22], WallPanel),
     ] {
         cockpit_console_visual_part(g, format!("cockpit/console-sculpt/pedestal/{name}"),
             axis_box(min, max), material);
@@ -2566,7 +2593,7 @@ fn add_cockpit_sculpted_console(g: &mut PioneerDockedGeometry) {
                 center_m: [34.073, 0.790, (z0 + z1) * 0.5],
                 half_m: [0.010, length * 0.5, 0.008],
                 axes: [X, along, cross(X, along)],
-            }, Graphite);
+            }, Titanium);
     }
     // Four closed OBBs make a wide aft cover with two clipped forward corners,
     // following the existing sloped sidewalls down to the narrow rear web.
@@ -2590,6 +2617,52 @@ fn add_cockpit_sculpted_console(g: &mut PioneerDockedGeometry) {
                 half_m: [0.10 * q, 0.012, 0.10 * q],
                 axes: [mul(add(along, Z), q), up, mul(sub(Z, along), q)],
             }, Carbon);
+    }
+}
+
+/// The coaming is built around the actual open display apertures, rather
+/// than a second opaque rectangle over the instrument. Every local box below
+/// remains inside one of the retained original socket/case collision panels.
+fn add_cockpit_instrument_coaming(g: &mut PioneerDockedGeometry) {
+    use PioneerDockedMaterial::{Carbon, Graphite, Titanium, WallPanel};
+    for (side, port, z0, z1, inner0, inner1) in [
+        ("port", true, 2.0, 2.55, 2.50, 2.55),
+        ("starboard", false, 3.45, 4.0, 3.45, 3.50),
+    ] {
+        let (outer0, outer1) = if port { (2.0, 2.005) } else { (3.995, 4.0) };
+        for (name, min, max, material) in [
+            ("rear-shell", [34.80, 0.58, z0], [34.84, 1.0, z1], Graphite),
+            ("top-return", [34.735, 0.995, z0], [34.84, 1.0, z1], WallPanel),
+            ("lower-return", [34.735, 0.575, z0], [34.84, 0.59, z1], WallPanel),
+            ("socket-foot", [34.735, 0.52, z0], [34.84, 0.575, z1], WallPanel),
+            ("outer-return", [34.735, 0.59, outer0], [34.84, 0.995, outer1], WallPanel),
+            ("inner-return", [34.741, 0.58, inner0], [34.84, 1.0, inner1], WallPanel),
+            ("inner-inset", [34.738, 0.586, inner0 + 0.006], [34.741, 0.994, inner1 - 0.006], Carbon),
+            ("inner-edge", [34.736, 0.58, inner0], [34.741, 1.0, inner0 + 0.003], Titanium),
+            ("bridge-shell", [34.741, 0.795, z0], [34.84, 0.82, z1], WallPanel),
+            ("bridge-inset", [34.738, 0.801, z0 + 0.006], [34.741, 0.814, z1 - 0.006], Carbon),
+            ("bridge-edge", [34.736, 0.817, z0], [34.741, 0.82, z1], Titanium),
+        ] {
+            let mut bounds = axis_box(min, max);
+            bounds.center_m = cockpit_bank_point(bounds.center_m, port);
+            bounds.axes = cockpit_bank_axes(port);
+            cockpit_console_visual_part(g,
+                format!("cockpit/console-sculpt/{side}/coaming/{name}"), bounds, material);
+        }
+    }
+    // The cream lower plinth continues into the existing central saddle. Its
+    // thin dark reveal and metal inner flanges preserve the live face opening.
+    for (name, min, max, material) in [
+        ("rear-shell", [34.055, 0.90, 2.785], [34.065, 1.17, 3.215], Graphite),
+        ("port-return", [34.015, 0.90, 2.785], [34.065, 1.17, 2.790], WallPanel),
+        ("starboard-return", [34.015, 0.90, 3.210], [34.065, 1.17, 3.215], WallPanel),
+        ("top-return", [34.02, 1.163, 2.785], [34.065, 1.17, 3.215], WallPanel),
+        ("lower-shell", [34.026, 0.90, 2.785], [34.065, 0.97, 3.215], WallPanel),
+        ("lower-reveal", [34.023, 0.916, 2.801], [34.026, 0.958, 3.199], Carbon),
+        ("lower-edge", [34.02, 0.967, 2.785], [34.026, 0.97, 3.215], Titanium),
+    ] {
+        cockpit_console_visual_part(g, format!("cockpit/console-sculpt/center/coaming/{name}"),
+            axis_box(min, max), material);
     }
 }
 
