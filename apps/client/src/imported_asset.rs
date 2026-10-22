@@ -838,3 +838,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(all(test, target_os = "macos"))]
+#[path = "pioneer_mesh_proof_gpu_tests.rs"]
+mod mesh_proof_tests;
