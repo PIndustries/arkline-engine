@@ -277,35 +277,57 @@ impl CockpitSurface {
                 );
             }
         }
-        let (origin, direction) = screen_ray(self.local_to_clip, self.viewport, point)?;
-        if direction.x.abs() < 1e-7 {
+        if !self.viewport.contains(point)
+            || self.viewport.width() <= 0.0 || self.viewport.height() <= 0.0 {
             return None;
         }
-        let t = (self.plane_x - origin.x) / direction.x;
+        // Keep the physical plane intersection in double precision. Casting
+        // the ray to f32 before intersecting a tilted plane near body X=35 m
+        // can move an exact glass edge outside the existing UV allowance.
+        // This does not change the viewport, UV allowance or scene-ray gate.
+        let inverse = glam::DMat4::from_cols_array(
+            &self.local_to_clip.to_cols_array().map(f64::from)).inverse();
+        let x = (f64::from(point.x) - f64::from(self.viewport.center().x)) * 2.0
+            / f64::from(self.viewport.width());
+        let y = (f64::from(self.viewport.center().y) - f64::from(point.y)) * 2.0
+            / f64::from(self.viewport.height());
+        let near = inverse * glam::DVec4::new(x, y, -1.0, 1.0);
+        let far = inverse * glam::DVec4::new(x, y, 1.0, 1.0);
+        if !near.is_finite() || !far.is_finite()
+            || near.w.abs() < 1e-7 || far.w.abs() < 1e-7 {
+            return None;
+        }
+        let origin = near.truncate() / near.w;
+        let direction = (far.truncate() / far.w - origin).normalize_or_zero();
+        if !direction.is_finite() || direction.length_squared() <= 0.5
+            || direction.x.abs() < 1e-7 {
+            return None;
+        }
+        let t = (f64::from(self.plane_x) - origin.x) / direction.x;
         if !t.is_finite() || t < 0.0 {
             return None;
         }
         let hit = origin + direction * t;
         if self.registered_occlusion {
             let (scene, vp, mount) = self.occlusion.as_ref()?;
-            if !scene.point_unblocked(*vp, self.viewport, point, mount.transform_point3(hit)) {
+            if !scene.point_unblocked(*vp, self.viewport, point, mount.transform_point3(hit.as_vec3())) {
                 return None;
             }
         }
-        let clip = self.local_to_clip * hit.extend(1.0);
+        let clip = self.local_to_clip * hit.as_vec3().extend(1.0);
         if !clip.is_finite() || clip.w <= 0.0 || clip.z < -clip.w || clip.z > clip.w {
             return None;
         }
-        let u = (hit.z - self.center.z) / (2.0 * self.half.z) + 0.5;
-        let v = 0.5 - (hit.y - self.center.y) / (2.0 * self.half.y);
+        let u = (hit.z - f64::from(self.center.z)) / (2.0 * f64::from(self.half.z)) + 0.5;
+        let v = 0.5 - (hit.y - f64::from(self.center.y)) / (2.0 * f64::from(self.half.y));
         if !(-1e-5..=1.0 + 1e-5).contains(&u) || !(-1e-5..=1.0 + 1e-5).contains(&v) {
             return None;
         }
         Some(
             self.canvas.min
                 + egui::vec2(
-                    u.clamp(0.0, 1.0) * self.canvas.width(),
-                    v.clamp(0.0, 1.0) * self.canvas.height(),
+                    u.clamp(0.0, 1.0) as f32 * self.canvas.width(),
+                    v.clamp(0.0, 1.0) as f32 * self.canvas.height(),
                 ),
         )
     }

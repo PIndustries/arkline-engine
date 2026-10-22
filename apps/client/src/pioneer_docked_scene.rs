@@ -1405,12 +1405,12 @@ mod composition_fit_tests {
                 } else {
                     assert_eq!(canvas.size(), egui::vec2(300.0, 180.0));
                 }
-                for point in [
-                    canvas.left_top(),
-                    canvas.right_top(),
-                    canvas.left_bottom(),
-                    canvas.right_bottom(),
-                ] {
+                // The full live glass must remain accessible, not only its
+                // corners: inclined neighboring cases can cross its interior.
+                for point in (0..=4).flat_map(|row| (0..=4).map(move |column| {
+                    canvas.min + canvas.size()
+                        * egui::vec2(column as f32 / 4.0, row as f32 / 4.0)
+                })) {
                     let projected = surface
                         .project(point)
                         .unwrap_or_else(|| panic!("Face {index}, {size:?}, canvas corner {point:?} must fit without clipping"));
@@ -1441,7 +1441,20 @@ mod composition_fit_tests {
                             })
                             .collect();
                         blockers.sort_by(|a, b| a.0.total_cmp(&b.0));
-                        panic!("Face {index}, {size:?}, corner {point:?} hidden by {blockers:?}");
+                        let (plane, lt, rb) = surface.feed_geometry(canvas).unwrap();
+                        let (origin, ray) = screen_ray(plane, viewport, projected).unwrap();
+                        let local = origin + ray * ((lt.x - origin.x) / ray.x);
+                        let raw_uv = [(local.z - lt.z) / (rb.z - lt.z),
+                            (local.y - lt.y) / (rb.y - lt.y)];
+                        let mut exact_hits: Vec<_> = parts.iter().enumerate()
+                            .filter(|(_, part)| docked_source_primitive(part.0) != Some(6))
+                            .filter_map(|(draw, part)| ray_mesh_hit(eye, direction, part.1,
+                                &geometry.catalog.uploads()[mesh_index(part.0)])
+                                .filter(|t| *t < distance + 0.001)
+                                .map(|t| (t, draw, mesh_index(part.0))))
+                            .collect();
+                        exact_hits.sort_by(|a, b| a.0.total_cmp(&b.0));
+                        panic!("Face {index}, {size:?}, point {point:?}, mapped {hit:?}, raw_uv {raw_uv:?}, distance {distance}, panels {blockers:?}, exact mesh hits {exact_hits:?}");
                     }
                     let clip = vp * glass.extend(1.0);
                     let ndc = clip.truncate() / clip.w;
