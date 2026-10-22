@@ -254,14 +254,29 @@ impl CockpitSurface {
         if !self.canvas.contains(point) {
             return None;
         }
-        let clip = self
-            .vertex(point, egui::Pos2::ZERO, egui::Color32::WHITE)
-            .clip;
-        if clip.w <= 1e-6 || clip.x.abs() > clip.w || clip.y.abs() > clip.w || clip.z.abs() > clip.w
-        {
+        // Match the inverse CPU picking path without changing GPU vertices.
+        let u = (f64::from(point.x) - f64::from(self.canvas.left()))
+            / f64::from(self.canvas.width());
+        let v = (f64::from(point.y) - f64::from(self.canvas.top()))
+            / f64::from(self.canvas.height());
+        let local = glam::DVec4::new(
+            f64::from(self.plane_x),
+            f64::from(self.center.y) + (0.5 - v) * f64::from(self.half.y) * 2.0,
+            f64::from(self.center.z) + (u - 0.5) * f64::from(self.half.z) * 2.0,
+            1.0,
+        );
+        let clip = glam::DMat4::from_cols_array(
+            &self.local_to_clip.to_cols_array().map(f64::from)) * local;
+        if !clip.is_finite() || clip.w <= 1e-6 || clip.x.abs() > clip.w
+            || clip.y.abs() > clip.w || clip.z.abs() > clip.w {
             return None;
         }
-        self.screen_position(clip)
+        Some(egui::pos2(
+            (f64::from(self.viewport.center().x)
+                + clip.x / clip.w * f64::from(self.viewport.width()) * 0.5) as f32,
+            (f64::from(self.viewport.center().y)
+                - clip.y / clip.w * f64::from(self.viewport.height()) * 0.5) as f32,
+        ))
     }
 
     pub(super) fn unproject(&self, point: egui::Pos2) -> Option<egui::Pos2> {
@@ -311,6 +326,8 @@ impl CockpitSurface {
         if self.registered_occlusion {
             let (scene, vp, mount) = self.occlusion.as_ref()?;
             if !scene.point_unblocked(*vp, self.viewport, point, mount.transform_point3(hit.as_vec3())) {
+                #[cfg(test)]
+                eprintln!("cockpit pick rejected by scene: surface={} pointer={point:?}", self.index);
                 return None;
             }
         }
@@ -321,6 +338,8 @@ impl CockpitSurface {
         let u = (hit.z - f64::from(self.center.z)) / (2.0 * f64::from(self.half.z)) + 0.5;
         let v = 0.5 - (hit.y - f64::from(self.center.y)) / (2.0 * f64::from(self.half.y));
         if !(-1e-5..=1.0 + 1e-5).contains(&u) || !(-1e-5..=1.0 + 1e-5).contains(&v) {
+            #[cfg(test)]
+            eprintln!("cockpit pick rejected by UV: surface={} u={u} v={v} pointer={point:?}", self.index);
             return None;
         }
         Some(
