@@ -1,0 +1,8 @@
+@@ -177,2 +177,7 @@
+     }
++
++    pub(super) fn paint(&self, ui: &egui::Ui, draw: impl FnOnce(&egui::Painter)) {
++        let paint = self.begin_paint(ui);
++        draw(paint.painter());
++    }
+ }

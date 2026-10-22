@@ -1,0 +1,7 @@
+@@ -4,2 +4,6 @@
+ pub use flight3d::imported_asset::ImportedAssetPreview;
++#[cfg(not(target_arch = "wasm32"))]
++pub use flight3d::imported_asset::procedural_inspection::{ProceduralComponentInfo, ProceduralShipInspection};
++#[cfg(not(target_arch = "wasm32"))]
++pub use flight3d::procedural_ship_components::{procedural_ship_components, ProceduralShipComponent};
+ pub use flight3d::imported_asset::{ImportReport, ImportedGeometry};

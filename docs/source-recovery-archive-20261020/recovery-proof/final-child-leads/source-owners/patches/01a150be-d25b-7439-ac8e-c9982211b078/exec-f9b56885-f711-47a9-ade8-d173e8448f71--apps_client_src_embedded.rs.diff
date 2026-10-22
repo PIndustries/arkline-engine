@@ -1,0 +1,5 @@
+@@ -398,3 +398,3 @@
+                     && self.cockpit.assets.as_ref().and_then(|assets| assets.pioneer_room.as_ref()).is_some_and(|room| {
+-                        Some(room.vessel_id.as_str()) == diagnostics.vessel.as_deref()
++                        diagnostics.vessel.as_deref().is_none_or(|vessel| room.vessel_id == vessel)
+                             && receipt.commanded == Some(room.light_commanded)

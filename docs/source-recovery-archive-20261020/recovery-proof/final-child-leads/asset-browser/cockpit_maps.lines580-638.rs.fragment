@@ -1,0 +1,59 @@
+                *range = (*range * (-scroll as f64 * 0.008).exp())
+                    .clamp(1000.0, arkline_protocol::AU_METERS * 20.0);
+            }
+            response.clone().on_hover_text("Scroll to change sensor range. Click a contact to select it. Map axes follow ship heading and roll.");
+        }
+        let map = rect.shrink2(egui::vec2(9.0, 18.0));
+        let radius = map.width().min(map.height()) * 0.46;
+        let center = map.center();
+        for fraction in [0.25, 0.5, 1.0] {
+            let points = (0..=64)
+                .map(|n| {
+                    let a = n as f32 / 64.0 * std::f32::consts::TAU;
+                    center
+                        + egui::vec2(a.sin(), a.cos() * if tactical { 0.55 } else { 1.0 })
+                            * radius
+                            * fraction
+                })
+                .collect();
+            painter.add(egui::Shape::line(
+                points,
+                egui::Stroke::new(0.8, color.gamma_multiply(0.45)),
+            ));
+            painter.text(
+                center + egui::vec2(radius * fraction, 2.0),
+                egui::Align2::LEFT_TOP,
+                super::super::format_distance(*range * fraction as f64),
+                egui::FontId::monospace(8.0),
+                color.gamma_multiply(0.65),
+            );
+        }
+        painter.line_segment(
+            [
+                center + egui::vec2(0.0, -radius),
+                center + egui::vec2(0.0, radius),
+            ],
+            egui::Stroke::new(0.5, color.gamma_multiply(0.3)),
+        );
+        painter.line_segment(
+            [
+                center + egui::vec2(-radius, 0.0),
+                center + egui::vec2(radius, 0.0),
+            ],
+            egui::Stroke::new(0.5, color.gamma_multiply(0.3)),
+        );
+        painter.add(egui::Shape::convex_polygon(
+            vec![
+                center + egui::vec2(0.0, -5.0),
+                center + egui::vec2(-3.0, 4.0),
+                center + egui::vec2(3.0, 4.0),
+            ],
+            color,
+            egui::Stroke::NONE,
+        ));
+        let mut nearest: Option<(f32, super::super::SelectedObject)> = None;
+        for (object, position, label) in &contacts {
+            let relative = std::array::from_fn(|i| position[i] - origin[i]);
+            if relative.iter().map(|v| v * v).sum::<f64>().sqrt() > *range {
+                continue;
+            }

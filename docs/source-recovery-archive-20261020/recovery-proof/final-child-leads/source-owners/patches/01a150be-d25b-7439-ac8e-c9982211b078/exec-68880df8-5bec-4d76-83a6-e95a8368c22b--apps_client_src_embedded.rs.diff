@@ -1,0 +1,13 @@
+@@ -407,3 +407,3 @@
+             receipt: diagnostics.receipt.clone(),
+-            snapshot_age_ms: self.cockpit.snapshot_received_at.map(|received| received.elapsed().as_millis().min(u64::MAX as u128) as u64),
++            snapshot_age_ms: self.cockpit.snapshot.as_ref().and(self.cockpit.snapshot_received_at).map(|received| received.elapsed().as_millis().min(u64::MAX as u128) as u64),
+             snapshot_confirmed,
+@@ -629,3 +629,7 @@
+         if self.command_diagnostics.authority_epoch != self.cockpit.authority_epoch {
++            let interrupted = self.command_diagnostics.pending.is_some();
+             self.command_diagnostics.reset(self.cockpit.authority_epoch);
++            if interrupted {
++                self.command_diagnostics.unknown = Some("Command outcome unknown after authority interruption. Nothing was retried.".into());
++            }
+             if let Some(state) = &mut self.graph_state {

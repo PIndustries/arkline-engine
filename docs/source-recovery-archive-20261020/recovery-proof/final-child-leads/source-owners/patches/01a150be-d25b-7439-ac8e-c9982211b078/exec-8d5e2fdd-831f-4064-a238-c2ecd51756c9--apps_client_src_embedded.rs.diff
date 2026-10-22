@@ -1,0 +1,54 @@
+@@ -1403,2 +1403,3 @@
+     let mut exterior_ack = None;
++    let mut command_receipt = None;
+     let mut pending_graph_state = Some(EmbeddedEventDebugState {
+@@ -1409,2 +1410,4 @@
+         exterior_ack: None,
++        command_trace: world.command_trace_debug(&session),
++        command_receipt: None,
+     });
+@@ -1415,2 +1418,6 @@
+             Ok(ClockCommand::Shutdown) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
++            Ok(ClockCommand::TraceRoomLight(id, on)) => {
++                command_receipt = Some(world.trace_room_light(&mut session, id, on));
++                snapshot_dirty = true;
++            }
+             Ok(ClockCommand::SceneState(id, state)) => {
+@@ -1565,2 +1572,4 @@
+                 exterior_ack: exterior_ack.clone(),
++                command_trace: world.command_trace_debug(&session),
++                command_receipt: command_receipt.clone(),
+             });
+@@ -1583,3 +1592,7 @@
+         let response = world.handle(&mut session, Request::Snapshot);
+-        match updates.try_send(Update::Response(Box::new(response), false)) {
++        let update = match command_receipt.as_ref() {
++            Some(receipt) => Update::CommandTraceSnapshot(Box::new(response), receipt.id),
++            None => Update::Response(Box::new(response), false),
++        };
++        match updates.try_send(update) {
+             Ok(()) => snapshot_dirty = false,
+@@ -1597,2 +1610,5 @@
+     use super::*;
++    mod command_trace {
++        include!("embedded_command_trace_tests.rs");
++    }
+     mod room_acceptance {
+@@ -3403,2 +3419,3 @@
+                 editor_input: EditorInputGate::default(),
++                command_diagnostics: CommandDiagnostics::default(),
+             },
+@@ -3593,2 +3610,4 @@
+                 exterior_ack: None,
++                command_trace: CommandTraceDebug::default(),
++                command_receipt: None,
+             }
+@@ -3738,2 +3757,4 @@
+                 exterior_ack: None,
++                command_trace: CommandTraceDebug::default(),
++                command_receipt: None,
+             })
+@@ -3924,2 +3945,3 @@
+             editor_input: EditorInputGate::default(),
++            command_diagnostics: CommandDiagnostics::default(),
+         };

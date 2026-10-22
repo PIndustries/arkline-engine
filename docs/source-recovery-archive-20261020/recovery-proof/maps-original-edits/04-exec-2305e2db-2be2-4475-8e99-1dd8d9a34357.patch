@@ -1,0 +1,9 @@
+@@ -112,2 +112,8 @@
+     pub(super) fn contains(&self, point: egui::Pos2) -> bool { self.unproject(point).is_some() }
++    pub(super) fn project(&self, point: egui::Pos2) -> Option<egui::Pos2> {
++        if !self.canvas.contains(point) { return None; }
++        let clip = self.vertex(point, egui::Pos2::ZERO, egui::Color32::WHITE).clip;
++        if clip.w <= 1e-6 || clip.x.abs() > clip.w || clip.y.abs() > clip.w || clip.z.abs() > clip.w { return None; }
++        self.screen_position(clip)
++    }
+ 

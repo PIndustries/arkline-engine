@@ -1,0 +1,4 @@
+@@ -150,2 +150,3 @@
+     }
++    #[cfg(test)]
+     pub(super) fn project(&self, point: egui::Pos2) -> Option<egui::Pos2> {

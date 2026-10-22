@@ -1,0 +1,193 @@
+@@ -6,2 +6,3 @@
+ use arkline_server::editor::EditorWorld;
++pub use arkline_server::editor::{CommandTraceDebug, CommandTraceHop, RoomLightTrace};
+ use eframe::App;
+@@ -127,2 +128,57 @@
+     pub exterior_ack: Option<EmbeddedEventAck>,
++    pub command_trace: CommandTraceDebug,
++    pub command_receipt: Option<RoomLightTrace>,
++}
++
++#[derive(Clone, Debug)]
++pub struct CommandObservation {
++    pub debug: CommandTraceDebug,
++    /// Correlation ID and monotonic host age in milliseconds.
++    pub pending: Option<(u64, u64)>,
++    pub receipt: Option<RoomLightTrace>,
++    pub snapshot_age_ms: Option<u64>,
++    pub snapshot_confirmed: bool,
++    pub unavailable: Option<String>,
++}
++
++const COMMAND_TRACE_TIMEOUT: Duration = Duration::from_secs(3);
++
++#[derive(Default)]
++struct CommandDiagnostics {
++    sequence: u64,
++    pending: Option<(u64, Instant)>,
++    latest: Option<u64>,
++    vessel: Option<String>,
++    receipt: Option<RoomLightTrace>,
++    unknown: Option<String>,
++    authority_epoch: u64,
++}
++impl CommandDiagnostics {
++    fn expire(&mut self) {
++        if let Some((id, started)) = self.pending {
++            if started.elapsed() >= COMMAND_TRACE_TIMEOUT {
++                self.pending = None;
++                self.unknown = Some(format!("Command {id} outcome unknown after 3 seconds. Nothing was retried; inspect a later receipt or snapshot."));
++            }
++        }
++    }
++
++    fn accept(&mut self, receipt: &RoomLightTrace) {
++        if self.latest != Some(receipt.id) {
++            return;
++        }
++        if self.pending.is_some_and(|(id, _)| id == receipt.id) {
++            self.pending = None;
++        }
++        self.receipt = Some(receipt.clone());
++        self.unknown = None;
++    }
++
++    fn reset(&mut self, authority_epoch: u64) {
++        *self = Self {
++            sequence: self.sequence,
++            authority_epoch,
++            ..Default::default()
++        };
++    }
+ }
+@@ -145,2 +201,3 @@
+ enum ClockCommand {
++    TraceRoomLight(u64, bool),
+     Graph(u64, GraphCommand),
+@@ -190,2 +247,3 @@
+     editor_input: EditorInputGate,
++    command_diagnostics: CommandDiagnostics,
+ }
+@@ -260,2 +318,3 @@
+             editor_input: EditorInputGate::default(),
++            command_diagnostics: CommandDiagnostics::default(),
+         }
+@@ -270,2 +329,85 @@
+     }
++    /// The worker executes one existing room-light command; this never predicts
++    /// equipment state, bypasses Play, or sends a shared-session command.
++    pub fn trace_room_light(&mut self, on: bool) -> Result<u64, String> {
++        self.command_diagnostics.expire();
++        if !matches!(self.mode, EmbeddedSessionMode::Local) {
++            return Err("Command tracing is available only in the local editor world; shared sessions are not instrumented.".into());
++        }
++        if self.state != EmbeddedStatus::Running {
++            return Err("Press Play before tracing a room-light command.".into());
++        }
++        if !self.cockpit.can_operate() {
++            return Err("The local authority transport is unavailable or another gameplay request is pending.".into());
++        }
++        if self.command_diagnostics.pending.is_some() {
++            return Err("Waiting for the previous command trace receipt.".into());
++        }
++        let id = self
++            .command_diagnostics
++            .sequence
++            .checked_add(1)
++            .ok_or("Command trace sequence exhausted")?;
++        self.clock
++            .try_send(ClockCommand::TraceRoomLight(id, on))
++            .map_err(|_| "The local editor command queue is full or closed; nothing was queued.".to_owned())?;
++        self.command_diagnostics.sequence = id;
++        self.command_diagnostics.pending = Some((id, Instant::now()));
++        self.command_diagnostics.latest = Some(id);
++        self.command_diagnostics.vessel = self
++            .cockpit
++            .assets
++            .as_ref()
++            .and_then(|assets| assets.pioneer_room.as_ref())
++            .map(|room| room.vessel_id.clone());
++        self.command_diagnostics.receipt = None;
++        self.command_diagnostics.unknown = None;
++        self.command_diagnostics.authority_epoch = self.cockpit.authority_epoch;
++        Ok(id)
++    }
++
++    pub fn command_observation(&self) -> CommandObservation {
++        let diagnostics = &self.command_diagnostics;
++        let timed_out = diagnostics
++            .pending
++            .is_some_and(|(_, started)| started.elapsed() >= COMMAND_TRACE_TIMEOUT);
++        let unavailable = if !matches!(self.mode, EmbeddedSessionMode::Local) {
++            Some("Command tracing is available only in the local editor world; shared sessions are not instrumented.".into())
++        } else if timed_out {
++            Some("Command outcome unknown after 3 seconds. Nothing was retried; inspect a later receipt or snapshot.".into())
++        } else if let Some(reason) = &diagnostics.unknown {
++            Some(reason.clone())
++        } else if self.state != EmbeddedStatus::Running {
++            Some("Press Play to trace an existing room-light command.".into())
++        } else if !self.cockpit.connected {
++            Some("Local authority is unavailable; retained values do not confirm a command.".into())
++        } else {
++            None
++        };
++        let snapshot_confirmed = self.cockpit.connected
++            && diagnostics.receipt.as_ref().is_some_and(|receipt| {
++                receipt.ok
++                    && self.cockpit.snapshot_trace_id == Some(receipt.id)
++                    && self.cockpit.snapshot.as_ref().is_some_and(|snapshot| {
++                        snapshot.server_time_ms >= receipt.simulation_time_ms
++                            && snapshot.pilots.iter().any(|pilot| {
++                                pilot.name == self.cockpit.pilot
++                                    && pilot.ship_class == ShipClass::Pioneer
++                            })
++                    })
++                    && self.cockpit.assets.as_ref().and_then(|assets| assets.pioneer_room.as_ref()).is_some_and(|room| {
++                        Some(room.vessel_id.as_str()) == diagnostics.vessel.as_deref()
++                            && receipt.commanded == Some(room.light_commanded)
++                            && receipt.effective == Some(room.light_on)
++                    })
++            });
++        CommandObservation {
++            debug: self.graph_state.as_ref().map(|state| state.command_trace.clone()).unwrap_or_default(),
++            pending: diagnostics.pending.filter(|_| !timed_out).map(|(id, started)| (id, started.elapsed().as_millis().min(u64::MAX as u128) as u64)),
++            receipt: diagnostics.receipt.clone(),
++            snapshot_age_ms: self.cockpit.snapshot_received_at.map(|received| received.elapsed().as_millis().min(u64::MAX as u128) as u64),
++            snapshot_confirmed,
++            unavailable,
++        }
++    }
+     pub fn room_layout_ack(&self) -> Option<&EmbeddedEventAck> {
+@@ -444,2 +586,5 @@
+         for graph in self.graph_states.try_iter() {
++            if let Some(receipt) = &graph.command_receipt {
++                self.command_diagnostics.accept(receipt);
++            }
+             if let Some(ack) = graph
+@@ -483,2 +628,17 @@
+         self.cockpit.poll();
++        if self.command_diagnostics.authority_epoch != self.cockpit.authority_epoch {
++            self.command_diagnostics.reset(self.cockpit.authority_epoch);
++            if let Some(state) = &mut self.graph_state {
++                state.command_trace = CommandTraceDebug::default();
++                state.command_receipt = None;
++            }
++        }
++        self.command_diagnostics.expire();
++        if self.command_diagnostics.pending.is_some()
++            && (matches!(self.state, EmbeddedStatus::Error(_) | EmbeddedStatus::Stopped)
++                || !self.cockpit.connected)
++        {
++            self.command_diagnostics.pending = None;
++            self.command_diagnostics.unknown = Some("Command outcome unknown after authority interruption. Nothing was retried.".into());
++        }
+         // This exact notice belongs to the editor clock request. Never clear
+@@ -855,2 +1015,4 @@
+         self.cockpit.snapshot = None;
++        self.cockpit.snapshot_received_at = None;
++        self.cockpit.snapshot_trace_id = None;
+         self.cockpit.assets = None;
+@@ -882,2 +1044,3 @@
+         self.graph_state = None;
++        self.command_diagnostics.reset(self.cockpit.authority_epoch);
+         self.graph_pending = None;

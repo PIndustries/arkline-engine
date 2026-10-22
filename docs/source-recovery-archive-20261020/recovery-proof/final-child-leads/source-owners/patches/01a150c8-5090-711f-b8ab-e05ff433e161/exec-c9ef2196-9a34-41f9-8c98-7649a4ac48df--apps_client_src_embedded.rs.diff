@@ -1,0 +1,20 @@
+@@ -388,3 +388,3 @@
+         };
+-        let snapshot_confirmed = self.cockpit.connected
++        let snapshot_confirmed = self.ready() && self.cockpit.connected
+             && diagnostics.receipt.as_ref().is_some_and(|receipt| {
+@@ -655,5 +655,8 @@
+         self.cockpit.poll();
+-        if self.command_diagnostics.authority_epoch != self.cockpit.authority_epoch {
++        if stop_feedback_confirmed
++            || self.command_diagnostics.authority_epoch != self.cockpit.authority_epoch
++        {
+             let interrupted = self.command_diagnostics.pending.is_some();
+             self.command_diagnostics.reset(self.cockpit.authority_epoch);
++            self.cockpit.snapshot_trace_id = None;
+             if interrupted {
+@@ -1520,2 +1523,4 @@
+                 world.disconnect(&mut session);
++                command_receipt = None;
++                pending_graph_state = None;
+                 snapshot_dirty = true;

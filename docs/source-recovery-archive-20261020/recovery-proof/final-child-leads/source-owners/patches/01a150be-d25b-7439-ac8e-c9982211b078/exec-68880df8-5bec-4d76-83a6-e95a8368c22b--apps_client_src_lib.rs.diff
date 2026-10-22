@@ -1,0 +1,20 @@
+@@ -1356,5 +1356,7 @@
+                             // causal marker on this ordered worker channel.
+-                            if let Some(id) = trace_id {
+-                                self.snapshot_trace_id = Some(id);
+-                            }
++                            self.snapshot_trace_id = if fresh_assets && response.ok {
++                                trace_id.or(self.snapshot_trace_id)
++                            } else {
++                                None
++                            };
+                         }
+@@ -1395,2 +1397,8 @@
+     fn reject_world_layout(&mut self, error: String) {
++        #[cfg(not(target_arch = "wasm32"))]
++        {
++            self.authority_epoch = self.authority_epoch.saturating_add(1);
++            self.snapshot_received_at = None;
++            self.snapshot_trace_id = None;
++        }
+         self.hangar_inspection.boarding_interrupted();

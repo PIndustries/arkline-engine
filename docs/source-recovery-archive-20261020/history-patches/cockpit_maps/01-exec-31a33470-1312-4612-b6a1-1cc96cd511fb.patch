@@ -1,0 +1,227 @@
+--- a/apps/client/src/cockpit_maps.rs
++++ b/apps/client/src/cockpit_maps.rs
+@@ -2,2 +2,4 @@
+ use super::*;
++use super::cockpit_displays::{CockpitDisplayRenderer, DisplayBatch, DisplayVertex};
++use super::cockpit_occlusion::CockpitOcclusion;
+ 
+@@ -8,3 +10,3 @@
+ #[derive(Clone)]
+-pub(super) struct CockpitSurface {
++pub(crate) struct CockpitSurface {
+     viewport: egui::Rect,
+@@ -17,2 +19,4 @@
+     index: usize,
++    renderer: Option<Arc<Mutex<CockpitDisplayRenderer>>>,
++    occlusion: Option<(Arc<CockpitOcclusion>, Mat4, Mat4)>,
+ }
+@@ -100,3 +104,5 @@
+         let (center, size) = *cockpit_screens(class).get(index)?;
+-        let plane_x = center.x - 0.025 - 0.006;
++        // Exact front bias shared with DisplayFace. It separates emitted pixels
++        // from the dielectric backing while retaining real scene depth.
++        let plane_x = center.x - 0.025 - 0.006 - 0.0001;
+         // A perspective projection maps its camera center to (0,0,z,0).
+@@ -116,2 +122,4 @@
+             index,
++            renderer: None,
++            occlusion: None,
+         };
+@@ -150,2 +158,15 @@
+     }
++    pub(super) fn with_renderer(mut self, renderer: Arc<Mutex<CockpitDisplayRenderer>>) -> Self {
++        self.renderer = Some(renderer);
++        self
++    }
++    pub(super) fn with_occlusion(
++        mut self,
++        scene: Arc<CockpitOcclusion>,
++        vp: Mat4,
++        mount: Mat4,
++    ) -> Self {
++        self.occlusion = Some((scene, vp, mount));
++        self
++    }
+     /// Exact glass-plane geometry for a cached video tile. Coordinates are
+@@ -160,19 +181,10 @@
+         }
+-        let local = |point: egui::Pos2| {
+-            let u = (point.x - self.canvas.left()) / self.canvas.width();
+-            let v = (point.y - self.canvas.top()) / self.canvas.height();
+-            Vec3::new(
+-                self.plane_x,
+-                self.center.y + (0.5 - v) * self.half.y * 2.0,
+-                self.center.z + (u - 0.5) * self.half.z * 2.0,
+-            )
+-        };
+         Some((
+             self.local_to_clip,
+-            local(tile.left_top()),
+-            local(tile.right_bottom()),
++            self.local_point(tile.left_top()),
++            self.local_point(tile.right_bottom()),
+         ))
+     }
+-    #[cfg(test)]
+-    pub(super) fn project(&self, point: egui::Pos2) -> Option<egui::Pos2> {
++    /// Platform-only projection for IME/caret placement; drawing uses 3D vertices.
++    pub(crate) fn project(&self, point: egui::Pos2) -> Option<egui::Pos2> {
+         if !self.canvas.contains(point) {
+@@ -191,2 +203,5 @@
+     pub(super) fn unproject(&self, point: egui::Pos2) -> Option<egui::Pos2> {
++        if let Some((scene, vp, mount)) = &self.occlusion {
++            return scene.hit_surface(*vp, self.viewport, point, self.index, *mount, self.canvas);
++        }
+         let (origin, direction) = screen_ray(self.local_to_clip, self.viewport, point)?;
+@@ -218,6 +233,6 @@
+ 
+-    fn vertex(&self, point: egui::Pos2, uv: egui::Pos2, color: egui::Color32) -> SurfaceVertex {
++    fn local_point(&self, point: egui::Pos2) -> Vec3 {
+         let u = (point.x - self.canvas.left()) / self.canvas.width();
+         let v = (point.y - self.canvas.top()) / self.canvas.height();
+-        let local = Vec3::new(
++        Vec3::new(
+             self.plane_x,
+@@ -225,5 +240,8 @@
+             self.center.z + (u - 0.5) * self.half.z * 2.0,
+-        );
++        )
++    }
++
++    fn vertex(&self, point: egui::Pos2, uv: egui::Pos2, color: egui::Color32) -> SurfaceVertex {
+         SurfaceVertex {
+-            clip: self.local_to_clip * local.extend(1.0),
++            clip: self.local_to_clip * self.local_point(point).extend(1.0),
+             uv,
+@@ -246,5 +264,8 @@
+ 
+-    fn project_mesh(&self, mesh: egui::epaint::Mesh, local_clip: egui::Rect) -> egui::epaint::Mesh {
++    fn mesh_geometry(&self, mesh: &egui::epaint::Mesh, local_clip: egui::Rect) -> Vec<DisplayVertex> {
+         let clip = local_clip.intersect(self.canvas);
+-        let mut output = egui::epaint::Mesh::with_texture(mesh.texture_id);
++        let mut output = Vec::new();
++        if !clip.is_finite() || !clip.is_positive() || !mesh.is_valid() {
++            return output;
++        }
+         for triangle in mesh.indices.chunks_exact(3) {
+@@ -262,2 +283,5 @@
+                 .collect();
++            if polygon.iter().any(|vertex| !vertex.clip.is_finite() || !vertex.uv.is_finite()) {
++                continue;
++            }
+             for edge in 0..4 {
+@@ -270,20 +294,10 @@
+             }
+-            let polygon = clip_surface_frustum(
+-                polygon
+-                    .into_iter()
+-                    .map(|v| self.vertex(egui::pos2(v.clip.x, v.clip.y), v.uv, v.color))
+-                    .collect(),
+-            );
+-            let start = output.vertices.len() as u32;
+-            for v in &polygon {
+-                if let Some(pos) = self.screen_position(v.clip) {
+-                    output.vertices.push(egui::epaint::Vertex {
+-                        pos,
+-                        uv: v.uv,
+-                        color: v.color,
++            for index in 1..polygon.len().saturating_sub(1) {
++                for vertex in [polygon[0], polygon[index], polygon[index + 1]] {
++                    output.push(DisplayVertex {
++                        position: self.local_point(egui::pos2(vertex.clip.x, vertex.clip.y)),
++                        uv: vertex.uv,
++                        color: vertex.color,
+                     });
+                 }
+-            }
+-            for index in 1..polygon.len().saturating_sub(1) {
+-                output.add_triangle(start, start + index as u32, start + index as u32 + 1);
+             }
+@@ -293,4 +307,64 @@
+ 
++    fn geometry(&self, primitives: &[egui::ClippedPrimitive]) -> Vec<DisplayBatch> {
++        primitives.iter().filter_map(|primitive| {
++            let egui::epaint::Primitive::Mesh(mesh) = &primitive.primitive else { return None; };
++            let vertices = self.mesh_geometry(mesh, primitive.clip_rect);
++            (!vertices.is_empty()).then_some(DisplayBatch { texture: mesh.texture_id, vertices })
++        }).collect()
++    }
++
++    /// Submit canonical UI meshes to a full-viewport GL callback. The GPU applies
++    /// homogeneous clipping, perspective interpolation, and retained scene depth.
++    pub(crate) fn submit(
++        &self,
++        ctx: &egui::Context,
++        layer: egui::LayerId,
++        primitives: Vec<egui::ClippedPrimitive>,
++    ) {
++        let Some(renderer) = self.renderer.clone() else { return; };
++        let batches = self.geometry(&primitives);
++        if batches.is_empty() { return; }
++        let matrix = self.local_to_clip;
++        #[cfg(target_arch = "wasm32")]
++        let renderer = send_wrapper::SendWrapper::new(renderer);
++        egui::Painter::new(ctx.clone(), layer, self.viewport).add(egui::PaintCallback {
++            rect: self.viewport,
++            callback: Arc::new(egui_glow::CallbackFn::new(move |info, painter| {
++                if let Ok(mut renderer) = renderer.lock() {
++                    unsafe { renderer.paint(info, painter, matrix, &batches); }
++                }
++            })),
++        });
++    }
++
++    fn submit_shapes(
++        &self,
++        ctx: &egui::Context,
++        layer: egui::LayerId,
++        shapes: Vec<egui::epaint::ClippedShape>,
++        pixels_per_point: f32,
++    ) {
++        let Some(renderer) = self.renderer.clone() else { return; };
++        let surface = self.clone();
++        let context = ctx.clone();
++        #[cfg(target_arch = "wasm32")]
++        let renderer = send_wrapper::SendWrapper::new(renderer);
++        #[cfg(target_arch = "wasm32")]
++        let surface = send_wrapper::SendWrapper::new(surface);
++        egui::Painter::new(ctx.clone(), layer, self.viewport).add(egui::PaintCallback {
++            rect: self.viewport,
++            callback: Arc::new(egui_glow::CallbackFn::new(move |info, painter| {
++                // All parent glyph layout and texture uploads have completed.
++                // Tessellation now sees the final atlas dimensions for this pass.
++                let primitives = context.tessellate(shapes.clone(), pixels_per_point);
++                let batches = surface.geometry(&primitives);
++                if let Ok(mut renderer) = renderer.lock() {
++                    unsafe { renderer.paint(info, painter, surface.local_to_clip, &batches); }
++                }
++            })),
++        });
++    }
++
+     /// Collect ordinary egui shapes in display-local coordinates. The guard
+-    /// tessellates and projects them (including font glyphs) onto this real face.
++    /// drains them into the same real 3D display pipeline as interactive controls.
+     pub(super) fn begin_paint(&self, ui: &egui::Ui) -> SurfacePaint {
+@@ -302,3 +376,3 @@
+             surface: self.clone(),
+-            output: ui.painter_at(self.viewport),
++            output_layer: ui.layer_id(),
+             painter: egui::Painter::new(ui.ctx().clone(), layer, self.canvas),
+@@ -316,3 +390,3 @@
+     surface: CockpitSurface,
+-    output: egui::Painter,
++    output_layer: egui::LayerId,
+     painter: egui::Painter,
+@@ -334,10 +408,3 @@
+         });
+-        for primitive in context.tessellate(shapes, context.pixels_per_point()) {
+-            if let egui::epaint::Primitive::Mesh(mesh) = primitive.primitive {
+-                let mesh = self.surface.project_mesh(mesh, primitive.clip_rect);
+-                if !mesh.indices.is_empty() {
+-                    self.output.add(egui::Shape::mesh(mesh));
+-                }
+-            }
+-        }
++        self.surface.submit_shapes(context, self.output_layer, shapes, context.pixels_per_point());
+     }

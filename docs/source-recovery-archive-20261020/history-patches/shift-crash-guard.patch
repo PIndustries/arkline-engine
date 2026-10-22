@@ -1,0 +1,21 @@
+--- a/apps/client/src/lib.rs
++++ b/apps/client/src/lib.rs
+@@ -4374,4 +4374,8 @@
+         if !in_hangar && self.flight_view.cockpit_presentation_active(self.view_mode) {
+-            if let Some(rect) = self.flight_view.cockpit_console_rect() {
+-                let rect = rect.shrink(1.0);
++            if let Some(rect) = self
++                .flight_view
++                .cockpit_console_rect()
++                .map(|rect| rect.shrink(1.0))
++                .filter(|rect| rect.is_finite() && rect.is_positive())
++            {
+                 egui::Area::new(egui::Id::new("physical_cockpit_console"))
+@@ -4399,3 +4403,6 @@
+                             .show(ui, |ui| {
+-                                ui.set_max_width(rect.width() - 18.0);
++                                // The projected face can narrow to a sliver at either
++                                // head-look edge. Padding must never create a negative
++                                // egui allocation while that face leaves the viewport.
++                                ui.set_max_width((rect.width() - 18.0).max(0.0));
+                                 if self.services_open

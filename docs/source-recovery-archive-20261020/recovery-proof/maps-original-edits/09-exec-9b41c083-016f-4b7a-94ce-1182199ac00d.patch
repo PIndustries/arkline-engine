@@ -1,0 +1,22 @@
+@@ -150,2 +150,21 @@
+     }
++    /// Exact glass-plane geometry for a cached video tile. Coordinates are
++    /// display-local; the caller's GPU shader applies the same mount MVP.
++    pub(super) fn feed_geometry(&self, tile: egui::Rect) -> Option<(Mat4, Vec3, Vec3)> {
++        if !tile.is_finite() || tile.width() <= 0.0 || tile.height() <= 0.0 {
++            return None;
++        }
++        let tile = tile.intersect(self.canvas);
++        if tile.width() <= 0.0 || tile.height() <= 0.0 {
++            return None;
++        }
++        let local = |point: egui::Pos2| {
++            let u = (point.x - self.canvas.left()) / self.canvas.width();
++            let v = (point.y - self.canvas.top()) / self.canvas.height();
++            Vec3::new(self.plane_x,
++                self.center.y + (0.5 - v) * self.half.y * 2.0,
++                self.center.z + (u - 0.5) * self.half.z * 2.0)
++        };
++        Some((self.local_to_clip, local(tile.left_top()), local(tile.right_bottom())))
++    }
+     #[cfg(test)]
