@@ -20,7 +20,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         .ok_or("Missing study components")?;
     let deck = parts
         .iter()
-        .find(|p| p["id"] == "enclosure.deck")
+        .find(|p| {
+            p["id"]
+                == study["deck_component_id"]
+                    .as_str()
+                    .unwrap_or("enclosure.deck")
+        })
         .ok_or("Missing study deck")?;
     let deck_min = vector(&deck["bounds_min"])?;
     let deck_max = vector(&deck["bounds_max"])?;

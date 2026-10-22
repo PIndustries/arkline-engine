@@ -142,6 +142,98 @@ fn vec3(v: &serde_json::Value) -> Vec3 {
     )
 }
 
+/// Geometry-only inspection of the canonical-fit candidate. Keeps the preview
+/// renderer/materials unchanged; does not claim live UI or exterior rendering.
+#[test]
+#[ignore = "Explicit isolated canonical-fit geometry capture"]
+fn native_canonical_enclosure_geometry() {
+    unsafe {
+        let asset = PathBuf::from(
+            std::env::var_os("ARKLINE_CANONICAL_ENCLOSURE_GLB").expect("Explicit candidate GLB"),
+        );
+        let manifest_path = PathBuf::from(
+            std::env::var_os("ARKLINE_CANONICAL_ENCLOSURE_MANIFEST").expect("Candidate manifest"),
+        );
+        let out = PathBuf::from(
+            std::env::var_os("ARKLINE_CANONICAL_ENCLOSURE_EVIDENCE")
+                .expect("New evidence directory"),
+        );
+        std::fs::create_dir(&out).unwrap();
+        let bytes = std::fs::read(asset).unwrap();
+        let manifest: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(manifest_path).unwrap()).unwrap();
+        assert_eq!(manifest["sha256"], hex::encode(Sha256::digest(&bytes)));
+        let geometry = ImportedGeometry::decode(&bytes).unwrap();
+        assert!(!geometry.uses_generated_normals());
+        let (_context, gl) = PrivateContext::create();
+        let mut gpu = PreviewGpu::new(gl.clone()).unwrap();
+        gpu.replace(&geometry).unwrap();
+        let target = CachedFeed::create(&gl, 83002, WIDTH as i32, HEIGHT as i32).unwrap();
+        let center = Vec3::new(34.4, 0.95, 3.);
+        let mut captures = Vec::new();
+        for (name, eye, look) in [
+            ("seated", vec3(&manifest["proof_eye"]), center),
+            (
+                "standing",
+                vec3(&manifest["canonical_fit"]["standing_eye"]),
+                center,
+            ),
+            (
+                "rear-entry",
+                Vec3::new(31.9, 1.33, 0.),
+                Vec3::new(33.54, 1., 3.),
+            ),
+            (
+                "port-route",
+                Vec3::new(34.1, 1.33, -0.5),
+                Vec3::new(33.2, 1., 3.),
+            ),
+        ] {
+            let vp = Mat4::perspective_rh_gl(
+                60f32.to_radians(),
+                WIDTH as f32 / HEIGHT as f32,
+                0.02,
+                100.,
+            ) * Mat4::look_at_rh(eye, look, Vec3::Y);
+            gl.bind_framebuffer(glow::FRAMEBUFFER, Some(target.framebuffer));
+            gl.viewport(0, 0, WIDTH as i32, HEIGHT as i32);
+            gl.disable(glow::SCISSOR_TEST);
+            gpu.paint(vp, eye);
+            assert_eq!(gl.get_error(), glow::NO_ERROR);
+            let mut raw = vec![0; WIDTH * HEIGHT * 4];
+            gl.read_pixels(
+                0,
+                0,
+                WIDTH as i32,
+                HEIGHT as i32,
+                glow::RGBA,
+                glow::UNSIGNED_BYTE,
+                glow::PixelPackData::Slice(Some(&mut raw)),
+            );
+            let pixels = raw
+                .chunks_exact(WIDTH * 4)
+                .rev()
+                .flatten()
+                .copied()
+                .collect::<Vec<_>>();
+            image::save_buffer_with_format(
+                out.join(format!("{name}.png")),
+                &pixels,
+                WIDTH as u32,
+                HEIGHT as u32,
+                image::ColorType::Rgba8,
+                image::ImageFormat::Png,
+            )
+            .unwrap();
+            captures.push(serde_json::json!({"name":name,"eye_m":eye.to_array(),"look_m":look.to_array(),"vertical_fov_degrees":60,"rgba_sha256":hex::encode(Sha256::digest(&pixels))}));
+        }
+        std::fs::write(out.join("receipt.json"), serde_json::to_vec_pretty(&serde_json::json!({"scope":"Isolated canonical-fit opaque geometry; no live UI, exterior scene or registration adoption", "geometry_sha256":manifest["sha256"],"captures":captures,"renderer":gl.get_parameter_string(glow::RENDERER)})).unwrap()).unwrap();
+        gpu.clear();
+        gl.delete_program(gpu.program);
+        target.destroy(&gl);
+    }
+}
+
 /// Explicit asset preview / isolated triangle-picking fixture. No EditorWorld,
 /// production registration, desktop window, command transport or live authority.
 #[test]

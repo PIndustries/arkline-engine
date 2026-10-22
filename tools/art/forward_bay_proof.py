@@ -193,9 +193,9 @@ def geometry():
     return meshes
 
 
-def write(output):
-    meshes=geometry()
-    instrument={'center':[.932,1.0,0],'half':[.02,.183,.308],
+def write(output, meshes=None, instrument=None, metadata=None):
+    meshes=geometry() if meshes is None else meshes
+    instrument=instrument or {'center':[.932,1.0,0],'half':[.02,.183,.308],
         'axes':[[1,0,0],[0,1,0],[0,0,1]],'plane_x':.900,'canvas':[400,240],
         'id':'pioneer.study.central.primary','size_m':[.600,.350],
         'backing_front_x':.914,'content_policy':'Recorded or authoritative data only; no modeled telemetry'}
@@ -250,6 +250,8 @@ def write(output):
         'triangle_count':sum(len(m.indices)//3 for m in meshes),'instrument':instrument,'components':components,
         'proof_eye':[0,1.35,0],'coordinate_frame':'+X forward,+Y up,+Z right; metres',
         'remaining_validation':'Runtime matched-view appearance, readability and occlusion; not canonical or shipped.'}
+    if metadata:
+        report.update(metadata)
     (output/'manifest.json').write_text(json.dumps(report,indent=2)+'\n')
     print(json.dumps({k:report[k] for k in ['glb','sha256','byte_length','mesh_count','material_count','triangle_count']}))
 
