@@ -2175,7 +2175,7 @@ impl Cockpit {
                     self.cockpit_console_detail = false;
                 }
                 self.power_gauge(ui);
-                self.service_tabs(ui);
+                self.cockpit_detail_tabs(ui);
                 ui.separator();
                 egui::ScrollArea::vertical()
                     .auto_shrink([false, false])

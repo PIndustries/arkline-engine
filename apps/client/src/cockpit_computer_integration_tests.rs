@@ -25,7 +25,9 @@ impl Journey {
             journey.step(vec![]);
         }
         assert!(journey.cockpit.flight_view.computer_surface().is_some());
-        let focus = journey.require_label("Console pages");
+        // Enter the detail view through the current compact console's actual
+        // physical widget, retaining the projection, hit and click assertions.
+        let focus = journey.require_label("DETAILS");
         journey.click(focus);
         for _ in 0..4 {
             journey.step(vec![]);
@@ -40,6 +42,9 @@ impl Journey {
 
     fn step_focused(&mut self, events: Vec<egui::Event>, focused: bool) -> egui::FullOutput {
         self.frame += 1;
+        // These synthetic input journeys use a fresh fixture snapshot. Keep
+        // wall-clock CPU rendering time from turning them into stale-data tests.
+        self.cockpit.observed = Instant::now();
         self.ctx.run(
             egui::RawInput {
                 screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, self.size)),
@@ -84,9 +89,9 @@ impl Journey {
     fn scroll_point(&self) -> Pos2 {
         let surface = self.cockpit.flight_view.computer_surface().unwrap();
         [
-            egui::pos2(420.0, 450.0),
-            egui::pos2(420.0, 350.0),
-            egui::pos2(300.0, 450.0),
+            egui::pos2(420.0, 300.0),
+            egui::pos2(300.0, 280.0),
+            egui::pos2(420.0, 240.0),
         ]
         .into_iter()
         .filter_map(|point| surface.project(point))
@@ -99,10 +104,37 @@ impl Journey {
         .expect("content has a visible exact scene hit")
     }
 
-    fn focus_instruction(&mut self) {
-        self.cockpit.service_tab = ServiceTab::ShipComputer;
+    fn scroll_to_label(&mut self, wanted: &str) -> Pos2 {
         for _ in 0..80 {
             self.step(vec![]);
+            if let Some(point) = self.label(wanted) {
+                return point;
+            }
+            let point = self.scroll_point();
+            self.step(vec![
+                egui::Event::PointerMoved(point),
+                egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: egui::vec2(0.0, -24.0),
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ]);
+        }
+        self.require_label(wanted)
+    }
+
+    fn focus_instruction(&mut self) {
+        self.cockpit.service_tab = ServiceTab::ShipComputer;
+        let mut orders_opened = false;
+        for _ in 0..80 {
+            self.step(vec![]);
+            if !orders_opened {
+                if let Some(point) = self.label("Ship computer · text & voice orders") {
+                    self.click(point);
+                    orders_opened = true;
+                    continue;
+                }
+            }
             if self.label("Submit instruction").is_some()
                 && self.label("Gather 100 ore and bring it back").is_some()
             {
@@ -177,7 +209,7 @@ pub(super) fn fleet_command_input_journey() {
     let point = journey.require_label("Drones");
     journey.click(point);
     assert!(journey.cockpit.service_tab == ServiceTab::Drones);
-    let point = journey.require_label("Launch Recon 0/5");
+    let point = journey.scroll_to_label("Launch Recon 0/5");
     journey.step(vec![
         egui::Event::PointerMoved(point),
         button(point, true),

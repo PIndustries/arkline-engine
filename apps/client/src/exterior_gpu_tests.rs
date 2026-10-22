@@ -3,7 +3,7 @@ use super::*;
 use arkline_protocol::{ExteriorDriveState, ExteriorVesselState, ExteriorWorldState};
 use std::ffi::{c_void, CString};
 
-struct Egl {
+pub(super) struct Egl {
     library: *mut c_void,
     display: *mut c_void,
     surface: *mut c_void,
@@ -21,7 +21,7 @@ impl Egl {
         assert!(!pointer.is_null(), "missing EGL symbol {name}");
         std::mem::transmute_copy(&pointer)
     }
-    unsafe fn create() -> (Self, Arc<glow::Context>) {
+    pub(super) unsafe fn create() -> (Self, Arc<glow::Context>) {
         let mut egl = Self {
             library: dlopen(c"libEGL.so.1".as_ptr(), 2),
             display: std::ptr::null_mut(),

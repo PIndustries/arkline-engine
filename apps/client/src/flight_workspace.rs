@@ -3,6 +3,22 @@
 use super::*;
 
 impl Cockpit {
+    /// The physical display reserves room for scrollable content. Full search
+    /// and workspace navigation belong to the expanded operations panel.
+    pub(super) fn cockpit_detail_tabs(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal_wrapped(|ui| {
+            for (tab, label) in [
+                (ServiceTab::Navigation, "Navigation"),
+                (ServiceTab::Modules, "Modules"),
+                (ServiceTab::Drones, "Drones"),
+                (ServiceTab::ShipComputer, "Mining"),
+                (ServiceTab::Cargo, "Cargo"),
+            ] {
+                ui.selectable_value(&mut self.service_tab, tab, label);
+            }
+        });
+    }
+
     /// Camera presentation is independent of physical seat/body authority.
     /// Ship cameras observe snapshots while on foot; they never grant controls.
     pub(super) fn flight_workspace_view_selector(&mut self, ui: &mut egui::Ui) {
