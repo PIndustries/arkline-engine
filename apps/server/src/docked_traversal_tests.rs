@@ -368,6 +368,125 @@ fn authority_restart_retains_canonical_feet_but_clears_active_movement() {
 }
 
 #[test]
+fn canonical_enclosure_candidate_intersects_a_reachable_v4_sqlite_save() {
+    // Only a new disposable fixture; no user world or candidate runtime adoption.
+    let directory = std::env::temp_dir().join(format!(
+        "arkline-enclosure-save-admission-{}-{}",
+        std::process::id(),
+        rand::random::<u64>()
+    ));
+    std::fs::create_dir(&directory).unwrap();
+    let database = directory.join("world.sqlite");
+    let mut server = Server::open(&database).unwrap();
+    let mut session = None;
+    connected(&mut server, &mut session);
+    leave_and_stand(&mut server, &mut session, LEFT_AT);
+    let pose = docked_binding_pose(&binding()).unwrap();
+    let mut now = STANDING_AT + 1;
+    let mut response = snapshot(&mut server, &mut session, now);
+    // Reach the old legal space using actual authority commands, not a patched
+    // avatar or a hand-edited persisted row.
+    for body in [
+        [33.36, -0.32, 3.],
+        [33.36, -0.32, 4.84],
+        [32.1, -0.32, 4.84],
+    ] {
+        response = walk_to(
+            &mut server,
+            &mut session,
+            &mut now,
+            body_to_station(pose, body),
+        );
+    }
+    let feet = traversal(&response).feet_m;
+    let saved_binding = traversal(&response).binding.clone();
+    let before: World = serde_json::from_str(&durable(&server)).unwrap();
+    docked_traversal::validate(&before, None).unwrap();
+    let ledger_before: Vec<String> = server
+        .db
+        .prepare("SELECT json FROM ledger ORDER BY sequence")
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    drop(server);
+    let reopened =
+        Server::open(&database).expect("Current revision must retain this legal occupied save");
+    let after: World = serde_json::from_str(&durable(&reopened)).unwrap();
+    docked_traversal::validate(&after, None).unwrap();
+    let state = after.pilots["Walker"]
+        .view
+        .station_avatar
+        .as_ref()
+        .unwrap()
+        .docked_traversal
+        .as_ref()
+        .unwrap();
+    assert_eq!(state.feet_m, feet);
+    assert_eq!(state.binding, saved_binding);
+    assert_eq!(state.binding.registration_revision, 4);
+    assert_eq!(
+        serde_json::to_value(&before.resource_jobs).unwrap(),
+        serde_json::to_value(&after.resource_jobs).unwrap()
+    );
+    assert_eq!(
+        (
+            before.pilots["Walker"].view.ore,
+            before.pilots["Walker"].view.credits
+        ),
+        (
+            after.pilots["Walker"].view.ore,
+            after.pilots["Walker"].view.credits
+        )
+    );
+    let ledger_after: Vec<String> = reopened
+        .db
+        .prepare("SELECT json FROM ledger ORDER BY sequence")
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(ledger_before, ledger_after);
+    let manifest: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../assets/studies/pioneer-canonical-enclosure-proof/manifest.json"
+    ))
+    .unwrap();
+    let wall = manifest["canonical_fit"]["panels"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["id"] == "candidate/starboard-wall")
+        .unwrap();
+    let bounds = PioneerDockedBox {
+        center_m: serde_json::from_value(wall["center"].clone()).unwrap(),
+        half_m: serde_json::from_value(wall["half"].clone()).unwrap(),
+        axes: serde_json::from_value(wall["axes"].clone()).unwrap(),
+    };
+    assert!(geometry::box_intersects_capsule(
+        bounds,
+        station_to_body(pose, feet),
+        AVATAR_HEIGHT_M,
+        STATION_AVATAR_RADIUS_M
+    ));
+    let receipt = serde_json::json!({
+        "scope":"Disposable authority-reached SQLite fixture, not user save or adopted geometry",
+        "fixture_directory":directory,"registration_revision":state.binding.registration_revision,
+        "capability":docked_traversal_capability(),"feet_station_m":feet,"feet_body_m":station_to_body(pose,feet),
+        "roundtrip_feet_and_binding_unchanged":true,"jobs_cargo_credits_and_ledger_unchanged":true,
+        "candidate_sha256":manifest["sha256"],"candidate_blocker":"candidate/starboard-wall",
+        "candidate_intersects_persisted_capsule":true,"runtime_adoption_safe_without_migration":false
+    });
+    std::fs::write(
+        directory.join("admission-receipt.json"),
+        serde_json::to_vec_pretty(&receipt).unwrap(),
+    )
+    .unwrap();
+    eprintln!("Enclosure admission evidence: {}", directory.display());
+}
+
+#[test]
 fn authority_legacy_capability_latches_only_after_authentication_until_last_disconnect() {
     let mut server = Server::open(":memory:").unwrap();
     let mut capable = None;

@@ -230,6 +230,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 mod tests {
     use super::*;
     #[test]
+    fn runtime_adoption_conflicts_with_existing_legal_saved_positions() {
+        let original = registered_geometry(&default_pioneer()).unwrap();
+        let mut proposed = original.clone();
+        proposed.panels.extend(candidate());
+        let body = [32.1, deck_floor_y(2).unwrap(), 4.84];
+        for pose in [
+            PioneerDockedPose::private(),
+            PioneerDockedPose::fleet(FleetLayoutRevision::LinearV1),
+            PioneerDockedPose::fleet(FleetLayoutRevision::CircularV1),
+        ] {
+            let dynamic = dynamic_geometry(pose, state(pose, 1.)).unwrap();
+            let feet = body_to_station(pose, body);
+            assert!(capsule_clear_station(&original, &dynamic, pose, feet));
+            assert!(support_at_station(&original, &dynamic, pose, feet, None, 0.01).is_some());
+            assert!(!capsule_clear_station(&proposed, &dynamic, pose, feet),
+                "A route proof must not be mistaken for compatibility of every existing saved position");
+        }
+    }
+    #[test]
     fn fitted_enclosure_preserves_registered_access_support_and_chair_sweep() {
         let manifest: serde_json::Value = serde_json::from_str(include_str!(
             "../../../assets/studies/pioneer-canonical-enclosure-proof/manifest.json"

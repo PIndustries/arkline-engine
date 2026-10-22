@@ -1,0 +1,26 @@
+{
+  "candidate_blocker": "candidate/starboard-wall",
+  "candidate_intersects_persisted_capsule": true,
+  "candidate_sha256": "07e8b762fadaed0f8fdb4d7c31ea69dd9e3b28dcb11d51d25e61d3441be41b50",
+  "capability": {
+    "registration_revision": 4,
+    "source_sha256": "8125644f007537437942d34169e527c08ddd2dfaed575c874e2263ff2b7cb123",
+    "version": 2
+  },
+  "feet_body_m": [
+    32.1,
+    -0.3200000000000003,
+    4.84
+  ],
+  "feet_station_m": [
+    32.1,
+    8.68,
+    4.84
+  ],
+  "fixture_directory": "/tmp/arkline-enclosure-save-admission-20064-14034804777425191394",
+  "jobs_cargo_credits_and_ledger_unchanged": true,
+  "registration_revision": 4,
+  "roundtrip_feet_and_binding_unchanged": true,
+  "runtime_adoption_safe_without_migration": false,
+  "scope": "Disposable authority-reached SQLite fixture, not user save or adopted geometry"
+}
