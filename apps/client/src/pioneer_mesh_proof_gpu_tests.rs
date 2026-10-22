@@ -249,7 +249,24 @@ fn native_authored_forward_bay_proof() {
                 "Study pose/path component-envelope obstruction"
             );
         }
-        let blocked_control = collision_boxes.last().unwrap().center_m;
+        let component_box = |wanted: &str| {
+            collision_boxes[components.iter().position(|c| c["id"] == wanted).unwrap()]
+        };
+        let deck = component_box("enclosure.deck");
+        assert!(
+            (deck.center_m[1] + deck.half_m[1]).abs() < 1e-6,
+            "Study deck must meet the unchanged zero-height feet plane"
+        );
+        assert!(
+            arkline_protocol::box_intersects_capsule(
+                deck,
+                [0., -0.05, 0.],
+                arkline_protocol::AVATAR_HEIGHT_M,
+                arkline_protocol::STATION_AVATAR_RADIUS_M
+            ),
+            "Deck penetration control must be rejected while tangent standing contact stays clear"
+        );
+        let blocked_control = component_box("console.continuous-dashboard-shell").center_m;
         assert!(
             capsule_blocked([blocked_control[0], 0., blocked_control[2]]),
             "Collision proxy must reject a console-intersecting pose"
@@ -450,7 +467,7 @@ fn native_authored_forward_bay_proof() {
             .unwrap();
             captures.push(serde_json::json!({"view":name,"eye_m":eye.to_array(),"look_target_m":look.to_array(),"width":WIDTH,"height":HEIGHT,"all_5_display_points_clear":clear==5,"display_points":corners,"minimum_label_projected_px":label_pixels,"minimum_value_projected_px":value_pixels,"seated_label_target_px":14,"seated_value_target_px":24,"readability_target_pass":label_pixels>=14. && value_pixels>=24.,"rgba_sha256":hex::encode(Sha256::digest(&top_down))}));
         }
-        let mut receipt = serde_json::json!({"scope":"Isolated original GLB asset preview with actual engine imported-mesh and cockpit-display code; no production registration or command dispatch","component_identity_verified":true,"clearance_proxy":"17 sampled standing capsules clear of conservative per-component AABBs; console-intersection control blocked; no floor/seat/grounding or exact triangle collision", "geometry_sha256":hex::encode(Sha256::digest(&bytes)),"manifest_sha256":hex::encode(Sha256::digest(&manifest_bytes)),"recorded_telemetry_sha256":hex::encode(Sha256::digest(&telemetry_bytes)),"telemetry":telemetry,"import_report":geometry.report,"captures":captures,"limits":["Preview lighting is not live cockpit lighting","Recorded confirmed values, not live simulation or fabricated progress","Projected font em size is not human reading certification","Full canonical collision/server admission not established by importpreview"]});
+        let mut receipt = serde_json::json!({"scope":"Isolated original GLB asset preview with actual engine imported-mesh and cockpit-display code; no production registration or command dispatch","component_identity_verified":true,"clearance_proxy":"17 sampled standing capsules clear of conservative per-component AABBs including tangent deck contact; console and deck-penetration controls blocked; no registered support, seat or exact triangle collision", "geometry_sha256":hex::encode(Sha256::digest(&bytes)),"manifest_sha256":hex::encode(Sha256::digest(&manifest_bytes)),"recorded_telemetry_sha256":hex::encode(Sha256::digest(&telemetry_bytes)),"telemetry":telemetry,"import_report":geometry.report,"captures":captures,"limits":["Preview lighting is not live cockpit lighting","Recorded confirmed values, not live simulation or fabricated progress","Projected font em size is not human reading certification","Full canonical collision/server admission not established by importpreview"]});
         receipt["graphics"] = serde_json::json!({
             "os": std::env::consts::OS,
             "renderer": gl.get_parameter_string(glow::RENDERER),

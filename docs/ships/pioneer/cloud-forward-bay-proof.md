@@ -6,9 +6,12 @@ the unintegrated editor console draft. All 110 recovery archive files matched
 their manifest hashes in the cloud. `main` at `78fdc5d` is an ancestor; no merge
 or replacement of newer source was needed. The migration branch remains a checkpoint.
 
-The current study is 16 meshes and 3,256 triangles, with GLB SHA-256
-`4196f82270e1b8fd773cd84d94c62d9792dc6eb4e67f7cbe88abbe8506e00b13`.
-Earlier 8-mesh/1,120-triangle descriptions do not describe this migrated asset.
+The migration checkpoint's study was 16 meshes and 3,256 triangles, with GLB
+SHA-256 `4196f82270e1b8fd773cd84d94c62d9792dc6eb4e67f7cbe88abbe8506e00b13`.
+The [cloud enclosure milestone](forward-bay-enclosure-20261022.md) now has
+22 meshes and 2,872 triangles, GLB SHA-256
+`7a2dbb0c78fe734a368eb2b697ab3c6e6dbad934245df77a87e3119baf79cd46`.
+Earlier 8-mesh/1,120-triangle descriptions do not describe either asset.
 
 The same imported-mesh test now runs on Linux using the existing private Mesa
 EGL helper, or on macOS using its existing CGL helper. Neither opens an app window
@@ -58,6 +61,9 @@ avatars, jobs and ledgers are unchanged. Separate denied operations remain outsi
 this workflow.
 
 ## Cloud validation, 2026-10-22
+
+This aggregate result predates the isolated enclosure revision; that milestone
+records its focused validation separately.
 
 The normal Rust 1.89 client library suite reports **465 passed, 11 failed,
 23 ignored**. All physical console input journeys pass, including text focus,

@@ -1,11 +1,11 @@
 {
   "study_only": true,
   "glb": "forward-bay-proof.glb",
-  "sha256": "4196f82270e1b8fd773cd84d94c62d9792dc6eb4e67f7cbe88abbe8506e00b13",
-  "byte_length": 286684,
-  "mesh_count": 16,
+  "sha256": "7a2dbb0c78fe734a368eb2b697ab3c6e6dbad934245df77a87e3119baf79cd46",
+  "byte_length": 258456,
+  "mesh_count": 22,
   "material_count": 3,
-  "triangle_count": 3256,
+  "triangle_count": 2872,
   "instrument": {
     "center": [
       0.932,
@@ -54,12 +54,12 @@
       "mesh": 0,
       "bounds_min": [
         1.55,
-        0.39,
+        0.3899999999999999,
         -1.58
       ],
       "bounds_max": [
         1.68,
-        2.36,
+        2.12,
         1.58
       ]
     },
@@ -69,12 +69,12 @@
       "mesh": 1,
       "bounds_min": [
         1.548,
-        0.497,
+        0.4969999999999999,
         -1.483
       ],
       "bounds_max": [
         1.568,
-        2.253,
+        2.013,
         1.483
       ]
     },
@@ -83,14 +83,14 @@
       "node": 2,
       "mesh": 2,
       "bounds_min": [
-        0.83,
-        0.68,
-        -0.36
+        0.875,
+        0.782,
+        -0.338
       ],
       "bounds_max": [
-        1.1,
-        1.231,
-        0.49
+        1.055,
+        1.218,
+        0.338
       ]
     },
     {
@@ -98,12 +98,12 @@
       "node": 3,
       "mesh": 3,
       "bounds_min": [
-        0.85,
+        0.887,
         0.796,
         -0.325
       ],
       "bounds_max": [
-        0.882,
+        0.897,
         1.204,
         0.325
       ]
@@ -128,14 +128,14 @@
       "node": 5,
       "mesh": 5,
       "bounds_min": [
-        0.679375,
-        0.25,
-        -0.46
+        0.77,
+        0.56,
+        -1.48
       ],
       "bounds_max": [
-        1.6,
-        0.890380859375,
-        1.1
+        1.64439453125,
+        0.8,
+        1.48
       ]
     },
     {
@@ -143,149 +143,239 @@
       "node": 6,
       "mesh": 6,
       "bounds_min": [
-        0.73,
-        0.72,
-        0.345
+        0.8698828125000001,
+        0.75,
+        0.32
       ],
       "bounds_max": [
-        1.43,
-        1.035,
-        0.72
-      ]
-    },
-    {
-      "id": "console.front-construction-seam",
-      "node": 7,
-      "mesh": 7,
-      "bounds_min": [
-        0.675375,
-        0.553,
-        -0.46
-      ],
-      "bounds_max": [
-        0.887,
-        0.565,
-        1.1
+        1.48,
+        0.825,
+        0.64
       ]
     },
     {
       "id": "console.starboard-inset-worktop",
+      "node": 7,
+      "mesh": 7,
+      "bounds_min": [
+        0.9450000000000001,
+        0.75,
+        0.67
+      ],
+      "bounds_max": [
+        1.5750000000000002,
+        0.7910986328125,
+        1.38
+      ]
+    },
+    {
+      "id": "console.starboard-deck-web",
       "node": 8,
       "mesh": 8,
       "bounds_min": [
-        0.7906249999999998,
-        0.69,
-        0.66
+        1.26,
+        0.0,
+        1.26
       ],
       "bounds_max": [
-        1.495,
-        0.887,
-        1.055
+        1.61,
+        0.6,
+        1.52
       ]
     },
     {
-      "id": "construction.front-access-cover",
+      "id": "console.port-shoulder",
       "node": 9,
       "mesh": 9,
       "bounds_min": [
-        0.766016042094456,
-        0.335,
-        -0.34
+        0.8698828125000001,
+        0.75,
+        -0.64
       ],
       "bounds_max": [
-        0.8159825889477667,
-        0.535,
-        0.2
+        1.48,
+        0.825,
+        -0.32
       ]
     },
     {
-      "id": "construction.cover-edge-lower",
+      "id": "console.port-inset-worktop",
       "node": 10,
       "mesh": 10,
       "bounds_min": [
-        0.763016042094456,
-        0.335,
-        -0.34
+        0.9450000000000001,
+        0.75,
+        -1.38
       ],
       "bounds_max": [
-        0.8089825889477666,
-        0.339,
-        0.2
+        1.5750000000000002,
+        0.7910986328125,
+        -0.67
       ]
     },
     {
-      "id": "construction.cover-edge-upper",
+      "id": "console.port-deck-web",
       "node": 11,
       "mesh": 11,
       "bounds_min": [
-        0.763016042094456,
-        0.531,
-        -0.34
+        1.26,
+        0.0,
+        -1.52
       ],
       "bounds_max": [
-        0.8089825889477666,
-        0.535,
+        1.61,
+        0.6,
+        -1.26
+      ]
+    },
+    {
+      "id": "console.central-deck-web",
+      "node": 12,
+      "mesh": 12,
+      "bounds_min": [
+        1.22,
+        0.0,
+        -0.2
+      ],
+      "bounds_max": [
+        1.48,
+        0.59,
         0.2
       ]
     },
     {
-      "id": "construction.cover-fastener-0",
-      "node": 12,
-      "mesh": 12,
-      "bounds_min": [
-        0.7944009135628952,
-        0.344,
-        -0.321
-      ],
-      "bounds_max": [
-        0.7994009135628952,
-        0.356,
-        -0.309
-      ]
-    },
-    {
-      "id": "construction.cover-fastener-1",
+      "id": "enclosure.deck",
       "node": 13,
       "mesh": 13,
       "bounds_min": [
-        0.7944009135628952,
-        0.514,
-        -0.321
+        -1.55,
+        -0.08,
+        -1.6
       ],
       "bounds_max": [
-        0.7994009135628952,
-        0.526,
-        -0.309
+        1.68,
+        0.0,
+        1.6
       ]
     },
     {
-      "id": "construction.cover-fastener-2",
+      "id": "enclosure.raked-overhead",
       "node": 14,
       "mesh": 14,
       "bounds_min": [
-        0.7703487780040733,
-        0.344,
-        0.16899999999999998
+        -1.55,
+        2.09,
+        -1.32
       ],
       "bounds_max": [
-        0.7753487780040733,
-        0.356,
-        0.181
+        1.56,
+        2.48,
+        1.32
       ]
     },
     {
-      "id": "construction.cover-fastener-3",
+      "id": "enclosure.starboard-sidewall",
       "node": 15,
       "mesh": 15,
       "bounds_min": [
-        0.7703487780040733,
-        0.514,
-        0.16899999999999998
+        -1.55,
+        0.28,
+        1.48
       ],
       "bounds_max": [
-        0.7753487780040733,
-        0.526,
-        0.181
+        1.56,
+        2.24,
+        1.6
+      ]
+    },
+    {
+      "id": "enclosure.starboard-upper-haunch",
+      "node": 16,
+      "mesh": 16,
+      "bounds_min": [
+        -1.55,
+        1.93,
+        1.3
+      ],
+      "bounds_max": [
+        1.56,
+        2.48,
+        1.6
+      ]
+    },
+    {
+      "id": "enclosure.starboard-lower-haunch",
+      "node": 17,
+      "mesh": 17,
+      "bounds_min": [
+        -1.55,
+        -0.04,
+        1.3
+      ],
+      "bounds_max": [
+        1.56,
+        0.28,
+        1.6
+      ]
+    },
+    {
+      "id": "enclosure.port-sidewall",
+      "node": 18,
+      "mesh": 18,
+      "bounds_min": [
+        -1.55,
+        0.28,
+        -1.6
+      ],
+      "bounds_max": [
+        1.56,
+        2.24,
+        -1.48
+      ]
+    },
+    {
+      "id": "enclosure.port-upper-haunch",
+      "node": 19,
+      "mesh": 19,
+      "bounds_min": [
+        -1.55,
+        1.93,
+        -1.6
+      ],
+      "bounds_max": [
+        1.56,
+        2.48,
+        -1.3
+      ]
+    },
+    {
+      "id": "enclosure.port-lower-haunch",
+      "node": 20,
+      "mesh": 20,
+      "bounds_min": [
+        -1.55,
+        -0.04,
+        -1.6
+      ],
+      "bounds_max": [
+        1.56,
+        0.28,
+        -1.3
+      ]
+    },
+    {
+      "id": "enclosure.forward-sill-apron",
+      "node": 21,
+      "mesh": 21,
+      "bounds_min": [
+        1.55,
+        0.0,
+        -1.56
+      ],
+      "bounds_max": [
+        1.68,
+        0.44,
+        1.56
       ]
     }
   ],

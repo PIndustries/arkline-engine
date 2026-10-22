@@ -110,30 +110,14 @@ def geometry():
         m=Mesh(identity,material)
         meshes.append(m)
         return m
-    # Open eight-sided surround: angled window corners and actual bevel depth.
-    annular_shell(part('panorama.structural-surround',0),1.375,
-        [(1.55,1.56,.965,.16),(1.575,1.58,.985,.17),(1.64,1.58,.985,.17),(1.68,1.56,.965,.16)],
-        [(1.55,1.48,.875,.13),(1.59,1.49,.885,.14),(1.68,1.49,.885,.14)])
-    annular_shell(part('panorama.metal-reveal',2),1.375,
-        [(1.548,1.483,.878,.13),(1.568,1.483,.878,.13)],
-        [(1.548,1.468,.863,.13),(1.568,1.468,.863,.13)])
-    # The central face is a genuinely open recess, not a slab with a painted UI.
-    annular_shell(part('instrument.central-sculpted-case',0),1.0,
-        [(.83,.342,.222,.023),(.86,.351,.231,.028),
-         [(1.10,.68,-.31),(1.10,.70,.44),(1.10,.79,.49),(1.08,1.17,.40),
-          (1.08,1.218,.31),(1.08,1.218,-.31),(1.08,1.19,-.344),(1.10,.76,-.36)]],
-        [(.83,.325,.205,.014),(.865,.322,.202,.014),(1.10,.315,.190,.012)])
-    annular_shell(part('instrument.recessed-liner',2),1.0,
-        [(.85,.325,.204,.014),(.882,.324,.203,.014)],
-        [(.85,.320,.199,.012),(.882,.319,.198,.012)])
-    closed_loft(part('instrument.central-substrate',1),
-        [octagon(x,1.0,.302,.177,.004) for x in (.914,.924)])
-    # One continuous sculpted dashboard replaces both the isolated stalk and
-    # the separate drum. It supports the full instrument width, then sweeps
-    # forward and rises into the adjoining console rather than touching at a
-    # single disconnected corner.
-    controls=[(-.46,.88,1.25,.76),(-.30,.80,1.26,.79),(0.,.77,1.28,.80),
-              (.30,.78,1.29,.81),(.52,.69,1.37,.89),(.82,.70,1.48,.84),(1.10,.86,1.60,.73)]
+    def prism(identity,material,x0,x1,section0,section1=None):
+        # Separate convex structural members retain useful conservative bounds.
+        closed_loft(part(identity,material),[
+            [(x0,y,z) for y,z in section0],
+            [(x1,y,z) for y,z in (section1 or section0)]])
+    def box(identity,material,lo,hi):
+        x0,y0,z0=lo; x1,y1,z1=hi
+        prism(identity,material,x0,x1,[(y0,z0),(y0,z1),(y1,z1),(y1,z0)])
     def sample(points):
         result=[]
         for i in range(len(points)-1):
@@ -141,58 +125,71 @@ def geometry():
                 result.append(curve(points[max(0,i-1)],points[i],points[i+1],points[min(len(points)-1,i+2)],step/8))
         result.append(points[-1])
         return result
-    samples=sample(controls)
+
+    # The forward aperture now meets a raked roof instead of an unbounded sky
+    # opening. Its lower sill and width retain the original instrument context.
+    annular_shell(part('panorama.structural-surround',0),1.255,
+        [(1.55,1.56,.845,.16),(1.575,1.58,.865,.17),
+         (1.64,1.58,.865,.17),(1.68,1.56,.845,.16)],
+        [(1.55,1.48,.755,.13),(1.59,1.49,.765,.14),(1.68,1.49,.765,.14)])
+    annular_shell(part('panorama.metal-reveal',2),1.255,
+        [(1.548,1.483,.758,.13),(1.568,1.483,.758,.13)],
+        [(1.548,1.468,.743,.13),(1.568,1.468,.743,.13)])
+
+    # Same glass and input plane, with a 25 mm recess and a restrained tapered
+    # case. The old rear flare/large shoulder no longer enlarges the display box.
+    annular_shell(part('instrument.central-sculpted-case',0),1.0,
+        [(.875,.334,.214,.018),(.895,.338,.218,.020),
+         (1.055,.327,.207,.018)],
+        [(.875,.325,.205,.014),(.895,.322,.202,.014),(1.055,.315,.190,.012)])
+    annular_shell(part('instrument.recessed-liner',2),1.0,
+        [(.887,.325,.204,.014),(.897,.324,.203,.014)],
+        [(.887,.320,.199,.012),(.897,.319,.198,.012)])
+    closed_loft(part('instrument.central-substrate',1),
+        [octagon(x,1.0,.302,.177,.004) for x in (.914,.924)])
+
+    # A shallow continuous U-shaped desk joins both jambs. The under-desk volume
+    # is open rather than a solid drum; three real webs take it to the deck.
+    controls=[(-1.48,1.18,1.64,.78),(-1.20,.98,1.64,.78),
+              (-.85,.89,1.58,.76),(-.50,.82,1.47,.78),
+              (-.30,.80,1.30,.79),(0.,.77,1.28,.80),
+              (.30,.80,1.30,.79),(.50,.82,1.47,.78),
+              (.85,.89,1.58,.76),(1.20,.98,1.64,.78),(1.48,1.18,1.64,.78)]
     shell=part('console.continuous-dashboard-shell',0)
-    closed_loft(shell,[section(*row,bottom=.25) for row in samples])
+    closed_loft(shell,[section(*row,bottom=.56) for row in sample(controls)])
     shell.weighted_normals()
-    # An asymmetric rising shoulder blends the central housing into the side
-    # body. It is a broad beveled, closed loft, not a rail or another monitor.
-    shoulder=part('console.rising-central-shoulder',0)
-    shoulder_controls=[(.345,.88,1.20,1.035),(.42,.84,1.27,1.015),
-                       (.56,.75,1.35,.955),(.72,.73,1.43,.875)]
-    closed_loft(shoulder,[section(*row,bottom=.72) for row in sample(shoulder_controls)])
-    shoulder.weighted_normals()
-    # A finite metal seam follows the real front-body curve, adding a true
-    # construction break rather than a texture line or a coplanar overlay.
-    seam=part('console.front-construction-seam',2)
-    seam_rings=[]
-    for z,front,back,top in samples:
-        seam_rings.append(section(z,front-.004,front+.007,.565,.553))
-    closed_loft(seam,seam_rings)
-    seam.weighted_normals()
-    # The task worktop is seated into the broad shoulder; its underside enters
-    # the supporting body, while its upper bevel is a restrained 12 mm step.
-    worktop=part('console.starboard-inset-worktop',1)
-    worktop_controls=[(.66,.74,1.42,.875),(.84,.72,1.49,.835),(1.055,.84,1.57,.75)]
-    closed_loft(worktop,[section(z,front+.075,back-.075,top+.012,top-.06)
-        for z,front,back,top in sample(worktop_controls)])
-    worktop.weighted_normals()
-    # A passive mechanically mounted access cover breaks the broad front body
-    # at human scale. Its curved surface follows the actual shell, and all
-    # pieces have finite depth. Nothing here represents an active ship system.
-    def body_front(z):
-        for a,b in zip(samples,samples[1:]):
-            if a[0] <= z <= b[0]:
-                t=(z-a[0])/(b[0]-a[0])
-                return a[1]+(b[1]-a[1])*t
-        raise ValueError('Cover outside authored shell')
-    cover_sections=[-.34+i*.54/16 for i in range(17)]
-    cover=part('construction.front-access-cover',1)
-    closed_loft(cover,[[(body_front(z)+x,y,z) for x,y in
-        [(-.004,.335),(.003,.335),(.003,.535),(-.004,.535)]] for z in cover_sections])
-    cover.weighted_normals()
-    for label,lo,hi in [('lower',.335,.339),('upper',.531,.535)]:
-        edge=part('construction.cover-edge-'+label,2)
-        closed_loft(edge,[[(body_front(z)+x,y,z) for x,y in
-            [(-.007,lo),(-.004,lo),(-.004,hi),(-.007,hi)]] for z in cover_sections])
-        edge.weighted_normals()
-    for i,(y,z) in enumerate([(.350,-.315),(.520,-.315),(.350,.175),(.520,.175)]):
-        # Original 12 mm fastener head; no implied switch/indicator behavior.
-        head=part('construction.cover-fastener-'+str(i),2)
-        rings=[]
-        for x,radius in [(body_front(z)-.010,.005),(body_front(z)-.009,.006),(body_front(z)-.005,.006)]:
-            rings.append([(x,y+radius*math.cos(k*math.tau/12),z+radius*math.sin(k*math.tau/12)) for k in range(12)])
-        closed_loft(head,rings)
+    for side,sign in [('starboard',1),('port',-1)]:
+        shoulder=part('console.rising-central-shoulder' if sign==1 else 'console.port-shoulder',0)
+        rows=[(.32,.89,1.24,.825),(.45,.87,1.36,.82),(.64,.88,1.48,.80)]
+        closed_loft(shoulder,[section(sign*z,front,back,top,bottom=.75)
+            for z,front,back,top in sample(rows)])
+        shoulder.weighted_normals()
+        worktop=part('console.starboard-inset-worktop' if sign==1 else 'console.port-inset-worktop',1)
+        rows=[(.67,.90,1.52,.775),(.98,.96,1.59,.79),(1.38,1.16,1.61,.79)]
+        closed_loft(worktop,[section(sign*z,front+.045,back-.035,top,top-.025)
+            for z,front,back,top in sample(rows)])
+        worktop.weighted_normals()
+        z0,z1=sorted((sign*1.26,sign*1.52))
+        box('console.'+side+'-deck-web',0,(1.26,0.,z0),(1.61,.60,z1))
+    box('console.central-deck-web',1,(1.22,0.,-.20),(1.48,.59,.20))
+
+    # Connected human-scale enclosure, open at the rear for study access. These
+    # are visual structural members, not registered hull/collision replacements.
+    box('enclosure.deck',1,(-1.55,-.08,-1.60),(1.68,0.,1.60))
+    prism('enclosure.raked-overhead',1,-1.55,1.56,
+        [(2.40,-1.32),(2.40,1.32),(2.48,1.32),(2.48,-1.32)],
+        [(2.09,-1.32),(2.09,1.32),(2.17,1.32),(2.17,-1.32)])
+    for side,sign in [('starboard',1),('port',-1)]:
+        def yz(points): return [(y,sign*z) for y,z in points]
+        prism('enclosure.'+side+'-sidewall',0,-1.55,1.56,
+            yz([(.28,1.48),(.28,1.60),(2.24,1.60),(2.18,1.48)]),
+            yz([(.28,1.48),(.28,1.60),(1.99,1.60),(1.93,1.48)]))
+        prism('enclosure.'+side+'-upper-haunch',0,-1.55,1.56,
+            yz([(2.40,1.30),(2.18,1.48),(2.24,1.60),(2.48,1.34)]),
+            yz([(2.09,1.30),(1.93,1.48),(1.99,1.60),(2.17,1.34)]))
+        prism('enclosure.'+side+'-lower-haunch',0,-1.55,1.56,
+            yz([(0.,1.30),(.28,1.48),(.28,1.60),(-.04,1.60)]))
+    box('enclosure.forward-sill-apron',0,(1.55,0.,-1.56),(1.68,.44,1.56))
     return meshes
 
 
