@@ -1952,3 +1952,53 @@ fn native_pioneer_first_person_cursor_and_hud_review() {
         std::fs::write(directory.join("receipt.json"), serde_json::to_vec_pretty(&serde_json::json!({"scope":"Native isolated body-view capture and HUD; not OS pointer-lock verification or runtime FPS benchmark", "raw_mouse_without_rmb":true,"escape_release":true,"deliberate_recapture":true,"management_release":true,"authority_fixture":authority_fixture(&h.directory)})).unwrap()).unwrap();
     }
 }
+
+
+#[test]
+#[ignore = "Explicit canonical model views on an isolated authority; no user world or desktop input"]
+fn native_pioneer_concept_fit_views() {
+    unsafe {
+        let directory = PathBuf::from(std::env::var_os("ARKLINE_CONCEPT_FIT_EVIDENCE")
+            .expect("Unique retained concept-fit review path"));
+        std::fs::create_dir(&directory).unwrap();
+        let (_context, gl) = PrivateContext::create();
+        let mut h = Harness::new(gl, Some(directory.clone()));
+        h.placement(EditorSceneState::Cockpit);
+        let mut captures = Vec::new();
+        for (name, yaw) in [
+            ("pilot-forward", 0.0),
+            ("pilot-port-quarter", 0.60),
+            ("pilot-starboard-quarter", -0.60),
+            ("pilot-aft", std::f32::consts::PI),
+        ] {
+            h.cockpit.hangar_view.head_look = [yaw, 0.0];
+            let shot = h.settle();
+            assert!(shot.registered_route && shot.occupied() > 10000);
+            captures.push(capture(Some(&directory), name, &shot));
+        }
+        h.cockpit.hangar_view.head_look = [0.0, 0.0];
+        let binding = h.cockpit.verified_docked_binding().unwrap();
+        h.command(Request::DockedTraversal {
+            request: DockedTraversalRequest::LeaveSeat { binding },
+        });
+        h.advance_time(900);
+        h.refresh();
+        for target in [[33.36, -0.32, 3.0], [33.36, -0.32, 0.0],
+            [32.10, -0.32, 0.0], [32.10, -0.32, 4.2]] {
+            h.walk_to_body(target);
+        }
+        h.heading(0.0);
+        let shot = h.settle();
+        assert!(shot.registered_route && shot.occupied() > 10000);
+        captures.push(capture(Some(&directory), "rear-chair-circulation", &shot));
+        std::fs::write(directory.join("model-review.json"),
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "scope":"Actual native engine canonical geometry; isolated authority; not desktop acceptance or latency measurement",
+                "captures":captures,
+                "source_sha256":arkline_protocol::PIONEER_DOCKED_SOURCE_SHA256,
+                "registration_revision":arkline_protocol::PIONEER_DOCKED_REGISTRATION_REVISION,
+                "roof_removed":false,
+                "concept_structural_deviations":["Existing shallow wide bay and offset rear entrance retained", "No conceptual central hologram or new simulated systems"]
+            })).unwrap()).unwrap();
+    }
+}
