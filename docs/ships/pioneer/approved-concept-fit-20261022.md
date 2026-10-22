@@ -90,3 +90,7 @@ Actual matched seated/quarter/standing views render successfully under /tmp/pion
 A bounded review found a lifecycle edge in22.2: taking the forward-facing chair retained the former local walking look target, so leaving could restore that old angle and turn toward it. Confirmed seated frames now synchronize only the local walking-yaw target to the seat heading. Initialization, pitch/zoom/head-look, saved pose, binding and authoritative movement are untouched.
 
 The new look90→seated→standing regression verifies no stale turn and correct look heading. The existing next-frame local-look and region/seat ownership tests also pass under the focused registered checks (log20261022T053735547763Z). No broader native geometry re-render is needed for this cache-only follow-up: geometry, surfaces, matrices, seated rendering and command gates are unchanged from the matched22.2 views. Actual OS latency and subjective feel remain unmeasured.
+
+## Enclosure decision study
+
+[Structural options](enclosure-structural-options-20261022.md) separates a broad bridge in the current bay from a deeper 7.1 × 4.4 m pod study. Sampled hull rays support investigating the latter without automatically enlarging the exterior; continuous fit and compatibility are unverified. Both remain proposals. No entrance, room or saved-avatar change is applied.
