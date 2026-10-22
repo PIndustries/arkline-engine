@@ -67,7 +67,7 @@ def octagon(x, center_y, half_z, half_y, cut):
 
 
 def annular_shell(mesh, center_y, outer, inner):
-    outside = [octagon(x,center_y,z,y,c) for x,z,y,c in outer]
+    outside = [row if isinstance(row[0],tuple) else octagon(row[0],center_y,row[1],row[2],row[3]) for row in outer]
     inside = [octagon(x,center_y,z,y,c) for x,z,y,c in inner]
     for rings, sign in [(outside,1),(inside,-1)]:
         for a,b in zip(rings,rings[1:]):
@@ -119,8 +119,10 @@ def geometry():
         [(1.548,1.468,.863,.13),(1.568,1.468,.863,.13)])
     # The central face is a genuinely open recess, not a slab with a painted UI.
     annular_shell(part('instrument.central-sculpted-case',0),1.0,
-        [(.83,.365,.245,.035),(.865,.39,.27,.05),(1.05,.37,.25,.035)],
-        [(.83,.325,.205,.014),(.865,.322,.202,.014),(1.05,.315,.190,.012)])
+        [(.83,.342,.222,.023),(.86,.351,.231,.028),
+         [(1.10,.68,-.31),(1.10,.70,.44),(1.10,.79,.49),(1.08,1.17,.40),
+          (1.08,1.218,.31),(1.08,1.218,-.31),(1.08,1.19,-.344),(1.10,.76,-.36)]],
+        [(.83,.325,.205,.014),(.865,.322,.202,.014),(1.10,.315,.190,.012)])
     annular_shell(part('instrument.recessed-liner',2),1.0,
         [(.85,.325,.204,.014),(.882,.324,.203,.014)],
         [(.85,.320,.199,.012),(.882,.319,.198,.012)])
@@ -165,6 +167,32 @@ def geometry():
     closed_loft(worktop,[section(z,front+.075,back-.075,top+.012,top-.06)
         for z,front,back,top in sample(worktop_controls)])
     worktop.weighted_normals()
+    # A passive mechanically mounted access cover breaks the broad front body
+    # at human scale. Its curved surface follows the actual shell, and all
+    # pieces have finite depth. Nothing here represents an active ship system.
+    def body_front(z):
+        for a,b in zip(samples,samples[1:]):
+            if a[0] <= z <= b[0]:
+                t=(z-a[0])/(b[0]-a[0])
+                return a[1]+(b[1]-a[1])*t
+        raise ValueError('Cover outside authored shell')
+    cover_sections=[-.34+i*.54/16 for i in range(17)]
+    cover=part('construction.front-access-cover',1)
+    closed_loft(cover,[[(body_front(z)+x,y,z) for x,y in
+        [(-.004,.335),(.003,.335),(.003,.535),(-.004,.535)]] for z in cover_sections])
+    cover.weighted_normals()
+    for label,lo,hi in [('lower',.335,.339),('upper',.531,.535)]:
+        edge=part('construction.cover-edge-'+label,2)
+        closed_loft(edge,[[(body_front(z)+x,y,z) for x,y in
+            [(-.007,lo),(-.004,lo),(-.004,hi),(-.007,hi)]] for z in cover_sections])
+        edge.weighted_normals()
+    for i,(y,z) in enumerate([(.350,-.315),(.520,-.315),(.350,.175),(.520,.175)]):
+        # Original 12 mm fastener head; no implied switch/indicator behavior.
+        head=part('construction.cover-fastener-'+str(i),2)
+        rings=[]
+        for x,radius in [(body_front(z)-.010,.005),(body_front(z)-.009,.006),(body_front(z)-.005,.006)]:
+            rings.append([(x,y+radius*math.cos(k*math.tau/12),z+radius*math.sin(k*math.tau/12)) for k in range(12)])
+        closed_loft(head,rings)
     return meshes
 
 
