@@ -1918,6 +1918,9 @@ impl Cockpit {
         berth_ui.set_enabled(enabled);
         let berth = berth_ui.put(berth_rect,
             egui::Button::new(egui::RichText::new(label).strong().size(text_size)).frame(false));
+        if berth.contains_pointer() {
+            berth.show_tooltip_ui(|ui| { ui.set_max_width(400.0); ui.label(help); });
+        }
         if berth.clicked() { self.send(command); }
         let braking = matches!(pilot.location, Location::Station | Location::Belt)
             && pilot.flight.as_ref().is_some_and(|flight| matches!(flight.mode, NavigationMode::Stop));
@@ -1926,6 +1929,9 @@ impl Cockpit {
         stop_ui.set_enabled(ready && self.can_fly());
         let stop = stop_ui.put(stop_rect,
             egui::Button::new(egui::RichText::new("STOP").size(text_size)).frame(false));
+        if stop.contains_pointer() {
+            stop.show_tooltip_ui(|ui| { ui.set_max_width(400.0); ui.label(help); });
+        }
         if stop.clicked() { self.send(Request::Navigate { mode: NavigationMode::Stop }); }
         // Real hover/pressed and confirmed braking feedback belongs to the
         // unchanged input face; no opaque UI rectangle conceals modeled relief.
@@ -1939,8 +1945,14 @@ impl Cockpit {
         ui.painter().text(Pos2::new(280.0, 33.0), egui::Align2::LEFT_TOP,
             status, egui::FontId::proportional(caption_size), state_color);
         if ui.put(egui::Rect::from_min_max(Pos2::new(280.0, 54.0), Pos2::new(420.0, 78.0)),
-            egui::Button::new("Expand panel").small()).clicked() { self.services_open = true; }
-        ui.label(egui::RichText::new(help).size(14.0).color(MUTED));
+            egui::Button::new(egui::RichText::new("Expand panel").size(18.0)).small()).clicked() { self.services_open = true; }
+        // Compact status already names the authority state. Keep detailed
+        // guidance on both control faces, reserving rows for actual readings.
+        if self.cockpit_console_detail {
+            ui.label(egui::RichText::new(help).size(14.0).color(MUTED));
+        } else {
+            ui.skip_ahead_auto_ids(1); // Preserve the removed label's ID slot.
+        }
         if self.snapshot.as_ref().is_some_and(|snapshot| snapshot.resource_jobs.iter()
             .any(|job| job.pilot == pilot.name && !job.phase.is_terminal())) {
             ui.label(egui::RichText::new("Manual ship orders can cancel the active mining routine")
@@ -2000,7 +2012,7 @@ impl Cockpit {
     }
     /// Read-only content; physical placement and input authority remain external.
     fn compact_flight_summary(&self, ui: &mut egui::Ui) {
-        ui.label(egui::RichText::new("FLIGHT CONSOLE").size(16.0).color(MUTED));
+        ui.label(egui::RichText::new("FLIGHT CONSOLE").size(20.0).color(MUTED));
         let Some(pilot) = self.own() else {
             ui.label("Waiting for vessel telemetry");
             return;
@@ -2043,11 +2055,11 @@ impl Cockpit {
                 .max_by_key(|job| (!job.phase.is_terminal(), job.updated_at_ms, job.id))
         });
         let mining = job.map_or_else(
-            || "No routine reported".into(),
+            || "No routine".into(),
             |job| resource_jobs_ui::resource_phase_label(job.phase).to_owned(),
         );
         let delivery = job.map_or_else(
-            || "No target reported".into(),
+            || "No target".into(),
             |job| format!("{} / {} ore", job.stored_units, job.target_units),
         );
         // Two compact readout groups leave the live control bank and view
@@ -2055,16 +2067,22 @@ impl Cockpit {
         ui.columns(2, |columns| {
             egui::Frame::new().fill(Color32::from_rgb(7, 17, 23))
                 .inner_margin(egui::Margin::same(6)).show(&mut columns[0], |ui| {
-                    ui.label(egui::RichText::new("SPEED").size(16.0).color(MUTED));
-                    ui.label(egui::RichText::new(speed).monospace().size(32.0).color(self.accent()));
-                    ui.label(egui::RichText::new(mode).size(18.0));
+                    ui.label(egui::RichText::new("SPEED").size(22.0).color(MUTED));
+                    let width = ui.painter().layout_no_wrap(speed.clone(), egui::FontId::monospace(44.0), self.accent()).size().x;
+                    let font = 44.0 * ((ui.available_width()-2.0) / width.max(1.0)).min(1.0);
+                    ui.add(egui::Label::new(egui::RichText::new(speed).monospace().size(font).color(self.accent())).wrap_mode(egui::TextWrapMode::Extend));
+                    ui.label(egui::RichText::new(mode).size(20.0));
                 });
             egui::Frame::new().fill(Color32::from_rgb(7, 17, 23))
                 .inner_margin(egui::Margin::same(6)).show(&mut columns[1], |ui| {
-                    ui.label(egui::RichText::new("Routine").size(16.0).color(MUTED));
-                    ui.label(egui::RichText::new(mining).size(24.0).color(self.accent()));
-                    ui.label(egui::RichText::new("Delivered").size(16.0).color(MUTED));
-                    ui.label(egui::RichText::new(delivery).monospace().size(22.0));
+                    ui.label(egui::RichText::new("Routine").size(22.0).color(MUTED));
+                    let width = ui.painter().layout_no_wrap(mining.clone(), egui::FontId::proportional(28.0), self.accent()).size().x;
+                    let font = 28.0 * ((ui.available_width()-2.0) / width.max(1.0)).min(1.0);
+                    ui.add(egui::Label::new(egui::RichText::new(mining).size(font).color(self.accent())).wrap_mode(egui::TextWrapMode::Extend));
+                    ui.label(egui::RichText::new("Delivered").size(22.0).color(MUTED));
+                    let width = ui.painter().layout_no_wrap(delivery.clone(), egui::FontId::monospace(28.0), self.accent()).size().x;
+                    let font = 28.0 * ((ui.available_width()-2.0) / width.max(1.0)).min(1.0);
+                    ui.add(egui::Label::new(egui::RichText::new(delivery).monospace().size(font)).wrap_mode(egui::TextWrapMode::Extend));
                 });
         });
         ui.label(egui::RichText::new(format!(
@@ -2072,7 +2090,7 @@ impl Cockpit {
             pilot.ore,
             cargo_capacity(pilot.ship_class),
             Self::fleet(&pilot).len()
-        )).size(18.0))
+        )).size(22.0))
         .on_hover_text("Current ship ore and reported hold capacity; drones counts deployed craft, not craft in the bay. Power and regeneration ratings are available in the expanded console.");
     }
     /// Build the physical computer in one fixed logical canvas. Perspective
@@ -5289,6 +5307,23 @@ mod tests {
     }
 
     #[test]
+    fn cockpit_control_bank_keeps_following_widget_ids_between_compact_and_detail() {
+        let ctx=egui::Context::default();
+        let mut app=view_test_cockpit(&ctx);
+        let mut ids=Vec::new();
+        for detail in [false,true] {
+            app.cockpit_console_detail=detail;
+            let _=ctx.run(egui::RawInput {screen_rect:Some(egui::Rect::from_min_size(Pos2::ZERO,Vec2::new(560.,380.))),..Default::default()}, |ctx| {
+                egui::CentralPanel::default().show(ctx,|ui| {
+                    app.cockpit_actions(ui);
+                    ids.push((ui.next_auto_id(),ui.button("Following control sentinel").id));
+                });
+            });
+        }
+        assert_eq!(ids[0],ids[1],"Omitting compact help must preserve subsequent control IDs");
+    }
+
+    #[test]
     fn cockpit_control_bank_preserves_commands_and_blocks_unready_orders() {
         let ctx = egui::Context::default();
         let mut cockpit = view_test_cockpit(&ctx);
@@ -5402,6 +5437,99 @@ mod tests {
             }
         }
     }
+    #[test]
+    fn compact_console_long_phase_missing_speed_and_viewport_stress() {
+        for size in [Vec2::new(800., 650.), Vec2::new(1500., 638.)] {
+            for missing_speed in [false, true] {
+                let ctx = egui::Context::default();
+                let mut app = view_test_cockpit(&ctx);
+                if missing_speed {
+                    app.snapshot.as_mut().unwrap().pilots[0].flight = None;
+                }
+                app.snapshot.as_mut().unwrap().resource_jobs = vec![ResourceJob {
+                    controller: "pilot".into(),
+                    pilot: "pilot".into(),
+                    id: 1,
+                    target_units: 5000,
+                    mined_units: 5000,
+                    stored_units: 1200,
+                    target_id: None,
+                    phase: ResourceJobPhase::ReturningToStation,
+                    message: String::new(),
+                    started_at_ms: 1000,
+                    updated_at_ms: 1000,
+                }];
+                let before = serde_json::to_value(&app.snapshot).unwrap();
+                for frame in 0..4 {
+                    app.observed = Instant::now();
+                    let _ = ctx.run(
+                        egui::RawInput {
+                            screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, size)),
+                            time: Some(frame as f64 / 60.),
+                            ..Default::default()
+                        },
+                        |ctx| {
+                            eframe::App::update(&mut app, ctx, &mut eframe::Frame::_new_kittest())
+                        },
+                    );
+                }
+                let canvas = egui::Rect::from_min_size(
+                    Pos2::ZERO,
+                    flight3d::cockpit_computer::COMPUTER_CANVAS_SIZE,
+                );
+                let text: Vec<_> = app
+                    .cockpit_computer
+                    .last_shapes
+                    .iter()
+                    .filter_map(|shape| {
+                        if let egui::Shape::Text(t) = &shape.shape {
+                            Some((shape, t))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                assert!(text
+                    .iter()
+                    .any(|(_, t)| t.galley.job.text == "Returning to station"));
+                assert!(text
+                    .iter()
+                    .any(|(_, t)| t.galley.job.text == "1200 / 5000 ore"));
+                assert!(text.iter().any(|(_, t)| t.galley.job.text == "Manual ship orders can cancel the active mining routine"));
+                assert!(text.iter().any(|(_, t)| t.galley.job.text
+                    == if missing_speed {
+                        "Unavailable"
+                    } else {
+                        "0 m/s"
+                    }));
+                for (index, (shape, t)) in text.iter().enumerate() {
+                    let ink = t.visual_bounding_rect();
+                    assert!(
+                        canvas.contains_rect(ink) && shape.clip_rect.contains_rect(ink),
+                        "Clipped {} at {size:?}",
+                        t.galley.job.text
+                    );
+                    if t.galley.job.text == "Expand panel" {
+                        assert!(
+                            ink.height() <= 24.,
+                            "Expand panel must stay in its fixed one-line control face"
+                        );
+                    }
+                    for (_, other) in &text[index + 1..] {
+                        assert!(
+                            !ink.shrink(0.5)
+                                .intersects(other.visual_bounding_rect().shrink(0.5)),
+                            "Text overlap: {} / {} at {size:?}",
+                            t.galley.job.text,
+                            other.galley.job.text
+                        );
+                    }
+                }
+                assert_eq!(serde_json::to_value(&app.snapshot).unwrap(), before);
+            }
+        }
+    }
+
     #[test]
     fn compact_flight_summary_actual_canvas_fits_and_selects_current_owned_routine() {
         let ctx = egui::Context::default();

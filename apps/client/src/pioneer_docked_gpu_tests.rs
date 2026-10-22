@@ -73,6 +73,188 @@ const WIDTH: usize = 1280;
 const HEIGHT: usize = 720;
 
 #[test]
+#[ignore = "Explicit all-five actual instrument typography and runtime images"]
+fn native_five_instrument_readability() {
+    unsafe {
+        let directory = std::path::PathBuf::from(
+            std::env::var_os("ARKLINE_INSTRUMENT_READABILITY_EVIDENCE")
+                .expect("New evidence directory"),
+        );
+        std::fs::create_dir(&directory).unwrap();
+        let (_context, gl) = PrivateContext::create();
+        let mut h = Harness::new(gl.clone());
+        h.ctx
+            .data_mut(|d| d.insert_temp(egui::Id::new("instrument_text_proof_enabled"), true));
+        let mut app = crate::tests::view_test_cockpit(&h.ctx);
+        app.flight_view = FlightView::new(Some(&gl));
+        let mut views = Vec::new();
+        for frame in 0..8 {
+            app.observed = std::time::Instant::now();
+            h.ctx.data_mut(|d| {
+                d.insert_temp(
+                    egui::Id::new("instrument_text_proof_rows"),
+                    Vec::<serde_json::Value>::new(),
+                )
+            });
+            let output = h.ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(WIDTH as f32, HEIGHT as f32),
+                    )),
+                    time: Some(frame as f64 / 60.),
+                    focused: true,
+                    ..Default::default()
+                },
+                |ctx| eframe::App::update(&mut app, ctx, &mut eframe::Frame::_new_kittest()),
+            );
+            let primitives = h.ctx.tessellate(output.shapes, output.pixels_per_point);
+            gl.bind_framebuffer(
+                glow::FRAMEBUFFER,
+                Some(h.target.as_ref().unwrap().framebuffer),
+            );
+            gl.viewport(0, 0, WIDTH as i32, HEIGHT as i32);
+            gl.disable(glow::SCISSOR_TEST);
+            gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
+            h.painter.paint_and_update_textures(
+                [WIDTH as u32, HEIGHT as u32],
+                output.pixels_per_point,
+                &primitives,
+                &output.textures_delta,
+            );
+            assert_eq!(gl.get_error(), glow::NO_ERROR);
+        }
+        let mut rows = h.ctx.data(|d| {
+            d.get_temp::<Vec<serde_json::Value>>(egui::Id::new("instrument_text_proof_rows"))
+                .unwrap_or_default()
+        });
+        let central = app
+            .flight_view
+            .computer_surface()
+            .expect("Real App computer face");
+        rows.extend(cockpit_maps::measure_text_shapes(
+            &central,
+            &app.cockpit_computer.last_shapes,
+        ));
+        let mut pixels = vec![0; WIDTH * HEIGHT * 4];
+        gl.read_pixels(
+            0,
+            0,
+            WIDTH as i32,
+            HEIGHT as i32,
+            glow::RGBA,
+            glow::UNSIGNED_BYTE,
+            glow::PixelPackData::Slice(Some(&mut pixels)),
+        );
+        let pixels = pixels
+            .chunks_exact(WIDTH * 4)
+            .rev()
+            .flatten()
+            .copied()
+            .collect::<Vec<_>>();
+        image::save_buffer_with_format(
+            directory.join("seated-app.png"),
+            &pixels,
+            WIDTH as u32,
+            HEIGHT as u32,
+            image::ColorType::Rgba8,
+            image::ImageFormat::Png,
+        )
+        .unwrap();
+        assert!(
+            (1..=5).all(|slot| rows.iter().any(|r| r["slot"] == slot)),
+            "All five actual painters must be measured: {rows:?}"
+        );
+        let (eye, yaw, pitch) = app.flight_view.editor_camera_pose().unwrap();
+        views.push(serde_json::json!({"view":"seated actual App","text":rows,"rgba_sha256":hex::encode(Sha256::digest(&pixels)),"camera_pose":[eye.to_array(),[yaw,pitch]]}));
+        let standing = pilot(Some(supported_state_at(
+            [33.54, -0.32, 3.],
+            0.,
+            arkline_protocol::DockedSupport::Cockpit,
+        )));
+        let mut last = None;
+        for _ in 0..8 {
+            h.ctx.data_mut(|d| {
+                d.insert_temp(
+                    egui::Id::new("instrument_text_proof_rows"),
+                    Vec::<serde_json::Value>::new(),
+                )
+            });
+            last = Some(h.frame(&standing, 1000, vec![]));
+        }
+        let shot = last.unwrap();
+        let rows = h.ctx.data(|d| {
+            d.get_temp::<Vec<serde_json::Value>>(egui::Id::new("instrument_text_proof_rows"))
+                .unwrap_or_default()
+        });
+        assert!((1..=5).all(|slot| rows.iter().any(|r| r["slot"] == slot)));
+        let image = capture(Some(&directory), "standing-seat-root", &shot);
+        views.push(
+            serde_json::json!({"view":"standing actual HangarView","text":rows,"capture":image}),
+        );
+        std::fs::write(directory.join("readability.json"),serde_json::to_vec_pretty(&serde_json::json!({"scope":"Actual App seated computer plus four instruments; actual registered standing scene/read-only computer; fixture data, not live telemetry","capability":arkline_protocol::docked_traversal_capability(),"views":views})).unwrap()).unwrap();
+        // Retain all diagnostic rows before asserting the bounded improvement.
+        for (view, slot, label, floor) in [
+            (0, 3, "0 m/s", 14.),
+            (0, 4, "NO CAMERA SELECTED", 11.),
+            (0, 5, "SHIP RADAR", 8.),
+            (0, 5, "1000 km", 8.),
+            (1, 4, "NAV LOCAL / LIVE", 9.),
+            (1, 5, "SHIP RADAR", 11.),
+        ] {
+            let row = views[view]["text"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|r| r["slot"] == slot && r["text"] == label)
+                .unwrap();
+            assert!(
+                row["projected_font_em_px"].as_f64().unwrap() >= floor,
+                "Projected em regression: {row}"
+            );
+            assert_eq!(row["clear_samples"], 5);
+            assert_eq!(row["ink_clipped"], false);
+            assert_eq!(row["elided"], false);
+        }
+        for view in &views {
+            for slot in [3, 4, 5] {
+                let rows: Vec<_> = view["text"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .filter(|r| r["slot"] == slot)
+                    .collect();
+                for (index, row) in rows.iter().enumerate() {
+                    let b = &row["ink_bounds"];
+                    let rect = egui::Rect::from_min_max(
+                        egui::pos2(b[0].as_f64().unwrap() as f32, b[1].as_f64().unwrap() as f32),
+                        egui::pos2(b[2].as_f64().unwrap() as f32, b[3].as_f64().unwrap() as f32),
+                    );
+                    assert_eq!(row["ink_clipped"], false);
+                    for other in &rows[index + 1..] {
+                        let b = &other["ink_bounds"];
+                        let other = egui::Rect::from_min_max(
+                            egui::pos2(
+                                b[0].as_f64().unwrap() as f32,
+                                b[1].as_f64().unwrap() as f32,
+                            ),
+                            egui::pos2(
+                                b[2].as_f64().unwrap() as f32,
+                                b[3].as_f64().unwrap() as f32,
+                            ),
+                        );
+                        assert!(
+                            !rect.shrink(0.5).intersects(other.shrink(0.5)),
+                            "Text overlap on instrument {slot}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
 #[ignore = "Explicit actual runtime enclosure boundary captures; fixture snapshots only"]
 fn native_registered_enclosure_boundary_views() {
     unsafe {

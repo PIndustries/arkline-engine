@@ -405,6 +405,66 @@ fn one_copy_event_forwards_once_even_when_parent_repeats_its_layout_pass() {
     );
 }
 
+#[test]
+fn compact_control_guidance_is_accessible_through_real_glass_hover() {
+    let mut journey = Journey::new(egui::vec2(1280., 800.));
+    let compact = journey.require_label("Flight view");
+    journey.click(compact);
+    assert!(!journey.cockpit.cockpit_console_detail);
+    let (tx, rx) = mpsc::channel();
+    journey.cockpit.commands = Some(tx);
+    let before = serde_json::to_value(&journey.cockpit.snapshot).unwrap();
+    let help = "Approach the station docking port to dock";
+    let canvas =
+        egui::Rect::from_min_size(Pos2::ZERO, flight3d::cockpit_computer::COMPUTER_CANVAS_SIZE);
+    for label in ["DOCK", "STOP"] {
+        journey.step(vec![egui::Event::PointerMoved(egui::pos2(10., 10.))]);
+        let point = journey.require_label(label);
+        journey.step(vec![egui::Event::PointerMoved(point)]);
+        for _ in 0..50 {
+            journey.step(vec![]);
+        }
+        let text = journey
+            .cockpit
+            .cockpit_computer
+            .last_shapes
+            .iter()
+            .find_map(|shape| {
+                if let egui::Shape::Text(t) = &shape.shape {
+                    (t.galley.job.text == help).then_some((shape, t))
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| panic!("Guidance missing through actual {label} glass hover"));
+        assert!(canvas.contains_rect(text.1.visual_bounding_rect()));
+        assert!(text
+            .0
+            .clip_rect
+            .contains_rect(text.1.visual_bounding_rect()));
+    }
+    let detail = journey.require_label("DETAILS");
+    journey.click(detail);
+    assert!(journey.cockpit.cockpit_console_detail);
+    for _ in 0..4 { journey.step(vec![]); }
+    assert!(
+        journey
+            .cockpit
+            .computer_ui_labels
+            .iter()
+            .any(|(text, _)| text == help),
+        "Detailed view retains inline guidance"
+    );
+    assert!(
+        rx.try_recv().is_err(),
+        "Hover and local view changes must not dispatch ship orders"
+    );
+    assert_eq!(
+        serde_json::to_value(&journey.cockpit.snapshot).unwrap(),
+        before
+    );
+}
+
 // Isolate the deadlock regression in a process we can kill and reap. A timeout
 // thread would leave a permanently blocked egui thread alive in the test suite.
 #[cfg(not(target_arch = "wasm32"))]

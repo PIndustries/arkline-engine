@@ -551,6 +551,19 @@ impl Drop for SurfacePaint {
             *list = Default::default();
             shapes
         });
+        #[cfg(test)]
+        if context.data(|d| {
+            d.get_temp::<bool>(egui::Id::new("instrument_text_proof_enabled"))
+                .unwrap_or(false)
+        }) {
+            let measurements = measure_text_shapes(&self.surface, &shapes);
+            context.data_mut(|d| {
+                let id = egui::Id::new("instrument_text_proof_rows");
+                let mut rows = d.get_temp::<Vec<serde_json::Value>>(id).unwrap_or_default();
+                rows.extend(measurements);
+                d.insert_temp(id, rows);
+            });
+        }
         self.surface.submit_shapes(
             context,
             self.output_layer,
@@ -558,6 +571,73 @@ impl Drop for SurfacePaint {
             context.pixels_per_point(),
         );
     }
+}
+
+/// Observe the actual glyph layouts and exact registered ray map in tests only.
+#[cfg(test)]
+pub(super) fn measure_text_shapes(
+    surface: &CockpitSurface,
+    shapes: &[egui::epaint::ClippedShape],
+) -> Vec<serde_json::Value> {
+    fn visit(
+        surface: &CockpitSurface,
+        shape: &egui::Shape,
+        clip: egui::Rect,
+        rows: &mut Vec<serde_json::Value>,
+    ) {
+        match shape {
+            egui::Shape::Vec(children) => {
+                for child in children {
+                    visit(surface, child, clip, rows);
+                }
+            }
+            egui::Shape::Text(text) => {
+                let ink = text.galley.mesh_bounds.translate(text.pos.to_vec2());
+                let visible = ink.intersect(clip).intersect(surface.canvas_rect());
+                if !visible.is_positive() {
+                    return;
+                }
+                let font = text
+                    .galley
+                    .job
+                    .sections
+                    .iter()
+                    .map(|s| s.format.font_id.size)
+                    .fold(f32::INFINITY, f32::min);
+                let top = (visible.center().y - font * 0.5).clamp(
+                    surface.canvas_rect().top(),
+                    surface.canvas_rect().bottom() - font.min(surface.canvas_rect().height()),
+                );
+                let em = surface
+                    .project(egui::pos2(visible.center().x, top))
+                    .zip(surface.project(egui::pos2(visible.center().x, top + font)))
+                    .map(|(a, b)| a.distance(b));
+                let points = [
+                    visible.left_top(),
+                    visible.right_top(),
+                    visible.left_bottom(),
+                    visible.right_bottom(),
+                    visible.center(),
+                ];
+                let clear = points
+                    .iter()
+                    .filter(|&&p| {
+                        surface
+                            .project(p)
+                            .and_then(|screen| surface.unproject(screen))
+                            .is_some_and(|hit| hit.distance(p) < 0.15)
+                    })
+                    .count();
+                rows.push(serde_json::json!({"slot":surface.index,"text":text.galley.job.text,"canvas_font_em":font,"elided":text.galley.elided,"projected_font_em_px":em,"ink_bounds":[ink.min.x,ink.min.y,ink.max.x,ink.max.y],"clip_bounds":[clip.min.x,clip.min.y,clip.max.x,clip.max.y],"ink_clipped":!clip.intersect(surface.canvas_rect()).expand(0.25).contains_rect(ink),"clear_samples":clear,"sample_count":5}));
+            }
+            _ => {}
+        }
+    }
+    let mut rows = Vec::new();
+    for shape in shapes {
+        visit(surface, &shape.shape, shape.clip_rect, &mut rows);
+    }
+    rows
 }
 
 pub(super) fn fleet(pilot: &PilotView) -> Vec<&arkline_protocol::DroneView> {
@@ -633,21 +713,29 @@ pub(super) fn paint_camera_signal(
         );
     }
     if signal <= 0.0 {
-        painter.text(
-            screen.center(),
-            egui::Align2::CENTER_CENTER,
-            if !fresh {
-                "TELEMETRY STALE"
-            } else if drone.is_none() {
-                "NO CAMERA SELECTED"
-            } else if drone
-                .is_some_and(|drone| matches!(drone.mode, arkline_protocol::DroneMode::Returning))
-            {
-                "SIGNAL LOST / RETURNING"
-            } else {
-                "SIGNAL LOST"
-            },
-            egui::FontId::monospace(11.0),
+        let label = if !fresh {
+            "TELEMETRY STALE"
+        } else if drone.is_none() {
+            "NO CAMERA SELECTED"
+        } else if drone
+            .is_some_and(|drone| matches!(drone.mode, arkline_protocol::DroneMode::Returning))
+        {
+            "SIGNAL LOST / RETURNING"
+        } else {
+            "SIGNAL LOST"
+        };
+        // Missing-feed state owns this face. Use its actual height and wrap
+        // complete words, rather than a tiny fixed-size line on shallow glass.
+        let mut font = (screen.height() * 0.30).clamp(14.,72.);
+        let mut galley = painter.layout(label.into(), egui::FontId::monospace(font), super::super::AMBER, screen.width()*0.88);
+        for _ in 0..8 {
+            if galley.size().y<=screen.height()*0.90 {break;}
+            font*=0.90;
+            galley=painter.layout(label.into(),egui::FontId::monospace(font),super::super::AMBER,screen.width()*0.88);
+        }
+        painter.galley(
+            screen.center() - galley.size() * 0.5,
+            galley,
             super::super::AMBER,
         );
     }
@@ -808,8 +896,8 @@ pub(super) fn paint_cockpit_maps(
         paint_map_readouts(&painter, rect, authority, selected_readout, *range, color);
         // Reserve independent text bands; contact geometry stays in the map field.
         let map = egui::Rect::from_min_max(
-            rect.min + egui::vec2(9.0, 29.0),
-            rect.max - egui::vec2(9.0, 20.0),
+            rect.min + egui::vec2(9.0, rect.height()*0.42),
+            rect.max - egui::vec2(9.0, rect.height()*0.19),
         );
         let radius = map.width().min(map.height()) * 0.46;
         let center = map.center();
@@ -927,7 +1015,17 @@ fn paint_map_readouts(
     range: f64,
     color: egui::Color32,
 ) {
-    let line = |text: String, y: f32, size| {
+    let line = |text: String, y: f32, size: f32, full: bool| {
+        let font = egui::FontId::monospace(size);
+        let width = painter
+            .layout_no_wrap(text.clone(), font.clone(), color)
+            .size()
+            .x;
+        let size = if full {
+            size * ((rect.width() - 8.) / width.max(1.)).min(1.) * 0.98
+        } else {
+            size
+        };
         let mut job = egui::text::LayoutJob::simple(
             text,
             egui::FontId::monospace(size),
@@ -937,13 +1035,18 @@ fn paint_map_readouts(
         job.wrap.max_rows = 1;
         job.wrap.break_anywhere = true;
         job.wrap.overflow_character = Some('…');
+        let galley = if full {
+            painter.layout_no_wrap(job.text.clone(), egui::FontId::monospace(size), color)
+        } else {
+            painter.layout_job(job)
+        };
         painter.galley(
             rect.min + egui::vec2(4.0, y),
-            painter.layout_job(job),
+            galley,
             color,
         );
     };
-    line(authority.into(), 2.0, 10.0);
+    line(authority.into(), 2.0, rect.height() * 0.17, true);
     let selection = selected.map_or_else(
         || "SELECTED CONTACT UNAVAILABLE".into(),
         |(name, distance)| {
@@ -955,11 +1058,12 @@ fn paint_map_readouts(
             }
         },
     );
-    line(selection, 16.0, 10.0);
+    line(selection, rect.height() * 0.21, rect.height() * 0.17, false);
     line(
         format!("RANGE {} / SCROLL", super::super::format_distance(range)),
-        rect.height() - 13.0,
-        9.0,
+        rect.height() * 0.82,
+        rect.height() * 0.15,
+        true,
     );
 }
 
@@ -1015,7 +1119,12 @@ mod tests {
 
     #[test]
     fn map_readouts_bound_actual_selection_and_range_at_both_canvas_sizes() {
-        for size in [egui::vec2(256.0, 128.0), egui::vec2(300.0, 180.0)] {
+        for size in [
+            egui::vec2(190.0, 90.0),
+            egui::vec2(256.0, 128.0),
+            egui::vec2(300.0, 180.0),
+            egui::vec2(496.0, 180.0),
+        ] {
             for selected in [
                 None,
                 Some((
@@ -1037,6 +1146,25 @@ mod tests {
                         );
                     });
                 });
+                let bounds: Vec<_> = output
+                    .shapes
+                    .iter()
+                    .filter_map(|s| {
+                        if let egui::Shape::Text(t) = &s.shape {
+                            Some(t.visual_bounding_rect())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                for (index, bound) in bounds.iter().enumerate() {
+                    for other in &bounds[index + 1..] {
+                        assert!(
+                            !bound.shrink(0.25).intersects(other.shrink(0.25)),
+                            "Map text bands overlap at {size:?}"
+                        );
+                    }
+                }
                 let labels: Vec<_> = output
                     .shapes
                     .iter()
@@ -1047,6 +1175,9 @@ mod tests {
                                 "{:?}",
                                 text.galley.job.text
                             );
+                            if text.galley.job.text.starts_with("NAV LOCAL /") || text.galley.job.text.starts_with("RANGE ") {
+                                assert!(!text.galley.elided, "Authority and calibrated range must remain complete");
+                            }
                             Some(text.galley.job.text.as_str())
                         } else {
                             None
@@ -1073,6 +1204,47 @@ mod tests {
                 } else {
                     assert!(labels.contains(&"SELECTED CONTACT UNAVAILABLE"));
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn camera_state_text_fits_narrow_and_wide_physical_canvases() {
+        for size in [
+            egui::vec2(190., 90.),
+            egui::vec2(256., 128.),
+            egui::vec2(496., 180.),
+        ] {
+            for fresh in [false, true] {
+                let ctx = egui::Context::default();
+                let rect = egui::Rect::from_min_size(egui::pos2(8., 8.), size);
+                let output = ctx.run(Default::default(), |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        paint_camera_signal(ui.painter(), rect, None, 1000, fresh)
+                    });
+                });
+                let text: Vec<_> = output
+                    .shapes
+                    .iter()
+                    .filter_map(|s| {
+                        if let egui::Shape::Text(t) = &s.shape {
+                            Some(t)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                assert_eq!(text.len(), 1);
+                assert!(rect.contains_rect(text[0].visual_bounding_rect()));
+                assert!(text[0].galley.job.sections[0].format.font_id.size >= size.y * 0.20);
+                assert_eq!(
+                    text[0].galley.job.text,
+                    if fresh {
+                        "NO CAMERA SELECTED"
+                    } else {
+                        "TELEMETRY STALE"
+                    }
+                );
             }
         }
     }

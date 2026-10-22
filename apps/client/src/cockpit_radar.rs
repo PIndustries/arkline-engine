@@ -38,12 +38,17 @@ pub(super) fn paint(
         painter.text(
             rect.left_top() + egui::vec2(4., 2.),
             egui::Align2::LEFT_TOP,
-            "HOLO / SHIP RELATIVE",
-            egui::FontId::monospace(10.),
+            "SHIP RADAR",
+            egui::FontId::monospace(rect.height() * 0.22),
             color,
         );
-        let center = rect.center();
-        let radius = rect.width().min(rect.height()) * 0.38;
+        // Reserve actual text bands before fitting the ship-relative plot.
+        let map = egui::Rect::from_min_max(
+            rect.min + egui::vec2(4., rect.height() * 0.28),
+            rect.max - egui::vec2(4., rect.height() * 0.25),
+        );
+        let center = map.center();
+        let radius = map.width().min(map.height()) * 0.43;
         for fraction in [0.25, 0.5, 1.] {
             let points = (0..=64)
                 .map(|n| {
@@ -99,7 +104,7 @@ pub(super) fn paint(
             rect.left_bottom() + egui::vec2(4., -2.),
             egui::Align2::LEFT_BOTTOM,
             super::super::format_distance(range),
-            egui::FontId::monospace(9.),
+            egui::FontId::monospace(rect.height() * 0.20),
             color,
         );
     });
