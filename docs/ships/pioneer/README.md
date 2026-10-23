@@ -2,13 +2,59 @@
 
 Pioneer is Arkline's 72 x 38 x 18 m industrial starter cutter. It has two mining turrets and two docked interior decks. The v05 interior review remains its visual design reference; earlier drawings are kept below as design history.
 
-As of 15 October 2026, merged source includes the authored Blender/GLB hull, walkable decks, flight, mining, drones, cargo and scalar power systems. The unmerged development branch uses the Study05 hull, connected airlock equipment, powered exterior fixtures and native editor tools. Study05 refines the bow, glazing and service areas; overall v05 fidelity and exterior/interior alignment remain unfinished.
+Historical baseline as of 15 October 2026: merged source includes the authored Blender/GLB hull, walkable decks, flight, mining, drones, cargo and scalar power systems. The unmerged development branch uses the Study05 hull, connected airlock equipment, powered exterior fixtures and native editor tools. Study05 refines the bow, glazing and service areas; overall v05 fidelity and exterior/interior alignment remain unfinished.
 
 
 
-[Design direction](#design-direction) · [3D model history](#dated-3d-model-history) · [Dimensions and frames](#dimensions-and-frames) · [Current runtime](#current-runtime) · [Editor and asset work](#editor-and-asset-work) · [Editable vessel](#editable-vessel-animations-and-lights) · [Evidence](#evidence-and-acceptance) · [Gaps](#remaining-gaps) · [Milestones](#milestone-log) · [Concept history](#concept-history)
+[Latest progress and vision](#progress-and-ship-vision--23-october-2026) · [Design direction](#design-direction) · [3D model history](#dated-3d-model-history) · [Dimensions and frames](#dimensions-and-frames) · [Current runtime](#current-runtime) · [Editor and asset work](#editor-and-asset-work) · [Editable vessel](#editable-vessel-animations-and-lights) · [Evidence](#evidence-and-acceptance) · [Gaps](#remaining-gaps) · [Milestones](#milestone-log) · [Concept history](#concept-history)
 
-[Versioned page source](https://github.com/PIndustries/arkline-engine/blob/feat/account-editor-foundation/docs/ships/pioneer/README.md) · [Fleet archive](https://github.com/PIndustries/arkline-engine/wiki/Ship-Design-Archive) · [Project 14](https://github.com/orgs/PIndustries/projects/14)
+[Versioned page source](https://github.com/PIndustries/arkline-engine/blob/docs/pioneer-progress-20261023/docs/ships/pioneer/README.md) · [Fleet archive](https://github.com/PIndustries/arkline-engine/wiki/Ship-Design-Archive) · [Project 14](https://github.com/orgs/PIndustries/projects/14)
+
+## Progress and ship vision · 23 October 2026
+
+Pioneer is the flagship development ship: a coherent, inhabited industrial vessel, not a fixed layout with more screens added. The current design remains open to substantial improvement. Its centered cockpit should give the captain a clear view of flight, mining and the ship's condition, with an integrated wraparound console, usable side aisles, rear access and a readable hierarchy rather than a wall of unrelated tablets.
+
+### What is implemented, and where
+
+These are **development checkpoints, not a merged release or deployed feature announcement**. The [active workstream and acceptance record](https://github.com/PIndustries/arkline-engine/issues/62) distinguishes implementation, local evidence and exact-head CI.
+
+| Area | Status on 23 October | Boundary |
+|---|---|---|
+| Whole-ship spatial redesign | [Published checkpoint 49c17e9](https://github.com/PIndustries/arkline-engine/commit/49c17e9804c06427c423136303b16ea052506d23): deeper centered cockpit, wraparound console construction, rear access, framed canopy and two-deck room-program blockouts | Coarse spatial/mechanical foundation, not finished concept fidelity or a fully operational room fit-out |
+| Dynamic mining cockpit | [Published checkpoint f2f3bb7](https://github.com/PIndustries/arkline-engine/commit/f2f3bb7071447ca7fd063728ec7b0ba1fd4fb068): five drone monitors lower from ceiling cassettes; two turret monitors rise from the center console | Seven distinct camera views at full mining activity; outer views require head turns. Displaying seven feeds does not mean seven full-rate video streams |
+| Mechanism behavior | Confirmed vessel/activity state drives physical deployment and warp stow; shared sampled poses drive rendering, collision and input, with obstruction and persistence handling | Warp currently **does not wait for mechanisms to finish closing**. Motor mass, electrical demand and heat are not modeled |
+| Reactor configuration | **Previously tested local prototype; source not published.** A fixed core envelope and four rigid segmented collars move along rails between expanded and compact configurations, with a dedicated cockpit configuration screen | It is mechanical compression, not the reactor shrinking. The exact tested source still needs recovery and revalidation. This is not a thermodynamic reactor simulation or a released feature |
+| Captain's manual monitor control | **Requested next feature, not implemented**: manually stow or reopen the camera monitors without stopping their associated equipment | Closing a display must not stop drones, turrets or mining. Presentation preference and equipment activity need separate state; warp safety takes priority |
+
+The [physical-mechanism report](https://github.com/PIndustries/arkline-engine/blob/f2f3bb7071447ca7fd063728ec7b0ba1fd4fb068/docs/ships/pioneer/physical-cockpit-mechanisms-20261023.md) supersedes earlier fixed-screen/paging proposals for these seven views. Each drone has a stable assigned view; the turret views show their real rendered perspective. Supports, housings and stowed covers are physical geometry, not just a sliding overlay. Unavailable, stale and obstructed views must remain truthful; a camera blocked by the ship's own hull must not be made clear by hiding that hull.
+
+The published mechanism checkpoint uses experimental registration 6 and disposable fresh fixtures. It does not automatically migrate older saved layouts. Existing concept images and earlier studies below remain historical references, not captures of this new checkpoint.
+
+### A connected, living ship
+
+The target is one vessel model joining physical components and their actual behavior:
+
+- **Structure and mass:** hull, installed equipment, cargo and consumables contribute to vessel mass, balance, inertia and load limits. Present cargo-dependent acceleration is not a complete mass ledger.
+- **Power and heat:** generation, storage, distribution, breakers, essential/emergency loads, mechanism demand and cooling must affect what equipment can operate. Existing scalar capacitor and bounded airlock loads are foundations, not a whole-ship electrical or thermal solver.
+- **Habitability:** compartments, doors, pressure boundaries, air circulation, oxygen/CO₂, temperature, water and emergency response need conserved state and meaningful consequences. Current scalar pressure behavior is not complete life support.
+- **Mining and logistics:** drone bays, recovery, turret clearances, cargo capacity and physical handling should connect to the same authoritative state rather than independent visual effects.
+- **Ship awareness:** the centerline cockpit needs a ship-wide overview with component/room condition, cause of faults and data freshness. Interior cameras should show real room activity with power, authorization and stale/offline states.
+- **Future mobile viewing:** interior feeds need an authenticated network streaming architecture. Current camera views are local scene renders, not remotely accessible video streams; mobile streaming is planned.
+- **Continuous docking and unloading:** approach, alignment, capture, clamps, service connection, safe access and cargo transfer should occur in-world without teleporting or a cutscene. Current dock/undock and deposit operations remain instant; cosmetic animation alone would not deliver this requirement.
+
+These are design goals and engineering work, not claims that all systems now exist. The [whole-space report](https://github.com/PIndustries/arkline-engine/blob/f2f3bb7071447ca7fd063728ec7b0ba1fd4fb068/docs/ships/pioneer/whole-space-redesign-20261023.md) records the underlying gaps and proposed compartment-first integration.
+
+### Next implementation and acceptance priorities
+
+1. **Manual monitor control:** separate captain visibility preference from drone/turret operation. Test stow/reopen during ongoing mining, safe reversal, obstruction, reconnect/restart, and warp precedence without issuing equipment-stop commands.
+2. **Safe warp preparation:** recover drones rather than deleting their deployed state; retract equipment and close mechanisms before warp acceptance, with explicit blocked/recovery states. The current warp path clears deployed drones and does not supply that recovery sequence.
+3. **Connected docking and cargo:** establish one station/hangar/berth coordinate contract and a persistent approach-to-services operation. Follow with timed, interruptible unloading using conserved inventory and idempotent transfer receipts.
+4. **One real compartment end to end:** connect a feeder, lamp, vent, door controller, emergency reserve and interior camera through stable component IDs. A breaker trip must change actual behavior and the cockpit overview; restart must preserve the state. Expand only after this slice works.
+5. **Visual and performance acceptance:** bring the side monitors closer into the captain's useful view, using the empty side-console space rather than leaving them far outboard; this is a requested ergonomics refinement, not a completed layout change. Refine integrated instrument bays, chair, canopy joins, lighting/readability and room construction against the approved concepts. Measure sustained frame pacing and feed freshness on representative desktop/browser hardware, not only screenshots.
+
+Formatting, runner prerequisites and inherited failing tests remain a cross-cutting acceptance gate, not something to defer until final art. [CI for f2f3bb7](https://github.com/PIndustries/arkline-engine/actions/runs/39913590864) **failed**: the issue's verification record reports Linux/macOS formatting stops and an unavailable browser Clippy command. Local checkpoint results recorded 65 protocol tests, 91 server tests and 14 verifier tests passing; the client recorded 489 passing, **11 inherited failures**, and 30 ignored. Those results are not an all-green suite. Software-rendered capture evidence establishes behavior, not adequate interactive desktop performance; representative desktop benchmarking remains outstanding.
+
+This dated summary takes precedence for the new development work. The sections below preserve the earlier model, runtime and concept history.
 
 ## Design direction
 
@@ -62,6 +108,8 @@ Cargo units have no implemented kilogram or cubic-metre conversion. Mass, materi
 
 ## Current runtime
 
+> Historical baseline recorded on 15 October 2026. See the dated 23 October progress section above for newer development checkpoints; this section does not describe the latest experimental layout.
+
 **Merged on main:** [#29](https://github.com/PIndustries/arkline-engine/pull/29) implements two private, docked Pioneer decks with twelve rooms, authoritative walking/collision, first/third-person cameras, an access-core lift transition and return through the airlock to boarding. The lift changes to a validated fixed landing; it is not a moving lift. [#34](https://github.com/PIndustries/arkline-engine/pull/34) adds compatible-client recovery. Ship operation is gated while on foot. See [interior behavior and rollback limits](https://github.com/PIndustries/arkline-engine/wiki/Pioneer-Interior-Preview).
 
 [#39](https://github.com/PIndustries/arkline-engine/pull/39) replaces the procedural hull with the embedded GLB and editable Blender source. Its actual cached triangles serve the main view, hangar, camera feeds, shadows and selection. The bounded loader supports static indexed geometry and opaque, untextured scalar PBR materials; textures, skins, animation and morph targets are rejected. See [model runtime](https://github.com/PIndustries/arkline-engine/wiki/Pioneer-Model-Runtime).
@@ -74,6 +122,8 @@ Existing cockpit flight, finite-ore mining, drones, cargo/storage, resource jobs
 
 
 ## Remaining gaps
+
+> Historical baseline recorded on 15 October 2026. The dated 23 October progress section above supersedes this list where newer development is explicitly documented.
 
 Overall v05 shape/material completion, moving doors and broader component behavior remain unfinished.
 
