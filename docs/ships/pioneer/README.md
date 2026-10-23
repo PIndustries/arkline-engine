@@ -30,6 +30,10 @@ The [physical-mechanism report](https://github.com/PIndustries/arkline-engine/bl
 
 The published mechanism checkpoint uses experimental registration 6 and disposable fresh fixtures. It does not automatically migrate older saved layouts. Existing concept images and earlier studies below remain historical references, not captures of this new checkpoint.
 
+### Requested drone metrics strip (planned)
+
+Use the space above each drone camera for a compact per-drone status strip: name/ID, health, speed, current task, signal/freshness and storage/cargo where supported by authoritative data. Keep the strip attached to that drone's stable view identity. Health, storage or other fields without an implemented model must read unavailable/unsupported rather than invented values; stale or disconnected data must be visibly marked. This is a requested next refinement, not part of the published seven-screen checkpoint.
+
 ### A connected, living ship
 
 The target is one vessel model joining physical components and their actual behavior:
