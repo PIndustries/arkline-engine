@@ -118,7 +118,7 @@ pub(in crate::flight3d) fn physical_surface(
 // Preserve the physical proportions of text, charts and camera tiles on the
 // rebuilt peripheral glass. The central computer keeps its existing UI contract.
 fn canonical_screen_canvas(index: usize, half: Vec3, requested: egui::Vec2) -> egui::Vec2 {
-    if matches!(index, 1 | 2 | 4 | 5) {
+    if matches!(index, 1 | 2 | 4 | 5 | 6 | 7) {
         egui::vec2(
             requested.y * (half.z - 0.008) / (half.y - 0.008),
             requested.y,
@@ -1366,7 +1366,10 @@ mod tests {
                 assert_eq!(view.head_look_angles(), [0.2, -0.1]);
                 frame(&mut view, &ctx, &seated, 2200, time + 0.1);
                 assert!(view.editor_camera_pose().unwrap().0.distance(expected) < 1e-4);
-                assert_eq!((view.yaw, view.pitch, view.zoom), (pose.yaw as f32, -0.15, 1.4));
+                assert_eq!(
+                    (view.yaw, view.pitch, view.zoom),
+                    (pose.yaw as f32, -0.15, 1.4)
+                );
             });
             let _ = sender.send(result);
         });
@@ -1391,19 +1394,34 @@ mod tests {
         // Same authoritative snapshot: no simulated turn or transport reply.
         frame(&mut view, &ctx, &actor, 1000, 0.016);
         let current = view.editor_camera_pose().unwrap();
-        let error = (current.1 - expected + std::f32::consts::PI)
-            .rem_euclid(std::f32::consts::TAU) - std::f32::consts::PI;
-        assert!(error.abs() < 1e-4, "Local look must be visible in the next frame");
-        assert!(current.0.distance(initial.0) < 1e-4, "Looking cannot move the eye anchor");
+        let error = (current.1 - expected + std::f32::consts::PI).rem_euclid(std::f32::consts::TAU)
+            - std::f32::consts::PI;
+        assert!(
+            error.abs() < 1e-4,
+            "Local look must be visible in the next frame"
+        );
+        assert!(
+            current.0.distance(initial.0) < 1e-4,
+            "Looking cannot move the eye anchor"
+        );
         assert_eq!(serde_json::to_vec(&actor).unwrap(), source);
         view.on_foot_view = OnFootView::ThirdPerson;
         frame(&mut view, &ctx, &actor, 1000, 0.032);
         let third = view.editor_camera_pose().unwrap();
-        let heading = actor.station_avatar.as_ref().unwrap()
-            .docked_traversal.as_ref().unwrap().heading as f32;
-        let error = (third.1 - heading + std::f32::consts::PI)
-            .rem_euclid(std::f32::consts::TAU) - std::f32::consts::PI;
-        assert!(error.abs() < 1e-4, "Third person must still follow authoritative body heading");
+        let heading = actor
+            .station_avatar
+            .as_ref()
+            .unwrap()
+            .docked_traversal
+            .as_ref()
+            .unwrap()
+            .heading as f32;
+        let error = (third.1 - heading + std::f32::consts::PI).rem_euclid(std::f32::consts::TAU)
+            - std::f32::consts::PI;
+        assert!(
+            error.abs() < 1e-4,
+            "Third person must still follow authoritative body heading"
+        );
     }
     #[test]
     fn registered_seat_cycle_does_not_restore_an_old_walking_look_target() {
@@ -1417,10 +1435,18 @@ mod tests {
         frame(&mut view, &ctx, &pilot(None), 1000, 0.032);
         // Same authoritative standing direction after leaving the forward seat.
         frame(&mut view, &ctx, &actor, 1000, 0.048);
-        let heading = actor.station_avatar.as_ref().unwrap()
-            .docked_traversal.as_ref().unwrap().heading;
-        assert!(view.walk_turn(heading).abs() < 1e-6,
-            "Seat exit must not send turn toward the old walking look");
+        let heading = actor
+            .station_avatar
+            .as_ref()
+            .unwrap()
+            .docked_traversal
+            .as_ref()
+            .unwrap()
+            .heading;
+        assert!(
+            view.walk_turn(heading).abs() < 1e-6,
+            "Seat exit must not send turn toward the old walking look"
+        );
         let yaw = view.editor_camera_pose().unwrap().1;
         assert!((yaw - heading as f32).abs() < 1e-4);
     }
@@ -1463,8 +1489,35 @@ mod native_tests;
 #[cfg(test)]
 mod composition_fit_tests {
     use super::*;
+
     #[test]
-    fn recessed_enclosure_is_contained_in_existing_solids_in_every_placement() {
+    fn prototype_seven_faces_keep_proportional_wings_and_legacy_ship_slots() {
+        let requested = egui::vec2(300.0, 180.0);
+        for index in [1, 2, 4, 5, 6, 7] {
+            let (_, half) = arkline_protocol::cockpit_screen(index).unwrap();
+            let canvas = canonical_screen_canvas(index, vector(half), requested);
+            assert!(
+                (canvas.x / canvas.y - (half[2] as f32 - 0.008) / (half[1] as f32 - 0.008)).abs()
+                    < 1e-5
+            );
+        }
+        assert!(arkline_protocol::cockpit_screen(COCKPIT_SURFACE_SLOTS).is_none());
+        let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280., 720.));
+        let vp = Mat4::perspective_rh_gl(COCKPIT_FOV, viewport.aspect_ratio(), 0.002, 100.)
+            * Mat4::look_at_rh(Vec3::ZERO, Vec3::X, Vec3::Y);
+        for class in arkline_protocol::ALL_SHIP_CLASSES {
+            if class == ShipClass::Pioneer {
+                continue;
+            }
+            assert_eq!(cockpit_screens(class).len(), 6);
+            for index in 6..COCKPIT_SURFACE_SLOTS {
+                assert!(CockpitSurface::new(viewport, vp, class, index, requested).is_none());
+            }
+        }
+    }
+
+    #[test]
+    fn prototype_recessed_ceiling_is_contained_in_registered_solids_in_every_placement() {
         let geometry = registered_geometry(&arkline_protocol::default_pioneer()).unwrap();
         let original = geometry.clone();
         let mut replaced = 0;
@@ -1501,7 +1554,9 @@ mod composition_fit_tests {
                 replaced += 1;
             }
         }
-        assert_eq!(replaced, 9);
+        // The new chamber has one recessed ceiling; forward frame construction
+        // is already authored in the canonical geometry, not replaced here.
+        assert_eq!(replaced, 3);
         assert_eq!(
             geometry, original,
             "Presentation must not rewrite authority geometry"
@@ -1518,8 +1573,11 @@ mod composition_fit_tests {
             PioneerDockedPose::fleet(arkline_protocol::FleetLayoutRevision::CircularV1),
         ] {
             let d = dynamic_geometry(pose, actuator_pose(None, pose, None, 0)).unwrap();
-            for x in [31.92, 32.1, 32.5, 33., 33.36, 34.1, 34.48] {
-                for z in [-6.48, -4., -0.84, 0., 1., 2., 3., 4.2, 4.84, 5.48] {
+            for x in [
+                27.3, 27.7, 28.1, 28.5, 29., 29.5, 30., 30.5, 31., 31.5, 31.8, 32.1, 32.5, 33.,
+                34.48,
+            ] {
+                for z in [-4., -3.5, -2.1, -1.5, -0.75, 0., 0.75, 1.5, 2.1] {
                     let feet = [x, arkline_protocol::deck_floor_y(2).unwrap(), z];
                     let station = body_to_station(pose, feet);
                     if !arkline_protocol::capsule_clear_station(&g, &d, pose, station)
@@ -1563,7 +1621,7 @@ mod composition_fit_tests {
         eprintln!("Registered clear/supported boundary samples preserved: {checked}");
     }
     #[test]
-    fn all_five_instruments_fit_real_viewport_aspects_with_forward_clearance() {
+    fn all_seven_instruments_fit_forward_and_head_turn_views_with_clearance() {
         let eye = vector(pilot_joints(0.0).eye_m);
         let cache = SceneCache::new(arkline_protocol::default_pioneer()).unwrap();
         let parts = seated_body_parts(&cache, None, 0).unwrap();
@@ -1591,9 +1649,15 @@ mod composition_fit_tests {
             egui::vec2(1500., 638.),
         ] {
             let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, size);
-            let vp = Mat4::perspective_rh_gl(FOV_RADIANS, viewport.aspect_ratio(), 0.02, 100.)
-                * Mat4::look_at_rh(eye, eye + Vec3::X, Vec3::Y);
-            for index in 1..6 {
+            for index in 1..8 {
+                let yaw: f32 = match index {
+                    6 => -0.95,
+                    7 => 0.95,
+                    _ => 0.,
+                };
+                let direction = Vec3::new(yaw.cos(), 0., yaw.sin());
+                let vp = Mat4::perspective_rh_gl(FOV_RADIANS, viewport.aspect_ratio(), 0.02, 100.)
+                    * Mat4::look_at_rh(eye, eye + direction, Vec3::Y);
                 let (center, half) = arkline_protocol::cockpit_screen(index).unwrap();
                 let surface = physical_surface(
                     viewport,
@@ -1605,7 +1669,7 @@ mod composition_fit_tests {
                 )
                 .unwrap();
                 let canvas = surface.canvas_rect();
-                if matches!(index, 1 | 2 | 4 | 5) {
+                if matches!(index, 1 | 2 | 4 | 5 | 6 | 7) {
                     let tile = egui::Rect::from_min_size(canvas.min, egui::vec2(1.0, 1.0));
                     let (_, a, b) = surface.feed_geometry(tile).unwrap();
                     let diagonal = b - a;
@@ -1618,10 +1682,12 @@ mod composition_fit_tests {
                 }
                 // The full live glass must remain accessible, not only its
                 // corners: inclined neighboring cases can cross its interior.
-                for point in (0..=4).flat_map(|row| (0..=4).map(move |column| {
-                    canvas.min + canvas.size()
-                        * egui::vec2(column as f32 / 4.0, row as f32 / 4.0)
-                })) {
+                for point in (0..=4).flat_map(|row| {
+                    (0..=4).map(move |column| {
+                        canvas.min
+                            + canvas.size() * egui::vec2(column as f32 / 4.0, row as f32 / 4.0)
+                    })
+                }) {
                     let projected = surface
                         .project(point)
                         .unwrap_or_else(|| panic!("Face {index}, {size:?}, canvas corner {point:?} must fit without clipping"));
@@ -1655,14 +1721,24 @@ mod composition_fit_tests {
                         let (plane, lt, rb) = surface.feed_geometry(canvas).unwrap();
                         let (origin, ray) = screen_ray(plane, viewport, projected).unwrap();
                         let local = origin + ray * ((lt.x - origin.x) / ray.x);
-                        let raw_uv = [(local.z - lt.z) / (rb.z - lt.z),
-                            (local.y - lt.y) / (rb.y - lt.y)];
-                        let mut exact_hits: Vec<_> = parts.iter().enumerate()
+                        let raw_uv = [
+                            (local.z - lt.z) / (rb.z - lt.z),
+                            (local.y - lt.y) / (rb.y - lt.y),
+                        ];
+                        let mut exact_hits: Vec<_> = parts
+                            .iter()
+                            .enumerate()
                             .filter(|(_, part)| docked_source_primitive(part.0) != Some(6))
-                            .filter_map(|(draw, part)| ray_mesh_hit(eye, direction, part.1,
-                                &geometry.catalog.uploads()[mesh_index(part.0)])
+                            .filter_map(|(draw, part)| {
+                                ray_mesh_hit(
+                                    eye,
+                                    direction,
+                                    part.1,
+                                    &geometry.catalog.uploads()[mesh_index(part.0)],
+                                )
                                 .filter(|t| *t < distance + 0.001)
-                                .map(|t| (t, draw, mesh_index(part.0))))
+                                .map(|t| (t, draw, mesh_index(part.0)))
+                            })
                             .collect();
                         exact_hits.sort_by(|a, b| a.0.total_cmp(&b.0));
                         panic!("Face {index}, {size:?}, point {point:?}, mapped {hit:?}, raw_uv {raw_uv:?}, distance {distance}, panels {blockers:?}, exact mesh hits {exact_hits:?}");
@@ -1678,9 +1754,13 @@ mod composition_fit_tests {
                 }
                 if index == 3 {
                     assert!(surface.bounds().width() / size.x < 0.45);
-                    assert!(surface.bounds().area() / viewport.area() < 0.095);
                     assert!(
-                        surface.bounds().top() > size.y * 0.70,
+                        surface.bounds().area() / viewport.area() < 0.16,
+                        "Prototype computer area must stay bounded: {:?} in {size:?}",
+                        surface.bounds()
+                    );
+                    assert!(
+                        surface.bounds().top() > size.y * 0.55,
                         "Computer must stay in the low instrument band, leaving the forward view clear"
                     );
                 }
@@ -1703,11 +1783,11 @@ mod composition_fit_tests {
         let post = geometry
             .panels
             .iter()
-            .find(|p| p.id == "cockpit/canopy/source-perimeter-post")
+            .find(|p| p.id == "cockpit/chamber/canopy-starboard")
             .unwrap();
         assert!(
             ray_mesh_hit(
-                Vec3::new(33.22, 1., 4.8),
+                Vec3::new(31.48, 1.35, 2.6),
                 Vec3::X,
                 box_matrix(&post.bounds),
                 &cube()

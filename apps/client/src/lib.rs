@@ -5628,13 +5628,15 @@ mod tests {
     }
 
     pub(crate) fn view_test_cockpit(ctx: &egui::Context) -> Cockpit {
-        let cc = eframe::CreationContext::_new_kittest(ctx.clone());
-        let mut cockpit = Cockpit::new(
-            &cc,
-            "fixture".into(),
+        view_test_cockpit_with_profile(
+            ctx,
             std::env::temp_dir().join("arkline-headless-view-unused"),
-            None,
-        );
+        )
+    }
+
+    pub(crate) fn view_test_cockpit_with_profile(ctx: &egui::Context, profile: PathBuf) -> Cockpit {
+        let cc = eframe::CreationContext::_new_kittest(ctx.clone());
+        let mut cockpit = Cockpit::new(&cc, "fixture".into(), profile, None);
         cockpit.boot.visible = false;
         cockpit.connected = true;
         cockpit.pilot = "pilot".into();

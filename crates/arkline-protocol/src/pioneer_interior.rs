@@ -19,7 +19,7 @@ pub fn pioneer_interior_obstacles() -> Vec<StationObstacle> {
 pub const PIONEER_LIFT_POINT: [f64; 3] = [2.0, 0.0, 7.0];
 pub const PIONEER_LIFT_RANGE: f64 = 1.2;
 pub const PIONEER_DECK_TWO_ROOMS: [(&str, f64, f64); 6] = [
-    ("BRIDGE / NAV", 4.2, 0.2),
+    ("NAV / PLANNING", 4.2, 0.2),
     ("CREW / GALLEY", 4.2, 8.4),
     ("SENSORS / COMMS", 13.5333333333, 0.2),
     ("MEDICAL / REST", 13.5333333333, 8.4),

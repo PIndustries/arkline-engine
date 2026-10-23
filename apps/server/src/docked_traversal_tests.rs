@@ -368,7 +368,7 @@ fn authority_restart_retains_canonical_feet_but_clears_active_movement() {
 }
 
 #[test]
-fn canonical_enclosure_candidate_intersects_a_reachable_v4_sqlite_save() {
+fn new_registration_fresh_rear_aisle_save_reopens_without_economic_changes() {
     // Only a new disposable fixture; no user world or candidate runtime adoption.
     let directory = std::env::temp_dir().join(format!(
         "arkline-enclosure-save-admission-{}-{}",
@@ -384,12 +384,12 @@ fn canonical_enclosure_candidate_intersects_a_reachable_v4_sqlite_save() {
     let pose = docked_binding_pose(&binding()).unwrap();
     let mut now = STANDING_AT + 1;
     let mut response = snapshot(&mut server, &mut session, now);
-    // Reach the old legal space using actual authority commands, not a patched
-    // avatar or a hand-edited persisted row.
+    // Reach the redesigned rear aisle through real authority commands.
+    // Prior-layout admission is covered separately without rebinding its feet.
     for body in [
-        [33.36, -0.32, 3.],
-        [33.36, -0.32, 4.84],
-        [32.1, -0.32, 4.84],
+        [31.62, -0.32, 0.],
+        [31.62, -0.32, 0.76],
+        [29.2, -0.32, 0.76],
     ] {
         response = walk_to(
             &mut server,
@@ -425,7 +425,10 @@ fn canonical_enclosure_candidate_intersects_a_reachable_v4_sqlite_save() {
         .unwrap();
     assert_eq!(state.feet_m, feet);
     assert_eq!(state.binding, saved_binding);
-    assert_eq!(state.binding.registration_revision, 4);
+    assert_eq!(
+        state.binding.registration_revision,
+        PIONEER_DOCKED_REGISTRATION_REVISION
+    );
     assert_eq!(
         serde_json::to_value(&before.resource_jobs).unwrap(),
         serde_json::to_value(&after.resource_jobs).unwrap()
@@ -449,41 +452,7 @@ fn canonical_enclosure_candidate_intersects_a_reachable_v4_sqlite_save() {
         .collect::<Result<_, _>>()
         .unwrap();
     assert_eq!(ledger_before, ledger_after);
-    let manifest: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../assets/studies/pioneer-canonical-enclosure-proof/manifest.json"
-    ))
-    .unwrap();
-    let wall = manifest["canonical_fit"]["panels"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|p| p["id"] == "candidate/starboard-wall")
-        .unwrap();
-    let bounds = PioneerDockedBox {
-        center_m: serde_json::from_value(wall["center"].clone()).unwrap(),
-        half_m: serde_json::from_value(wall["half"].clone()).unwrap(),
-        axes: serde_json::from_value(wall["axes"].clone()).unwrap(),
-    };
-    assert!(geometry::box_intersects_capsule(
-        bounds,
-        station_to_body(pose, feet),
-        AVATAR_HEIGHT_M,
-        STATION_AVATAR_RADIUS_M
-    ));
-    let receipt = serde_json::json!({
-        "scope":"Disposable authority-reached SQLite fixture, not user save or adopted geometry",
-        "fixture_directory":directory,"registration_revision":state.binding.registration_revision,
-        "capability":docked_traversal_capability(),"feet_station_m":feet,"feet_body_m":station_to_body(pose,feet),
-        "roundtrip_feet_and_binding_unchanged":true,"jobs_cargo_credits_and_ledger_unchanged":true,
-        "candidate_sha256":manifest["sha256"],"candidate_blocker":"candidate/starboard-wall",
-        "candidate_intersects_persisted_capsule":true,"runtime_adoption_safe_without_migration":false
-    });
-    std::fs::write(
-        directory.join("admission-receipt.json"),
-        serde_json::to_vec_pretty(&receipt).unwrap(),
-    )
-    .unwrap();
-    eprintln!("Enclosure admission evidence: {}", directory.display());
+    eprintln!("Fresh occupied fixture retained: {}", directory.display());
 }
 
 #[test]
@@ -530,7 +499,10 @@ fn registered_boundary_space_reopens_fixture_saves_in_all_placements() {
             fleet,
         );
         let pose = docked_binding_pose(&binding).unwrap();
-        assert_eq!(binding.registration_revision, 4);
+        assert_eq!(
+            binding.registration_revision,
+            PIONEER_DOCKED_REGISTRATION_REVISION
+        );
         ok(command(
             &mut server,
             &mut session,
@@ -542,15 +514,16 @@ fn registered_boundary_space_reopens_fixture_saves_in_all_placements() {
         let mut now = STANDING_AT;
         snapshot(&mut server, &mut session, now);
         let mut receipts = Vec::new();
-        // Both sides of the rejected local bay and the actual far rear corner.
-        // Intermediate waypoints avoid the existing chair, not its collision.
+        // Both redesigned seat aisles and rear chamber corners. Intermediate
+        // waypoints avoid real chair/console collision rather than bypassing it.
         for (body, persist) in [
-            ([33.36, -0.32, 3.], false),
-            ([33.36, -0.32, 0.], false),
-            ([32.1, -0.32, 0.], false),
-            ([32.1, -0.32, -0.84], true),
-            ([32.1, -0.32, 4.84], true),
-            ([31.92, -0.32, 5.48], true),
+            ([31.62, -0.32, 0.], false),
+            ([31.62, -0.32, -0.76], true),
+            ([29.2, -0.32, -0.76], false),
+            ([29.2, -0.32, -1.90], true),
+            ([29.2, -0.32, 1.90], true),
+            ([29.2, -0.32, 0.76], false),
+            ([31.62, -0.32, 0.76], true),
         ] {
             let target = body_to_station(pose, body);
             let deadline = now + 10_000;
@@ -886,12 +859,14 @@ fn set_hatch(
 fn midpoint(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
     std::array::from_fn(|axis| (a[axis] + b[axis]) * 0.5)
 }
-fn ship_route(pose: PioneerDockedPose) -> [[f64; 3]; 4] {
+fn ship_route(pose: PioneerDockedPose) -> [[f64; 3]; 6] {
     // Geometry-owner-proved route around the folded chair, then down the port aisle.
     [
-        [33.36, -0.32, 3.0],
-        [33.36, -0.32, 0.0],
-        [34.1, -0.32, -0.5],
+        [31.62, -0.32, 0.0],
+        [31.62, -0.32, -0.76],
+        [29.2, -0.32, -0.76],
+        [29.2, -0.32, -3.5],
+        [34.1, -0.32, -3.5],
         [34.1, -0.32, -7.8],
     ]
     .map(|point| geometry::body_to_station(pose, point))
@@ -1560,9 +1535,10 @@ fn authority_walks_from_pilot_seat_down_both_core_stairs_and_back_without_telepo
     let deck1_y = pose.origin_m[1] + geometry::deck_floor_y(1).unwrap();
     // Seat egress, the actual bridge opening, connector, and deck-two corridor.
     let approach = [
-        [33.36, 3.0],
-        [33.36, 0.0],
-        [33.4, 0.0],
+        [31.62, 0.0],
+        [31.62, -0.76],
+        [29.2, -0.76],
+        [29.2, 0.0],
         [20.0, 0.0],
         [10.0, 0.0],
         [0.0, 0.0],
@@ -1664,7 +1640,7 @@ fn authority_walks_from_pilot_seat_down_both_core_stairs_and_back_without_telepo
         &mut server,
         &mut session,
         &mut now,
-        &[[33.54, 3.0]],
+        &[[31.8, 0.0]],
         &mut trace,
     );
     assert!(
@@ -2189,7 +2165,7 @@ fn hatch_motion_is_timed_reversible_paused_and_holds_on_power_loss() {
 }
 
 #[test]
-fn stowed_v3_cockpit_rebinds_only_identity_and_occupied_or_open_worlds_stay_untouched() {
+fn isolated_revision_five_never_rebinds_stowed_occupied_or_open_v3_worlds() {
     let mut server = Server::open(":memory:").unwrap();
     let mut session = None;
     connected(&mut server, &mut session);
@@ -2216,24 +2192,18 @@ fn stowed_v3_cockpit_rebinds_only_identity_and_occupied_or_open_worlds_stay_unto
     {
         actuator.binding.registration_revision = 3;
     }
-    let mut expected = old.clone();
-    for actuator in expected
-        .accounts
-        .get_mut("Walker")
-        .unwrap()
-        .docked_actuators
-        .values_mut()
-    {
-        actuator.binding.registration_revision = 4;
-    }
+    assert_eq!(PIONEER_DOCKED_REGISTRATION_REVISION, 5);
     let mut migrated = old.clone();
     docked_traversal::migrate_stowed_cockpit_v3(&mut migrated).unwrap();
     assert_eq!(
         serde_json::to_value(&migrated).unwrap(),
-        serde_json::to_value(&expected).unwrap(),
-        "Only registration binding may change, preserving all economic/physical state"
+        serde_json::to_value(&old).unwrap(),
+        "The legacy 3→4 migration must remain inactive in the isolated revision-5 build"
     );
-    validate(&migrated, None).unwrap();
+    assert!(
+        validate(&migrated, None).is_err(),
+        "An old registration must not be admitted"
+    );
     for open in [false, true] {
         let mut blocked = old.clone();
         if open {

@@ -1,10 +1,10 @@
 //! Actual registered docked scene in private CGL/macOS or EGL/Linux; no desktop window.
 use super::*;
+#[cfg(target_os = "linux")]
+use crate::flight3d::exterior_gpu_tests::Egl as PrivateContext;
 use sha2::{Digest, Sha256};
 #[cfg(target_os = "macos")]
 use std::ffi::{c_void, CString};
-#[cfg(target_os = "linux")]
-use crate::flight3d::exterior_gpu_tests::Egl as PrivateContext;
 use std::path::Path;
 
 #[cfg(target_os = "macos")]
@@ -361,6 +361,435 @@ fn native_registered_enclosure_boundary_views() {
             "capability":arkline_protocol::docked_traversal_capability(),"captures":captures,
             "seated_computer_pointer_roundtrip":true,"camera_code_unchanged":true,
             "renderer":gl.get_parameter_string(glow::RENDERER),"loaded_fixture_saves":loaded_saves
+        })).unwrap()).unwrap();
+    }
+}
+
+/// Fresh in-memory registration fixture: never opens a world or launches a window.
+#[test]
+#[ignore = "Explicit full cockpit prototype: actual App and registered HangarView EGL/CGL"]
+fn native_whole_space_cockpit_runtime_views() {
+    unsafe {
+        let directory = std::path::PathBuf::from(
+            std::env::var_os("ARKLINE_WHOLE_SPACE_EVIDENCE").expect("New evidence directory"),
+        );
+        std::fs::create_dir(&directory).unwrap();
+        let (_context, gl) = PrivateContext::create();
+        let mut harness = Harness::new(gl.clone());
+        harness
+            .ctx
+            .data_mut(|d| d.insert_temp(egui::Id::new("instrument_text_proof_enabled"), true));
+        let profile = directory.join(format!(
+            "profile-registration-{}",
+            arkline_protocol::docked_traversal_capability().registration_revision
+        ));
+        std::fs::create_dir(&profile).unwrap();
+        let mut app = crate::tests::view_test_cockpit_with_profile(&harness.ctx, profile);
+        app.flight_view = FlightView::new(Some(&gl));
+        // Deliberately declared fixture content, not a claimed live mining session.
+        let snapshot = app.snapshot.as_mut().unwrap();
+        snapshot.docked_traversal_capability =
+            Some(arkline_protocol::docked_traversal_capability());
+        // The generic view fixture puts the pilot at the rock center. Move only
+        // this disposable fixture's rock: enclosure proof must not look from
+        // inside an asteroid and mistake its opaque triangles for a canopy.
+        snapshot.asteroids[0].position[0] += 1800.0;
+        snapshot.asteroids[0].position[2] += 500.0;
+        snapshot.pilots[0].drones = vec![serde_json::from_value(serde_json::json!({
+            "id":42,"class":"mining","position":arkline_protocol::BELT_POSITION,
+            "velocity":[0,0,0],"heading":[1,0,0],"mode":{"kind":"mining","target_id":7},
+            "updated_at_ms":1000,"signal_strength":0.85
+        }))
+        .unwrap()];
+        snapshot.resource_jobs = vec![arkline_protocol::ResourceJob {
+            controller: "fixture".into(),
+            id: 1,
+            pilot: "pilot".into(),
+            target_units: 5000,
+            mined_units: 125,
+            stored_units: 100,
+            target_id: Some(7),
+            phase: arkline_protocol::ResourceJobPhase::Mining,
+            message: "Fixture".into(),
+            started_at_ms: 1000,
+            updated_at_ms: 1000,
+        }];
+        let snapshot_before = serde_json::to_vec(app.snapshot.as_ref().unwrap()).unwrap();
+        let mut captures = Vec::new();
+        for (name, angle, connected, paused) in [
+            ("seated-forward", 0., true, false),
+            ("seated-port", 0.95, true, false),
+            ("seated-starboard", -0.95, true, false),
+            ("port-disconnected", 0.95, false, false),
+            ("starboard-paused", -0.95, true, true),
+            ("port-stale", 0.95, true, false),
+        ] {
+            app.connected = connected;
+            app.embedded_paused = paused;
+            for frame in 0..8 {
+                app.observed = std::time::Instant::now()
+                    - std::time::Duration::from_secs(if name == "port-stale" { 3 } else { 0 });
+                app.flight_view.head_look = [angle, 0.];
+                harness.ctx.data_mut(|d| {
+                    d.insert_temp(
+                        egui::Id::new("instrument_text_proof_rows"),
+                        Vec::<serde_json::Value>::new(),
+                    )
+                });
+                let output = harness.ctx.run(
+                    egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(
+                            egui::Pos2::ZERO,
+                            egui::vec2(WIDTH as f32, HEIGHT as f32),
+                        )),
+                        time: Some(captures.len() as f64 + frame as f64 / 60.),
+                        focused: true,
+                        modifiers: egui::Modifiers {
+                            shift: true,
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    },
+                    |ctx| eframe::App::update(&mut app, ctx, &mut eframe::Frame::_new_kittest()),
+                );
+                let primitives = harness
+                    .ctx
+                    .tessellate(output.shapes, output.pixels_per_point);
+                gl.bind_framebuffer(
+                    glow::FRAMEBUFFER,
+                    Some(harness.target.as_ref().unwrap().framebuffer),
+                );
+                gl.viewport(0, 0, WIDTH as i32, HEIGHT as i32);
+                gl.disable(glow::SCISSOR_TEST);
+                gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
+                harness.painter.paint_and_update_textures(
+                    [WIDTH as u32, HEIGHT as u32],
+                    output.pixels_per_point,
+                    &primitives,
+                    &output.textures_delta,
+                );
+                assert_eq!(gl.get_error(), glow::NO_ERROR);
+            }
+            let mut rows = harness.ctx.data(|d| {
+                d.get_temp::<Vec<serde_json::Value>>(egui::Id::new("instrument_text_proof_rows"))
+                    .unwrap_or_default()
+            });
+            if let Some(central) = app.flight_view.computer_surface() {
+                rows.extend(cockpit_maps::measure_text_shapes(
+                    &central,
+                    &app.cockpit_computer.last_shapes,
+                ));
+            }
+            let mut pixels = vec![0; WIDTH * HEIGHT * 4];
+            gl.read_pixels(
+                0,
+                0,
+                WIDTH as i32,
+                HEIGHT as i32,
+                glow::RGBA,
+                glow::UNSIGNED_BYTE,
+                glow::PixelPackData::Slice(Some(&mut pixels)),
+            );
+            let pixels = pixels
+                .chunks_exact(WIDTH * 4)
+                .rev()
+                .flatten()
+                .copied()
+                .collect::<Vec<_>>();
+            image::save_buffer_with_format(
+                directory.join(format!("{name}.png")),
+                &pixels,
+                WIDTH as u32,
+                HEIGHT as u32,
+                image::ColorType::Rgba8,
+                image::ImageFormat::Png,
+            )
+            .unwrap();
+            captures.push(serde_json::json!({"view":name,"route":"Actual Cockpit::update / FlightView",
+                "text":rows,"rgba_sha256":hex::encode(Sha256::digest(&pixels)),
+                "camera_pose":app.flight_view.editor_camera_pose().map(|(p,yaw,pitch)|(p.to_array(),yaw,pitch))}));
+            assert_eq!(
+                serde_json::to_vec(app.snapshot.as_ref().unwrap()).unwrap(),
+                snapshot_before
+            );
+        }
+        for (name, body, heading, pitch) in [
+            ("rear-entry-forward", [28.1, -0.32, 0.], 0., 0.),
+            ("standing-forward", [31.8, -0.32, 0.], 0., 0.),
+            ("standing-aft", [30.6, -0.32, 0.], std::f64::consts::PI, 0.),
+            ("overhead-from-entry", [28.1, -0.32, 0.], 0., -0.42),
+        ] {
+            let standing = pilot(Some(supported_state_at(
+                body,
+                heading,
+                arkline_protocol::DockedSupport::Cockpit,
+            )));
+            let before = serde_json::to_vec(&standing).unwrap();
+            harness.view.pitch = pitch;
+            harness.view.yaw = heading as f32;
+            harness.view.head_look = [0., 0.];
+            harness.view.follow = None;
+            harness.view.follow_heading = None;
+            let shot = harness.settle(&standing, 3300);
+            assert!(shot.occupied > 1000);
+            assert!(
+                harness.view.computer_surface().is_none(),
+                "Standing never owns command computer"
+            );
+            assert_eq!(serde_json::to_vec(&standing).unwrap(), before);
+            captures.push(capture(Some(&directory), name, &shot));
+        }
+        std::fs::write(directory.join("whole-space-runtime.json"), serde_json::to_vec_pretty(&serde_json::json!({
+            "schema_version":1,"scope":"Actual App seated/head-turn and registered standing engine callbacks; new in-memory fixture, not live telemetry or desktop input",
+            "capability":arkline_protocol::docked_traversal_capability(),"captures":captures,
+            "source_glb_sha256":arkline_protocol::PIONEER_DOCKED_SOURCE_SHA256,
+            "snapshot_unchanged":true,"standing_command_surface_revoked":true,
+            "renderer":gl.get_parameter_string(glow::RENDERER),
+            "limitations":["Prototype geometry, not final art", "No saved worlds or user data opened", "Interior camera streams are not implemented"]
+        })).unwrap()).unwrap();
+        for slot in 1..=7 {
+            assert!(
+                captures[..3].iter().any(|capture| capture["text"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|row| row["slot"] == slot)),
+                "Actual painter missing for slot {slot}"
+            );
+        }
+        for (view, slot) in [(1, 6), (2, 7)] {
+            for row in captures[view]["text"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|row| row["slot"] == slot)
+            {
+                assert_eq!(
+                    row["clear_samples"], 5,
+                    "Wing instrument must clear the real geometry: {row}"
+                );
+                assert_eq!(row["ink_clipped"], false, "No clipped wing glyphs: {row}");
+                assert_eq!(row["elided"], false);
+                assert!(
+                    row["projected_font_em_px"].as_f64().unwrap() >= 9.,
+                    "Readable wing text: {row}"
+                );
+            }
+        }
+        for (view, slot, status) in [(3, 6, "DISCONNECTED"), (4, 7, "PAUSED"), (5, 6, "STALE")] {
+            assert!(captures[view]["text"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|row| row["slot"] == slot && row["text"] == status));
+        }
+    }
+}
+
+#[test]
+#[ignore = "Explicit registered whole-ship deck cutaways; real engine subsets, no player-camera claim"]
+fn native_whole_ship_registered_blockout_cutaways() {
+    unsafe {
+        let directory = std::path::PathBuf::from(
+            std::env::var_os("ARKLINE_WHOLE_SHIP_EVIDENCE").expect("New evidence directory"),
+        );
+        std::fs::create_dir(&directory).unwrap();
+        let (_context, gl) = PrivateContext::create();
+        let harness = Harness::new(gl.clone());
+        let document = arkline_protocol::default_pioneer();
+        let cache = SceneCache::new(document.clone()).unwrap();
+        let pose = PioneerDockedPose::private();
+        let dynamic = dynamic_geometry(pose, actuator_pose(None, pose, None, 1000)).unwrap();
+        let installed = body_parts(&cache, &dynamic).unwrap();
+        let mut captures = Vec::new();
+        for (name, deck, oblique) in [
+            ("deck-1-top-cutaway", 1, false),
+            ("deck-2-cockpit-top-cutaway", 2, false),
+            ("deck-2-cockpit-oblique-cutaway", 2, true),
+            ("whole-ship-exterior", 0, true),
+            ("bow-canopy-exterior", 3, true),
+        ] {
+            let exterior = deck == 0 || deck == 3;
+            let floor = arkline_protocol::deck_floor_y(deck).unwrap_or(0.);
+            let keep = |panel: &arkline_protocol::PioneerDockedPanel| {
+                use arkline_protocol::PioneerDockedCell;
+                let in_deck = match panel.cell {
+                    PioneerDockedCell::Deck1 => deck == 1,
+                    PioneerDockedCell::Deck2 => deck == 2,
+                    PioneerDockedCell::Core => true,
+                    PioneerDockedCell::Room {
+                        deck: room_deck, ..
+                    } => room_deck == deck,
+                    PioneerDockedCell::Cockpit
+                    | PioneerDockedCell::Connector
+                    | PioneerDockedCell::Vestibule => deck == 2,
+                    _ => false,
+                };
+                in_deck
+                    && !panel.id.contains("ceiling")
+                    && !panel.id.contains("roof")
+                    && panel.bounds.center_m[1] < floor + 2.7
+                    && (deck == 2 || panel.bounds.center_m[1] >= floor - 0.2)
+            };
+            let mut subset = cache.geometry.as_ref().clone();
+            subset.panels.retain(keep);
+            let mut dynamic_subset = dynamic.clone();
+            dynamic_subset.panels.retain(keep);
+            let mut parts: Vec<_> = panel_parts(&subset, Mat4::IDENTITY, true).collect();
+            parts.extend(panel_parts(&dynamic_subset, Mat4::IDENTITY, false));
+            let rooms: Vec<_> = document
+                .rooms
+                .iter()
+                .filter(|room| exterior || room.deck == deck)
+                .collect();
+            assert_eq!(rooms.len(), if exterior { 12 } else { 6 });
+            for room in &rooms {
+                let registration =
+                    Mat4::from_translation(vector(deck_to_body(room.deck, [0.; 3]).unwrap()));
+                parts.extend(
+                    pioneer_interior::room_shell_parts(room)
+                        .into_iter()
+                        // Omit only overhead room lighting/baffles in this diagnostic
+                        // view so the actual lower fixtures remain inspectable.
+                        .filter(|(_, model, _, emission)| *emission == 0. && model.w_axis.y < 2.7)
+                        .map(|(mesh, model, color, emission)| {
+                            (mesh, registration * model, color, emission)
+                        }),
+                );
+            }
+            if exterior {
+                parts = installed.clone();
+            }
+            let mut program_rooms = Vec::new();
+            for room in &rooms {
+                let prefix = format!("room/{}/program/", room.id);
+                let mut program = cache.geometry.as_ref().clone();
+                program.panels.retain(|panel| panel.id.starts_with(&prefix));
+                let draws: Vec<_> = panel_parts(&program, Mat4::IDENTITY, true).collect();
+                if room.source_room_id.as_deref() == Some("D2-S1") {
+                    assert!(
+                        draws.is_empty(),
+                        "Galley retains its existing shared recipe"
+                    );
+                    continue;
+                }
+                assert!(
+                    !draws.is_empty(),
+                    "{} must have installed room-program draws",
+                    room.name
+                );
+                assert!(
+                    draws.iter().all(|draw| parts.contains(draw)),
+                    "{} program must be present in the actual cutaway/exterior draws",
+                    room.name
+                );
+                program_rooms.push(serde_json::json!({"source_room_id":room.source_room_id,
+                    "panel_count":program.panels.len(), "installed_draw_count":draws.len()}));
+            }
+            assert_eq!(
+                program_rooms.len(),
+                if exterior {
+                    11
+                } else if deck == 1 {
+                    6
+                } else {
+                    5
+                }
+            );
+            assert!(
+                parts.iter().all(|part| installed.contains(part)),
+                "Cutaway must contain only exact installed scene draws, never invented geometry"
+            );
+            let target = match deck {
+                0 => Vec3::ZERO,
+                3 => Vec3::new(32., 1., 0.),
+                _ => Vec3::new(if deck == 1 { 4. } else { 11.5 }, floor as f32, 0.),
+            };
+            let eye = target
+                + match deck {
+                    0 => Vec3::new(70., 45., 65.),
+                    3 => Vec3::new(14., 8., 14.),
+                    _ if oblique => Vec3::new(-17., 38., 27.),
+                    _ => Vec3::Y * 50.,
+                };
+            let half_width = match deck {
+                0 => 48.,
+                1 => 18.,
+                3 => 14.,
+                _ => 26.,
+            };
+            let half_height = half_width * HEIGHT as f32 / WIDTH as f32;
+            let vp = Mat4::orthographic_rh_gl(
+                -half_width,
+                half_width,
+                -half_height,
+                half_height,
+                0.1,
+                200.,
+            ) * Mat4::look_at_rh(eye, target, if oblique { Vec3::Y } else { -Vec3::Z });
+            let renderer = harness.view.renderer.as_ref().unwrap();
+            for _ in 0..3 {
+                gl.bind_framebuffer(
+                    glow::FRAMEBUFFER,
+                    Some(harness.target.as_ref().unwrap().framebuffer),
+                );
+                gl.viewport(0, 0, WIDTH as i32, HEIGHT as i32);
+                gl.disable(glow::SCISSOR_TEST);
+                gl.color_mask(true, true, true, true);
+                gl.depth_mask(true);
+                gl.clear_depth_f32(1.);
+                gl.clear_color(0.012, 0.020, 0.027, 1.);
+                gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
+                paint_scene(
+                    &mut renderer.lock().unwrap(),
+                    vp,
+                    eye,
+                    &parts,
+                    1000,
+                    true,
+                    0,
+                );
+            }
+            let mut pixels = vec![0; WIDTH * HEIGHT * 4];
+            gl.read_pixels(
+                0,
+                0,
+                WIDTH as i32,
+                HEIGHT as i32,
+                glow::RGBA,
+                glow::UNSIGNED_BYTE,
+                glow::PixelPackData::Slice(Some(&mut pixels)),
+            );
+            assert_eq!(gl.get_error(), glow::NO_ERROR);
+            let pixels = pixels
+                .chunks_exact(WIDTH * 4)
+                .rev()
+                .flatten()
+                .copied()
+                .collect::<Vec<_>>();
+            image::save_buffer_with_format(
+                directory.join(format!("{name}.png")),
+                &pixels,
+                WIDTH as u32,
+                HEIGHT as u32,
+                image::ColorType::Rgba8,
+                image::ImageFormat::Png,
+            )
+            .unwrap();
+            captures.push(serde_json::json!({"png":format!("{name}.png"),"deck":deck,
+                "view":if exterior { "Complete runtime hull and registered fittings, external inspection camera" }
+                    else { "Explicit roof/hull/overhead-lighting-omitted cutaway, not player camera" }, "exact_installed_draw_count":parts.len(),
+                "room_ids":rooms.iter().map(|room| room.source_room_id.clone()).collect::<Vec<_>>(),
+                "program_rooms":program_rooms,
+                "body_eye_m":eye.to_array(),"body_target_m":target.to_array(),
+                "rgba_sha256":hex::encode(Sha256::digest(&pixels))}));
+        }
+        std::fs::write(directory.join("whole-ship-cutaway.json"),serde_json::to_vec_pretty(&serde_json::json!({
+            "scope":"Actual engine rendering of exact registered installed panel/room subsets; roof, source hull and overhead room lighting omitted solely for cutaway inspection views; complete runtime recipe retained in exterior views",
+            "capability":arkline_protocol::docked_traversal_capability(),"captures":captures,
+            "source_glb_sha256":arkline_protocol::PIONEER_DOCKED_SOURCE_SHA256,
+            "renderer":gl.get_parameter_string(glow::RENDERER),
+            "limitations":["Does not establish full source-hull fit", "Does not imply room equipment mechanics are implemented", "Not a live player-camera view", "Canonical source GLB, materials, saved worlds and user data unchanged; prototype runtime includes separately guarded mullion replacement"]
         })).unwrap()).unwrap();
     }
 }

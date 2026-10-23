@@ -10,10 +10,10 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 
-// Revision 4 fits the raised pilot station, connected console and canopy liner.
+// Experimental revision 5 redesigns the complete pilot chamber. Fresh test worlds only.
 // Old saved bindings must
 // remain with their matching build until an explicit migration is validated.
-pub const PIONEER_DOCKED_REGISTRATION_REVISION: u32 = 4;
+pub const PIONEER_DOCKED_REGISTRATION_REVISION: u32 = 5;
 pub const PIONEER_DOCKED_SOURCE_SHA256: &str =
     "8125644f007537437942d34169e527c08ddd2dfaed575c874e2263ff2b7cb123";
 /// Dial coordinates in the complete canonical glass rectangle (u right, v down).
@@ -23,19 +23,18 @@ pub const PIONEER_DIAL_RADIUS_HEIGHT: f64 = 0.28;
 /// Dedicated rectangular range module in the navigation glass coordinate frame.
 pub const PIONEER_RANGE_MODULE_RECT: [[f64; 2]; 2] = [[0.58, 0.16], [0.97, 0.70]];
 
-
 const EPS: f64 = 1.0e-8;
 const FLOOR: f64 = -0.32;
 // Fitted interior authoring choices in the unchanged canonical body frame.
 // Registration admission/recovery must be coordinated before accepting this recipe.
-const COCKPIT_REAR_X_M: f64 = 31.6;
-const PILOT_STATION_SHIFT_X_M: f64 = -1.0;
+const COCKPIT_REAR_X_M: f64 = 27.0;
+const PILOT_STATION_SHIFT_X_M: f64 = -2.74;
 const PILOT_SEAT_RISE_M: f64 = 0.35;
 fn workstation_point(point: [f64; 3]) -> [f64; 3] {
     add(pilot_station_point(point), [0.0, PILOT_SEAT_RISE_M, 0.0])
 }
 fn pilot_station_point(point: [f64; 3]) -> [f64; 3] {
-    add(point, [PILOT_STATION_SHIFT_X_M, 0.0, 0.0])
+    add(point, [PILOT_STATION_SHIFT_X_M, 0.0, -3.0])
 }
 const P: [f64; 3] = [32.985, 0.0, -9.815];
 const T: [f64; 3] = [0.7903075524006599, 0.0, 0.6127103495719207];
@@ -787,6 +786,7 @@ pub fn registered_geometry(document: &RoomLayoutDocument) -> Result<PioneerDocke
                     PioneerDockedPanelKind::RoomObstacle,
                 );
             }
+            add_room_program_blockout(&mut g, room);
             let x = room.door_center_xz_m[0];
             let z = room.door_wall_z();
             let [w, h] = room.door_clear_wh_m;
@@ -825,6 +825,95 @@ pub fn registered_geometry(document: &RoomLayoutDocument) -> Result<PioneerDocke
 
 /// Construction finish shares the registered geometry in every camera/route.
 /// These static ceiling/service housings create no equipment or powered circuit.
+/// Physical reservations for the complete room program. These are static
+/// blockout fittings, not claims that power, life support or cameras operate.
+/// All bodies share the authority's geometry; no pass-through cabinets.
+fn add_room_program_blockout(g: &mut PioneerDockedGeometry, room: &crate::RoomLayout) {
+    if room.clear_lwh_m[0] < 7.0 || room.clear_lwh_m[1] < 4.5 {
+        return;
+    }
+    let Some(id) = room.source_room_id.as_deref() else {
+        return;
+    };
+    let [x, z] = room.origin_xz_m;
+    let depth = room.clear_lwh_m[1];
+    let rear = if room.deck == 1 && id.ends_with("P1") || id.contains("-P") {
+        z + 0.22
+    } else {
+        z + depth - 1.0
+    };
+    let cell = PioneerDockedCell::Room {
+        deck: room.deck,
+        room_id: room.id,
+    };
+    let spec: Vec<(&str, f64, f64, f64, f64)> = match id {
+        "D1-P1" => vec![("eva-lockers", 0.45, 2.2, 0.65, 2.0)],
+        "D1-S1" => vec![
+            ("power-cabinet-a", 0.45, 1.1, 0.65, 2.2),
+            ("power-cabinet-b", 1.75, 1.1, 0.65, 2.2),
+            ("service-space", 6.0, 1.0, 0.65, 1.2),
+        ],
+        "D1-P2" => vec![
+            ("drone-bench", 0.45, 2.4, 0.75, 0.9),
+            ("drone-cradle", 6.0, 1.2, 0.75, 0.5),
+        ],
+        "D1-S2" => vec![
+            ("cargo-staging-a", 0.45, 1.2, 0.8, 1.3),
+            ("cargo-staging-b", 1.85, 1.2, 0.8, 1.3),
+        ],
+        "D1-P3" => vec![
+            ("stores-rack-a", 0.45, 1.2, 0.65, 2.0),
+            ("stores-rack-b", 1.85, 1.2, 0.65, 2.0),
+        ],
+        "D1-S3" => vec![
+            ("workbench", 0.45, 2.5, 0.75, 0.9),
+            ("tool-cabinet", 6.0, 1.0, 0.65, 1.8),
+        ],
+        "D2-P1" => vec![
+            ("planning-table", 0.7, 2.0, 0.8, 0.85),
+            ("chart-storage", 6.0, 1.0, 0.65, 1.7),
+        ],
+        "D2-S1" => vec![], // Existing physical galley remains part of the shared room recipe.
+        "D2-P2" => vec![
+            ("sensor-rack", 0.45, 1.2, 0.65, 2.0),
+            ("comms-rack", 1.85, 1.2, 0.65, 2.0),
+        ],
+        "D2-S2" => vec![
+            ("medical-berth-a", 0.45, 2.0, 0.8, 0.65),
+            ("medical-berth-b", 5.9, 2.0, 0.8, 0.65),
+        ],
+        "D2-P3" => vec![
+            ("operations-table", 0.7, 2.0, 0.8, 0.85),
+            ("operations-console", 6.0, 1.0, 0.65, 1.2),
+        ],
+        "D2-S3" => vec![
+            ("life-support-rack-a", 0.45, 1.2, 0.65, 2.2),
+            ("life-support-rack-b", 1.85, 1.2, 0.65, 2.2),
+        ],
+        _ => vec![],
+    };
+    for (name, offset, length, d, h) in spec {
+        g.block(
+            format!("room/{}/program/{name}", room.id),
+            deck_to_body(room.deck, [x + offset, 0.0, rear]).unwrap(),
+            deck_to_body(room.deck, [x + offset + length, h, rear + d]).unwrap(),
+            PioneerDockedMaterial::Graphite,
+            PioneerDockedCollision::Solid,
+            cell,
+            PioneerDockedPanelKind::Furniture,
+        );
+        g.block(
+            format!("room/{}/program/{name}/cap", room.id),
+            deck_to_body(room.deck, [x + offset, h, rear]).unwrap(),
+            deck_to_body(room.deck, [x + offset + length, h + 0.04, rear + d]).unwrap(),
+            PioneerDockedMaterial::WallPanel,
+            PioneerDockedCollision::Solid,
+            cell,
+            PioneerDockedPanelKind::Furniture,
+        );
+    }
+}
+
 fn add_service_finish(g: &mut PioneerDockedGeometry) {
     for deck in [1, 2] {
         let floor = deck_floor_y(deck).unwrap();
@@ -871,9 +960,9 @@ fn add_service_finish(g: &mut PioneerDockedGeometry) {
     }
     // The fitted bridge has its own service ceiling, not an exposed hull void.
     for bay in 0..3 {
-        let x = 31.75 + bay as f64;
+        let x = 28.25 + bay as f64 * 2.0;
         for side in [-1.0, 1.0] {
-            let z = side * 4.8;
+            let z = side * 1.9;
             g.block(
                 format!("finish/bridge/service/{bay}/{side}"),
                 [x, 2.72, z - 0.25],
@@ -1087,8 +1176,8 @@ fn add_connector(g: &mut PioneerDockedGeometry) {
     }
     g.floor(
         "cockpit/aft-crosswalk",
-        [COCKPIT_REAR_X_M, -6.8],
-        [34.7, 5.8],
+        [COCKPIT_REAR_X_M, -2.7],
+        [34.7, 2.7],
         FLOOR,
         0.12,
         PioneerDockedSupport::Cockpit,
@@ -1097,8 +1186,8 @@ fn add_connector(g: &mut PioneerDockedGeometry) {
     );
     g.floor(
         "cockpit/seat-floor",
-        [34.7, -6.8],
-        [34.9, 5.8],
+        [34.7, -2.7],
+        [34.9, 2.7],
         FLOOR,
         0.12,
         PioneerDockedSupport::Cockpit,
@@ -1107,17 +1196,17 @@ fn add_connector(g: &mut PioneerDockedGeometry) {
     );
     g.floor(
         "cockpit/port-walkway",
-        [33.7, -8.4],
-        [34.5, -6.8],
+        [33.4, -8.4],
+        [34.8, -3.5],
         FLOOR,
         0.12,
         PioneerDockedSupport::Cockpit,
         PioneerDockedCell::Cockpit,
         [0.0, 0.0],
     );
-    // Real bay boundaries share the floor/collision recipe. The 0.8 m port
-    // opening retains the existing measured walkway and boarding vestibule.
-    for (i, (z0, z1)) in [(-6.88, -0.7), (0.7, 5.88)].into_iter().enumerate() {
+    // The centered rear entry and 1.4 m aft port service exit are distinct.
+    // The service passage routes around the continuous side console.
+    for (i, (z0, z1)) in [(-2.78, -0.7), (0.7, 2.78)].into_iter().enumerate() {
         g.block(
             format!("cockpit/rear-bulkhead/{i}"),
             [COCKPIT_REAR_X_M - 0.12, FLOOR, z0],
@@ -1140,25 +1229,25 @@ fn add_connector(g: &mut PioneerDockedGeometry) {
     for (id, min, max) in [
         (
             "ceiling",
-            [COCKPIT_REAR_X_M - 0.12, 2.88, -6.88],
-            [34.901, 2.98, 5.88],
+            [COCKPIT_REAR_X_M - 0.12, 2.88, -2.78],
+            [34.901, 2.98, 2.78],
         ),
         (
             "starboard-wall",
-            [COCKPIT_REAR_X_M, FLOOR, 5.8],
-            [34.9, 2.88, 5.88],
+            [COCKPIT_REAR_X_M, FLOOR, 2.7],
+            [34.9, 2.88, 2.78],
         ),
         (
             "port-aft-wall",
-            [COCKPIT_REAR_X_M, FLOOR, -6.88],
-            [33.7, 2.88, -6.8],
+            [COCKPIT_REAR_X_M, FLOOR, -2.78],
+            [28.5, 2.88, -2.7],
         ),
         (
             "port-forward-wall",
-            [34.5, FLOOR, -6.88],
-            [34.9, 2.88, -6.8],
+            [29.9, FLOOR, -2.78],
+            [34.9, 2.88, -2.7],
         ),
-        ("port-exit-header", [33.7, 2.08, -6.88], [34.5, 2.88, -6.8]),
+        ("port-exit-header", [28.5, 2.08, -2.78], [29.9, 2.88, -2.7]),
     ] {
         g.block(
             format!("cockpit/{id}"),
@@ -1176,6 +1265,43 @@ fn add_connector(g: &mut PioneerDockedGeometry) {
             PioneerDockedPanelKind::Structure,
         );
     }
+    g.floor(
+        "cockpit/port-service-passage",
+        [28.5, -4.2],
+        [34.8, -2.70],
+        FLOOR,
+        0.12,
+        PioneerDockedSupport::Cockpit,
+        PioneerDockedCell::Cockpit,
+        [0.0, 0.0],
+    );
+    g.block(
+        "cockpit/port-service-passage/roof",
+        [28.5, 2.08, -4.2],
+        [34.8, 2.20, -2.70],
+        PioneerDockedMaterial::ServiceCeiling,
+        PioneerDockedCollision::Solid,
+        PioneerDockedCell::Cockpit,
+        PioneerDockedPanelKind::Structure,
+    );
+    g.block(
+        "cockpit/port-service-passage/aft",
+        [28.42, FLOOR, -4.2],
+        [28.5, 2.08, -2.70],
+        PioneerDockedMaterial::FittedBulkhead,
+        PioneerDockedCollision::Solid,
+        PioneerDockedCell::Cockpit,
+        PioneerDockedPanelKind::Structure,
+    );
+    g.block(
+        "cockpit/port-service-passage/outer",
+        [28.5, FLOOR, -4.28],
+        [33.4, 2.08, -4.2],
+        PioneerDockedMaterial::FittedBulkhead,
+        PioneerDockedCollision::Solid,
+        PioneerDockedCell::Cockpit,
+        PioneerDockedPanelKind::Structure,
+    );
     add_cockpit_exit_guidance(g);
     let d = normalized(sub(VESTIBULE_END, VESTIBULE_START));
     let lateral = [-d[2], 0.0, d[0]];
@@ -1528,12 +1654,30 @@ fn add_cockpit_dial_rim(
     // Their fronts stay behind the unchanged live needle/label/input plane.
     // Passive detail does not change the registered solid collision recipe.
     for (name, front, rear, inner, outer, material) in [
-        ("retaining-collar", 0.002, 0.012, radius + 0.004, radius + 0.010,
-            PioneerDockedMaterial::Titanium),
-        ("barrel", 0.012, 0.045, radius + 0.002, radius + 0.006,
-            PioneerDockedMaterial::Graphite),
-        ("mounting-flange", 0.045, 0.052, radius + 0.002, radius + 0.014,
-            PioneerDockedMaterial::Carbon),
+        (
+            "retaining-collar",
+            0.002,
+            0.012,
+            radius + 0.004,
+            radius + 0.010,
+            PioneerDockedMaterial::Titanium,
+        ),
+        (
+            "barrel",
+            0.012,
+            0.045,
+            radius + 0.002,
+            radius + 0.006,
+            PioneerDockedMaterial::Graphite,
+        ),
+        (
+            "mounting-flange",
+            0.045,
+            0.052,
+            radius + 0.002,
+            radius + 0.014,
+            PioneerDockedMaterial::Carbon,
+        ),
     ] {
         let middle = (inner + outer) * 0.5;
         let tangent_half = middle * (std::f64::consts::PI / 16.0).tan();
@@ -1545,8 +1689,10 @@ fn add_cockpit_dial_rim(
             g.panel(
                 format!("cockpit/screen/{slot}/dial/{dial}/housing/{name}/{segment}"),
                 PioneerDockedBox {
-                    center_m: add(dial_center,
-                        add(mul(axes[0], (front + rear) * 0.5), mul(radial, middle))),
+                    center_m: add(
+                        dial_center,
+                        add(mul(axes[0], (front + rear) * 0.5), mul(radial, middle)),
+                    ),
                     half_m: [(rear - front) * 0.5, (outer - inner) * 0.5, tangent_half],
                     axes: [axes[0], radial, tangent],
                 },
@@ -1561,22 +1707,37 @@ fn add_cockpit_dial_rim(
     // cartridge an actual mounting interface. The ears bridge aft into the
     // existing shared case backplate. No marks imply a control/state.
     for ear in 0..4 {
-        let angle = std::f64::consts::FRAC_PI_4
-            + ear as f64 * std::f64::consts::FRAC_PI_2;
+        let angle = std::f64::consts::FRAC_PI_4 + ear as f64 * std::f64::consts::FRAC_PI_2;
         let (sin, cos) = angle.sin_cos();
         let radial = add(mul(axes[1], cos), mul(axes[2], sin));
         let tangent = add(mul(axes[1], -sin), mul(axes[2], cos));
         for (name, depth, half_depth, radial_center, half_radial, half_tangent, material) in [
-            ("ear", 0.062, 0.012, radius + 0.013, 0.009, 0.006,
-                PioneerDockedMaterial::Graphite),
-            ("fastener", 0.048, 0.002, radius + 0.016, 0.003, 0.003,
-                PioneerDockedMaterial::Titanium),
+            (
+                "ear",
+                0.062,
+                0.012,
+                radius + 0.013,
+                0.009,
+                0.006,
+                PioneerDockedMaterial::Graphite,
+            ),
+            (
+                "fastener",
+                0.048,
+                0.002,
+                radius + 0.016,
+                0.003,
+                0.003,
+                PioneerDockedMaterial::Titanium,
+            ),
         ] {
             g.panel(
                 format!("cockpit/screen/{slot}/dial/{dial}/housing/{name}/{ear}"),
                 PioneerDockedBox {
-                    center_m: add(dial_center,
-                        add(mul(axes[0], depth), mul(radial, radial_center))),
+                    center_m: add(
+                        dial_center,
+                        add(mul(axes[0], depth), mul(radial, radial_center)),
+                    ),
                     half_m: [half_depth, half_radial, half_tangent],
                     axes: [axes[0], radial, tangent],
                 },
@@ -1675,15 +1836,31 @@ fn add_cockpit_furniture(g: &mut PioneerDockedGeometry) {
     use PioneerDockedMaterial::{Carbon, Graphite, Titanium};
     let cell = PioneerDockedCell::Cockpit;
     let solid = PioneerDockedCollision::Solid;
-    g.block(
-        "pilot-chair/wallplate",
-        workstation_point([33.70, -0.20, 2.60]),
-        workstation_point([33.77, 1.05, 3.40]),
-        Titanium,
-        solid,
-        cell,
-        PioneerDockedPanelKind::Furniture,
-    );
+    // Open structural chair frame rather than a solid room-dividing plate.
+    for (name, min, max) in [
+        ("port-rail", [33.70, -0.20, 2.60], [33.77, 1.05, 2.67]),
+        ("starboard-rail", [33.70, -0.20, 3.33], [33.77, 1.05, 3.40]),
+        (
+            "upper-crossmember",
+            [33.70, 0.98, 2.60],
+            [33.77, 1.05, 3.40],
+        ),
+        (
+            "lower-crossmember",
+            [33.70, 0.12, 2.60],
+            [33.77, 0.20, 3.40],
+        ),
+    ] {
+        g.block(
+            format!("pilot-chair/frame/{name}"),
+            workstation_point(min),
+            workstation_point(max),
+            Titanium,
+            solid,
+            cell,
+            PioneerDockedPanelKind::Furniture,
+        );
+    }
     g.block(
         "pilot-chair/backrest",
         workstation_point([33.80, 0.32, 2.70]),
@@ -1709,62 +1886,21 @@ fn add_cockpit_furniture(g: &mut PioneerDockedGeometry) {
     // ends before the folded pan's measured minimum X=32.801 m.
     g.block(
         "pilot-chair/deck-support",
-        [32.66, FLOOR, 2.60],
-        [32.78, -0.19 + PILOT_SEAT_RISE_M, 3.40],
+        [30.92, FLOOR, -0.40],
+        [31.04, -0.19 + PILOT_SEAT_RISE_M, 0.40],
         Titanium,
         solid,
         cell,
         PioneerDockedPanelKind::Furniture,
     );
-    // The original canopy and its structural perimeter are unchanged.
-    for (id, min, max, material) in [
-        (
-            "canopy/source-perimeter-post",
-            [35.55, -0.65, 4.75],
-            [35.62, 2.71, 4.85],
-            Titanium,
-        ),
-        (
-            "canopy/header",
-            [34.80, 2.02, -6.8],
-            [34.90, 2.88, 5.8],
-            Graphite,
-        ),
-        (
-            "canopy/sill",
-            [34.80, FLOOR, -6.8],
-            [34.90, 0.45, 5.8],
-            Carbon,
-        ),
-        (
-            "canopy/port-jamb",
-            [34.80, 0.45, 1.72],
-            [34.90, 2.02, 1.82],
-            Titanium,
-        ),
-        (
-            "canopy/starboard-jamb",
-            [34.80, 0.45, 4.18],
-            [34.90, 2.02, 4.28],
-            Titanium,
-        ),
-    ] {
-        g.block(
-            format!("cockpit/{id}"),
-            min,
-            max,
-            material,
-            solid,
-            cell,
-            PioneerDockedPanelKind::Furniture,
-        );
-    }
+    // A complete experimental chamber, not an overlay on the former crosswalk.
+    add_cockpit_chamber_structure(g);
     add_cockpit_low_console(g);
 
     // Index identities mirror the existing six screen slots. Slot zero is
     // transparent telemetry, not a depth-writing console panel.
-    for i in 1..6 {
-        let (center, half) = cockpit_screen(i).expect("five physical panels");
+    for i in 1..8 {
+        let (center, half) = cockpit_screen(i).expect("seven physical panels");
         let axes = cockpit_screen_axes(i).expect("same five physical panel frames");
         if i == 1 || i == 2 {
             add_cockpit_dial_rim(g, i, 0, center, half, axes);
@@ -1865,194 +2001,311 @@ pub fn cockpit_panel_has_visual_replacement(id: &str) -> bool {
 fn add_cockpit_low_console(g: &mut PioneerDockedGeometry) {
     use PioneerDockedMaterial::{Carbon, Graphite, Titanium, WallPanel};
     let cell = PioneerDockedCell::Cockpit;
-    for (id, min, max, material) in [
-        ("port-cabinet/core", [34.12, FLOOR, 2.0], [35.01, 0.28, 2.65], Graphite),
-        ("starboard-cabinet/core", [34.12, FLOOR, 3.35], [35.01, 0.28, 4.0], Graphite),
-        ("forward-bridge/core", [34.78, FLOOR, 2.65], [35.01, 0.32, 3.35], Graphite),
-        ("footrest", [33.85, FLOOR, 2.68], [34.18, 0.085, 3.32], Carbon),
-        ("center-pedestal/core", [34.26, 0.43, 2.86], [34.66, 0.83, 3.14], Graphite),
-        ("port-instrument-foot/core", [34.80, 0.43, 2.13], [35.02, 0.50, 2.55], Graphite),
-        ("starboard-instrument-foot/core", [34.80, 0.43, 3.45], [35.02, 0.50, 3.87], Graphite),
-    ] {
-        g.block(format!("cockpit/console/{id}"), min, max, material,
-            PioneerDockedCollision::Solid, cell, PioneerDockedPanelKind::Furniture);
-    }
-    // Tapered solid cheeks widen toward the inclined MFD instead of making
-    // a third cream cuboid. They remain inside the previous pedestal envelope.
-    for (side, a, b) in [
-        ("port", [34.46, 0.45, 2.86], [34.46, 0.81, 2.75]),
-        ("starboard", [34.46, 0.45, 3.14], [34.46, 0.81, 3.25]),
-    ] {
-        let delta = sub(b, a);
-        let length = dot(delta, delta).sqrt();
-        let along = mul(delta, length.recip());
-        g.panel(format!("cockpit/console/center-pedestal/{side}-cheek"),
-            PioneerDockedBox { center_m: mul(add(a, b), 0.5),
-                half_m: [0.20, length * 0.5, 0.008], axes: [X, along, cross(X, along)] },
-            WallPanel, PioneerDockedCollision::Solid, cell, PioneerDockedPanelKind::Furniture);
-    }
-    // Three closed facets form each side of the low horseshoe. The raked
-    // apron retreats toward its dark lower core; the Carbon shoulder slopes up
-    // toward the actual instrument feet. These replace, rather than skin, the
-    // former flat cream cabinet blocks, and remain inside their exact bounds.
-    let apron_delta: [f64; 3] = [-0.14, 0.38, 0.0];
-    let apron_length = dot(apron_delta, apron_delta).sqrt();
-    let apron_along = mul(apron_delta, apron_length.recip());
-    let apron_normal = [apron_along[1], -apron_along[0], 0.0];
-    let shoulder_length = 1.02_f64.hypot(0.11);
-    let shoulder_axes = [[1.02 / shoulder_length, 0.11 / shoulder_length, 0.0],
-        [-0.11 / shoulder_length, 1.02 / shoulder_length, 0.0], Z];
-    for (side, z0, z1) in [("port", 2.0, 2.65), ("starboard", 3.35, 4.0)] {
-        let mid_z = (z0 + z1) * 0.5;
-        let apron_center = [34.05, 0.10, mid_z];
-        g.panel(format!("cockpit/console/{side}-cabinet/raked-apron"),
-            PioneerDockedBox { center_m: apron_center,
-                half_m: [0.060, apron_length * 0.5, (z1 - z0) * 0.5],
-                axes: [apron_normal, apron_along, Z] },
-            WallPanel, PioneerDockedCollision::Solid, cell, PioneerDockedPanelKind::Furniture);
-        g.panel(format!("cockpit/console/{side}-cabinet/sloping-shoulder"),
-            PioneerDockedBox { center_m: [34.49, 0.35, mid_z],
-                half_m: [shoulder_length * 0.5, 0.025, (z1 - z0) * 0.5], axes: shoulder_axes },
-            Carbon, PioneerDockedCollision::Solid, cell, PioneerDockedPanelKind::Furniture);
-        // Covers sit 1 mm clear of the real apron face, with their own depth;
-        // no coplanar cream skins or floating fronts at the obsolete X plane.
-        for (name, along, half, material) in [
-            ("service-inset", 0.0, [0.001, 0.13, 0.25], Carbon),
-            ("lower-edge", -0.15, [0.001, 0.003, 0.25], Titanium),
+    let solid = PioneerDockedCollision::Solid;
+    // One horseshoe chassis: lateral systems benches join the forward belt.
+    // The aft ends stop before the rear circulation space. No center barrier.
+    for side in [-1.0, 1.0] {
+        let (z0, z1) = if side < 0.0 {
+            (-2.40, -1.18)
+        } else {
+            (1.18, 2.40)
+        };
+        for (name, min, max, material) in [
+            ("bench", [30.25, FLOOR, z0], [34.35, 0.48, z1], Graphite),
+            (
+                "toe-recess",
+                [30.30, FLOOR + 0.02, z0 + 0.06],
+                [34.30, FLOOR + 0.12, z1 - 0.06],
+                Carbon,
+            ),
         ] {
-            g.panel(format!("cockpit/console/{side}/{name}"),
+            g.block(
+                format!("cockpit/console/wing/{side}/{name}"),
+                min,
+                max,
+                material,
+                solid,
+                cell,
+                PioneerDockedPanelKind::Furniture,
+            );
+        }
+        // The instrument wing is a continuous inclined chassis, not tablets
+        // placed on a horizontal counter. Its lower edge joins the inner lip;
+        // the outer rise supports the side displays without filling their aperture.
+        let slope = (0.60_f64 / 1.22).atan();
+        let (sn, cs) = slope.sin_cos();
+        g.panel(
+            format!("cockpit/console/wing/{side}/inclined-fascia"),
+            PioneerDockedBox {
+                center_m: [32.30, 0.85, side * 1.79],
+                half_m: [
+                    2.05,
+                    0.035,
+                    (1.22_f64.powi(2) + 0.60_f64.powi(2)).sqrt() / 2.0,
+                ],
+                axes: [[1.0, 0.0, 0.0], [0.0, cs, -side * sn], [0.0, side * sn, cs]],
+            },
+            WallPanel,
+            solid,
+            cell,
+            PioneerDockedPanelKind::Furniture,
+        );
+        // Physical divisions and inset service panels, no invented powered state.
+        for section in 0..5 {
+            let x = 30.45 + section as f64 * 0.73;
+            let z = if side < 0.0 { z1 + 0.002 } else { z0 - 0.012 };
+            g.block(
+                format!("cockpit/console/wing/{side}/service/{section}"),
+                [x, -0.12, z],
+                [x + 0.58, 0.36, z + 0.010],
+                Carbon,
+                PioneerDockedCollision::Decoration,
+                cell,
+                PioneerDockedPanelKind::Furniture,
+            );
+        }
+    }
+    g.block(
+        "cockpit/console/forward-belt",
+        [33.65, FLOOR, -1.18],
+        [34.35, 0.55, 1.18],
+        Graphite,
+        solid,
+        cell,
+        PioneerDockedPanelKind::Furniture,
+    );
+    g.block(
+        "cockpit/console/center-plinth",
+        [32.63, 0.16, -0.33],
+        [33.14, 0.73, 0.33],
+        Graphite,
+        solid,
+        cell,
+        PioneerDockedPanelKind::Furniture,
+    );
+    for slot in 1..8 {
+        let (center, half) = cockpit_screen(slot).unwrap();
+        let axes = cockpit_screen_axes(slot).unwrap();
+        let point = |local: [f64; 3]| {
+            add(
+                center,
+                add(
+                    mul(axes[0], local[0]),
+                    add(mul(axes[1], local[1]), mul(axes[2], local[2])),
+                ),
+            )
+        };
+        for (name, local, extent, material) in [
+            (
+                "case",
+                [0.055, 0.0, 0.0],
+                [0.065, half[1] + 0.025, half[2] + 0.025],
+                Graphite,
+            ),
+            (
+                "crown",
+                [0.0, half[1] + 0.021, 0.0],
+                [0.045, 0.015, half[2] + 0.030],
+                WallPanel,
+            ),
+            (
+                "sill",
+                [0.0, -half[1] - 0.021, 0.0],
+                [0.045, 0.015, half[2] + 0.030],
+                WallPanel,
+            ),
+            (
+                "port",
+                [0.0, 0.0, -half[2] - 0.021],
+                [0.045, half[1] + 0.020, 0.015],
+                Titanium,
+            ),
+            (
+                "starboard",
+                [0.0, 0.0, half[2] + 0.021],
+                [0.045, half[1] + 0.020, 0.015],
+                Titanium,
+            ),
+        ] {
+            g.panel(
+                format!("cockpit/console/mount/{slot}/{name}"),
                 PioneerDockedBox {
-                    center_m: add(apron_center, add(mul(apron_normal, -0.062), mul(apron_along, along))),
-                    half_m: half, axes: [apron_normal, apron_along, Z] },
-                material, PioneerDockedCollision::Decoration, cell, PioneerDockedPanelKind::Furniture);
+                    center_m: point(local),
+                    half_m: extent,
+                    axes,
+                },
+                material,
+                solid,
+                cell,
+                PioneerDockedPanelKind::Furniture,
+            );
         }
     }
-    // The original forward connection remains a single narrow bridge, now
-    // capped by a sloped structural cross-member instead of a broad flat slab.
-    let bridge_length = 0.30_f64.hypot(0.04);
-    g.panel("cockpit/console/forward-bridge/sloped-cap",
-        PioneerDockedBox { center_m: [34.84, 0.34, 3.0], half_m: [bridge_length * 0.5, 0.025, 0.35],
-            axes: [[0.30 / bridge_length, 0.04 / bridge_length, 0.0],
-                [-0.04 / bridge_length, 0.30 / bridge_length, 0.0], Z] },
-        Graphite, PioneerDockedCollision::Solid, cell, PioneerDockedPanelKind::Furniture);
-    let foot_length = 0.22_f64.hypot(0.055);
-    for (side, z0, z1) in [("port", 2.13, 2.55), ("starboard", 3.45, 3.87)] {
-        g.panel(format!("cockpit/console/{side}-instrument-foot/inclined-attachment"),
-            PioneerDockedBox { center_m: [34.88, 0.5075, (z0 + z1) * 0.5],
-                half_m: [foot_length * 0.5, 0.018, (z1 - z0) * 0.5],
-                axes: [[0.22 / foot_length, 0.055 / foot_length, 0.0],
-                    [-0.055 / foot_length, 0.22 / foot_length, 0.0], Z] },
-            WallPanel, PioneerDockedCollision::Solid, cell, PioneerDockedPanelKind::Furniture);
-    }
-    for slot in 1..6 {
-        let (center, half) = cockpit_screen(slot).expect("five mounted instruments");
-        let axes = cockpit_screen_axes(slot).expect("shared mount frame");
-        let point = |local: [f64; 3]| add(center, add(mul(axes[0], local[0]),
-            add(mul(axes[1], local[1]), mul(axes[2], local[2]))));
-        if slot <= 2 {
-            // Dedicated cartridges mount through a real sloping deck. There is
-            // no surviving rectangular case or four-sided cream screen frame.
-            // The core starts at the real barrel-flange rear plane (+.020).
-            for (name, local, extents, material) in [
-                ("deck-core", [0.071, 0.0, 0.0], [0.051, 0.072, 0.205], Graphite),
-                ("lower-rail", [0.070, -0.092, 0.0], [0.052, 0.012, 0.238], WallPanel),
-                ("header-backer", [-0.00425, 0.080, 0.0], [0.02625, 0.012, 0.212], Carbon),
-                ("footer-backer", [-0.00425, -0.081, 0.0], [0.02625, 0.011, 0.212], Carbon),
-            ] {
-                g.panel(format!("cockpit/console/mount/{slot}/{name}"),
-                    PioneerDockedBox { center_m: point(local), half_m: extents, axes },
-                    material, PioneerDockedCollision::Solid, cell, PioneerDockedPanelKind::Furniture);
-            }
-            continue;
-        }
-        if slot >= 4 {
-            continue; // Task faces belong to the shared physical pods below.
-        }
-        // The unchanged central case remains behind its live input plane.
-        let (case_center, case_depth) = (0.091, 0.109);
-        for (name, local, extents, material) in [
-            ("case", [case_center, 0.0, 0.0], [case_depth, half[1] + 0.018, half[2] + 0.018], Graphite),
-            ("top-return", [-0.020, half[1] + 0.010, 0.0], [0.010, 0.009, half[2] + 0.018], WallPanel),
-            ("bottom-return", [-0.020, -half[1] - 0.010, 0.0], [0.010, 0.009, half[2] + 0.018], WallPanel),
-            ("port-return", [-0.020, 0.0, -half[2] - 0.010], [0.010, half[1] + 0.001, 0.009], WallPanel),
-            ("starboard-return", [-0.020, 0.0, half[2] + 0.010], [0.010, half[1] + 0.001, 0.009], WallPanel),
-        ] {
-            g.panel(format!("cockpit/console/mount/{slot}/{name}"),
-                PioneerDockedBox { center_m: point(local), half_m: extents, axes },
-                material, PioneerDockedCollision::Solid, cell, PioneerDockedPanelKind::Furniture);
-        }
-    }
-    add_cockpit_shared_instrument_pods(g);
-
 }
 
-/// Each closed pod physically joins one dedicated instrument deck and its
-/// forward task surface. The old independent task box and rectangular support
-/// foot are absent; common side facets and a raked rear web carry both mounts.
-fn add_cockpit_shared_instrument_pods(g: &mut PioneerDockedGeometry) {
+/// Repeated real ribs and trim unify roof, sidewalls and deck. Palette and
+/// lighting systems are unchanged; the blockout gets depth from construction.
+fn add_cockpit_chamber_structure(g: &mut PioneerDockedGeometry) {
     use PioneerDockedMaterial::{Carbon, Graphite, Titanium, WallPanel};
     let cell = PioneerDockedCell::Cockpit;
-    for (side, lower_slot, task_slot) in [("port", 1, 4), ("starboard", 2, 5)] {
-        let (low_center, _) = cockpit_screen(lower_slot).unwrap();
-        let low_axes = cockpit_screen_axes(lower_slot).unwrap();
-        let (task_center, task_half) = cockpit_screen(task_slot).unwrap();
-        let task_axes = cockpit_screen_axes(task_slot).unwrap();
-        let point = |center, axes: [[f64; 3]; 3], local: [f64; 3]| add(center,
-            add(mul(axes[0], local[0]), add(mul(axes[1], local[1]), mul(axes[2], local[2]))));
-        let mut part = |name: &str, bounds, material| {
-            g.panel(format!("cockpit/console/shared-pod/{side}/{name}"), bounds,
-                material, PioneerDockedCollision::Solid, cell, PioneerDockedPanelKind::Furniture);
-        };
-        for (edge, sign) in [("port", -1.0_f64), ("starboard", 1.0_f64)] {
-            let a = point(low_center, low_axes, [0.050, -0.090, sign * 0.232]);
-            let b = point(task_center, task_axes, [0.045, 0.085, sign * 0.232]);
-            let delta = sub(b, a);
-            let length = dot(delta, delta).sqrt();
-            let along = mul(delta, length.recip());
-            let shared_right = normalized(add(low_axes[2], task_axes[2]));
-            let across = normalized(sub(shared_right, mul(along, dot(shared_right, along))));
-            part(&format!("{edge}-facet"), PioneerDockedBox {
-                center_m: mul(add(a, b), 0.5), half_m: [0.040, length * 0.5, 0.009],
-                axes: [cross(along, across), along, across] }, WallPanel);
+    let solid = PioneerDockedCollision::Solid;
+    for (name, min, max, material) in [
+        (
+            "forward-sill",
+            [34.55, FLOOR, -2.70],
+            [34.88, 0.52, 2.70],
+            Graphite,
+        ),
+        (
+            "canopy-header",
+            [34.55, 2.60, -2.70],
+            [34.88, 2.88, 2.70],
+            WallPanel,
+        ),
+        (
+            "canopy-port",
+            [34.55, 0.52, -2.70],
+            [34.88, 2.30, -2.50],
+            Titanium,
+        ),
+        (
+            "canopy-starboard",
+            [34.55, 0.52, 2.50],
+            [34.88, 2.30, 2.70],
+            Titanium,
+        ),
+        (
+            "rear-door-header",
+            [27.0, 2.08, -0.90],
+            [27.20, 2.50, 0.90],
+            WallPanel,
+        ),
+        (
+            "rear-door-port",
+            [27.0, FLOOR, -0.90],
+            [27.20, 2.08, -0.70],
+            WallPanel,
+        ),
+        (
+            "rear-door-starboard",
+            [27.0, FLOOR, 0.70],
+            [27.20, 2.08, 0.90],
+            WallPanel,
+        ),
+    ] {
+        g.block(
+            format!("cockpit/chamber/{name}"),
+            min,
+            max,
+            material,
+            solid,
+            cell,
+            PioneerDockedPanelKind::Structure,
+        );
+    }
+    // Revision-5 canopy refit replaces the exact saved-source center mullion
+    // with outboard load-path reservations. No pressure/strength rating is claimed.
+    // The source glass remains intact and these frames join its X=35.72 plane
+    // to the new chamber rather than leaving disconnected interior trim.
+    for side in [-1.0, 1.0] {
+        g.block(
+            format!("cockpit/chamber/canopy-outboard/{side}"),
+            [34.55, 0.44, side * 2.55 - 0.08],
+            [35.84, 2.71, side * 2.55 + 0.08],
+            Titanium,
+            solid,
+            cell,
+            PioneerDockedPanelKind::Structure,
+        );
+    }
+    for (name, y0, y1) in [("upper", 2.60, 2.71), ("lower", 0.44, 0.52)] {
+        g.block(
+            format!("cockpit/chamber/canopy-transom/{name}"),
+            [34.55, y0, -2.63],
+            [35.84, y1, 2.63],
+            Titanium,
+            solid,
+            cell,
+            PioneerDockedPanelKind::Structure,
+        );
+    }
+    for i in 0..5 {
+        let x = 27.35 + i as f64 * 1.40;
+        g.block(
+            format!("cockpit/chamber/rib/{i}/roof"),
+            [x, 2.68, -2.15],
+            [x + 0.12, 2.88, 2.15],
+            WallPanel,
+            solid,
+            cell,
+            PioneerDockedPanelKind::Structure,
+        );
+        for side in [-1.0, 1.0] {
+            let slope = (0.55_f64 / 0.45).atan();
+            let (sn, cs) = slope.sin_cos();
+            g.panel(
+                format!("cockpit/chamber/rib/{i}/{side}/haunch"),
+                PioneerDockedBox {
+                    center_m: [x + 0.06, 2.475, side * 2.375],
+                    half_m: [
+                        0.06,
+                        0.08,
+                        (0.55_f64.powi(2) + 0.45_f64.powi(2)).sqrt() / 2.0,
+                    ],
+                    axes: [[1.0, 0.0, 0.0], [0.0, cs, side * sn], [0.0, -side * sn, cs]],
+                },
+                WallPanel,
+                solid,
+                cell,
+                PioneerDockedPanelKind::Structure,
+            );
+            let z = side * 2.60;
+            g.block(
+                format!("cockpit/chamber/rib/{i}/{side}"),
+                [x, FLOOR, z - 0.06],
+                [x + 0.12, 2.20, z + 0.06],
+                WallPanel,
+                solid,
+                cell,
+                PioneerDockedPanelKind::Structure,
+            );
         }
-        // The task hood is genuinely shallow: a 5 mm back and two open-ended
-        // closures join the common facets, leaving the accepted glass/lips free.
-        for (name, local, half, material) in [
-            ("hood-back", [0.0225, 0.0, 0.0], [0.0025, task_half[1] + 0.012, task_half[2] + 0.018], Graphite),
-            ("hood-crown", [0.0015, task_half[1] + 0.010, 0.0], [0.0195, 0.009, task_half[2] + 0.018], WallPanel),
-            ("hood-lower-return", [0.0015, -task_half[1] - 0.010, 0.0], [0.0195, 0.009, task_half[2] + 0.018], Carbon),
-        ] {
-            part(name, PioneerDockedBox { center_m: point(task_center, task_axes, local),
-                half_m: half, axes: task_axes }, material);
-        }
-        let web_a = point(low_center, low_axes, [0.100, -0.050, 0.0]);
-        let web_b = point(task_center, task_axes, [0.025, -0.075, 0.0]);
-        let web_delta = sub(web_b, web_a);
-        let web_length = dot(web_delta, web_delta).sqrt();
-        let web_along = mul(web_delta, web_length.recip());
-        let web_right = normalized(sub(task_axes[2], mul(web_along, dot(task_axes[2], web_along))));
-        part("raked-rear-web", PioneerDockedBox { center_m: mul(add(web_a, web_b), 0.5),
-            half_m: [0.012, web_length * 0.5, 0.212],
-            axes: [cross(web_along, web_right), web_along, web_right] }, Graphite);
-        let base = [35.0, 0.45, low_center[2]];
-        let support_delta = sub(web_b, base);
-        let support_length = dot(support_delta, support_delta).sqrt();
-        let support_along = mul(support_delta, support_length.recip());
-        let support_right = normalized(cross(X, support_along));
-        part("inclined-cabinet-support", PioneerDockedBox {
-            // Rearward seating keeps every support corner behind the task
-            // plane while retaining overlap with the web, shoe and cabinet.
-            center_m: add(mul(add(base, web_b), 0.5), mul(task_axes[0], 0.032)),
-            half_m: [0.025, support_length * 0.5, 0.205],
-            axes: [cross(support_along, support_right), support_along, support_right] }, Graphite);
-        part("deck-shoe", axis_box([34.92, 0.43, low_center[2] - 0.205],
-            [35.08, 0.46, low_center[2] + 0.205]), Titanium);
+    }
+    for side in [-1.0, 1.0] {
+        let z = side * 1.02;
+        g.block(
+            format!("cockpit/chamber/aisle-edge/{side}"),
+            [27.3, FLOOR + 0.001, z - 0.018],
+            [33.5, FLOOR + 0.004, z + 0.018],
+            Titanium,
+            PioneerDockedCollision::Decoration,
+            cell,
+            PioneerDockedPanelKind::Structure,
+        );
+        g.block(
+            format!("cockpit/chamber/rear-locker/{side}"),
+            [27.35, FLOOR, side * 1.95 - 0.34],
+            [28.15, 1.85, side * 1.95 + 0.34],
+            Graphite,
+            solid,
+            cell,
+            PioneerDockedPanelKind::Furniture,
+        );
+    }
+    for i in 0..8 {
+        let x = 27.25 + i as f64 * 0.88;
+        g.block(
+            format!("cockpit/chamber/deck-joint/{i}"),
+            [x, FLOOR + 0.001, -2.45],
+            [x + 0.012, FLOOR + 0.003, 2.45],
+            Carbon,
+            PioneerDockedCollision::Decoration,
+            cell,
+            PioneerDockedPanelKind::Structure,
+        );
     }
 }
 
-/// Physical cartridges under the BERTH/STOP controls and workspace selectors. Rectangles
-/// are absolute coordinates on the unchanged 560 x 380 computer canvas; they
-/// describe construction only, with no eligibility, command or input model.
 fn add_cockpit_button_cartridges(
     g: &mut PioneerDockedGeometry,
     center: [f64; 3],
@@ -2072,8 +2325,13 @@ fn add_cockpit_button_cartridges(
         g.panel(
             format!("cockpit/screen/3/button-construction/{name}"),
             PioneerDockedBox {
-                center_m: add(center, add(mul(axes[0], local[0]),
-                    add(mul(axes[1], local[1]), mul(axes[2], local[2])))),
+                center_m: add(
+                    center,
+                    add(
+                        mul(axes[0], local[0]),
+                        add(mul(axes[1], local[1]), mul(axes[2], local[2])),
+                    ),
+                ),
                 half_m: [
                     (rear - front) * 0.5,
                     (bottom - top) * height / 760.0,
@@ -2094,9 +2352,18 @@ fn add_cockpit_button_cartridges(
         ("substrate/middle", [0.0, 73.0, 560.0, 327.0]),
         ("substrate/bottom", [0.0, 377.0, 560.0, 380.0]),
         ("substrate/workspace-port", [0.0, 327.0, 9.0, 377.0]),
-        ("substrate/workspace-flight-drone", [183.0, 327.0, 193.0, 377.0]),
-        ("substrate/workspace-drone-mining", [367.0, 327.0, 377.0, 377.0]),
-        ("substrate/workspace-starboard", [551.0, 327.0, 560.0, 377.0]),
+        (
+            "substrate/workspace-flight-drone",
+            [183.0, 327.0, 193.0, 377.0],
+        ),
+        (
+            "substrate/workspace-drone-mining",
+            [367.0, 327.0, 377.0, 377.0],
+        ),
+        (
+            "substrate/workspace-starboard",
+            [551.0, 327.0, 560.0, 377.0],
+        ),
         ("substrate/port", [0.0, 29.0, 9.0, 73.0]),
         ("substrate/between", [147.0, 29.0, 161.0, 73.0]),
         ("substrate/starboard", [263.0, 29.0, 560.0, 73.0]),
@@ -2108,87 +2375,147 @@ fn add_cockpit_button_cartridges(
         ("stop", [164.0, 32.0, 260.0, 70.0]),
     ] {
         let pocket = [left - 3.0, top - 3.0, right + 3.0, bottom + 3.0];
-        part(&format!("{name}/pocket-floor"), pocket, -0.022, -0.019, Carbon);
+        part(
+            &format!("{name}/pocket-floor"),
+            pocket,
+            -0.022,
+            -0.019,
+            Carbon,
+        );
         // Narrow metal liners expose the pocket's real depth outside the live
         // response rectangle. Their fronts never cross the fixed input face.
         for (edge, rect) in [
             ("top", [left - 3.0, top - 3.0, right + 3.0, top - 2.0]),
-            ("bottom", [left - 3.0, bottom + 2.0, right + 3.0, bottom + 3.0]),
+            (
+                "bottom",
+                [left - 3.0, bottom + 2.0, right + 3.0, bottom + 3.0],
+            ),
             ("port", [left - 3.0, top - 2.0, left - 2.0, bottom + 2.0]),
-            ("starboard", [right + 2.0, top - 2.0, right + 3.0, bottom + 2.0]),
+            (
+                "starboard",
+                [right + 2.0, top - 2.0, right + 3.0, bottom + 2.0],
+            ),
         ] {
-            part(&format!("{name}/pocket-liner/{edge}"), rect, -0.0305, -0.022, Titanium);
+            part(
+                &format!("{name}/pocket-liner/{edge}"),
+                rect,
+                -0.0305,
+                -0.022,
+                Titanium,
+            );
         }
         // A separate base seats on the recessed floor. The cap body projects
         // 6.2 mm from its base, with a smaller face forming a stepped edge.
-        part(&format!("{name}/base"),
+        part(
+            &format!("{name}/base"),
             [left - 1.0, top - 1.0, right + 1.0, bottom + 1.0],
-            -0.0255, -0.0216, Carbon);
-        part(&format!("{name}/cap-body"), [left, top, right, bottom],
-            -0.0297, -0.0255, Graphite);
-        part(&format!("{name}/cap-face"),
+            -0.0255,
+            -0.0216,
+            Carbon,
+        );
+        part(
+            &format!("{name}/cap-body"),
+            [left, top, right, bottom],
+            -0.0297,
+            -0.0255,
+            Graphite,
+        );
+        part(
+            &format!("{name}/cap-face"),
             [left + 1.5, top + 1.5, right - 1.5, bottom - 1.5],
-            -0.0317, -0.0297, Titanium);
+            -0.0317,
+            -0.0297,
+            Titanium,
+        );
     }
     // The workspace row is a single recessed cartridge rail with three
     // independent stepped keys. Shared floor/edge pieces avoid duplicating a
     // full eight-piece command-button housing for each view selector. These
     // keys select existing workspaces; they do not represent ship commands.
-    part("workspace/pocket-floor", [9.0, 327.0, 551.0, 377.0],
-        -0.022, -0.019, Carbon);
+    part(
+        "workspace/pocket-floor",
+        [9.0, 327.0, 551.0, 377.0],
+        -0.022,
+        -0.019,
+        Carbon,
+    );
     for (edge, rect) in [
         ("top", [9.0, 327.0, 551.0, 328.0]),
         ("bottom", [9.0, 376.0, 551.0, 377.0]),
     ] {
-        part(&format!("workspace/pocket-liner/{edge}"), rect,
-            -0.0305, -0.022, Titanium);
+        part(
+            &format!("workspace/pocket-liner/{edge}"),
+            rect,
+            -0.0305,
+            -0.022,
+            Titanium,
+        );
     }
     for (name, [left, top, right, bottom]) in [
         ("workspace-flight", [12.0, 330.0, 180.0, 374.0]),
         ("workspace-drone", [196.0, 330.0, 364.0, 374.0]),
         ("workspace-mining", [380.0, 330.0, 548.0, 374.0]),
     ] {
-        part(&format!("{name}/base"),
+        part(
+            &format!("{name}/base"),
             [left - 1.0, top - 1.0, right + 1.0, bottom + 1.0],
-            -0.0255, -0.0216, Carbon);
-        part(&format!("{name}/cap-body"), [left, top, right, bottom],
-            -0.0297, -0.0255, Graphite);
-        part(&format!("{name}/cap-face"),
+            -0.0255,
+            -0.0216,
+            Carbon,
+        );
+        part(
+            &format!("{name}/cap-body"),
+            [left, top, right, bottom],
+            -0.0297,
+            -0.0255,
+            Graphite,
+        );
+        part(
+            &format!("{name}/cap-face"),
             [left + 1.5, top + 1.5, right - 1.5, bottom - 1.5],
-            -0.0317, -0.0297, Titanium);
+            -0.0317,
+            -0.0297,
+            Titanium,
+        );
     }
 }
 
 /// Existing screen slot identities, now fitted to the same physical console.
 /// Returns body-space centre and half extents; zero is canopy telemetry only.
 pub fn cockpit_screen(index: usize) -> Option<([f64; 3], [f64; 3])> {
-    // Actual body-space mount centers. There is no secondary visual-only
-    // transform: collision, content and pointer projection share these frames.
     Some(match index {
-        0 => (workstation_point([34.94, 1.112, 3.0]), [0.020, 0.075, 0.18]),
-        1 => ([34.80, 0.685, 2.34], [0.012, 0.10, 0.22]),
-        2 => ([34.80, 0.685, 3.66], [0.012, 0.10, 0.22]),
-        3 => ([34.40, 0.95, 3.0], [0.020, 0.14, 0.245]),
-        4 => ([34.96, 0.83, 2.34], [0.012, 0.085, 0.22]),
-        5 => ([34.96, 0.83, 3.66], [0.012, 0.085, 0.22]),
+        0 => ([34.80, 1.46, 0.0], [0.020, 0.075, 0.18]),
+        1 => ([33.65, 0.85, -0.95], [0.012, 0.14, 0.30]),
+        2 => ([33.65, 0.85, 0.95], [0.012, 0.14, 0.30]),
+        3 => ([32.90, 0.95, 0.0], [0.020, 0.22, 0.36]),
+        4 => ([33.88, 1.20, -0.95], [0.012, 0.17, 0.30]),
+        5 => ([33.88, 1.20, 0.95], [0.012, 0.17, 0.30]),
+        6 => ([32.35, 1.03, -1.50], [0.020, 0.22, 0.42]),
+        7 => ([32.35, 1.03, 1.50], [0.020, 0.22, 0.42]),
         _ => return None,
     })
 }
 
-/// Canonical instrument mounting axes, shared by scene and pointer mapping.
+/// Shared by structural cases, emitted UI and physical pointer rays.
 pub fn cockpit_screen_axes(index: usize) -> Option<[[f64; 3]; 3]> {
     let (yaw, pitch): (f64, f64) = match index {
         0 => return Some([X, Y, Z]),
         1 => (18.0, -35.0),
         2 => (-18.0, -35.0),
-        3 => (0.0, -50.0),
-        4 => (18.0, -65.0),
-        5 => (-18.0, -65.0),
+        3 => (0.0, -45.0),
+        4 => (18.0, -15.0),
+        5 => (-18.0, -15.0),
+        6 => (60.0, -15.0),
+        7 => (-60.0, -15.0),
         _ => return None,
     };
     let (sy, cy) = yaw.to_radians().sin_cos();
     let (sp, cp) = pitch.to_radians().sin_cos();
-    Some([[cp * cy, sp * cy, -sy], [-sp, cp, 0.0], [cp * sy, sp * sy, cy]])
+    Some([
+        [cp * cy, sp * cy, -sy],
+        [-sp, cp, 0.0],
+        [cp * sy, sp * sy, cy],
+    ])
 }
 
 /// Paired inward-opening leaves, shared by rendering, collision and sweep checks.
@@ -2947,13 +3274,13 @@ mod tests {
             // aisle, around the starboard side, and back to the same seat root.
             // Every 25 mm sample uses full-height capsule and floor collision.
             for target in [
-                [33.36, 3.0],
-                [33.36, 0.0],
-                [32.10, 0.0],
-                [32.10, 4.2],
-                [33.36, 4.2],
-                [33.36, 3.0],
-                [33.54, 3.0],
+                [31.62, 0.0],
+                [31.62, -0.76],
+                [29.2, -0.76],
+                [29.2, 0.76],
+                [31.62, 0.76],
+                [31.62, 0.0],
+                [31.80, 0.0],
             ] {
                 walk(&g, &d, pose, &mut feet, target, &mut previous);
             }
@@ -2974,7 +3301,14 @@ mod tests {
             let mut feet = seat_anchors(pose).root_station_m;
             let mut previous = Some(PioneerDockedSupport::Cockpit);
             assert!(capsule_clear_station(&g, &d, pose, feet));
-            for point in [[33.36, 3.0], [33.36, 0.0], [34.1, -0.5], [34.1, -7.8]] {
+            for point in [
+                [31.62, 0.0],
+                [31.62, -0.76],
+                [29.2, -0.76],
+                [29.2, -3.5],
+                [34.1, -3.5],
+                [34.1, -7.8],
+            ] {
                 walk(&g, &d, pose, &mut feet, point, &mut previous);
             }
             let anchors = hatch_anchors(pose);
@@ -3122,21 +3456,27 @@ mod tests {
             }
             let (fold, standing) = seat_transition_pose(true, i as f64 / 1000.0);
             let joints = pilot_joints(standing);
-            assert_eq!(joints.root_m, [33.54, FLOOR, 3.0]);
+            assert!(
+                (joints.root_m[0] - 31.8).abs() < EPS
+                    && joints.root_m[1] == FLOOR
+                    && joints.root_m[2] == 0.0
+            );
             assert!(standing == 0.0 || (fold - 1.0).abs() < EPS);
             assert!(joints.hands_m.iter().all(|p| p[1] > 0.48));
             let reverse = seat_transition_pose(false, 1.0 - i as f64 / 1000.0);
             assert!((reverse.0 - fold).abs() < EPS && (reverse.1 - standing).abs() < EPS);
         }
-        assert_eq!(pilot_joints(0.0).eye_m, [33.22, 1.35, 3.0]);
-        assert_eq!(pilot_joints(1.0).eye_m, [33.54, 1.33, 3.0]);
+        assert!((pilot_joints(0.0).eye_m[0] - 31.48).abs() < EPS);
+        assert_eq!(pilot_joints(0.0).eye_m[1..], [1.35, 0.0]);
+        assert!((pilot_joints(1.0).eye_m[0] - 31.8).abs() < EPS);
+        assert_eq!(pilot_joints(1.0).eye_m[1..], [1.33, 0.0]);
         let (center, half) = cockpit_screen(3).unwrap();
         assert!(center
             .iter()
-            .zip([34.40, 0.95, 3.0])
+            .zip([32.90, 0.95, 0.0])
             .all(|(a, b)| (a - b).abs() < EPS));
-        assert_eq!(half, [0.020, 0.14, 0.245]);
-        assert!(cockpit_screen(6).is_none());
+        assert_eq!(half, [0.020, 0.22, 0.36]);
+        assert!(cockpit_screen(8).is_none());
     }
 
     #[test]
@@ -3308,86 +3648,122 @@ mod tests {
     #[test]
     fn inclined_console_cases_share_real_mounts_and_leave_live_planes_open() {
         let g = registered_geometry(&crate::default_pioneer()).unwrap();
-        assert!(!g.panels.iter().any(|p| p.id.starts_with("cockpit/bank/")));
-        for slot in 1..6 {
+        for slot in 1..8 {
             let (center, half) = cockpit_screen(slot).unwrap();
             let axes = cockpit_screen_axes(slot).unwrap();
             let prefix = format!("cockpit/console/mount/{slot}/");
-            let parts: Vec<_> = g.panels.iter().filter(|p| p.id.starts_with(&prefix)).collect();
-            if slot <= 2 {
-                assert_eq!(parts.len(), 4);
-                assert!(!parts.iter().any(|p| p.id.ends_with("/case") || p.id.ends_with("-return")));
-                for part in &parts {
-                    assert_eq!(part.collision, PioneerDockedCollision::Solid);
-                    // Every construction corner is behind the real input/data
-                    // plane, including the independently inclined end cheeks.
-                    for x in [-1.0, 1.0] {
-                        for y in [-1.0, 1.0] {
-                            for z in [-1.0, 1.0] {
-                                let corner = add(part.bounds.center_m, add(mul(part.bounds.axes[0], x * part.bounds.half_m[0]),
-                                    add(mul(part.bounds.axes[1], y * part.bounds.half_m[1]), mul(part.bounds.axes[2], z * part.bounds.half_m[2]))));
-                                assert!(dot(sub(corner, center), axes[0]) > -0.032 + EPS,
-                                    "{} covers its live plane", part.id);
-                            }
-                        }
-                    }
-                }
-                for name in ["header-backer", "footer-backer"] {
-                    let backer = parts.iter().find(|p| p.id.ends_with(name)).unwrap();
-                    let n = dot(sub(backer.bounds.center_m, center), axes[0]);
-                    assert!((n - backer.bounds.half_m[0] + 0.0305).abs() < EPS);
-                    assert!((n + backer.bounds.half_m[0] - 0.022).abs() < EPS);
-                }
-                continue;
-            }
-            if slot >= 4 {
-                assert!(parts.is_empty(), "No independent task-case proxy remains");
-                let side = if slot == 4 { "port" } else { "starboard" };
-                let pod_prefix = format!("cockpit/console/shared-pod/{side}/");
-                let pod: Vec<_> = g.panels.iter().filter(|p| p.id.starts_with(&pod_prefix)).collect();
-                assert_eq!(pod.len(), 8);
-                assert!(pod.iter().all(|p| p.collision == PioneerDockedCollision::Solid));
-                let hood = pod.iter().find(|p| p.id.ends_with("/hood-back")).unwrap();
-                let local = sub(hood.bounds.center_m, center);
-                assert!((dot(local, axes[0]) - hood.bounds.half_m[0] - 0.020).abs() < EPS);
-                assert!((dot(local, axes[0]) + hood.bounds.half_m[0] - 0.025).abs() < EPS);
-                continue;
-            }
+            let parts: Vec<_> = g
+                .panels
+                .iter()
+                .filter(|p| p.id.starts_with(&prefix))
+                .collect();
             assert_eq!(parts.len(), 5);
-            for part in &parts {
+            for part in parts {
                 assert_eq!(part.collision, PioneerDockedCollision::Solid);
                 assert_eq!(part.bounds.axes, axes);
-            }
-            let case = parts.iter().find(|p| p.id.ends_with("/case")).unwrap();
-            let local = sub(case.bounds.center_m, center);
-            assert!((dot(local, axes[0]) - case.bounds.half_m[0] + 0.018).abs() < EPS);
-            let expected_rear = if slot >= 4 { 0.025 } else { 0.200 };
-            assert!((dot(local, axes[0]) + case.bounds.half_m[0] - expected_rear).abs() < EPS);
-            assert!(dot(local, axes[0]) - case.bounds.half_m[0] > -0.032);
-            for part in parts.iter().filter(|p| !p.id.ends_with("/case")) {
                 let d = sub(part.bounds.center_m, center);
-                assert!(dot(d, axes[1]).abs() - part.bounds.half_m[1] >= half[1] - EPS
-                    || dot(d, axes[2]).abs() - part.bounds.half_m[2] >= half[2] - EPS,
-                    "{} covers the live aperture", part.id);
+                // Every structural case either stays behind the live plane or
+                // outside its full rectangular aperture, for all seven faces.
+                assert!(
+                    dot(d, axes[0]) - part.bounds.half_m[0] > -0.032
+                        || dot(d, axes[1]).abs() - part.bounds.half_m[1] >= half[1] - EPS
+                        || dot(d, axes[2]).abs() - part.bounds.half_m[2] >= half[2] - EPS,
+                    "{} covers glass",
+                    part.id
+                );
             }
         }
     }
 
     #[test]
-    fn low_console_service_insets_stay_on_existing_cabinet_fronts() {
+    fn redesigned_chamber_has_centerline_seat_rear_entry_and_real_side_wings() {
         let g = registered_geometry(&crate::default_pioneer()).unwrap();
-        for (side, z0, z1) in [("port", 2.0, 2.65), ("starboard", 3.35, 4.0)] {
-            let id = format!("cockpit/console/{side}/service-inset");
-            let panel = g.panels.iter().find(|p| p.id == id).unwrap();
-            assert_eq!(panel.collision, PioneerDockedCollision::Decoration);
-            assert_eq!(panel.material, PioneerDockedMaterial::Carbon);
-            let apron = g.panels.iter().find(|p| p.id == format!("cockpit/console/{side}-cabinet/raked-apron")).unwrap();
-            assert_eq!(panel.bounds.axes, apron.bounds.axes);
-            let separation = dot(sub(panel.bounds.center_m, apron.bounds.center_m), apron.bounds.axes[0]);
-            assert!((separation + 0.062).abs() < EPS);
-            assert!(separation + panel.bounds.half_m[0] < -apron.bounds.half_m[0]);
-            assert!(panel.bounds.center_m[2] - panel.bounds.half_m[2] >= z0);
-            assert!(panel.bounds.center_m[2] + panel.bounds.half_m[2] <= z1);
+        assert_eq!(PIONEER_DOCKED_REGISTRATION_REVISION, 5);
+        assert_eq!(pilot_joints(0.0).eye_m[2], 0.0);
+        assert_eq!(pilot_joints(1.0).root_m[2], 0.0);
+        let portal = g
+            .portals
+            .iter()
+            .find(|p| p.id == "cockpit/backwall-portal")
+            .unwrap();
+        assert_eq!(portal.center_m[2], 0.0);
+        for slot in [6, 7] {
+            let (c, _) = cockpit_screen(slot).unwrap();
+            assert!(c[0] < cockpit_screen(3).unwrap().0[0]);
+            assert!(c[2].abs() > 1.4);
+        }
+        assert!(g
+            .panels
+            .iter()
+            .any(|p| p.id == "cockpit/console/wing/-1/bench"));
+        assert!(g
+            .panels
+            .iter()
+            .any(|p| p.id == "cockpit/console/wing/1/bench"));
+    }
+
+    #[test]
+    fn room_program_reservations_are_solid_bounded_and_leave_entry_centers_open() {
+        let document = crate::default_pioneer();
+        let g = registered_geometry(&document).unwrap();
+        for room in &document.rooms {
+            let prefix = format!("room/{}/program/", room.id);
+            let panels: Vec<_> = g
+                .panels
+                .iter()
+                .filter(|p| p.id.starts_with(&prefix))
+                .collect();
+            if room.source_room_id.as_deref() == Some("D2-S1") {
+                assert!(panels.is_empty(), "Galley keeps its existing shared recipe");
+                continue;
+            }
+            assert!(
+                !panels.is_empty(),
+                "{} needs actual program geometry",
+                room.name
+            );
+            for panel in panels {
+                assert_eq!(panel.collision, PioneerDockedCollision::Solid);
+                assert!(panel.bounds.valid());
+                let entry = deck_to_body(
+                    room.deck,
+                    [
+                        room.door_center_xz_m[0],
+                        0.0,
+                        room.origin_xz_m[1] + room.clear_lwh_m[1] * 0.5,
+                    ],
+                )
+                .unwrap();
+                assert!(
+                    !box_intersects_capsule(
+                        panel.bounds,
+                        entry,
+                        AVATAR_HEIGHT_M,
+                        STATION_AVATAR_RADIUS_M
+                    ),
+                    "{} blocks room center",
+                    panel.id
+                );
+                let min = deck_to_body(room.deck, [room.origin_xz_m[0], 0.0, room.origin_xz_m[1]])
+                    .unwrap();
+                let max = deck_to_body(
+                    room.deck,
+                    [
+                        room.origin_xz_m[0] + room.clear_lwh_m[0],
+                        room.clear_lwh_m[2],
+                        room.origin_xz_m[1] + room.clear_lwh_m[1],
+                    ],
+                )
+                .unwrap();
+                for axis in 0..3 {
+                    assert!(
+                        panel.bounds.center_m[axis] - panel.bounds.half_m[axis] >= min[axis] - EPS
+                    );
+                    assert!(
+                        panel.bounds.center_m[axis] + panel.bounds.half_m[axis] <= max[axis] + EPS
+                    );
+                }
+            }
         }
     }
 
@@ -3397,10 +3773,7 @@ mod tests {
         let bank: Vec<_> = g
             .panels
             .iter()
-            .filter(|p| {
-                p.id.starts_with("cockpit/console/")
-                    && p.id != "cockpit/console/footrest"
-            })
+            .filter(|p| p.id.starts_with("cockpit/console/") && p.id != "cockpit/console/footrest")
             .collect();
         assert!(!bank.is_empty());
         for i in 0..=100 {

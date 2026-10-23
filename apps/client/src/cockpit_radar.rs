@@ -294,11 +294,28 @@ pub(super) fn paint(
         }
         painter.circle_filled(center, 3., color);
         let readout = egui::pos2(rect.left() + rect.width() * 0.43, rect.bottom() - 2.);
+        let range_label = super::super::format_distance(range);
+        let mut range_font = rect.height() * 0.20;
+        // Registered panels can be taller/narrower than the former mount.
+        // Fit the complete value and unit, including astronomical ranges.
+        for _ in 0..4 {
+            let galley = painter.layout_no_wrap(
+                range_label.clone(),
+                egui::FontId::monospace(range_font),
+                color,
+            );
+            let available = rect.right() - readout.x - 4.0;
+            let fit = (available / galley.mesh_bounds.width().max(0.01)).min(1.0);
+            if fit >= 1.0 {
+                break;
+            }
+            range_font *= fit * 0.99;
+        }
         painter.text(
             readout,
             egui::Align2::LEFT_BOTTOM,
-            super::super::format_distance(range),
-            egui::FontId::monospace(rect.height() * 0.20),
+            range_label,
+            egui::FontId::monospace(range_font),
             color,
         );
         painter.text(

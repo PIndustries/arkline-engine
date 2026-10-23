@@ -73,6 +73,20 @@ const PILOT_BRACE: SourcePart = SourcePart {
     affected: 112608..112932,
 };
 
+// Registration-5 cockpit prototype: this single measured source mullion is
+// replaced by protocol-authored outboard uprights/transoms. Never remove by
+// broad spatial clipping; the exact export identity and index span are guarded.
+const CENTER_MULLION: SourcePart = SourcePart {
+    id: "part:2edf5970536f9fa18916a20dd4ab3c43c403bf71ab9c3ed6121b7512aa994f2b",
+    name: "Bridge center mullion",
+    primitive: 1,
+    first: 2880,
+    count: 324,
+    material: "Titanium machinery",
+    material_id: "material:2e4b79a53f5d6a450c73bf2b573933f76a43373c0bdcc489c83a15237cfb346a",
+    affected: 2880..3204,
+};
+
 /// Order is canonical primitives 0 (hull), 1 (machinery), 6 (glass).
 /// A source mismatch disables this derived presentation rather than guessing.
 pub(super) fn source_meshes() -> Result<[Vec<Vertex>; 3], String> {
@@ -108,6 +122,9 @@ fn build() -> Result<[Vec<Vertex>; 3], String> {
             let added = result[slot].len() - part.vertices.len();
             result[slot]
                 .drain(PILOT_BRACE.first + added..PILOT_BRACE.first + added + PILOT_BRACE.count);
+            // Descending original offsets: mullion precedes the existing portal
+            // clipping range, so no generated-fragment offset applies here.
+            result[slot].drain(CENTER_MULLION.first..CENTER_MULLION.first + CENTER_MULLION.count);
         }
     }
     Ok(result)
@@ -143,7 +160,7 @@ fn validate_identity(receipt: &serde_json::Value) -> Result<(), String> {
         .as_array()
         .filter(|materials| materials.len() == 9)
         .ok_or("Docked Pioneer material catalog mismatch")?;
-    for source in SOURCES.iter().chain(std::iter::once(&PILOT_BRACE)) {
+    for source in SOURCES.iter().chain([&PILOT_BRACE, &CENTER_MULLION]) {
         let matches: Vec<_> = parts
             .iter()
             .filter(|part| part["source_id"] == source.id)
@@ -504,10 +521,16 @@ mod tests {
         let derived = source_meshes().unwrap();
         for (slot, source) in SOURCES.iter().enumerate() {
             let original = &asset[source.primitive].vertices;
-            assert!(identical(
-                &original[..source.affected.start],
-                &derived[slot][..source.affected.start]
-            ));
+            let prefix = if slot == 1 {
+                [
+                    &original[..CENTER_MULLION.first],
+                    &original[CENTER_MULLION.first + CENTER_MULLION.count..source.affected.start],
+                ]
+                .concat()
+            } else {
+                original[..source.affected.start].to_vec()
+            };
+            assert!(identical(&prefix, &derived[slot][..prefix.len()]));
             let suffix = if slot == 1 {
                 [
                     &original[source.affected.end..PILOT_BRACE.first],
@@ -532,6 +555,50 @@ mod tests {
                 primitive.vertices.iter().map(bits).collect::<Vec<_>>(),
                 original
             );
+        }
+    }
+
+    #[test]
+    fn prototype_center_mullion_removes_only_its_measured_export_span() {
+        let asset = pioneer_asset().unwrap();
+        let original = &asset[1].vertices;
+        let span = &original[CENTER_MULLION.affected.clone()];
+        let min = span
+            .iter()
+            .fold(Vec3::splat(f32::INFINITY), |a, v| a.min(v.p * 100.));
+        let max = span
+            .iter()
+            .fold(Vec3::splat(f32::NEG_INFINITY), |a, v| a.max(v.p * 100.));
+        assert!(
+            min.abs_diff_eq(Vec3::new(35.6, -0.64, -0.11), 0.0001),
+            "{min:?}"
+        );
+        assert!(
+            max.abs_diff_eq(Vec3::new(35.84, 2.71, 0.11), 0.0001),
+            "{max:?}"
+        );
+        let source = &SOURCES[1];
+        let mut previous = derive(original, source.affected.clone(), cuts(1).unwrap()).unwrap();
+        let added = previous.len() - original.len();
+        previous.drain(PILOT_BRACE.first + added..PILOT_BRACE.first + added + PILOT_BRACE.count);
+        let before = previous.len();
+        previous.drain(CENTER_MULLION.affected.clone());
+        let actual = source_meshes().unwrap();
+        assert_eq!(before - actual[1].len(), CENTER_MULLION.count);
+        assert!(
+            identical(&previous, &actual[1]),
+            "No other runtime source triangle may change"
+        );
+        for property in ["first_index", "index_count", "render_primitive"] {
+            let mut receipt: serde_json::Value = serde_json::from_slice(RECEIPT).unwrap();
+            let part = receipt["source_parts"]
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|part| part["source_id"] == CENTER_MULLION.id)
+                .unwrap();
+            part[property] = 0.into();
+            assert!(validate_identity(&receipt).is_err());
         }
     }
 
@@ -582,7 +649,7 @@ mod tests {
         let first = build().unwrap();
         let second = build().unwrap();
         assert!(first[0].len() > COUNTS[0]);
-        assert_eq!([first[1].len(), first[2].len()], [156186, 366]);
+        assert_eq!([first[1].len(), first[2].len()], [155862, 366]);
         for (slot, (a, b)) in first.iter().zip(&second).enumerate() {
             assert!(identical(a, b));
             assert_eq!(a.len() % 3, 0);

@@ -226,7 +226,7 @@ impl CockpitOcclusion {
         // Reject other physical displays before testing blocker triangles. This
         // keeps the common off-display/nonmatching hover path constant work.
         if index != 0 {
-            for candidate in 1..6 {
+            for candidate in 1..cockpit_screens(self.class).len() {
                 if candidate == index {
                     continue;
                 }

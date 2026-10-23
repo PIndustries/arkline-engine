@@ -113,6 +113,8 @@ mod cockpit_displays;
 mod navigation_instrument;
 #[path = "power_instrument.rs"]
 mod power_instrument;
+#[path = "side_instruments.rs"]
+mod side_instruments;
 use cockpit_displays::CockpitDisplayRenderer;
 #[path = "cockpit_occlusion.rs"]
 mod cockpit_occlusion;
@@ -1199,7 +1201,7 @@ impl FlightView {
                     });
             self.cockpit_layer = self.cockpit_display_frame.as_ref().map(|_| ui.layer_id());
         }
-        let instrument_surfaces: [Option<CockpitSurface>; 6] =
+        let instrument_surfaces: [Option<CockpitSurface>; COCKPIT_SURFACE_SLOTS] =
             std::array::from_fn(|index| self.physical_surface(index, egui::vec2(300., 180.)));
         self.instrument_surfaces = instrument_surfaces.iter().flatten().cloned().collect();
         self.computer_surface = self.physical_surface(3, cockpit_computer::COMPUTER_CANVAS_SIZE);
@@ -1691,8 +1693,16 @@ impl FlightView {
                             snapshot,
                             selected_distance,
                             now,
-                            connected,
-                            None,
+                            connected && !self.radar_paused,
+                            Some(if !connected {
+                                "DISCONNECTED"
+                            } else if self.radar_paused {
+                                "PAUSED"
+                            } else if now.saturating_sub(snapshot.server_time_ms) > 1500 {
+                                "STALE"
+                            } else {
+                                "LIVE"
+                            }),
                         );
                         let feed_count = camera_feeds.len();
                         if let Some(surface) = &drone_surface {
@@ -4428,6 +4438,9 @@ fn in_warp(location: &Location, now: u64) -> bool {
     matches!(location, Location::InTransit { arrives_at_ms, .. } if now < *arrives_at_ms)
 }
 /// Shared bezel geometry and instrument layout: +X forward, +Y up, +Z right.
+// Slot zero is the legacy HUD; Pioneer leaves it empty and owns physical 1..=7.
+// Other ship classes retain their existing five physical faces and HUD.
+const COCKPIT_SURFACE_SLOTS: usize = 8;
 const COCKPIT_FOV: f32 = 1.22;
 fn cockpit_fov(class: ShipClass) -> f32 {
     if class == ShipClass::Pioneer {
@@ -4714,7 +4727,7 @@ fn instrument_rows(
 #[allow(clippy::too_many_arguments)]
 fn paint_instruments(
     ui: &egui::Ui,
-    surfaces: &[Option<CockpitSurface>; 6],
+    surfaces: &[Option<CockpitSurface>; COCKPIT_SURFACE_SLOTS],
     own: &PilotView,
     snapshot: &Snapshot,
     target_distance: Option<f64>,
@@ -4730,6 +4743,21 @@ fn paint_instruments(
     }
     let connected = connected && now.saturating_sub(snapshot.server_time_ms) <= 1500;
     let color = if connected { super::TEAL } else { super::AMBER };
+    if own.ship_class == ShipClass::Pioneer {
+        let status = authority.unwrap_or(if connected {
+            "LIVE"
+        } else {
+            "STALE / DISCONNECTED"
+        });
+        for (index, panel) in [
+            (6, side_instruments::Panel::Drones),
+            (7, side_instruments::Panel::MiningCargo),
+        ] {
+            if let Some(surface) = &surfaces[index] {
+                side_instruments::paint(ui, surface, panel, own, snapshot, status, color);
+            }
+        }
+    }
     for index in 0..3 {
         let Some(surface) = surfaces[index].as_ref() else {
             continue;

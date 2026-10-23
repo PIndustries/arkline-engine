@@ -167,7 +167,7 @@ pub struct HangarView {
     head_look: [f32; 2],
     first_person_mouse: FirstPersonMouseLook,
     computer_keyboard_owned: bool,
-    docked_surfaces: [Option<CockpitSurface>; 6],
+    docked_surfaces: [Option<CockpitSurface>; COCKPIT_SURFACE_SLOTS],
     passive_console: Option<CockpitSurface>,
     docked_layer: Option<egui::LayerId>,
     docked_display_renderer: Option<Arc<Mutex<CockpitDisplayRenderer>>>,
@@ -289,10 +289,11 @@ impl HangarView {
     ) -> egui::Vec2 {
         let clear_layer = ui.ctx().pointer_latest_pos().is_some_and(|point| {
             let layer = ui.ctx().layer_id_at(point);
-            let passive_body_hud = egui::LayerId::new(
-                egui::Order::Foreground, egui::Id::new("body-context-hud"));
-            rect.contains(point) && (layer == Some(ui.layer_id())
-                || self.first_person_mouse.captured && layer == Some(passive_body_hud))
+            let passive_body_hud =
+                egui::LayerId::new(egui::Order::Foreground, egui::Id::new("body-context-hud"));
+            rect.contains(point)
+                && (layer == Some(ui.layer_id())
+                    || self.first_person_mouse.captured && layer == Some(passive_body_hud))
         });
         let allowed = self.head_look_input_allowed
             && !self.editor_free_camera_active
@@ -416,16 +417,7 @@ impl HangarView {
             });
         }
         if let Some(surface) = &self.docked_surfaces[5] {
-            cockpit_radar::paint(
-                ui,
-                surface,
-                pilot,
-                snapshot,
-                now,
-                connected,
-                paused,
-                range,
-            );
+            cockpit_radar::paint(ui, surface, pilot, snapshot, now, connected, paused, range);
         }
         if let Some(surface) = &self.passive_console {
             paint_passive_flight_console(ui, surface, pilot, snapshot, now, connected, paused);
@@ -433,7 +425,7 @@ impl HangarView {
         for (index, surface) in self.docked_surfaces.iter().enumerate() {
             // These cards own their authority header; a second top-right badge
             // would obscure real data on the small physical display canvas.
-            if index == 1 || index == 2 || index == 4 || index == 5 {
+            if matches!(index, 1 | 2 | 4 | 5 | 6 | 7) {
                 continue;
             }
             if let Some(surface) = surface {
