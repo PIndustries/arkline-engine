@@ -30,7 +30,7 @@ Captain **AUTO / OPEN / STOWED** controls change physical presentation without s
 
 ![Integrated local cockpit: fixed-core reactor configuration display](https://raw.githubusercontent.com/PIndustries/arkline-engine/7d7bb8e639e46a59f0642d142ee6f5e22f5cf09e/docs/ships/pioneer/images/progress-20261023/integrated-28817c/deployed-reactor.png)
 
-**Evidence:** these stills come from the 39-capture controlled server-state replay, not a live-session FPS benchmark. Cached image ages remain explicit. Local checks recorded server 262 passing, client 535 passing with 11 inherited failures, verifier 14 passing, plus workspace and serialized Rustdoc checks. This uses fresh registration 10; no old-world migration or all-green suite is claimed. [Media provenance](https://github.com/PIndustries/arkline-engine/blob/7d7bb8e639e46a59f0642d142ee6f5e22f5cf09e/docs/ships/pioneer/images/progress-20261023/integrated-28817c/media-manifest.json).
+**Evidence:** these stills come from controlled server-state replay, not a live-session FPS benchmark. Cached image ages remain explicit. Local checks recorded server 262 passing, client 535 passing with 11 inherited failures, verifier 14 passing, plus workspace and serialized Rustdoc checks. This uses fresh registration 10; no old-world migration or all-green suite is claimed. [Media provenance](https://github.com/PIndustries/arkline-engine/blob/7d7bb8e639e46a59f0642d142ee6f5e22f5cf09e/docs/ships/pioneer/images/progress-20261023/integrated-28817c/media-manifest.json).
 
 **Animation boundary:** this checkpoint is shown as a still gallery; the older GIFs below remain clearly dated historical footage, not an animation of this nine-camera integrated build.
 
