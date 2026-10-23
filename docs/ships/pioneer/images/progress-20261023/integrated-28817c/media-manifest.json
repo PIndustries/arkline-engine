@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-23",
+  "source_commit": "28817c23ee0d5b6d84ffe207fe60317cff3afe13",
+  "status": "Locally validated integrated prototype; runtime source not published, no release or deployment",
+  "capture_kind": "Actual engine rendering of controlled server-state replay; cached frame ages remain visible; not a live-session FPS benchmark",
+  "files": [
+    {
+      "file": "deployed-port.png",
+      "bytes": 583529,
+      "width": 1280,
+      "height": 720,
+      "sha256": "403433b2906e571248fa170c70351d12a791b63bc98846ca963fed7bb5891cf6"
+    },
+    {
+      "file": "deployed-cargo.png",
+      "bytes": 457475,
+      "width": 1280,
+      "height": 720,
+      "sha256": "e822c4d364726849a0868528d852e748d10312eb65a0dedc4d54081903de0a7d"
+    },
+    {
+      "file": "deployed-reactor.png",
+      "bytes": 215597,
+      "width": 1280,
+      "height": 720,
+      "sha256": "e9c7a3e224322f7f5e6a8bee0fa8d3d7cae7ad78665834992cc83a1b02f540b6"
+    }
+  ]
+}
