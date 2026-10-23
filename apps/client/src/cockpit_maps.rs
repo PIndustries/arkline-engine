@@ -131,6 +131,30 @@ impl CockpitSurface {
         )
     }
 
+    /// The moving screen's content lies one millimetre in front of its shared
+    /// glass mesh and inside the twelve-millimetre bezel on both dimensions.
+    /// Mesh, pointer and content all receive the same sampled physical pose.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn registered_mechanism(
+        viewport: egui::Rect,
+        vp: Mat4,
+        mount: Mat4,
+        center: Vec3,
+        half: Vec3,
+        index: usize,
+        canvas_size: egui::Vec2,
+    ) -> Option<Self> {
+        Self::from_plane(
+            viewport,
+            vp * mount,
+            center,
+            Vec3::new(0., half.y - 0.012, half.z - 0.012),
+            center.x - 0.044,
+            index,
+            canvas_size,
+        )
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn from_plane(
         viewport: egui::Rect,

@@ -1,5 +1,6 @@
 pub mod access_tokens;
 mod assets;
+mod cockpit_mechanisms;
 pub mod collaborative_editor;
 pub mod collaborative_transport;
 mod docked_traversal;
@@ -292,6 +293,7 @@ impl Server {
         }
         docked_traversal::migrate_stowed_cockpit_v3(&mut world)?;
         docked_traversal::stop_lifts(&mut world, now);
+        cockpit_mechanisms::stop_on_restart(&mut world, now);
         station::migrate(&mut world, editor_room_layout.as_ref());
         for pilot in world.pilots.values_mut() {
             mining::stop_all(pilot, "Server restarted");
@@ -576,6 +578,7 @@ impl Server {
         power::advance(&mut world, now)?;
         room_controls::advance(&mut world, now)?;
         flight::advance(&mut world, now);
+        cockpit_mechanisms::advance(&mut world, now)?;
         docked_traversal::advance(&mut world, now, self.editor_room_layout.as_ref())?;
         station::advance(&mut world, now, self.editor_room_layout.as_ref());
         surface::update(&mut world);
@@ -584,6 +587,7 @@ impl Server {
         events.extend(drones::advance(&mut world, now));
         universe::advance_locks(&mut world, now);
         mining::invalidate(&mut world);
+        cockpit_mechanisms::advance(&mut world, now)?;
         let mut entries = load_entries(&tx, false)?;
         for event in events {
             append_event(&tx, &mut entries, event, now)?;
@@ -719,6 +723,7 @@ impl Server {
         power::advance(&mut world, now)?;
         room_controls::advance(&mut world, now)?;
         flight::advance(&mut world, now);
+        cockpit_mechanisms::advance(&mut world, now)?;
         docked_traversal::advance(&mut world, now, self.editor_room_layout.as_ref())?;
         station::advance(&mut world, now, self.editor_room_layout.as_ref());
         surface::update(&mut world);
@@ -1032,6 +1037,7 @@ impl Server {
                         pilot.clone(),
                         Pilot {
                             view: PilotView {
+                                cockpit_mechanisms: None,
                                 station_avatar: None,
                                 surface: None,
                                 power: None,
@@ -1453,6 +1459,8 @@ impl Server {
         universe::advance_locks(&mut world, now);
         mining::invalidate(&mut world);
         drones::invalidate(&mut world);
+        cockpit_mechanisms::advance(&mut world, now)?;
+        cockpit_mechanisms::validate(&world)?;
         let updated_json = serde_json::to_string(&world)?;
         if updated_json != json {
             tx.execute("UPDATE world SET json=?1 WHERE id=1", [updated_json])?;
@@ -1593,6 +1601,7 @@ fn validate(world: &World, room_layout: Option<&RoomLayoutDocument>) -> Result<(
     assets::validate(world)?;
     exterior_effects::validate(world)?;
     room_controls::validate(world)?;
+    cockpit_mechanisms::validate(world)?;
     mining::validate(world)?;
     universe::validate_locks(world)?;
     drones::validate(world)?;

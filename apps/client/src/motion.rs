@@ -157,6 +157,7 @@ mod tests {
             online_pilots: vec![],
             asteroids: vec![],
             pilots: vec![PilotView {
+                cockpit_mechanisms: None,
                 surface: None,
                 station_avatar: None,
                 power: None,

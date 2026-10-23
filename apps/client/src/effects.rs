@@ -173,6 +173,7 @@ mod tests {
                 ore: remaining,
             }],
             pilots: vec![PilotView {
+                cockpit_mechanisms: None,
                 surface: None,
                 station_avatar: None,
                 power: None,

@@ -2009,59 +2009,66 @@ fn canonical_sprint_uses_normalized_six_meters_per_second_and_same_lease_and_sto
 
 #[test]
 fn previous_registration_save_is_rejected_without_rewriting_world() {
-    let directory = std::env::temp_dir().join(format!(
-        "arkline-old-pioneer-registration-{}-{}",
-        std::process::id(),
-        rand::random::<u64>()
-    ));
-    std::fs::create_dir_all(&directory).unwrap();
-    let database = directory.join("world.sqlite");
-    let mut server = Server::open(&database).unwrap();
-    let mut session = None;
-    connected(&mut server, &mut session);
-    leave_and_stand(&mut server, &mut session, LEFT_AT);
-    let mut world: World = serde_json::from_str(&durable(&server)).unwrap();
-    let old = PIONEER_DOCKED_REGISTRATION_REVISION - 1;
-    for actuator in world
-        .accounts
-        .get_mut("Walker")
-        .unwrap()
-        .docked_actuators
-        .values_mut()
-    {
-        actuator.binding.registration_revision = old;
+    for old in [4, 5] {
+        let directory = std::env::temp_dir().join(format!(
+            "arkline-old-pioneer-registration-{}-{}",
+            std::process::id(),
+            rand::random::<u64>()
+        ));
+        std::fs::create_dir_all(&directory).unwrap();
+        let database = directory.join("world.sqlite");
+        let mut server = Server::open(&database).unwrap();
+        let mut session = None;
+        connected(&mut server, &mut session);
+        leave_and_stand(&mut server, &mut session, LEFT_AT);
+        let mut world: World = serde_json::from_str(&durable(&server)).unwrap();
+        for actuator in world
+            .accounts
+            .get_mut("Walker")
+            .unwrap()
+            .docked_actuators
+            .values_mut()
+        {
+            actuator.binding.registration_revision = old;
+        }
+        let state = world
+            .pilots
+            .get_mut("Walker")
+            .unwrap()
+            .view
+            .station_avatar
+            .as_mut()
+            .unwrap()
+            .docked_traversal
+            .as_mut()
+            .unwrap();
+        state.binding.registration_revision = old;
+        state.actuators.binding.registration_revision = old;
+        let previous = serde_json::to_string(&world).unwrap();
+        server
+            .db
+            .execute("UPDATE world SET json=?1 WHERE id=1", [&previous])
+            .unwrap();
+        drop(server);
+        let database_before = std::fs::read(&database).unwrap();
+        assert!(
+            Server::open(&database).is_err(),
+            "An older fit cannot be silently rebound"
+        );
+        assert_eq!(
+            std::fs::read(&database).unwrap(),
+            database_before,
+            "Rejected revision {old} changed SQLite bytes"
+        );
+        let db = rusqlite::Connection::open(&database).unwrap();
+        let after: String = db
+            .query_row("SELECT json FROM world WHERE id=1", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(
+            after, previous,
+            "Failed admission must preserve feet, equipment, and saved world"
+        );
     }
-    let state = world
-        .pilots
-        .get_mut("Walker")
-        .unwrap()
-        .view
-        .station_avatar
-        .as_mut()
-        .unwrap()
-        .docked_traversal
-        .as_mut()
-        .unwrap();
-    state.binding.registration_revision = old;
-    state.actuators.binding.registration_revision = old;
-    let previous = serde_json::to_string(&world).unwrap();
-    server
-        .db
-        .execute("UPDATE world SET json=?1 WHERE id=1", [&previous])
-        .unwrap();
-    drop(server);
-    assert!(
-        Server::open(&database).is_err(),
-        "An older fit cannot be silently rebound"
-    );
-    let db = rusqlite::Connection::open(&database).unwrap();
-    let after: String = db
-        .query_row("SELECT json FROM world WHERE id=1", [], |row| row.get(0))
-        .unwrap();
-    assert_eq!(
-        after, previous,
-        "Failed admission must preserve feet, equipment, and saved world"
-    );
 }
 
 #[test]
@@ -2192,13 +2199,13 @@ fn isolated_revision_five_never_rebinds_stowed_occupied_or_open_v3_worlds() {
     {
         actuator.binding.registration_revision = 3;
     }
-    assert_eq!(PIONEER_DOCKED_REGISTRATION_REVISION, 5);
+    assert_eq!(PIONEER_DOCKED_REGISTRATION_REVISION, 6);
     let mut migrated = old.clone();
     docked_traversal::migrate_stowed_cockpit_v3(&mut migrated).unwrap();
     assert_eq!(
         serde_json::to_value(&migrated).unwrap(),
         serde_json::to_value(&old).unwrap(),
-        "The legacy 3→4 migration must remain inactive in the isolated revision-5 build"
+        "The legacy 3→4 migration must remain inactive in the isolated revision-6 build"
     );
     assert!(
         validate(&migrated, None).is_err(),

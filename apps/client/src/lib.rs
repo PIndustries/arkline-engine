@@ -623,6 +623,7 @@ struct Cockpit {
     workspace_keyboard_owned_last_frame: bool,
     operations_search: String,
     controls_reference_open: bool,
+    identity_collapsed: bool,
     performance_open: bool,
     performance_snapshot_received: Option<Instant>,
     performance_server_tick: Option<(u64, u64)>,
@@ -761,6 +762,7 @@ impl Cockpit {
             workspace_keyboard_owned_last_frame: false,
             operations_search: String::new(),
             controls_reference_open: false,
+            identity_collapsed: false,
             performance_open: false,
             performance_snapshot_received: None,
             performance_server_tick: None,
@@ -1257,6 +1259,34 @@ impl Cockpit {
             }
         }
     }
+    fn compact_control_label(&self, fresh: bool) -> &'static str {
+        if !fresh || !self.connected || self.own().is_none() { "NO CONFIRMED CONTROL" }
+        else if self.ship_observation { "OBSERVATION ONLY" }
+        else if self.own().is_some_and(|p| p.station_avatar.is_some()) { "ON FOOT / FLIGHT LOCKED" }
+        else if self.controlled_remote().is_some() { "CONFIRMED REMOTE CONTROL" }
+        else if self.manual_remote.is_some() { "REMOTE REQUEST / NO CONTROL" }
+        else if self.can_fly() { "LOCAL PILOT CONTROL" }
+        else { "MANUAL FLIGHT LOCKED" }
+    }
+    /// The authority footer remains visible independently of this optional panel.
+    fn identity_header(&mut self, ui: &mut egui::Ui) -> egui::Response {
+        ui.horizontal(|ui| {
+            let button = ui.small_button(if self.identity_collapsed { "Show status" } else { "Hide status" })
+                .on_hover_text("Show/hide ship status · Ctrl+Shift+H (outside text fields)");
+            if button.clicked() { self.identity_collapsed = !self.identity_collapsed; }
+            if self.identity_collapsed {
+                let age = self.timeline_origin.map_or(u64::MAX, |origin| origin
+                    .saturating_add(self.observed.elapsed().as_millis() as u64)
+                    .saturating_sub(self.snapshot.as_ref().map_or(0, |s| s.server_time_ms)));
+                let status = if !self.connected { "DISCONNECTED" } else if self.embedded_paused { "PAUSED" }
+                    else if age > 1500 { "STALE" } else { "CONNECTED" };
+                ui.colored_label(if status == "CONNECTED" { self.accent() } else { AMBER }, status);
+                ui.small(self.compact_control_label(status == "CONNECTED"));
+                self.session_menu(ui);
+            }
+            button
+        }).inner
+    }
     fn poll(&mut self) {
         if let Some(result) = self
             .audit_updates
@@ -1274,6 +1304,8 @@ impl Cockpit {
         for update in updates {
             match update {
                 Update::Ready => {
+                    self.flight_view.reset_activity_session();
+                    self.hangar_view.reset_mechanisms();
                     self.invalidate_ai_session();
                     self.frozen_time = None;
                     self.timeline_origin = None;
@@ -1285,6 +1317,8 @@ impl Cockpit {
                     self.notice.clear();
                 }
                 Update::Reconnecting(message) => {
+                    self.flight_view.disconnect_activity();
+                    self.hangar_view.disconnect_mechanisms();
                     self.invalidate_ai_session();
                     if self.frozen_time.is_none() {
                         self.frozen_time = Some(self.presentation_time());
@@ -1298,6 +1332,8 @@ impl Cockpit {
                     self.log(message, true);
                 }
                 Update::Failure(error) => {
+                    self.flight_view.disconnect_activity();
+                    self.hangar_view.disconnect_mechanisms();
                     let error = resume_guidance(error);
                     self.invalidate_ai_session();
                     if self.boot.visible {
@@ -1367,6 +1403,9 @@ impl Cockpit {
                             self.timeline_origin = Some(snapshot.server_time_ms);
                             self.observed = Instant::now();
                         }
+                        let activity_owner = self.controlled_name().to_owned();
+                        self.flight_view.observe_activity(&snapshot, &activity_owner, self.connected, snapshot.server_time_ms);
+                        self.hangar_view.observe_mechanisms(&snapshot, &activity_owner, self.connected, snapshot.server_time_ms);
                         self.motion.observe(&snapshot);
                         self.performance_snapshot_received = Some(Instant::now());
                         self.snapshot = Some(snapshot);
@@ -4083,6 +4122,13 @@ impl eframe::App for Cockpit {
             self.engineering_panel = None;
         }
         self.sync_remote_control();
+        if let Some(snapshot) = self.snapshot.as_ref() {
+            let owner = self.controlled_name().to_owned();
+            self.flight_view.observe_activity(snapshot, &owner, self.connected, self.presentation_time());
+            self.hangar_view.observe_mechanisms(snapshot, &owner, self.connected, self.presentation_time());
+        } else if !self.connected { self.flight_view.disconnect_activity();
+                    self.hangar_view.disconnect_mechanisms(); }
+
         // A previous frame's mounted surface must never survive an early return,
         // a world switch or a hidden/free-camera presentation.
         self.flight_view.clear_cockpit_presentation();
@@ -4240,6 +4286,10 @@ impl eframe::App for Cockpit {
         if !self.service_visible(self.service_tab) {
             self.service_tab = ServiceTab::Station;
         }
+        if !ctx.wants_keyboard_input() && ctx.input_mut(|i| i.consume_key(
+            egui::Modifiers::CTRL | egui::Modifiers::SHIFT, egui::Key::H)) {
+            self.identity_collapsed = !self.identity_collapsed;
+        }
         let in_hangar = self.in_station_hangar();
         // Reserve persistent bottom chrome before placing any task/identity window.
         if in_hangar
@@ -4276,6 +4326,8 @@ impl eframe::App for Cockpit {
                 .show(ctx, |ui| {
                     self.overlay_frame(ctx).show(ui, |ui| {
                         ui.set_max_width((bounds.width() - 24.0).clamp(1.0, 490.0));
+                        self.identity_header(ui);
+                        if self.identity_collapsed { return; }
                         if self.embedded {
                             ui.horizontal_wrapped(|ui| {
                                 ui.strong(system_name(self.current_system()));
@@ -5627,6 +5679,36 @@ mod tests {
         assert_eq!(serde_json::to_value(&cockpit.snapshot).unwrap(), authority);
     }
 
+    #[test]
+    fn compact_status_collapse_reopen_preserves_authority_and_does_not_take_focus() {
+        let ctx=egui::Context::default();
+        let profile=std::env::temp_dir().join(format!("arkline-status-r6-{}",std::process::id()));
+        let mut app=view_test_cockpit_with_profile(&ctx,profile);
+        let mut button=egui::Rect::NOTHING;
+        let run=|app:&mut Cockpit,events:Vec<egui::Event>,button:&mut egui::Rect| {
+            let _=ctx.run(egui::RawInput{events,focused:true,..Default::default()},|ctx| {
+                egui::CentralPanel::default().show(ctx,|ui|*button=app.identity_header(ui).rect);
+            });
+        };
+        run(&mut app,vec![],&mut button);
+        for expected in [true,false] {
+            let pos=button.center();
+            for pressed in [true,false] {
+                run(&mut app,vec![egui::Event::PointerMoved(pos),egui::Event::PointerButton{
+                    pos,button:egui::PointerButton::Primary,pressed,modifiers:egui::Modifiers::NONE}],&mut button);
+            }
+            assert_eq!(app.identity_collapsed,expected);
+            assert!(!ctx.wants_keyboard_input());
+        }
+        assert_eq!(app.compact_control_label(true),"LOCAL PILOT CONTROL");
+        app.manual_remote=Some("unconfirmed".into());
+        assert_eq!(app.compact_control_label(true),"REMOTE REQUEST / NO CONTROL");
+        app.connected=false;
+        assert_eq!(app.compact_control_label(true),"NO CONFIRMED CONTROL");
+        app.connected=true;app.snapshot=None;
+        assert_eq!(app.compact_control_label(true),"NO CONFIRMED CONTROL");
+    }
+
     pub(crate) fn view_test_cockpit(ctx: &egui::Context) -> Cockpit {
         view_test_cockpit_with_profile(
             ctx,
@@ -5666,6 +5748,7 @@ mod tests {
             ledger_sequence: 9,
             ledger_hash: "fixture".into(),
             pilots: vec![PilotView {
+                cockpit_mechanisms: None,
                 name: "pilot".into(),
                 system_id: HOME_SYSTEM_ID,
                 ship_class: ShipClass::Pioneer,
@@ -7545,6 +7628,7 @@ mod tests {
             ledger_sequence: 0,
             ledger_hash: String::new(),
             pilots: vec![PilotView {
+                cockpit_mechanisms: None,
                 name: "pilot".into(),
                 system_id: HOME_SYSTEM_ID,
                 ship_class: ShipClass::Pioneer,
@@ -7794,6 +7878,7 @@ mod tests {
     #[test]
     fn action_range_uses_physical_position_and_rejects_docked_or_transit() {
         let mut pilot = PilotView {
+            cockpit_mechanisms: None,
             name: "Range test".into(),
             ship_class: ShipClass::default(),
             system_id: HOME_SYSTEM_ID,

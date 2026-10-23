@@ -10,10 +10,10 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 
-// Experimental revision 5 redesigns the complete pilot chamber. Fresh test worlds only.
-// Old saved bindings must
-// remain with their matching build until an explicit migration is validated.
-pub const PIONEER_DOCKED_REGISTRATION_REVISION: u32 = 5;
+// Experimental revision 6 adds physical display cassettes and moving mechanisms
+// to revision 5's redesigned pilot chamber. Fresh test worlds only: old saved
+// bindings remain with their matching build; no implicit geometry migration.
+pub const PIONEER_DOCKED_REGISTRATION_REVISION: u32 = 6;
 pub const PIONEER_DOCKED_SOURCE_SHA256: &str =
     "8125644f007537437942d34169e527c08ddd2dfaed575c874e2263ff2b7cb123";
 /// Dial coordinates in the complete canonical glass rectangle (u right, v down).
@@ -1896,6 +1896,7 @@ fn add_cockpit_furniture(g: &mut PioneerDockedGeometry) {
     // A complete experimental chamber, not an overlay on the former crosswalk.
     add_cockpit_chamber_structure(g);
     add_cockpit_low_console(g);
+    add_cockpit_mechanism_pockets(g);
 
     // Index identities mirror the existing six screen slots. Slot zero is
     // transparent telemetry, not a depth-writing console panel.
@@ -2518,6 +2519,245 @@ pub fn cockpit_screen_axes(index: usize) -> Option<[[f64; 3]; 3]> {
     ])
 }
 
+/// Physical mining display frames in body metres. Hardware slots are independent
+/// of source identities: 0..5 lower from the roof, 5..7 rise from the console.
+/// Fraction zero is stowed; one is deployed. No local presentation clock here.
+pub type CockpitMechanismScreen = ([f64; 3], [f64; 3], [[f64; 3]; 3]);
+pub fn cockpit_mechanism_screen(slot: usize, fraction: f64) -> Option<CockpitMechanismScreen> {
+    if !fraction.is_finite() || !(0.0..=1.0).contains(&fraction) {
+        return None;
+    }
+    let (x, z, yaw, stowed_y, deployed_y, half) = match slot {
+        0 => (32.9, -1.6, 60_f64, 2.45, 1.95, [0.035, 0.18, 0.32]),
+        1 => (33.65, -0.84, 25., 2.45, 1.95, [0.035, 0.18, 0.32]),
+        2 => (34.1, 0., 0., 2.45, 1.95, [0.035, 0.18, 0.32]),
+        3 => (33.65, 0.84, -25., 2.45, 1.95, [0.035, 0.18, 0.32]),
+        4 => (32.9, 1.6, -60., 2.45, 1.95, [0.035, 0.18, 0.32]),
+        5 => (33.45, -0.32, 0., 0.42, 1.35, [0.035, 0.16, 0.28]),
+        6 => (33.45, 0.32, 0., 0.42, 1.35, [0.035, 0.16, 0.28]),
+        _ => return None,
+    };
+    let (s, c) = yaw.to_radians().sin_cos();
+    Some((
+        [x, stowed_y + (deployed_y - stowed_y) * fraction, z],
+        half,
+        [[c, 0., -s], Y, [s, 0., c]],
+    ))
+}
+
+/// Conservative collision envelope includes the case and its telescoping stem.
+/// Vertical translation keeps the axes constant, so the endpoint union is exact
+/// for this conservative envelope (not a rotational swept-volume approximation).
+pub fn cockpit_mechanism_box(slot: usize, fraction: f64) -> Option<PioneerDockedBox> {
+    let (mut center, half, axes) = cockpit_mechanism_screen(slot, fraction)?;
+    let anchor = if slot < 5 { 2.65 } else { 0.20 };
+    let low = (center[1] - half[1]).min(anchor);
+    let high = (center[1] + half[1]).max(anchor);
+    center[1] = (low + high) * 0.5;
+    Some(PioneerDockedBox {
+        center_m: center,
+        half_m: [0.105, (high - low) * 0.5, half[2] + 0.015],
+        axes,
+    })
+}
+pub fn cockpit_mechanism_sweep(slot: usize, from: f64, to: f64) -> Option<PioneerDockedBox> {
+    let a = cockpit_mechanism_box(slot, from)?;
+    let b = cockpit_mechanism_box(slot, to)?;
+    let low = (a.center_m[1] - a.half_m[1]).min(b.center_m[1] - b.half_m[1]);
+    let high = (a.center_m[1] + a.half_m[1]).max(b.center_m[1] + b.half_m[1]);
+    Some(PioneerDockedBox {
+        center_m: [a.center_m[0], (low + high) * 0.5, a.center_m[2]],
+        half_m: [a.half_m[0], (high - low) * 0.5, a.half_m[2]],
+        axes: a.axes,
+    })
+}
+
+/// Actual moving parts only. Fixed pockets stay in registered geometry; neither
+/// receives fake passthrough collision. The returned recipe is in body metres,
+/// like dynamic_geometry; callers apply the same station/ship placement once.
+pub fn cockpit_mechanism_geometry(
+    pose: PioneerDockedPose,
+    fractions: [f64; 7],
+) -> Result<PioneerDockedGeometry, String> {
+    if !pose.valid() {
+        return Err("Invalid cockpit mechanism placement".into());
+    }
+    use PioneerDockedMaterial::{Glass, Graphite, Titanium};
+    let mut g = PioneerDockedGeometry::default();
+    for (slot, fraction) in fractions.into_iter().enumerate() {
+        let (center, half, axes) =
+            cockpit_mechanism_screen(slot, fraction).ok_or("Invalid cockpit mechanism fraction")?;
+        let point = |v: [f64; 3]| {
+            add(
+                center,
+                add(
+                    mul(axes[0], v[0]),
+                    add(mul(axes[1], v[1]), mul(axes[2], v[2])),
+                ),
+            )
+        };
+        for (name, local, extent, material) in [
+            ("case", [0., 0., 0.], half, Graphite),
+            (
+                "glass",
+                [-0.040, 0., 0.],
+                [0.003, half[1] - 0.012, half[2] - 0.012],
+                Glass,
+            ),
+            (
+                "top",
+                [-0.045, half[1], 0.],
+                [0.008, 0.008, half[2] + 0.008],
+                Titanium,
+            ),
+            (
+                "bottom",
+                [-0.045, -half[1], 0.],
+                [0.008, 0.008, half[2] + 0.008],
+                Titanium,
+            ),
+            (
+                "port",
+                [-0.045, 0., -half[2]],
+                [0.008, half[1], 0.008],
+                Titanium,
+            ),
+            (
+                "starboard",
+                [-0.045, 0., half[2]],
+                [0.008, half[1], 0.008],
+                Titanium,
+            ),
+        ] {
+            g.panel(
+                format!("cockpit/mechanism/{slot}/{name}"),
+                PioneerDockedBox {
+                    center_m: point(local),
+                    half_m: extent,
+                    axes,
+                },
+                material,
+                PioneerDockedCollision::Solid,
+                PioneerDockedCell::Cockpit,
+                PioneerDockedPanelKind::Instrument,
+            );
+        }
+        let edge = center[1] + if slot < 5 { half[1] } else { -half[1] };
+        let anchor = if slot < 5 { 2.65 } else { 0.20 };
+        let length = (anchor - edge).abs();
+        if length > 0.001 {
+            let mut stem = point([0.075, 0., 0.]);
+            stem[1] = (anchor + edge) * 0.5;
+            g.panel(
+                format!("cockpit/mechanism/{slot}/stem"),
+                PioneerDockedBox {
+                    center_m: stem,
+                    half_m: [0.020, length * 0.5, 0.035],
+                    axes,
+                },
+                Titanium,
+                PioneerDockedCollision::Solid,
+                PioneerDockedCell::Cockpit,
+                PioneerDockedPanelKind::Rail,
+            );
+        }
+    }
+    validate_geometry(&g)?;
+    Ok(g)
+}
+
+fn add_cockpit_mechanism_pockets(g: &mut PioneerDockedGeometry) {
+    use PioneerDockedMaterial::{Graphite, Titanium};
+    for slot in 0..7 {
+        let (center, half, axes) = cockpit_mechanism_screen(slot, 0.).unwrap();
+        let point = |v: [f64; 3]| {
+            add(
+                center,
+                add(
+                    mul(axes[0], v[0]),
+                    add(mul(axes[1], v[1]), mul(axes[2], v[2])),
+                ),
+            )
+        };
+        // Hollow fixed cassette: front, back, sides and closed far end; deployment end
+        // remains physically open. No solid box through which screens teleport.
+        for (name, local, extent, material) in [
+            (
+                "front",
+                [-0.095, 0., 0.],
+                [0.015, half[1] + 0.035, half[2] + 0.040],
+                Graphite,
+            ),
+            (
+                "back",
+                [0.135, 0., 0.],
+                [0.025, half[1] + 0.035, half[2] + 0.040],
+                Graphite,
+            ),
+            (
+                "port",
+                [0.025, 0., -half[2] - 0.030],
+                [0.110, half[1] + 0.035, 0.015],
+                Titanium,
+            ),
+            (
+                "starboard",
+                [0.025, 0., half[2] + 0.030],
+                [0.110, half[1] + 0.035, 0.015],
+                Titanium,
+            ),
+            (
+                "end",
+                [
+                    0.025,
+                    if slot < 5 {
+                        half[1] + 0.025
+                    } else {
+                        -half[1] - 0.025
+                    },
+                    0.,
+                ],
+                [0.110, 0.015, half[2] + 0.040],
+                Graphite,
+            ),
+        ] {
+            g.panel(
+                format!("cockpit/mechanism-pocket/{slot}/{name}"),
+                PioneerDockedBox {
+                    center_m: point(local),
+                    half_m: extent,
+                    axes,
+                },
+                material,
+                PioneerDockedCollision::Solid,
+                PioneerDockedCell::Cockpit,
+                PioneerDockedPanelKind::Structure,
+            );
+        }
+        // Declared structural attachments: ceiling hangers or deck pedestals,
+        // not floating cassette housings. They stay behind the travel aperture.
+        let (low, high) = if slot < 5 {
+            (2.64, 2.88)
+        } else {
+            (FLOOR, 0.24)
+        };
+        let mut anchor = point([0.135, 0., 0.]);
+        anchor[1] = (low + high) * 0.5;
+        g.panel(
+            format!("cockpit/mechanism-pocket/{slot}/anchor"),
+            PioneerDockedBox {
+                center_m: anchor,
+                half_m: [0.025, (high - low) * 0.5, 0.065],
+                axes,
+            },
+            Titanium,
+            PioneerDockedCollision::Solid,
+            PioneerDockedCell::Cockpit,
+            PioneerDockedPanelKind::Structure,
+        );
+    }
+}
+
 /// Paired inward-opening leaves, shared by rendering, collision and sweep checks.
 /// Measured travel has no undeclared sliding pocket; open leaves remain physical.
 pub fn hatch_leaf_bounds(
@@ -3061,6 +3301,162 @@ fn pane_box(min: [f64; 3], max: [f64; 3]) -> PioneerDockedBox {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn deployed_mechanism_glass_has_clear_pilot_rays_and_stowed_covers_are_opaque() {
+        let g = registered_geometry(&crate::default_pioneer()).unwrap();
+        let mut conflicts = Vec::new();
+        for standing in [0., 0.5, 1.] {
+            let eye = pilot_joints(standing).eye_m;
+            for fraction in [0., 1.] {
+                let d = cockpit_mechanism_geometry(PioneerDockedPose::private(), [fraction; 7])
+                    .unwrap();
+                for slot in 0..7 {
+                    let (center, half, axes) = cockpit_mechanism_screen(slot, fraction).unwrap();
+                    for v in [-0.8, -0.4, 0., 0.4, 0.8] {
+                        for u in [-0.8, -0.4, 0., 0.4, 0.8] {
+                            let target = add(
+                                center,
+                                add(
+                                    mul(axes[0], -0.044),
+                                    add(
+                                        mul(axes[1], v * (half[1] - 0.012)),
+                                        mul(axes[2], u * (half[2] - 0.012)),
+                                    ),
+                                ),
+                            );
+                            let hits: Vec<_> = g
+                                .panels
+                                .iter()
+                                .chain(&d.panels)
+                                .filter(|p| p.collision != PioneerDockedCollision::Decoration)
+                                .filter(|p| {
+                                    segment_box_first_hit(
+                                        p.bounds.local(eye),
+                                        p.bounds.local(target),
+                                        p.bounds.half_m,
+                                        0.,
+                                    )
+                                    .is_some()
+                                })
+                                .map(|p| p.id.clone())
+                                .collect();
+                            if fraction == 1. && !hits.is_empty() {
+                                conflicts.push(format!("slot{slot} uv{u}/{v}: {hits:?}"));
+                            }
+                            if fraction == 0. && u == 0. && v == 0. {
+                                assert!(!hits.is_empty(), "stowed {slot} lacks physical mask");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assert!(
+            conflicts.is_empty(),
+            "deployed glass blocked: {conflicts:#?}"
+        );
+    }
+
+    fn mechanism_boxes_overlap(a: PioneerDockedBox, b: PioneerDockedBox) -> bool {
+        let separation = sub(b.center_m, a.center_m);
+        let mut axes = a.axes.to_vec();
+        axes.extend(b.axes);
+        for x in a.axes {
+            for y in b.axes {
+                axes.push(cross(x, y));
+            }
+        }
+        axes.into_iter()
+            .filter(|axis| dot(*axis, *axis) > 1e-12)
+            .all(|axis| {
+                let ra = (0..3)
+                    .map(|i| a.half_m[i] * dot(a.axes[i], axis).abs())
+                    .sum::<f64>();
+                let rb = (0..3)
+                    .map(|i| b.half_m[i] * dot(b.axes[i], axis).abs())
+                    .sum::<f64>();
+                dot(separation, axis).abs() < ra + rb - 1e-7
+            })
+    }
+    #[test]
+    fn seven_mechanism_sweeps_are_disjoint_and_preserve_seat_and_rear_aisles() {
+        let sweeps: Vec<_> = (0..7)
+            .map(|i| cockpit_mechanism_sweep(i, 0., 1.).unwrap())
+            .collect();
+        for (i, a) in sweeps.iter().enumerate() {
+            assert!(a.valid());
+            for (j, b) in sweeps.iter().enumerate().skip(i + 1) {
+                assert!(!mechanism_boxes_overlap(*a, *b), "mechanism sweeps {i}/{j}");
+            }
+            for feet in [
+                [31.8, FLOOR, 0.],
+                [30.0, FLOOR, 0.],
+                [29.2, FLOOR, -1.5],
+                [31.8, FLOOR, -0.85],
+                [31.8, FLOOR, 0.85],
+            ] {
+                assert!(
+                    !box_intersects_capsule(*a, feet, AVATAR_HEIGHT_M, STATION_AVATAR_RADIUS_M),
+                    "slot {i} blocks {feet:?}"
+                );
+            }
+            for step in 0..=100 {
+                let f = step as f64 / 100.;
+                let (center, half, axes) = cockpit_mechanism_screen(i, f).unwrap();
+                for x in [-1., 1.] {
+                    for y in [-1., 1.] {
+                        for z in [-1., 1.] {
+                            let point = add(
+                                center,
+                                add(
+                                    mul(axes[0], x * half[0]),
+                                    add(mul(axes[1], y * half[1]), mul(axes[2], z * half[2])),
+                                ),
+                            );
+                            let local = a.local(point);
+                            assert!((0..3).all(|k| local[k].abs() <= a.half_m[k] + 1e-9));
+                        }
+                    }
+                }
+                assert!(cockpit_mechanism_geometry(PioneerDockedPose::private(), [f; 7]).is_ok());
+            }
+        }
+        assert!(cockpit_mechanism_screen(7, 0.).is_none());
+        assert!(cockpit_mechanism_screen(0, f64::NAN).is_none());
+        assert!(cockpit_mechanism_screen(0, 1.01).is_none());
+    }
+    #[test]
+    fn mechanism_travel_clears_existing_solids_except_declared_anchor_contacts() {
+        let g = registered_geometry(&crate::default_pioneer()).unwrap();
+        let mut conflicts = Vec::new();
+        for slot in 0..7 {
+            // Moving case's endpoint union, excluding the stem's deliberate
+            // insertion into its own fixed anchor. All other solids must clear.
+            let (a, h, axes) = cockpit_mechanism_screen(slot, 0.).unwrap();
+            let (b, _, _) = cockpit_mechanism_screen(slot, 1.).unwrap();
+            let sweep = PioneerDockedBox {
+                center_m: [a[0], (a[1] + b[1]) / 2., a[2]],
+                half_m: [
+                    h[0] + 0.020,
+                    h[1] + (a[1] - b[1]).abs() / 2. + 0.008,
+                    h[2] + 0.008,
+                ],
+                axes,
+            };
+            for p in &g.panels {
+                if p.collision == PioneerDockedCollision::Decoration {
+                    continue;
+                }
+                if mechanism_boxes_overlap(sweep, p.bounds) {
+                    conflicts.push(format!("{slot}: {}", p.id));
+                }
+            }
+        }
+        assert!(
+            conflicts.is_empty(),
+            "moving screen conflicts: {conflicts:#?}"
+        );
+    }
 
     #[test]
     fn boarding_lift_station_edge_remains_blocked_by_closed_safety_gate() {
@@ -3678,7 +4074,7 @@ mod tests {
     #[test]
     fn redesigned_chamber_has_centerline_seat_rear_entry_and_real_side_wings() {
         let g = registered_geometry(&crate::default_pioneer()).unwrap();
-        assert_eq!(PIONEER_DOCKED_REGISTRATION_REVISION, 5);
+        assert_eq!(PIONEER_DOCKED_REGISTRATION_REVISION, 6);
         assert_eq!(pilot_joints(0.0).eye_m[2], 0.0);
         assert_eq!(pilot_joints(1.0).root_m[2], 0.0);
         let portal = g

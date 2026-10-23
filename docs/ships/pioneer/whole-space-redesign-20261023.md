@@ -4,6 +4,11 @@ Tracking: [issue 62](https://github.com/PIndustries/arkline-engine/issues/62).
 Base: `8da5c35e5d31e3583173bfda23ccbb87b91f6326`.
 Branch: `design/pioneer-whole-space-20261023`.
 
+This document records the published registration-5 spatial checkpoint. The
+subsequent physical deployment implementation advances to registration 6; see
+[physical cockpit mechanisms](physical-cockpit-mechanisms-20261023.md) for its
+current contract and verification. No revision-5 save migration is implied.
+
 Pioneer is the flagship development platform. Its previous room shape, cockpit,
 seat position and screen arrangement are not immutable requirements. The target
 is the approved coherent six-view cockpit and corrected whole-room study, not a
@@ -233,6 +238,8 @@ half-extents, inclination, command semantics and Y=0.95 m. This resolves the
 front-bank/case overlap without compromising narrow-aspect safety margins.
 
 ## Next interaction requirement (not implemented by this checkpoint)
+
+Implementation plan: [activity-driven cockpit displays](dynamic-cockpit-activity-20261023.md).
 
 The spatial direction was accepted for further development with a request for
 event-driven instrument presentation: confirmed drone launch should reveal an

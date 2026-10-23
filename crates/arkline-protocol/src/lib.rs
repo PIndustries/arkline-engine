@@ -16,6 +16,8 @@ mod pioneer_interior;
 pub use pioneer_interior::*;
 pub mod pioneer_docked;
 pub use pioneer_docked::*;
+mod cockpit_mechanisms;
+pub use cockpit_mechanisms::*;
 mod docked_traversal;
 pub use docked_traversal::*;
 mod room_layout;
@@ -928,6 +930,8 @@ pub struct MiningModule {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PilotView {
+    #[serde(default)]
+    pub cockpit_mechanisms: Option<PioneerCockpitMechanisms>,
     #[serde(default)]
     pub station_avatar: Option<StationAvatar>,
     #[serde(default)]

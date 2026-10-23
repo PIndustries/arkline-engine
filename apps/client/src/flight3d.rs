@@ -115,6 +115,10 @@ mod navigation_instrument;
 mod power_instrument;
 #[path = "side_instruments.rs"]
 mod side_instruments;
+#[path = "physical_cockpit.rs"]
+mod physical_cockpit;
+#[path = "physical_cockpit_onfoot.rs"]
+mod physical_cockpit_onfoot;
 use cockpit_displays::CockpitDisplayRenderer;
 #[path = "cockpit_occlusion.rs"]
 mod cockpit_occlusion;
@@ -355,6 +359,7 @@ struct CockpitDisplayFrame {
     mount: Mat4,
     viewport: egui::Rect,
     class: ShipClass,
+    mechanism_fractions: [f64; 7],
 }
 
 pub struct FlightView {
@@ -389,6 +394,7 @@ pub struct FlightView {
     drone_mode: DroneCameraMode,
     drone_feeds: Vec<u64>,
     drone_headings: std::collections::HashMap<u64, Vec3>,
+    mechanism_pose: physical_cockpit::PoseSampler,
     remote_ship: Option<String>,
     console_rect: Option<egui::Rect>,
     map_range: f64,
@@ -449,6 +455,7 @@ impl FlightView {
             drone_mode: DroneCameraMode::Raised,
             drone_feeds: Vec::new(),
             drone_headings: std::collections::HashMap::new(),
+            mechanism_pose: Default::default(),
             remote_ship: None,
             console_rect: None,
             map_range: 1_000_000.0,
@@ -472,7 +479,7 @@ impl FlightView {
     pub(crate) fn set_pioneer_room(&mut self, room: Option<arkline_protocol::PioneerRoomState>) {
         self.pioneer_room = room;
     }
-    fn canonical_pioneer_parts(&mut self, now: u64) -> Result<Arc<Vec<ModelPart>>, String> {
+    fn canonical_pioneer_parts(&mut self, now: u64, fractions: [f64; 7]) -> Result<Arc<Vec<ModelPart>>, String> {
         let document = self
             .pioneer_layout
             .as_ref()
@@ -486,12 +493,13 @@ impl FlightView {
         {
             self.pioneer_scene = Some(hangar::pioneer_docked_scene::SceneCache::new(document)?);
         }
-        hangar::pioneer_docked_scene::seated_body_parts(
+        hangar::pioneer_docked_scene::seated_body_parts_with_mechanisms(
             self.pioneer_scene
                 .as_ref()
                 .expect("validated canonical scene"),
             self.pioneer_room.as_ref(),
             now,
+            fractions,
         )
     }
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
@@ -515,6 +523,11 @@ impl FlightView {
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     pub fn editor_camera_pose(&self) -> Option<(Vec3, f32, f32)> {
         self.last_camera_pose
+    }
+    pub(crate) fn reset_activity_session(&mut self) { self.mechanism_pose.reset_session(); }
+    pub(crate) fn disconnect_activity(&mut self) { self.mechanism_pose.disconnect(); }
+    pub(crate) fn observe_activity(&mut self, snapshot: &Snapshot, owner: &str, connected: bool, now: u64) {
+        self.mechanism_pose.observe(snapshot, owner, connected, now);
     }
     pub fn set_remote_ship(&mut self, pilot: Option<String>) {
         self.remote_ship = pilot;
@@ -611,13 +624,14 @@ impl FlightView {
     fn physical_surface(&self, index: usize, canvas: egui::Vec2) -> Option<CockpitSurface> {
         let frame = self.cockpit_display_frame.as_ref()?;
         let mut surface = if frame.class == ShipClass::Pioneer {
-            hangar::pioneer_docked_scene::physical_surface(
+            hangar::pioneer_docked_scene::physical_surface_with_mechanisms(
                 frame.viewport,
                 frame.vp,
                 frame.mount,
                 index,
                 canvas,
                 frame.scene.clone(),
+                frame.mechanism_fractions,
             )?
         } else {
             CockpitSurface::new(
@@ -1068,8 +1082,10 @@ impl FlightView {
             0.0002,
             10.0,
         ) * view;
+        self.mechanism_pose.observe(snapshot, pilot_name, connected, now);
+        let mechanism_fractions = self.mechanism_pose.fractions();
         let pioneer_parts = if class == ShipClass::Pioneer {
-            match self.canonical_pioneer_parts(now) {
+            match self.canonical_pioneer_parts(now, mechanism_fractions) {
                 Ok(parts) => Some(parts),
                 Err(error) => {
                     self.clear_cockpit_presentation();
@@ -1198,6 +1214,7 @@ impl FlightView {
                         mount: cockpit_mount,
                         viewport: rect,
                         class,
+                        mechanism_fractions,
                     });
             self.cockpit_layer = self.cockpit_display_frame.as_ref().map(|_| ui.layer_id());
         }
@@ -1326,6 +1343,34 @@ impl FlightView {
                         camera_feeds.push((screen, feed, Some(drone), None));
                     }
                 }
+                let primary_feed_count = camera_feeds.len();
+                let mut camera_feeds: Vec<_> = camera_feeds.into_iter().filter_map(|(screen, feed, drone, turret)| {
+                    let source_key = camera_source_key(pilot_name, drone.map(|d: &arkline_protocol::DroneView| d.id),
+                        self.remote_ship.as_deref(), self.drone_mode, turret);
+                    Some(physical_cockpit::DisplayFeed { surface: drone_surface.clone()?, screen,
+                        frame: feed, drone, turret,
+                        #[cfg(test)]
+                        source_key,
+                        key: physical_cockpit::capture_key(self.mechanism_pose.capture_identity(source_key), screen), primary: true,
+                        #[cfg(test)]
+                        bay: 4, rig_status: None })
+                }).collect();
+                if let Some(own) = own_pilot.filter(|_| cockpit && class == ShipClass::Pioneer) {
+                    physical_cockpit::append_feeds(&instrument_surfaces, &mut camera_feeds,
+                        &renderer, &frame, own, &self.mechanism_pose);
+                }
+                if let (Some(own), Ok(renderer)) = (own_pilot, renderer.lock()) {
+                    physical_cockpit::annotate_turret_rigs(&mut camera_feeds, &renderer, &frame, own);
+                }
+                #[cfg(test)]
+                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("physical_cockpit_proof"), serde_json::json!({
+                    "snapshot_ms": snapshot.server_time_ms, "fractions": mechanism_fractions,
+                    "state": self.mechanism_pose.state(),
+                    "feeds": camera_feeds.iter().map(|f| serde_json::json!({"key":f.key,"source_key":f.source_key,"bay":f.bay,
+                        "drone":f.drone.map(|d|d.id),"turret":f.turret,"primary":f.primary,
+                        "size":feed_resolution(f.screen.width().round() as i32,f.screen.height().round() as i32),
+                        "rig_status":f.rig_status,"aspect":f.screen.aspect_ratio(),"nonrecursive":!f.frame.cockpit&&f.frame.drone_camera})).collect::<Vec<_>>()
+                })));
                 let drone_renderer = renderer.clone();
                 // WebGL objects stay on the browser thread; guard callback access.
                 #[cfg(target_arch = "wasm32")]
@@ -1341,7 +1386,8 @@ impl FlightView {
                     })),
                 });
                 for drone in own_pilot.map(fleet).unwrap_or_default() {
-                    if let Some(point) = project_point(vp, rect, space.scene(drone.position)) {
+                    if let Some(point) = project_point(vp, rect, space.scene(drone.position))
+                        .filter(|point| physical_cockpit::world_annotation_clear(&instrument_surfaces, *point)) {
                         let painter = ui.painter_at(rect);
                         painter.circle_stroke(point, 8.0, egui::Stroke::new(1.0, super::TEAL));
                         painter.text(
@@ -1378,6 +1424,7 @@ impl FlightView {
                                 rect.center().x + point.x * rect.width() * 0.5,
                                 rect.center().y - point.y * rect.height() * 0.5,
                             );
+                            if !physical_cockpit::world_annotation_clear(&instrument_surfaces, screen) { continue; }
                             ui.painter_at(rect).text(
                                 screen,
                                 egui::Align2::CENTER_BOTTOM,
@@ -1395,7 +1442,8 @@ impl FlightView {
                 for actor in snapshot.traffic.iter().filter(|a| a.system_id == system_id) {
                     let pos = space.scene(actor.position);
                     if pos.distance(eye) < 300.0 {
-                        if let Some(label) = project_point(vp, rect, pos) {
+                        if let Some(label) = project_point(vp, rect, pos)
+                            .filter(|point| physical_cockpit::world_annotation_clear(&instrument_surfaces, *point)) {
                             let role = match actor.role {
                                 arkline_protocol::TrafficRole::StationShuttle => "Shuttle",
                                 arkline_protocol::TrafficRole::FreightTender => "Freight tender",
@@ -1411,7 +1459,8 @@ impl FlightView {
                         }
                     }
                 }
-                let project = |point: Vec3| project_point(vp, rect, point);
+                let project = |point: Vec3| project_point(vp, rect, point)
+                    .filter(|point| physical_cockpit::world_annotation_clear(&instrument_surfaces, *point));
                 let own_pilot = snapshot
                     .pilots
                     .iter()
@@ -1704,16 +1753,21 @@ impl FlightView {
                                 "LIVE"
                             }),
                         );
-                        let feed_count = camera_feeds.len();
+                        let authority = if !connected { "DISCONNECTED" } else if self.radar_paused { "PAUSED" }
+                            else if now.saturating_sub(snapshot.server_time_ms) > 1500 { "STALE" } else { "LIVE" };
+                        physical_cockpit::backgrounds(ui, &instrument_surfaces, &self.mechanism_pose, own, now, authority);
                         if let Some(surface) = &drone_surface {
                             let capture_pass = ui.ctx().cumulative_pass_nr();
                             let capture_ui_ms = ui.input(|input| (input.time.max(0.0) * 1000.0) as u64);
-                            let capture_keys: Arc<Vec<u64>> = Arc::new(camera_feeds.iter()
-                                .filter(|(screen, _, drone, _)| drone.is_none_or(|d| d.signal_strength > 0.0)
-                                    && surface.feed_geometry(*screen).is_some())
-                                .map(|(_, _, drone, turret)| camera_source_key(pilot_name, drone.map(|d| d.id),
-                                    self.remote_ship.as_deref(), self.drone_mode, *turret)).collect());
-                            for (screen, feed, drone, turret) in camera_feeds {
+                            let mut capture_keys: Vec<u64> = camera_feeds.iter()
+                                .filter(|view| view.drone.is_none_or(|d| d.signal_strength > 0.0)
+                                    && view.surface.feed_geometry(view.screen).is_some())
+                                .map(|view| view.key).collect();
+                            capture_keys.sort_unstable();
+                            capture_keys.dedup();
+                            let capture_keys = Arc::new(capture_keys);
+                            for view in camera_feeds {
+                                let physical_cockpit::DisplayFeed { surface, screen, frame: feed, drone, turret, key, primary, rig_status, .. } = view;
                                 let fresh = connected
                                     && now.saturating_sub(snapshot.server_time_ms) <= 1500;
                                 if drone.is_none_or(|d| d.signal_strength > 0.0) {
@@ -1723,8 +1777,6 @@ impl FlightView {
                                     let renderer = send_wrapper::SendWrapper::new(renderer);
                                     #[cfg(target_arch = "wasm32")]
                                     let surface = send_wrapper::SendWrapper::new(surface);
-                                    let key = camera_source_key(pilot_name, drone.map(|d| d.id),
-                                        self.remote_ship.as_deref(), self.drone_mode, turret);
                                     let capture_keys = capture_keys.clone();
                                     painter.add(egui::PaintCallback {
                                         rect,
@@ -1747,8 +1799,7 @@ impl FlightView {
                                         )),
                                     });
                                 }
-                                let capture_key = camera_source_key(pilot_name, drone.map(|d| d.id),
-                                    self.remote_ship.as_deref(), self.drone_mode, turret);
+                                let capture_key = key;
                                 let capture_size = feed_resolution(screen.width().round() as i32, screen.height().round() as i32);
                                 let captured_at = drone_renderer.lock().ok().and_then(|renderer|
                                     renderer.feed_cache.iter().find(|cache| cache.key == capture_key
@@ -1767,7 +1818,7 @@ impl FlightView {
                                     overlay.text(
                                         screen.left_top() + egui::vec2(3., 3.),
                                         egui::Align2::LEFT_TOP,
-                                        if let Some(worker) = remote_worker {
+                                        if let Some(worker) = remote_worker.filter(|_| primary) {
                                             format!("{} / REMOTE SHIP", worker.name)
                                         } else if let Some(slot) = turret {
                                             format!("TURRET {} / RENDERED POV", slot + 1)
@@ -1775,7 +1826,7 @@ impl FlightView {
                                             format!(
                                                 "#{} / {}",
                                                 drone.map_or(0, |d| d.id),
-                                                self.drone_mode.label()
+                                                if primary { self.drone_mode.label() } else { DroneCameraMode::Pov.label() }
                                             )
                                         },
                                         egui::FontId::monospace(11.),
@@ -1787,6 +1838,10 @@ impl FlightView {
                                         overlay.text(screen.left_top() + egui::vec2(3., 17.),
                                             egui::Align2::LEFT_TOP, status,
                                             egui::FontId::monospace(10.), super::MUTED);
+                                    }
+                                    if let Some(status) = &rig_status {
+                                        overlay.text(screen.center_bottom() - egui::vec2(0., 17.), egui::Align2::CENTER_BOTTOM,
+                                            status, egui::FontId::monospace(10.), super::AMBER);
                                     }
                                     if let Some(drone) = drone {
                                         paint_camera_signal(
@@ -1816,7 +1871,7 @@ impl FlightView {
                                 });
                             } else if self.remote_ship.is_none()
                                 && self.drone_camera
-                                && feed_count == 0
+                                && primary_feed_count == 0
                             {
                                 surface.paint(ui, |overlay| {
                                     if self.camera_source != super::camera_sources::CameraSource::Drones {
@@ -3333,7 +3388,7 @@ impl Renderer {
             self.feed_cache.remove(index).destroy(&gl);
         }
         if !self.feed_cache.iter().any(|cache| cache.key == key) {
-            if self.feed_cache.len() >= 4 {
+            if self.feed_cache.len() >= physical_cockpit::MAX_CAPTURE_SOURCES {
                 let evict = capture_schedule.and_then(|(_, _, visible)| self.feed_cache.iter()
                     .position(|cache| !visible.contains(&cache.key))).unwrap_or(0);
                 self.feed_cache.remove(evict).destroy(&gl);
@@ -3345,15 +3400,13 @@ impl Renderer {
         if let Some(index) = self.feed_cache.iter().position(|cache| cache.key == key) {
             let framebuffer = self.feed_cache[index].framebuffer;
             let due = feed_due(self.feed_cache[index].painted_ms, frame.now, count);
-            let capture_granted = due && capture_schedule.map_or(true, |(pass, ui_ms, visible)| {
-                let candidates = visible.iter().map(|key| camera_feed_budget::FeedCaptureCandidate {
-                    key: *key,
-                    painted_ms: self.feed_cache.iter().find(|cache| cache.key == *key
-                        && cache.width == width && cache.height == height)
-                        .and_then(|cache| if feed_due(cache.painted_ms, frame.now, count) {
-                            cache.captured_ui_ms
-                        } else { Some(ui_ms) }),
-                }).collect::<Vec<_>>();
+            let capture_granted = due && capture_schedule.is_none_or(|(pass, ui_ms, visible)| {
+                let ages: Vec<_> = self.feed_cache.iter().map(|cache| camera_feed_budget::SourceCaptureAge {
+                    key: cache.key,
+                    due: feed_due(cache.painted_ms, frame.now, count),
+                    captured_ui_ms: cache.captured_ui_ms,
+                }).collect();
+                let candidates = camera_feed_budget::source_candidates(visible, &ages, ui_ms);
                 self.feed_capture_budget.should_capture(pass, ui_ms, key, &candidates)
             });
             if due && capture_granted {
@@ -4438,9 +4491,9 @@ fn in_warp(location: &Location, now: u64) -> bool {
     matches!(location, Location::InTransit { arrives_at_ms, .. } if now < *arrives_at_ms)
 }
 /// Shared bezel geometry and instrument layout: +X forward, +Y up, +Z right.
-// Slot zero is the legacy HUD; Pioneer leaves it empty and owns physical 1..=7.
+// Slot zero is the legacy HUD; Pioneer owns fixed 1..=7 and mechanisms 8..=14.
 // Other ship classes retain their existing five physical faces and HUD.
-const COCKPIT_SURFACE_SLOTS: usize = 8;
+const COCKPIT_SURFACE_SLOTS: usize = 15;
 const COCKPIT_FOV: f32 = 1.22;
 fn cockpit_fov(class: ShipClass) -> f32 {
     if class == ShipClass::Pioneer {
@@ -4929,6 +4982,7 @@ fn turret_camera_frame(frame: &Frame, pilot: &PilotView, slot: u8, rotation: Qua
     let ship = transform(frame.space.position(pilot, frame.now), Vec3::ONE, ship_orientation_at(pilot, frame.now));
     // Observation offset, in the same scene units as the rendered mount:
     // 2.2 m above the bore clears its existing 1.4 m visual beam envelope.
+    // Other hull/gun occluders remain and are explicitly diagnosed by the UI.
     // This is a barrel-tracking view, not an authoritative sensor entity.
     let eye = ship.transform_point3(turret_muzzle(pilot.ship_class, rotation, slot)
         + rotation * Vec3::Y * 0.022);
@@ -8182,6 +8236,7 @@ mod tests {
     fn extrapolation_is_bounded_and_warp_uses_server_position() {
         let space = Space::default();
         let mut pilot = PilotView {
+            cockpit_mechanisms: None,
             station_avatar: None,
             surface: None,
             power: None,
@@ -8462,6 +8517,7 @@ mod tests {
     fn stable_pilot_lane_does_not_depend_on_roster_or_view() {
         let space = Space::default();
         let pilot = PilotView {
+            cockpit_mechanisms: None,
             station_avatar: None,
             surface: None,
             power: None,

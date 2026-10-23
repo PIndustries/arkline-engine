@@ -2,6 +2,8 @@ use super::*;
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub(super) struct Account {
     #[serde(default)]
+    pub(super) cockpit_mechanisms: Option<PioneerCockpitMechanisms>,
+    #[serde(default)]
     pub(super) docked_traversal_compatible: bool,
     #[serde(default)]
     pub(super) docked_actuators: BTreeMap<String, DockedVesselActuators>,

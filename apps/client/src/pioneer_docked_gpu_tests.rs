@@ -1511,3 +1511,7 @@ fn native_pioneer_registered_docked_scene_displays_continuity_and_visibility() {
         assert_eq!(gl.get_error(), glow::NO_ERROR);
     }
 }
+
+
+#[path = "physical_cockpit_gpu_tests.rs"]
+mod physical_cockpit_tests;

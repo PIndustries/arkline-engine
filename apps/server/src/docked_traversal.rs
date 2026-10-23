@@ -202,6 +202,7 @@ pub(super) fn editor_place(
     let expected = binding(world, name, Some(document))?;
     let pose = docked_binding_pose(&expected).map_err(anyhow::Error::msg)?;
     let static_geometry = registered(Some(document))?;
+    let static_geometry = cockpit_mechanisms::with_collision(world, name, &static_geometry, now);
     let mut actuator = world.accounts[name]
         .docked_actuators
         .get(&expected.host_vessel_id)
@@ -595,6 +596,7 @@ pub(super) fn execute(
     );
     let pose = docked_binding_pose(&expected).map_err(anyhow::Error::msg)?;
     let static_geometry = registered(document)?;
+    let static_geometry = cockpit_mechanisms::with_collision(w, name, &static_geometry, now);
     let existing = pilot
         .view
         .station_avatar
@@ -1199,6 +1201,7 @@ pub(super) fn advance(
     }
     let static_geometry = registered(document)?;
     for name in names {
+        let static_geometry = cockpit_mechanisms::with_collision(w, &name, &static_geometry, now);
         let expected = binding(w, &name, document)?;
         let pilot = &w.pilots[&name];
         let mut state = pilot
@@ -1282,6 +1285,8 @@ pub(super) fn validate_room_layout(w: &World, document: &RoomLayoutDocument) -> 
         {
             ensure!(state.binding.layout_sha256 == docked_layout_sha256(document),
                 "return all affected pilots to their pilot seats before replacing the bound docked layout");
+            let static_geometry =
+                cockpit_mechanisms::with_collision(w, name, &static_geometry, state.updated_at_ms);
             let pose = docked_binding_pose(&state.binding).map_err(anyhow::Error::msg)?;
             let dynamic_geometry = geometry::dynamic_geometry(
                 pose,

@@ -159,6 +159,9 @@ pub struct HangarView {
     room_parts: Option<pioneer_interior::LayoutPartsCache>,
     docked_enabled: bool,
     space_snapshot: Option<Arc<Snapshot>>,
+    mechanism_pose: physical_cockpit::PoseSampler,
+    mechanism_host_bound: bool,
+    mechanism_feed_frame: Option<Frame>,
     #[cfg(test)]
     docked_disable_culling: bool,
     docked_scene: Option<pioneer_docked_scene::SceneCache>,
@@ -208,6 +211,9 @@ impl HangarView {
             room_parts: None,
             docked_enabled: false,
             space_snapshot: None,
+            mechanism_pose: Default::default(),
+            mechanism_host_bound: false,
+            mechanism_feed_frame: None,
             #[cfg(test)]
             docked_disable_culling: false,
             docked_scene: None,
@@ -346,6 +352,8 @@ impl HangarView {
         self.docked_surfaces = std::array::from_fn(|_| None);
         self.passive_console = None;
         self.docked_layer = None;
+        self.mechanism_host_bound = false;
+        self.mechanism_feed_frame = None;
     }
     pub(crate) fn computer_hit_tester(
         &self,
@@ -370,6 +378,8 @@ impl HangarView {
             surface.submit(ctx, layer, primitives);
         }
     }
+    // Match the existing instrument painters: authority inputs remain explicit.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn paint_docked_instruments(
         &self,
         ui: &mut egui::Ui,
@@ -422,21 +432,67 @@ impl HangarView {
         if let Some(surface) = &self.passive_console {
             paint_passive_flight_console(ui, surface, pilot, snapshot, now, connected, paused);
         }
+        if self.mechanism_host_bound {
+            physical_cockpit::backgrounds(
+                ui,
+                &self.docked_surfaces,
+                &self.mechanism_pose,
+                pilot,
+                now,
+                if !connected {
+                    "DISCONNECTED"
+                } else if paused {
+                    "PAUSED"
+                } else {
+                    "STALE"
+                },
+            );
+            if let (Some((viewport, _)), Some(renderer), Some(frame)) = (
+                self.surface,
+                self.renderer.as_ref(),
+                self.mechanism_feed_frame.as_ref(),
+            ) {
+                physical_cockpit_onfoot::paint(
+                    ui,
+                    viewport,
+                    &self.docked_surfaces,
+                    renderer,
+                    frame,
+                    pilot,
+                    &self.mechanism_pose,
+                );
+            }
+        }
         for (index, surface) in self.docked_surfaces.iter().enumerate() {
             // These cards own their authority header; a second top-right badge
             // would obscure real data on the small physical display canvas.
-            if matches!(index, 1 | 2 | 4 | 5 | 6 | 7) {
+            if matches!(index, 1 | 2 | 4 | 5 | 6 | 7 | 8..=14) {
                 continue;
             }
             if let Some(surface) = surface {
                 paint_passive_authority(ui, surface, snapshot, now, connected, paused);
             }
         }
-        // The passive navigation card owns its full bounded canvas. Camera feeds
-        // remain available through the existing seated drone view.
+        // The passive navigation card owns its full bounded canvas. Dedicated
+        // physical camera faces remain read-only while walking.
     }
     pub(crate) fn set_space_snapshot(&mut self, snapshot: Option<Arc<Snapshot>>) {
         self.space_snapshot = snapshot;
+    }
+    pub(crate) fn observe_mechanisms(
+        &mut self,
+        snapshot: &Snapshot,
+        owner: &str,
+        connected: bool,
+        now: u64,
+    ) {
+        self.mechanism_pose.observe(snapshot, owner, connected, now);
+    }
+    pub(crate) fn disconnect_mechanisms(&mut self) {
+        self.mechanism_pose.disconnect();
+    }
+    pub(crate) fn reset_mechanisms(&mut self) {
+        self.mechanism_pose.reset_session();
     }
     pub fn input_surface(&self) -> Option<(egui::Rect, egui::LayerId)> {
         self.surface

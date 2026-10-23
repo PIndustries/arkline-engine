@@ -8,6 +8,23 @@ pub(crate) struct FeedCaptureCandidate {
     pub(crate) painted_ms: Option<u64>,
 }
 
+/// One complete capture-key's own age. A key includes the camera's fixed
+/// dimensions/aspect, so another callback's destination cannot invalidate it.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct SourceCaptureAge {
+    pub(crate) key: u64,
+    pub(crate) due: bool,
+    pub(crate) captured_ui_ms: Option<u64>,
+}
+
+pub(crate) fn source_candidates(visible: &[u64], ages: &[SourceCaptureAge], ui_ms: u64) -> Vec<FeedCaptureCandidate> {
+    visible.iter().map(|key| FeedCaptureCandidate {
+        key: *key,
+        painted_ms: ages.iter().find(|source| source.key == *key).and_then(|source|
+            if source.due { source.captured_ui_ms } else { Some(ui_ms) }),
+    }).collect()
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct FeedCaptureBudget {
     ui_frame: Option<u64>,
@@ -74,6 +91,29 @@ mod tests {
 
     fn candidate(key: u64, painted_ms: Option<u64>) -> FeedCaptureCandidate {
         FeedCaptureCandidate { key, painted_ms }
+    }
+
+    #[test]
+    fn paused_mixed_dimensions_admit_cold_source_not_warm_other_callback() {
+        let mut budget = FeedCaptureBudget::default();
+        assert!(budget.should_capture(1, 100, 20, &[candidate(20, None)]));
+        assert!(budget.should_capture(2, 200, 10, &[candidate(10, None)]));
+        // Keys name distinct fixed specs: large primary, small wing, new page.
+        // Warm sources are not due at the paused simulation clock. Their age
+        // must not become None merely because a different-sized callback ran.
+        let ages = [
+            SourceCaptureAge { key: 10, due: super::super::feed_due(Some(1000), 1000, 3), captured_ui_ms: Some(200) },
+            SourceCaptureAge { key: 20, due: super::super::feed_due(Some(1000), 1000, 3), captured_ui_ms: Some(100) },
+        ];
+        let candidates = source_candidates(&[10, 20, 30], &ages, 300);
+        assert_eq!(candidates.iter().map(|c| c.painted_ms).collect::<Vec<_>>(), [Some(300), Some(300), None]);
+        assert!(!budget.should_capture(3, 300, 20, &candidates));
+        assert!(budget.should_capture(3, 300, 30, &candidates));
+        assert!(!budget.should_capture(3, 300, 30, &candidates));
+        let warmed = [ages[0], ages[1], SourceCaptureAge { key: 30, due: false, captured_ui_ms: Some(300) }];
+        let candidates = source_candidates(&[30, 20, 10], &warmed, 400);
+        assert!(!budget.should_capture(4, 400, 30, &candidates));
+        assert!(!budget.should_capture(4, 400, 20, &candidates));
     }
 
     #[test]

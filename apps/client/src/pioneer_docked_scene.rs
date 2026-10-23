@@ -72,9 +72,33 @@ pub(in crate::flight3d) fn seated_body_parts(
     room: Option<&arkline_protocol::PioneerRoomState>,
     now: u64,
 ) -> Result<Arc<Vec<ModelPart>>, String> {
+    seated_body_parts_with_mechanisms(cache, room, now, [0.0; 7])
+}
+
+/// The caller samples the confirmed actuator state once and supplies exactly
+/// these fractions to both this mesh recipe and the physical content planes.
+pub(in crate::flight3d) fn seated_body_parts_with_mechanisms(
+    cache: &SceneCache,
+    room: Option<&arkline_protocol::PioneerRoomState>,
+    now: u64,
+    fractions: [f64; 7],
+) -> Result<Arc<Vec<ModelPart>>, String> {
     let pose = PioneerDockedPose::private();
-    let dynamic = dynamic_geometry(pose, actuator_pose(None, pose, room, now))?;
+    let dynamic = dynamic_with_mechanisms(pose, actuator_pose(None, pose, room, now), fractions)?;
     body_parts(cache, &dynamic).map(Arc::new)
+}
+
+fn dynamic_with_mechanisms(
+    pose: PioneerDockedPose,
+    actuators: PioneerDockedActuators,
+    fractions: [f64; 7],
+) -> Result<PioneerDockedGeometry, String> {
+    let mut dynamic = dynamic_geometry(pose, actuators)?;
+    let mechanisms = arkline_protocol::cockpit_mechanism_geometry(pose, fractions)?;
+    dynamic.panels.extend(mechanisms.panels);
+    dynamic.supports.extend(mechanisms.supports);
+    dynamic.portals.extend(mechanisms.portals);
+    Ok(dynamic)
 }
 
 pub(in crate::flight3d) fn default_body_parts() -> Result<Arc<Vec<ModelPart>>, String> {
@@ -89,6 +113,7 @@ pub(in crate::flight3d) fn default_body_parts() -> Result<Arc<Vec<ModelPart>>, S
 }
 
 /// The same real backing plane and opaque-scene ray guard in every view.
+#[cfg(test)]
 pub(in crate::flight3d) fn physical_surface(
     rect: egui::Rect,
     vp: Mat4,
@@ -97,8 +122,39 @@ pub(in crate::flight3d) fn physical_surface(
     canvas: egui::Vec2,
     scene: Arc<CockpitOcclusion>,
 ) -> Option<CockpitSurface> {
+    physical_surface_with_mechanisms(rect, vp, mount, index, canvas, scene, [0.0; 7])
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(in crate::flight3d) fn physical_surface_with_mechanisms(
+    rect: egui::Rect,
+    vp: Mat4,
+    mount: Mat4,
+    index: usize,
+    canvas: egui::Vec2,
+    scene: Arc<CockpitOcclusion>,
+    fractions: [f64; 7],
+) -> Option<CockpitSurface> {
     if index == 0 {
         return None;
+    }
+    if let Some(slot) = index.checked_sub(8) {
+        let fraction = *fractions.get(slot)?;
+        let (center, half, axes) = arkline_protocol::cockpit_mechanism_screen(slot, fraction)?;
+        let center = vector(center);
+        let half = vector(half);
+        let plane_mount = oriented_plane_mount(mount, center, axes);
+        let canvas = egui::vec2(canvas.y * (half.z - 0.012) / (half.y - 0.012), canvas.y);
+        return CockpitSurface::registered_mechanism(
+            rect,
+            vp,
+            plane_mount,
+            center,
+            half,
+            index,
+            canvas,
+        )
+        .map(|surface| surface.with_registered_occlusion(scene, vp, plane_mount));
     }
     let (center, half) = arkline_protocol::cockpit_screen(index)?;
     let plane_mount = screen_plane_mount(index, mount, vector(center))?;
@@ -132,13 +188,17 @@ fn canonical_screen_canvas(index: usize, half: Vec3, requested: egui::Vec2) -> e
 // Camera matrices, GPU programs and world authority are not changed here.
 fn screen_plane_mount(index: usize, mount: Mat4, center: Vec3) -> Option<Mat4> {
     let axes = arkline_protocol::cockpit_screen_axes(index)?;
+    Some(oriented_plane_mount(mount, center, axes))
+}
+
+fn oriented_plane_mount(mount: Mat4, center: Vec3, axes: [[f64; 3]; 3]) -> Mat4 {
     let rotation = Mat4::from_cols(
         vector(axes[0]).extend(0.0),
         vector(axes[1]).extend(0.0),
         vector(axes[2]).extend(0.0),
         glam::Vec4::W,
     );
-    Some(mount * Mat4::from_translation(center) * rotation * Mat4::from_translation(-center))
+    mount * Mat4::from_translation(center) * rotation * Mat4::from_translation(-center)
 }
 
 fn vector(point: [f64; 3]) -> Vec3 {
@@ -600,6 +660,7 @@ fn registered_surfaces(
     vp: Mat4,
     pose: PioneerDockedPose,
     parts: &[ModelPart],
+    fractions: [f64; 7],
 ) {
     let catalog = view
         .renderer
@@ -644,7 +705,9 @@ fn registered_surfaces(
         } else {
             egui::vec2(300.0, 180.0)
         };
-        let mut surface = physical_surface(rect, vp, mount, index, canvas, scene.clone())?;
+        let mut surface = physical_surface_with_mechanisms(
+            rect, vp, mount, index, canvas, scene.clone(), fractions,
+        )?;
         if let Some(renderer) = &view.docked_display_renderer {
             surface = surface.with_renderer(renderer.clone());
         }
@@ -900,7 +963,15 @@ pub(super) fn show(
     }
     let target = eye_at(&joints, smooth, body_heading);
     let act = actuator_pose(state, pose, room, now);
-    let dynamic = match dynamic_geometry(pose, act) {
+    // One confirmed, freshness-gated sample supplies the rendered mechanisms,
+    // third-person camera collision and every content/pointer plane this frame.
+    view.mechanism_host_bound = mechanism_host_matches(state, view.mechanism_pose.state());
+    let fractions = if view.mechanism_host_bound {
+        view.mechanism_pose.fractions()
+    } else {
+        [0.; 7]
+    };
+    let dynamic = match dynamic_with_mechanisms(pose, act, fractions) {
         Ok(dynamic) => dynamic,
         Err(error) => {
             ui.painter().text(
@@ -991,7 +1062,7 @@ pub(super) fn show(
         parts.extend(pilot_parts(&joints, smooth, body_heading));
     }
     if !view.editor_free_camera_active {
-        registered_surfaces(view, rect, vp, pose, &parts);
+        registered_surfaces(view, rect, vp, pose, &parts, fractions);
         // Leaving the pilot station revokes its active computer surface even
         // when the new lower console happens to remain in the walking view.
         if state.is_some() {
@@ -1024,6 +1095,11 @@ pub(super) fn show(
         )
         .ok()
     });
+    view.mechanism_feed_frame = if view.mechanism_host_bound {
+        space_frame.clone()
+    } else {
+        None
+    };
     if let Some(renderer) = &view.renderer {
         let renderer = renderer.clone();
         #[cfg(target_arch = "wasm32")]
@@ -1071,9 +1147,188 @@ pub(super) fn show(
     None
 }
 
+fn mechanism_host_matches(
+    traversal: Option<&DockedTraversalState>,
+    mechanisms: Option<&arkline_protocol::PioneerCockpitMechanisms>,
+) -> bool {
+    mechanisms.is_some_and(|mechanisms| {
+        traversal.is_none_or(|state| state.binding.host_vessel_id == mechanisms.vessel_id)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mechanism_state_is_never_borrowed_from_owner_while_visiting_another_host() {
+        let state = standing_state();
+        let own = arkline_protocol::PioneerCockpitMechanisms::stowed("another-ship".into(), 1000);
+        assert!(!mechanism_host_matches(Some(&state), Some(&own)));
+        let host = arkline_protocol::PioneerCockpitMechanisms::stowed(
+            state.binding.host_vessel_id.clone(),
+            1000,
+        );
+        assert!(mechanism_host_matches(Some(&state), Some(&host)));
+        assert!(mechanism_host_matches(None, Some(&own)));
+        assert!(!mechanism_host_matches(Some(&state), None));
+        assert!(!mechanism_host_matches(None, None));
+    }
+    #[test]
+    fn mechanism_mesh_recipe_uses_exact_shared_fractions_and_stowed_wrapper() {
+        let cache = SceneCache::new(arkline_protocol::default_pioneer()).unwrap();
+        let pose = PioneerDockedPose::private();
+        let actuators = actuator_pose(None, pose, None, 0);
+        let base = dynamic_geometry(pose, actuators).unwrap();
+        for fractions in [
+            [0.; 7],
+            [0.5; 7],
+            [1.; 7],
+            [0., 0.2, 0.4, 0.6, 0.8, 1., 0.3],
+        ] {
+            let mut expected = base.clone();
+            let mechanisms = arkline_protocol::cockpit_mechanism_geometry(pose, fractions).unwrap();
+            expected.panels.extend(mechanisms.panels);
+            expected.supports.extend(mechanisms.supports);
+            expected.portals.extend(mechanisms.portals);
+            let actual = dynamic_with_mechanisms(pose, actuators, fractions).unwrap();
+            assert_eq!(actual, expected);
+            assert_eq!(
+                seated_body_parts_with_mechanisms(&cache, None, 0, fractions)
+                    .unwrap()
+                    .as_ref(),
+                &body_parts(&cache, &expected).unwrap()
+            );
+            // Geometry remains in body metres: placement is applied exactly
+            // once later, by both on-foot meshes and their registered planes.
+            for pose in [
+                PioneerDockedPose::fleet(arkline_protocol::FleetLayoutRevision::LinearV1),
+                PioneerDockedPose::fleet(arkline_protocol::FleetLayoutRevision::CircularV1),
+            ] {
+                assert_eq!(
+                    arkline_protocol::cockpit_mechanism_geometry(pose, fractions).unwrap(),
+                    arkline_protocol::cockpit_mechanism_geometry(
+                        PioneerDockedPose::private(),
+                        fractions
+                    )
+                    .unwrap()
+                );
+            }
+        }
+        assert_eq!(
+            seated_body_parts(&cache, None, 0).unwrap().as_ref(),
+            seated_body_parts_with_mechanisms(&cache, None, 0, [0.; 7])
+                .unwrap()
+                .as_ref()
+        );
+        for invalid in [f64::NAN, -0.01, 1.01] {
+            assert!(seated_body_parts_with_mechanisms(&cache, None, 0, [invalid; 7]).is_err());
+        }
+    }
+
+    #[test]
+    fn mechanism_planes_match_shared_glass_pointer_depth_and_proportions() {
+        let geometry = flight_geometry().unwrap();
+        let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280., 720.));
+        for fraction in [0., 0.5, 1.] {
+            let fractions = [fraction; 7];
+            let mechanisms = arkline_protocol::cockpit_mechanism_geometry(
+                PioneerDockedPose::private(),
+                fractions,
+            )
+            .unwrap();
+            for pose in [
+                PioneerDockedPose::private(),
+                PioneerDockedPose::fleet(arkline_protocol::FleetLayoutRevision::CircularV1),
+            ] {
+                let mount = body_frame(pose);
+                let draws = panel_parts(&mechanisms, mount, false)
+                    .into_iter()
+                    .map(|part| {
+                        cockpit_occlusion::DepthDraw::whole(&geometry.catalog, part.0, part.1)
+                            .unwrap()
+                    })
+                    .collect();
+                let scene = Arc::new(
+                    CockpitOcclusion::new(
+                        ShipClass::Pioneer,
+                        geometry.catalog.clone(),
+                        draws,
+                        Vec::new(),
+                    )
+                    .unwrap(),
+                );
+                for slot in 0..7 {
+                    let (center, half, axes) =
+                        arkline_protocol::cockpit_mechanism_screen(slot, fraction).unwrap();
+                    let center = vector(center);
+                    let target = mount.transform_point3(center);
+                    let eye = mount.transform_point3(center - vector(axes[0]) * 1.2);
+                    let vp =
+                        Mat4::perspective_rh_gl(FOV_RADIANS, viewport.aspect_ratio(), 0.02, 100.)
+                            * Mat4::look_at_rh(eye, target, Vec3::Y);
+                    let surface = physical_surface_with_mechanisms(
+                        viewport,
+                        vp,
+                        mount,
+                        slot + 8,
+                        egui::vec2(300., 180.),
+                        scene.clone(),
+                        fractions,
+                    )
+                    .unwrap();
+                    let canvas = surface.canvas_rect();
+                    assert!(
+                        (canvas.aspect_ratio()
+                            - (half[2] as f32 - 0.012) / (half[1] as f32 - 0.012))
+                            .abs()
+                            < 1e-5
+                    );
+                    for (u, v) in [
+                        (0.05, 0.05),
+                        (0.5, 0.5),
+                        (0.95, 0.95),
+                        (0.05, 0.95),
+                        (0.95, 0.05),
+                    ] {
+                        let point = canvas.min + canvas.size() * egui::vec2(u, v);
+                        let projected = surface.project(point).unwrap();
+                        let glass = mount.transform_point3(
+                            center - vector(axes[0]) * 0.044
+                                + vector(axes[1]) * ((0.5 - v) * 2. * (half[1] as f32 - 0.012))
+                                + vector(axes[2]) * ((u - 0.5) * 2. * (half[2] as f32 - 0.012)),
+                        );
+                        let clip = vp * glass.extend(1.);
+                        let ndc = clip.truncate() / clip.w;
+                        let expected = viewport.min
+                            + egui::vec2(
+                                (ndc.x * 0.5 + 0.5) * viewport.width(),
+                                (0.5 - ndc.y * 0.5) * viewport.height(),
+                            );
+                        assert!(
+                            projected.distance(expected) < 0.03,
+                            "slot {slot}, fraction {fraction}"
+                        );
+                        assert!(surface.unproject(projected).is_some_and(|hit| hit.distance(point) < 0.1),
+                            "slot {slot}, fraction {fraction}, point {point:?}: content must remain in front of its own glass/case");
+                    }
+                    let square = egui::Rect::from_min_size(canvas.min, egui::vec2(1., 1.));
+                    let (_, a, b) = surface.feed_geometry(square).unwrap();
+                    assert!(((b.y - a.y).abs() - (b.z - a.z).abs()).abs() < 1e-5);
+                    assert!(physical_surface_with_mechanisms(
+                        viewport,
+                        vp,
+                        mount,
+                        15,
+                        canvas.size(),
+                        scene.clone(),
+                        fractions
+                    )
+                    .is_none());
+                }
+            }
+        }
+    }
 
     #[test]
     fn cached_body_parts_preserve_legacy_order_and_live_actuators() {
@@ -1308,6 +1563,63 @@ mod tests {
         }
     }
     #[test]
+    fn onfoot_surfaces_use_observed_pose_not_independent_ui_clock() {
+        let mut pilot = pilot(Some(standing_state()));
+        pilot.ship_class = ShipClass::Pioneer;
+        let mut mechanisms = arkline_protocol::PioneerCockpitMechanisms::stowed(
+            pilot
+                .station_avatar
+                .as_ref()
+                .unwrap()
+                .docked_traversal
+                .as_ref()
+                .unwrap()
+                .binding
+                .host_vessel_id
+                .clone(),
+            1000,
+        );
+        for screen in &mut mechanisms.screens {
+            screen.target_deployed = true;
+            screen.duration_ms = 1200;
+        }
+        pilot.cockpit_mechanisms = Some(mechanisms);
+        let snapshot: Snapshot = serde_json::from_value(serde_json::json!({
+            "server_time_ms":1000,"pilots":[pilot],"orders":[],"belt_ore":0,
+            "ledger_sequence":0,"ledger_hash":"onfoot-mechanism-fixture"
+        }))
+        .unwrap();
+        let pilot = &snapshot.pilots[0];
+        let ctx = egui::Context::default();
+        let mut view = HangarView::new(None);
+        view.set_docked_traversal_enabled(true);
+        view.on_foot_view = OnFootView::FirstPerson;
+        view.observe_mechanisms(&snapshot, &pilot.name, true, 1600);
+        frame(&mut view, &ctx, pilot, 1600, 0.);
+        assert_eq!(view.mechanism_pose.fractions(), [0.5; 7]);
+        assert!(view.mechanism_host_bound);
+        let half = view.docked_surfaces[10].as_ref().unwrap().bounds();
+        frame(&mut view, &ctx, pilot, 2200, 5.);
+        assert_eq!(view.mechanism_pose.fractions(), [0.5; 7]);
+        assert_eq!(view.docked_surfaces[10].as_ref().unwrap().bounds(), half);
+        view.observe_mechanisms(&snapshot, &pilot.name, true, 2200);
+        frame(&mut view, &ctx, pilot, 2200, 6.);
+        assert_eq!(view.mechanism_pose.fractions(), [1.; 7]);
+        assert_ne!(view.docked_surfaces[10].as_ref().unwrap().bounds(), half);
+        view.disconnect_mechanisms();
+        view.observe_mechanisms(&snapshot, &pilot.name, false, 2400);
+        frame(&mut view, &ctx, pilot, 2400, 7.);
+        assert_eq!(view.mechanism_pose.fractions(), [1.; 7]);
+        assert!(
+            view.mechanism_feed_frame.is_none(),
+            "Docked cameras cannot invent a space snapshot"
+        );
+        view.reset_mechanisms();
+        frame(&mut view, &ctx, pilot, 2400, 8.);
+        assert_eq!(view.mechanism_pose.fractions(), [0.; 7]);
+        assert!(!view.mechanism_host_bound);
+    }
+    #[test]
     fn registered_docked_camera_preserves_pose_ownership_across_region_flags_and_seat_joints() {
         let (sender, receiver) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
@@ -1489,6 +1801,129 @@ mod native_tests;
 #[cfg(test)]
 mod composition_fit_tests {
     use super::*;
+
+    #[test]
+    fn mechanism_travel_grid_keeps_pocket_occlusion_pointer_and_fixed_canvas_coherent() {
+        let eye = vector(pilot_joints(0.).eye_m);
+        let cache = SceneCache::new(arkline_protocol::default_pioneer()).unwrap();
+        let geometry = flight_geometry().unwrap();
+        let mut canvases = [None; 7];
+        let mut partial_hidden = 0;
+        let mut total = 0;
+        for fraction in [0., 0.25, 0.5, 0.75, 1.] {
+            let fractions = [fraction; 7];
+            let parts = seated_body_parts_with_mechanisms(&cache, None, 0, fractions).unwrap();
+            let opaque: Vec<_> = parts
+                .iter()
+                .filter(|part| docked_source_primitive(part.0) != Some(6))
+                .collect();
+            let draws = opaque
+                .iter()
+                .map(|part| {
+                    cockpit_occlusion::DepthDraw::whole(&geometry.catalog, part.0, part.1).unwrap()
+                })
+                .collect();
+            let scene = Arc::new(
+                CockpitOcclusion::new(
+                    ShipClass::Pioneer,
+                    geometry.catalog.clone(),
+                    Vec::new(),
+                    draws,
+                )
+                .unwrap(),
+            );
+            let mut hidden = 0;
+            for slot in 0..7 {
+                let (center, half, axes) =
+                    arkline_protocol::cockpit_mechanism_screen(slot, fraction).unwrap();
+                // Independent direct-triangle oracle, not a second call to the
+                // surface's BVH ray guard. The same geometry includes pockets.
+                let samples: Vec<_> = (0..=4)
+                    .flat_map(|row| {
+                        (0..=4).map(move |column| {
+                            egui::vec2(0.05 + column as f32 * 0.225, 0.05 + row as f32 * 0.225)
+                        })
+                    })
+                    .map(|uv| {
+                        let target = vector(center) - vector(axes[0]) * 0.044
+                            + vector(axes[1]) * ((0.5 - uv.y) * 2. * (half[1] as f32 - 0.012))
+                            + vector(axes[2]) * ((uv.x - 0.5) * 2. * (half[2] as f32 - 0.012));
+                        let distance = target.distance(eye);
+                        let ray = (target - eye).normalize();
+                        let blocked = opaque.iter().any(|part| {
+                            ray_mesh_hit(
+                                eye,
+                                ray,
+                                part.1,
+                                &geometry.catalog.uploads()[mesh_index(part.0)],
+                            )
+                            .is_some_and(|hit| hit < distance - 0.00001)
+                        });
+                        (uv, blocked)
+                    })
+                    .collect();
+                for size in [egui::vec2(1280., 720.), egui::vec2(800., 650.)] {
+                    let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, size);
+                    let vp =
+                        Mat4::perspective_rh_gl(FOV_RADIANS, viewport.aspect_ratio(), 0.02, 100.)
+                            * Mat4::look_at_rh(eye, vector(center), Vec3::Y);
+                    let surface = physical_surface_with_mechanisms(
+                        viewport,
+                        vp,
+                        Mat4::IDENTITY,
+                        slot + 8,
+                        egui::vec2(300., 180.),
+                        scene.clone(),
+                        fractions,
+                    )
+                    .unwrap();
+                    let canvas = surface.canvas_rect();
+                    assert!(
+                        (canvas.aspect_ratio()
+                            - (half[2] as f32 - 0.012) / (half[1] as f32 - 0.012))
+                            .abs()
+                            < 1e-5
+                    );
+                    if let Some(expected) = canvases[slot] {
+                        assert_eq!(
+                            canvas.size(),
+                            expected,
+                            "Motion and viewport aspect cannot resize a source capture"
+                        );
+                    } else {
+                        canvases[slot] = Some(canvas.size());
+                    }
+                    for &(uv, blocked) in &samples {
+                        let point = canvas.min + canvas.size() * uv;
+                        let projected = surface.project(point).unwrap();
+                        let hit = surface.unproject(projected);
+                        assert_eq!(hit.is_none(), blocked,
+                            "slot {slot}, fraction {fraction}, viewport {size:?}, point {uv:?}: opaque pocket/body must reject input; clear glass must allow it");
+                        if let Some(hit) = hit {
+                            assert!(hit.distance(point) < 0.1);
+                        }
+                        if blocked {
+                            hidden += 1;
+                        }
+                        total += 1;
+                    }
+                }
+            }
+            if fraction == 1. {
+                assert_eq!(hidden, 0, "Fully deployed screen glass must be readable");
+            } else {
+                partial_hidden += hidden;
+            }
+            eprintln!(
+                "Mechanism grid fraction {fraction}: {hidden}/350 samples occluded (two viewports)"
+            );
+        }
+        assert_eq!(total, 1750);
+        assert!(
+            partial_hidden > 0,
+            "Travel must exercise hidden pocket contents, not only deployed glass"
+        );
+    }
 
     #[test]
     fn prototype_seven_faces_keep_proportional_wings_and_legacy_ship_slots() {
