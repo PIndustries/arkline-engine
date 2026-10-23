@@ -14,9 +14,29 @@ Historical baseline as of 15 October 2026: merged source includes the authored B
 
 ### Visual development timeline — newest first
 
-The newest checkpoint is first; earlier revisions continue below. **These are actual engine captures unless explicitly labeled concept art.** Local prototypes are not published runtime builds, integrated features or releases. GIF playback uses edited sample timing and endpoint holds, not measured desktop frame rate. Select a still for its full 1280 × 720 image.
+The newest checkpoint is first; earlier revisions continue below. **These are actual engine captures unless explicitly labeled concept art.** Local prototypes are not published runtime builds or releases; integration status is stated for each checkpoint. GIF playback uses edited sample timing and endpoint holds, not measured desktop frame rate. Select a still for its full 1280 × 720 image.
 
-#### 23 October · Latest: closer side consoles and per-drone metrics
+#### 23 October · Latest: integrated nine-camera cockpit
+
+**Status:** locally validated prototype `28817c`; runtime source is not published. The published source checkpoint remains [`f2f3bb7`](https://github.com/PIndustries/arkline-engine/commit/f2f3bb7071447ca7fd063728ec7b0ba1fd4fb068), not a release or deployment.
+
+The overhead order is **D1 · Port · D2 · D3 · D4 · Starboard · D5**, plus two rising turret views: nine dynamic camera monitors. Full-face drone instruments show actual HP, signal, heading/pitch, cycle and task data. The permanent cargo overview reports ore units, and the fixed-core reactor configuration display is now in the same local prototype. Exterior camera views are local scene captures, not network streams.
+
+Captain **AUTO / OPEN / STOWED** controls change physical presentation without stopping drones, turrets or mining. Warp takes priority while retaining the captain's preference. This supersedes the earlier “manual control planned” and “not integrated” statuses below, which remain historical checkpoint descriptions.
+
+![Integrated local cockpit: port-side exterior view, drone full-face metrics and turret monitors](https://raw.githubusercontent.com/PIndustries/arkline-engine/7d7bb8e639e46a59f0642d142ee6f5e22f5cf09e/docs/ships/pioneer/images/progress-20261023/integrated-28817c/deployed-port.png)
+
+![Integrated local cockpit: permanent onboard cargo overview in ore units](https://raw.githubusercontent.com/PIndustries/arkline-engine/7d7bb8e639e46a59f0642d142ee6f5e22f5cf09e/docs/ships/pioneer/images/progress-20261023/integrated-28817c/deployed-cargo.png)
+
+![Integrated local cockpit: fixed-core reactor configuration display](https://raw.githubusercontent.com/PIndustries/arkline-engine/7d7bb8e639e46a59f0642d142ee6f5e22f5cf09e/docs/ships/pioneer/images/progress-20261023/integrated-28817c/deployed-reactor.png)
+
+**Evidence:** these stills come from the 39-capture controlled server-state replay, not a live-session FPS benchmark. Cached image ages remain explicit. Local checks recorded server 262 passing, client 535 passing with 11 inherited failures, verifier 14 passing, plus workspace and serialized Rustdoc checks. This uses fresh registration 10; no old-world migration or all-green suite is claimed. [Media provenance](https://github.com/PIndustries/arkline-engine/blob/7d7bb8e639e46a59f0642d142ee6f5e22f5cf09e/docs/ships/pioneer/images/progress-20261023/integrated-28817c/media-manifest.json).
+
+**Animation boundary:** this checkpoint is shown as a still gallery; the older GIFs below remain clearly dated historical footage, not an animation of this nine-camera integrated build.
+
+**Next:** representative native frame pacing and feed-freshness acceptance, followed by warp preparation and safety interlocks.
+
+#### 23 October · Earlier: closer side consoles and per-drone metrics
 
 **Status:** locally validated prototype `4819300`; runtime source not published and not integrated with the reactor replacement. Full-size side displays now use the empty side-console space and a 15° glance. Five cassette-front bands show real drone ID, HP, velocity-derived speed, mode, signal and cycle data. Viewing all five still requires head turns; storage is not modeled or shown as a number.
 
@@ -64,6 +84,8 @@ Pioneer is the flagship development ship: a coherent, inhabited industrial vesse
 
 ### What is implemented, and where
 
+> Historical summary of the earlier 23 October checkpoints. The integrated nine-camera entry at the top supersedes the earlier planned/manual-control and separate-prototype statuses here.
+
 These are **development checkpoints, not a merged release or deployed feature announcement**. The [active workstream and acceptance record](https://github.com/PIndustries/arkline-engine/issues/62) distinguishes implementation, local evidence and exact-head CI.
 
 | Area | Status on 23 October | Boundary |
@@ -98,6 +120,8 @@ The target is one vessel model joining physical components and their actual beha
 These are design goals and engineering work, not claims that all systems now exist. The [whole-space report](https://github.com/PIndustries/arkline-engine/blob/f2f3bb7071447ca7fd063728ec7b0ba1fd4fb068/docs/ships/pioneer/whole-space-redesign-20261023.md) records the underlying gaps and proposed compartment-first integration.
 
 ### Next implementation and acceptance priorities
+
+> Earlier planning baseline, retained for history. Manual monitor controls and local prototype integration have since been implemented in the newest entry; publication and native acceptance remain separate.
 
 1. **Manual monitor control:** separate captain visibility preference from drone/turret operation. Test stow/reopen during ongoing mining, safe reversal, obstruction, reconnect/restart, and warp precedence without issuing equipment-stop commands.
 2. **Safe warp preparation:** recover drones rather than deleting their deployed state; retract equipment and close mechanisms before warp acceptance, with explicit blocked/recovery states. The current warp path clears deployed drones and does not supply that recovery sequence.
