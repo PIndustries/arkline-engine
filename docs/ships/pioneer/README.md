@@ -42,6 +42,8 @@ Pioneer now has a local, authority-driven docking path: the release phase begins
 
 Next: combine this path with the current cabin finish, validate walking and rail clearances and truthful phase labels, then build transactionally safe timed unloading. The older raised-bridge and cockpit studies remain below for comparison.
 
+<a id="24-october--latest-raised-bridge-matching-hull-and-working-access-stairs"></a>
+
 #### 24 October · Earlier: raised bridge, matching hull and working access stairs
 
 Pioneer's bridge now sits eight metres higher as a complete cabin. The seat, nine camera monitors, consoles, controls and collision moved together. The exterior canopy and side windows follow that raised space, and the lower recess is closed around the intended boarding opening. This gives the ship a clearer bridge silhouette and makes the cockpit feel connected to the hull around it.
