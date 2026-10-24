@@ -16,7 +16,56 @@ Historical baseline as of 15 October 2026: merged source includes the authored B
 
 The newest checkpoint is first; earlier revisions continue below. **These are actual engine captures unless explicitly labeled concept art.** Local prototypes are not published runtime builds or releases; integration status is stated for each checkpoint. GIF playback uses edited sample timing and endpoint holds, not measured desktop frame rate. Select a still for its full 1280 × 720 image.
 
-#### 23 October · Latest: integrated nine-camera cockpit
+#### 24 October · Latest: raised bridge, matching hull and working access stairs
+
+Pioneer's bridge now sits eight metres higher as a complete cabin. The seat, nine camera monitors, consoles, controls and collision moved together. The exterior canopy and side windows follow that raised space, and the lower recess is closed around the intended boarding opening. This gives the ship a clearer bridge silhouette and makes the cockpit feel connected to the hull around it.
+
+**Checkpoint:** locally validated prototype `c358f7b`. Runtime source is not published; this journal publishes documentation and capture media only. The model is still a functional industrial blockout, with further readability and finish work underway separately.
+
+**Hull and glazing.** The new exterior and interior agree on the raised cabin. Both mining turrets sit farther outboard at ±5.2 m, with their rendered pivots, firing origins and camera positions kept consistent. The exterior GIF is a sequence of captured viewpoints, not a continuous orbit or flight recording.
+
+![Raised bridge exterior — held-viewpoint study](https://raw.githubusercontent.com/PIndustries/arkline-engine/7e82a0690aab21a9d10cde906140f75393931031/docs/ships/pioneer/images/progress-20261024/pioneer-raised-bridge-exterior-study.gif)
+![Raised bridge and matching canopy](https://raw.githubusercontent.com/PIndustries/arkline-engine/7e82a0690aab21a9d10cde906140f75393931031/docs/ships/pioneer/images/progress-20261024/pioneer-raised-bridge-exterior.png)
+
+**Getting to the bridge.** Three real stair flights provide 45 treads, landings and guards between the lower access area and bridge. Route tests cover the stairs, both decks, boarding lift/hatches and seat entry/exit. The stairs GIF shows held inspection viewpoints; it does not claim continuous recorded walking.
+
+![Three-flight access — held viewpoints, not continuous walking](https://raw.githubusercontent.com/PIndustries/arkline-engine/7e82a0690aab21a9d10cde906140f75393931031/docs/ships/pioneer/images/progress-20261024/pioneer-raised-bridge-stair-access-study.gif)
+![Real stair treads, railings and landings](https://raw.githubusercontent.com/PIndustries/arkline-engine/7e82a0690aab21a9d10cde906140f75393931031/docs/ships/pioneer/images/progress-20261024/pioneer-raised-bridge-stairs.png)
+
+**Working from the seat.** The nine-screen arrangement, full-face drone metrics, permanent cargo overview, reactor display and captain AUTO / OPEN / STOWED choices remain together in the raised cabin. Stowing a monitor changes its presentation, not the ship's mining job. The camera views retain visible cache ages and obstruction labels. A straight-ahead glance still crops some overhead metric tops; looking up and turning covers them, so readability and framing remain on the punchlist.
+
+![Nine-screen mining controls — sampled stow and reopen replay](https://raw.githubusercontent.com/PIndustries/arkline-engine/7e82a0690aab21a9d10cde906140f75393931031/docs/ships/pioneer/images/progress-20261024/pioneer-raised-bridge-nine-screen-mining-controls.gif)
+![Current raised-bridge mining cockpit](https://raw.githubusercontent.com/PIndustries/arkline-engine/7e82a0690aab21a9d10cde906140f75393931031/docs/ships/pioneer/images/progress-20261024/pioneer-raised-bridge-mining-cockpit.png)
+
+**Warp and reactor.** The warp/arrival GIF shows sampled authority states: arrival remains stowed, followed by an explicit manual reopen with unassigned drone feeds. The cut omits transit time; arrival alone is not shown deploying all nine monitors. The reactor GIF uses captured 100 ms replay samples of rigid collars moving around a fixed core. Neither establishes live frame rate, a complete warp safety interlock or reactor physics.
+
+![Warp override, arrival stowed and explicit manual reopen — sampled states](https://raw.githubusercontent.com/PIndustries/arkline-engine/7e82a0690aab21a9d10cde906140f75393931031/docs/ships/pioneer/images/progress-20261024/pioneer-raised-bridge-warp-arrival-states.gif)
+![Fixed-core reactor collar movement — 100 ms replay samples](https://raw.githubusercontent.com/PIndustries/arkline-engine/7e82a0690aab21a9d10cde906140f75393931031/docs/ships/pioneer/images/progress-20261024/pioneer-raised-bridge-reactor-mechanism.gif)
+
+**Checked locally:** 79 protocol tests, 14 asset-verifier tests and 263 server tests passed. Client results were 535 passing with the same 11 baseline failures. Eight GPU evidence suites passed with 142 receipt-verified captures; workspace checks and Clippy passed with warnings. Repeated art export was byte-identical. Registration 11 uses fresh fixtures and refuses incompatible old bindings; no user saves were migrated. These checks support the checkpoint, not a finished flagship or release.
+
+[Capture provenance and timing](https://github.com/PIndustries/arkline-engine/blob/7e82a0690aab21a9d10cde906140f75393931031/docs/ships/pioneer/images/progress-20261024/pioneer-raised-bridge-media-manifest.json). GIF and PNG files are published here; MP4 encoding records in the manifest describe companion exports, not additional repository files.
+
+### Flagship finish line · current punchlist
+
+The goal is a ship whose spaces, controls and systems work together. The following are acceptance gates, not promises that every simulation already exists.
+
+| Workstream | Current position | What must be demonstrated before calling it finished |
+|---|---|---|
+| Cockpit readability and control finish | Active next pass | Clear seated/standing views, useful head turns, consistent labels, readable telemetry and dependable physical input without overlapping panels |
+| Exterior and interior art | Functional blockout | Coherent finished surfaces, construction details, lighting, glazing and room equipment while retaining verified clearances and collision |
+| Walkable decks and access | Raised route locally tested | Repeatable boarding, stairs, hatches, lift and seat journeys, including obstruction, restart and safe escape paths |
+| Mass, power, heat, life support and damage | Partial foundations; broader simulation remains | Shared component accounting, meaningful power/fault behavior, conserved compartment systems and repair consequences; no decorative readings presented as a solver |
+| Drones, mining and cargo | Working mining/control foundation | Safe recovery, real storage and energy boundaries, firing clearances, truthful metrics and conserved cargo handling |
+| Flight, warp and reactor | Local configuration/control prototype | Equipment securing, interruption/recovery and closure interlocks driven by authority; actual load and thermal accounting remain separate work |
+| Seamless docking and unloading | Docking workstream scoped; unloading follows | Continuous authoritative approach/alignment/capture/departure, safe reservations and restart; then timed transactional unloading without instant teleport or duplicate credit |
+| Performance, saves and builds | Local checks with known failures | Representative native/browser frame pacing and feed freshness, resolved existing test failures, explicit migration policy and exact-head release checks |
+| Public development journal | Updated with checkpoint evidence | Newest-first entries, matching GIFs/stills, exact provenance, and clear boundaries between local prototype, published source and release |
+
+[Current workstream scope and ownership](https://github.com/PIndustries/arkline-engine/issues/62#issuecomment-6380550924). Next work prioritizes cockpit readability/panel finish and authoritative docking. Full life support, vessel mass/heat, general weapon interlocks and mobile video streaming are not delivered by this checkpoint. We will keep the older studies below so changes remain easy to compare.
+
+
+#### 23 October · Earlier: integrated nine-camera cockpit
 
 **Status:** locally validated prototype `28817c`; runtime source is not published. The published source checkpoint remains [`f2f3bb7`](https://github.com/PIndustries/arkline-engine/commit/f2f3bb7071447ca7fd063728ec7b0ba1fd4fb068), not a release or deployment.
 
@@ -32,7 +81,9 @@ Captain **AUTO / OPEN / STOWED** controls change physical presentation without s
 
 **Evidence:** these stills come from controlled server-state replay, not a live-session FPS benchmark. Cached image ages remain explicit. Local checks recorded server 262 passing, client 535 passing with 11 inherited failures, verifier 14 passing, plus workspace and serialized Rustdoc checks. This uses fresh registration 10; no old-world migration or all-green suite is claimed. [Media provenance](https://github.com/PIndustries/arkline-engine/blob/7d7bb8e639e46a59f0642d142ee6f5e22f5cf09e/docs/ships/pioneer/images/progress-20261023/integrated-28817c/media-manifest.json).
 
-**Animation boundary:** this checkpoint is shown as a still gallery; the older GIFs below remain clearly dated historical footage, not an animation of this nine-camera integrated build.
+![Historical integrated 28817c cockpit — held port, cargo and reactor viewpoints](https://raw.githubusercontent.com/PIndustries/arkline-engine/7e82a0690aab21a9d10cde906140f75393931031/docs/ships/pioneer/images/progress-20261024/integrated-28817c-held-gallery.gif)
+
+**Animation boundary:** this historical 23 October gallery holds three captured stills for comparison; it is not recorded motion and predates the raised bridge. [Gallery provenance](https://github.com/PIndustries/arkline-engine/blob/7e82a0690aab21a9d10cde906140f75393931031/docs/ships/pioneer/images/progress-20261024/integrated-28817c-gallery-manifest.json).
 
 **Next:** representative native frame pacing and feed-freshness acceptance, followed by warp preparation and safety interlocks.
 
