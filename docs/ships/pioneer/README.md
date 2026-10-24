@@ -16,7 +16,33 @@ Historical baseline as of 15 October 2026: merged source includes the authored B
 
 The newest checkpoint is first; earlier revisions continue below. **These are actual engine captures unless explicitly labeled concept art.** Local prototypes are not published runtime builds or releases; integration status is stated for each checkpoint. GIF playback uses edited sample timing and endpoint holds, not measured desktop frame rate. Select a still for its full 1280 × 720 image.
 
-#### 24 October · Latest: raised bridge, matching hull and working access stairs
+#### 24 October · Latest: continuous departure and return, without a scene cut
+
+Pioneer now has a local, authority-driven docking path: the release phase begins, the ship backs out, and its return proceeds through approach, alignment, berth translation and the secured phase. The seated camera stays in the same world-space cockpit rather than switching to a hangar scene. This is real engine motion, not an animation laid over an instant teleport.
+
+**Checkpoint:** footage captured from local `30618f0`; the later docking milestone `d1e86f8` adds acceptance tests, documentation and equivalent cleanup without changing the captured behavior. This is not the later combined cabin-polish build. Runtime source remains unpublished.
+
+![Retained legacy immediate path versus continuous docking motion](https://raw.githubusercontent.com/PIndustries/arkline-engine/d197234676cd6a883cc741f0942c1012f5c5a2eb/docs/ships/pioneer/images/progress-20261024/pioneer-docking-before-after-motion.gif)
+
+*Comparison: the retained legacy immediate path runs in the same modified binary at 1× simulation cadence, followed by a hard cut to the complete new sequence at labeled 3× speed. It is not an exact old-binary or same-world benchmark.*
+
+![Continuous departure from the actual engine cockpit](https://raw.githubusercontent.com/PIndustries/arkline-engine/d197234676cd6a883cc741f0942c1012f5c5a2eb/docs/ships/pioneer/images/progress-20261024/pioneer-undocking-cockpit-continuous.gif)
+
+*Seated departure, at 1× simulation cadence, with the actual engine cockpit and instruments. These offscreen captures are not a live frame-rate measurement.*
+
+![Continuous approach, alignment and return to berth](https://raw.githubusercontent.com/PIndustries/arkline-engine/d197234676cd6a883cc741f0942c1012f5c5a2eb/docs/ships/pioneer/images/progress-20261024/pioneer-docking-return-continuous.gif)
+
+*Return at 1× simulation cadence: the ship approaches after a manual 45° yaw, aligns, translates into its berth and reaches the secured phase. No generated intermediate frames or crossfades.*
+
+**Connected behavior:** persistent operation and berth identities, vessel-owned berths, occupied-route checks, cancellation that brakes to a held state, and explicit resume after disconnect/restart. Docked access is granted only after capture. Collision handling remains conservative and kinematic, not general rigid-body physics.
+
+**Evidence:** all 984 source PNGs decoded and matched their recorded hashes in producer validation. The actual engine renderer sampled authority states every 100 ms. Request boundaries preserve position and the completed journey returns to its starting berth; this validates the recorded route, not unrestricted multiplayer or live FPS. Consolidated protocol/server checks passed 352 tests with seven intentionally ignored; the final client run passed 537 tests with 11 known baseline failures and 39 ignored. No all-green workspace CI is claimed. [Media provenance and timing](https://github.com/PIndustries/arkline-engine/blob/d197234676cd6a883cc741f0942c1012f5c5a2eb/docs/ships/pioneer/images/progress-20261024/pioneer-docking-media-manifest.json).
+
+**Still unfinished at this checkpoint:** this operates in a fresh **Continuous docking preview / DockingV1** realm with exterior Pioneer aprons. Existing worlds are not migrated, and the apron is not a finished shared station interior. Cargo transfer is still instantaneous; timed unloading is not implemented. Physical service hookup and pressure equalization are not implemented. Rail/walking clearance, combined cabin-polish integration, adverse-network/multi-client acceptance and normal-world adoption remain gates before calling docking finished.
+
+Next: combine this path with the current cabin finish, validate walking and rail clearances and truthful phase labels, then build transactionally safe timed unloading. The older raised-bridge and cockpit studies remain below for comparison.
+
+#### 24 October · Earlier: raised bridge, matching hull and working access stairs
 
 Pioneer's bridge now sits eight metres higher as a complete cabin. The seat, nine camera monitors, consoles, controls and collision moved together. The exterior canopy and side windows follow that raised space, and the lower recess is closed around the intended boarding opening. This gives the ship a clearer bridge silhouette and makes the cockpit feel connected to the hull around it.
 
