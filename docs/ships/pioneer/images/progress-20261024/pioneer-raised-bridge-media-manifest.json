@@ -1,0 +1,1137 @@
+{
+  "checkpoint": "c358f7b49d321a786a9f6a14bea866a600549f22",
+  "capture_set": "raised-final-proof-v8",
+  "source_kind": "Actual production renderer / exported authority-response fixtures",
+  "editing": "Hard cuts and explicit still holds only. No synthesized motion, interpolation, AI images, or invented physics. Sources scaled uniformly to 1216x684 inside a 1280x720 labelled canvas; full source frame retained. GIF timelines are 10 fps; MP4 30 fps duplicates samples only.",
+  "source_receipt_sha256": {
+    "gpu-hull": "106e188a02ec2440b71ac6f736433ead72a36e85e5139820b69f79ef489dc0f8",
+    "gpu-access": "73d691153d7741bbfc75e49cb206b3b93764fe44f5b7530ef98293d5c2bb10ea",
+    "gpu-nine-r2": "474ec9ff8342820ce1a60fcd5d4942cc2fa02d646d4eb760a2d49b965c9c374f",
+    "gpu-captain-r2": "fb5ee7ae8e5ac1aea11433d5cc2018490d9997b24308331de121077840c30669",
+    "gpu-reactor": "aaf4a3d05abd79f03ec3dfd5a0d06acc79115dbb6d6a40c72439eabae61d961c"
+  },
+  "clips": [
+    {
+      "name": "pioneer-raised-bridge-exterior-study",
+      "title": "Raised bridge exterior",
+      "caption": "Three actual engine-rendered views of the installed raised-bridge hull and fittings. A held-view study, not a recorded orbit or before/after transition.",
+      "limits": [
+        "In-memory inspection fixture, not a live player flight or performance measurement.",
+        "No historical before frame was supplied; this is the current checkpoint only."
+      ],
+      "duration_seconds": 6.0,
+      "sequence": [
+        {
+          "source": "gpu-hull/whole-hull-quarter.png",
+          "duration_seconds": 2.4,
+          "start_seconds": 0,
+          "label": "Raised bridge exterior / Held viewpoints",
+          "source_png_sha256": "f60da3544b6f2130381da1e00c7af5f9a8f836917cd008451e131f217c9d1fe2",
+          "source_rgba_sha256": "c5e8cfc27640bdab38b2000c0efda9cc984ed9e2f8b5a18aac00a8a2ccaa79ed",
+          "source_snapshot_ms": null,
+          "screen_deployment_fractions": null,
+          "source_view": "full installed runtime hull and fittings; external inspection camera, no cutaway"
+        },
+        {
+          "source": "gpu-hull/whole-hull-port.png",
+          "duration_seconds": 1.8,
+          "start_seconds": 2.4,
+          "label": "Exterior side view / Not a recorded orbit",
+          "source_png_sha256": "0162e3cc49fdc0529fd8ac6cc1d2c4badca91f3d1f5f78f6acd548ab7d4a19e1",
+          "source_rgba_sha256": "6eb899b4a453747f91ec8d0657aac9539f1af6943084a7bc19638a08f9f0b551",
+          "source_snapshot_ms": null,
+          "screen_deployment_fractions": null,
+          "source_view": "full installed runtime hull and fittings; external inspection camera, no cutaway"
+        },
+        {
+          "source": "gpu-hull/whole-hull-top.png",
+          "duration_seconds": 1.8,
+          "start_seconds": 4.2,
+          "label": "Exterior top view / Held capture",
+          "source_png_sha256": "0b42e4e9848311625b2202343881ab11a8b67da8d988f00704bb278dbd0bf8a1",
+          "source_rgba_sha256": "c6ea364eb38104b512de107e23d698fb5097d3ff3b5c70f6518052855f675eeb",
+          "source_snapshot_ms": null,
+          "screen_deployment_fractions": null,
+          "source_view": "full installed runtime hull and fittings; external inspection camera, no cutaway"
+        }
+      ],
+      "artifacts": [
+        {
+          "file": "pioneer-raised-bridge-exterior-study.gif",
+          "mime": "image/gif",
+          "sha256": "1375d4ba446ad6418567baf0b8b4e30dbfa2555e556a7aed9638878b56786add",
+          "size_bytes": 398216,
+          "width": 1280,
+          "height": 720,
+          "duration_seconds": 6.0,
+          "frame_count": 60,
+          "loop": "infinite",
+          "timeline_fps": 10
+        },
+        {
+          "file": "pioneer-raised-bridge-exterior-study.mp4",
+          "mime": "video/mp4",
+          "sha256": "2eaa1489196544449040b68e054532e0896a1c16f58f0a9b476f7f634619e371",
+          "size_bytes": 224958,
+          "width": 1280,
+          "height": 720,
+          "duration_seconds": 6.0,
+          "frame_count": 180,
+          "timeline_fps": 30,
+          "codec": "H.264",
+          "pixel_format": "yuv420p",
+          "faststart": true
+        }
+      ]
+    },
+    {
+      "name": "pioneer-raised-bridge-stair-access-study",
+      "title": "Bridge stair access",
+      "caption": "Actual first-person production-renderer views at registered stair, landing and lower-corridor supports. Held viewpoints, not continuous walking footage.",
+      "limits": [
+        "In-memory collision-clear viewpoint fixtures, not a walked server journey."
+      ],
+      "duration_seconds": 9.4,
+      "sequence": [
+        {
+          "source": "gpu-access/lower-foyer-towards-stairs.png",
+          "duration_seconds": 1.4,
+          "start_seconds": 0,
+          "label": "Stair access / Held viewpoints - not a walkthrough",
+          "source_png_sha256": "65bb8f712f76c6228e6b74861c1567d8b028695631379aa53bad9444a9a1d89b",
+          "source_rgba_sha256": "a63974cb3eb83ad8042cf05f7ef7bf5c4a50ee7370d8026a0f1d422def219b70",
+          "source_snapshot_ms": null,
+          "screen_deployment_fractions": null,
+          "source_view": null
+        },
+        {
+          "source": "gpu-access/stairs-lower-approach.png",
+          "duration_seconds": 1.6,
+          "start_seconds": 1.4,
+          "label": "Lower stair approach / Held viewpoint",
+          "source_png_sha256": "37f300b30e53e69e3688e4b019776f44dcd131087c64d4de14d1e1915e4aa03a",
+          "source_rgba_sha256": "901b4c4b95e95ae4441fc9df33d4375c2229ace3afacddf3d49f351d29814258",
+          "source_snapshot_ms": null,
+          "screen_deployment_fractions": null,
+          "source_view": null
+        },
+        {
+          "source": "gpu-access/stairs-mid-lower.png",
+          "duration_seconds": 1.2,
+          "start_seconds": 3.0,
+          "label": "Lower landing / Held viewpoint",
+          "source_png_sha256": "f6f721ec697ce959fd192ab5ed87d6fa722c3b581d9adee3d8149387c2f5666b",
+          "source_rgba_sha256": "4b1a670fe790abff522e891a9d1a9a346d53a3ff44b7618b999f5457b529e744",
+          "source_snapshot_ms": null,
+          "screen_deployment_fractions": null,
+          "source_view": null
+        },
+        {
+          "source": "gpu-access/stairs-mid-upper.png",
+          "duration_seconds": 1.2,
+          "start_seconds": 4.2,
+          "label": "Upper landing / Held viewpoint",
+          "source_png_sha256": "f0b4b96ce4a788f5c7d976b340c72a061cded2afbb0819366095ef35ebc32e5c",
+          "source_rgba_sha256": "16b5b27d3424ab8db93ccf2358ae1c84d76084a0edff5c8c43635a8f63cac854",
+          "source_snapshot_ms": null,
+          "screen_deployment_fractions": null,
+          "source_view": null
+        },
+        {
+          "source": "gpu-access/stairs-upper-to-bridge.png",
+          "duration_seconds": 1.6,
+          "start_seconds": 5.4,
+          "label": "Upper stairs toward bridge / Held viewpoint",
+          "source_png_sha256": "6039d07b22daaec78a0ef7f05f351c74d4cb1660bbc38640940142de5e1fb16f",
+          "source_rgba_sha256": "565a02cddf849bb1e2ae67b768a0b199db46c85af2041c6643cb42daaf70a48b",
+          "source_snapshot_ms": null,
+          "screen_deployment_fractions": null,
+          "source_view": null
+        },
+        {
+          "source": "gpu-access/stairs-upper-descent.png",
+          "duration_seconds": 1.2,
+          "start_seconds": 7.0,
+          "label": "Upper descent view / Held viewpoint",
+          "source_png_sha256": "f381d92b4df50b0e2fcafb1c7432c06aa4f6ed0bead66d25a2e07cc030b65593",
+          "source_rgba_sha256": "889f2b9bca64243c9f7181a3e3d6bf9ac1011d095c7ffc0b800e1ecd76667d35",
+          "source_snapshot_ms": null,
+          "screen_deployment_fractions": null,
+          "source_view": null
+        },
+        {
+          "source": "gpu-access/lower-corridor-under-landing.png",
+          "duration_seconds": 1.2,
+          "start_seconds": 8.2,
+          "label": "Corridor under landing / Held viewpoint",
+          "source_png_sha256": "3343533c1d55d00af64efccb984343e40c90d3885a2d9c9329f3de5fb4ecbf63",
+          "source_rgba_sha256": "95156c59e3007e33be7c8d90132d33cf94dbbafc56f4c6a5d099e912bde2a861",
+          "source_snapshot_ms": null,
+          "screen_deployment_fractions": null,
+          "source_view": null
+        }
+      ],
+      "artifacts": [
+        {
+          "file": "pioneer-raised-bridge-stair-access-study.gif",
+          "mime": "image/gif",
+          "sha256": "0f3c9b4c791bf05a46f60b16109c9f8b2d1efcf82976caebfebeec622670436a",
+          "size_bytes": 1690822,
+          "width": 1280,
+          "height": 720,
+          "duration_seconds": 9.4,
+          "frame_count": 94,
+          "loop": "infinite",
+          "timeline_fps": 10
+        },
+        {
+          "file": "pioneer-raised-bridge-stair-access-study.mp4",
+          "mime": "video/mp4",
+          "sha256": "53d870785f903d15c778d0f3c5d4e6b1994036b0b86822fc29f8245cef2c225a",
+          "size_bytes": 748201,
+          "width": 1280,
+          "height": 720,
+          "duration_seconds": 9.4,
+          "frame_count": 282,
+          "timeline_fps": 30,
+          "codec": "H.264",
+          "pixel_format": "yuv420p",
+          "faststart": true
+        }
+      ]
+    },
+    {
+      "name": "pioneer-raised-bridge-nine-screen-mining-controls",
+      "title": "Nine-screen mining and manual controls",
+      "caption": "Current nine-camera-screen bridge: five drone displays, two turret displays and two hull-side displays. Mining views followed by genuine sampled manual stow and reopen states.",
+      "limits": [
+        "Nine installed/deployable camera screens does not mean nine simultaneously visible or valid feeds.",
+        "Motion samples are 600 ms apart; endpoints and viewpoint cuts are held for readability.",
+        "Actual engine replay of exported authority Responses, not a live network session or an FPS demonstration."
+      ],
+      "duration_seconds": 10.0,
+      "sequence": [
+        {
+          "source": "gpu-nine-r2/deployed-front.png",
+          "duration_seconds": 1.8,
+          "start_seconds": 0,
+          "label": "Nine-screen bridge / Held mining view",
+          "source_png_sha256": "14854561b14fdb75eafc65e90803be9c9418d7d102ca624286bd196c853edbd3",
+          "source_rgba_sha256": "528e48cfe7071fcdc1b20c197b948343ef032c1edabe4c3b94f1b4b9b20cec89",
+          "source_snapshot_ms": 26502,
+          "screen_deployment_fractions": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "source_view": null
+        },
+        {
+          "source": "gpu-nine-r2/deployed-port.png",
+          "duration_seconds": 1.4,
+          "start_seconds": 1.8,
+          "label": "Mining - port view / Held capture",
+          "source_png_sha256": "da149877d0ea54edbcb7a3c97901a3d0b6a8a878c7a13a04efa8c834136e87bb",
+          "source_rgba_sha256": "3bfefece81f3cfe4550931a645e6927fc80e538304d1e80fa5978b2a7c10b413",
+          "source_snapshot_ms": 26502,
+          "screen_deployment_fractions": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "source_view": null
+        },
+        {
+          "source": "gpu-nine-r2/deployed-starboard.png",
+          "duration_seconds": 1.4,
+          "start_seconds": 3.2,
+          "label": "Mining - starboard view / Held capture",
+          "source_png_sha256": "0081718ff6362877023b81db9339248470fd364b72bcccf5c67da17c80795089",
+          "source_rgba_sha256": "9d86d054136136579ddca66e668034f63f48dc07236348f35785e22a3cbcf674",
+          "source_snapshot_ms": 26502,
+          "screen_deployment_fractions": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "source_view": null
+        },
+        {
+          "source": "gpu-captain-r2/stow-00-displays.png",
+          "duration_seconds": 0.6,
+          "start_seconds": 4.6,
+          "label": "Manual stow / 600 ms sampled replay",
+          "source_png_sha256": "c0ab9c1ac518cc15fcf10a346d00bc3b7065c2a8bcdab8022f1f96f9e528408a",
+          "source_rgba_sha256": "886c9f154a5f4b2e5cc12eb61c6c307049d16bf67376b4ea0294456a72f076eb",
+          "source_snapshot_ms": 26502,
+          "screen_deployment_fractions": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "source_view": null
+        },
+        {
+          "source": "gpu-captain-r2/stow-06-displays.png",
+          "duration_seconds": 0.6,
+          "start_seconds": 5.2,
+          "label": "Manual stow / 600 ms sampled replay",
+          "source_png_sha256": "d88c906b865143c3b304e02e3e6fe8215fe1dc68984f915d61d08cedeba8fb77",
+          "source_rgba_sha256": "33348bfd487350d703cf1f5a4434ec7d6356873a94c473bb979486bd0563e44f",
+          "source_snapshot_ms": 27102,
+          "screen_deployment_fractions": [
+            0.5,
+            0.5,
+            0.5,
+            0.5,
+            0.5,
+            0.5,
+            0.5,
+            0.5,
+            0.5
+          ],
+          "source_view": null
+        },
+        {
+          "source": "gpu-captain-r2/stow-12-displays.png",
+          "duration_seconds": 1.2,
+          "start_seconds": 5.8,
+          "label": "Manual stow / Endpoint held",
+          "source_png_sha256": "2ff392faf4474e7cb2e94c4b316169a63b9c11642e1086552f1bf368fe043710",
+          "source_rgba_sha256": "ed9d97fe17a477296ebb595acccaf4ee449fd21589ec7d4a2fa409d6e1441a4f",
+          "source_snapshot_ms": 27702,
+          "screen_deployment_fractions": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "source_view": null
+        },
+        {
+          "source": "gpu-captain-r2/open-00-displays.png",
+          "duration_seconds": 0.6,
+          "start_seconds": 7.0,
+          "label": "Manual reopen / 600 ms sampled replay",
+          "source_png_sha256": "5f08d774414e16959defaa3d021984419265cb0f175766837fe823b7032da3bb",
+          "source_rgba_sha256": "90438aaa6b1561aad21638a5c36b9b905ade02df5e703a20e36c30616e3f057f",
+          "source_snapshot_ms": 27702,
+          "screen_deployment_fractions": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "source_view": null
+        },
+        {
+          "source": "gpu-captain-r2/open-06-displays.png",
+          "duration_seconds": 0.6,
+          "start_seconds": 7.6,
+          "label": "Manual reopen / 600 ms sampled replay",
+          "source_png_sha256": "dbc30f6b596caa6cfc503df9332ce3e36648dd0ddf4ca8a2de0473ca06d2c0c4",
+          "source_rgba_sha256": "0018fbc3c0161b21ceac8e837d2d442fc2b762cc7ec874c94963980972d308e6",
+          "source_snapshot_ms": 28302,
+          "screen_deployment_fractions": [
+            0.5,
+            0.5,
+            0.5,
+            0.5,
+            0.5,
+            0.5,
+            0.5,
+            0.5,
+            0.5
+          ],
+          "source_view": null
+        },
+        {
+          "source": "gpu-captain-r2/open-12-displays.png",
+          "duration_seconds": 1.8,
+          "start_seconds": 8.2,
+          "label": "Manual reopen / Endpoint held",
+          "source_png_sha256": "40d1555b4286cd8df3294fa7e0b20a4e328df99b9fe8e3136ce3103d85962dab",
+          "source_rgba_sha256": "53c511a4422c7fbcf91fa98e629eadb20cd166637beb3011bcdc8864cf16ed92",
+          "source_snapshot_ms": 28902,
+          "screen_deployment_fractions": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "source_view": null
+        }
+      ],
+      "artifacts": [
+        {
+          "file": "pioneer-raised-bridge-nine-screen-mining-controls.gif",
+          "mime": "image/gif",
+          "sha256": "a40fe57c906247ebd15729d556c327c6370045dd7cc07e0ba02032071f351a85",
+          "size_bytes": 1646908,
+          "width": 1280,
+          "height": 720,
+          "duration_seconds": 10.0,
+          "frame_count": 100,
+          "loop": "infinite",
+          "timeline_fps": 10
+        },
+        {
+          "file": "pioneer-raised-bridge-nine-screen-mining-controls.mp4",
+          "mime": "video/mp4",
+          "sha256": "58013bbac96db0ba9253935f2d94d351399a0d8b5da4092640b23b739f236837",
+          "size_bytes": 866594,
+          "width": 1280,
+          "height": 720,
+          "duration_seconds": 10.0,
+          "frame_count": 300,
+          "timeline_fps": 30,
+          "codec": "H.264",
+          "pixel_format": "yuv420p",
+          "faststart": true
+        }
+      ]
+    },
+    {
+      "name": "pioneer-raised-bridge-warp-arrival-states",
+      "title": "Warp override and arrival",
+      "caption": "Warp override retracts the nine camera-screen mechanisms; held captures then show arrival still stowed and an explicit manual reopen. Empty drone assignments remain honestly shown.",
+      "limits": [
+        "The cut to arrival omits transit time. This is sampled replay plus held states, not an uninterrupted trip.",
+        "Arrival alone is not shown redeploying all nine: the final open state follows manual reopen.",
+        "Warp retains existing mining-job cancellation and drone invalidation."
+      ],
+      "duration_seconds": 9.6,
+      "sequence": [
+        {
+          "source": "gpu-nine-r2/manual-open-front.png",
+          "duration_seconds": 1.2,
+          "start_seconds": 0,
+          "label": "Before warp / Held deployed state",
+          "source_png_sha256": "ed6c0802de0c535875902cf0df7c96e4d2e63413fea95c0d3ce6be15bc3ade64",
+          "source_rgba_sha256": "8dd862ea342e3b14c6171fc2f4f8158ebd7165ea3feed71daa62d7a6b12e43d4",
+          "source_snapshot_ms": 28902,
+          "screen_deployment_fractions": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "source_view": null
+        },
+        {
+          "source": "gpu-captain-r2/warp-00-displays.png",
+          "duration_seconds": 0.6,
+          "start_seconds": 1.2,
+          "label": "Warp override / 600 ms sampled replay",
+          "source_png_sha256": "fb8424187ffef00bb1a08e246bec448d8f7ef0de34e90e80e5f5c29a9d1a5acf",
+          "source_rgba_sha256": "b475bfd7413a7e7e0d7564662ed479c85af1a4077842b8a53acca612198223b5",
+          "source_snapshot_ms": 28902,
+          "screen_deployment_fractions": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "source_view": null
+        },
+        {
+          "source": "gpu-captain-r2/warp-06-displays.png",
+          "duration_seconds": 0.6,
+          "start_seconds": 1.8,
+          "label": "Warp override / 600 ms sampled replay",
+          "source_png_sha256": "bc7ae82d83c07341112d9a248959515e5fb28928a1922a2e447f1aa9c00f088a",
+          "source_rgba_sha256": "1cf659e04801f216530765d67663394f72aa0c305fcdc7e2305c8761bb278c76",
+          "source_snapshot_ms": 29502,
+          "screen_deployment_fractions": [
+            0.5,
+            0.5,
+            0.5,
+            0.5,
+            0.5,
+            0.5,
+            0.5,
+            0.5,
+            0.5
+          ],
+          "source_view": null
+        },
+        {
+          "source": "gpu-captain-r2/warp-12-displays.png",
+          "duration_seconds": 1.4,
+          "start_seconds": 2.4,
+          "label": "Warp override / Stowed endpoint held",
+          "source_png_sha256": "af9746433c4bfbad4fd0264ec4db33fde47065bab646abf4f3dfb1d878271e38",
+          "source_rgba_sha256": "971d66710c6b3de48366f5fa14e999d92197152d175b22c668077c4aaed14fd4",
+          "source_snapshot_ms": 30102,
+          "screen_deployment_fractions": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "source_view": null
+        },
+        {
+          "source": "gpu-nine-r2/arrival-front.png",
+          "duration_seconds": 1.6,
+          "start_seconds": 3.8,
+          "label": "Cut to arrival / Screens remain stowed",
+          "source_png_sha256": "44cdaac4a2ede63e7cdaaa35ef79f51ea6608e03836acadb033ddd7e91f6f179",
+          "source_rgba_sha256": "ca6f378993ad5199f879b902906b22cd1e853eebcc44e2ec83d134daf3099e4f",
+          "source_snapshot_ms": 46902,
+          "screen_deployment_fractions": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "source_view": null
+        },
+        {
+          "source": "gpu-nine-r2/arrival-open-front.png",
+          "duration_seconds": 1.8,
+          "start_seconds": 5.4,
+          "label": "Manual reopen after arrival / Held state",
+          "source_png_sha256": "08ee18fed2ebd1bf2f90b96d6eecb1e96d82ce54f460fa2f98d87ab20e0753fc",
+          "source_rgba_sha256": "f58d962d48d09a14053fa1529454c5ab30aff13579e9bc34feb3740336d52f91",
+          "source_snapshot_ms": 48102,
+          "screen_deployment_fractions": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "source_view": null
+        },
+        {
+          "source": "gpu-nine-r2/arrival-open-port.png",
+          "duration_seconds": 1.2,
+          "start_seconds": 7.2,
+          "label": "After manual reopen - port / Held view",
+          "source_png_sha256": "8ddfba31cd75a8bded4c26395821d7a5fde5caa10512dcb8660df2642137a7fc",
+          "source_rgba_sha256": "53285fc471a7f92c35a06bd057886e963a193179f629ac9c8991fb47a80ec4c2",
+          "source_snapshot_ms": 48102,
+          "screen_deployment_fractions": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "source_view": null
+        },
+        {
+          "source": "gpu-nine-r2/arrival-open-starboard.png",
+          "duration_seconds": 1.2,
+          "start_seconds": 8.4,
+          "label": "After manual reopen - starboard / Held view",
+          "source_png_sha256": "a24a301e3621a35f65078957d7c50482c20e841ad7d2f1df2d166557d631e033",
+          "source_rgba_sha256": "8866c43d506ed744862c51d2d71a2aef0d8036c87ccffbf914d004e1934798f2",
+          "source_snapshot_ms": 48102,
+          "screen_deployment_fractions": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "source_view": null
+        }
+      ],
+      "artifacts": [
+        {
+          "file": "pioneer-raised-bridge-warp-arrival-states.gif",
+          "mime": "image/gif",
+          "sha256": "144cc711bf90725bb12e8e7d48874722948f60b4c3d00fdb07a562ba0e6acb55",
+          "size_bytes": 1908728,
+          "width": 1280,
+          "height": 720,
+          "duration_seconds": 9.6,
+          "frame_count": 96,
+          "loop": "infinite",
+          "timeline_fps": 10
+        },
+        {
+          "file": "pioneer-raised-bridge-warp-arrival-states.mp4",
+          "mime": "video/mp4",
+          "sha256": "d9918fdae7011209760a0a87a2e84051afdd1ff8f74ebd9f74e03638cf49e185",
+          "size_bytes": 895494,
+          "width": 1280,
+          "height": 720,
+          "duration_seconds": 9.6,
+          "frame_count": 288,
+          "timeline_fps": 30,
+          "codec": "H.264",
+          "pixel_format": "yuv420p",
+          "faststart": true
+        }
+      ]
+    },
+    {
+      "name": "pioneer-raised-bridge-reactor-mechanism",
+      "title": "Reactor mechanism and dedicated schematic",
+      "caption": "Actual registered four-collar reactor mechanism compresses and reopens from server-authority snapshots. The dedicated cockpit display is a read-only schematic, not an additional camera feed.",
+      "limits": [
+        "Development mechanical blockout, not a thermal or mass simulation.",
+        "Heat, fuel and motor power are unmodeled.",
+        "The room view is a diagnostic inspection camera, not player traversal.",
+        "100 ms source steps, plus endpoint and viewpoint holds."
+      ],
+      "duration_seconds": 9.4,
+      "sequence": [
+        {
+          "source": "gpu-reactor/room-oblique-compress-00.png",
+          "duration_seconds": 1.4,
+          "start_seconds": 0,
+          "label": "Reactor mechanism / Diagnostic held view",
+          "source_png_sha256": "21cbe92bb4f42b9727fdddeed1c93f5ee7a6705353874d89ba6bdbd3930eed88",
+          "source_rgba_sha256": "fb77b2713d26614ac22133fd0022c834cc223fb1d199daec0bd35ae27d8c3b4c",
+          "source_snapshot_ms": 1001,
+          "screen_deployment_fractions": null,
+          "source_view": "diagnostic registered interior, not player traversal"
+        },
+        {
+          "source": "gpu-reactor/room-compress-00.png",
+          "duration_seconds": 0.3,
+          "start_seconds": 1.4,
+          "label": "Reactor mechanism / 100 ms authority replay",
+          "source_png_sha256": "d07206615613efec8a4d66e787ff9dad08c1a757531ac258dbad3605c103a710",
+          "source_rgba_sha256": "b6165c50c42319d943f042a4af1ed22bcba2f40fa8c086eb3090ee49e416ca3f",
+          "source_snapshot_ms": 1001,
+          "screen_deployment_fractions": null,
+          "source_view": "diagnostic registered interior, not player traversal"
+        },
+        {
+          "source": "gpu-reactor/room-compress-01.png",
+          "duration_seconds": 0.1,
+          "start_seconds": 1.7,
+          "label": "Reactor mechanism / 100 ms authority replay",
+          "source_png_sha256": "1304e1b64177f55f7dcce319c4fc5696d4b320a824cd9bc84800e0b2c9ad46bc",
+          "source_rgba_sha256": "39de8b771cbfb02526f436d0ff84ef95f0dc5f9718314197edbe516b905607f0",
+          "source_snapshot_ms": 1101,
+          "screen_deployment_fractions": null,
+          "source_view": "diagnostic registered interior, not player traversal"
+        },
+        {
+          "source": "gpu-reactor/room-compress-02.png",
+          "duration_seconds": 0.1,
+          "start_seconds": 1.8,
+          "label": "Reactor mechanism / 100 ms authority replay",
+          "source_png_sha256": "df2d7346425ea047b0cced69ebd42b0bc4b55073639c26582ca81ee0fbc7cca8",
+          "source_rgba_sha256": "f44eb9157cdc891e2fdc0f5077aaecc1d301b95445f5ad4ee4a1425e16a75122",
+          "source_snapshot_ms": 1201,
+          "screen_deployment_fractions": null,
+          "source_view": "diagnostic registered interior, not player traversal"
+        },
+        {
+          "source": "gpu-reactor/room-compress-03.png",
+          "duration_seconds": 0.1,
+          "start_seconds": 1.9,
+          "label": "Reactor mechanism / 100 ms authority replay",
+          "source_png_sha256": "6f2b69c176b4e67d92de9c684604cf5c66f48769c90a75be2e37a168271cad22",
+          "source_rgba_sha256": "fe05deb3e1578f889799c290f5d7452847fbfba1711424a9190a59ad340aef9c",
+          "source_snapshot_ms": 1301,
+          "screen_deployment_fractions": null,
+          "source_view": "diagnostic registered interior, not player traversal"
+        },
+        {
+          "source": "gpu-reactor/room-compress-04.png",
+          "duration_seconds": 0.1,
+          "start_seconds": 2.0,
+          "label": "Reactor mechanism / 100 ms authority replay",
+          "source_png_sha256": "ec829ae67867a975de5fb6645341bea080850d81cae8077bfd5ae56dca9583bd",
+          "source_rgba_sha256": "9f063944151df7cab2b62b4d40deade5168301342fdc53809cd5f7b781b0e0aa",
+          "source_snapshot_ms": 1401,
+          "screen_deployment_fractions": null,
+          "source_view": "diagnostic registered interior, not player traversal"
+        },
+        {
+          "source": "gpu-reactor/room-compress-05.png",
+          "duration_seconds": 0.1,
+          "start_seconds": 2.1,
+          "label": "Reactor mechanism / 100 ms authority replay",
+          "source_png_sha256": "6dbb8795c3bf12e0980c584973383dc25837ba3f8265410152ebe9ad158afd6a",
+          "source_rgba_sha256": "02557cedb7f3386274b72b24b7a9102fb4dc70c0741550e5d61a7f7b6c9877e4",
+          "source_snapshot_ms": 1501,
+          "screen_deployment_fractions": null,
+          "source_view": "diagnostic registered interior, not player traversal"
+        },
+        {
+          "source": "gpu-reactor/room-compress-06.png",
+          "duration_seconds": 0.1,
+          "start_seconds": 2.2,
+          "label": "Reactor mechanism / 100 ms authority replay",
+          "source_png_sha256": "453e75a88af3ce0baacaf81ccaf99246fefd3af94ac179a7258bfe4a45f191b9",
+          "source_rgba_sha256": "4bdd4c6d0f116202587f6b4246556f015eca35a61cd6744a1fdf45db5db0429e",
+          "source_snapshot_ms": 1601,
+          "screen_deployment_fractions": null,
+          "source_view": "diagnostic registered interior, not player traversal"
+        },
+        {
+          "source": "gpu-reactor/room-compress-07.png",
+          "duration_seconds": 0.1,
+          "start_seconds": 2.3,
+          "label": "Reactor mechanism / 100 ms authority replay",
+          "source_png_sha256": "8d275b4af24a92104af3192e5ba18f3f6e27a74bbe12f905a1094820280c8d6b",
+          "source_rgba_sha256": "95c0e344c3884f2fc3f29a2d44e0662081f9d5d8a835f2b1ede0399cf3cdeba9",
+          "source_snapshot_ms": 1701,
+          "screen_deployment_fractions": null,
+          "source_view": "diagnostic registered interior, not player traversal"
+        },
+        {
+          "source": "gpu-reactor/room-compress-08.png",
+          "duration_seconds": 0.1,
+          "start_seconds": 2.4,
+          "label": "Reactor mechanism / 100 ms authority replay",
+          "source_png_sha256": "f6b5134d939ef935d7142b6d3e0172ec762e5a3d41ba04ba2815a2925ef355f8",
+          "source_rgba_sha256": "70a82f023ecd1a32117ac758b410157d6f44d99def34034ffb50fc4a4d2c43a1",
+          "source_snapshot_ms": 1801,
+          "screen_deployment_fractions": null,
+          "source_view": "diagnostic registered interior, not player traversal"
+        },
+        {
+          "source": "gpu-reactor/room-compress-09.png",
+          "duration_seconds": 0.1,
+          "start_seconds": 2.5,
+          "label": "Reactor mechanism / 100 ms authority replay",
+          "source_png_sha256": "f16dd62019eb7ce35f2e9e86c91b98d7f1f2ecc2e2ad2dc6ffb64cc5bf453ebf",
+          "source_rgba_sha256": "b5e4e154818f9e28112f712c18621b8aa9325241a994c3945e078891e5e993f1",
+          "source_snapshot_ms": 1901,
+          "screen_deployment_fractions": null,
+          "source_view": "diagnostic registered interior, not player traversal"
+        },
+        {
+          "source": "gpu-reactor/room-compress-10.png",
+          "duration_seconds": 0.1,
+          "start_seconds": 2.6,
+          "label": "Reactor mechanism / 100 ms authority replay",
+          "source_png_sha256": "158c7ee8802fb21adc68e9777338bf4b04aa24f9330e1850629e3e5739f00ecb",
+          "source_rgba_sha256": "8a651d4f76e9a2c5832b668cb2c22a797836b8cca94c319b46394b0f32beee89",
+          "source_snapshot_ms": 2001,
+          "screen_deployment_fractions": null,
+          "source_view": "diagnostic registered interior, not player traversal"
+        },
+        {
+          "source": "gpu-reactor/room-compress-11.png",
+          "duration_seconds": 0.1,
+          "start_seconds": 2.7,
+          "label": "Reactor mechanism / 100 ms authority replay",
+          "source_png_sha256": "837438de9868ec8443377d0b18aab269155154577c904216fed23403fdd246a0",
+          "source_rgba_sha256": "42afbf6c3507401aa2b59142b38246f7d8fc904cb14c392dd3f4def330ddac7d",
+          "source_snapshot_ms": 2101,
+          "screen_deployment_fractions": null,
+          "source_view": "diagnostic registered interior, not player traversal"
+        },
+        {
+          "source": "gpu-reactor/room-compress-12.png",
+          "duration_seconds": 0.9,
+          "start_seconds": 2.8,
+          "label": "Reactor mechanism / 100 ms authority replay",
+          "source_png_sha256": "66f27b3dadba34f66cc2f3a7cf83fbcd517da50d20e1ce68ce2f8da2dbd6b423",
+          "source_rgba_sha256": "a67d85aa20073468c3e4bf5b2ba1df09c0502050ac5353cb76934296ddd0332c",
+          "source_snapshot_ms": 2201,
+          "screen_deployment_fractions": null,
+          "source_view": "diagnostic registered interior, not player traversal"
+        },
+        {
+          "source": "gpu-reactor/room-oblique-compress-12.png",
+          "duration_seconds": 1.0,
+          "start_seconds": 3.7,
+          "label": "Compact mechanism / Diagnostic held view",
+          "source_png_sha256": "c367ca05332c16fd35f68a6d2df53856e70e054c8c22a6c65d607ca676cfdd33",
+          "source_rgba_sha256": "615883dbb3a258accddf0b2aea2bfbbe3298224fd53e13eca313a7dbb5621202",
+          "source_snapshot_ms": 2201,
+          "screen_deployment_fractions": null,
+          "source_view": "diagnostic registered interior, not player traversal"
+        },
+        {
+          "source": "gpu-reactor/room-open-00.png",
+          "duration_seconds": 0.3,
+          "start_seconds": 4.7,
+          "label": "Reactor mechanism / 100 ms authority replay",
+          "source_png_sha256": "9d43ce3749b913ee6fb60f4b66eb203a48440ddbb8180b3d78ec787171abaeda",
+          "source_rgba_sha256": "e453f3295f27e1bb798bc257ccffb46d14bc24b946819a3346f7f38bb71364a0",
+          "source_snapshot_ms": 19001,
+          "screen_deployment_fractions": null,
+          "source_view": "diagnostic registered interior, not player traversal"
+        },
+        {
+          "source": "gpu-reactor/room-open-01.png",
+          "duration_seconds": 0.1,
+          "start_seconds": 5.0,
+          "label": "Reactor mechanism / 100 ms authority replay",
+          "source_png_sha256": "cc8c0dc7c90a63a33c77ec2519722fcc8dae482ee6167e57fa67ea2b51b1f83c",
+          "source_rgba_sha256": "b0cf1f2e3c6ac4e04643339336d638a84117085dcc4461eecb5e64baca897fdc",
+          "source_snapshot_ms": 19101,
+          "screen_deployment_fractions": null,
+          "source_view": "diagnostic registered interior, not player traversal"
+        },
+        {
+          "source": "gpu-reactor/room-open-02.png",
+          "duration_seconds": 0.1,
+          "start_seconds": 5.1,
+          "label": "Reactor mechanism / 100 ms authority replay",
+          "source_png_sha256": "ae6d72293260a76fc4f121aea80a18d3a69a0d2c9901c349b03d495a838fdaa2",
+          "source_rgba_sha256": "c5c5d5425fab4ff8e789116331d9987f0b3b0b3c151ea522d96c81d9260c785c",
+          "source_snapshot_ms": 19201,
+          "screen_deployment_fractions": null,
+          "source_view": "diagnostic registered interior, not player traversal"
+        },
+        {
+          "source": "gpu-reactor/room-open-03.png",
+          "duration_seconds": 0.1,
+          "start_seconds": 5.2,
+          "label": "Reactor mechanism / 100 ms authority replay",
+          "source_png_sha256": "e7b5cd29788a64b3b1bd04f5e0f8589a7a8f60a0d21c797d043e2d6c96b71509",
+          "source_rgba_sha256": "5228c46530c55a31b3142e3cdbf7af6b9ca22db4d69447d97978020e53f24179",
+          "source_snapshot_ms": 19301,
+          "screen_deployment_fractions": null,
+          "source_view": "diagnostic registered interior, not player traversal"
+        },
+        {
+          "source": "gpu-reactor/room-open-04.png",
+          "duration_seconds": 0.1,
+          "start_seconds": 5.3,
+          "label": "Reactor mechanism / 100 ms authority replay",
+          "source_png_sha256": "e03d70e266249387b68f5469974daec1e1749e44797aba9ea842f6edc999a817",
+          "source_rgba_sha256": "b09db832021c2d1eff5e16551e80b3c405b673055186ddb0fd81c59e593e368d",
+          "source_snapshot_ms": 19401,
+          "screen_deployment_fractions": null,
+          "source_view": "diagnostic registered interior, not player traversal"
+        },
+        {
+          "source": "gpu-reactor/room-open-05.png",
+          "duration_seconds": 0.1,
+          "start_seconds": 5.4,
+          "label": "Reactor mechanism / 100 ms authority replay",
+          "source_png_sha256": "93fd53262e9713ca43f4a7f2da00961af2a4dad5c93e103818526434376f0f9b",
+          "source_rgba_sha256": "153381120983ec8309d464b399890cef24d43085e92047e6755d88886337302f",
+          "source_snapshot_ms": 19501,
+          "screen_deployment_fractions": null,
+          "source_view": "diagnostic registered interior, not player traversal"
+        },
+        {
+          "source": "gpu-reactor/room-open-06.png",
+          "duration_seconds": 0.1,
+          "start_seconds": 5.5,
+          "label": "Reactor mechanism / 100 ms authority replay",
+          "source_png_sha256": "1cea9016ad99c919539e45c2ab3f38f2c116ecfd4df84176cff577a9630d33ad",
+          "source_rgba_sha256": "9b6381514e64ed6568bfecaba60677c8d3ec8f27b447a0b66076727458d693f5",
+          "source_snapshot_ms": 19601,
+          "screen_deployment_fractions": null,
+          "source_view": "diagnostic registered interior, not player traversal"
+        },
+        {
+          "source": "gpu-reactor/room-open-07.png",
+          "duration_seconds": 0.1,
+          "start_seconds": 5.6,
+          "label": "Reactor mechanism / 100 ms authority replay",
+          "source_png_sha256": "060035f42b05527ce74ef1d897e807258c23dc5d4ce3f980124014d6cd1deb97",
+          "source_rgba_sha256": "7ab07f4b4bc31c29d2201dc440e9d6015b4f1dbe39a063854d1a4749ed5935a3",
+          "source_snapshot_ms": 19701,
+          "screen_deployment_fractions": null,
+          "source_view": "diagnostic registered interior, not player traversal"
+        },
+        {
+          "source": "gpu-reactor/room-open-08.png",
+          "duration_seconds": 0.1,
+          "start_seconds": 5.7,
+          "label": "Reactor mechanism / 100 ms authority replay",
+          "source_png_sha256": "007f818fc2527aca1c641f92b4876b74df1dac9e0f5153bdbfaa11725e4cba2f",
+          "source_rgba_sha256": "898ee9940b1bdcc934cdf5cf66ff584c20cbfe4b778fcc2bc8d27c4fb0d4372b",
+          "source_snapshot_ms": 19801,
+          "screen_deployment_fractions": null,
+          "source_view": "diagnostic registered interior, not player traversal"
+        },
+        {
+          "source": "gpu-reactor/room-open-09.png",
+          "duration_seconds": 0.1,
+          "start_seconds": 5.8,
+          "label": "Reactor mechanism / 100 ms authority replay",
+          "source_png_sha256": "ef5faf8aee8e7e18089015a0ae813f05855e0fed9d8285e93552c7499f673c67",
+          "source_rgba_sha256": "a2ef8ad3133782295846913c39735ea1b3ea82478c6ab20c80033fbdf92b2e2b",
+          "source_snapshot_ms": 19901,
+          "screen_deployment_fractions": null,
+          "source_view": "diagnostic registered interior, not player traversal"
+        },
+        {
+          "source": "gpu-reactor/room-open-10.png",
+          "duration_seconds": 0.1,
+          "start_seconds": 5.9,
+          "label": "Reactor mechanism / 100 ms authority replay",
+          "source_png_sha256": "e0809cd8457ad949317fce464d65170d897ec390bce8c460e4f27148b89eb8af",
+          "source_rgba_sha256": "07498b82742d681548c995245d4f8a26acb5977a208e50b2495e4f05c21d8206",
+          "source_snapshot_ms": 20001,
+          "screen_deployment_fractions": null,
+          "source_view": "diagnostic registered interior, not player traversal"
+        },
+        {
+          "source": "gpu-reactor/room-open-11.png",
+          "duration_seconds": 0.1,
+          "start_seconds": 6.0,
+          "label": "Reactor mechanism / 100 ms authority replay",
+          "source_png_sha256": "232133bc2e864f9876f212b22d045a86c9d1decf440a03e7907ae5b1b9381ee6",
+          "source_rgba_sha256": "ff8af922307b84f6f6bf00c0041df52787984c7ccfc5e730e13afe8703bd4d0b",
+          "source_snapshot_ms": 20101,
+          "screen_deployment_fractions": null,
+          "source_view": "diagnostic registered interior, not player traversal"
+        },
+        {
+          "source": "gpu-reactor/room-open-12.png",
+          "duration_seconds": 0.9,
+          "start_seconds": 6.1,
+          "label": "Reactor mechanism / 100 ms authority replay",
+          "source_png_sha256": "36935d3e0bcd387e630f9d5dee400b9dd2da0787ae092892a21731ae15cbbaa9",
+          "source_rgba_sha256": "644e8142663c83fb3dbe7fee9f03d7528c7f8a22245b406633c282bc4e915dad",
+          "source_snapshot_ms": 20201,
+          "screen_deployment_fractions": null,
+          "source_view": "diagnostic registered interior, not player traversal"
+        },
+        {
+          "source": "gpu-reactor/cockpit-compress-06.png",
+          "duration_seconds": 2.4,
+          "start_seconds": 7.0,
+          "label": "Reactor display / Read-only schematic - held",
+          "source_png_sha256": "9e2e2f9065db281cd549f45d6a261bb3afe7f4f8864baaafe5f5515ae4093c41",
+          "source_rgba_sha256": "3f6c90e924e40a99d60f851d113b55eb9d463be0a965034a38d90cba3e31f0e5",
+          "source_snapshot_ms": 1601,
+          "screen_deployment_fractions": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "source_view": null
+        }
+      ],
+      "artifacts": [
+        {
+          "file": "pioneer-raised-bridge-reactor-mechanism.gif",
+          "mime": "image/gif",
+          "sha256": "942742715ff8fde0ee27eea448d235f9f80b5baf129ee75da696edbc470271b7",
+          "size_bytes": 2423755,
+          "width": 1280,
+          "height": 720,
+          "duration_seconds": 9.4,
+          "frame_count": 94,
+          "loop": "infinite",
+          "timeline_fps": 10
+        },
+        {
+          "file": "pioneer-raised-bridge-reactor-mechanism.mp4",
+          "mime": "video/mp4",
+          "sha256": "f48c685feaa6aa6bf218d0995b780ce66251fbdd78ef0dc022a33f0b2197d480",
+          "size_bytes": 506110,
+          "width": 1280,
+          "height": 720,
+          "duration_seconds": 9.4,
+          "frame_count": 282,
+          "timeline_fps": 30,
+          "codec": "H.264",
+          "pixel_format": "yuv420p",
+          "faststart": true
+        }
+      ]
+    }
+  ],
+  "new_stills": [
+    {
+      "file": "pioneer-raised-bridge-reactor-room.png",
+      "source": "gpu-reactor/room-oblique-compress-00.png",
+      "caption": "Registered reactor mechanical blockout, diagnostic inspection view; not player traversal.",
+      "sha256": "21cbe92bb4f42b9727fdddeed1c93f5ee7a6705353874d89ba6bdbd3930eed88",
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "file": "pioneer-raised-bridge-reactor-display.png",
+      "source": "gpu-reactor/cockpit-compress-06.png",
+      "caption": "Dedicated read-only reactor schematic at the 50% compact authority snapshot; not an additional camera feed.",
+      "sha256": "9e2e2f9065db281cd549f45d6a261bb3afe7f4f8864baaafe5f5515ae4093c41",
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "file": "pioneer-raised-bridge-arrival-manual-reopen.png",
+      "source": "gpu-nine-r2/arrival-open-front.png",
+      "caption": "Manual reopen after arrival; unassigned drone screens are not live feeds.",
+      "sha256": "08ee18fed2ebd1bf2f90b96d6eecb1e96d82ce54f460fa2f98d87ab20e0753fc",
+      "width": 1280,
+      "height": 720
+    }
+  ],
+  "existing_stills": [
+    {
+      "file": "pioneer-raised-bridge-exterior.png",
+      "sha256": "f60da3544b6f2130381da1e00c7af5f9a8f836917cd008451e131f217c9d1fe2",
+      "source": "gpu-hull/whole-hull-quarter.png",
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "file": "pioneer-raised-bridge-mining-cockpit.png",
+      "sha256": "14854561b14fdb75eafc65e90803be9c9418d7d102ca624286bd196c853edbd3",
+      "source": "gpu-nine-r2/deployed-front.png",
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "file": "pioneer-raised-bridge-side-window.png",
+      "sha256": "98b8b6a51b5458965c9471bf2ab7a0f791c7e230600a63eec8cc0981fa8a52f9",
+      "source": "gpu-nine-r2/deployed-side-window-port.png",
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "file": "pioneer-raised-bridge-stairs.png",
+      "sha256": "f381d92b4df50b0e2fcafb1c7432c06aa4f6ed0bead66d25a2e07cc030b65593",
+      "source": "gpu-access/stairs-upper-descent.png",
+      "width": 1280,
+      "height": 720
+    }
+  ],
+  "validation": [
+    {
+      "name": "pioneer-raised-bridge-exterior-study",
+      "source_captures_preserved": 3,
+      "all_source_frames_checked": true,
+      "max_mean_absolute_rgb_error_at_160x90": 0.5175462962962963,
+      "gif_under_10_decimal_MB": true,
+      "mp4_atom_order": [
+        "ftyp",
+        "moov",
+        "free",
+        "mdat"
+      ]
+    },
+    {
+      "name": "pioneer-raised-bridge-stair-access-study",
+      "source_captures_preserved": 7,
+      "all_source_frames_checked": true,
+      "max_mean_absolute_rgb_error_at_160x90": 0.9238194444444444,
+      "gif_under_10_decimal_MB": true,
+      "mp4_atom_order": [
+        "ftyp",
+        "moov",
+        "free",
+        "mdat"
+      ]
+    },
+    {
+      "name": "pioneer-raised-bridge-nine-screen-mining-controls",
+      "source_captures_preserved": 9,
+      "all_source_frames_checked": true,
+      "max_mean_absolute_rgb_error_at_160x90": 0.8812731481481482,
+      "gif_under_10_decimal_MB": true,
+      "mp4_atom_order": [
+        "ftyp",
+        "moov",
+        "free",
+        "mdat"
+      ]
+    },
+    {
+      "name": "pioneer-raised-bridge-warp-arrival-states",
+      "source_captures_preserved": 8,
+      "all_source_frames_checked": true,
+      "max_mean_absolute_rgb_error_at_160x90": 0.7703009259259259,
+      "gif_under_10_decimal_MB": true,
+      "mp4_atom_order": [
+        "ftyp",
+        "moov",
+        "free",
+        "mdat"
+      ]
+    },
+    {
+      "name": "pioneer-raised-bridge-reactor-mechanism",
+      "source_captures_preserved": 29,
+      "all_source_frames_checked": true,
+      "max_mean_absolute_rgb_error_at_160x90": 1.5918287037037038,
+      "gif_under_10_decimal_MB": true,
+      "mp4_atom_order": [
+        "ftyp",
+        "moov",
+        "free",
+        "mdat"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "file": "integrated-28817c-held-gallery.gif",
+  "source_commit": "28817c23ee0d5b6d84ffe207fe60317cff3afe13",
+  "caption": "Historical 23 October integrated cockpit: held port, cargo and reactor stills. Viewpoint gallery, not recorded motion; predates raised bridge.",
+  "width": 960,
+  "height": 540,
+  "frames": 3,
+  "duration_ms": 5400,
+  "bytes": 483369,
+  "sha256": "8dab1961cc37eaa98fb3b14434246349f84c3c5304a134a7ea8cf5d982785cb8",
+  "sources": [
+    {
+      "url": "https://raw.githubusercontent.com/PIndustries/arkline-engine/7d7bb8e639e46a59f0642d142ee6f5e22f5cf09e/docs/ships/pioneer/images/progress-20261023/integrated-28817c/deployed-port.png",
+      "sha256": "403433b2906e571248fa170c70351d12a791b63bc98846ca963fed7bb5891cf6"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PIndustries/arkline-engine/7d7bb8e639e46a59f0642d142ee6f5e22f5cf09e/docs/ships/pioneer/images/progress-20261023/integrated-28817c/deployed-cargo.png",
+      "sha256": "e822c4d364726849a0868528d852e748d10312eb65a0dedc4d54081903de0a7d"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PIndustries/arkline-engine/7d7bb8e639e46a59f0642d142ee6f5e22f5cf09e/docs/ships/pioneer/images/progress-20261023/integrated-28817c/deployed-reactor.png",
+      "sha256": "e9c7a3e224322f7f5e6a8bee0fa8d3d7cae7ad78665834992cc83a1b02f540b6"
+    }
+  ]
+}
