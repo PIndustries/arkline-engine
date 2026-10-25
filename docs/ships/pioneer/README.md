@@ -10,13 +10,63 @@ Historical baseline as of 15 October 2026: merged source includes the authored B
 
 [Versioned page source](https://github.com/PIndustries/arkline-engine/blob/docs/pioneer-progress-20261023/docs/ships/pioneer/README.md) · [Fleet archive](https://github.com/PIndustries/arkline-engine/wiki/Ship-Design-Archive) · [Project 14](https://github.com/orgs/PIndustries/projects/14)
 
-## Progress and ship vision · 23 October 2026
+<a id="progress-and-ship-vision--23-october-2026"></a>
+
+## Progress and ship vision · updated 25 October 2026
 
 ### Visual development timeline — newest first
 
 The newest checkpoint is first; earlier revisions continue below. **These are actual engine captures unless explicitly labeled concept art.** Local prototypes are not published runtime builds or releases; integration status is stated for each checkpoint. GIF playback uses edited sample timing and endpoint holds, not measured desktop frame rate. Select a still for its full 1280 × 720 image.
 
-#### 24 October · Latest: continuous departure and return, without a scene cut
+#### 25 October · Latest: physical mining drones and a working ore-return loop
+
+Pioneer's mining workflow now connects the drone bay, the asteroid, each drone's cargo and the ship's external ore receiver. The ship and its equipment are official Arkline designs. Player ship customization is not part of the current offering or this milestone.
+
+**Status:** validated development preview, not yet a released build.
+
+![Actual mining drone transfers ore at Pioneer's external receiver](https://arkline.network/images/arkline-journal/progress-20261025/ore-receiver-excerpt-d8c8244459db.gif)
+
+*Actual engine capture: a 10.2-second normal-time excerpt of the receiver approach and transfer, looping from the beginning. It is not the full mining trip, a captain-view recording or a live frame-rate benchmark.*
+
+[Watch the full 4:52.5 mining, drop-off and recall journey at normal simulation cadence](https://arkline.network/images/arkline-journal/progress-20261025/ore-journey-full-normal-time-18df47b114b1.mp4).
+
+**What works now**
+- Mining drones have a real 100-unit cargo limit and extract 10 ore per completed eight-second cycle.
+- They travel to an external receiver and transfer up to 25 units per 500 ms step. Reserved ship headroom and conservation checks keep cargo ownership explicit through the transfer.
+- A quick drop-off returns the drone to mining; Recall All brings it back, unloads its remaining ore and then stows it. These are different orders, not interchangeable screen animations.
+- The captured 4-minute-52.5-second journey follows the same drone: mine 40, transfer 40, resume for another 10, then recall, unload and stow. Five completed extraction events are verified; a reserved but uncompleted cycle is not counted as mined ore.
+
+![Drone and cargo controls showing confirmed ore, reserved headroom and receiver status](https://arkline.network/images/arkline-journal/progress-20261025/ore-transfer-controls-1a8383248097.png)
+
+*Current coupled drone/cargo controls in the actual preview. Displayed state comes from the ship authority.*
+
+**Still ahead:** final ship art and animation polish, representative hardware performance and feed-freshness acceptance, broader multiplayer/interruption testing, and the remaining connected ship systems. Development visuals remain in use. This milestone does not claim completed life support, vessel mass/heat simulation or finished station services.
+
+<details>
+<summary>Technical validation and capture provenance</summary>
+
+The final local `e9ef19e` workspace validation recorded 1,471 passing tests, zero failures and 76 ignored tests. Check, Clippy and formatting gates passed. Runtime source for this milestone is not published.
+
+**Capture provenance:** the ore footage uses renderer `c6f03b0` and authority `11325b7`. The coupled-controls still is a separate capture using renderer `a73caac` and authority `11325b7` (source index 1141). The later `e9ef19e` source validation is recorded separately; these images are not relabeled as footage captured from that final commit. The full journey was checked against 2,926 authority responses at 100 ms intervals, with ore conservation and unchanged credits verified.
+
+[Public capture provenance and media hashes](https://arkline.network/images/arkline-journal/progress-20261025/drone-ore-media-manifest-a94a71009bd3.json).
+
+</details>
+
+Next, we are tightening the complete operational loop and its presentation together: clear orders, physical movement, truthful cargo/progress readings, recovery behavior and repeatable acceptance evidence. Older checkpoints remain below with their original status and limitations.
+
+#### 25 October · Earlier: five-drone deployment and recovery through one physical bay
+
+The Mining class can deploy five persistent drones and recall those same five through the shared bay. The recorded full-cycle check completed five launches and five recoveries, returning to 15 stored drones and none active. Drone identity, home position and health remained tracked throughout.
+
+![Five-drone deployment and recall controls — sampled states with edited holds](https://arkline.network/images/arkline-journal/progress-20261025/deploy-recall-sampled-controls-ed199284df32.gif)
+
+*Sampled actual controls and bay-camera states with edited holds, not continuous launch/recovery footage. This earlier capture uses renderer `d9fd266` and authority `4f1eb584`; the full continuous cycle was 630.2 seconds. The camera selector changes the bay monitor, not the captain's viewpoint. This is separate from the later ore-return journey above.*
+
+
+<a id="24-october--latest-continuous-departure-and-return-without-a-scene-cut"></a>
+
+#### 24 October · Earlier: continuous departure and return, without a scene cut
 
 Pioneer now has a local, authority-driven docking path: the release phase begins, the ship backs out, and its return proceeds through approach, alignment, berth translation and the secured phase. The seated camera stays in the same world-space cockpit rather than switching to a hangar scene. This is real engine motion, not an animation laid over an instant teleport.
 
@@ -74,7 +124,7 @@ Pioneer's bridge now sits eight metres higher as a complete cabin. The seat, nin
 
 [Capture provenance and timing](https://github.com/PIndustries/arkline-engine/blob/7e82a0690aab21a9d10cde906140f75393931031/docs/ships/pioneer/images/progress-20261024/pioneer-raised-bridge-media-manifest.json). GIF and PNG files are published here; MP4 encoding records in the manifest describe companion exports, not additional repository files.
 
-### Flagship finish line · current punchlist
+### Flagship finish line · 24 October checkpoint punchlist
 
 The goal is a ship whose spaces, controls and systems work together. The following are acceptance gates, not promises that every simulation already exists.
 
