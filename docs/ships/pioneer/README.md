@@ -24,9 +24,9 @@ Pioneer's mining workflow now connects the drone bay, the asteroid, each drone's
 
 **Status:** validated development preview, not yet a released build.
 
-![Actual mining drone transfers ore at Pioneer's external receiver](https://arkline.network/images/arkline-journal/progress-20261025/ore-receiver-excerpt-d8c8244459db.gif)
+[![Actual receiver capture — select to play the ore-transfer GIF](https://arkline.network/images/arkline-journal/progress-20261025/ore-receiver-poster-ed1847f009e4.png)](https://arkline.network/images/arkline-journal/progress-20261025/ore-receiver-excerpt-d8c8244459db.gif)
 
-*Actual engine capture: a 10.2-second normal-time excerpt of the receiver approach and transfer, looping from the beginning. It is not the full mining trip, a captain-view recording or a live frame-rate benchmark.*
+*Select the receiver image to open the GIF. Actual engine capture: a 10.2-second normal-time excerpt of the receiver approach and transfer, looping from the beginning. It is not the full mining trip, a captain-view recording or a live frame-rate benchmark.*
 
 [Watch the full 4:52.5 mining, drop-off and recall journey at normal simulation cadence](https://arkline.network/images/arkline-journal/progress-20261025/ore-journey-full-normal-time-18df47b114b1.mp4).
 
