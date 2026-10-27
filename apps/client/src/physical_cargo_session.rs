@@ -148,7 +148,7 @@ fn start(options: PhysicalBayClientOptions) -> Bridge {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, target_os = "linux"))]
 pub(crate) fn live_bridge_for_tests(
     options: PhysicalBayClientOptions,
 ) -> (
