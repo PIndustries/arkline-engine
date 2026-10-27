@@ -151,7 +151,7 @@ pub(super) fn partition(
 }
 
 pub(super) fn installed() -> Result<Partition, String> {
-    model_catalog::validate_pioneer_source_snapshot()?;
+    pioneer_source_snapshot::validate_installed()?;
     let vertices = pioneer_asset()?
         .iter()
         .map(|p| p.vertices.clone())

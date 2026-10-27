@@ -1,5 +1,6 @@
 //! Lifetime ownership and loopback startup for a locally spawned host.
 
+#[cfg(not(target_arch = "wasm32"))]
 use super::*;
 
 /// Only the process that spawned a local host owns its lifetime.

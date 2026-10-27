@@ -11,7 +11,7 @@ use std::sync::{
 };
 
 mod synthesis;
-#[cfg(test)]
+#[cfg(all(test, target_os = "linux"))]
 pub use synthesis::OfflineRenderer;
 use synthesis::Synth;
 

@@ -7,6 +7,7 @@ license.workspace = true
 
 [dependencies]
 arkline-protocol.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 hex.workspace = true
@@ -20,7 +21,6 @@ web-time = "=1.1.0"
 arkline-verifier = { path = "../verifier" }
 arkline-server = { path = "../server" }
 oauth2 = { version = "=5.0.0", default-features = false, features = ["reqwest-blocking", "rustls-tls"] }
-serde.workspace = true
 rustls = { version = "0.23", default-features = false, features = ["std", "ring", "tls12"] }
 webpki-roots = "1"
 cpal = "=0.15.3"

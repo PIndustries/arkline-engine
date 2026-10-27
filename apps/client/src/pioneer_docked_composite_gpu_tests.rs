@@ -143,6 +143,8 @@ impl Harness {
         snapshot.pilots[0].location = Location::Docked;
         snapshot.pilots[0].station_avatar = None;
         cockpit.assets = Some(AssetsView {
+            drone_bay: None,
+            drone_cargo: None,
             carrier_inventory: None,
             cargo_unloading: None,
             pioneer_room: Some(PioneerRoomState::uncommissioned(

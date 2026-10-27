@@ -234,6 +234,7 @@ impl Cockpit {
             }
         });
     }
+    #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn operations_route(&self) -> &'static str {
         ["Flight", "Ship", "Operations", "Station"][group(self.service_tab)]
     }

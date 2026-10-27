@@ -1,7 +1,7 @@
 //! Procedural audio vocabulary and stable engine facade.
 
 mod device;
-#[cfg(test)]
+#[cfg(all(test, target_os = "linux"))]
 pub use device::OfflineRenderer;
 pub use device::SoundEngine;
 

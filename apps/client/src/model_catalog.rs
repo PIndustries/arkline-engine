@@ -9,11 +9,6 @@ mod parts;
 #[path = "model_catalog_windows.rs"]
 mod windows;
 
-/// Strict shared source gate for canonical runtime and inspection geometry.
-pub(super) fn validate_pioneer_source_snapshot() -> Result<(), String> {
-    parts::validate_installed()
-}
-
 #[derive(Clone, Debug)]
 pub struct RuntimeModelDescriptor {
     pub id: String,

@@ -16,7 +16,7 @@ pub(super) fn source_meshes() -> Result<[Vec<Vertex>; 3], String> {
 }
 
 fn build() -> Result<[Vec<Vertex>; 3], String> {
-    model_catalog::validate_pioneer_source_snapshot()?;
+    pioneer_source_snapshot::validate_installed()?;
     let asset = pioneer_asset()?;
     Ok(std::array::from_fn(|slot| {
         asset[PRIMITIVES[slot]].vertices.clone()

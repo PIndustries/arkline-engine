@@ -112,6 +112,8 @@ mod pioneer_bay_source;
 #[cfg(test)]
 #[path = "pioneer_docked_source.rs"]
 mod pioneer_docked_source;
+#[path = "pioneer_source_snapshot.rs"]
+mod pioneer_source_snapshot;
 #[path = "ship_asset.rs"]
 mod ship_asset;
 use geometry_catalog::*;
