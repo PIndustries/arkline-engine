@@ -15,7 +15,11 @@ fn corrupt_hangar_and_storage_fail_open_without_panicking() {
                     .handle_at(
                         &mut None,
                         Request::Connect {
+                            supports_room_controls: false,
+                            world_layout_version: 1,
+                            supports_fleet_hangar: false,
                             supports_pioneer_interior: true,
+                            supports_docked_traversal_v2: false,
                             protocol_version: PROTOCOL_VERSION,
                             pilot: "Pilot".into(),
                             resume_token: None

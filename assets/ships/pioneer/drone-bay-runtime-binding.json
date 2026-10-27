@@ -1,0 +1,1710 @@
+{
+  "schema": "arkline.pioneer-drone-bay-runtime-binding/v1",
+  "registration_revision": 12,
+  "blend_sha256": "ee43c05cb1d4ebf907d609b5338b4d8a911b812d8fb05914c96ca48dbb06b1d9",
+  "glb_sha256": "7970f096a6aac9d95b6250b75cd19ea2e54046c9deb77f3592b82efa879112fd",
+  "authoring_manifest_sha256": "342d050e111ff239d9d3ef540ffa5023906a2ae528db5ae9359eb73a46f32ae8",
+  "export_receipt_sha256": "979748932dfe690cf1a48347286bbad4ee9e73b0ecfaa4505003237c9d9a2ed9",
+  "source_triangle_count": 131438,
+  "dynamic_triangle_count": 7668,
+  "static_triangle_count": 123770,
+  "partition": "Every receipt source part exactly once; subtract only listed dynamic ranges from original material primitives. Preserve original material identity per range. No arbitrary hull hiding.",
+  "dynamic_groups": [
+    {
+      "id": "tray/s00",
+      "reference_pose_body_m": {
+        "translation": [
+          -30.5,
+          -5.4,
+          3.5
+        ],
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "vertices_space": "absolute body metres; apply current_pose * inverse(reference_pose) once",
+      "motion": {
+        "body_center_reference_m": [
+          -30.5,
+          -5.4,
+          3.5
+        ],
+        "path": "rack -> aisle at same X/Y -> exit Y=-1 -> aft station X=-30.5; then lower0.20m while same drone holds Y=-1; hold while drone departs; reverse to store",
+        "translation_m_at_aisle": [
+          0,
+          0,
+          -7
+        ]
+      },
+      "source_parts": [
+        {
+          "name": "pioneer.drone_bay/tray/s00/deck",
+          "source_id": "part:c0178d372d88b529e3d36fc48eecadaca84ee8b7cb332e87100a399d86d64f58",
+          "render_primitive": 1,
+          "first_index": 175752,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/tray/s00/retainer/aft",
+          "source_id": "part:1d1ab9242e9a7ac89ff2953ab2c1c024f574406df6edf3e3083f7c401bc7c106",
+          "render_primitive": 7,
+          "first_index": 27972,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/tray/s00/retainer/fore",
+          "source_id": "part:4fff8fccc2491238cadd634190684bd580b299692ed3da037a14679ae921cc62",
+          "render_primitive": 7,
+          "first_index": 28296,
+          "index_count": 324
+        }
+      ]
+    },
+    {
+      "id": "tray/s01",
+      "reference_pose_body_m": {
+        "translation": [
+          -30.5,
+          -3.2,
+          3.5
+        ],
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "vertices_space": "absolute body metres; apply current_pose * inverse(reference_pose) once",
+      "motion": {
+        "body_center_reference_m": [
+          -30.5,
+          -3.2,
+          3.5
+        ],
+        "path": "rack -> aisle at same X/Y -> exit Y=-1 -> aft station X=-30.5; then lower0.20m while same drone holds Y=-1; hold while drone departs; reverse to store",
+        "translation_m_at_aisle": [
+          0,
+          0,
+          -7
+        ]
+      },
+      "source_parts": [
+        {
+          "name": "pioneer.drone_bay/tray/s01/deck",
+          "source_id": "part:ecfa42457936e41a3401b24ce4a14c581f4a5b8d85d90bd012efb274558c5b14",
+          "render_primitive": 1,
+          "first_index": 176076,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/tray/s01/retainer/aft",
+          "source_id": "part:3a80e298f0bd71f4b4819c73a97922cc3de6991cb03b6e1fa32951a25feb1fd8",
+          "render_primitive": 7,
+          "first_index": 28620,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/tray/s01/retainer/fore",
+          "source_id": "part:91f3a8716132cc45a7f45ca21510106df56bd7b05f90ebc343adb0d82a953e03",
+          "render_primitive": 7,
+          "first_index": 28944,
+          "index_count": 324
+        }
+      ]
+    },
+    {
+      "id": "tray/s02",
+      "reference_pose_body_m": {
+        "translation": [
+          -30.5,
+          -1.0,
+          3.5
+        ],
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "vertices_space": "absolute body metres; apply current_pose * inverse(reference_pose) once",
+      "motion": {
+        "body_center_reference_m": [
+          -30.5,
+          -1.0,
+          3.5
+        ],
+        "path": "rack -> aisle at same X/Y -> exit Y=-1 -> aft station X=-30.5; then lower0.20m while same drone holds Y=-1; hold while drone departs; reverse to store",
+        "translation_m_at_aisle": [
+          0,
+          0,
+          -7
+        ]
+      },
+      "source_parts": [
+        {
+          "name": "pioneer.drone_bay/tray/s02/deck",
+          "source_id": "part:9ef89bda65ab00703e2fd1bb248aaad813d4ba447450303d66b8f4dc5e0c2fbf",
+          "render_primitive": 1,
+          "first_index": 176400,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/tray/s02/retainer/aft",
+          "source_id": "part:1c18a88feca3513bbfef5e689bb9f2ea4801e44e0a8f1314873d451670cb683f",
+          "render_primitive": 7,
+          "first_index": 29268,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/tray/s02/retainer/fore",
+          "source_id": "part:ff5c3718d8080b4602c776c1264a286fd3594ee16c22bf15030a9e67a48b1ad4",
+          "render_primitive": 7,
+          "first_index": 29592,
+          "index_count": 324
+        }
+      ]
+    },
+    {
+      "id": "tray/s03",
+      "reference_pose_body_m": {
+        "translation": [
+          -30.5,
+          1.2,
+          3.5
+        ],
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "vertices_space": "absolute body metres; apply current_pose * inverse(reference_pose) once",
+      "motion": {
+        "body_center_reference_m": [
+          -30.5,
+          1.2,
+          3.5
+        ],
+        "path": "rack -> aisle at same X/Y -> exit Y=-1 -> aft station X=-30.5; then lower0.20m while same drone holds Y=-1; hold while drone departs; reverse to store",
+        "translation_m_at_aisle": [
+          0,
+          0,
+          -7
+        ]
+      },
+      "source_parts": [
+        {
+          "name": "pioneer.drone_bay/tray/s03/deck",
+          "source_id": "part:195930ea17713c04df90bc53ff8f5b62fc3bedf8d508432c69bfb5161429ee2d",
+          "render_primitive": 1,
+          "first_index": 176724,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/tray/s03/retainer/aft",
+          "source_id": "part:906a9934e61d40e9d15fdc0304d3f40f81335f885dc17feb51b09b64784c1df8",
+          "render_primitive": 7,
+          "first_index": 29916,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/tray/s03/retainer/fore",
+          "source_id": "part:ef344290f8faa98f6a42ff285ff58c17996f097c1a08f6abaa45be70d932a3b5",
+          "render_primitive": 7,
+          "first_index": 30240,
+          "index_count": 324
+        }
+      ]
+    },
+    {
+      "id": "tray/s04",
+      "reference_pose_body_m": {
+        "translation": [
+          -30.5,
+          3.4,
+          3.5
+        ],
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "vertices_space": "absolute body metres; apply current_pose * inverse(reference_pose) once",
+      "motion": {
+        "body_center_reference_m": [
+          -30.5,
+          3.4,
+          3.5
+        ],
+        "path": "rack -> aisle at same X/Y -> exit Y=-1 -> aft station X=-30.5; then lower0.20m while same drone holds Y=-1; hold while drone departs; reverse to store",
+        "translation_m_at_aisle": [
+          0,
+          0,
+          -7
+        ]
+      },
+      "source_parts": [
+        {
+          "name": "pioneer.drone_bay/tray/s04/deck",
+          "source_id": "part:82353ff3fb1e8bf575febfe0ab67aa37b64c1d5eacdea9618d1b8029daf9e15d",
+          "render_primitive": 1,
+          "first_index": 177048,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/tray/s04/retainer/aft",
+          "source_id": "part:eda660d9f9414476f2986a83cfb56493ac077c2ec929cf07b38975bc4c267ffd",
+          "render_primitive": 7,
+          "first_index": 30564,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/tray/s04/retainer/fore",
+          "source_id": "part:d11c0c1bb45b79f4e989a57f33590a01c1980069067457f7f8c87359a34b27a4",
+          "render_primitive": 7,
+          "first_index": 30888,
+          "index_count": 324
+        }
+      ]
+    },
+    {
+      "id": "tray/s05",
+      "reference_pose_body_m": {
+        "translation": [
+          -24.5,
+          -5.4,
+          3.5
+        ],
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "vertices_space": "absolute body metres; apply current_pose * inverse(reference_pose) once",
+      "motion": {
+        "body_center_reference_m": [
+          -24.5,
+          -5.4,
+          3.5
+        ],
+        "path": "rack -> aisle at same X/Y -> exit Y=-1 -> aft station X=-30.5; then lower0.20m while same drone holds Y=-1; hold while drone departs; reverse to store",
+        "translation_m_at_aisle": [
+          0,
+          0,
+          -7
+        ]
+      },
+      "source_parts": [
+        {
+          "name": "pioneer.drone_bay/tray/s05/deck",
+          "source_id": "part:ad9591b386ec5eb169b8a2f99cd67bbeadab16efa67020689fec603116403e0c",
+          "render_primitive": 1,
+          "first_index": 177372,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/tray/s05/retainer/aft",
+          "source_id": "part:c6157de92c08da52687bf1450aa5807b2dd42e2819bbc30f8f63572e5991334d",
+          "render_primitive": 7,
+          "first_index": 31212,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/tray/s05/retainer/fore",
+          "source_id": "part:50ce8f8fd17387f8715b04a3c512886e510a3966ea283b451b001903c88a4eb9",
+          "render_primitive": 7,
+          "first_index": 31536,
+          "index_count": 324
+        }
+      ]
+    },
+    {
+      "id": "tray/s06",
+      "reference_pose_body_m": {
+        "translation": [
+          -24.5,
+          -3.2,
+          3.5
+        ],
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "vertices_space": "absolute body metres; apply current_pose * inverse(reference_pose) once",
+      "motion": {
+        "body_center_reference_m": [
+          -24.5,
+          -3.2,
+          3.5
+        ],
+        "path": "rack -> aisle at same X/Y -> exit Y=-1 -> aft station X=-30.5; then lower0.20m while same drone holds Y=-1; hold while drone departs; reverse to store",
+        "translation_m_at_aisle": [
+          0,
+          0,
+          -7
+        ]
+      },
+      "source_parts": [
+        {
+          "name": "pioneer.drone_bay/tray/s06/deck",
+          "source_id": "part:d0732e75f12259beaf50eda7db89d2392325f46a87aded0bb0821462c2d50c9f",
+          "render_primitive": 1,
+          "first_index": 177696,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/tray/s06/retainer/aft",
+          "source_id": "part:1999bb7c36dfa45a935b8421ac0c94b15148b435143d8fdd4d048af0a9ff9128",
+          "render_primitive": 7,
+          "first_index": 31860,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/tray/s06/retainer/fore",
+          "source_id": "part:fc78d45a8322219a0bcfbc35efcc31fca3db211bd452ebf464e7a5c1bc192850",
+          "render_primitive": 7,
+          "first_index": 32184,
+          "index_count": 324
+        }
+      ]
+    },
+    {
+      "id": "tray/s07",
+      "reference_pose_body_m": {
+        "translation": [
+          -24.5,
+          -1.0,
+          3.5
+        ],
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "vertices_space": "absolute body metres; apply current_pose * inverse(reference_pose) once",
+      "motion": {
+        "body_center_reference_m": [
+          -24.5,
+          -1.0,
+          3.5
+        ],
+        "path": "rack -> aisle at same X/Y -> exit Y=-1 -> aft station X=-30.5; then lower0.20m while same drone holds Y=-1; hold while drone departs; reverse to store",
+        "translation_m_at_aisle": [
+          0,
+          0,
+          -7
+        ]
+      },
+      "source_parts": [
+        {
+          "name": "pioneer.drone_bay/tray/s07/deck",
+          "source_id": "part:e086342d3d5eabecfa7818999a92f4485f8f1da6336505037d4f3c248e6cc3ea",
+          "render_primitive": 1,
+          "first_index": 178020,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/tray/s07/retainer/aft",
+          "source_id": "part:dac19a865450cb23b321325307c79952829df3498bff5bedbe3d4f3af794235e",
+          "render_primitive": 7,
+          "first_index": 32508,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/tray/s07/retainer/fore",
+          "source_id": "part:84043a4bcafa500b0601933c3d9f9cd2e7ea1fd4d807b79e62e97190fa8400a2",
+          "render_primitive": 7,
+          "first_index": 32832,
+          "index_count": 324
+        }
+      ]
+    },
+    {
+      "id": "tray/s08",
+      "reference_pose_body_m": {
+        "translation": [
+          -24.5,
+          1.2,
+          3.5
+        ],
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "vertices_space": "absolute body metres; apply current_pose * inverse(reference_pose) once",
+      "motion": {
+        "body_center_reference_m": [
+          -24.5,
+          1.2,
+          3.5
+        ],
+        "path": "rack -> aisle at same X/Y -> exit Y=-1 -> aft station X=-30.5; then lower0.20m while same drone holds Y=-1; hold while drone departs; reverse to store",
+        "translation_m_at_aisle": [
+          0,
+          0,
+          -7
+        ]
+      },
+      "source_parts": [
+        {
+          "name": "pioneer.drone_bay/tray/s08/deck",
+          "source_id": "part:d70a41f0a14a095836f4589cfcc1389271c303c420a99002d9a40d4a53c8786e",
+          "render_primitive": 1,
+          "first_index": 178344,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/tray/s08/retainer/aft",
+          "source_id": "part:7b6176713a441a489bb4f7bd171dbd6e8eb8e8d7b9f3ca45f96e8d2d8e5b3dc1",
+          "render_primitive": 7,
+          "first_index": 33156,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/tray/s08/retainer/fore",
+          "source_id": "part:17e16a72f0c01b85b1ed166e406892f41764593718c0ecefc26ca9a95ec636db",
+          "render_primitive": 7,
+          "first_index": 33480,
+          "index_count": 324
+        }
+      ]
+    },
+    {
+      "id": "tray/s09",
+      "reference_pose_body_m": {
+        "translation": [
+          -24.5,
+          3.4,
+          3.5
+        ],
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "vertices_space": "absolute body metres; apply current_pose * inverse(reference_pose) once",
+      "motion": {
+        "body_center_reference_m": [
+          -24.5,
+          3.4,
+          3.5
+        ],
+        "path": "rack -> aisle at same X/Y -> exit Y=-1 -> aft station X=-30.5; then lower0.20m while same drone holds Y=-1; hold while drone departs; reverse to store",
+        "translation_m_at_aisle": [
+          0,
+          0,
+          -7
+        ]
+      },
+      "source_parts": [
+        {
+          "name": "pioneer.drone_bay/tray/s09/deck",
+          "source_id": "part:b6c2d79a4c766bca13ce749c200ea59d1fee6eecaa063865a07fd819dae0ae93",
+          "render_primitive": 1,
+          "first_index": 178668,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/tray/s09/retainer/aft",
+          "source_id": "part:652c0130325b9f5723e36782c03027162573ea6f3ec871cf9f730f1ceffdf362",
+          "render_primitive": 7,
+          "first_index": 33804,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/tray/s09/retainer/fore",
+          "source_id": "part:9764d696585d6ff531139008b1d225bbac2fdeda47fe2528e7d3d22a7e214eeb",
+          "render_primitive": 7,
+          "first_index": 34128,
+          "index_count": 324
+        }
+      ]
+    },
+    {
+      "id": "tray/s10",
+      "reference_pose_body_m": {
+        "translation": [
+          -18.5,
+          -5.4,
+          3.5
+        ],
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "vertices_space": "absolute body metres; apply current_pose * inverse(reference_pose) once",
+      "motion": {
+        "body_center_reference_m": [
+          -18.5,
+          -5.4,
+          3.5
+        ],
+        "path": "rack -> aisle at same X/Y -> exit Y=-1 -> aft station X=-30.5; then lower0.20m while same drone holds Y=-1; hold while drone departs; reverse to store",
+        "translation_m_at_aisle": [
+          0,
+          0,
+          -7
+        ]
+      },
+      "source_parts": [
+        {
+          "name": "pioneer.drone_bay/tray/s10/deck",
+          "source_id": "part:29a6d0f841b2f83f2aa1dacc4aafd9311221de39259a6dbe13f72bb0f57d311e",
+          "render_primitive": 1,
+          "first_index": 178992,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/tray/s10/retainer/aft",
+          "source_id": "part:cfdfe886526d279886fc968ec3fb2501b9c92d0f57cc8d8762c49e3f1b51c658",
+          "render_primitive": 7,
+          "first_index": 34452,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/tray/s10/retainer/fore",
+          "source_id": "part:751686535d2365b581e8674a88a24a6ed50498b0d6079fdcb646bebfe371f4aa",
+          "render_primitive": 7,
+          "first_index": 34776,
+          "index_count": 324
+        }
+      ]
+    },
+    {
+      "id": "tray/s11",
+      "reference_pose_body_m": {
+        "translation": [
+          -18.5,
+          -3.2,
+          3.5
+        ],
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "vertices_space": "absolute body metres; apply current_pose * inverse(reference_pose) once",
+      "motion": {
+        "body_center_reference_m": [
+          -18.5,
+          -3.2,
+          3.5
+        ],
+        "path": "rack -> aisle at same X/Y -> exit Y=-1 -> aft station X=-30.5; then lower0.20m while same drone holds Y=-1; hold while drone departs; reverse to store",
+        "translation_m_at_aisle": [
+          0,
+          0,
+          -7
+        ]
+      },
+      "source_parts": [
+        {
+          "name": "pioneer.drone_bay/tray/s11/deck",
+          "source_id": "part:d594f2adb7178c16d8c5d5a74900a04f63eab0f2b0d8b0d6708711dbb6146b8c",
+          "render_primitive": 1,
+          "first_index": 179316,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/tray/s11/retainer/aft",
+          "source_id": "part:ea4fd6f9b9cf322d1e9a165aaadaeea8cc51adf61019bc4e1ac0be079657d2dc",
+          "render_primitive": 7,
+          "first_index": 35100,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/tray/s11/retainer/fore",
+          "source_id": "part:79ee149b447431dea06414a13c152150fa176b90486411759e36f9d3022a5259",
+          "render_primitive": 7,
+          "first_index": 35424,
+          "index_count": 324
+        }
+      ]
+    },
+    {
+      "id": "tray/s12",
+      "reference_pose_body_m": {
+        "translation": [
+          -18.5,
+          -1.0,
+          3.5
+        ],
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "vertices_space": "absolute body metres; apply current_pose * inverse(reference_pose) once",
+      "motion": {
+        "body_center_reference_m": [
+          -18.5,
+          -1.0,
+          3.5
+        ],
+        "path": "rack -> aisle at same X/Y -> exit Y=-1 -> aft station X=-30.5; then lower0.20m while same drone holds Y=-1; hold while drone departs; reverse to store",
+        "translation_m_at_aisle": [
+          0,
+          0,
+          -7
+        ]
+      },
+      "source_parts": [
+        {
+          "name": "pioneer.drone_bay/tray/s12/deck",
+          "source_id": "part:337ba47d81604af60e6e38d0534ff05769fcd91a8edbfb41e21ae09fa80841a2",
+          "render_primitive": 1,
+          "first_index": 179640,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/tray/s12/retainer/aft",
+          "source_id": "part:b678d0c59aef1c2065deeeb9590c6d3a8701363ade5e4f128edca9ad0ea8c253",
+          "render_primitive": 7,
+          "first_index": 35748,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/tray/s12/retainer/fore",
+          "source_id": "part:47af10bf54630c4593143f220d8c9bbabdbafc320751ee95e3ff8e898a9722d9",
+          "render_primitive": 7,
+          "first_index": 36072,
+          "index_count": 324
+        }
+      ]
+    },
+    {
+      "id": "tray/s13",
+      "reference_pose_body_m": {
+        "translation": [
+          -18.5,
+          1.2,
+          3.5
+        ],
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "vertices_space": "absolute body metres; apply current_pose * inverse(reference_pose) once",
+      "motion": {
+        "body_center_reference_m": [
+          -18.5,
+          1.2,
+          3.5
+        ],
+        "path": "rack -> aisle at same X/Y -> exit Y=-1 -> aft station X=-30.5; then lower0.20m while same drone holds Y=-1; hold while drone departs; reverse to store",
+        "translation_m_at_aisle": [
+          0,
+          0,
+          -7
+        ]
+      },
+      "source_parts": [
+        {
+          "name": "pioneer.drone_bay/tray/s13/deck",
+          "source_id": "part:1e747395bf13a22673cb2356bb54ca93735cfc94098e2e1228cf1e0b284798a9",
+          "render_primitive": 1,
+          "first_index": 179964,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/tray/s13/retainer/aft",
+          "source_id": "part:c56f297b9b1c6770a868ce48ea0168d8419ce09f944a32507571a3d98f548d2f",
+          "render_primitive": 7,
+          "first_index": 36396,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/tray/s13/retainer/fore",
+          "source_id": "part:1dae1f3399c41d3629984153f878f667891071b96f3c20c6b345eaf203d5b35a",
+          "render_primitive": 7,
+          "first_index": 36720,
+          "index_count": 324
+        }
+      ]
+    },
+    {
+      "id": "tray/s14",
+      "reference_pose_body_m": {
+        "translation": [
+          -18.5,
+          3.4,
+          3.5
+        ],
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "vertices_space": "absolute body metres; apply current_pose * inverse(reference_pose) once",
+      "motion": {
+        "body_center_reference_m": [
+          -18.5,
+          3.4,
+          3.5
+        ],
+        "path": "rack -> aisle at same X/Y -> exit Y=-1 -> aft station X=-30.5; then lower0.20m while same drone holds Y=-1; hold while drone departs; reverse to store",
+        "translation_m_at_aisle": [
+          0,
+          0,
+          -7
+        ]
+      },
+      "source_parts": [
+        {
+          "name": "pioneer.drone_bay/tray/s14/deck",
+          "source_id": "part:02390bbd9871a79e08d935d24d8ac85db6f6c0896f320d1d5cfdd6621613db77",
+          "render_primitive": 1,
+          "first_index": 180288,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/tray/s14/retainer/aft",
+          "source_id": "part:4a8630bdaa0312c20609d74a308e4c207b0dab8a087b3f0e29dfceaf5d376d6e",
+          "render_primitive": 7,
+          "first_index": 37044,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/tray/s14/retainer/fore",
+          "source_id": "part:68f3682142bfcf0caeb9e823d87bc33bf80ece438e178f911e8be32a1b5b50b3",
+          "render_primitive": 7,
+          "first_index": 37368,
+          "index_count": 324
+        }
+      ]
+    },
+    {
+      "id": "carriage_x",
+      "reference_pose_body_m": {
+        "translation": [
+          -30.5,
+          -1,
+          -3.5
+        ],
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "vertices_space": "absolute body metres; apply current_pose * inverse(reference_pose) once",
+      "motion": {
+        "axes": [
+          "X"
+        ],
+        "reference_center_m": [
+          -30.5,
+          -1,
+          -3.5
+        ],
+        "x_range_m": [
+          -30.5,
+          -18.5
+        ]
+      },
+      "source_parts": [
+        {
+          "name": "pioneer.drone_bay/mechanism/carriage/aft/port/mast",
+          "source_id": "part:7e657d83034f0e88bae406878a3b6aa08f464aabae642bc3e14cebb390ace4b1",
+          "render_primitive": 1,
+          "first_index": 157608,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/mechanism/carriage/aft/port/head",
+          "source_id": "part:2196807639c47a080e97f80b43d4f08df8fa0cca27de170e796341740dfa2bbc",
+          "render_primitive": 7,
+          "first_index": 21816,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/mechanism/carriage/aft/starboard/mast",
+          "source_id": "part:a5cb535d6cb307c17c6aa0c2003233aea3478981f901cefc2440cc39ee333f51",
+          "render_primitive": 1,
+          "first_index": 157932,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/mechanism/carriage/aft/starboard/head",
+          "source_id": "part:6758b2303184ab8eccb5abdb0ca7cea71e29ce8d75a157c159ea278a664c67e3",
+          "render_primitive": 7,
+          "first_index": 22140,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/mechanism/carriage/aft/top_tie",
+          "source_id": "part:a03c8f660005493930f27ad37de758859c916c56b79cddc43b8bee230e09dbd6",
+          "render_primitive": 3,
+          "first_index": 61188,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/mechanism/carriage/fore/port/mast",
+          "source_id": "part:6c72ef060aad78ca72dfb86af47a74c9b70efa942a1e8d1e5075a555be380605",
+          "render_primitive": 1,
+          "first_index": 158256,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/mechanism/carriage/fore/port/head",
+          "source_id": "part:6de4d6b27fed4522b2a4f06bfe1d532a3c8f81c9139dd8b7890c8b606997736c",
+          "render_primitive": 7,
+          "first_index": 22464,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/mechanism/carriage/fore/starboard/mast",
+          "source_id": "part:ff129d5e2a67e59aca135460b7415049960aad6449a3ad554ee3ac6201e87df2",
+          "render_primitive": 1,
+          "first_index": 158580,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/mechanism/carriage/fore/starboard/head",
+          "source_id": "part:4293d6ae8c6563e555bf76101f8852902728122523ec457ae5716dec83a989d9",
+          "render_primitive": 7,
+          "first_index": 22788,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/mechanism/carriage/fore/top_tie",
+          "source_id": "part:7a768b870b4fdc3e0681b3111c364f81195d34c03c100ad2d528cfb865ea6196",
+          "render_primitive": 3,
+          "first_index": 61512,
+          "index_count": 324
+        }
+      ]
+    },
+    {
+      "id": "lift_xy",
+      "reference_pose_body_m": {
+        "translation": [
+          -30.5,
+          -1,
+          -3.5
+        ],
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "vertices_space": "absolute body metres; apply current_pose * inverse(reference_pose) once",
+      "motion": {
+        "inherits": "carriage_x",
+        "y_reference_m": -1,
+        "y_range_m": [
+          -5.4,
+          3.4
+        ]
+      },
+      "source_parts": [
+        {
+          "name": "pioneer.drone_bay/mechanism/lift/aft/edge",
+          "source_id": "part:47c7e5449c8a3aa24aead5ffe16f0ae01bd1d3d5af7fcf7daeb07db4d2be00de",
+          "render_primitive": 1,
+          "first_index": 160848,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/mechanism/lift/fore/edge",
+          "source_id": "part:61f72503713c098bb112a071453a7927a497ba0e5318b6b1980de1e12772b466",
+          "render_primitive": 1,
+          "first_index": 161172,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/mechanism/lift/port/tie",
+          "source_id": "part:af02cc9291593303a63a3297a659a81d73592b060b66a7991f1c691d6e984910",
+          "render_primitive": 1,
+          "first_index": 161496,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/mechanism/lift/starboard/tie",
+          "source_id": "part:b0d40c11858044f11a569c653df398731a010dd44f92c926c204bff9c7179a21",
+          "render_primitive": 1,
+          "first_index": 161820,
+          "index_count": 324
+        }
+      ]
+    },
+    {
+      "id": "fork_stage0",
+      "reference_pose_body_m": {
+        "translation": [
+          -30.5,
+          -1,
+          -3.5
+        ],
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "vertices_space": "absolute body metres; apply current_pose * inverse(reference_pose) once",
+      "motion": {
+        "inherits": "lift_xy",
+        "extension_translation_z_m": [
+          0,
+          0.0
+        ],
+        "shared_extension_fraction_range": [
+          0,
+          1
+        ]
+      },
+      "source_parts": [
+        {
+          "name": "pioneer.drone_bay/mechanism/fork/aft/stage0",
+          "source_id": "part:91300404d71055b413ec37fc417305185a5bfb934e2fdf25681b2fe600c446b6",
+          "render_primitive": 1,
+          "first_index": 158904,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/mechanism/fork/fore/stage0",
+          "source_id": "part:1b8b0ebf5f03df7e3e7077efc72a0cbb0db972a046db25a34773ab2f0e927817",
+          "render_primitive": 1,
+          "first_index": 159876,
+          "index_count": 324
+        }
+      ]
+    },
+    {
+      "id": "fork_stage1",
+      "reference_pose_body_m": {
+        "translation": [
+          -30.5,
+          -1,
+          -3.5
+        ],
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "vertices_space": "absolute body metres; apply current_pose * inverse(reference_pose) once",
+      "motion": {
+        "inherits": "lift_xy",
+        "extension_translation_z_m": [
+          0,
+          3.5
+        ],
+        "shared_extension_fraction_range": [
+          0,
+          1
+        ]
+      },
+      "source_parts": [
+        {
+          "name": "pioneer.drone_bay/mechanism/fork/aft/stage1",
+          "source_id": "part:7afebc30497d505f79811c9e90efd8e8fa9edf3ba977cd837a79f92433b82b04",
+          "render_primitive": 1,
+          "first_index": 159228,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/mechanism/fork/fore/stage1",
+          "source_id": "part:ccd71522d7657340bfa6267cd14abddca823f658eb1349c5f0cd1e332c2ef61f",
+          "render_primitive": 1,
+          "first_index": 160200,
+          "index_count": 324
+        }
+      ]
+    },
+    {
+      "id": "fork_stage2",
+      "reference_pose_body_m": {
+        "translation": [
+          -30.5,
+          -1,
+          -3.5
+        ],
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "vertices_space": "absolute body metres; apply current_pose * inverse(reference_pose) once",
+      "motion": {
+        "inherits": "lift_xy",
+        "extension_translation_z_m": [
+          0,
+          7.0
+        ],
+        "shared_extension_fraction_range": [
+          0,
+          1
+        ]
+      },
+      "source_parts": [
+        {
+          "name": "pioneer.drone_bay/mechanism/fork/aft/stage2",
+          "source_id": "part:54ef793a65d09d979b6845834beb8fd1c7e35431a9a40f810e0dda78682484e8",
+          "render_primitive": 1,
+          "first_index": 159552,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/mechanism/fork/fore/stage2",
+          "source_id": "part:3534b900000dd61ec67a5a14f3815b762cdf2490786cac64c4861a228ab45edd",
+          "render_primitive": 1,
+          "first_index": 160524,
+          "index_count": 324
+        }
+      ]
+    },
+    {
+      "id": "door/lower",
+      "reference_pose_body_m": {
+        "translation": [
+          -35.58,
+          -1.81,
+          -3.5
+        ],
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "vertices_space": "absolute body metres; apply current_pose * inverse(reference_pose) once",
+      "motion": {
+        "translation_y_m": [
+          0,
+          -1.7
+        ]
+      },
+      "source_parts": [
+        {
+          "name": "pioneer.drone_bay/door/lower/leaf",
+          "source_id": "part:138971cbdf2c6745c275215bf340ca0027332cc5dabd3dbabd9b6839228fccf0",
+          "render_primitive": 0,
+          "first_index": 52938,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/door/lower/rib",
+          "source_id": "part:c08ccbefaeb45e895d8b70b6e60447b7376c7d9a0c3b91e31390bd8929dcf18b",
+          "render_primitive": 3,
+          "first_index": 59244,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/door/lower/edge_marker",
+          "source_id": "part:1e1fe5135c2ed6e6f58600fa5c9695ba22e030193de11687dae839fd61bfcffd",
+          "render_primitive": 7,
+          "first_index": 21168,
+          "index_count": 324
+        }
+      ]
+    },
+    {
+      "id": "door/upper",
+      "reference_pose_body_m": {
+        "translation": [
+          -35.58,
+          -0.19,
+          -3.5
+        ],
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "vertices_space": "absolute body metres; apply current_pose * inverse(reference_pose) once",
+      "motion": {
+        "translation_y_m": [
+          0,
+          1.7
+        ]
+      },
+      "source_parts": [
+        {
+          "name": "pioneer.drone_bay/door/upper/leaf",
+          "source_id": "part:59f652cdc75721876c04f5d46684a8e052e44f3116412219b5c368eb4bcbad94",
+          "render_primitive": 0,
+          "first_index": 53262,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/door/upper/rib",
+          "source_id": "part:50c58711dba2a68339df73f24ea97705e6b10cdac99cd940833fbb6b430a07df",
+          "render_primitive": 3,
+          "first_index": 59568,
+          "index_count": 324
+        },
+        {
+          "name": "pioneer.drone_bay/door/upper/edge_marker",
+          "source_id": "part:e92e8fba768234c69a476d129828191dd5e5e1ef6ad267a402db00d2358bfe87",
+          "render_primitive": 7,
+          "first_index": 21492,
+          "index_count": 324
+        }
+      ]
+    }
+  ],
+  "slots": [
+    {
+      "id": "s00",
+      "station": 0,
+      "tier": 0,
+      "body_center_m": [
+        -30.5,
+        -5.4,
+        3.5
+      ],
+      "body_forward": [
+        -1,
+        0,
+        0
+      ],
+      "drone_bounds_relative_m": [
+        [
+          -2.5,
+          -0.9,
+          -3
+        ],
+        [
+          2.5,
+          0.9,
+          3
+        ]
+      ],
+      "tray_group": "tray/s00",
+      "reference_tray_body_contact_y": -6.300000000000001,
+      "class_seed": "recon"
+    },
+    {
+      "id": "s01",
+      "station": 0,
+      "tier": 1,
+      "body_center_m": [
+        -30.5,
+        -3.2,
+        3.5
+      ],
+      "body_forward": [
+        -1,
+        0,
+        0
+      ],
+      "drone_bounds_relative_m": [
+        [
+          -2.5,
+          -0.9,
+          -3
+        ],
+        [
+          2.5,
+          0.9,
+          3
+        ]
+      ],
+      "tray_group": "tray/s01",
+      "reference_tray_body_contact_y": -4.1000000000000005,
+      "class_seed": "recon"
+    },
+    {
+      "id": "s02",
+      "station": 0,
+      "tier": 2,
+      "body_center_m": [
+        -30.5,
+        -1.0,
+        3.5
+      ],
+      "body_forward": [
+        -1,
+        0,
+        0
+      ],
+      "drone_bounds_relative_m": [
+        [
+          -2.5,
+          -0.9,
+          -3
+        ],
+        [
+          2.5,
+          0.9,
+          3
+        ]
+      ],
+      "tray_group": "tray/s02",
+      "reference_tray_body_contact_y": -1.9,
+      "class_seed": "recon"
+    },
+    {
+      "id": "s03",
+      "station": 0,
+      "tier": 3,
+      "body_center_m": [
+        -30.5,
+        1.2,
+        3.5
+      ],
+      "body_forward": [
+        -1,
+        0,
+        0
+      ],
+      "drone_bounds_relative_m": [
+        [
+          -2.5,
+          -0.9,
+          -3
+        ],
+        [
+          2.5,
+          0.9,
+          3
+        ]
+      ],
+      "tray_group": "tray/s03",
+      "reference_tray_body_contact_y": 0.29999999999999993,
+      "class_seed": "recon"
+    },
+    {
+      "id": "s04",
+      "station": 0,
+      "tier": 4,
+      "body_center_m": [
+        -30.5,
+        3.4,
+        3.5
+      ],
+      "body_forward": [
+        -1,
+        0,
+        0
+      ],
+      "drone_bounds_relative_m": [
+        [
+          -2.5,
+          -0.9,
+          -3
+        ],
+        [
+          2.5,
+          0.9,
+          3
+        ]
+      ],
+      "tray_group": "tray/s04",
+      "reference_tray_body_contact_y": 2.5,
+      "class_seed": "recon"
+    },
+    {
+      "id": "s05",
+      "station": 1,
+      "tier": 0,
+      "body_center_m": [
+        -24.5,
+        -5.4,
+        3.5
+      ],
+      "body_forward": [
+        -1,
+        0,
+        0
+      ],
+      "drone_bounds_relative_m": [
+        [
+          -2.5,
+          -0.9,
+          -3
+        ],
+        [
+          2.5,
+          0.9,
+          3
+        ]
+      ],
+      "tray_group": "tray/s05",
+      "reference_tray_body_contact_y": -6.300000000000001,
+      "class_seed": "mining"
+    },
+    {
+      "id": "s06",
+      "station": 1,
+      "tier": 1,
+      "body_center_m": [
+        -24.5,
+        -3.2,
+        3.5
+      ],
+      "body_forward": [
+        -1,
+        0,
+        0
+      ],
+      "drone_bounds_relative_m": [
+        [
+          -2.5,
+          -0.9,
+          -3
+        ],
+        [
+          2.5,
+          0.9,
+          3
+        ]
+      ],
+      "tray_group": "tray/s06",
+      "reference_tray_body_contact_y": -4.1000000000000005,
+      "class_seed": "mining"
+    },
+    {
+      "id": "s07",
+      "station": 1,
+      "tier": 2,
+      "body_center_m": [
+        -24.5,
+        -1.0,
+        3.5
+      ],
+      "body_forward": [
+        -1,
+        0,
+        0
+      ],
+      "drone_bounds_relative_m": [
+        [
+          -2.5,
+          -0.9,
+          -3
+        ],
+        [
+          2.5,
+          0.9,
+          3
+        ]
+      ],
+      "tray_group": "tray/s07",
+      "reference_tray_body_contact_y": -1.9,
+      "class_seed": "mining"
+    },
+    {
+      "id": "s08",
+      "station": 1,
+      "tier": 3,
+      "body_center_m": [
+        -24.5,
+        1.2,
+        3.5
+      ],
+      "body_forward": [
+        -1,
+        0,
+        0
+      ],
+      "drone_bounds_relative_m": [
+        [
+          -2.5,
+          -0.9,
+          -3
+        ],
+        [
+          2.5,
+          0.9,
+          3
+        ]
+      ],
+      "tray_group": "tray/s08",
+      "reference_tray_body_contact_y": 0.29999999999999993,
+      "class_seed": "mining"
+    },
+    {
+      "id": "s09",
+      "station": 1,
+      "tier": 4,
+      "body_center_m": [
+        -24.5,
+        3.4,
+        3.5
+      ],
+      "body_forward": [
+        -1,
+        0,
+        0
+      ],
+      "drone_bounds_relative_m": [
+        [
+          -2.5,
+          -0.9,
+          -3
+        ],
+        [
+          2.5,
+          0.9,
+          3
+        ]
+      ],
+      "tray_group": "tray/s09",
+      "reference_tray_body_contact_y": 2.5,
+      "class_seed": "mining"
+    },
+    {
+      "id": "s10",
+      "station": 2,
+      "tier": 0,
+      "body_center_m": [
+        -18.5,
+        -5.4,
+        3.5
+      ],
+      "body_forward": [
+        -1,
+        0,
+        0
+      ],
+      "drone_bounds_relative_m": [
+        [
+          -2.5,
+          -0.9,
+          -3
+        ],
+        [
+          2.5,
+          0.9,
+          3
+        ]
+      ],
+      "tray_group": "tray/s10",
+      "reference_tray_body_contact_y": -6.300000000000001,
+      "class_seed": "attack"
+    },
+    {
+      "id": "s11",
+      "station": 2,
+      "tier": 1,
+      "body_center_m": [
+        -18.5,
+        -3.2,
+        3.5
+      ],
+      "body_forward": [
+        -1,
+        0,
+        0
+      ],
+      "drone_bounds_relative_m": [
+        [
+          -2.5,
+          -0.9,
+          -3
+        ],
+        [
+          2.5,
+          0.9,
+          3
+        ]
+      ],
+      "tray_group": "tray/s11",
+      "reference_tray_body_contact_y": -4.1000000000000005,
+      "class_seed": "attack"
+    },
+    {
+      "id": "s12",
+      "station": 2,
+      "tier": 2,
+      "body_center_m": [
+        -18.5,
+        -1.0,
+        3.5
+      ],
+      "body_forward": [
+        -1,
+        0,
+        0
+      ],
+      "drone_bounds_relative_m": [
+        [
+          -2.5,
+          -0.9,
+          -3
+        ],
+        [
+          2.5,
+          0.9,
+          3
+        ]
+      ],
+      "tray_group": "tray/s12",
+      "reference_tray_body_contact_y": -1.9,
+      "class_seed": "attack"
+    },
+    {
+      "id": "s13",
+      "station": 2,
+      "tier": 3,
+      "body_center_m": [
+        -18.5,
+        1.2,
+        3.5
+      ],
+      "body_forward": [
+        -1,
+        0,
+        0
+      ],
+      "drone_bounds_relative_m": [
+        [
+          -2.5,
+          -0.9,
+          -3
+        ],
+        [
+          2.5,
+          0.9,
+          3
+        ]
+      ],
+      "tray_group": "tray/s13",
+      "reference_tray_body_contact_y": 0.29999999999999993,
+      "class_seed": "attack"
+    },
+    {
+      "id": "s14",
+      "station": 2,
+      "tier": 4,
+      "body_center_m": [
+        -18.5,
+        3.4,
+        3.5
+      ],
+      "body_forward": [
+        -1,
+        0,
+        0
+      ],
+      "drone_bounds_relative_m": [
+        [
+          -2.5,
+          -0.9,
+          -3
+        ],
+        [
+          2.5,
+          0.9,
+          3
+        ]
+      ],
+      "tray_group": "tray/s14",
+      "reference_tray_body_contact_y": 2.5,
+      "class_seed": "attack"
+    }
+  ],
+  "floor_profile_xy_m": [
+    [
+      -35.8,
+      -2.9
+    ],
+    [
+      -34.2,
+      -6.42
+    ],
+    [
+      -33.2,
+      -6.72
+    ],
+    [
+      -15.5,
+      -6.72
+    ]
+  ],
+  "launch_release_body_m": [
+    -30.5,
+    -1,
+    -3.5
+  ],
+  "release_tray_center_m": [
+    -30.5,
+    -1.2,
+    -3.5
+  ],
+  "release_disengage_y_m": -0.2,
+  "release_contract": "Same drone holds Y=-1 while tray/lift/retracted forks lower0.20m; only then translate drone aft. Recovery reverses. Explicit choreography, not force simulation.",
+  "aperture_body_m": [
+    [
+      -36,
+      -2.6,
+      -7.5
+    ],
+    [
+      -35.25,
+      0.6,
+      0.5
+    ]
+  ],
+  "group_translation_contract": {
+    "carriage_x": "[carriage_x_m + 30.5, 0, 0]",
+    "lift_xy": "[carriage_x_m + 30.5, support_y_m + 1, 0]",
+    "fork_stageN": "[carriage_x_m + 30.5, support_y_m + 1, 3.5 * N * fork_extension_fraction]",
+    "tray/sNN": "current_tray_center_body_m - slot.body_center_m; inactive trays identity",
+    "door/upper": "[0, +1.70 * open_fraction, 0]",
+    "door/lower": "[0, -1.70 * open_fraction, 0]"
+  },
+  "phase_interlocks": [
+    "Only one active tray/drone and one throat operation",
+    "Fork must be fully retracted before any carriage X or support Y move",
+    "Fork may extend only at selected stationary station/tier; selected tray remains parked until extension complete",
+    "Extraction: tray Z shift = -7*t; fork extension fraction = 1-t",
+    "Move support Y to -1 before transporting selected tray to aft station X=-30.5",
+    "At exit, same drone holds Y=-1 while selected tray/support lower0.20m to Y=-1.2",
+    "Drone may translate aft only after200mm support disengagement and doors fully open",
+    "Recovery reverses: drone stops above lowered tray then support raises200mm before transport",
+    "Do not close door while drone/body swept volume occupies throat"
+  ],
+  "limits": [
+    "Source geometry and kinematic contract, not authority or physics implementation",
+    "No force/strength/pressure ratings; no crew route",
+    "Stored drone meshes are not baked; draw persistent runtime IDs with unchanged class geometry",
+    "Full parent quaternion/velocity inherited at runtime; roots are ship-body frame, not station-yaw frame"
+  ]
+}

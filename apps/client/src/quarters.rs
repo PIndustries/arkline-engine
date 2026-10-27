@@ -2,7 +2,7 @@
 use super::*;
 use arkline_protocol::{quarters_layout, station_obstacles, StationObstacleKind};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum HangarAction {
     Overview,
     Ship,
@@ -10,6 +10,8 @@ pub enum HangarAction {
     Corporation,
     Ai,
     Sit,
+    BoardShip(String),
+    Engineering(String),
 }
 
 fn box_part(parts: &mut Parts, min: Vec3, max: Vec3, color: Vec3, emission: f32) {
@@ -26,7 +28,6 @@ pub(super) fn room_parts(class: ShipClass, now: u64) -> Vec<ModelPart> {
     let max = Vec3::from_array(room.max.map(|v| v as f32));
     let mut p = Parts(Vec::new());
     let charcoal = Vec3::new(0.035, 0.055, 0.06);
-    let green = Vec3::new(0.015, 0.35, 0.12);
     box_part(
         &mut p,
         min - Vec3::Y * 0.06,
@@ -51,93 +52,7 @@ pub(super) fn room_parts(class: ShipClass, now: u64) -> Vec<ModelPart> {
         );
     }
     for obstacle in station_obstacles(class) {
-        let a = Vec3::from_array(obstacle.min.map(|v| v as f32));
-        let b = Vec3::from_array(obstacle.max.map(|v| v as f32));
-        let c = (a + b) * 0.5;
-        match obstacle.kind {
-            StationObstacleKind::Wall => {
-                box_part(&mut p, a, b, charcoal, 0.0);
-                box_part(
-                    &mut p,
-                    Vec3::new(a.x, 2.9, a.z),
-                    Vec3::new(b.x, 2.95, b.z),
-                    green,
-                    0.5,
-                );
-            }
-            StationObstacleKind::Sofa | StationObstacleKind::Bed => {
-                box_part(&mut p, a, b, Vec3::new(0.04, 0.085, 0.073), 0.0);
-                box_part(
-                    &mut p,
-                    Vec3::new(a.x + 0.12, b.y, a.z + 0.12),
-                    Vec3::new(b.x - 0.12, b.y + 0.09, b.z - 0.12),
-                    Vec3::new(0.075, 0.115, 0.105),
-                    0.0,
-                );
-                // Padded head/backrest keeps the silhouette furnished, not a crate.
-                box_part(
-                    &mut p,
-                    Vec3::new(a.x + 0.1, b.y, b.z - 0.3),
-                    Vec3::new(b.x - 0.1, b.y + 0.35, b.z - 0.06),
-                    charcoal,
-                    0.0,
-                );
-            }
-            StationObstacleKind::Desk | StationObstacleKind::Table => {
-                box_part(
-                    &mut p,
-                    Vec3::new(a.x, b.y - 0.10, a.z),
-                    b,
-                    Vec3::new(0.10, 0.14, 0.14),
-                    0.0,
-                );
-                for x in [a.x + 0.12, b.x - 0.12] {
-                    for z in [a.z + 0.12, b.z - 0.12] {
-                        box_part(
-                            &mut p,
-                            Vec3::new(x - 0.07, a.y, z - 0.07),
-                            Vec3::new(x + 0.07, b.y, z + 0.07),
-                            charcoal,
-                            0.0,
-                        );
-                    }
-                }
-                if obstacle.kind == StationObstacleKind::Table {
-                    let hologram = Mat4::from_scale_rotation_translation(
-                        Vec3::splat(0.85 / class.spec().length_m as f32 * 100.0),
-                        Quat::from_rotation_y(now as f32 * 0.00015),
-                        Vec3::new(c.x, b.y + 0.65, c.z),
-                    );
-                    p.0.extend(
-                        ship_parts(class)
-                            .into_iter()
-                            .map(|(mesh, m, _, _)| (mesh, hologram * m, green, 0.75)),
-                    );
-                    p.draw(
-                        1,
-                        transform(
-                            Vec3::new(c.x, b.y + 0.02, c.z),
-                            Vec3::new(0.65, 0.1, 0.65),
-                            Quat::IDENTITY,
-                        ),
-                        green,
-                        0.5,
-                    );
-                }
-            }
-            StationObstacleKind::Storage => {
-                box_part(&mut p, a, b, charcoal, 0.0);
-                for y in [0.5, 1.1, 1.7] {
-                    box_part(
-                        &mut p,
-                        Vec3::new(a.x + 0.12, y, a.z - 0.012),
-                        Vec3::new(b.x - 0.12, y + 0.025, a.z),
-                        green,
-                        0.4,
-                    );
-                }
-            }
-        }
+        p.0.extend(obstacle_parts(class, now, obstacle));
     }
     for x in [-8.0, -4.0, 0.0, 4.0, 8.0] {
         box_part(
@@ -174,6 +89,104 @@ pub(super) fn room_parts(class: ShipClass, now: u64) -> Vec<ModelPart> {
             charcoal,
             0.0,
         );
+    }
+    p.0
+}
+/// The same furnishing recipe is used by quarters and model inspection.
+pub(super) fn obstacle_parts(
+    class: ShipClass,
+    now: u64,
+    obstacle: arkline_protocol::StationObstacle,
+) -> Vec<ModelPart> {
+    let mut p = Parts(Vec::new());
+    let charcoal = Vec3::new(0.035, 0.055, 0.06);
+    let green = Vec3::new(0.015, 0.35, 0.12);
+    let a = Vec3::from_array(obstacle.min.map(|v| v as f32));
+    let b = Vec3::from_array(obstacle.max.map(|v| v as f32));
+    let c = (a + b) * 0.5;
+    match obstacle.kind {
+        StationObstacleKind::Wall => {
+            box_part(&mut p, a, b, charcoal, 0.0);
+            box_part(
+                &mut p,
+                Vec3::new(a.x, 2.9, a.z),
+                Vec3::new(b.x, 2.95, b.z),
+                green,
+                0.5,
+            );
+        }
+        StationObstacleKind::Sofa | StationObstacleKind::Bed => {
+            box_part(&mut p, a, b, Vec3::new(0.04, 0.085, 0.073), 0.0);
+            box_part(
+                &mut p,
+                Vec3::new(a.x + 0.12, b.y, a.z + 0.12),
+                Vec3::new(b.x - 0.12, b.y + 0.09, b.z - 0.12),
+                Vec3::new(0.075, 0.115, 0.105),
+                0.0,
+            );
+            // Padded head/backrest keeps the silhouette furnished, not a crate.
+            box_part(
+                &mut p,
+                Vec3::new(a.x + 0.1, b.y, b.z - 0.3),
+                Vec3::new(b.x - 0.1, b.y + 0.35, b.z - 0.06),
+                charcoal,
+                0.0,
+            );
+        }
+        StationObstacleKind::Desk | StationObstacleKind::Table => {
+            box_part(
+                &mut p,
+                Vec3::new(a.x, b.y - 0.10, a.z),
+                b,
+                Vec3::new(0.10, 0.14, 0.14),
+                0.0,
+            );
+            for x in [a.x + 0.12, b.x - 0.12] {
+                for z in [a.z + 0.12, b.z - 0.12] {
+                    box_part(
+                        &mut p,
+                        Vec3::new(x - 0.07, a.y, z - 0.07),
+                        Vec3::new(x + 0.07, b.y, z + 0.07),
+                        charcoal,
+                        0.0,
+                    );
+                }
+            }
+            if obstacle.kind == StationObstacleKind::Table {
+                let hologram = Mat4::from_scale_rotation_translation(
+                    Vec3::splat(0.85 / class.spec().length_m as f32 * 100.0),
+                    Quat::from_rotation_y(now as f32 * 0.00015),
+                    Vec3::new(c.x, b.y + 0.65, c.z),
+                );
+                p.0.extend(
+                    ship_parts(class)
+                        .into_iter()
+                        .map(|(mesh, m, _, _)| (mesh, hologram * m, green, 0.75)),
+                );
+                p.draw(
+                    1,
+                    transform(
+                        Vec3::new(c.x, b.y + 0.02, c.z),
+                        Vec3::new(0.65, 0.1, 0.65),
+                        Quat::IDENTITY,
+                    ),
+                    green,
+                    0.5,
+                );
+            }
+        }
+        StationObstacleKind::Storage => {
+            box_part(&mut p, a, b, charcoal, 0.0);
+            for y in [0.5, 1.1, 1.7] {
+                box_part(
+                    &mut p,
+                    Vec3::new(a.x + 0.12, y, a.z - 0.012),
+                    Vec3::new(b.x - 0.12, y + 0.025, a.z),
+                    green,
+                    0.4,
+                );
+            }
+        }
     }
     p.0
 }
@@ -262,14 +275,60 @@ pub(super) fn terminals(
     unobstructed: bool,
     live: bool,
 ) -> Option<HangarAction> {
+    terminals_impl(
+        ui,
+        rect,
+        vp,
+        eye,
+        pilot,
+        pilot.ship_class,
+        unobstructed,
+        live,
+    )
+}
+#[allow(clippy::too_many_arguments)]
+pub(super) fn fleet_terminals(
+    ui: &mut egui::Ui,
+    rect: egui::Rect,
+    vp: Mat4,
+    eye: Vec3,
+    pilot: &PilotView,
+    unobstructed: bool,
+    live: bool,
+) -> Option<HangarAction> {
+    let offset = fleet_hangar::quarters_offset();
+    let mut local = pilot.clone();
+    if let Some(a) = &mut local.station_avatar {
+        for (axis, value) in offset.to_array().iter().enumerate() {
+            a.position[axis] -= *value as f64;
+        }
+    }
+    terminals_impl(
+        ui,
+        rect,
+        vp * Mat4::from_translation(offset),
+        eye - offset,
+        &local,
+        ShipClass::Pioneer,
+        unobstructed,
+        live,
+    )
+}
+#[allow(clippy::too_many_arguments)]
+fn terminals_impl(
+    ui: &mut egui::Ui,
+    rect: egui::Rect,
+    vp: Mat4,
+    eye: Vec3,
+    pilot: &PilotView,
+    room_class: ShipClass,
+    unobstructed: bool,
+    live: bool,
+) -> Option<HangarAction> {
     let avatar = pilot.station_avatar.as_ref()?;
     let feet = Vec3::from_array(avatar.position.map(|v| v as f32));
     let mut result = None;
-    let seat = Vec3::from_array(
-        quarters_layout(pilot.ship_class)
-            .seat_point
-            .map(|v| v as f32),
-    );
+    let seat = Vec3::from_array(quarters_layout(room_class).seat_point.map(|v| v as f32));
     if !avatar.seated && feet.distance(seat) < 2.0 {
         if let Some(at) = project_point(vp, rect, seat + Vec3::Y * 0.9) {
             let button = egui::Rect::from_center_size(at, egui::vec2(100.0, 28.0));
@@ -281,12 +340,12 @@ pub(super) fn terminals(
     }
 
     for (i, (action, label)) in actions().into_iter().enumerate() {
-        let world = terminal_position(pilot.ship_class, i);
+        let world = terminal_position(room_class, i);
         let near = feet.distance(world) < 3.0;
         if eye.z > world.z {
             continue;
         }
-        let blocked = station_obstacles(pilot.ship_class).into_iter().any(|o| {
+        let blocked = station_obstacles(room_class).into_iter().any(|o| {
             segment_box(
                 eye,
                 world,
@@ -347,7 +406,9 @@ pub(super) fn terminals(
             HangarAction::Overview => format!("System {}", pilot.system_id),
             HangarAction::Ai => "Ask your ship computer".into(),
             HangarAction::Corporation => "Open corporation services".into(),
-            HangarAction::Sit => unreachable!(),
+            HangarAction::Sit | HangarAction::BoardShip(_) | HangarAction::Engineering(_) => {
+                unreachable!()
+            }
         };
         painter.rect_filled(screen, 2.0, egui::Color32::from_rgb(5, 23, 18));
         painter.text(
@@ -375,7 +436,7 @@ pub(super) fn terminals(
             result = Some(action);
         }
     }
-    let room = quarters_layout(pilot.ship_class);
+    let room = quarters_layout(room_class);
     let (text, z) = if eye.z < room.min[2] as f32 {
         ("CAPTAIN'S QUARTERS", room.min[2] as f32 - 0.05)
     } else {

@@ -1,0 +1,1129 @@
+{
+  "schema": "arkline.pioneer-ore-receiver-export/v1",
+  "receiver_revision": 1,
+  "base_registration": 12,
+  "base_glb_sha256": "7970f096a6aac9d95b6250b75cd19ea2e54046c9deb77f3592b82efa879112fd",
+  "source": {
+    "sha256": "3b4a1ba43c0904063574118d7a42e9c246b58aab19eb0a6c015590a0086f84c1",
+    "size_bytes": 119316
+  },
+  "output": {
+    "sha256": "7101f1cfaf7ca4aa6bcae7ed8de966eb97dc47d00c087c644efc242be0f171ff",
+    "bytes": 383028,
+    "triangles": 4488,
+    "primitives": 5,
+    "body_bounds_m": [
+      [
+        -36.58000183105469,
+        -1.7999999523162842,
+        4.260000228881836
+      ],
+      [
+        -35.97999954223633,
+        -0.20000000298023224,
+        5.739999771118164
+      ]
+    ]
+  },
+  "source_parts": [
+    {
+      "name": "pioneer.ore_receiver/anchor/port",
+      "source_id": "part:173de752734ebdf37c0457b4bbbc14057576dd48f0d8d9506fbd955666e2e6b5",
+      "render_primitive": 0,
+      "first_index": 0,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Emerald structural frames",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.099998474121094,
+          -1.7999999523162842,
+          4.28000020980835
+        ],
+        [
+          -35.97999954223633,
+          -0.20000000298023224,
+          4.380000114440918
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/anchor/starboard",
+      "source_id": "part:4370f41c0d80b16a1bf8f0eeabfa69731779ddf2a61adb277faa005353d67fab",
+      "render_primitive": 0,
+      "first_index": 324,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Emerald structural frames",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.099998474121094,
+          -1.7999999523162842,
+          5.619999885559082
+        ],
+        [
+          -35.97999954223633,
+          -0.20000000298023224,
+          5.71999979019165
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/gusset/port",
+      "source_id": "part:667b184ac4a5652a6be4018897cfc852d749ecea086a289cf4947b00fbc2b8f7",
+      "render_primitive": 0,
+      "first_index": 648,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Emerald structural frames",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.439998626708984,
+          -1.600000023841858,
+          4.28000020980835
+        ],
+        [
+          -36.08000183105469,
+          -0.4000000059604645,
+          4.380000114440918
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/gusset/starboard",
+      "source_id": "part:b1192af7dfc38d9f2594c2a3ed9b1757e132cbd558fa16ef8c8760b13a60846e",
+      "render_primitive": 0,
+      "first_index": 972,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Emerald structural frames",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.439998626708984,
+          -1.600000023841858,
+          5.619999885559082
+        ],
+        [
+          -36.08000183105469,
+          -0.4000000059604645,
+          5.71999979019165
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/cargo_identifier",
+      "source_id": "part:d0ba294f04b73076135beeb5a0d5f342b19435fecb3d49b2c7609f3c8163be59",
+      "render_primitive": 1,
+      "first_index": 0,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Hull identification ivory",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.1150016784668,
+          -0.3700000047683716,
+          4.71999979019165
+        ],
+        [
+          -36.099998474121094,
+          -0.3199999928474426,
+          5.28000020980835
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/head_seal/bottom",
+      "source_id": "part:8b15b215dc42e02e8b3c47b89d5ea0b75f7a792f2c58dd0818c84e1a75acc1f9",
+      "render_primitive": 2,
+      "first_index": 0,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Recessed carbon",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.51499938964844,
+          -1.225000023841858,
+          4.775000095367432
+        ],
+        [
+          -36.505001068115234,
+          -1.218000054359436,
+          5.224999904632568
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/head_seal/port",
+      "source_id": "part:1b2d7452f1aed507c7e6f955d8512c0a552fcc83efd5db6a4948c33e65f5ccb9",
+      "render_primitive": 2,
+      "first_index": 324,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Recessed carbon",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.51499938964844,
+          -1.218000054359436,
+          4.775000095367432
+        ],
+        [
+          -36.505001068115234,
+          -0.7820000052452087,
+          4.7820000648498535
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/head_seal/starboard",
+      "source_id": "part:81d649f65a54365d87bfbe74f89c471a19b4b5c4941dc1462887e3506c1d9ccc",
+      "render_primitive": 2,
+      "first_index": 648,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Recessed carbon",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.51499938964844,
+          -1.218000054359436,
+          5.2179999351501465
+        ],
+        [
+          -36.505001068115234,
+          -0.7820000052452087,
+          5.224999904632568
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/head_seal/top",
+      "source_id": "part:fad5ab2d173875ec57c56aba395d91afdd55605411e6f9c98be70ce790594d51",
+      "render_primitive": 2,
+      "first_index": 972,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Recessed carbon",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.51499938964844,
+          -0.7820000052452087,
+          4.775000095367432
+        ],
+        [
+          -36.505001068115234,
+          -0.7749999761581421,
+          5.224999904632568
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/mount_gasket/bottom",
+      "source_id": "part:ab437938945ce5db799a2288ecddb2a81110e07e43803ea3bdca78d8f8242d00",
+      "render_primitive": 2,
+      "first_index": 1296,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Recessed carbon",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.09000015258789,
+          -1.6100000143051147,
+          4.389999866485596
+        ],
+        [
+          -36.07500076293945,
+          -1.5700000524520874,
+          5.610000133514404
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/mount_gasket/port",
+      "source_id": "part:57ef7dbfb5208b6d86444428e9244a6ed73665ec0939672570f5046f2cb821db",
+      "render_primitive": 2,
+      "first_index": 1620,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Recessed carbon",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.09000015258789,
+          -1.5700000524520874,
+          4.389999866485596
+        ],
+        [
+          -36.07500076293945,
+          -0.4300000071525574,
+          4.429999828338623
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/mount_gasket/starboard",
+      "source_id": "part:9adc55e1308b08239c144a3ccf1d20f15088987a7c3aacad659f0d565c95ed57",
+      "render_primitive": 2,
+      "first_index": 1944,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Recessed carbon",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.09000015258789,
+          -1.5700000524520874,
+          5.570000171661377
+        ],
+        [
+          -36.07500076293945,
+          -0.4300000071525574,
+          5.610000133514404
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/mount_gasket/top",
+      "source_id": "part:4d60a0ec0848ee58215af89a4055b44128d37a68a6d0c8691146e4150c8eaabc",
+      "render_primitive": 2,
+      "first_index": 2268,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Recessed carbon",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.09000015258789,
+          -0.4300000071525574,
+          4.389999866485596
+        ],
+        [
+          -36.07500076293945,
+          -0.38999998569488525,
+          5.610000133514404
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/locking_shoe/port",
+      "source_id": "part:c8191d5604ea1e348c029a2e1cc6a7aca792ee41a060204533ff812548292f38",
+      "render_primitive": 3,
+      "first_index": 0,
+      "index_count": 180,
+      "retained_triangles": 60,
+      "material": "Safety amber",
+      "group": "latch/port",
+      "bounds_body_m": [
+        [
+          -36.560001373291016,
+          -1.0800000429153442,
+          4.78000020980835
+        ],
+        [
+          -36.52000045776367,
+          -0.9200000166893005,
+          4.880000114440918
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/locking_shoe/starboard",
+      "source_id": "part:639fd772f48d85fc9799ba6b3768563027390fe290eb38d56b803b22cde6b43a",
+      "render_primitive": 3,
+      "first_index": 180,
+      "index_count": 180,
+      "retained_triangles": 60,
+      "material": "Safety amber",
+      "group": "latch/starboard",
+      "bounds_body_m": [
+        [
+          -36.560001373291016,
+          -1.0800000429153442,
+          5.119999885559082
+        ],
+        [
+          -36.52000045776367,
+          -0.9200000166893005,
+          5.21999979019165
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/service_band/-0.45",
+      "source_id": "part:4082f2d23065d4f018f018317b497f9cbea53f4dd9825ff7fe4c6d8b41c7ac1b",
+      "render_primitive": 3,
+      "first_index": 360,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Safety amber",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.10499954223633,
+          -0.44999998807907104,
+          4.579999923706055
+        ],
+        [
+          -36.09000015258789,
+          -0.42500001192092896,
+          5.420000076293945
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/service_band/-1.57",
+      "source_id": "part:d9e04fbd8277c37892a367a5ea4953afea96347e7ecc0be4fe94326de64b50f0",
+      "render_primitive": 3,
+      "first_index": 684,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Safety amber",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.10499954223633,
+          -1.5700000524520874,
+          4.579999923706055
+        ],
+        [
+          -36.09000015258789,
+          -1.5449999570846558,
+          5.420000076293945
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/coupling_head/bottom",
+      "source_id": "part:60bc4a61e32edf8338420f2e1be5fd19dbfec4c329352e00d5b199446d963bb0",
+      "render_primitive": 4,
+      "first_index": 0,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Titanium machinery",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.58000183105469,
+          -1.2200000286102295,
+          4.78000020980835
+        ],
+        [
+          -36.5,
+          -1.1050000190734863,
+          5.21999979019165
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/coupling_head/port/back",
+      "source_id": "part:28c6e2a0802ac44cfeecb3dc894e09d2d960756a7b123d8576fe52c7b77c3693",
+      "render_primitive": 4,
+      "first_index": 324,
+      "index_count": 180,
+      "retained_triangles": 60,
+      "material": "Titanium machinery",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.52000045776367,
+          -1.1050000190734863,
+          4.78000020980835
+        ],
+        [
+          -36.5,
+          -0.8949999809265137,
+          4.894999980926514
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/coupling_head/port/front",
+      "source_id": "part:70912482dbd4bd3c8de8d16dfad0e08914f05c3cbad5bb9cea23ebcde5471194",
+      "render_primitive": 4,
+      "first_index": 504,
+      "index_count": 180,
+      "retained_triangles": 60,
+      "material": "Titanium machinery",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.58000183105469,
+          -1.1050000190734863,
+          4.78000020980835
+        ],
+        [
+          -36.560001373291016,
+          -0.8949999809265137,
+          4.894999980926514
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/coupling_head/port/lower",
+      "source_id": "part:0da53c79418cdf08f3bd49738014e240d9c85b3eff8dd67338d188a22a96df40",
+      "render_primitive": 4,
+      "first_index": 684,
+      "index_count": 180,
+      "retained_triangles": 60,
+      "material": "Titanium machinery",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.560001373291016,
+          -1.1050000190734863,
+          4.78000020980835
+        ],
+        [
+          -36.52000045776367,
+          -1.0800000429153442,
+          4.894999980926514
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/coupling_head/port/upper",
+      "source_id": "part:359b03eb0dd81726f3b960aed52518a3932e4f599856cd811c715dd529dd0a5f",
+      "render_primitive": 4,
+      "first_index": 864,
+      "index_count": 180,
+      "retained_triangles": 60,
+      "material": "Titanium machinery",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.560001373291016,
+          -0.9200000166893005,
+          4.78000020980835
+        ],
+        [
+          -36.52000045776367,
+          -0.8949999809265137,
+          4.894999980926514
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/coupling_head/starboard/back",
+      "source_id": "part:cc06be5bec0d77718362a8fce3f91f0937521794fc8dc0eac12680fd74b93aa3",
+      "render_primitive": 4,
+      "first_index": 1044,
+      "index_count": 180,
+      "retained_triangles": 60,
+      "material": "Titanium machinery",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.52000045776367,
+          -1.1050000190734863,
+          5.105000019073486
+        ],
+        [
+          -36.5,
+          -0.8949999809265137,
+          5.21999979019165
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/coupling_head/starboard/front",
+      "source_id": "part:d3d7c1b94bb525a7b8ce4ff96eac2f3cbcd34479b1d26a91cc71879b9d3dc8c6",
+      "render_primitive": 4,
+      "first_index": 1224,
+      "index_count": 180,
+      "retained_triangles": 60,
+      "material": "Titanium machinery",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.58000183105469,
+          -1.1050000190734863,
+          5.105000019073486
+        ],
+        [
+          -36.560001373291016,
+          -0.8949999809265137,
+          5.21999979019165
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/coupling_head/starboard/lower",
+      "source_id": "part:c5e396bf96cac86d4029ec8f055b2064020fa928586385e7b75fc5323d509f41",
+      "render_primitive": 4,
+      "first_index": 1404,
+      "index_count": 180,
+      "retained_triangles": 60,
+      "material": "Titanium machinery",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.560001373291016,
+          -1.1050000190734863,
+          5.105000019073486
+        ],
+        [
+          -36.52000045776367,
+          -1.0800000429153442,
+          5.21999979019165
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/coupling_head/starboard/upper",
+      "source_id": "part:7fc82881772027e202f6715a07d423b79837620909caf84b30d261f76c5148a9",
+      "render_primitive": 4,
+      "first_index": 1584,
+      "index_count": 180,
+      "retained_triangles": 60,
+      "material": "Titanium machinery",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.560001373291016,
+          -0.9200000166893005,
+          5.105000019073486
+        ],
+        [
+          -36.52000045776367,
+          -0.8949999809265137,
+          5.21999979019165
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/coupling_head/top",
+      "source_id": "part:7a9a4305da4f4b24f862dcd7814c3d935c65647b5d2637fcd0df66b2e66a1fb4",
+      "render_primitive": 4,
+      "first_index": 1764,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Titanium machinery",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.58000183105469,
+          -0.8949999809265137,
+          4.78000020980835
+        ],
+        [
+          -36.5,
+          -0.7799999713897705,
+          5.21999979019165
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/fixed_collar/bottom",
+      "source_id": "part:dbaacf56b20b45805c1261847b401c1a23c1135cc0671c263272a97e1c7a78a8",
+      "render_primitive": 4,
+      "first_index": 2088,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Titanium machinery",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.5,
+          -1.2999999523162842,
+          4.699999809265137
+        ],
+        [
+          -36.08000183105469,
+          -1.2549999952316284,
+          5.300000190734863
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/fixed_collar/port",
+      "source_id": "part:ba7636f691beede001f6d6c13cb170937cf0ae6f911ccf9b2580da17d6bfdda2",
+      "render_primitive": 4,
+      "first_index": 2412,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Titanium machinery",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.5,
+          -1.2549999952316284,
+          4.699999809265137
+        ],
+        [
+          -36.08000183105469,
+          -0.7450000047683716,
+          4.744999885559082
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/fixed_collar/starboard",
+      "source_id": "part:ee89bb67c31cabb34d01249786c527c22fabac3a5d2e3966cfc7bc991755529f",
+      "render_primitive": 4,
+      "first_index": 2736,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Titanium machinery",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.5,
+          -1.2549999952316284,
+          5.255000114440918
+        ],
+        [
+          -36.08000183105469,
+          -0.7450000047683716,
+          5.300000190734863
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/fixed_collar/top",
+      "source_id": "part:0e494ab39afff2060d28da85b669e359a2562bc0904af354515c3be10ab1a279",
+      "render_primitive": 4,
+      "first_index": 3060,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Titanium machinery",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.5,
+          -0.7450000047683716,
+          4.699999809265137
+        ],
+        [
+          -36.08000183105469,
+          -0.699999988079071,
+          5.300000190734863
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/sealed_feedthrough_plate",
+      "source_id": "part:60f2c59dba373a97306c854d61e6c16764b84dce9b9012de672b30502715ae8b",
+      "render_primitive": 4,
+      "first_index": 3384,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Titanium machinery",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.08000183105469,
+          -1.649999976158142,
+          4.349999904632568
+        ],
+        [
+          -35.97999954223633,
+          -0.3499999940395355,
+          5.650000095367432
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/shoe/port",
+      "source_id": "part:c16ce12bdcd2bdc281f85707101e127a01e95a5c21b22efe8a5d92e3595facae",
+      "render_primitive": 4,
+      "first_index": 3708,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Titanium machinery",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.459999084472656,
+          -1.6399999856948853,
+          4.260000228881836
+        ],
+        [
+          -36.400001525878906,
+          -0.36000001430511475,
+          4.400000095367432
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/shoe/starboard",
+      "source_id": "part:c511b1e02a679f1d2e20a8695fca3b97ee3b7d96dce5e50333a0e2c38ae651bd",
+      "render_primitive": 4,
+      "first_index": 4032,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Titanium machinery",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.459999084472656,
+          -1.6399999856948853,
+          5.599999904632568
+        ],
+        [
+          -36.400001525878906,
+          -0.36000001430511475,
+          5.739999771118164
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/sleeve1/bottom",
+      "source_id": "part:8348d1c0ff03346ecbbb88a2b4f46c2ec84fe16bd5a68e7cc127deb6a92b1c4d",
+      "render_primitive": 4,
+      "first_index": 4356,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Titanium machinery",
+      "group": "stage/1",
+      "bounds_body_m": [
+        [
+          -36.5,
+          -1.25,
+          4.75
+        ],
+        [
+          -36.099998474121094,
+          -1.2050000429153442,
+          5.25
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/sleeve1/port",
+      "source_id": "part:e37a86b11f71fa587b0e05edaf00f6054e9c72d33c59c5b9ede31db0f2f6e369",
+      "render_primitive": 4,
+      "first_index": 4680,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Titanium machinery",
+      "group": "stage/1",
+      "bounds_body_m": [
+        [
+          -36.5,
+          -1.2050000429153442,
+          4.75
+        ],
+        [
+          -36.099998474121094,
+          -0.7950000166893005,
+          4.795000076293945
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/sleeve1/starboard",
+      "source_id": "part:4edc9940bf3e7fd33830d951e83d1319b5691e6cb87a931497523db6378f3289",
+      "render_primitive": 4,
+      "first_index": 5004,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Titanium machinery",
+      "group": "stage/1",
+      "bounds_body_m": [
+        [
+          -36.5,
+          -1.2050000429153442,
+          5.204999923706055
+        ],
+        [
+          -36.099998474121094,
+          -0.7950000166893005,
+          5.25
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/sleeve1/top",
+      "source_id": "part:5f6aa7e16e865630bdb6422b5ddca7f8d46f7c0c118112160177dd5a7754cd6c",
+      "render_primitive": 4,
+      "first_index": 5328,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Titanium machinery",
+      "group": "stage/1",
+      "bounds_body_m": [
+        [
+          -36.5,
+          -0.7950000166893005,
+          4.75
+        ],
+        [
+          -36.099998474121094,
+          -0.75,
+          5.25
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/sleeve2/bottom",
+      "source_id": "part:4d0d1e8ffa0984a838d4c6a20f17fdeea3d2689687af6ac26b047a8a9fd8eded",
+      "render_primitive": 4,
+      "first_index": 5652,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Titanium machinery",
+      "group": "stage/2",
+      "bounds_body_m": [
+        [
+          -36.5,
+          -1.2000000476837158,
+          4.800000190734863
+        ],
+        [
+          -36.099998474121094,
+          -1.1549999713897705,
+          5.199999809265137
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/sleeve2/port",
+      "source_id": "part:1cfb3ae7e8412af932a8521f8823a9ebaab17b0f1abaa5f02cdd097bfbd05e46",
+      "render_primitive": 4,
+      "first_index": 5976,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Titanium machinery",
+      "group": "stage/2",
+      "bounds_body_m": [
+        [
+          -36.5,
+          -1.1549999713897705,
+          4.800000190734863
+        ],
+        [
+          -36.099998474121094,
+          -0.8450000286102295,
+          4.84499979019165
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/sleeve2/starboard",
+      "source_id": "part:5bccbf7216eb30afb009dc25a8f89c799a4356590f6b513b5863b552fc16f6e0",
+      "render_primitive": 4,
+      "first_index": 6300,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Titanium machinery",
+      "group": "stage/2",
+      "bounds_body_m": [
+        [
+          -36.5,
+          -1.1549999713897705,
+          5.15500020980835
+        ],
+        [
+          -36.099998474121094,
+          -0.8450000286102295,
+          5.199999809265137
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/sleeve2/top",
+      "source_id": "part:9381c695d11ae514e0eff50f7395266a42b487abf394409b8235f821642237e4",
+      "render_primitive": 4,
+      "first_index": 6624,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Titanium machinery",
+      "group": "stage/2",
+      "bounds_body_m": [
+        [
+          -36.5,
+          -0.8450000286102295,
+          4.800000190734863
+        ],
+        [
+          -36.099998474121094,
+          -0.800000011920929,
+          5.199999809265137
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/sleeve3/bottom",
+      "source_id": "part:4b1b2707da3a028e9810510b5719477a19265deac07fa053be57d39eeedaeee3",
+      "render_primitive": 4,
+      "first_index": 6948,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Titanium machinery",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.5,
+          -1.149999976158142,
+          4.849999904632568
+        ],
+        [
+          -36.099998474121094,
+          -1.1050000190734863,
+          5.150000095367432
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/sleeve3/port",
+      "source_id": "part:14cffc3c7be49ea9e3a8cf49748e44a84afef41b3410174d6afae8fa5cf0cfdf",
+      "render_primitive": 4,
+      "first_index": 7272,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Titanium machinery",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.5,
+          -1.1050000190734863,
+          4.849999904632568
+        ],
+        [
+          -36.099998474121094,
+          -0.8949999809265137,
+          4.894999980926514
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/sleeve3/starboard",
+      "source_id": "part:099f8e09599f0be69adeccca73584231aee639dd783bd35bb88c9b37e3089f13",
+      "render_primitive": 4,
+      "first_index": 7596,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Titanium machinery",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.5,
+          -1.1050000190734863,
+          5.105000019073486
+        ],
+        [
+          -36.099998474121094,
+          -0.8949999809265137,
+          5.150000095367432
+        ]
+      ]
+    },
+    {
+      "name": "pioneer.ore_receiver/sleeve3/top",
+      "source_id": "part:4d02ee318d8f4542fa57cd110968c787ed9bfaec6eb63405c188534e6f6c8eec",
+      "render_primitive": 4,
+      "first_index": 7920,
+      "index_count": 324,
+      "retained_triangles": 108,
+      "material": "Titanium machinery",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.5,
+          -0.8949999809265137,
+          4.849999904632568
+        ],
+        [
+          -36.099998474121094,
+          -0.8500000238418579,
+          5.150000095367432
+        ]
+      ]
+    }
+  ],
+  "degenerate_policy": "drop float32 cross-squared <=1e-20; record every discarded triangle count",
+  "dropped_triangles_by_part": {
+    "pioneer.ore_receiver/coupling_head/port/back": 48,
+    "pioneer.ore_receiver/coupling_head/port/front": 48,
+    "pioneer.ore_receiver/coupling_head/port/lower": 48,
+    "pioneer.ore_receiver/coupling_head/port/upper": 48,
+    "pioneer.ore_receiver/coupling_head/starboard/back": 48,
+    "pioneer.ore_receiver/coupling_head/starboard/front": 48,
+    "pioneer.ore_receiver/coupling_head/starboard/lower": 48,
+    "pioneer.ore_receiver/coupling_head/starboard/upper": 48,
+    "pioneer.ore_receiver/locking_shoe/port": 48,
+    "pioneer.ore_receiver/locking_shoe/starboard": 48
+  },
+  "mechanism_reference_poses": {
+    "stage/1": {
+      "position_m": [
+        -36.5,
+        -1,
+        5
+      ],
+      "orientation_xyzw": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    "stage/2": {
+      "position_m": [
+        -36.5,
+        -1,
+        5
+      ],
+      "orientation_xyzw": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    "stage/3": {
+      "position_m": [
+        -36.5,
+        -1,
+        5
+      ],
+      "orientation_xyzw": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    "latch/port": {
+      "position_m": [
+        -36.5,
+        -1,
+        5
+      ],
+      "orientation_xyzw": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    "latch/starboard": {
+      "position_m": [
+        -36.5,
+        -1,
+        5
+      ],
+      "orientation_xyzw": [
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  },
+  "coordinates": "body metres, identity node; transform dynamic ranges current_root * inverse(reference_root) once",
+  "exporter": {
+    "script_sha256": "ed5946cb93c214d01a475972e0b0f0eb071ed807325eee1d346c31ceb9da6791",
+    "blender": "5.0.1"
+  },
+  "authoring_sha256": "a83410fb898eb46bd0387b3cf2aec9c3461a752a2c0319be85846769f26e1308",
+  "status": "source-only candidate; native/authority acceptance separate"
+}

@@ -1,4 +1,6 @@
 /target/
+/.build-version.lock
+/.build-version.state
 /data/
 *.sqlite
 *.sqlite-shm
@@ -10,3 +12,6 @@
 
 __pycache__/
 *.pyc
+
+# One bounded local reconstruction target and receipts.
+/.build/

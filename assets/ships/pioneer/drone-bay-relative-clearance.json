@@ -1,0 +1,35 @@
+{
+  "schema": "arkline.drone-bay-relative-motion-proof/v1",
+  "authoring_manifest_sha256": "342d050e111ff239d9d3ef540ffa5023906a2ae528db5ae9359eb73a46f32ae8",
+  "export_glb_sha256": "7970f096a6aac9d95b6250b75cd19ea2e54046c9deb77f3592b82efa879112fd",
+  "method": "Exact relative linear interval overlap for conservative authored boxes; positive-volume threshold10micrometres",
+  "mesh_binding": {
+    "receipt_source_matches_manifest": true,
+    "all_dynamic_boxes_contain_exported_vertices_within_m": 1e-05,
+    "dynamic_source_ranges_disjoint": true,
+    "dynamic_triangles": 7668
+  },
+  "dynamic_groups": 22,
+  "dynamic_source_parts": 71,
+  "drone_boxes": 15,
+  "phases": [
+    "empty_carriage_x",
+    "empty_lift_y",
+    "fork_extend",
+    "extract",
+    "loaded_lift_y",
+    "loaded_carriage_x",
+    "release_support",
+    "drone_depart"
+  ],
+  "pair_segment_tests": 426000,
+  "closed_door_negative_control": false,
+  "omitted_release_negative_control": false,
+  "hits": [],
+  "limitations": [
+    "Static environment not checked here",
+    "Authored boxes contain bevel geometry; no runtime execution or force proof",
+    "Tangent bearing and drone/cradle contact accepted within10micrometres",
+    "Departure endpoint X\u221240m; larger world hazards not covered"
+  ]
+}

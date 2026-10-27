@@ -11,7 +11,11 @@ fn setup(s: &mut Server) -> (Option<String>, u64, u64) {
         s,
         &mut p,
         Request::Connect {
+            supports_room_controls: false,
+            world_layout_version: 1,
+            supports_fleet_hangar: false,
             supports_pioneer_interior: true,
+            supports_docked_traversal_v2: false,
             protocol_version: PROTOCOL_VERSION,
             pilot: "Miner".into(),
             resume_token: None,

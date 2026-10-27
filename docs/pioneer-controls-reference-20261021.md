@@ -1,0 +1,11 @@
+# Controls and ownership reference — 2026-10-21
+
+The persistent flight status bar and Preferences expose Controls & ownership. It derives seated flight axes from the same AxisBinding definitions used by PilotInput::sample: positive/negative keys, alternatives, sign and pressed/held semantics. Existing Shift rotation suppression, mouse steering, neutral release and automated handoff are preserved. F and management key identities also use shared constants in their actual handlers.
+
+Context uses actual avatar, observation/remote state, authority freshness/pause/pending state and the pilot's nonterminal resource job/controller/message. Manual ship commands can cancel that routine; DockedTraversal walking is exempt. Viewing telemetry and switching views do not take over. Shift suppresses rotation but keeps translation: Shift plus the forward thrust key still sends a manual ship command.
+
+While the reference is open, ship/walking/nearby-action input and underlying management search/Back shortcuts are suppressed. Closing preserves the existing held-input release latch. It does not pause physics, issue a routine command or stop the world's simulation. Editor free camera has separate view controls; no camera implementation was changed.
+
+The walking sampler/help refactor was automatically rejected in the assigned worker under its earlier read-only restriction. That command did not execute, was not retried, and was not rerouted through root. Existing station_ui.rs is untouched by this milestone. The independently permitted reference therefore shows on-foot authority/F guidance and points to existing body movement hints, rather than presenting the pending shared walking list as integrated. Pending walking definitions are preserved in the new bindings source; no active walking integration is claimed.
+
+Denied console integration, scene-init camera correction and renderer work remain untouched. No protocol, layout, collision, asset, world migration or autopilot authority policy changes. Use focused reference/binding checks and the guarded build; preserve the current Pioneer avatar/job/ledger and FirstProject through the supported backup/save/reopen workflow. Record actual live verification limits in the package receipt.

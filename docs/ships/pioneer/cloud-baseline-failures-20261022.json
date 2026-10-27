@@ -1,0 +1,162 @@
+{
+  "baseline_revision": "3d1129e543824a7e1c515aa03f2af54c2c1f4be7",
+  "cloud_revision": "cb385d5d6859241323ddde6ea28b530ae462d2e2",
+  "baseline_clean": true,
+  "baseline_source": "/workspace/arkline-migration-baseline-20261022/apps/client/src/lib.rs",
+  "profile": {
+    "opt_level": "1",
+    "debuginfo": 0,
+    "debug_assertions": true,
+    "overflow_checks": true,
+    "test": true
+  },
+  "environment_script": "/workspace/scratch/arkline-cloud-env.sh",
+  "execution": "Existing binaries invoked separately with --exact NAME --nocapture --test-threads=1; no assertions modified. Cloud aggregate used --test-threads=2.",
+  "cloud_binary_sha256": "910add5ef1769ef10ac264d3803d243cbcb551dc67995b438f94b12b534813e8",
+  "migration_binary_sha256": "29538249bb3ff8aa1a362f0138f5c70bea1b0eecec674330534b05fc0e73d237",
+  "result": {
+    "cloud_isolated_passed": 0,
+    "cloud_isolated_failed": 11,
+    "cloud_isolated_ignored": 0,
+    "baseline_isolated_passed": 0,
+    "baseline_isolated_failed": 11,
+    "baseline_isolated_ignored": 0,
+    "isolated_signatures_match": 10,
+    "aggregate_signatures_match_baseline": 11
+  },
+  "timing_note": "Drone launch/hold test failed at its later missing-Hold-control assertion in both cloud aggregate and baseline isolation. Cloud isolation failed earlier at missing launch acknowledgement; a second isolated attempt did too. Different failure points are retained, not normalized away; exact timing/input cause remains open.",
+  "tests": [
+    {
+      "test": "flight3d::hangar::pioneer_interior::room_inspection_tests::every_room_cutaway_is_an_ordered_subset_of_the_installed_deck",
+      "cloud_isolated_exit": 101,
+      "migration_isolated_exit": 101,
+      "isolated_signatures_match": true,
+      "cloud_aggregate_signature_matches_baseline": true,
+      "cloud_isolated_failure": "assertion `left == right` failed: D1-P1\n  left: 176\n right: 28",
+      "migration_isolated_failure": "assertion `left == right` failed: D1-P1\n  left: 176\n right: 28",
+      "cloud_aggregate_failure": "assertion `left == right` failed: D1-P1\n  left: 176\n right: 28",
+      "cloud_log_sha256": "e782c2533df18805226c377e8fcffc51ef32afd0314d08ce74e93fab92ef7448",
+      "migration_log_sha256": "35118d385765eb437b7094f398c881d5093e1a830591a7fb90d5c4b09047bb0b"
+    },
+    {
+      "test": "flight3d::hangar::pioneer_interior::tests::removed_live_room_drops_its_bounds_and_prototype_fixture",
+      "cloud_isolated_exit": 101,
+      "migration_isolated_exit": 101,
+      "isolated_signatures_match": true,
+      "cloud_aggregate_signature_matches_baseline": true,
+      "cloud_isolated_failure": "assertion failed: rendered_before.iter().any(|(_, model, color, emission)|\n        {\n            *color == Vec3::new(0.09, 0.13, 0.14) && *emission == 0.0 &&\n                model.w_axis.truncate().distance(fixture_center) < 0.001\n        })",
+      "migration_isolated_failure": "assertion failed: rendered_before.iter().any(|(_, model, color, emission)|\n        {\n            *color == Vec3::new(0.09, 0.13, 0.14) && *emission == 0.0 &&\n                model.w_axis.truncate().distance(fixture_center) < 0.001\n        })",
+      "cloud_aggregate_failure": "assertion failed: rendered_before.iter().any(|(_, model, color, emission)|\n        {\n            *color == Vec3::new(0.09, 0.13, 0.14) && *emission == 0.0 &&\n                model.w_axis.truncate().distance(fixture_center) < 0.001\n        })",
+      "cloud_log_sha256": "a88ed02e4ce5ef53adaebbeec77a760802fa7fc2daf52ecf9d13bd65f2a1d234",
+      "migration_log_sha256": "ccd46e09ccc0c1c2505ed7134da1058b3a774a1b283699abdd36d0fc5014876e"
+    },
+    {
+      "test": "interior_acceptance::on_foot_camera_buttons_and_ship_command_boundary",
+      "cloud_isolated_exit": 101,
+      "migration_isolated_exit": 101,
+      "isolated_signatures_match": true,
+      "cloud_aggregate_signature_matches_baseline": true,
+      "cloud_isolated_failure": "assertion `left == right` failed\n  left: ThirdPerson\n right: FirstPerson",
+      "migration_isolated_failure": "assertion `left == right` failed\n  left: ThirdPerson\n right: FirstPerson",
+      "cloud_aggregate_failure": "assertion `left == right` failed\n  left: ThirdPerson\n right: FirstPerson",
+      "cloud_log_sha256": "cf8e1ec8e2d0f595104c0276e79fc0a309b76981d5744500363c05a4132097e2",
+      "migration_log_sha256": "aeb250e46d4dd7d9835921ed17176068faeb08112bc2507c1918653088f26fee"
+    },
+    {
+      "test": "station_ui::tests::docked_hangar_requires_own_view_and_gathering_requires_embarked_pilot",
+      "cloud_isolated_exit": 101,
+      "migration_isolated_exit": 101,
+      "isolated_signatures_match": true,
+      "cloud_aggregate_signature_matches_baseline": true,
+      "cloud_isolated_failure": "assertion failed: cockpit.resource_start_reason().unwrap().contains(\"Enter\")",
+      "migration_isolated_failure": "assertion failed: cockpit.resource_start_reason().unwrap().contains(\"Enter\")",
+      "cloud_aggregate_failure": "assertion failed: cockpit.resource_start_reason().unwrap().contains(\"Enter\")",
+      "cloud_log_sha256": "49aa31f90ce6077e9b2cdc65235cbce4618c7d75b3bc94f0d11aebeb39ac9eea",
+      "migration_log_sha256": "d6e766a74f8db0e5c1f26c28c149f9281b252058e4e3f98f9e4b7a437b676c3b"
+    },
+    {
+      "test": "tests::acquiring_lock_blocks_duplicate_and_extract_until_server_confirmation",
+      "cloud_isolated_exit": 101,
+      "migration_isolated_exit": 101,
+      "isolated_signatures_match": true,
+      "cloud_aggregate_signature_matches_baseline": true,
+      "cloud_isolated_failure": "called `Result::unwrap()` on an `Err` value: Empty",
+      "migration_isolated_failure": "called `Result::unwrap()` on an `Err` value: Empty",
+      "cloud_aggregate_failure": "called `Result::unwrap()` on an `Err` value: Empty",
+      "cloud_log_sha256": "7b757094c976df5c4c1e5c2ca653579049fdeaf97a3e1e131145444074c4f01b",
+      "migration_log_sha256": "672ee8fd06eaedf8af1f98f5b024ad947f2b1215951e7b9c3be8904f9bbdd680"
+    },
+    {
+      "test": "tests::drone_controls_emit_real_launch_hold_recall_and_selected_position",
+      "cloud_isolated_exit": 101,
+      "migration_isolated_exit": 101,
+      "isolated_signatures_match": false,
+      "cloud_aggregate_signature_matches_baseline": true,
+      "cloud_isolated_failure": "called `Result::unwrap()` on an `Err` value: Empty",
+      "migration_isolated_failure": "called `Option::unwrap()` on a `None` value",
+      "cloud_aggregate_failure": "called `Option::unwrap()` on a `None` value",
+      "cloud_log_sha256": "451223dcd18315edde9dca1a02cbd15c3c360862468b7127560deeca4744ee32",
+      "migration_log_sha256": "fbb2ec1b5516df4beb7de670c055e8a4c1d75b2b0e3c9677e71aab18a7a10e71"
+    },
+    {
+      "test": "tests::fleet_selection_routes_commands_by_id_and_limits_each_class",
+      "cloud_isolated_exit": 101,
+      "migration_isolated_exit": 101,
+      "isolated_signatures_match": true,
+      "cloud_aggregate_signature_matches_baseline": true,
+      "cloud_isolated_failure": "called `Option::unwrap()` on a `None` value",
+      "migration_isolated_failure": "called `Option::unwrap()` on a `None` value",
+      "cloud_aggregate_failure": "called `Option::unwrap()` on a `None` value",
+      "cloud_log_sha256": "822f1e690e45fdc32b3ea29b99c02a36fac54ea725fbe4c64f224a275d7e5ec1",
+      "migration_log_sha256": "e55240da7004b22ba9e7db43eb2d9c36cf0819a9b1aca25ede729ee0aa165a4f"
+    },
+    {
+      "test": "tests::hangar_undock_is_visible_on_every_tab_and_disabled_offline",
+      "cloud_isolated_exit": 101,
+      "migration_isolated_exit": 101,
+      "isolated_signatures_match": true,
+      "cloud_aggregate_signature_matches_baseline": true,
+      "cloud_isolated_failure": "assertion failed: labels.iter().any(|(text, _)|\n        text.contains(\"Capacitor 2.5/10.0 kJ \u00b7 reactor 300 W\"))",
+      "migration_isolated_failure": "assertion failed: labels.iter().any(|(text, _)|\n        text.contains(\"Capacitor 2.5/10.0 kJ \u00b7 reactor 300 W\"))",
+      "cloud_aggregate_failure": "assertion failed: labels.iter().any(|(text, _)|\n        text.contains(\"Capacitor 2.5/10.0 kJ \u00b7 reactor 300 W\"))",
+      "cloud_log_sha256": "96b37b396ffa5497617cabeeabe5bc55190c6c1d8c939e21fcd67793f5e0378a",
+      "migration_log_sha256": "515140a731f0bdccaac66d31cfaed14a4357542d601795e1c3521bc2a3c3b2a6"
+    },
+    {
+      "test": "tests::mining_panel_is_readable_on_foot_and_start_remains_disabled",
+      "cloud_isolated_exit": 101,
+      "migration_isolated_exit": 101,
+      "isolated_signatures_match": true,
+      "cloud_aggregate_signature_matches_baseline": true,
+      "cloud_isolated_failure": "assertion failed: cockpit.resource_start_reason().unwrap().contains(\"Enter\")",
+      "migration_isolated_failure": "assertion failed: cockpit.resource_start_reason().unwrap().contains(\"Enter\")",
+      "cloud_aggregate_failure": "assertion failed: cockpit.resource_start_reason().unwrap().contains(\"Enter\")",
+      "cloud_log_sha256": "df59a41dffff6642bab97b60b9fcf37fd752f6584155e36ca09a144e351316ae",
+      "migration_log_sha256": "cb3fe4a8e62198e081900c7f95f180e3709edfe953b315260acb0341bc29e9ed"
+    },
+    {
+      "test": "tests::operations_safety_reports_real_stage_and_full_hold_without_manual_orders",
+      "cloud_isolated_exit": 101,
+      "migration_isolated_exit": 101,
+      "isolated_signatures_match": true,
+      "cloud_aggregate_signature_matches_baseline": true,
+      "cloud_isolated_failure": "assertion failed: labels.iter().any(|(text, _)| text.contains(\"Ship hold full\"))",
+      "migration_isolated_failure": "assertion failed: labels.iter().any(|(text, _)| text.contains(\"Ship hold full\"))",
+      "cloud_aggregate_failure": "assertion failed: labels.iter().any(|(text, _)| text.contains(\"Ship hold full\"))",
+      "cloud_log_sha256": "ed687b91f6697432e8dd6aea22ad8ce65f62dd51342ca02213af528776f8436c",
+      "migration_log_sha256": "df1d1ab3765033f2bffe4b939d2b916e381502eb36bb86c5158ff383ce9a1d0e"
+    },
+    {
+      "test": "tests::overview_pointer_drag_persists_and_reflows_in_real_app_update",
+      "cloud_isolated_exit": 101,
+      "migration_isolated_exit": 101,
+      "isolated_signatures_match": true,
+      "cloud_aggregate_signature_matches_baseline": true,
+      "cloud_isolated_failure": "called `Option::unwrap()` on a `None` value",
+      "migration_isolated_failure": "called `Option::unwrap()` on a `None` value",
+      "cloud_aggregate_failure": "called `Option::unwrap()` on a `None` value",
+      "cloud_log_sha256": "9386052bc07cc8bf1de85048fa8dedfb4f0693dae3496797692f96c852a83501",
+      "migration_log_sha256": "66959ee48f5fef27c6a0f9831f84d1411a655a969afaae9a545bf540d5af6e5f"
+    }
+  ]
+}

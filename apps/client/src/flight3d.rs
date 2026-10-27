@@ -1,8 +1,23 @@
 //! Desktop and WebGL2 GPU flight view. Presentation only: never issues simulation commands.
+#[path = "camera_feed_budget.rs"]
+mod camera_feed_budget;
+#[path = "docking_scene.rs"]
+mod docking_scene;
+use crate::material_program::{
+    compile_material_program, MaterialShaderSource, SpatialMaterialUniforms,
+};
+use crate::spatial_material::{
+    MaterialProgramDiagnostic, MaterialProgramErrorPhase, MaterialProgramState,
+    MaterialProgramStatus, MaterialRevision, PreparedMaterialUpdate,
+};
+#[cfg(all(test, target_os = "macos"))]
+#[path = "spatial_material_gpu_tests.rs"]
+mod spatial_material_gpu_tests;
 use arkline_protocol::{
     gates, systems, Asteroid, Destination, Location, NavigationMode, NavigationTarget, PilotView,
-    ShipClass, Snapshot, Stargate, BELT_POSITION, HOME_SYSTEM_ID, JUMP_DURATION_MS, SPACE_BOUND,
-    STATION_CENTER_POSITION, STATION_DIAMETER_M, STATION_HEIGHT_M, STATION_POSITION,
+    ShipClass, Snapshot, Stargate, WorldLayoutDefinition, BELT_POSITION, HOME_SYSTEM_ID,
+    JUMP_DURATION_MS, SPACE_BOUND, STATION_CENTER_POSITION, STATION_DIAMETER_M, STATION_HEIGHT_M,
+    STATION_POSITION,
 };
 #[cfg(test)]
 use arkline_protocol::{WARP_DURATION_MS, WARP_WARMUP_MS};
@@ -11,18 +26,168 @@ use glam::{Mat4, Quat, Vec3};
 use glow::HasContext;
 use std::sync::{Arc, Mutex};
 
+/// Inspect the current draw target without rebinding it. Desktop core OpenGL
+/// removed DEPTH_BITS; querying it silently suppresses physical displays after
+/// raising INVALID_ENUM. WebGL/GLES retain that default-framebuffer query.
+unsafe fn draw_framebuffer_depth_bits(gl: &glow::Context) -> i32 {
+    if gl.version().is_embedded {
+        return gl.get_parameter_i32(glow::DEPTH_BITS);
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let attachment = if gl
+            .get_parameter_framebuffer(glow::DRAW_FRAMEBUFFER_BINDING)
+            .is_some()
+        {
+            glow::DEPTH_ATTACHMENT
+        } else {
+            glow::DEPTH
+        };
+        if gl.get_framebuffer_attachment_parameter_i32(
+            glow::DRAW_FRAMEBUFFER,
+            attachment,
+            glow::FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE,
+        ) as u32
+            == glow::NONE
+        {
+            return 0;
+        }
+        gl.get_framebuffer_attachment_parameter_i32(
+            glow::DRAW_FRAMEBUFFER,
+            attachment,
+            glow::FRAMEBUFFER_ATTACHMENT_DEPTH_SIZE,
+        )
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        0
+    }
+}
+
+#[path = "imported_asset.rs"]
+pub mod imported_asset;
+
+#[path = "flight3d/carrier_monitor.rs"]
+mod carrier_monitor;
+#[path = "drone_bay_scene.rs"]
+mod drone_bay_scene;
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "drone_gallery.rs"]
+pub mod drone_gallery;
+#[path = "drone_models.rs"]
+mod drone_models;
+#[path = "drone_work.rs"]
+mod drone_work;
+#[path = "flight3d/geometry_catalog.rs"]
+mod geometry_catalog;
+#[path = "flight3d/model_recipes.rs"]
+mod model_recipes;
+use model_recipes::*;
+#[path = "carrier_magazine_source.rs"]
+mod carrier_magazine_source;
+#[path = "carrier_scene.rs"]
+mod carrier_scene;
+#[cfg(test)]
+#[path = "independent_bay_source.rs"]
+mod independent_bay_source;
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "model_catalog.rs"]
+pub mod model_catalog;
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "model_preview.rs"]
+pub mod model_preview;
+#[path = "ore_receiver_source.rs"]
+mod ore_receiver_source;
+#[path = "flight3d/parallel_propulsion_effects.rs"]
+mod parallel_propulsion_effects;
+#[path = "flight3d/parallel_turret_pose.rs"]
+mod parallel_turret_pose;
+#[cfg(all(test, not(target_arch = "wasm32")))]
+#[path = "physical_cargo_native_tests.rs"]
+pub(crate) mod physical_cargo_native_tests;
+#[path = "physical_source_scene.rs"]
+mod physical_source_scene;
+#[path = "pioneer_bay_source.rs"]
+mod pioneer_bay_source;
+#[cfg(test)]
+#[path = "pioneer_docked_source.rs"]
+mod pioneer_docked_source;
 #[path = "ship_asset.rs"]
 mod ship_asset;
+use geometry_catalog::*;
+#[path = "carrier_hull_picking.rs"]
+mod carrier_hull_picking;
+#[path = "view_visibility.rs"]
+mod view_visibility;
+use view_visibility::part_in_view;
+#[path = "carrier_annotation.rs"]
+mod carrier_annotation;
+#[cfg(not(target_arch = "wasm32"))]
+pub use view_visibility::ViewRenderMetrics;
+pub use view_visibility::ViewVisibility;
+#[cfg(not(target_arch = "wasm32"))]
+use view_visibility::{ViewProfileStart, ViewProfiler};
 
+#[cfg(test)]
+#[path = "docking_frame_acceptance_tests.rs"]
+mod docking_frame_acceptance_tests;
+#[cfg(all(test, target_os = "linux"))]
+#[path = "docking_gpu_tests.rs"]
+mod docking_gpu_tests;
+#[cfg(all(test, target_os = "linux"))]
+#[path = "exterior_gpu_tests.rs"]
+mod exterior_gpu_tests;
+#[path = "exterior_visuals.rs"]
+mod exterior_visuals;
 #[path = "local_lighting.rs"]
 mod local_lighting;
 
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "asset_gallery.rs"]
+pub mod asset_gallery;
 #[path = "hangar.rs"]
 pub mod hangar;
 
 #[path = "cockpit_maps.rs"]
 mod cockpit_maps;
+pub(crate) use cockpit_maps::CockpitSurface;
 use cockpit_maps::*;
+#[path = "cargo_instrument.rs"]
+mod cargo_instrument;
+#[path = "cockpit_displays.rs"]
+mod cockpit_displays;
+#[path = "drone_cassette_metrics.rs"]
+mod drone_cassette_metrics;
+#[path = "navigation_instrument.rs"]
+mod navigation_instrument;
+#[path = "physical_cockpit.rs"]
+mod physical_cockpit;
+#[path = "physical_cockpit_onfoot.rs"]
+mod physical_cockpit_onfoot;
+#[path = "power_instrument.rs"]
+mod power_instrument;
+#[path = "reactor_display.rs"]
+mod reactor_display;
+#[path = "side_instruments.rs"]
+mod side_instruments;
+use cockpit_displays::CockpitDisplayRenderer;
+#[path = "cockpit_occlusion.rs"]
+mod cockpit_occlusion;
+use cockpit_occlusion::{CockpitDepthProgram, CockpitOcclusion, DepthMeshCatalog};
+#[path = "cockpit_computer.rs"]
+pub(crate) mod cockpit_computer;
+#[cfg(all(test, target_os = "macos"))]
+#[path = "cockpit_enclosure_gpu_tests.rs"]
+mod cockpit_enclosure_gpu_tests;
+#[path = "cockpit_fit.rs"]
+mod cockpit_fit;
+#[path = "cockpit_occlusion_geometry.rs"]
+mod cockpit_occlusion_geometry;
+#[path = "cockpit_radar.rs"]
+mod cockpit_radar;
+#[cfg(all(test, target_os = "macos"))]
+#[path = "pioneer_docked_composite_gpu_tests.rs"]
+mod pioneer_docked_composite_gpu_tests;
 #[path = "sun_shadows.rs"]
 mod sun_shadows;
 #[path = "world_visuals.rs"]
@@ -124,9 +289,21 @@ pub fn lane(name: &str) -> f32 {
 pub fn display_position(pilot: &PilotView, now: u64) -> [f64; 3] {
     super::motion::position(pilot, now)
 }
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Debug, PartialEq)]
 struct Space {
     origin: [f64; 3],
+}
+fn editor_camera_scene_space(
+    active: bool,
+    frozen: Option<Space>,
+    live: Space,
+) -> (Space, Option<Space>) {
+    if active {
+        let fixed = frozen.unwrap_or(live);
+        (fixed, Some(fixed))
+    } else {
+        (live, None)
+    }
 }
 impl Space {
     fn scene(self, meters: [f64; 3]) -> Vec3 {
@@ -169,6 +346,16 @@ fn ship_orientation(pilot: &PilotView) -> Quat {
 }
 
 fn ship_orientation_at(pilot: &PilotView, now: u64) -> Quat {
+    if let Some(docking) = pilot.flight.as_ref().and_then(|f| f.docking.as_ref()) {
+        if let Some(segment) = &docking.segment {
+            return Quat::from_array(
+                segment
+                    .sample(now.min(docking.updated_at_ms.saturating_add(150)))
+                    .2
+                    .map(|v| v as f32),
+            );
+        }
+    }
     if matches!(pilot.location, Location::InTransit { .. }) {
         if let Some(path) = pilot.flight.as_ref().and_then(|f| f.warp.as_ref()) {
             if let Some(rotation) = orientation(arkline_protocol::sample_warp_heading(path, now)) {
@@ -226,9 +413,106 @@ fn navigation_destination(
     Some((label, target))
 }
 
+#[derive(Clone)]
+struct CockpitDisplayFrame {
+    scene: Arc<CockpitOcclusion>,
+    vp: Mat4,
+    mount: Mat4,
+    viewport: egui::Rect,
+    class: ShipClass,
+    mechanism_fractions: [f64; 9],
+}
+
+/// Independent, view-only cameras for the drone operations workspace.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub(crate) enum BayMonitorCamera {
+    #[default]
+    Wide,
+    Doorway,
+    OreReceiver,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct BayMonitorOptions {
+    pub now: u64,
+    pub connected: bool,
+    pub paused: bool,
+    pub camera: BayMonitorCamera,
+}
+
+// Existing thirteen physical sources plus one independently visible workspace tile.
+const MAX_CAMERA_CAPTURE_SOURCES: usize = physical_cockpit::MAX_CAPTURE_SOURCES + 1;
+
+/// UI construction registers every visible source before egui paints callbacks.
+/// This is admission metadata only; the renderer retains its existing cache.
+#[derive(Default)]
+struct VisibleFeedSources {
+    pass: Option<u64>,
+    keys: Vec<u64>,
+    clocks: Vec<(u64, u64)>,
+}
+impl VisibleFeedSources {
+    fn register(&mut self, pass: u64, keys: impl IntoIterator<Item = u64>) {
+        if self.pass != Some(pass) {
+            self.pass = Some(pass);
+            self.keys.clear();
+            self.clocks.clear();
+        }
+        self.keys.extend(keys);
+        self.keys.sort_unstable();
+        self.keys.dedup();
+    }
+    fn register_clocks(&mut self, pass: u64, clocks: impl IntoIterator<Item = (u64, u64)>) {
+        let clocks: Vec<_> = clocks.into_iter().collect();
+        self.register(pass, clocks.iter().map(|(key, _)| *key));
+        for (key, now) in clocks {
+            if let Some(entry) = self
+                .clocks
+                .iter_mut()
+                .find(|(existing, _)| *existing == key)
+            {
+                debug_assert_eq!(
+                    entry.1, now,
+                    "duplicate camera source must share its sample clock"
+                );
+            } else {
+                self.clocks.push((key, now));
+            }
+        }
+    }
+    fn clocks_for_pass(&self, pass: u64) -> Vec<(u64, u64)> {
+        if self.pass == Some(pass) {
+            self.clocks.clone()
+        } else {
+            Vec::new()
+        }
+    }
+    fn for_pass(&self, pass: u64) -> Vec<u64> {
+        if self.pass == Some(pass) {
+            self.keys.clone()
+        } else {
+            Vec::new()
+        }
+    }
+}
+
 pub struct FlightView {
+    physical: Option<Arc<physical_source_scene::Scene>>,
+    audio_listener: Option<(String, u64, super::sound_scene::AudioListener)>,
+    visible_feed_sources: Arc<Mutex<VisibleFeedSources>>,
+    bay_monitor_session_epoch: u64,
+    carrier_monitor: carrier_monitor::State,
     pub lighting_quality: super::lighting_settings::LightingQuality,
     renderer: Result<Arc<Mutex<Renderer>>, String>,
+    depth_geometry: Result<Arc<FlightGeometry>, String>,
+    headless_turrets: std::collections::HashMap<(String, u8), TurretState>,
+    display_renderer: Result<Arc<Mutex<CockpitDisplayRenderer>>, String>,
+    computer_surface: Option<CockpitSurface>,
+    cockpit_display_frame: Option<CockpitDisplayFrame>,
+    cockpit_layer: Option<egui::LayerId>,
+    instrument_surfaces: Vec<CockpitSurface>,
+    computer_keyboard_owned: bool,
+    head_look_input_allowed: bool,
     head_look: [f32; 2],
     yaw: f32,
     pitch: f32,
@@ -243,17 +527,173 @@ pub struct FlightView {
     tactical: bool,
     other_camera: (f32, f32, f32),
     tactical_overlay: bool,
+    camera_source: super::camera_sources::CameraSource,
     drone_camera: bool,
     selected_drone: Option<u64>,
     drone_mode: DroneCameraMode,
     drone_feeds: Vec<u64>,
     drone_headings: std::collections::HashMap<u64, Vec3>,
+    mechanism_pose: physical_cockpit::PoseSampler,
+    reactor_pose: reactor_display::PoseSampler,
+    drone_telemetry_time: crate::drone_telemetry::TelemetryTime,
+    cargo_unload: Option<arkline_protocol::CargoUnloadOperation>,
     remote_ship: Option<String>,
     console_rect: Option<egui::Rect>,
     map_range: f64,
+    radar_paused: bool,
     space: Space,
+    /// Editor-only camera, expressed in the rendered scene's local coordinates.
+    free_camera: Option<(Vec3, f32, f32)>,
+    editor_free_camera_active: bool,
+    editor_free_camera_space: Option<Space>,
+    last_camera_pose: Option<(Vec3, f32, f32)>,
+    pioneer_layout: Option<arkline_protocol::RoomLayoutState>,
+    pioneer_room: Option<arkline_protocol::PioneerRoomState>,
+    pioneer_scene: Option<hangar::pioneer_docked_scene::SceneCache>,
 }
 impl FlightView {
+    /// A real bay camera alongside operations; never changes the captain's
+    /// camera selection, audio listener, drone target, or authoritative state.
+    pub(crate) fn bay_operations_camera_ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        snapshot: &Snapshot,
+        viewed_name: &str,
+        options: BayMonitorOptions,
+    ) {
+        let BayMonitorOptions {
+            now,
+            connected,
+            paused,
+            camera,
+        } = options;
+        let width = ui.available_width().max(1.0);
+        let caption_height = bay_monitor_caption_height(ui, width, camera);
+        let available_height = (ui
+            .clip_rect()
+            .bottom()
+            .min(ui.available_rect_before_wrap().bottom())
+            - ui.cursor().top())
+        .max(0.0);
+        let Some(height) = bay_monitor_image_height(width, available_height, caption_height) else {
+            ui.small("Bay monitor needs more visible space · scroll or enlarge the workspace");
+            return;
+        };
+        let (rect, _) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
+        ui.painter().rect_filled(rect, 3.0, egui::Color32::BLACK);
+        let fresh = now.saturating_sub(snapshot.server_time_ms) <= 1500;
+        let frame = match bay_operations_frame(
+            snapshot,
+            viewed_name,
+            now,
+            connected,
+            paused,
+            camera,
+            rect.aspect_ratio(),
+        ) {
+            Ok(frame) => frame,
+            Err(reason) => {
+                ui.painter_at(rect).text(
+                    rect.center(),
+                    egui::Align2::CENTER_CENTER,
+                    "BAY CAMERA UNAVAILABLE",
+                    egui::FontId::proportional(14.0),
+                    super::AMBER,
+                );
+                ui.colored_label(super::AMBER, reason);
+                return;
+            }
+        };
+        let pilot = frame
+            .scene
+            .pilots
+            .iter()
+            .find(|p| p.name == viewed_name)
+            .unwrap();
+        let bay = drone_bay_scene::validated_bay(pilot).unwrap();
+        let key = egui::Id::new((
+            "bay-operations-camera",
+            viewed_name,
+            &bay.binding.vessel_id,
+            bay.binding.geometry_revision,
+            &bay.binding.source_sha256,
+            camera,
+            rect.width().to_bits(),
+            rect.height().to_bits(),
+            ui.ctx().pixels_per_point().to_bits(),
+        ))
+        .value();
+        let key = self.bay_monitor_session_key(key);
+        let pass = ui.ctx().cumulative_pass_nr();
+        let ui_ms = ui.input(|i| (i.time.max(0.0) * 1000.0) as u64);
+        let captured = self
+            .renderer
+            .as_ref()
+            .ok()
+            .and_then(|r| r.lock().ok())
+            .and_then(|r| {
+                r.feed_cache
+                    .iter()
+                    .find(|c| c.key == key)
+                    .and_then(|c| c.captured_ui_ms)
+            });
+        let age = captured.filter(|t| *t <= ui_ms).map(|t| ui_ms - t);
+
+        ui.small(bay_monitor_image_status(connected, paused, fresh, age));
+        ui.small(bay_monitor_view_caption(camera));
+        if !ui.is_rect_visible(rect) {
+            return;
+        }
+        let Ok(renderer) = &self.renderer else {
+            ui.colored_label(
+                super::AMBER,
+                "Graphics context unavailable · no camera image",
+            );
+            return;
+        };
+        if let Ok(mut visible) = self.visible_feed_sources.lock() {
+            visible.register_clocks(pass, [(key, frame.now)]);
+        }
+        let visible = self.visible_feed_sources.clone();
+        let renderer = renderer.clone();
+        #[cfg(target_arch = "wasm32")]
+        let renderer = send_wrapper::SendWrapper::new(renderer);
+        ui.painter().add(egui::PaintCallback {
+            rect,
+            callback: Arc::new(egui_glow::CallbackFn::new(move |info, painter| {
+                let keys = visible.lock().map(|v| v.for_pass(pass)).unwrap_or_default();
+                if let Ok(mut renderer) = renderer.lock() {
+                    renderer.feed_source_clocks = visible
+                        .lock()
+                        .map(|v| v.clocks_for_pass(pass))
+                        .unwrap_or_default();
+                    unsafe {
+                        renderer.prepare_workspace_feed(key);
+                        renderer.paint_cached_feed_on_surface(
+                            &frame,
+                            key,
+                            info,
+                            keys.len(),
+                            painter.intermediate_fbo(),
+                            None,
+                            Some((pass, ui_ms, keys.as_slice())),
+                        );
+                    }
+                }
+            })),
+        });
+    }
+
+    pub(crate) fn audio_listener(
+        &self,
+        pilot: &str,
+        now: u64,
+    ) -> Option<super::sound_scene::AudioListener> {
+        self.audio_listener
+            .as_ref()
+            .filter(|(name, time, _)| name == pilot && now.saturating_sub(*time) <= 1500)
+            .map(|(_, _, listener)| *listener)
+    }
     // egui callbacks share ownership on one browser thread; SendWrapper guards access.
     #[cfg_attr(target_arch = "wasm32", allow(clippy::arc_with_non_send_sync))]
     pub fn new(gl: Option<&Arc<glow::Context>>) -> Self {
@@ -263,9 +703,27 @@ impl FlightView {
             })
             .and_then(|gl| unsafe { Renderer::new(gl.clone()) })
             .map(|r| Arc::new(Mutex::new(r)));
+        let display_renderer = gl
+            .ok_or_else(|| "OpenGL is unavailable for cockpit displays".into())
+            .and_then(|gl| unsafe { CockpitDisplayRenderer::new(gl.clone()) })
+            .map(|renderer| Arc::new(Mutex::new(renderer)));
         Self {
+            physical: None,
+            audio_listener: None,
+            visible_feed_sources: Arc::new(Mutex::new(VisibleFeedSources::default())),
+            bay_monitor_session_epoch: 0,
+            carrier_monitor: Default::default(),
             lighting_quality: Default::default(),
             renderer,
+            depth_geometry: flight_geometry(),
+            headless_turrets: Default::default(),
+            display_renderer,
+            computer_surface: None,
+            cockpit_display_frame: None,
+            cockpit_layer: None,
+            instrument_surfaces: Vec::new(),
+            computer_keyboard_owned: false,
+            head_look_input_allowed: true,
             head_look: [0.0; 2],
             yaw: 0.72,
             pitch: 0.35,
@@ -280,19 +738,163 @@ impl FlightView {
             tactical: false,
             other_camera: (0.72, 0.65, 350.0),
             tactical_overlay: true,
+            camera_source: Default::default(),
             drone_camera: true,
             selected_drone: None,
             drone_mode: DroneCameraMode::Raised,
             drone_feeds: Vec::new(),
             drone_headings: std::collections::HashMap::new(),
+            mechanism_pose: Default::default(),
+            reactor_pose: Default::default(),
+            cargo_unload: None,
+            drone_telemetry_time: Default::default(),
             remote_ship: None,
             console_rect: None,
             map_range: 1_000_000.0,
+            radar_paused: false,
             space: Space::default(),
+            free_camera: None,
+            editor_free_camera_active: false,
+            editor_free_camera_space: None,
+            last_camera_pose: None,
+            pioneer_layout: None,
+            pioneer_room: None,
+            pioneer_scene: None,
         }
+    }
+    pub(crate) fn clear_physical(&mut self) {
+        self.physical = None;
+    }
+    pub(crate) fn observe_physical(
+        &mut self,
+        snapshot: &Snapshot,
+        view: Option<&arkline_protocol::physical_cargo::control::PhysicalControlPublicView>,
+        owner: &str,
+    ) -> Result<(), String> {
+        self.physical = None;
+        if let Some(view) = view {
+            let scene = physical_source_scene::Scene::from_view(snapshot, view, owner)?;
+            scene.parts(true)?;
+            let geometry = physical_geometry()?;
+            self.depth_geometry = Ok(geometry.clone());
+            if let Ok(renderer) = &self.renderer {
+                if let Ok(mut renderer) = renderer.lock() {
+                    // CPU picking must see the source before the first GL callback.
+                    renderer.depth_meshes = geometry.catalog.clone();
+                }
+            }
+            self.physical = Some(Arc::new(scene));
+        }
+        Ok(())
+    }
+    pub(crate) fn set_cargo_unload(&mut self, op: Option<arkline_protocol::CargoUnloadOperation>) {
+        self.cargo_unload = op;
+    }
+    pub(crate) fn set_drone_telemetry_time(&mut self, time: crate::drone_telemetry::TelemetryTime) {
+        self.drone_telemetry_time = time;
+    }
+    pub(crate) fn set_pioneer_layout(&mut self, layout: Option<arkline_protocol::RoomLayoutState>) {
+        self.pioneer_layout = layout;
+    }
+    pub(crate) fn set_radar_paused(&mut self, paused: bool) {
+        self.radar_paused = paused;
+    }
+    pub(crate) fn set_pioneer_room(&mut self, room: Option<arkline_protocol::PioneerRoomState>) {
+        self.pioneer_room = room;
+    }
+    fn canonical_pioneer_parts(
+        &mut self,
+        now: u64,
+        fractions: [f64; 9],
+        reactor: Option<f64>,
+    ) -> Result<Arc<Vec<ModelPart>>, String> {
+        let document = self
+            .pioneer_layout
+            .as_ref()
+            .map(|layout| layout.document.clone())
+            .unwrap_or_else(arkline_protocol::default_pioneer);
+        document.validate_live()?;
+        if self
+            .pioneer_scene
+            .as_ref()
+            .is_none_or(|scene| !scene.matches(&document))
+        {
+            self.pioneer_scene = Some(hangar::pioneer_docked_scene::SceneCache::new(document)?);
+        }
+        hangar::pioneer_docked_scene::seated_body_parts_with_configuration(
+            self.pioneer_scene
+                .as_ref()
+                .expect("validated canonical scene"),
+            self.pioneer_room.as_ref(),
+            now,
+            fractions,
+            reactor,
+        )
+    }
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    pub fn set_editor_free_camera(&mut self, active: bool, pose: Option<(Vec3, f32, f32)>) {
+        let reseed = active
+            && (!self.editor_free_camera_active || (pose.is_none() && self.free_camera.is_some()));
+        if !active {
+            self.editor_free_camera_space = None;
+        } else if reseed {
+            // An existing camera pose belongs to the last rendered origin,
+            // even when the pilot travels before the next rendered frame.
+            // A cleared pose lets a new scene establish its origin instead.
+            self.editor_free_camera_space = pose.map(|_| self.space);
+        }
+        if active {
+            self.clear_cockpit_presentation();
+        }
+        self.editor_free_camera_active = active;
+        self.free_camera = pose;
+    }
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    pub fn editor_camera_pose(&self) -> Option<(Vec3, f32, f32)> {
+        self.last_camera_pose
+    }
+    fn bay_monitor_session_key(&self, source_key: u64) -> u64 {
+        egui::Id::new((
+            "bay-monitor-session",
+            self.bay_monitor_session_epoch,
+            source_key,
+        ))
+        .value()
+    }
+    /// Invalidate image identity without deleting GL resources outside a paint callback.
+    /// The next workspace paint retires the old entry; until then its pixels cannot
+    /// be looked up under the new session, even for the same deterministic vessel ID.
+    pub(crate) fn invalidate_bay_monitor_session(&mut self) {
+        self.bay_monitor_session_epoch = self.bay_monitor_session_epoch.wrapping_add(1);
+    }
+    pub(crate) fn reset_activity_session(&mut self) {
+        self.clear_physical();
+        self.carrier_monitor.reset();
+        self.invalidate_bay_monitor_session();
+        self.mechanism_pose.reset_session();
+        self.reactor_pose.reset_session();
+    }
+    pub(crate) fn disconnect_activity(&mut self) {
+        self.clear_physical();
+        self.carrier_monitor.suppress();
+        self.mechanism_pose.disconnect();
+        self.reactor_pose.disconnect();
+    }
+    pub(crate) fn observe_activity(
+        &mut self,
+        snapshot: &Snapshot,
+        owner: &str,
+        connected: bool,
+        now: u64,
+    ) {
+        self.mechanism_pose.observe(snapshot, owner, connected, now);
+        self.reactor_pose.observe(snapshot, owner, connected, now);
     }
     pub fn set_remote_ship(&mut self, pilot: Option<String>) {
         self.remote_ship = pilot;
+    }
+    pub fn set_camera_source(&mut self, source: super::camera_sources::CameraSource) {
+        self.camera_source = source;
     }
     pub fn set_drone_camera(&mut self, enabled: bool) {
         self.drone_camera = enabled;
@@ -316,14 +918,156 @@ impl FlightView {
             DroneCameraMode::Raised
         };
     }
-    #[cfg(test)]
+    #[cfg(all(test, target_os = "macos"))]
     pub fn cockpit_console_rect(&self) -> Option<egui::Rect> {
         self.console_rect
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn set_material_preview(&mut self, preview: Option<crate::EmbeddedMaterialPreview>) {
+        if let Ok(renderer) = &self.renderer {
+            if let Ok(mut renderer) = renderer.lock() {
+                renderer.set_material_preview(preview);
+            }
+        }
+    }
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))] // Native editor authoring entry.
+    pub fn set_spatial_material(&mut self, material: Option<Arc<MaterialRevision>>) {
+        if let Ok(renderer) = &self.renderer {
+            if let Ok(mut renderer) = renderer.lock() {
+                let _ = renderer.spatial_material.queue(material);
+            }
+        }
+    }
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    pub fn spatial_material_status(&self) -> MaterialProgramStatus {
+        self.renderer
+            .as_ref()
+            .ok()
+            .and_then(|r| r.lock().ok().map(|r| r.spatial_material.status().clone()))
+            .unwrap_or_default()
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn set_debug_wireframe(&mut self, enabled: bool) {
+        if let Ok(renderer) = &self.renderer {
+            if let Ok(mut renderer) = renderer.lock() {
+                renderer.debug_wireframe = enabled;
+            }
+        }
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn debug_render_metrics(&self) -> DebugRenderMetrics {
+        self.renderer
+            .as_ref()
+            .ok()
+            .and_then(|r| r.lock().ok().map(|r| r.debug_metrics.get()))
+            .unwrap_or_default()
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn debug_view_render_metrics(&self) -> Vec<ViewRenderMetrics> {
+        self.renderer
+            .as_ref()
+            .ok()
+            .and_then(|r| r.lock().ok().map(|r| r.view_profiler.borrow().samples()))
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn cockpit_presentation_active(&self, mode: super::ViewMode) -> bool {
+        matches!(mode, super::ViewMode::Cockpit) && !self.editor_free_camera_active
+    }
+    pub(crate) fn clear_cockpit_presentation(&mut self) {
+        self.audio_listener = None;
+        self.input_surface = None;
+        self.computer_surface = None;
+        self.cockpit_display_frame = None;
+        self.cockpit_layer = None;
+        self.instrument_surfaces.clear();
+        self.console_rect = None;
+    }
+    fn physical_surface(&self, index: usize, canvas: egui::Vec2) -> Option<CockpitSurface> {
+        let frame = self.cockpit_display_frame.as_ref()?;
+        let mut surface = if frame.class == ShipClass::Pioneer {
+            hangar::pioneer_docked_scene::physical_surface_with_mechanisms(
+                frame.viewport,
+                frame.vp,
+                frame.mount,
+                index,
+                canvas,
+                frame.scene.clone(),
+                frame.mechanism_fractions,
+            )?
+        } else {
+            CockpitSurface::new(
+                frame.viewport,
+                frame.vp * frame.mount,
+                frame.class,
+                index,
+                canvas,
+            )?
+            .with_occlusion(frame.scene.clone(), frame.vp, frame.mount)
+        };
+        if let Ok(renderer) = &self.display_renderer {
+            surface = surface.with_renderer(renderer.clone());
+        }
+        Some(surface)
+    }
+    pub(crate) fn computer_surface(&self) -> Option<CockpitSurface> {
+        self.computer_surface.clone()
+    }
+    /// Editor viewport ownership is separate from paused flight-command permission.
+    #[cfg(any(not(target_arch = "wasm32"), test))]
+    pub(crate) fn set_head_look_input_allowed(&mut self, allowed: bool) {
+        self.head_look_input_allowed = allowed;
+    }
+    #[cfg(test)]
+    pub(crate) fn head_look_angles(&self) -> [f32; 2] {
+        self.head_look
+    }
+    pub(crate) fn set_computer_keyboard_owned(&mut self, owned: bool) {
+        self.computer_keyboard_owned = owned;
+    }
+    pub(crate) fn computer_hit_tester(
+        &self,
+        ctx: &egui::Context,
+    ) -> impl Fn(egui::Pos2) -> Option<egui::Pos2> + 'static {
+        let surface = self.computer_surface.clone();
+        let layer = self.cockpit_layer;
+        let ctx = ctx.clone();
+        move |point| {
+            if layer.is_none() || ctx.layer_id_at(point) != layer {
+                return None;
+            }
+            surface.as_ref()?.unproject(point)
+        }
+    }
+    #[cfg(test)]
+    pub(crate) fn computer_hit(
+        &self,
+        ctx: &egui::Context,
+        point: egui::Pos2,
+    ) -> Option<egui::Pos2> {
+        self.computer_hit_tester(ctx)(point)
+    }
+    pub(crate) fn submit_computer(
+        &self,
+        ctx: &egui::Context,
+        primitives: Vec<egui::ClippedPrimitive>,
+    ) {
+        if let (Some(surface), Some(layer)) = (&self.computer_surface, self.cockpit_layer) {
+            surface.submit(ctx, layer, primitives);
+        }
     }
     pub fn input_surface(&self) -> Option<(egui::Rect, egui::LayerId)> {
         self.input_surface
     }
     pub fn destroy(&mut self) {
+        self.clear_cockpit_presentation();
+        if let Ok(renderer) = &self.display_renderer {
+            if let Ok(mut renderer) = renderer.lock() {
+                unsafe {
+                    renderer.destroy();
+                }
+            }
+        }
         if let Ok(renderer) = &self.renderer {
             if let Ok(mut renderer) = renderer.lock() {
                 unsafe {
@@ -331,9 +1075,6 @@ impl FlightView {
                 }
             }
         }
-    }
-    pub fn head_looking(&self) -> bool {
-        self.head_look.iter().any(|angle| angle.abs() > 0.002)
     }
     #[allow(clippy::too_many_arguments)]
     pub fn ui(
@@ -348,8 +1089,45 @@ impl FlightView {
         mode: super::ViewMode,
         layout: &mut super::layout::Layout,
     ) -> Option<ViewAction> {
+        self.clear_cockpit_presentation();
+        let world_layout = match super::snapshot_world_layout(snapshot) {
+            Ok(layout) => layout,
+            Err(error) => {
+                self.input_surface = None;
+                ui.colored_label(egui::Color32::RED, error);
+                return None;
+            }
+        };
         let mut picked = None;
         let own_pilot = snapshot.pilots.iter().find(|p| p.name == pilot_name);
+        if own_pilot.map_or(snapshot.carrier_inventory_registration.is_some(), |p| {
+            carrier_advertised_in_world(p, snapshot.carrier_inventory_registration.as_ref())
+        }) {
+            let carrier = own_pilot
+                .ok_or("Carrier pilot projection missing")
+                .and_then(|p| {
+                    let public = p
+                        .carrier_inventory
+                        .as_ref()
+                        .ok_or("Carrier source projection unavailable")?;
+                    if snapshot
+                        .carrier_inventory_registration
+                        .as_ref()
+                        .is_some_and(|r| r != &public.binding().registration)
+                    {
+                        return Err("Carrier source does not match accepted world");
+                    }
+                    carrier_body_parts(p, snapshot.server_time_ms)
+                        .map(|_| ())
+                        .map_err(|_| "Carrier source, roots or clock unavailable")
+                });
+            if let Err(reason) = carrier {
+                self.input_surface = None;
+                ui.colored_label(egui::Color32::RED, reason);
+                return None;
+            }
+        }
+        let observing_on_foot = own_pilot.is_some_and(|pilot| pilot.station_avatar.is_some());
         let camera_length = own_pilot.map_or(72.0, |p| p.ship_class.spec().length_m) as f32 / 100.0;
         let ship_distance = (camera_length * 2.5).max(1.8);
         if own_pilot.map(|p| p.ship_class) != self.camera_ship_class {
@@ -358,14 +1136,22 @@ impl FlightView {
                 self.distance = ship_distance;
             }
         }
-        let space = Space {
+        let live_space = Space {
             origin: own_pilot.map_or(STATION_POSITION, |p| display_position(p, now)),
         };
+        let (space, editor_free_camera_space) = editor_camera_scene_space(
+            self.editor_free_camera_active,
+            self.editor_free_camera_space,
+            live_space,
+        );
+        self.editor_free_camera_space = editor_free_camera_space;
         let warp_tracking =
             own_pilot.is_some_and(|p| matches!(p.location, Location::InTransit { .. }));
         self.target = rebased_camera_target(self.target, self.space, space, warp_tracking);
         self.space = space;
-        let cockpit = matches!(mode, super::ViewMode::Cockpit);
+        let cockpit_mode = matches!(mode, super::ViewMode::Cockpit);
+        let cockpit = cockpit_mode && !self.editor_free_camera_active;
+        let editor_free_camera = self.editor_free_camera_active;
         let tactical = mode == super::ViewMode::Tactical3d;
         if tactical != self.tactical {
             let next = self.other_camera;
@@ -380,7 +1166,7 @@ impl FlightView {
             self.focus_selection = false;
         }
 
-        let bounds = ui.ctx().screen_rect();
+        let bounds = ui.max_rect();
         let (camera_position, camera_size) = layout.position(
             "flight-camera",
             bounds,
@@ -401,7 +1187,7 @@ impl FlightView {
                     resize
                 }
             })
-            .constrain_to(ui.ctx().screen_rect().shrink(8.0))
+            .constrain_to(ui.max_rect().shrink(8.0))
             .frame(
                 egui::Frame::window(&ui.ctx().style())
                     .fill(egui::Color32::from_rgba_unmultiplied(3, 9, 6, 212))
@@ -412,12 +1198,23 @@ impl FlightView {
             .resizable(!layout.pinned)
             .collapsible(true)
             .show(ui.ctx(), |ui| {
+                if editor_free_camera {
+                    ui.label("Editor free camera · WASD move · E/Q or Space/C vertical · RMB look");
+                    camera_content = Some(ui.max_rect().size());
+                    return;
+                }
                 if cockpit {
-                    ui.label("Pilot seat · full six-axis flight");
-                    ui.small("W/S: thrust · A/D: strafe · Space/C: vertical");
-                    ui.small("Q/E: roll · Arrows: aim · RMB + mouse: aim");
-                    ui.small("Hold Shift + arrows: look around · release: recenter");
-                    ui.small("Left-click: select · Release controls: neutral");
+                    if observing_on_foot {
+                        ui.label("Cockpit observation · pilot remains on foot");
+                        ui.small("Manual flight locked · return to the physical pilot seat to fly");
+                        ui.small("Left-click: select · camera changes do not move your avatar");
+                    } else {
+                        ui.label("Pilot seat · full six-axis flight");
+                        ui.small("W/S: thrust · A/D: strafe · Space/C: vertical");
+                        ui.small("Q/E: roll · Arrows: aim · RMB + mouse: aim");
+                        ui.small("Hold Shift + arrows: look around · release: recenter");
+                        ui.small("Left-click: select · Release controls: neutral");
+                    }
                     camera_content = Some(ui.max_rect().size());
                     return;
                 }
@@ -430,7 +1227,11 @@ impl FlightView {
                         self.distance = 350.0;
                     }
                     ui.small("Drag: orbit · Scroll: zoom · Distances in meters/km");
-                    ui.small("Double-click space: fly · Right-click: actions");
+                    ui.small(if observing_on_foot {
+                        "Observation only · pilot remains on foot · manual flight locked · click to select"
+                    } else {
+                        "Double-click space: fly · Right-click: actions"
+                    });
                     camera_content = Some(ui.max_rect().size());
                     return;
                 }
@@ -461,7 +1262,11 @@ impl FlightView {
                     }
                 });
                 ui.small("Drag: orbit · Scroll: zoom");
-                ui.small("Double-click space: fly · Right-click: actions");
+                ui.small(if observing_on_foot {
+                        "Observation only · pilot remains on foot · manual flight locked · click to select"
+                    } else {
+                        "Double-click space: fly · Right-click: actions"
+                    });
                 camera_content = Some(ui.max_rect().size());
             });
         if let Some(response) = camera_response {
@@ -477,32 +1282,25 @@ impl FlightView {
             ui.available_size().max(egui::vec2(100.0, 150.0)),
             egui::Sense::click_and_drag(),
         );
-        self.console_rect = cockpit.then(|| {
-            cockpit_console_bounds(rect, own_pilot.map_or(ShipClass::Pioneer, |p| p.ship_class))
-        });
-        let pointer_on_instrument = cockpit
-            && ui.input(|i| i.pointer.hover_pos()).is_some_and(|p| {
-                cockpit_screens(own_pilot.map_or(ShipClass::Pioneer, |p| p.ship_class))
-                    .iter()
-                    .any(|(center, size)| instrument_rect(rect, *center, *size).contains(p))
-            });
-        self.input_surface = (!pointer_on_instrument).then_some((rect, ui.layer_id()));
-        // Foreground panels own their pointer input, including transparent
-        // panel margins. Checking the layer also blocks a drag crossing a HUD.
-        let world_input = ui.input(|i| i.pointer.hover_pos()).is_some_and(|pointer| {
-            rect.contains(pointer)
-                && ui.ctx().layer_id_at(pointer) == Some(ui.layer_id())
-                && !(cockpit
-                    && cockpit_screens(own_pilot.map_or(ShipClass::Pioneer, |p| p.ship_class))
-                        .iter()
-                        .any(|(c, s)| instrument_rect(rect, *c, *s).contains(pointer)))
-        });
-        if !cockpit && world_input && response.dragged_by(egui::PointerButton::Primary) {
+        // Resolve interaction against this frame's ship-fixed glass below,
+        // once both the final camera pose and exact scene geometry are known.
+        self.input_surface = Some((rect, ui.layer_id()));
+        let mut world_input = !editor_free_camera
+            && ui
+                .input(|input| input.pointer.hover_pos())
+                .is_some_and(|pointer| {
+                    rect.contains(pointer) && ui.ctx().layer_id_at(pointer) == Some(ui.layer_id())
+                });
+        if !cockpit
+            && !editor_free_camera
+            && world_input
+            && response.dragged_by(egui::PointerButton::Primary)
+        {
             let delta = ui.input(|i| i.pointer.delta());
             self.yaw -= delta.x * 0.007;
             self.pitch = (self.pitch + delta.y * 0.006).clamp(-1.25, 1.25);
         }
-        if !cockpit && world_input && response.hovered() {
+        if !cockpit && !editor_free_camera && world_input && response.hovered() {
             self.distance =
                 (self.distance * (-ui.input(|i| i.smooth_scroll_delta.y) * 0.002).exp()).clamp(
                     if tactical {
@@ -535,10 +1333,11 @@ impl FlightView {
             super::SelectedObject::Gate(id) => {
                 local_gates.iter().find(|g| g.id == *id).map(|g| g.position)
             }
-            super::SelectedObject::Planet(id) => arkline_protocol::planets()
+            super::SelectedObject::Planet(id) => world_layout
+                .planets
                 .iter()
-                .find(|p| p.id == *id)
-                .map(|_| arkline_protocol::PLANET_APPROACH_POSITION),
+                .find(|p| p.id == *id && p.system_id == system_id)
+                .map(|planet| planet.approach_position),
             super::SelectedObject::Prop(id) => snapshot
                 .surface_props
                 .iter()
@@ -587,9 +1386,19 @@ impl FlightView {
                 self.yaw.cos() * self.pitch.cos(),
             ) * self.distance;
         let rotation = own_pilot.map_or(Quat::IDENTITY, |p| ship_orientation_at(p, now));
-        let looking = cockpit
+        let head_look_input = cockpit
+            && self.head_look_input_allowed
+            && !self.computer_keyboard_owned
             && !ui.ctx().wants_keyboard_input()
-            && ui.input(|i| i.focused && i.modifiers.shift);
+            && ui.input(|input| {
+                input.focused && !input.pointer.any_down() && !input.pointer.any_pressed()
+            })
+            && ui
+                .input(|input| input.pointer.hover_pos())
+                .is_some_and(|point| {
+                    rect.contains(point) && ui.ctx().layer_id_at(point) == Some(ui.layer_id())
+                });
+        let looking = ui.input(|input| input.modifiers.shift);
         let axes = ui.input(|i| {
             [
                 (i.key_down(egui::Key::ArrowLeft) as i32 - i.key_down(egui::Key::ArrowRight) as i32)
@@ -598,23 +1407,26 @@ impl FlightView {
                     as f32,
             ]
         });
-        update_head_look(&mut self.head_look, looking, axes, dt);
+        // Denied ownership freezes the presentation pose; it must not be
+        // interpreted as releasing Shift and recentering somebody else's view.
+        if head_look_input {
+            update_head_look(&mut self.head_look, looking, axes, dt);
+        }
         let head_rotation = rotation
             * Quat::from_rotation_y(self.head_look[0])
             * Quat::from_rotation_z(self.head_look[1]);
-        let (eye, mut view) = if cockpit {
-            cockpit_camera(
-                own_pilot.map_or(Vec3::ZERO, |p| {
-                    let spec = p.ship_class.spec();
-                    space.position(p, now)
-                        + rotation
-                            * Vec3::new(
-                                spec.length_m as f32 * 0.0043,
-                                spec.height_m as f32 * 0.0062,
-                                0.0,
-                            )
-                }),
-                rotation,
+        let class = own_pilot.map_or(ShipClass::Pioneer, |p| p.ship_class);
+        let ship_origin = own_pilot.map_or(Vec3::ZERO, |p| space.position(p, now));
+        let cockpit_mount = if class == ShipClass::Pioneer {
+            Mat4::from_scale_rotation_translation(Vec3::splat(0.01), rotation, ship_origin)
+        } else {
+            cockpit_fit::mount(ship_origin, rotation, class)
+        };
+        let (mut eye, mut view) = if cockpit {
+            let eye = ship_origin + rotation * (cockpit_fit::eye_body_meters(class) / 100.0);
+            (
+                eye,
+                Mat4::look_at_rh(eye, eye + rotation * Vec3::X, rotation * Vec3::Y),
             )
         } else {
             (
@@ -625,12 +1437,39 @@ impl FlightView {
         if cockpit {
             view = Mat4::look_at_rh(eye, eye + head_rotation * Vec3::X, head_rotation * Vec3::Y);
         }
+        let player_direction = view
+            .inverse()
+            .transform_vector3(Vec3::NEG_Z)
+            .normalize_or_zero();
+        self.last_camera_pose = Some((
+            eye,
+            player_direction.z.atan2(player_direction.x),
+            player_direction.y.clamp(-1.0, 1.0).asin(),
+        ));
+        if let Some((position, yaw, pitch)) = self.free_camera {
+            let direction = hangar::editor_camera_direction(yaw, pitch);
+            eye = position;
+            view = Mat4::look_at_rh(eye, eye + direction, Vec3::Y);
+        }
 
+        self.audio_listener = Some((
+            pilot_name.to_owned(),
+            now,
+            super::sound_scene::AudioListener {
+                position_m: space.world(eye),
+                right: view
+                    .inverse()
+                    .transform_vector3(Vec3::X)
+                    .normalize_or_zero()
+                    .to_array()
+                    .map(f64::from),
+            },
+        ));
         let projection = Mat4::perspective_rh_gl(
             if tactical {
                 1.22
             } else if cockpit {
-                COCKPIT_FOV
+                cockpit_fov(class)
             } else {
                 0.85
             },
@@ -640,86 +1479,190 @@ impl FlightView {
         );
         let vp = projection * view;
         let cockpit_vp = Mat4::perspective_rh_gl(
-            COCKPIT_FOV,
+            cockpit_fov(class),
             rect.width() / rect.height().max(1.0),
             0.0002,
             10.0,
         ) * view;
+        self.mechanism_pose
+            .observe(snapshot, pilot_name, connected, now);
+        self.reactor_pose
+            .observe(snapshot, pilot_name, connected, now);
+        let mechanism_fractions = self.mechanism_pose.fractions();
+        let pioneer_parts = if class == ShipClass::Pioneer {
+            match self.canonical_pioneer_parts(
+                now,
+                mechanism_fractions,
+                self.reactor_pose.fraction(),
+            ) {
+                Ok(parts) => Some(parts),
+                Err(error) => {
+                    self.clear_cockpit_presentation();
+                    ui.painter_at(rect).text(
+                        rect.center(),
+                        egui::Align2::CENTER_CENTER,
+                        format!("Canonical Pioneer unavailable: {error}"),
+                        egui::FontId::proportional(16.0),
+                        super::AMBER,
+                    );
+                    return None;
+                }
+            }
+        } else {
+            None
+        };
+        let mut frame = Frame {
+            pioneer_parts,
+            exterior: snapshot.exterior.clone().map(Arc::new),
+            lighting_quality: self.lighting_quality,
+            cockpit_vp,
+            cockpit_occlusion: None,
+            snapshot_time: snapshot.server_time_ms,
+            paused: self.radar_paused,
+            planet_vp: Mat4::perspective_rh_gl(
+                if tactical {
+                    1.22
+                } else if cockpit {
+                    cockpit_fov(class)
+                } else {
+                    0.85
+                },
+                rect.aspect_ratio(),
+                1.0,
+                300_000.0,
+            ) * view,
+            system_id,
+            ship_class: own_pilot.map_or(ShipClass::Pioneer, |p| p.ship_class),
+            drone_camera: false,
+            camera_drone: None,
+            scene: Arc::new(FrameScene {
+                physical: self.physical.clone(),
+                carrier_inventory_registration: snapshot.carrier_inventory_registration.clone(),
+                world_layout: world_layout.clone(),
+                traffic: snapshot
+                    .traffic
+                    .iter()
+                    .filter(|a| a.system_id == system_id)
+                    .cloned()
+                    .collect(),
+                surface_props: snapshot
+                    .surface_props
+                    .iter()
+                    .filter(|p| p.system_id == system_id)
+                    .cloned()
+                    .collect(),
+                asteroids: asteroids.clone(),
+                gates: local_gates.clone(),
+                pilots: snapshot
+                    .pilots
+                    .iter()
+                    .filter(|p| {
+                        p.system_id == system_id
+                            && (p.location != Location::Docked
+                                || p.name == pilot_name
+                                || p.flight.as_ref().is_some_and(|f| f.docking.is_some()))
+                    })
+                    .cloned()
+                    .collect(),
+            }),
+            space,
+            cockpit,
+            rotation,
+            connected,
+            vp,
+            eye,
+            now,
+            own: pilot_name.to_string(),
+
+            docking: effects.events.iter().rev().find_map(|event| {
+                let age = now.saturating_sub(event.started_ms);
+                if !connected || age >= super::effects::EFFECT_DURATION_MS {
+                    return None;
+                }
+                let docking = match event.kind {
+                    super::effects::EffectKind::Docking => true,
+                    super::effects::EffectKind::Undocking => false,
+                    _ => return None,
+                };
+                Some((
+                    age as f32 / super::effects::EFFECT_DURATION_MS as f32,
+                    docking,
+                ))
+            }),
+        };
+        if cockpit {
+            frame.cockpit_occlusion = if let Ok(renderer) = &self.renderer {
+                renderer.lock().ok().and_then(|mut renderer| {
+                    renderer.prepare_turrets(&frame);
+                    let catalog = renderer.depth_meshes.clone();
+                    let (external, own) = cockpit_occlusion_geometry::build(
+                        &frame,
+                        &catalog,
+                        &renderer.station_batches,
+                        &renderer.drone_parts,
+                        &renderer.turrets,
+                    )?;
+                    CockpitOcclusion::new(class, catalog, external, own).map(Arc::new)
+                })
+            } else {
+                prepare_turrets(&mut self.headless_turrets, &frame);
+                self.depth_geometry.as_ref().ok().and_then(|geometry| {
+                    let (external, own) = cockpit_occlusion_geometry::build(
+                        &frame,
+                        &geometry.catalog,
+                        &geometry.station_batches,
+                        &geometry.drone_parts,
+                        &self.headless_turrets,
+                    )?;
+                    CockpitOcclusion::new(class, geometry.catalog.clone(), external, own)
+                        .map(Arc::new)
+                })
+            };
+            self.cockpit_display_frame =
+                frame
+                    .cockpit_occlusion
+                    .clone()
+                    .map(|scene| CockpitDisplayFrame {
+                        scene,
+                        vp: cockpit_vp,
+                        mount: cockpit_mount,
+                        viewport: rect,
+                        class,
+                        mechanism_fractions,
+                    });
+            self.cockpit_layer = self.cockpit_display_frame.as_ref().map(|_| ui.layer_id());
+        }
+        let instrument_surfaces: [Option<CockpitSurface>; COCKPIT_SURFACE_SLOTS] =
+            std::array::from_fn(|index| self.physical_surface(index, egui::vec2(300., 180.)));
+        self.instrument_surfaces = instrument_surfaces.iter().flatten().cloned().collect();
+        self.computer_surface = self.physical_surface(3, cockpit_computer::COMPUTER_CANVAS_SIZE);
+        self.console_rect = self.computer_surface.as_ref().map(CockpitSurface::bounds);
+        let pointer_on_display = ui
+            .input(|input| input.pointer.hover_pos())
+            .is_some_and(|point| {
+                self.instrument_surfaces
+                    .iter()
+                    .any(|surface| surface.contains(point))
+            });
+        if pointer_on_display {
+            self.input_surface = None;
+        }
+        world_input &= !pointer_on_display;
+        // Keep dedicated lower instruments available while camera video owns
+        // the upper-left multipurpose display instead of its usual local map.
+        let camera_display = self.drone_camera || self.remote_ship.is_some();
+        let drone_surface = self.physical_surface(4, egui::vec2(344., 244.));
         match &self.renderer {
             Ok(renderer) => {
                 let renderer = renderer.clone();
-                let frame = Frame {
-                    lighting_quality: self.lighting_quality,
-                    cockpit_vp,
-                    snapshot_time: snapshot.server_time_ms,
-                    planet_vp: Mat4::perspective_rh_gl(
-                        if tactical {
-                            1.22
-                        } else if cockpit {
-                            COCKPIT_FOV
-                        } else {
-                            0.85
-                        },
-                        rect.aspect_ratio(),
-                        1.0,
-                        300_000.0,
-                    ) * view,
-                    system_id,
-                    ship_class: own_pilot.map_or(ShipClass::Pioneer, |p| p.ship_class),
-                    traffic: snapshot
-                        .traffic
-                        .iter()
-                        .filter(|a| a.system_id == system_id)
-                        .cloned()
-                        .collect(),
-                    surface_props: snapshot
-                        .surface_props
-                        .iter()
-                        .filter(|p| p.system_id == system_id)
-                        .cloned()
-                        .collect(),
-                    drone_camera: false,
-                    camera_drone: None,
-                    space,
-                    cockpit,
-                    rotation,
-                    asteroids: asteroids.clone(),
-                    gates: local_gates.clone(),
-                    connected,
-                    vp,
-                    eye,
-                    now,
-                    pilots: snapshot
-                        .pilots
-                        .iter()
-                        .filter(|p| p.system_id == system_id && p.location != Location::Docked)
-                        .cloned()
-                        .collect(),
-                    own: pilot_name.to_string(),
-
-                    docking: effects.events.iter().rev().find_map(|event| {
-                        let age = now.saturating_sub(event.started_ms);
-                        if !connected || age >= super::effects::EFFECT_DURATION_MS {
-                            return None;
-                        }
-                        let docking = match event.kind {
-                            super::effects::EffectKind::Docking => true,
-                            super::effects::EffectKind::Undocking => false,
-                            _ => return None,
-                        };
-                        Some((
-                            age as f32 / super::effects::EFFECT_DURATION_MS as f32,
-                            docking,
-                        ))
-                    }),
-                };
-                let drone_screen = drone_feed_rect(rect, frame.ship_class);
-                let camera_drone = own_pilot.and_then(|p| {
-                    fleet(p)
-                        .into_iter()
-                        .find(|d| Some(d.id) == self.selected_drone)
-                        .or_else(|| fleet(p).first().copied())
-                });
+                let drone_screen = drone_surface.as_ref().map_or(
+                    egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(344., 244.)),
+                    |surface| surface.canvas_rect().shrink(8.),
+                );
+                let camera_drone =
+                    own_pilot.and_then(|p| selected_camera_drone(p, self.selected_drone));
+                let stored_camera = own_pilot
+                    .and_then(|p| drone_bay_scene::selected_stored(p, self.selected_drone));
                 let remote_worker = self
                     .remote_ship
                     .as_deref()
@@ -730,10 +1673,74 @@ impl FlightView {
                 let mut camera_feeds = Vec::new();
                 if cockpit && self.remote_ship.is_some() {
                     if let Some(feed) = remote_frame {
-                        camera_feeds.push((drone_screen, feed, None));
+                        camera_feeds.push((drone_screen, feed, None, None));
                     }
                 } else if cockpit
                     && self.drone_camera
+                    && matches!(
+                        self.camera_source,
+                        super::camera_sources::CameraSource::BayOverview
+                            | super::camera_sources::CameraSource::BayRack(_)
+                    )
+                    && connected
+                    && now.saturating_sub(snapshot.server_time_ms) <= 1500
+                {
+                    if let Some(pilot) = own_pilot {
+                        if let Some(feed) = drone_bay_scene::camera_frame(
+                            &frame,
+                            pilot,
+                            self.camera_source,
+                            drone_screen.aspect_ratio(),
+                        ) {
+                            camera_feeds.push((drone_screen, feed, None, None));
+                        }
+                    }
+                } else if cockpit
+                    && self.drone_camera
+                    && self.camera_source != super::camera_sources::CameraSource::Drones
+                    && connected
+                    && now.saturating_sub(snapshot.server_time_ms) <= 1500
+                {
+                    let slots: Vec<u8> = match self.camera_source {
+                        super::camera_sources::CameraSource::Turret(slot) if slot < 2 => vec![slot],
+                        super::camera_sources::CameraSource::AllTurrets => vec![0, 1],
+                        _ => Vec::new(),
+                    };
+                    if let Some(pilot) = own_pilot {
+                        let poses = renderer
+                            .lock()
+                            .ok()
+                            .map(|renderer| {
+                                slots
+                                    .iter()
+                                    .map(|slot| {
+                                        renderer
+                                            .turrets
+                                            .get(&(pilot_name.to_owned(), *slot))
+                                            .map(|state| state.rotation)
+                                    })
+                                    .collect::<Vec<_>>()
+                            })
+                            .unwrap_or_default();
+                        let screens = feed_tiles(drone_screen, slots.len());
+                        for ((slot, rotation), screen) in slots.into_iter().zip(poses).zip(screens)
+                        {
+                            if let Some(feed) = rotation.and_then(|rotation| {
+                                turret_camera_frame(
+                                    &frame,
+                                    pilot,
+                                    slot,
+                                    rotation,
+                                    screen.aspect_ratio(),
+                                )
+                            }) {
+                                camera_feeds.push((screen, feed, None, Some(slot)));
+                            }
+                        }
+                    }
+                } else if cockpit
+                    && self.drone_camera
+                    && self.camera_source == super::camera_sources::CameraSource::Drones
                     && connected
                     && now.saturating_sub(snapshot.server_time_ms) <= 1500
                 {
@@ -752,7 +1759,15 @@ impl FlightView {
                     let screens = feed_tiles(drone_screen, chosen.len());
                     for (drone, screen) in chosen.into_iter().zip(screens) {
                         let mut feed = frame.clone();
-                        let mut camera_sample = drone.clone();
+                        let Some(mut camera_sample) = own_pilot.and_then(|p| {
+                            drone_bay_scene::camera_sample(
+                                p,
+                                drone,
+                                frame.authoritative_motion_time(),
+                            )
+                        }) else {
+                            continue;
+                        };
                         let heading =
                             Vec3::from_array(drone.heading.map(|v| v as f32)).normalize_or_zero();
                         let previous = self.drone_headings.entry(drone.id).or_insert(heading);
@@ -787,9 +1802,125 @@ impl FlightView {
                         feed.camera_drone =
                             (self.drone_mode == DroneCameraMode::Pov).then_some(drone.id);
                         feed.docking = None;
-                        camera_feeds.push((screen, feed, Some(drone)));
+                        camera_feeds.push((screen, feed, Some(drone), None));
                     }
                 }
+                // Recovery retains the exact selected identity. A stored craft is
+                // observed in its real home rack, not substituted with another drone.
+                if cockpit
+                    && self.drone_camera
+                    && self.remote_ship.is_none()
+                    && self.camera_source == super::camera_sources::CameraSource::Drones
+                    && self.drone_feeds.is_empty()
+                    && camera_feeds.is_empty()
+                    && connected
+                    && now.saturating_sub(snapshot.server_time_ms) <= 1500
+                {
+                    if let (Some(pilot), Some(entry)) = (own_pilot, stored_camera) {
+                        if let Some(feed) = drone_bay_scene::camera_frame(
+                            &frame,
+                            pilot,
+                            super::camera_sources::CameraSource::BayRack(entry.home_cradle / 5),
+                            drone_screen.aspect_ratio(),
+                        ) {
+                            camera_feeds.push((drone_screen, feed, None, None));
+                        }
+                    }
+                }
+                let primary_feed_count = camera_feeds.len();
+                let mut camera_feeds: Vec<_> = camera_feeds
+                    .into_iter()
+                    .filter_map(|(screen, feed, drone, turret)| {
+                        let stored_view = if self.camera_source
+                            == super::camera_sources::CameraSource::Drones
+                            && drone.is_none()
+                            && turret.is_none()
+                            && self.remote_ship.is_none()
+                        {
+                            stored_camera
+                        } else {
+                            None
+                        };
+                        let source_key = if let Some(entry) = stored_view {
+                            let bay = drone_bay_scene::validated_bay(own_pilot?)?;
+                            egui::Id::new((
+                                "stored-drone",
+                                &bay.binding.vessel_id,
+                                &bay.binding.source_sha256,
+                                entry.drone_id,
+                                entry.home_cradle,
+                            ))
+                            .value()
+                        } else if matches!(
+                            self.camera_source,
+                            super::camera_sources::CameraSource::BayOverview
+                                | super::camera_sources::CameraSource::BayRack(_)
+                        ) && self.remote_ship.is_none()
+                        {
+                            let bay = drone_bay_scene::validated_bay(own_pilot?)?;
+                            bay_camera_source_key(pilot_name, &bay.binding, self.camera_source)
+                        } else {
+                            camera_source_key(
+                                pilot_name,
+                                drone.map(|d: &arkline_protocol::DroneView| d.id),
+                                self.remote_ship.as_deref(),
+                                self.drone_mode,
+                                turret,
+                            )
+                        };
+                        Some(physical_cockpit::DisplayFeed {
+                            surface: drone_surface.clone()?,
+                            screen,
+                            frame: feed,
+                            drone,
+                            turret,
+                            exterior: None,
+                            #[cfg(test)]
+                            source_key,
+                            key: physical_cockpit::capture_key(
+                                self.mechanism_pose.capture_identity(source_key),
+                                screen,
+                            ),
+                            primary: true,
+                            #[cfg(test)]
+                            bay: 4,
+                            rig_status: stored_view.map(|entry| {
+                                format!(
+                                    "DRONE #{} · DOCKED · HOME {}",
+                                    entry.drone_id,
+                                    entry.home_cradle + 1
+                                )
+                            }),
+                        })
+                    })
+                    .collect();
+                if let Some(own) = own_pilot.filter(|_| cockpit && class == ShipClass::Pioneer) {
+                    physical_cockpit::append_feeds(
+                        &instrument_surfaces,
+                        &mut camera_feeds,
+                        &renderer,
+                        &frame,
+                        own,
+                        &self.mechanism_pose,
+                    );
+                }
+                if let (Some(own), Ok(renderer)) = (own_pilot, renderer.lock()) {
+                    physical_cockpit::annotate_turret_rigs(
+                        &mut camera_feeds,
+                        &renderer,
+                        &frame,
+                        own,
+                    );
+                }
+                #[cfg(test)]
+                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("physical_cockpit_proof"), serde_json::json!({
+                    "snapshot_ms": snapshot.server_time_ms, "fractions": mechanism_fractions,
+                    "state": self.mechanism_pose.state(),
+                    "feeds": camera_feeds.iter().map(|f| serde_json::json!({"key":f.key,"source_key":f.source_key,"bay":f.bay,
+                        "drone":f.drone.map(|d|d.id),"turret":f.turret,"primary":f.primary,
+                        "size":feed_resolution(f.screen.width().round() as i32,f.screen.height().round() as i32),
+                        "rig_status":f.rig_status,"exterior":f.exterior.map(|s|s.component_id()),"aspect":f.screen.aspect_ratio(),"nonrecursive":!f.frame.cockpit&&f.frame.drone_camera})).collect::<Vec<_>>()
+                })));
                 let drone_renderer = renderer.clone();
                 // WebGL objects stay on the browser thread; guard callback access.
                 #[cfg(target_arch = "wasm32")]
@@ -805,7 +1936,11 @@ impl FlightView {
                     })),
                 });
                 for drone in own_pilot.map(fleet).unwrap_or_default() {
-                    if let Some(point) = project_point(vp, rect, space.scene(drone.position)) {
+                    if let Some(point) = project_point(vp, rect, space.scene(drone.position))
+                        .filter(|point| {
+                            physical_cockpit::world_annotation_clear(&instrument_surfaces, *point)
+                        })
+                    {
                         let painter = ui.painter_at(rect);
                         painter.circle_stroke(point, 8.0, egui::Stroke::new(1.0, super::TEAL));
                         painter.text(
@@ -831,10 +1966,16 @@ impl FlightView {
                         && p.location != Location::Docked
                         && !(cockpit && p.name == pilot_name)
                 }) {
-                    let clip = vp
-                        * (space.position(pilot, now)
-                            + Vec3::Y * (pilot.ship_class.spec().height_m as f32 / 200.0 + 0.06))
-                            .extend(1.0);
+                    let Some(label_position) = carrier_annotation::position(
+                        pilot,
+                        space,
+                        snapshot.server_time_ms,
+                        now,
+                        snapshot.carrier_inventory_registration.as_ref(),
+                    ) else {
+                        continue;
+                    };
+                    let clip = vp * label_position.extend(1.0);
                     if clip.w > 0.0 {
                         let point = clip.truncate() / clip.w;
                         if point.x.abs() < 0.95 && point.y.abs() < 0.92 {
@@ -842,6 +1983,12 @@ impl FlightView {
                                 rect.center().x + point.x * rect.width() * 0.5,
                                 rect.center().y - point.y * rect.height() * 0.5,
                             );
+                            if !physical_cockpit::world_annotation_clear(
+                                &instrument_surfaces,
+                                screen,
+                            ) {
+                                continue;
+                            }
                             ui.painter_at(rect).text(
                                 screen,
                                 egui::Align2::CENTER_BOTTOM,
@@ -859,7 +2006,9 @@ impl FlightView {
                 for actor in snapshot.traffic.iter().filter(|a| a.system_id == system_id) {
                     let pos = space.scene(actor.position);
                     if pos.distance(eye) < 300.0 {
-                        if let Some(label) = project_point(vp, rect, pos) {
+                        if let Some(label) = project_point(vp, rect, pos).filter(|point| {
+                            physical_cockpit::world_annotation_clear(&instrument_surfaces, *point)
+                        }) {
                             let role = match actor.role {
                                 arkline_protocol::TrafficRole::StationShuttle => "Shuttle",
                                 arkline_protocol::TrafficRole::FreightTender => "Freight tender",
@@ -875,12 +2024,17 @@ impl FlightView {
                         }
                     }
                 }
-                let project = |point: Vec3| project_point(vp, rect, point);
+                let project = |point: Vec3| {
+                    project_point(vp, rect, point).filter(|point| {
+                        physical_cockpit::world_annotation_clear(&instrument_surfaces, *point)
+                    })
+                };
                 let own_pilot = snapshot
                     .pilots
                     .iter()
                     .find(|pilot| pilot.name == pilot_name);
-                let can_navigate = connected
+                let can_navigate = !editor_free_camera
+                    && connected
                     && own_pilot.is_some_and(|pilot| {
                         pilot.flight.is_some()
                             && !matches!(
@@ -908,11 +2062,9 @@ impl FlightView {
                             p.system_id == system_id
                                 && space.scene(p.position).distance(eye) < 1100.0
                         }) {
-                            targets.push((
-                                super::SelectedObject::Prop(prop.id),
-                                cube(),
-                                surface_prop_model(prop, space),
-                            ));
+                            if let Some(model) = surface_prop_model(prop, space, world_layout) {
+                                targets.push((super::SelectedObject::Prop(prop.id), cube(), model));
+                            }
                         }
                         for gate in local_gates
                             .iter()
@@ -937,12 +2089,18 @@ impl FlightView {
                                 && p.location != Location::Docked
                                 && !(cockpit && p.name == pilot_name)
                         }) {
-                            let model = transform(
-                                space.position(pilot, now),
-                                Vec3::ONE,
-                                ship_orientation_at(pilot, now),
-                            );
-                            for (mesh, part) in ship_geometry(pilot.ship_class, model) {
+                            let Ok(hull) = carrier_hull_picking::hull_geometry(
+                                pilot,
+                                space,
+                                snapshot.server_time_ms,
+                                now,
+                                snapshot.carrier_inventory_registration.as_ref(),
+                            ) else {
+                                // Invalid advertised source rejects this whole pilot's
+                                // picking geometry, including neighboring turret draws.
+                                continue;
+                            };
+                            for (mesh, part) in hull {
                                 targets.push((
                                     super::SelectedObject::Pilot(pilot.name.clone()),
                                     mesh,
@@ -955,17 +2113,25 @@ impl FlightView {
                                         if let Some(state) =
                                             renderer.turrets.get(&(pilot.name.clone(), module_id))
                                         {
-                                            for (mesh, part, _, _) in turret_parts(
-                                                pilot.ship_class,
-                                                state.rotation,
+                                            for (mesh, part, _, _) in parallel_turret_pose::resolve(
+                                                pilot,
+                                                space,
+                                                snapshot.server_time_ms,
+                                                now,
                                                 module_id,
-                                            ) {
+                                                state.rotation,
+                                                false,
+                                                snapshot.carrier_inventory_registration.as_ref(),
+                                            )
+                                            .into_iter()
+                                            .flat_map(|r| r.parts)
+                                            {
                                                 targets.push((
                                                     super::SelectedObject::Pilot(
                                                         pilot.name.clone(),
                                                     ),
                                                     mesh_vertices(mesh),
-                                                    model * part,
+                                                    part,
                                                 ));
                                             }
                                         }
@@ -1014,13 +2180,28 @@ impl FlightView {
                         }
                     }
                 }
-                if !cockpit && (world_input || response.context_menu_opened()) {
+                if !cockpit
+                    && !editor_free_camera
+                    && (world_input || response.context_menu_opened())
+                {
                     response.context_menu(|ui| {
                         ui.label("Navigation");
                         match &self.context_object {
                             Some(super::SelectedObject::Asteroid(id)) => {
                                 if let Some(asteroid) = asteroids.iter().find(|a| a.id == *id) {
-                                    ui.label(format!("{} · {} ore", asteroid.name, asteroid.ore));
+                                    ui.label(format!(
+                                        "{} · {}",
+                                        asteroid.name,
+                                        self.physical
+                                            .as_ref()
+                                            .filter(
+                                                |p| p.view.state.binding.target_id == asteroid.id
+                                            )
+                                            .map(|p| crate::physical_cargo_ui::litres(
+                                                p.view.state.projection.resource_remaining_cm3.0
+                                            ))
+                                            .unwrap_or_else(|| format!("{} ore", asteroid.ore))
+                                    ));
                                     let lockable = can_navigate
                                         && own_pilot.is_some_and(|p| {
                                             space
@@ -1146,104 +2327,359 @@ impl FlightView {
                         }
                     }
                 }
-                if cockpit && !self.head_looking() && !ui.input(|i| i.modifiers.shift) {
+                if cockpit {
                     if let Some(own) = own_pilot {
                         paint_instruments(
-                            &painter,
-                            rect,
+                            ui,
+                            &instrument_surfaces,
                             own,
                             snapshot,
                             selected_distance,
                             now,
-                            connected,
+                            connected && !self.radar_paused,
+                            Some(if !connected {
+                                "DISCONNECTED"
+                            } else if self.radar_paused {
+                                "PAUSED"
+                            } else if now.saturating_sub(snapshot.server_time_ms) > 1500 {
+                                "STALE"
+                            } else {
+                                "LIVE"
+                            }),
                         );
-                        let feed_count = camera_feeds.len();
-                        for (screen, feed, drone) in camera_feeds {
-                            let fresh =
-                                connected && now.saturating_sub(snapshot.server_time_ms) <= 1500;
-                            if drone.is_none_or(|d| d.signal_strength > 0.0) {
-                                let renderer = drone_renderer.clone();
-                                #[cfg(target_arch = "wasm32")]
-                                let renderer = send_wrapper::SendWrapper::new(renderer);
-                                let key = egui::Id::new((
-                                    pilot_name,
-                                    drone.map(|d| d.id),
-                                    self.remote_ship.as_deref(),
-                                    self.drone_mode,
-                                ))
-                                .value();
-                                painter.with_clip_rect(screen.intersect(rect)).add(
-                                    egui::PaintCallback {
-                                        rect: screen,
+                        let authority = if !connected {
+                            "DISCONNECTED"
+                        } else if self.radar_paused {
+                            "PAUSED"
+                        } else if now.saturating_sub(snapshot.server_time_ms) > 1500 {
+                            "STALE"
+                        } else {
+                            "LIVE"
+                        };
+                        if let Some(surface) = &instrument_surfaces[7] {
+                            if let Some(physical) = &self.physical {
+                                cargo_instrument::paint_physical(
+                                    ui,
+                                    surface,
+                                    own,
+                                    snapshot,
+                                    self.drone_telemetry_time,
+                                    &physical.view,
+                                );
+                            } else {
+                                cargo_instrument::paint(
+                                    ui,
+                                    surface,
+                                    own,
+                                    snapshot,
+                                    self.drone_telemetry_time,
+                                    self.cargo_unload.as_ref(),
+                                );
+                            }
+                        }
+                        drone_cassette_metrics::paint(
+                            ui,
+                            &instrument_surfaces,
+                            self.mechanism_pose.state(),
+                            own,
+                            self.drone_telemetry_time,
+                        );
+                        physical_cockpit::backgrounds(
+                            ui,
+                            &instrument_surfaces,
+                            &self.mechanism_pose,
+                            own,
+                            now,
+                            authority,
+                        );
+                        if let Some(surface) = &instrument_surfaces[REACTOR_SURFACE_SLOT] {
+                            reactor_display::paint(ui, surface, &self.reactor_pose, own, authority);
+                        }
+                        // Dedicated camera screens are independent of the legacy
+                        // NAV/primary-camera face. Head look may cull that face
+                        // while other drone/turret screens remain clearly visible.
+                        {
+                            let capture_pass = ui.ctx().cumulative_pass_nr();
+                            let capture_ui_ms =
+                                ui.input(|input| (input.time.max(0.0) * 1000.0) as u64);
+                            let mut capture_keys: Vec<u64> = camera_feeds
+                                .iter()
+                                .filter(|view| {
+                                    view.drone.is_none_or(|d| d.signal_strength > 0.0)
+                                        && view.surface.feed_geometry(view.screen).is_some()
+                                })
+                                .map(|view| view.key)
+                                .collect();
+                            capture_keys.sort_unstable();
+                            capture_keys.dedup();
+                            if let Ok(mut visible) = self.visible_feed_sources.lock() {
+                                visible.register_clocks(
+                                    capture_pass,
+                                    camera_feeds
+                                        .iter()
+                                        .filter(|view| capture_keys.contains(&view.key))
+                                        .map(|view| (view.key, view.frame.now)),
+                                );
+                            }
+                            for view in camera_feeds {
+                                let physical_cockpit::DisplayFeed {
+                                    surface,
+                                    screen,
+                                    frame: feed,
+                                    drone,
+                                    turret,
+                                    exterior,
+                                    key,
+                                    primary,
+                                    rig_status,
+                                    ..
+                                } = view;
+                                let fresh = connected
+                                    && now.saturating_sub(snapshot.server_time_ms) <= 1500;
+                                if drone.is_none_or(|d| d.signal_strength > 0.0) {
+                                    let renderer = drone_renderer.clone();
+                                    let surface = surface.clone();
+                                    #[cfg(target_arch = "wasm32")]
+                                    let renderer = send_wrapper::SendWrapper::new(renderer);
+                                    #[cfg(target_arch = "wasm32")]
+                                    let surface = send_wrapper::SendWrapper::new(surface);
+                                    let visible_sources = self.visible_feed_sources.clone();
+                                    painter.add(egui::PaintCallback {
+                                        rect,
                                         callback: Arc::new(egui_glow::CallbackFn::new(
                                             move |info, painter| {
+                                                let capture_keys = visible_sources
+                                                    .lock()
+                                                    .map(|v| v.for_pass(capture_pass))
+                                                    .unwrap_or_default();
                                                 if let Ok(mut renderer) = renderer.lock() {
+                                                    renderer.feed_source_clocks = visible_sources
+                                                        .lock()
+                                                        .map(|v| v.clocks_for_pass(capture_pass))
+                                                        .unwrap_or_default();
                                                     unsafe {
-                                                        renderer.paint_cached_feed(
+                                                        renderer.paint_cached_feed_on_surface(
                                                             &feed,
                                                             key,
                                                             info,
-                                                            feed_count,
+                                                            capture_keys.len(),
                                                             painter.intermediate_fbo(),
+                                                            Some((&surface, screen)),
+                                                            Some((
+                                                                capture_pass,
+                                                                capture_ui_ms,
+                                                                capture_keys.as_slice(),
+                                                            )),
                                                         );
                                                     }
                                                 }
                                             },
                                         )),
-                                    },
+                                    });
+                                }
+                                let capture_key = key;
+                                let capture_size = feed_resolution(
+                                    screen.width().round() as i32,
+                                    screen.height().round() as i32,
                                 );
-                            }
-                            let overlay = painter.with_clip_rect(screen.intersect(rect));
-                            overlay.text(
-                                screen.left_top() + egui::vec2(3.0, 3.0),
-                                egui::Align2::LEFT_TOP,
-                                if let Some(worker) = remote_worker {
-                                    format!("{} / REMOTE SHIP", worker.name)
-                                } else {
-                                    format!("#{} / {}", drone.unwrap().id, self.drone_mode.label())
-                                },
-                                egui::FontId::monospace((screen.width() / 16.0).clamp(8.0, 12.0)),
-                                super::TEAL,
-                            );
-                            if let Some(drone) = drone {
-                                paint_camera_signal(&painter, screen, Some(drone), now, fresh);
+                                let captured_at = drone_renderer.lock().ok().and_then(|renderer| {
+                                    renderer
+                                        .feed_cache
+                                        .iter()
+                                        .find(|cache| {
+                                            cache.key == capture_key
+                                                && (cache.width, cache.height) == capture_size
+                                        })
+                                        .and_then(|cache| cache.captured_ui_ms)
+                                });
+                                surface.paint(ui, |overlay| {
+                                    let overlay = overlay.with_clip_rect(screen);
+                                    let capture_label = if !fresh
+                                        || drone.is_some_and(|d| d.signal_strength <= 0.0)
+                                    {
+                                        "UNAVAILABLE".to_owned()
+                                    } else {
+                                        captured_at
+                                            .filter(|captured| *captured <= capture_ui_ms)
+                                            .map_or_else(
+                                                || "WARMING UP".to_owned(),
+                                                |captured| {
+                                                    format!(
+                                                        "CACHED · {} ms",
+                                                        capture_ui_ms.saturating_sub(captured)
+                                                    )
+                                                },
+                                            )
+                                    };
+                                    overlay.text(
+                                        screen.left_bottom() + egui::vec2(3., -3.),
+                                        egui::Align2::LEFT_BOTTOM,
+                                        capture_label,
+                                        egui::FontId::monospace(10.),
+                                        super::MUTED,
+                                    );
+                                    overlay.text(
+                                        screen.left_top() + egui::vec2(3., 3.),
+                                        egui::Align2::LEFT_TOP,
+                                        if let Some(worker) = remote_worker.filter(|_| primary) {
+                                            format!("{} / REMOTE SHIP", worker.name)
+                                        } else if let Some(side) = exterior {
+                                            exterior_camera_label(side).into()
+                                        } else if let Some(slot) = turret {
+                                            format!("TURRET {} / RENDERED POV", slot + 1)
+                                        } else if primary
+                                            && matches!(
+                                                self.camera_source,
+                                                super::camera_sources::CameraSource::BayOverview
+                                                    | super::camera_sources::CameraSource::BayRack(
+                                                        _
+                                                    )
+                                            )
+                                        {
+                                            format!(
+                                                "{} / FIXED BAY CAMERA",
+                                                self.camera_source.label().to_uppercase()
+                                            )
+                                        } else if primary
+                                            && drone.is_none()
+                                            && stored_camera.is_some()
+                                        {
+                                            "SELECTED DRONE / HOME RACK CAMERA".into()
+                                        } else {
+                                            format!(
+                                                "#{} / {}",
+                                                drone.map_or(0, |d| d.id),
+                                                if primary {
+                                                    self.drone_mode.label()
+                                                } else {
+                                                    DroneCameraMode::Pov.label()
+                                                }
+                                            )
+                                        },
+                                        egui::FontId::monospace(11.),
+                                        super::TEAL,
+                                    );
+                                    if let Some(slot) = turret {
+                                        let status = own_pilot
+                                            .map(|pilot| module_instrument(pilot, slot, now))
+                                            .unwrap_or_else(|| {
+                                                "MODULE DATA UNAVAILABLE".to_owned()
+                                            });
+                                        overlay.text(
+                                            screen.left_top() + egui::vec2(3., 17.),
+                                            egui::Align2::LEFT_TOP,
+                                            status,
+                                            egui::FontId::monospace(10.),
+                                            super::MUTED,
+                                        );
+                                    }
+                                    if let Some(status) = &rig_status {
+                                        overlay.text(
+                                            screen.center_bottom() - egui::vec2(0., 17.),
+                                            egui::Align2::CENTER_BOTTOM,
+                                            status,
+                                            egui::FontId::monospace(10.),
+                                            super::AMBER,
+                                        );
+                                    }
+                                    if let Some(drone) = drone {
+                                        paint_camera_signal(
+                                            &overlay,
+                                            screen,
+                                            Some(drone),
+                                            now,
+                                            fresh,
+                                        );
+                                    }
+                                });
                             }
                         }
-                        if self.remote_ship.is_some() && remote_worker.is_none() {
-                            let overlay = painter.with_clip_rect(drone_screen.intersect(rect));
-                            overlay.rect_filled(
-                                drone_screen,
-                                0.0,
-                                egui::Color32::from_rgb(1, 8, 5),
-                            );
-                            overlay.text(
-                                drone_screen.center(),
-                                egui::Align2::CENTER_CENTER,
-                                "REMOTE VIEW UNAVAILABLE / STALE",
-                                egui::FontId::monospace(11.0),
-                                super::AMBER,
-                            );
-                        } else if self.remote_ship.is_none() && self.drone_camera && feed_count == 0
+                        if let Some(surface) = &drone_surface {
+                            if self.remote_ship.is_some() && remote_worker.is_none() {
+                                surface.paint(ui, |overlay| {
+                                    overlay.rect_filled(
+                                        drone_screen,
+                                        0.,
+                                        egui::Color32::from_rgb(1, 8, 5),
+                                    );
+                                    overlay.text(
+                                        drone_screen.center(),
+                                        egui::Align2::CENTER_CENTER,
+                                        "REMOTE VIEW UNAVAILABLE / STALE",
+                                        egui::FontId::monospace(11.),
+                                        super::AMBER,
+                                    );
+                                });
+                            } else if self.remote_ship.is_none()
+                                && self.drone_camera
+                                && primary_feed_count == 0
+                            {
+                                surface.paint(ui, |overlay| {
+                                    if self.camera_source
+                                        != super::camera_sources::CameraSource::Drones
+                                    {
+                                        overlay.text(
+                                            drone_screen.center(),
+                                            egui::Align2::CENTER_CENTER,
+                                            if matches!(
+                                                self.camera_source,
+                                                super::camera_sources::CameraSource::BayOverview
+                                                    | super::camera_sources::CameraSource::BayRack(
+                                                        _
+                                                    )
+                                            ) {
+                                                "BAY VIEW UNAVAILABLE / STALE"
+                                            } else {
+                                                "TURRET VIEW UNAVAILABLE / STALE"
+                                            },
+                                            egui::FontId::monospace(11.),
+                                            super::AMBER,
+                                        );
+                                    } else {
+                                        paint_camera_signal(
+                                            overlay,
+                                            drone_screen,
+                                            camera_drone,
+                                            now,
+                                            connected
+                                                && now.saturating_sub(snapshot.server_time_ms)
+                                                    <= 1500,
+                                        )
+                                    }
+                                });
+                            }
+                        }
+                        if let Some(surface) = (!camera_display)
+                            .then(|| self.physical_surface(4, NAV_CANVAS_SIZE))
+                            .flatten()
                         {
-                            paint_camera_signal(
-                                &painter,
-                                drone_screen,
-                                camera_drone,
+                            if let Some(action) = paint_cockpit_maps(
+                                ui,
+                                &surface,
+                                own,
+                                snapshot,
                                 now,
-                                connected && now.saturating_sub(snapshot.server_time_ms) <= 1500,
-                            );
+                                connected,
+                                false,
+                                selected,
+                                &mut self.map_range,
+                            ) {
+                                picked = Some(action);
+                            }
                         }
-                        if let Some(action) = paint_cockpit_maps(
-                            ui,
-                            rect,
-                            own,
-                            snapshot,
-                            now,
-                            connected,
-                            selected,
-                            &mut self.map_range,
-                        ) {
-                            picked = Some(action);
+                        if let Some(surface) =
+                            self.physical_surface(5, cockpit_radar::RADAR_CANVAS_SIZE)
+                        {
+                            cockpit_radar::paint(
+                                ui,
+                                &surface,
+                                own,
+                                snapshot,
+                                now,
+                                connected,
+                                self.radar_paused,
+                                self.map_range,
+                            );
                         }
                         painter.circle_stroke(
                             rect.center(),
@@ -1271,7 +2707,15 @@ impl FlightView {
                 if let super::SelectedObject::Asteroid(id) = selected {
                     if let Some(a) = asteroids.iter().find(|a| a.id == *id) {
                         if let Some(point) = project(space.scene(a.position)) {
-                            let ore = if a.ore == 0 {
+                            let ore = if let Some(p) = self
+                                .physical
+                                .as_ref()
+                                .filter(|p| p.view.state.binding.target_id == a.id)
+                            {
+                                crate::physical_cargo_ui::litres(
+                                    p.view.state.projection.resource_remaining_cm3.0,
+                                )
+                            } else if a.ore == 0 {
                                 "DEPLETED".into()
                             } else {
                                 format!("{} ore", a.ore)
@@ -1474,19 +2918,21 @@ impl FlightView {
                         }
                     }
                 }
-                painter.text(
-                    rect.left_top() + egui::vec2(18.0, 16.0),
-                    egui::Align2::LEFT_TOP,
-                    format!(
-                        "{} / ARKLINE ORBITAL",
-                        systems()
-                            .iter()
-                            .find(|s| s.id == system_id)
-                            .map_or("UNKNOWN", |s| s.name.as_str())
-                    ),
-                    egui::FontId::monospace(12.0),
-                    super::TEAL,
-                );
+                if !cockpit {
+                    painter.text(
+                        rect.left_top() + egui::vec2(18.0, 16.0),
+                        egui::Align2::LEFT_TOP,
+                        format!(
+                            "{} / ARKLINE ORBITAL",
+                            systems()
+                                .iter()
+                                .find(|s| s.id == system_id)
+                                .map_or("UNKNOWN", |s| s.name.as_str())
+                        ),
+                        egui::FontId::monospace(12.0),
+                        super::TEAL,
+                    );
+                }
                 painter.text(
                     rect.left_bottom() + egui::vec2(18.0, -16.0),
                     egui::Align2::LEFT_BOTTOM,
@@ -1523,31 +2969,658 @@ impl FlightView {
         picked
     }
 }
+fn bay_monitor_image_status(
+    connected: bool,
+    paused: bool,
+    fresh: bool,
+    image_age_ms: Option<u64>,
+) -> String {
+    let image = image_age_ms.map_or_else(
+        || "no captured image yet".to_owned(),
+        |age| format!("image {age} ms old"),
+    );
+    if !connected {
+        format!("DISCONNECTED · last received bay · {image}")
+    } else if paused {
+        format!("PAUSED · bay motion paused · {image}")
+    } else if !fresh {
+        format!("STALE AUTHORITY · bay motion frozen · {image}")
+    } else if image_age_ms.is_none() {
+        "WAITING FOR FIRST CAMERA IMAGE".to_owned()
+    } else if image_age_ms.is_some_and(|age| age <= 250) {
+        format!("LIVE · {image}")
+    } else {
+        format!("CACHED · {image} · waiting for camera refresh")
+    }
+}
+
+fn bay_monitor_image_height(width: f32, visible_height: f32, caption_height: f32) -> Option<f32> {
+    let room = visible_height - caption_height;
+    (room >= 100.0).then(|| (width / 1.7).clamp(100.0, 240.0).min(room))
+}
+
+fn bay_monitor_view_caption(camera: BayMonitorCamera) -> &'static str {
+    match camera {
+        BayMonitorCamera::Wide => "INTERIOR BAY · actual stock, trays and transfer aisle",
+        BayMonitorCamera::Doorway => "BAY DOORWAY · actual hull and doors remain visible",
+        BayMonitorCamera::OreReceiver => {
+            "ORE RECEIVER · inspection view of actual coupling hardware"
+        }
+    }
+}
+
+fn bay_monitor_caption_height(ui: &egui::Ui, width: f32, camera: BayMonitorCamera) -> f32 {
+    let font = egui::TextStyle::Small.resolve(ui.style());
+    let measure = |text: String| {
+        ui.painter()
+            .layout(text, font.clone(), egui::Color32::WHITE, width)
+            .size()
+            .y
+    };
+    // Reserve actual wrapped text, including worst-case age digits. Cached-image
+    // age is measured after the rect/key exists; no status can push it offscreen.
+    let status = [
+        (true, false, true),
+        (true, true, true),
+        (false, false, true),
+        (true, false, false),
+    ]
+    .into_iter()
+    .map(|(connected, paused, fresh)| {
+        measure(bay_monitor_image_status(
+            connected,
+            paused,
+            fresh,
+            Some(u64::MAX),
+        ))
+    })
+    .fold(
+        measure(bay_monitor_image_status(true, false, true, None)),
+        f32::max,
+    );
+    status + measure(bay_monitor_view_caption(camera).into()) + 2.0 * ui.spacing().item_spacing.y
+}
+
+fn bay_operations_frame(
+    snapshot: &Snapshot,
+    viewed_name: &str,
+    now: u64,
+    connected: bool,
+    paused: bool,
+    camera: BayMonitorCamera,
+    aspect: f32,
+) -> Result<Frame, String> {
+    let world_layout = super::snapshot_world_layout(snapshot)?.clone();
+    let pilot = snapshot
+        .pilots
+        .iter()
+        .find(|p| p.name == viewed_name)
+        .ok_or("Viewed vessel is not reported")?;
+    drone_bay_scene::validated_bay(pilot)
+        .ok_or("Physical bay is unavailable for this vessel or source registration")?;
+    // On-foot/legacy hangar screens use a different renderer. Do not grant a
+    // second capture budget while those surfaces own the scene.
+    if pilot.station_avatar.is_some() {
+        return Err("Return to the pilot seat for the live bay monitor".into());
+    }
+    if world_layout.revision != arkline_protocol::SceneLayoutRevision::DockingV1
+        || pilot
+            .flight
+            .as_ref()
+            .is_none_or(|flight| flight.docking.is_none())
+    {
+        return Err("Live bay monitor requires the physical flagship flight scene".into());
+    }
+    let fresh = now.saturating_sub(snapshot.server_time_ms) <= 1500;
+    let sample_time = if connected && fresh && !paused {
+        now
+    } else {
+        snapshot.server_time_ms
+    };
+    let system = pilot.system_id;
+    let frame = Frame {
+        pioneer_parts: None,
+        exterior: snapshot.exterior.clone().map(Arc::new),
+        lighting_quality: Default::default(),
+        cockpit_vp: Mat4::IDENTITY,
+        cockpit_occlusion: None,
+        snapshot_time: snapshot.server_time_ms,
+        paused,
+        planet_vp: Mat4::IDENTITY,
+        system_id: system,
+        ship_class: pilot.ship_class,
+        drone_camera: true,
+        camera_drone: None,
+        scene: Arc::new(FrameScene {
+            physical: None,
+            carrier_inventory_registration: snapshot.carrier_inventory_registration.clone(),
+            world_layout,
+            traffic: snapshot
+                .traffic
+                .iter()
+                .filter(|a| a.system_id == system)
+                .cloned()
+                .collect(),
+            surface_props: snapshot
+                .surface_props
+                .iter()
+                .filter(|a| a.system_id == system)
+                .cloned()
+                .collect(),
+            asteroids: snapshot
+                .asteroids
+                .iter()
+                .filter(|a| a.system_id == system)
+                .cloned()
+                .collect(),
+            gates: gates()
+                .into_iter()
+                .filter(|a| a.system_id == system)
+                .collect(),
+            pilots: snapshot
+                .pilots
+                .iter()
+                .filter(|a| a.system_id == system)
+                .cloned()
+                .collect(),
+        }),
+        space: Space {
+            origin: display_position(pilot, sample_time),
+        },
+        cockpit: false,
+        rotation: ship_orientation_at(pilot, sample_time),
+        connected: connected && fresh,
+        vp: Mat4::IDENTITY,
+        eye: Vec3::ZERO,
+        now: sample_time,
+        own: pilot.name.clone(),
+        docking: None,
+    };
+    drone_bay_scene::operations_camera_frame(&frame, pilot, camera, aspect)
+        .ok_or_else(|| "Physical bay camera geometry unavailable".to_owned())
+}
+
+fn confirmed_carrier_parent(
+    parent: arkline_protocol::drone_bay_geometry::BayPose,
+    snapshot_time: u64,
+) -> Result<(Space, Quat, u64), String> {
+    if !parent.valid() {
+        return Err("Carrier parent pose unavailable".into());
+    }
+    Ok((
+        Space {
+            origin: parent.position_m,
+        },
+        Quat::from_array(parent.orientation_xyzw.map(|v| v as f32)).normalize(),
+        snapshot_time,
+    ))
+}
+
+#[test]
+fn walking_carrier_parent_preserves_confirmed_au_origin_and_roll() {
+    use arkline_protocol::drone_bay_geometry::BayPose;
+    let parent = BayPose {
+        position_m: [149_597_870_700., 12., -44.],
+        orientation_xyzw: [
+            0.,
+            0.,
+            std::f64::consts::FRAC_1_SQRT_2,
+            std::f64::consts::FRAC_1_SQRT_2,
+        ],
+    };
+    let (space, rotation, motion_time) = confirmed_carrier_parent(parent, 1234).unwrap();
+    assert_eq!(
+        motion_time, 1234,
+        "eye and machinery share the accepted sample clock"
+    );
+    assert_eq!(space.origin, parent.position_m);
+    assert!((rotation * Vec3::X).distance(Vec3::Y) < 1e-6);
+    let mut invalid = parent;
+    invalid.position_m[0] = f64::NAN;
+    assert!(confirmed_carrier_parent(invalid, 1234).is_err());
+}
+
+#[test]
+fn walking_frame_rejects_advertised_missing_carrier_instead_of_legacy_fallback() {
+    let ctx = egui::Context::default();
+    let cockpit = crate::tests::view_test_cockpit(&ctx);
+    let pilot = cockpit.own().unwrap();
+    let mut snapshot = cockpit.snapshot.unwrap();
+    let frame = |snapshot: &Snapshot| {
+        moving_interior_frame(
+            snapshot,
+            &pilot,
+            snapshot.server_time_ms + 300,
+            true,
+            1.5,
+            arkline_protocol::PioneerDockedPose::private(),
+            Vec3::Y,
+            Vec3::Y + Vec3::Z,
+            &[],
+        )
+    };
+    assert_eq!(
+        frame(&snapshot).unwrap().now,
+        snapshot.server_time_ms + 300,
+        "legacy walking retains the supplied presentation time"
+    );
+    // A confirmed clock must never turn an externally stale/disconnected or
+    // paused view live. The caller supplies real-age liveness separately.
+    let mut frozen = frame(&snapshot).unwrap();
+    frozen.now = frozen.snapshot_time;
+    frozen.connected = false;
+    assert!(!frozen.presentation_live());
+    assert_eq!(frozen.authoritative_motion_time(), frozen.snapshot_time);
+    frozen.connected = true;
+    frozen.paused = true;
+    assert!(!frozen.presentation_live());
+    assert_eq!(frozen.authoritative_motion_time(), frozen.snapshot_time);
+    snapshot.carrier_inventory_registration = Some(
+        arkline_protocol::carrier_inventory_geometry::stationary_fixture_definition()
+            .unwrap()
+            .topology
+            .registration
+            .clone(),
+    );
+    assert!(
+        matches!(frame(&snapshot), Err(reason) if reason == "Carrier source projection unavailable")
+    );
+    // Deliberately unvalidated negative data: reject the caller/snapshot
+    // mismatch before either projection can be used for a camera or draw.
+    let binding = snapshot
+        .carrier_inventory_registration
+        .as_ref()
+        .unwrap()
+        .bind("mismatched-source-pilot".into());
+    snapshot
+        .pilots
+        .iter_mut()
+        .find(|p| p.name == pilot.name)
+        .unwrap()
+        .carrier_inventory = Some(
+        serde_json::from_value(serde_json::json!({
+            "sample_time_ms": snapshot.server_time_ms,
+            "parent": { "position_m": [0.,0.,0.], "orientation_xyzw": [0.,0.,0.,1.] },
+            "inventory": { "schema_version": 1, "binding": binding,
+                "initialized_at_ms": 1000, "roster": [], "entries": [], "cassettes": [],
+                "deployment_high_watermark": 0, "deployments": [], "high_watermark": 0,
+                "operations": [], "reservations": [], "cleanups": [] },
+            "ore": { "binding": binding, "holds": [], "lost_ore_units": 0,
+                "service_high_watermark": 0, "services": [], "waiting": [],
+                "granted_service_id": null, "last_committed_at_ms": null },
+            "drone_poses": [], "cassette_poses": [], "machinery": [], "motions": []
+        }))
+        .unwrap(),
+    );
+    assert!(matches!(frame(&snapshot), Err(reason)
+        if reason == "Carrier viewed projection differs from accepted snapshot"));
+    snapshot.pilots.retain(|p| p.name != pilot.name);
+    assert!(matches!(frame(&snapshot), Err(reason)
+        if reason == "Carrier viewed pilot is absent from accepted snapshot"));
+}
+
+/// Registered walking coordinates remain ship-local while the normal flight
+/// renderer supplies the live vessel pose, exterior world and warp effects.
+#[allow(clippy::too_many_arguments)]
+fn moving_interior_frame(
+    snapshot: &Snapshot,
+    pilot: &PilotView,
+    now: u64,
+    connected: bool,
+    aspect: f32,
+    pose: arkline_protocol::PioneerDockedPose,
+    eye: Vec3,
+    look: Vec3,
+    parts: &[ModelPart],
+) -> Result<Frame, String> {
+    let world_layout = super::snapshot_world_layout(snapshot)?.clone();
+    let (space, rotation, presentation_time) =
+        if carrier_advertised_in_world(pilot, snapshot.carrier_inventory_registration.as_ref()) {
+            let accepted_pilot = snapshot
+                .pilots
+                .iter()
+                .find(|p| p.name == pilot.name)
+                .ok_or("Carrier viewed pilot is absent from accepted snapshot")?;
+            if accepted_pilot.carrier_inventory != pilot.carrier_inventory {
+                return Err("Carrier viewed projection differs from accepted snapshot".into());
+            }
+            let public = pilot
+                .carrier_inventory
+                .as_ref()
+                .ok_or("Carrier source projection unavailable")?;
+            if snapshot
+                .carrier_inventory_registration
+                .as_ref()
+                .is_some_and(|r| r != &public.binding().registration)
+            {
+                return Err("Carrier source does not match accepted world".into());
+            }
+            carrier_body_parts(pilot, snapshot.server_time_ms)?;
+            // The eye, hull and actual roster share the same confirmed parent.
+            // Never advance only the walking camera using predicted legacy flight.
+            confirmed_carrier_parent(public.parent, snapshot.server_time_ms)?
+        } else {
+            (
+                Space {
+                    origin: display_position(pilot, now),
+                },
+                ship_orientation_at(pilot, now),
+                now,
+            )
+        };
+    let registration = hangar::pioneer_docked_scene::body_frame(pose);
+    let inverse = registration.inverse();
+    let eye = rotation * inverse.transform_point3(eye) / 100.0;
+    let look = rotation * inverse.transform_point3(look) / 100.0;
+    let view = Mat4::look_at_rh(eye, look, rotation * Vec3::Y);
+    let projection = |near, far| {
+        Mat4::perspective_rh_gl(cockpit_fov(pilot.ship_class), aspect, near, far) * view
+    };
+    let system = pilot.system_id;
+    Ok(Frame {
+        pioneer_parts: Some(Arc::new(
+            parts
+                .iter()
+                .map(|&(mesh, model, color, emission)| (mesh, inverse * model, color, emission))
+                .collect(),
+        )),
+        exterior: snapshot.exterior.clone().map(Arc::new),
+        lighting_quality: Default::default(),
+        cockpit_vp: projection(0.0002, 10.0),
+        cockpit_occlusion: None,
+        snapshot_time: snapshot.server_time_ms,
+        paused: false,
+        planet_vp: projection(1.0, 300_000.0),
+        system_id: system,
+        ship_class: pilot.ship_class,
+        drone_camera: false,
+        camera_drone: None,
+        scene: Arc::new(FrameScene {
+            physical: None,
+            carrier_inventory_registration: snapshot.carrier_inventory_registration.clone(),
+            world_layout,
+            traffic: snapshot
+                .traffic
+                .iter()
+                .filter(|a| a.system_id == system)
+                .cloned()
+                .collect(),
+            surface_props: snapshot
+                .surface_props
+                .iter()
+                .filter(|a| a.system_id == system)
+                .cloned()
+                .collect(),
+            asteroids: snapshot
+                .asteroids
+                .iter()
+                .filter(|a| a.system_id == system)
+                .cloned()
+                .collect(),
+            gates: gates()
+                .into_iter()
+                .filter(|a| a.system_id == system)
+                .collect(),
+            pilots: snapshot
+                .pilots
+                .iter()
+                .filter(|a| a.system_id == system)
+                .cloned()
+                .collect(),
+        }),
+        space,
+        cockpit: true,
+        rotation,
+        connected,
+        vp: projection(0.03, 1200.0),
+        eye,
+        now: presentation_time,
+        own: pilot.name.clone(),
+        docking: None,
+    })
+}
+
 #[derive(Clone)]
 struct Frame {
+    /// Canonical local body metres, immutable and independent of each camera.
+    pioneer_parts: Option<Arc<Vec<ModelPart>>>,
+    exterior: Option<Arc<arkline_protocol::ExteriorWorldState>>,
     lighting_quality: super::lighting_settings::LightingQuality,
     cockpit_vp: Mat4,
+    cockpit_occlusion: Option<Arc<CockpitOcclusion>>,
     snapshot_time: u64,
+    paused: bool,
     planet_vp: Mat4,
     system_id: u32,
     ship_class: ShipClass,
-    traffic: Vec<arkline_protocol::TrafficActor>,
-    surface_props: Vec<arkline_protocol::SurfaceProp>,
     drone_camera: bool,
     camera_drone: Option<u64>,
+    scene: Arc<FrameScene>,
     space: Space,
     cockpit: bool,
     rotation: Quat,
-    asteroids: Vec<Asteroid>,
-    gates: Vec<Stargate>,
     connected: bool,
     vp: Mat4,
     eye: Vec3,
     now: u64,
-    pilots: Vec<PilotView>,
     own: String,
 
     docking: Option<(f32, bool)>,
+}
+fn carrier_advertised_in_world(
+    pilot: &PilotView,
+    registration: Option<&arkline_protocol::CarrierInventoryRegistration>,
+) -> bool {
+    pilot.carrier_inventory.is_some()
+        || (pilot.ship_class == ShipClass::Pioneer && registration.is_some())
+}
+impl Frame {
+    fn audio_listener(&self) -> Option<super::sound_scene::AudioListener> {
+        let right = self
+            .vp
+            .inverse()
+            .transform_vector3(Vec3::X)
+            .normalize_or_zero();
+        (right.is_finite() && right.length_squared() > 0.99).then(|| {
+            super::sound_scene::AudioListener {
+                position_m: self.space.world(self.eye),
+                right: right.to_array().map(f64::from),
+            }
+        })
+    }
+    fn presentation_live(&self) -> bool {
+        self.connected && !self.paused && self.now.saturating_sub(self.snapshot_time) <= 1500
+    }
+    /// Machinery and constrained bodies use the same authority clock in every
+    /// draw/depth/camera path. Stale presentation cannot finish an accepted route.
+    fn authoritative_motion_time(&self) -> u64 {
+        if self.scene.physical.is_some() {
+            return self.snapshot_time;
+        }
+        if self.presentation_live() {
+            self.now
+        } else {
+            self.snapshot_time
+        }
+    }
+    fn canonical_pioneer_parts(&self) -> Option<Arc<Vec<ModelPart>>> {
+        let parts = self
+            .pioneer_parts
+            .clone()
+            .or_else(|| hangar::pioneer_docked_scene::default_body_parts().ok())?;
+        let Some(pilot) = self.scene.pilots.iter().find(|p| p.name == self.own) else {
+            return Some(parts);
+        };
+        if self
+            .scene
+            .physical
+            .as_ref()
+            .is_some_and(|p| p.owner == pilot.name && !p.matches(pilot, self.snapshot_time))
+        {
+            return None;
+        }
+        if let Some(physical) = self.physical_for(pilot) {
+            let mut variant = physical
+                .parts(self.camera_drone != Some(physical.drone_id))
+                .ok()?;
+            variant.extend(
+                parts
+                    .iter()
+                    .copied()
+                    .filter(|(mesh, _, _, _)| docked_source_primitive(*mesh).is_none()),
+            );
+            return Some(Arc::new(variant));
+        }
+        if self.carrier_advertised(pilot) {
+            self.ship_mount(pilot)?;
+            let public = pilot.carrier_inventory.as_ref()?;
+            if public.sample_time_ms != self.snapshot_time {
+                return None;
+            }
+            let mut variant = carrier_body_parts(pilot, self.snapshot_time).ok()?;
+            // Keep the same procedural crew/bridge/panel geometry, replacing
+            // only registered source triangles. Never overlay two hulls.
+            variant.extend(
+                parts
+                    .iter()
+                    .copied()
+                    .filter(|(mesh, _, _, _)| docked_source_primitive(*mesh).is_none()),
+            );
+            return Some(Arc::new(variant));
+        }
+        if pilot.drone_bay.is_none() {
+            return Some(parts);
+        }
+        Some(Arc::new(drone_bay_scene::apply_presentation(
+            &parts,
+            pilot,
+            self.authoritative_motion_time(),
+            self.presentation_live(),
+        )))
+    }
+    fn carrier_advertised(&self, pilot: &PilotView) -> bool {
+        carrier_advertised_in_world(pilot, self.scene.carrier_inventory_registration.as_ref())
+    }
+    fn physical_for(&self, pilot: &PilotView) -> Option<&physical_source_scene::Scene> {
+        self.scene
+            .physical
+            .as_deref()
+            .filter(|p| p.matches(pilot, self.snapshot_time))
+    }
+    fn ship_mount(&self, pilot: &PilotView) -> Option<Mat4> {
+        if let Some(physical) = self
+            .scene
+            .physical
+            .as_deref()
+            .filter(|p| p.owner == pilot.name)
+        {
+            return physical
+                .matches(pilot, self.snapshot_time)
+                .then(|| Mat4::from_translation(self.space.scene([0.; 3])));
+        }
+        if self.carrier_advertised(pilot) {
+            let public = pilot.carrier_inventory.as_ref()?;
+            if self
+                .scene
+                .carrier_inventory_registration
+                .as_ref()
+                .is_some_and(|r| r != &public.binding().registration)
+            {
+                return None;
+            }
+            if public.sample_time_ms != self.snapshot_time {
+                return None;
+            }
+            public.validate_projection(pilot).ok()?;
+            Some(Mat4::from_rotation_translation(
+                Quat::from_array(public.parent.orientation_xyzw.map(|v| v as f32)).normalize(),
+                self.space.scene(public.parent.position_m),
+            ))
+        } else {
+            Some(transform(
+                self.space.position(pilot, self.now),
+                Vec3::ONE,
+                ship_orientation_at(pilot, self.now),
+            ))
+        }
+    }
+    fn carrier_instances(
+        &self,
+        pilot: &PilotView,
+    ) -> Option<Vec<(u64, arkline_protocol::DroneClass, Mat4)>> {
+        if !self.carrier_advertised(pilot) {
+            return None;
+        }
+        self.ship_mount(pilot)?;
+        carrier_scene::instances(pilot, self.space, self.snapshot_time)
+    }
+    fn pioneer_exterior_parts(&self, pilot: &PilotView) -> Option<Vec<ModelPart>> {
+        self.ship_mount(pilot)?;
+        if let Some(p) = self.physical_for(pilot) {
+            return p.parts(self.camera_drone != Some(p.drone_id)).ok();
+        }
+        if self.carrier_advertised(pilot) {
+            carrier_body_parts(pilot, self.snapshot_time).ok()
+        } else {
+            drone_bay_scene::exterior_body_parts(
+                pilot,
+                self.authoritative_motion_time(),
+                self.presentation_live(),
+            )
+        }
+    }
+    fn pioneer_body_mount(&self) -> Mat4 {
+        if self
+            .scene
+            .physical
+            .as_ref()
+            .is_some_and(|p| p.owner == self.own && p.sample_time_ms == self.snapshot_time)
+        {
+            return Mat4::from_scale_rotation_translation(
+                Vec3::splat(0.01),
+                Quat::IDENTITY,
+                self.space.scene([0.; 3]),
+            );
+        }
+        if let Some(public) = self
+            .scene
+            .pilots
+            .iter()
+            .find(|p| p.name == self.own)
+            .and_then(|p| p.carrier_inventory.as_ref())
+        {
+            return Mat4::from_scale_rotation_translation(
+                Vec3::splat(0.01),
+                Quat::from_array(public.parent.orientation_xyzw.map(|v| v as f32)).normalize(),
+                self.space.scene(public.parent.position_m),
+            );
+        }
+        let origin = self
+            .scene
+            .pilots
+            .iter()
+            .find(|pilot| pilot.name == self.own)
+            .map_or_else(
+                || {
+                    self.eye
+                        - self.rotation * (cockpit_fit::eye_body_meters(ShipClass::Pioneer) / 100.0)
+                },
+                |pilot| self.space.position(pilot, self.now),
+            );
+        Mat4::from_scale_rotation_translation(Vec3::splat(0.01), self.rotation, origin)
+    }
+}
+
+#[derive(Clone)]
+struct FrameScene {
+    physical: Option<Arc<physical_source_scene::Scene>>,
+    carrier_inventory_registration: Option<arkline_protocol::CarrierInventoryRegistration>,
+    world_layout: WorldLayoutDefinition,
+    traffic: Vec<arkline_protocol::TrafficActor>,
+    surface_props: Vec<arkline_protocol::SurfaceProp>,
+    asteroids: Vec<Asteroid>,
+    gates: Vec<Stargate>,
+    pilots: Vec<PilotView>,
 }
 #[derive(Clone, Copy)]
 struct Vertex {
@@ -1763,6 +3836,8 @@ fn hull() -> Vec<Vertex> {
 }
 #[path = "materials.rs"]
 mod materials;
+#[path = "surface_roles.rs"]
+mod surface_roles;
 use materials::Material;
 
 struct Mesh {
@@ -1775,17 +3850,50 @@ struct Uniforms {
     color: Option<glow::UniformLocation>,
     emission: Option<glow::UniformLocation>,
     emissive_color: Option<glow::UniformLocation>,
+    emission_power: Option<glow::UniformLocation>,
+    emission_override: Option<glow::UniformLocation>,
     vp: Option<glow::UniformLocation>,
     eye: Option<glow::UniformLocation>,
+    surface_opacity: Option<glow::UniformLocation>,
     material: Option<glow::UniformLocation>,
     material_params: Option<glow::UniformLocation>,
+    hull_surface: Option<glow::UniformLocation>,
     environment_atmosphere: Option<glow::UniformLocation>,
+    station_lighting: Option<glow::UniformLocation>,
+    scene_meter_scale: Option<glow::UniformLocation>,
     environment_up: Option<glow::UniformLocation>,
     sky_inverse: Option<glow::UniformLocation>,
     sky_eye: Option<glow::UniformLocation>,
     planet_center: Option<glow::UniformLocation>,
     atmosphere: Option<glow::UniformLocation>,
     planet_up: Option<glow::UniformLocation>,
+}
+impl Uniforms {
+    unsafe fn new(gl: &glow::Context, program: glow::Program, background: glow::Program) -> Self {
+        Self {
+            planet_center: gl.get_uniform_location(program, "planet_center"),
+            atmosphere: gl.get_uniform_location(background, "atmosphere"),
+            planet_up: gl.get_uniform_location(background, "planet_up"),
+            model: gl.get_uniform_location(program, "model"),
+            color: gl.get_uniform_location(program, "base_color"),
+            emission: gl.get_uniform_location(program, "emission"),
+            emissive_color: gl.get_uniform_location(program, "emissive_color"),
+            emission_power: gl.get_uniform_location(program, "emission_power"),
+            emission_override: gl.get_uniform_location(program, "emission_override"),
+            vp: gl.get_uniform_location(program, "view_projection"),
+            eye: gl.get_uniform_location(program, "eye"),
+            surface_opacity: gl.get_uniform_location(program, "surface_opacity"),
+            material: gl.get_uniform_location(program, "material_kind"),
+            material_params: gl.get_uniform_location(program, "material_params"),
+            hull_surface: gl.get_uniform_location(program, "hull_surface"),
+            environment_atmosphere: gl.get_uniform_location(program, "environment_atmosphere"),
+            station_lighting: gl.get_uniform_location(program, "station_lighting"),
+            scene_meter_scale: gl.get_uniform_location(program, "scene_meter_scale"),
+            environment_up: gl.get_uniform_location(program, "environment_up"),
+            sky_inverse: gl.get_uniform_location(background, "inverse_view_projection"),
+            sky_eye: gl.get_uniform_location(background, "camera_eye"),
+        }
+    }
 }
 struct CachedFeed {
     key: u64,
@@ -1795,6 +3903,7 @@ struct CachedFeed {
     width: i32,
     height: i32,
     painted_ms: Option<u64>,
+    captured_ui_ms: Option<u64>,
 }
 impl CachedFeed {
     unsafe fn create(
@@ -1865,6 +3974,7 @@ impl CachedFeed {
             width,
             height,
             painted_ms: None,
+            captured_ui_ms: None,
         };
         if gl.check_framebuffer_status(glow::FRAMEBUFFER) != glow::FRAMEBUFFER_COMPLETE {
             cache.destroy(gl);
@@ -1878,18 +3988,133 @@ impl CachedFeed {
         gl.delete_renderbuffer(self.depth);
     }
 }
+/// Submitted mesh work for the most recent GPU scene pass; excludes sky and shadow passes.
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct DebugRenderMetrics {
+    pub draw_calls: u64,
+    pub triangles: u64,
+    pub wireframe_draw_calls: u64,
+}
+fn prepare_turrets(
+    turrets: &mut std::collections::HashMap<(String, u8), TurretState>,
+    frame: &Frame,
+) {
+    let space = frame.space;
+    // Main and remote passes may show different systems. Keep recently drawn
+    // turret state between passes so neither camera resets the other's slew.
+    turrets.retain(|(name, _), state| {
+        frame.scene.pilots.iter().any(|p| &p.name == name)
+            || frame.now.saturating_sub(state.last_ms) < 5000
+    });
+    for pilot in &frame.scene.pilots {
+        for module_id in 0..2 {
+            let state = turrets
+                .entry((pilot.name.clone(), module_id))
+                .or_insert(TurretState {
+                    rotation: Quat::IDENTITY,
+                    last_ms: frame.now,
+                });
+            let target = pilot
+                .mining_modules
+                .iter()
+                .find(|m| m.module_id == module_id)
+                .and_then(|m| m.target_id)
+                .or_else(|| {
+                    pilot
+                        .target_lock
+                        .as_ref()
+                        .map(|lock| lock.asteroid_id)
+                        .or(pilot.locked_asteroid)
+                });
+            let Some(ship) = frame.ship_mount(pilot) else {
+                continue;
+            };
+            let desired = target
+                .and_then(|id| {
+                    frame
+                        .scene
+                        .asteroids
+                        .iter()
+                        .find(|a| a.id == id && a.system_id == pilot.system_id)
+                })
+                .and_then(|a| {
+                    let direction = ship.inverse().transform_point3(space.scene(a.position))
+                        - turret_mount(pilot.ship_class, module_id).0;
+                    direction
+                        .try_normalize()
+                        .map(|d| Quat::from_rotation_arc(Vec3::X, d))
+                })
+                .unwrap_or(Quat::IDENTITY);
+            let seconds = frame.now.saturating_sub(state.last_ms).min(250) as f32 / 1000.0;
+            state.rotation = slew_rotation(state.rotation, desired, 1.4 * seconds);
+            state.last_ms = frame.now;
+        }
+    }
+}
+
+#[cfg(any(not(target_arch = "wasm32"), test))]
+fn drone_model_bounds(class: arkline_protocol::DroneClass) -> (Vec3, Vec3) {
+    let model = drone_models::model(class);
+    (model.min, model.max)
+}
+
+fn drone_model_transform(space: Space, drone: &arkline_protocol::DroneView, now: u64) -> Mat4 {
+    transform(
+        space.scene(drone_present_position(drone, now)),
+        Vec3::ONE,
+        drone_attitude(drone).unwrap_or(Quat::IDENTITY),
+    )
+}
+
+fn drone_attitude(drone: &arkline_protocol::DroneView) -> Option<Quat> {
+    match drone.orientation_xyzw {
+        Some(q) => arkline_protocol::drone_bay_geometry::BayPose {
+            position_m: drone.position,
+            orientation_xyzw: q,
+        }
+        .valid()
+        .then(|| Quat::from_array(q.map(|v| v as f32)).normalize()),
+        None => orientation(drone.heading),
+    }
+}
+
 struct Renderer {
+    #[cfg(test)]
+    profile_phase_sync: bool,
+    #[cfg(test)]
+    profile_shadow: std::cell::Cell<(f64, u64, u64)>,
+    #[cfg(test)]
+    profile_color_ms: std::cell::Cell<f64>,
+    drone_impacts: drone_work::ConfirmedImpacts,
+    runtime_surface_opacity: std::cell::Cell<f32>,
+    exterior_emission: std::cell::Cell<exterior_visuals::EmissionPower>,
+    exterior_cache: Option<(Option<Arc<arkline_protocol::ExteriorWorldState>>, bool)>,
+    material_preview: Option<crate::EmbeddedMaterialPreview>,
+    spatial_material: MaterialProgramState,
+    spatial_uniforms: Option<SpatialMaterialUniforms>,
+    #[cfg(not(target_arch = "wasm32"))]
+    debug_wireframe: bool,
+    #[cfg(not(target_arch = "wasm32"))]
+    debug_metrics: std::cell::Cell<DebugRenderMetrics>,
+    #[cfg(not(target_arch = "wasm32"))]
+    view_profiler: std::cell::RefCell<ViewProfiler>,
     gl: Arc<glow::Context>,
     program: glow::Program,
     background: glow::Program,
-    #[cfg(target_arch = "wasm32")]
     feed_program: glow::Program,
     empty: glow::VertexArray,
     meshes: Vec<Mesh>,
+    depth_meshes: Arc<DepthMeshCatalog>,
+    cockpit_depth: CockpitDepthProgram,
     uniforms: Uniforms,
     local_lights: local_lighting::Uniforms,
     station_batches: Vec<(usize, Vec3, f32)>,
+    drone_parts: [Arc<Vec<ModelPart>>; 3],
     feed_cache: Vec<CachedFeed>,
+    workspace_feed_key: Option<u64>,
+    feed_source_clocks: Vec<(u64, u64)>,
+    feed_capture_budget: camera_feed_budget::FeedCaptureBudget,
     destroyed: bool,
     sun_shadows: Vec<sun_shadows::SunShadows>,
     shadow_fallback: glow::Texture,
@@ -1897,6 +4122,66 @@ struct Renderer {
     turrets: std::collections::HashMap<(String, u8), TurretState>,
 }
 impl Renderer {
+    /// The registered runtime adapts actual source panes to tinted glazing.
+    /// Canonical inspection materials/buffers stay opaque and unchanged. This
+    /// pass retains pane triangles, uses no opaque depth writes, and draws after
+    /// opaque geometry; it does not turn the whole source batch into an opening.
+    unsafe fn draw_registered_glass(&self, part: &ModelPart) {
+        let gl = &self.gl;
+        let blend = gl.is_enabled(glow::BLEND);
+        let src_rgb = gl.get_parameter_i32(glow::BLEND_SRC_RGB) as u32;
+        let dst_rgb = gl.get_parameter_i32(glow::BLEND_DST_RGB) as u32;
+        let src_alpha = gl.get_parameter_i32(glow::BLEND_SRC_ALPHA) as u32;
+        let dst_alpha = gl.get_parameter_i32(glow::BLEND_DST_ALPHA) as u32;
+        let depth_write = gl.get_parameter_bool(glow::DEPTH_WRITEMASK);
+        let equation_rgb = gl.get_parameter_i32(glow::BLEND_EQUATION_RGB) as u32;
+        let equation_alpha = gl.get_parameter_i32(glow::BLEND_EQUATION_ALPHA) as u32;
+        gl.enable(glow::BLEND);
+        gl.blend_equation_separate(glow::FUNC_ADD, glow::FUNC_ADD);
+        gl.blend_func_separate(
+            glow::SRC_ALPHA,
+            glow::ONE_MINUS_SRC_ALPHA,
+            glow::ONE,
+            glow::ONE_MINUS_SRC_ALPHA,
+        );
+        gl.depth_mask(false);
+        self.runtime_surface_opacity.set(0.16);
+        self.draw(part.0, part.1, part.2, part.3);
+        self.runtime_surface_opacity.set(1.);
+        gl.depth_mask(depth_write);
+        gl.blend_func_separate(src_rgb, dst_rgb, src_alpha, dst_alpha);
+        gl.blend_equation_separate(equation_rgb, equation_alpha);
+        if !blend {
+            gl.disable(glow::BLEND);
+        }
+    }
+    fn visible_part(&self, vp: Mat4, part: &ModelPart, stats: &mut ViewVisibility) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        let started = std::time::Instant::now();
+        let triangles = self.depth_meshes.vertex_count(part.0) as u64 / 3;
+        stats.candidate_draws += 1;
+        stats.candidate_triangles += triangles;
+        let visible = part_in_view(&self.depth_meshes, vp, part);
+        if visible {
+            stats.submitted_draws += 1;
+            stats.submitted_triangles += triangles;
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            stats.cpu_prepare_ns += started.elapsed().as_nanos().min(u64::MAX as u128) as u64;
+        }
+        visible
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    unsafe fn begin_view_profile(&self, key: &str, frame: u64) -> ViewProfileStart {
+        self.view_profiler.borrow_mut().begin(&self.gl, key, frame)
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    unsafe fn finish_view_profile(&self, start: ViewProfileStart, visibility: ViewVisibility) {
+        self.view_profiler
+            .borrow_mut()
+            .finish(&self.gl, start, visibility);
+    }
     unsafe fn new(gl: Arc<glow::Context>) -> Result<Self, String> {
         if gl.version().is_embedded && gl.version().major < 3 {
             return Err("Arkline 3D requires WebGL2 / OpenGL ES 3 or newer".into());
@@ -1904,94 +4189,170 @@ impl Renderer {
         let program = compile(
             &gl,
             VERTEX,
-            &FRAGMENT.replacen(
-                "#version 150",
-                &format!("#version 150\n{}", sun_shadows::GLSL),
-                1,
+            &format!(
+                "{}{}{}",
+                mesh_fragment_prefix(),
+                AUTHORED_MATERIAL_FUNCTION,
+                FRAGMENT_BODY
             ),
         )?;
         let local_lights = local_lighting::Uniforms::new(&gl, program);
         let background = compile(&gl, BACK_VERTEX, BACK_FRAGMENT)?;
-        #[cfg(target_arch = "wasm32")]
-        let feed_program = compile(&gl, BACK_VERTEX, FEED_FRAGMENT)?;
+        let feed_program = compile(&gl, FEED_VERTEX, FEED_FRAGMENT)?;
+        let cockpit_depth = CockpitDepthProgram::new(&gl)?;
         let empty = gl.create_vertex_array()?;
         let mut meshes = vec![];
-        let uniforms = Uniforms {
-            planet_center: gl.get_uniform_location(program, "planet_center"),
-            atmosphere: gl.get_uniform_location(background, "atmosphere"),
-            planet_up: gl.get_uniform_location(background, "planet_up"),
-            model: gl.get_uniform_location(program, "model"),
-            color: gl.get_uniform_location(program, "base_color"),
-            emission: gl.get_uniform_location(program, "emission"),
-            emissive_color: gl.get_uniform_location(program, "emissive_color"),
-            vp: gl.get_uniform_location(program, "view_projection"),
-            eye: gl.get_uniform_location(program, "eye"),
-            material: gl.get_uniform_location(program, "material_kind"),
-            material_params: gl.get_uniform_location(program, "material_params"),
-            environment_atmosphere: gl.get_uniform_location(program, "environment_atmosphere"),
-            environment_up: gl.get_uniform_location(program, "environment_up"),
-            sky_inverse: gl.get_uniform_location(background, "inverse_view_projection"),
-            sky_eye: gl.get_uniform_location(background, "camera_eye"),
-        };
-        let mut upload = vec![
-            cube(),
-            torus(1.0, 0.12),
-            sphere(false),
-            rock_mesh(),
-            hull(),
-            sphere_with_resolution(false, 72, 48),
-            torus(1.0, 0.008),
-            surface_patch(),
-            armor_block(),
-            industrial_shell(),
-        ];
-        upload.extend(pioneer_asset()?.iter().map(|p| p.vertices.clone()));
-        let mut station_batches = Vec::new();
-        for (vertices, color, emission) in station_batches_geometry() {
-            station_batches.push((upload.len(), color, emission));
-            upload.push(vertices);
-        }
-        for vertices in upload {
-            let vao = gl.create_vertex_array()?;
-            let buffer = gl.create_buffer()?;
-            gl.bind_vertex_array(Some(vao));
-            gl.bind_buffer(glow::ARRAY_BUFFER, Some(buffer));
-            let bytes: Vec<u8> = vertices
-                .iter()
-                .flat_map(|v| [v.p.x, v.p.y, v.p.z, v.n.x, v.n.y, v.n.z])
-                .flat_map(f32::to_ne_bytes)
-                .collect();
-            gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, &bytes, glow::STATIC_DRAW);
-            for index in 0..2 {
-                gl.enable_vertex_attrib_array(index);
-                gl.vertex_attrib_pointer_f32(index, 3, glow::FLOAT, false, 24, index as i32 * 12);
-            }
-            meshes.push(Mesh {
-                vao,
-                buffer,
-                count: vertices.len() as i32,
-            });
+        let uniforms = Uniforms::new(&gl, program, background);
+        let geometry = flight_geometry()?;
+        let station_batches = geometry.station_batches.clone();
+        for vertices in geometry.catalog.uploads() {
+            meshes.push(Self::upload_mesh(&gl, vertices)?);
         }
         gl.bind_vertex_array(None);
         let shadow_fallback = sun_shadows::fallback(&gl)?;
+        #[cfg(not(target_arch = "wasm32"))]
+        let geometry_gl = gl.clone();
         Ok(Self {
+            drone_impacts: Default::default(),
+            runtime_surface_opacity: std::cell::Cell::new(1.),
+            exterior_emission: Default::default(),
+            exterior_cache: None,
             gl,
             program,
             background,
-            #[cfg(target_arch = "wasm32")]
             feed_program,
             empty,
             meshes,
+            #[cfg(test)]
+            profile_phase_sync: false,
+            #[cfg(test)]
+            profile_shadow: Default::default(),
+            #[cfg(test)]
+            profile_color_ms: Default::default(),
+            depth_meshes: geometry.catalog.clone(),
+            cockpit_depth,
             uniforms,
             local_lights,
             station_batches,
+            drone_parts: geometry.drone_parts.clone(),
             feed_cache: Vec::new(),
+            workspace_feed_key: None,
+            feed_source_clocks: Vec::new(),
+            feed_capture_budget: Default::default(),
             destroyed: false,
+            material_preview: None,
+            spatial_material: Default::default(),
+            spatial_uniforms: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            debug_wireframe: false,
+            #[cfg(not(target_arch = "wasm32"))]
+            debug_metrics: Default::default(),
+            #[cfg(not(target_arch = "wasm32"))]
+            view_profiler: std::cell::RefCell::new(ViewProfiler::new(&geometry_gl)),
             sun_shadows: Vec::new(),
             shadow_fallback,
             shadow_failed: false,
             turrets: std::collections::HashMap::new(),
         })
+    }
+    unsafe fn upload_mesh(gl: &glow::Context, vertices: &[Vertex]) -> Result<Mesh, String> {
+        let vao = gl.create_vertex_array()?;
+        let buffer = gl.create_buffer()?;
+        gl.bind_vertex_array(Some(vao));
+        gl.bind_buffer(glow::ARRAY_BUFFER, Some(buffer));
+        let bytes: Vec<u8> = vertices
+            .iter()
+            .flat_map(|v| [v.p.x, v.p.y, v.p.z, v.n.x, v.n.y, v.n.z])
+            .flat_map(f32::to_ne_bytes)
+            .collect();
+        gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, &bytes, glow::STATIC_DRAW);
+        for index in 0..2 {
+            gl.enable_vertex_attrib_array(index);
+            gl.vertex_attrib_pointer_f32(index, 3, glow::FLOAT, false, 24, index as i32 * 12);
+        }
+        Ok(Mesh {
+            vao,
+            buffer,
+            count: vertices.len() as i32,
+        })
+    }
+    /// GPU extension is requested only by an already validated physical frame.
+    unsafe fn ensure_physical_meshes(&mut self, frame: &Frame) -> Result<(), String> {
+        if frame.scene.physical.is_none() {
+            return Ok(());
+        }
+        let geometry = physical_geometry()?;
+        for vertices in geometry.catalog.uploads().iter().skip(self.meshes.len()) {
+            self.meshes.push(Self::upload_mesh(&self.gl, vertices)?);
+        }
+        self.gl.bind_vertex_array(None);
+        self.depth_meshes = geometry.catalog.clone();
+        Ok(())
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    fn set_material_preview(&mut self, preview: Option<crate::EmbeddedMaterialPreview>) {
+        let preview = preview.map(crate::EmbeddedMaterialPreview::validated);
+        if self.material_preview != preview {
+            self.material_preview = preview;
+            // Geometry is unchanged: only per-draw uniforms and cached camera pixels change.
+            for feed in &mut self.feed_cache {
+                feed.painted_ms = None;
+            }
+        }
+    }
+    unsafe fn prepare_spatial_material(&mut self) {
+        let gl = self.gl.clone();
+        let background = self.background;
+        let update = self.spatial_material.prepare_validated(
+            |revision| {
+                let expected = arkline_protocol::material_graph::AssetMaterialBinding::pioneer();
+                if *revision.binding() != expected || revision.binding().asset_sha256 != pioneer_asset_sha256() {
+                    return Err(MaterialProgramDiagnostic {
+                        phase: MaterialProgramErrorPhase::Binding,
+                        node_ids: vec![],
+                        message: "This renderer supports only the current embedded Pioneer armor material slot 0. The previous valid surface remains visible.".into(),
+                    });
+                }
+                Ok(())
+            },
+            |revision| {
+                let source = MaterialShaderSource::new(&mesh_fragment_prefix(), revision, FRAGMENT_BODY);
+                compile_material_program(&gl, VERTEX, &source, revision, |gl, program| {
+                    Ok((Uniforms::new(gl, program, background), local_lighting::Uniforms::new(gl, program), SpatialMaterialUniforms::new(gl, program)))
+                })
+            },
+        );
+        let Some(update) = update else { return };
+        match self.spatial_material.commit(update) {
+            Ok(PreparedMaterialUpdate::Program { candidate, .. }) => {
+                candidate.install(
+                    &gl,
+                    &mut self.program,
+                    |(uniforms, local_lights, spatial)| {
+                        self.uniforms = uniforms;
+                        self.local_lights = local_lights;
+                        self.spatial_uniforms = Some(spatial);
+                    },
+                );
+            }
+            Err(PreparedMaterialUpdate::Program { candidate, .. }) => {
+                candidate.destroy(&gl);
+                return;
+            }
+            Err(_) => return,
+            Ok(_) => {}
+        }
+        // Includes parameter/binding/reset changes while the simulation is paused.
+        for feed in &mut self.feed_cache {
+            feed.painted_ms = None;
+        }
+    }
+    unsafe fn upload_spatial_material(&self) {
+        if let (Some(uniforms), Some(revision)) =
+            (&self.spatial_uniforms, self.spatial_material.applied())
+        {
+            uniforms.upload(&self.gl, revision);
+        }
     }
     unsafe fn draw(&self, mesh: usize, model: Mat4, color: Vec3, emission: f32) {
         self.draw_material(mesh, model, color, emission, Material::PaintedHull);
@@ -2004,10 +4365,45 @@ impl Renderer {
         emission: f32,
         material: Material,
     ) {
-        let params = embedded_primitive(mesh).map_or_else(
-            || material.parameters(),
-            |p| [p.roughness, p.metallic, 0.0, 0.0],
-        );
+        self.draw_material_range(mesh, model, color, emission, material, None);
+    }
+    unsafe fn draw_material_range(
+        &self,
+        mesh: usize,
+        model: Mat4,
+        color: Vec3,
+        emission: f32,
+        material: Material,
+        range: Option<(usize, usize)>,
+    ) {
+        let Some(buffer) = self.meshes.get(mesh_index(mesh)) else {
+            return;
+        };
+        let Some((first, count)) = triangle_draw_range(buffer.count, range) else {
+            return;
+        };
+        let graph_enabled = self.spatial_material.applied().is_some_and(|revision| {
+            embedded_primitive(mesh).is_some_and(|p| {
+                p.material_index == Some(revision.binding().material_index as usize)
+            })
+        });
+        let (color, emission) = if graph_enabled {
+            embedded_primitive(mesh).map_or((color, emission), |p| (p.color, p.emission))
+        } else {
+            preview_material(mesh, color, emission, self.material_preview)
+        };
+        let mut params = resolved_material_parameters(mesh, material);
+        if let Some(preview) = self
+            .material_preview
+            .filter(|_| !graph_enabled && preview_paint(mesh))
+        {
+            if let Some(roughness) = preview.roughness {
+                params[0] = roughness.clamp(0.08, 1.0);
+            }
+            if let Some(metallic) = preview.metallic {
+                params[1] = metallic;
+            }
+        }
         self.gl.uniform_4_f32(
             self.uniforms.material_params.as_ref(),
             params[0],
@@ -2016,8 +4412,39 @@ impl Renderer {
             params[3],
         );
         let gl = &self.gl;
+        gl.uniform_1_f32(
+            self.uniforms.emission_power.as_ref(),
+            self.exterior_emission.get().for_mesh(mesh),
+        );
+        let emitted = self.exterior_emission.get().override_for_mesh(mesh);
+        let color_override = emitted.unwrap_or(Vec3::ZERO);
+        gl.uniform_4_f32(
+            self.uniforms.emission_override.as_ref(),
+            color_override.x,
+            color_override.y,
+            color_override.z,
+            if emitted.is_some() { 1. } else { 0. },
+        );
+        if let Some(uniforms) = &self.spatial_uniforms {
+            uniforms.set_enabled(gl, graph_enabled);
+        }
+        gl.uniform_1_f32(
+            self.uniforms.hull_surface.as_ref(),
+            if !graph_enabled
+                && embedded_primitive(mesh)
+                    .is_some_and(|p| p.emission == 0.0 && p.roughness >= 0.25)
+            {
+                1.0
+            } else {
+                0.0
+            },
+        );
         gl.uniform_matrix_4_f32_slice(self.uniforms.model.as_ref(), false, &model.to_cols_array());
         gl.uniform_3_f32(self.uniforms.color.as_ref(), color.x, color.y, color.z);
+        gl.uniform_1_f32(
+            self.uniforms.surface_opacity.as_ref(),
+            self.runtime_surface_opacity.get(),
+        );
         gl.uniform_1_f32(self.uniforms.emission.as_ref(), emission);
         let light_color = embedded_primitive(mesh).map_or(color, |p| p.emissive_color);
         gl.uniform_3_f32(
@@ -2026,51 +4453,177 @@ impl Renderer {
             light_color.y,
             light_color.z,
         );
-        gl.bind_vertex_array(Some(self.meshes[mesh].vao));
-        gl.draw_arrays(glow::TRIANGLES, 0, self.meshes[mesh].count);
+        gl.bind_vertex_array(Some(self.meshes[mesh_index(mesh)].vao));
+        gl.draw_arrays(glow::TRIANGLES, first, count);
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let mut metrics = self.debug_metrics.get();
+            metrics.draw_calls += 1;
+            metrics.triangles += count as u64 / 3;
+            if self.debug_wireframe {
+                let mut modes = [0; 2];
+                gl.get_parameter_i32_slice(glow::POLYGON_MODE, &mut modes);
+                let offset_enabled = gl.is_enabled(glow::POLYGON_OFFSET_LINE);
+                let factor = gl.get_parameter_f32(glow::POLYGON_OFFSET_FACTOR);
+                let units = gl.get_parameter_f32(glow::POLYGON_OFFSET_UNITS);
+                gl.enable(glow::POLYGON_OFFSET_LINE);
+                gl.polygon_offset(-1., -1.);
+                gl.polygon_mode(glow::FRONT_AND_BACK, glow::LINE);
+                gl.uniform_3_f32(self.uniforms.color.as_ref(), 0.02, 0.9, 0.25);
+                gl.uniform_3_f32(self.uniforms.emissive_color.as_ref(), 0.02, 0.9, 0.25);
+                gl.uniform_1_f32(self.uniforms.emission.as_ref(), 1.5);
+                if let Some(uniforms) = &self.spatial_uniforms {
+                    uniforms.set_enabled(gl, false);
+                }
+                gl.draw_arrays(glow::TRIANGLES, first, count);
+                if let Some(uniforms) = &self.spatial_uniforms {
+                    uniforms.set_enabled(gl, graph_enabled);
+                }
+                // Core GL uses a shared front/back polygon mode.
+                gl.polygon_mode(glow::FRONT_AND_BACK, modes[0] as u32);
+                gl.polygon_offset(factor, units);
+                if !offset_enabled {
+                    gl.disable(glow::POLYGON_OFFSET_LINE);
+                }
+                gl.uniform_3_f32(self.uniforms.color.as_ref(), color.x, color.y, color.z);
+                gl.uniform_3_f32(
+                    self.uniforms.emissive_color.as_ref(),
+                    light_color.x,
+                    light_color.y,
+                    light_color.z,
+                );
+                gl.uniform_1_f32(self.uniforms.emission.as_ref(), emission);
+                metrics.wireframe_draw_calls += 1;
+            }
+            self.debug_metrics.set(metrics);
+        }
     }
+    /// The operations monitor owns at most one entry in the existing cache.
+    /// Resizing, changing view or viewing another vessel retires its old image.
+    unsafe fn prepare_workspace_feed(&mut self, key: u64) {
+        if let Some(previous) = self.workspace_feed_key.filter(|old| *old != key) {
+            if let Some(index) = self
+                .feed_cache
+                .iter()
+                .position(|entry| entry.key == previous)
+            {
+                self.feed_cache.remove(index).destroy(&self.gl);
+            }
+        }
+        self.workspace_feed_key = Some(key);
+    }
+
+    #[cfg(test)]
     unsafe fn paint_cached_feed(
         &mut self,
         frame: &Frame,
         key: u64,
         info: egui::PaintCallbackInfo,
         count: usize,
-        _callback_target: Option<glow::Framebuffer>,
+        callback_target: Option<glow::Framebuffer>,
     ) {
-        let gl = self.gl.clone();
+        self.paint_cached_feed_on_surface(frame, key, info, count, callback_target, None, None);
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn paint_cached_feed_on_surface(
+        &mut self,
+        frame: &Frame,
+        key: u64,
+        info: egui::PaintCallbackInfo,
+        count: usize,
+        callback_target: Option<glow::Framebuffer>,
+        geometry: Option<(&CockpitSurface, egui::Rect)>,
+        capture_schedule: Option<(u64, u64, &[u64])>,
+    ) {
+        if self.destroyed {
+            return;
+        }
         let viewport = info.viewport_in_pixels();
-        let (width, height) = feed_resolution(viewport.width_px, viewport.height_px);
-        // glow 0.16 cannot look up WebGL's null/default framebuffer safely.
-        // egui supplies the documented callback target instead.
+        if viewport.width_px <= 0 || viewport.height_px <= 0 {
+            return;
+        }
+        // The cache has stable logical dimensions while the physical screen
+        // foreshortens. Only the final quad uses the full scene viewport.
+        let (surface_geometry, width, height) = if let Some((surface, tile)) = geometry {
+            let tile = tile.intersect(surface.canvas_rect());
+            let Some(quad) = surface.feed_geometry(tile) else {
+                return;
+            };
+            let (width, height) =
+                feed_resolution(tile.width().round() as i32, tile.height().round() as i32);
+            (Some(quad), width, height)
+        } else {
+            let (width, height) = feed_resolution(viewport.width_px, viewport.height_px);
+            (None, width, height)
+        };
+        let gl = self.gl.clone();
+        // glow 0.16 cannot query WebGL's null object bindings. The callback
+        // supplies that target, and egui restores its object bindings on return.
         #[cfg(target_arch = "wasm32")]
-        let (draw, read) = (_callback_target, _callback_target);
+        let (draw, read) = (callback_target, callback_target);
         #[cfg(not(target_arch = "wasm32"))]
         let (draw, read) = (
             gl.get_parameter_framebuffer(glow::DRAW_FRAMEBUFFER_BINDING),
             gl.get_parameter_framebuffer(glow::READ_FRAMEBUFFER_BINDING),
         );
+        #[cfg(not(target_arch = "wasm32"))]
+        let _ = callback_target;
         let mut old_viewport = [0; 4];
         let mut old_scissor = [0; 4];
+        let mut depth_range = [0.0; 2];
+        let mut clear_color = [0.0; 4];
         gl.get_parameter_i32_slice(glow::VIEWPORT, &mut old_viewport);
         gl.get_parameter_i32_slice(glow::SCISSOR_BOX, &mut old_scissor);
-        let scissor = gl.is_enabled(glow::SCISSOR_TEST);
-        let depth_enabled = gl.is_enabled(glow::DEPTH_TEST);
-        let blend_enabled = gl.is_enabled(glow::BLEND);
-        // WebGL2 does not expose the desktop FRAMEBUFFER_SRGB capability.
+        gl.get_parameter_f32_slice(glow::DEPTH_RANGE, &mut depth_range);
+        gl.get_parameter_f32_slice(glow::COLOR_CLEAR_VALUE, &mut clear_color);
+        let clear_depth = gl.get_parameter_f32(glow::DEPTH_CLEAR_VALUE);
+        let capabilities = [
+            glow::SCISSOR_TEST,
+            glow::DEPTH_TEST,
+            glow::BLEND,
+            glow::CULL_FACE,
+            glow::STENCIL_TEST,
+            glow::POLYGON_OFFSET_FILL,
+            glow::SAMPLE_ALPHA_TO_COVERAGE,
+        ]
+        .map(|capability| (capability, gl.is_enabled(capability)));
         let desktop_srgb = !gl.version().is_embedded;
         let srgb = desktop_srgb && gl.is_enabled(glow::FRAMEBUFFER_SRGB);
         let depth_mask = gl.get_parameter_bool(glow::DEPTH_WRITEMASK);
+        let depth_func = gl.get_parameter_i32(glow::DEPTH_FUNC) as u32;
         let color_mask = gl.get_parameter_bool_array::<4>(glow::COLOR_WRITEMASK);
         let blend = [
-            gl.get_parameter_i32(glow::BLEND_SRC_RGB),
-            gl.get_parameter_i32(glow::BLEND_DST_RGB),
-            gl.get_parameter_i32(glow::BLEND_SRC_ALPHA),
-            gl.get_parameter_i32(glow::BLEND_DST_ALPHA),
-        ];
-        let equation = [
-            gl.get_parameter_i32(glow::BLEND_EQUATION_RGB),
-            gl.get_parameter_i32(glow::BLEND_EQUATION_ALPHA),
-        ];
+            glow::BLEND_SRC_RGB,
+            glow::BLEND_DST_RGB,
+            glow::BLEND_SRC_ALPHA,
+            glow::BLEND_DST_ALPHA,
+        ]
+        .map(|parameter| gl.get_parameter_i32(parameter) as u32);
+        let equation = [glow::BLEND_EQUATION_RGB, glow::BLEND_EQUATION_ALPHA]
+            .map(|parameter| gl.get_parameter_i32(parameter) as u32);
+        let active_texture = gl.get_parameter_i32(glow::ACTIVE_TEXTURE) as u32;
+        gl.active_texture(glow::TEXTURE0);
+        #[cfg(not(target_arch = "wasm32"))]
+        let objects = (
+            gl.get_parameter_program(glow::CURRENT_PROGRAM),
+            gl.get_parameter_vertex_array(glow::VERTEX_ARRAY_BINDING),
+            gl.get_parameter_buffer(glow::ARRAY_BUFFER_BINDING),
+            gl.get_parameter_renderbuffer(glow::RENDERBUFFER_BINDING),
+            gl.get_parameter_texture(glow::TEXTURE_BINDING_2D),
+            gl.get_parameter_sampler(glow::SAMPLER_BINDING),
+        );
+        #[cfg(not(target_arch = "wasm32"))]
+        let polygon_mode = {
+            let mut mode = [0; 2];
+            gl.get_parameter_i32_slice(glow::POLYGON_MODE, &mut mode);
+            mode[0] as u32
+        };
+
+        // Must precede feed_due: paused feeds also need newly installed pixels.
+        self.drone_impacts.update(frame);
+        self.prepare_spatial_material();
+        self.prepare_exterior(frame);
         gl.color_mask(true, true, true, true);
         if desktop_srgb {
             gl.disable(glow::FRAMEBUFFER_SRGB);
@@ -2078,108 +4631,172 @@ impl Renderer {
         if let Some(index) = self
             .feed_cache
             .iter()
-            .position(|c| c.key == key && (c.width != width || c.height != height))
+            .position(|cache| cache.key == key && (cache.width != width || cache.height != height))
         {
             self.feed_cache.remove(index).destroy(&gl);
         }
-        if !self.feed_cache.iter().any(|c| c.key == key) {
-            if self.feed_cache.len() >= 4 {
-                self.feed_cache.remove(0).destroy(&gl);
+        if !self.feed_cache.iter().any(|cache| cache.key == key) {
+            if self.feed_cache.len() >= MAX_CAMERA_CAPTURE_SOURCES {
+                let evict = capture_schedule
+                    .and_then(|(_, _, visible)| {
+                        self.feed_cache
+                            .iter()
+                            .position(|cache| !visible.contains(&cache.key))
+                    })
+                    .unwrap_or(0);
+                self.feed_cache.remove(evict).destroy(&gl);
             }
             if let Ok(cache) = CachedFeed::create(&gl, key, width, height) {
                 self.feed_cache.push(cache);
             }
         }
-        if let Some(index) = self.feed_cache.iter().position(|c| c.key == key) {
-            let cache = &self.feed_cache[index];
-            let framebuffer = cache.framebuffer;
-            if feed_due(cache.painted_ms, frame.now, count) {
+        if let Some(index) = self.feed_cache.iter().position(|cache| cache.key == key) {
+            let framebuffer = self.feed_cache[index].framebuffer;
+            let due = feed_due(self.feed_cache[index].painted_ms, frame.now, count);
+            let capture_granted = due
+                && capture_schedule.is_none_or(|(pass, ui_ms, visible)| {
+                    let ages: Vec<_> = self
+                        .feed_cache
+                        .iter()
+                        .map(|cache| camera_feed_budget::SourceCaptureAge {
+                            key: cache.key,
+                            // A monitor may sample a later clock than a physical screen.
+                            // Eligibility must use that source's own current frame, not
+                            // whichever callback happens to ask for the shared grant first.
+                            due: feed_due(
+                                cache.painted_ms,
+                                self.feed_source_clocks
+                                    .iter()
+                                    .find(|(source, _)| *source == cache.key)
+                                    .map_or(frame.now, |(_, now)| *now),
+                                count,
+                            ),
+                            captured_ui_ms: cache.captured_ui_ms,
+                        })
+                        .collect();
+                    let candidates = camera_feed_budget::source_candidates(visible, &ages, ui_ms);
+
+                    self.feed_capture_budget
+                        .should_capture(pass, ui_ms, key, &candidates)
+                });
+            if due && capture_granted {
                 gl.bind_framebuffer(glow::FRAMEBUFFER, Some(framebuffer));
                 gl.viewport(0, 0, width, height);
                 gl.disable(glow::SCISSOR_TEST);
                 gl.clear_color(0.0, 0.0, 0.0, 1.0);
+                gl.clear_depth_f32(1.0);
                 gl.depth_mask(true);
                 gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
                 self.paint(frame, Some(framebuffer));
                 self.feed_cache[index].painted_ms = Some(frame.now);
+                self.feed_cache[index].captured_ui_ms = capture_schedule.map(|(_, ui_ms, _)| ui_ms);
             }
-            gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(framebuffer));
             gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, draw);
-            gl.viewport(
-                old_viewport[0],
-                old_viewport[1],
-                old_viewport[2],
-                old_viewport[3],
-            );
-            gl.scissor(
-                old_scissor[0],
-                old_scissor[1],
-                old_scissor[2],
-                old_scissor[3],
-            );
-            if scissor {
-                gl.enable(glow::SCISSOR_TEST);
-            } else {
-                gl.disable(glow::SCISSOR_TEST);
-            }
-            if srgb {
-                gl.enable(glow::FRAMEBUFFER_SRGB);
-            }
-            #[cfg(not(target_arch = "wasm32"))]
-            gl.blit_framebuffer(
-                0,
-                0,
-                width,
-                height,
-                viewport.left_px,
-                viewport.from_bottom_px,
-                viewport.left_px + viewport.width_px,
-                viewport.from_bottom_px + viewport.height_px,
-                glow::COLOR_BUFFER_BIT,
-                glow::LINEAR,
-            );
-            #[cfg(target_arch = "wasm32")]
+            gl.bind_framebuffer(glow::READ_FRAMEBUFFER, read);
+            // A color-only target cannot enforce the physical display's depth.
+            if self.feed_cache[index].painted_ms.is_some()
+                && capture_schedule.is_none_or(|(_, ui_ms, _)| {
+                    self.feed_cache[index]
+                        .captured_ui_ms
+                        .is_some_and(|captured| captured <= ui_ms)
+                })
+                && (surface_geometry.is_none() || draw_framebuffer_depth_bits(&gl) > 0)
             {
-                // WebGL cannot blit into every browser-owned default framebuffer.
-                // Sample the cached image into the callback target instead.
-                gl.bind_framebuffer(glow::FRAMEBUFFER, draw);
                 gl.viewport(
                     viewport.left_px,
                     viewport.from_bottom_px,
                     viewport.width_px,
                     viewport.height_px,
                 );
-                gl.disable(glow::DEPTH_TEST);
-                gl.disable(glow::BLEND);
+                let clip = info.clip_rect_in_pixels();
+                gl.enable(glow::SCISSOR_TEST);
+                gl.scissor(
+                    clip.left_px,
+                    clip.from_bottom_px,
+                    clip.width_px,
+                    clip.height_px,
+                );
+                gl.depth_range_f32(0.0, 1.0);
+                gl.depth_mask(false);
+                if surface_geometry.is_some() {
+                    gl.enable(glow::DEPTH_TEST);
+                    gl.depth_func(glow::LEQUAL);
+                } else {
+                    gl.disable(glow::DEPTH_TEST);
+                }
+                for capability in [
+                    glow::BLEND,
+                    glow::CULL_FACE,
+                    glow::STENCIL_TEST,
+                    glow::POLYGON_OFFSET_FILL,
+                    glow::SAMPLE_ALPHA_TO_COVERAGE,
+                ] {
+                    gl.disable(capability);
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                gl.polygon_mode(glow::FRONT_AND_BACK, glow::FILL);
+                if desktop_srgb {
+                    gl.disable(glow::FRAMEBUFFER_SRGB);
+                }
+                gl.color_mask(true, true, true, true);
                 gl.use_program(Some(self.feed_program));
                 gl.bind_vertex_array(Some(self.empty));
                 gl.active_texture(glow::TEXTURE0);
+                gl.bind_sampler(0, None);
                 gl.bind_texture(glow::TEXTURE_2D, Some(self.feed_cache[index].texture));
                 gl.uniform_1_i32(
                     gl.get_uniform_location(self.feed_program, "image").as_ref(),
                     0,
                 );
-                gl.draw_arrays(glow::TRIANGLES, 0, 3);
-                gl.bind_texture(glow::TEXTURE_2D, None);
+                gl.uniform_1_i32(
+                    gl.get_uniform_location(self.feed_program, "physical_surface")
+                        .as_ref(),
+                    i32::from(surface_geometry.is_some()),
+                );
+                if let Some((matrix, top_left, bottom_right)) = surface_geometry {
+                    gl.uniform_matrix_4_f32_slice(
+                        gl.get_uniform_location(self.feed_program, "local_to_clip")
+                            .as_ref(),
+                        false,
+                        &matrix.to_cols_array(),
+                    );
+                    gl.uniform_3_f32(
+                        gl.get_uniform_location(self.feed_program, "surface_top_left")
+                            .as_ref(),
+                        top_left.x,
+                        top_left.y,
+                        top_left.z,
+                    );
+                    gl.uniform_3_f32(
+                        gl.get_uniform_location(self.feed_program, "surface_bottom_right")
+                            .as_ref(),
+                        bottom_right.x,
+                        bottom_right.y,
+                        bottom_right.z,
+                    );
+                }
+                gl.draw_arrays(glow::TRIANGLES, 0, 6);
             }
         }
+
         gl.depth_mask(depth_mask);
-        gl.color_mask(color_mask[0], color_mask[1], color_mask[2], color_mask[3]);
-        gl.blend_func_separate(
-            blend[0] as u32,
-            blend[1] as u32,
-            blend[2] as u32,
-            blend[3] as u32,
+        gl.depth_func(depth_func);
+        gl.depth_range_f32(depth_range[0], depth_range[1]);
+        gl.clear_color(
+            clear_color[0],
+            clear_color[1],
+            clear_color[2],
+            clear_color[3],
         );
-        gl.blend_equation_separate(equation[0] as u32, equation[1] as u32);
-        for (state, enabled) in [
-            (glow::DEPTH_TEST, depth_enabled),
-            (glow::BLEND, blend_enabled),
-        ] {
+        gl.clear_depth_f32(clear_depth);
+        gl.color_mask(color_mask[0], color_mask[1], color_mask[2], color_mask[3]);
+        gl.blend_func_separate(blend[0], blend[1], blend[2], blend[3]);
+        gl.blend_equation_separate(equation[0], equation[1]);
+        for (capability, enabled) in capabilities {
             if enabled {
-                gl.enable(state);
+                gl.enable(capability);
             } else {
-                gl.disable(state);
+                gl.disable(capability);
             }
         }
         if desktop_srgb {
@@ -2203,66 +4820,46 @@ impl Renderer {
             old_scissor[2],
             old_scissor[3],
         );
-        if scissor {
-            gl.enable(glow::SCISSOR_TEST);
-        } else {
-            gl.disable(glow::SCISSOR_TEST);
+        gl.active_texture(glow::TEXTURE0);
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            gl.use_program(objects.0);
+            gl.bind_vertex_array(objects.1);
+            gl.bind_buffer(glow::ARRAY_BUFFER, objects.2);
+            gl.bind_renderbuffer(glow::RENDERBUFFER, objects.3);
+            gl.bind_texture(glow::TEXTURE_2D, objects.4);
+            gl.bind_sampler(0, objects.5);
+            gl.polygon_mode(glow::FRONT_AND_BACK, polygon_mode);
         }
+        #[cfg(target_arch = "wasm32")]
+        {
+            gl.use_program(None);
+            gl.bind_vertex_array(None);
+            gl.bind_buffer(glow::ARRAY_BUFFER, None);
+            gl.bind_renderbuffer(glow::RENDERBUFFER, None);
+            gl.bind_texture(glow::TEXTURE_2D, None);
+            gl.bind_sampler(0, None);
+        }
+        gl.active_texture(active_texture);
+    }
+    fn prepare_turrets(&mut self, frame: &Frame) {
+        prepare_turrets(&mut self.turrets, frame);
     }
     unsafe fn paint(&mut self, frame: &Frame, callback_target: Option<glow::Framebuffer>) {
-        let space = frame.space;
-        // Main and remote passes may show different systems. Keep recently drawn
-        // turret state between passes so neither camera resets the other's slew.
-        self.turrets.retain(|(name, _), state| {
-            frame.pilots.iter().any(|p| &p.name == name)
-                || frame.now.saturating_sub(state.last_ms) < 5000
-        });
-        for pilot in &frame.pilots {
-            for module_id in 0..2 {
-                let state = self
-                    .turrets
-                    .entry((pilot.name.clone(), module_id))
-                    .or_insert(TurretState {
-                        rotation: Quat::IDENTITY,
-                        last_ms: frame.now,
-                    });
-                let target = pilot
-                    .mining_modules
-                    .iter()
-                    .find(|m| m.module_id == module_id)
-                    .and_then(|m| m.target_id)
-                    .or_else(|| {
-                        pilot
-                            .target_lock
-                            .as_ref()
-                            .map(|lock| lock.asteroid_id)
-                            .or(pilot.locked_asteroid)
-                    });
-                let ship = transform(
-                    space.position(pilot, frame.now),
-                    Vec3::ONE,
-                    ship_orientation_at(pilot, frame.now),
-                );
-                let desired = target
-                    .and_then(|id| {
-                        frame
-                            .asteroids
-                            .iter()
-                            .find(|a| a.id == id && a.system_id == pilot.system_id)
-                    })
-                    .and_then(|a| {
-                        let direction = ship.inverse().transform_point3(space.scene(a.position))
-                            - turret_mount(pilot.ship_class, module_id).0;
-                        direction
-                            .try_normalize()
-                            .map(|d| Quat::from_rotation_arc(Vec3::X, d))
-                    })
-                    .unwrap_or(Quat::IDENTITY);
-                let seconds = frame.now.saturating_sub(state.last_ms).min(250) as f32 / 1000.0;
-                state.rotation = slew_rotation(state.rotation, desired, 1.4 * seconds);
-                state.last_ms = frame.now;
-            }
+        if self.destroyed
+            || frame.scene.world_layout.validate().is_err()
+            || self.ensure_physical_meshes(frame).is_err()
+        {
+            return;
         }
+        // Main-world painting must observe the same accepted mining edges as feeds.
+        // Repeated cameras at the same snapshot are deduplicated by the tracker.
+        self.drone_impacts.update(frame);
+        self.prepare_spatial_material();
+        #[cfg(not(target_arch = "wasm32"))]
+        self.debug_metrics.set(Default::default());
+        let space = frame.space;
+        self.prepare_turrets(frame);
         if self.destroyed {
             return;
         }
@@ -2271,11 +4868,44 @@ impl Renderer {
             .gl
             .get_parameter_framebuffer(glow::DRAW_FRAMEBUFFER_BINDING)
             .or(callback_target);
+        #[cfg(not(target_arch = "wasm32"))]
+        let profile = self.begin_view_profile(
+            &if frame.drone_camera {
+                frame
+                    .camera_drone
+                    .map_or_else(|| "drone:unbound".to_owned(), |id| format!("drone:{id}"))
+            } else {
+                "main".to_owned()
+            },
+            frame.now,
+        );
+        let mut visibility = ViewVisibility::default();
+        #[cfg(test)]
+        let shadow_started = {
+            if self.profile_phase_sync {
+                self.gl.finish();
+            }
+            self.profile_shadow.set((0., 0, 0));
+            std::time::Instant::now()
+        };
         let shadow_texture = self.paint_sun_shadow(
             frame,
             callback_target,
             frame.lighting_quality.shadow_size(frame.drone_camera),
         );
+        #[cfg(test)]
+        let color_started = {
+            if self.profile_phase_sync {
+                self.gl.finish();
+            }
+            let (_, draws, triangles) = self.profile_shadow.get();
+            self.profile_shadow.set((
+                shadow_started.elapsed().as_secs_f64() * 1000.,
+                draws,
+                triangles,
+            ));
+            std::time::Instant::now()
+        };
         let gl = &self.gl;
         gl.disable(glow::CULL_FACE);
         gl.disable(glow::BLEND);
@@ -2294,19 +4924,7 @@ impl Renderer {
             frame.eye.z,
         );
         let camera_world = frame.space.world(frame.eye);
-        let (density, up) = arkline_protocol::planets()
-            .iter()
-            .find(|p| p.system_id == frame.system_id)
-            .map_or((0.0, Vec3::Y), |p| {
-                let radial =
-                    glam::DVec3::from_array(std::array::from_fn(|i| camera_world[i] - p.center[i]));
-                (
-                    ((1.0 - (radial.length() - p.radius_m) / p.atmosphere_height_m).clamp(0.0, 1.0)
-                        as f32)
-                        .powi(2),
-                    radial.normalize().as_vec3(),
-                )
-            });
+        let (density, up) = atmosphere_at(&frame.scene.world_layout, frame.system_id, camera_world);
         gl.uniform_1_f32(self.uniforms.atmosphere.as_ref(), density);
         gl.uniform_3_f32(self.uniforms.planet_up.as_ref(), up.x, up.y, up.z);
         gl.draw_arrays(glow::TRIANGLES, 0, 3);
@@ -2316,6 +4934,7 @@ impl Renderer {
         gl.clear_depth_f32(1.0);
         gl.clear(glow::DEPTH_BUFFER_BIT);
         gl.use_program(Some(self.program));
+        self.upload_spatial_material();
         self.local_lights.upload(
             gl,
             frame,
@@ -2329,31 +4948,55 @@ impl Renderer {
             frame.eye.y,
             frame.eye.z,
         );
+        gl.uniform_1_f32(self.uniforms.station_lighting.as_ref(), 0.0);
+        gl.uniform_1_f32(self.uniforms.scene_meter_scale.as_ref(), 100.0);
         gl.uniform_1_f32(self.uniforms.environment_atmosphere.as_ref(), density);
         gl.uniform_3_f32(self.uniforms.environment_up.as_ref(), up.x, up.y, up.z);
         self.paint_environment(frame);
         if space.scene(STATION_CENTER_POSITION).distance(frame.eye) < 1100.0 {
             let model = Mat4::from_translation(space.scene(STATION_CENTER_POSITION));
             for &(mesh, color, emission) in &self.station_batches {
-                self.draw_material(mesh, model, color, emission, Material::BareMetal);
+                if self.visible_part(frame.vp, &(mesh, model, color, emission), &mut visibility) {
+                    self.draw_material(mesh, model, color, emission, Material::BareMetal);
+                }
+            }
+        }
+        if frame.scene.world_layout.revision == arkline_protocol::SceneLayoutRevision::DockingV1 {
+            for part in docking_scene::parts(frame) {
+                if self.visible_part(frame.vp, &part, &mut visibility) {
+                    self.draw(part.0, part.1, part.2, part.3);
+                }
             }
         }
         for asteroid in frame
+            .scene
             .asteroids
             .iter()
             .filter(|a| space.scene(a.position).distance(frame.eye) < 1100.0)
         {
-            let color = if asteroid.ore == 0 {
+            let contains_ore = frame
+                .scene
+                .physical
+                .as_ref()
+                .filter(|p| p.view.state.binding.target_id == asteroid.id)
+                .map_or(asteroid.ore > 0, |p| {
+                    p.view.state.projection.resource_remaining_cm3.0 > 0
+                });
+            let color = if !contains_ore {
                 Vec3::splat(0.10)
             } else {
                 Vec3::new(0.36, 0.29, 0.18)
             };
+            let model = asteroid_model(asteroid, space, frame.now);
+            if !self.visible_part(frame.vp, &(3, model, color, 0.), &mut visibility) {
+                continue;
+            }
             self.draw_material(
                 3,
-                asteroid_model(asteroid, space, frame.now),
+                model,
                 color,
                 0.0,
-                if asteroid.ore > 0 {
+                if contains_ore {
                     Material::Ore
                 } else {
                     Material::Rock
@@ -2361,11 +5004,15 @@ impl Renderer {
             );
         }
         for gate in frame
+            .scene
             .gates
             .iter()
             .filter(|g| space.scene(g.position).distance(frame.eye) < 1100.0)
         {
             for model in gate_models(gate, space) {
+                if !self.visible_part(frame.vp, &(1, model, Vec3::ONE, 0.), &mut visibility) {
+                    continue;
+                }
                 self.draw_material(
                     1,
                     model,
@@ -2375,95 +5022,237 @@ impl Renderer {
                 );
             }
         }
-        for pilot in &frame.pilots {
-            if space.position(pilot, frame.now).distance(frame.eye) > 1100.0 {
+        let mut registered_glass = Vec::new();
+        for pilot in &frame.scene.pilots {
+            let Some(ship) = frame.ship_mount(pilot) else {
+                continue;
+            };
+            if ship.w_axis.truncate().distance(frame.eye) > 1100.0 {
                 continue;
             }
             let own = pilot.name == frame.own;
-            let ship = transform(
-                space.position(pilot, frame.now),
-                Vec3::ONE,
-                ship_orientation_at(pilot, frame.now),
-            );
             if !frame.cockpit || !own {
-                for &(mesh, model, color, emission) in cached_ship_parts(pilot.ship_class) {
-                    self.draw_material(mesh, ship * model, color, emission, Material::BareMetal);
+                let exterior = exterior_visuals::for_pilot(frame, pilot);
+                self.exterior_emission
+                    .set(exterior_visuals::EmissionPower::for_binding(
+                        exterior,
+                        frame.carrier_advertised(pilot),
+                    ));
+                if own && pilot.ship_class == ShipClass::Pioneer {
+                    if let Some(parts) = frame.canonical_pioneer_parts() {
+                        let mount = frame.pioneer_body_mount();
+                        for &(mesh, model, color, emission) in parts.iter() {
+                            let part = (mesh, mount * model, color, emission);
+                            if self.visible_part(frame.vp, &part, &mut visibility) {
+                                if is_registered_glass(mesh) {
+                                    registered_glass.push((part, self.exterior_emission.get()));
+                                } else {
+                                    self.draw(mesh, part.1, color, emission);
+                                }
+                            }
+                        }
+                    }
+                } else if pilot.ship_class == ShipClass::Pioneer {
+                    if let Some(parts) = frame.pioneer_exterior_parts(pilot) {
+                        let mount = ship * Mat4::from_scale(Vec3::splat(0.01));
+                        for (mesh, model, color, emission) in parts {
+                            let part = (mesh, mount * model, color, emission);
+                            if self.visible_part(frame.vp, &part, &mut visibility) {
+                                if is_registered_glass(mesh) {
+                                    registered_glass.push((part, self.exterior_emission.get()));
+                                } else {
+                                    self.draw(mesh, part.1, color, emission);
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    for &(mesh, model, color, emission) in cached_ship_parts(pilot.ship_class) {
+                        if self.visible_part(
+                            frame.vp,
+                            &(mesh, ship * model, color, emission),
+                            &mut visibility,
+                        ) {
+                            self.draw_material(
+                                mesh,
+                                ship * model,
+                                color,
+                                emission,
+                                Material::BareMetal,
+                            );
+                        }
+                    }
                 }
             }
+            self.exterior_emission.set(Default::default());
             for module_id in 0..2 {
+                if frame.physical_for(pilot).is_some() {
+                    continue;
+                }
                 if let Some(state) = self.turrets.get(&(pilot.name.clone(), module_id)) {
-                    for (mesh, model, color, emission) in
-                        turret_parts(pilot.ship_class, state.rotation, module_id)
+                    for (mesh, model, color, emission) in parallel_turret_pose::resolve(
+                        pilot,
+                        frame.space,
+                        frame.snapshot_time,
+                        frame.now,
+                        module_id,
+                        state.rotation,
+                        frame.connected,
+                        frame.scene.carrier_inventory_registration.as_ref(),
+                    )
+                    .into_iter()
+                    .flat_map(|r| r.parts)
                     {
-                        self.draw(mesh, ship * model, color, emission);
+                        if self.visible_part(
+                            frame.vp,
+                            &(mesh, model, color, emission),
+                            &mut visibility,
+                        ) {
+                            self.draw(mesh, model, color, emission);
+                        }
                     }
                 }
             }
         }
-        for pilot in &frame.pilots {
+        for pilot in &frame.scene.pilots {
             for drone in fleet(pilot) {
+                if frame.carrier_advertised(pilot) || frame.physical_for(pilot).is_some() {
+                    continue;
+                }
                 if frame.camera_drone == Some(drone.id) && pilot.name == frame.own {
                     continue;
                 }
-                let base = transform(
-                    space.scene(drone_present_position(drone, frame.now)),
-                    Vec3::ONE,
-                    orientation(drone.heading).unwrap_or(Quat::IDENTITY),
-                );
-                self.draw(
-                    0,
-                    base * transform(Vec3::ZERO, Vec3::new(0.025, 0.009, 0.017), Quat::IDENTITY),
-                    match drone.class {
-                        arkline_protocol::DroneClass::Recon => Vec3::new(0.12, 0.25, 0.20),
-                        arkline_protocol::DroneClass::Mining => Vec3::new(0.50, 0.34, 0.09),
-                        arkline_protocol::DroneClass::Attack => Vec3::new(0.48, 0.12, 0.09),
-                    },
-                    0.1,
-                );
-                for side in [-1.0, 1.0] {
-                    self.draw(
-                        0,
-                        base * transform(
-                            Vec3::new(0.0, 0.0, side * 0.023),
-                            Vec3::new(0.012, 0.004, 0.007),
-                            Quat::IDENTITY,
-                        ),
-                        Vec3::new(0.05, 0.7, 0.4),
-                        0.8,
-                    );
+                let Some(base) = drone_bay_scene::active_transform(
+                    pilot,
+                    drone,
+                    space,
+                    frame.authoritative_motion_time(),
+                ) else {
+                    continue;
+                };
+                for (index, &(mesh, local, color, emission)) in self.drone_parts
+                    [drone_models::class_index(drone.class)]
+                .iter()
+                .enumerate()
+                {
+                    let local = drone_work::part_transform(frame, pilot, drone, index) * local;
+                    if self.visible_part(
+                        frame.vp,
+                        &(mesh, base * local, color, emission),
+                        &mut visibility,
+                    ) {
+                        self.draw(mesh, base * local, color, emission);
+                    }
                 }
             }
         }
-        if frame.connected {
-            for pilot in &frame.pilots {
+        for pilot in &frame.scene.pilots {
+            if frame.physical_for(pilot).is_some() {
+                continue;
+            }
+            if frame.carrier_advertised(pilot) {
+                if let Some(instances) = frame.carrier_instances(pilot) {
+                    for (id, class, base) in instances {
+                        if frame.camera_drone == Some(id) && pilot.name == frame.own {
+                            continue;
+                        }
+                        let active = fleet(pilot).into_iter().find(|d| d.id == id);
+                        for (index, &(mesh, local, color, emission)) in self.drone_parts
+                            [drone_models::class_index(class)]
+                        .iter()
+                        .enumerate()
+                        {
+                            let local = active.map_or(local, |drone| {
+                                drone_work::part_transform(frame, pilot, drone, index) * local
+                            });
+                            if self.visible_part(
+                                frame.vp,
+                                &(mesh, base * local, color, emission),
+                                &mut visibility,
+                            ) {
+                                self.draw(mesh, base * local, color, emission);
+                            }
+                        }
+                    }
+                }
+                continue;
+            }
+            if let Some(bay) = drone_bay_scene::validated_bay(pilot) {
+                for (id, class, base) in
+                    drone_bay_scene::stored_instances(pilot, bay, space, frame.now)
+                {
+                    if frame.camera_drone == Some(id) && pilot.name == frame.own {
+                        continue;
+                    }
+                    for &(mesh, local, color, emission) in
+                        self.drone_parts[drone_models::class_index(class)].iter()
+                    {
+                        if self.visible_part(
+                            frame.vp,
+                            &(mesh, base * local, color, emission),
+                            &mut visibility,
+                        ) {
+                            self.draw(mesh, base * local, color, emission);
+                        }
+                    }
+                }
+            }
+        }
+        if frame.presentation_live() {
+            if let Some((start, end)) = frame.scene.physical.as_ref().and_then(|p| p.mining_beam())
+            {
+                if let Some(model) = segment_model(space.scene(start), space.scene(end), 0.00006) {
+                    self.draw(0, model, Vec3::new(0.15, 0.95, 0.45), 1.2);
+                }
+            }
+            for pilot in &frame.scene.pilots {
+                if frame.physical_for(pilot).is_some() {
+                    continue;
+                }
                 for drone in fleet(pilot) {
                     if drone.signal_strength <= 0.0
                         || (frame.camera_drone == Some(drone.id) && pilot.name == frame.own)
                     {
                         continue;
                     }
-                    let start = space.scene(drone_present_position(drone, frame.now));
+                    if pilot
+                        .drone_bay
+                        .as_ref()
+                        .is_some_and(|b| b.constrained(drone.id).is_some())
+                    {
+                        continue;
+                    }
+                    let start = if drone.class == arkline_protocol::DroneClass::Mining {
+                        let Some(mount) = drone_work::work_head_world(
+                            pilot,
+                            drone,
+                            frame.now,
+                            drone_work::target_position(frame, pilot, drone),
+                        ) else {
+                            continue;
+                        };
+                        space.scene(mount)
+                    } else {
+                        space.scene(drone_present_position(drone, frame.now))
+                    };
                     let beam = match &drone.mode {
                         arkline_protocol::DroneMode::Mining { target_id }
-                            if drone.mining_cycle.is_some() =>
+                            if drone_work::mining_target(pilot, drone, frame.now)
+                                == Some(*target_id) =>
                         {
                             frame
+                                .scene
                                 .asteroids
                                 .iter()
                                 .find(|a| a.id == *target_id && a.ore > 0)
-                                .map(|a| {
-                                    let center = space.scene(a.position);
-                                    let direction = (start - center).normalize_or_zero();
-                                    (
-                                        center + direction * a.radius as f32 / 100.0,
-                                        Vec3::new(0.15, 0.95, 0.45),
-                                    )
-                                })
+                                .and_then(|a| mining_impact(start, a, space, frame.now))
+                                .map(|impact| (impact, Vec3::new(0.15, 0.95, 0.45)))
                         }
                         arkline_protocol::DroneMode::Attacking {
                             target_pilot,
                             target_drone_id,
                         } if frame.now % 1000 < 250 => frame
+                            .scene
                             .pilots
                             .iter()
                             .find(|p| p.name == *target_pilot)
@@ -2476,30 +5265,70 @@ impl Renderer {
                         _ => None,
                     };
                     if let Some((end, color)) = beam {
-                        if let Some(model) = segment_model(start, end, 0.009) {
+                        let radius = if drone.class == arkline_protocol::DroneClass::Mining {
+                            0.0006
+                        } else {
+                            0.009
+                        };
+                        if let Some(model) = segment_model(start, end, radius) {
                             self.draw(0, model, color, 1.2);
+                        }
+                        if let arkline_protocol::DroneMode::Mining { target_id } = drone.mode {
+                            let strength = self.drone_impacts.strength(
+                                &pilot.name,
+                                drone.id,
+                                target_id,
+                                frame.now,
+                            );
+                            if strength > 0. {
+                                self.draw(
+                                    2,
+                                    transform(
+                                        end,
+                                        Vec3::splat(0.003 + 0.003 * strength),
+                                        Quat::IDENTITY,
+                                    ),
+                                    Vec3::new(0.65, 0.95, 0.55),
+                                    strength * 1.6,
+                                );
+                            }
                         }
                     }
                 }
             }
         }
         self.paint_living_world(frame);
+        for (part, emission) in &registered_glass {
+            self.exterior_emission.set(*emission);
+            self.draw_registered_glass(part);
+        }
+        self.exterior_emission.set(Default::default());
         self.paint_effects(frame);
         if !frame.drone_camera {
             self.paint_warp_tunnel(frame);
         }
         if frame.cockpit {
-            self.paint_cockpit(frame);
+            self.paint_cockpit(frame, &mut visibility);
         }
         gl.disable(glow::DEPTH_TEST);
         gl.depth_mask(false);
         gl.bind_vertex_array(None);
         gl.use_program(None);
         self.restore_shadow_texture(shadow_texture);
+        #[cfg(test)]
+        {
+            if self.profile_phase_sync {
+                self.gl.finish();
+            }
+            self.profile_color_ms
+                .set(color_started.elapsed().as_secs_f64() * 1000.);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        self.finish_view_profile(profile, visibility);
     }
     /// Additive, depth-tested effects do not write depth or obscure UI meshes.
     unsafe fn paint_warp_tunnel(&self, frame: &Frame) {
-        let Some(pilot) = frame.pilots.iter().find(|p| p.name == frame.own) else {
+        let Some(pilot) = frame.scene.pilots.iter().find(|p| p.name == frame.own) else {
             return;
         };
         let Some((phase, progress)) = super::motion::warp_phase(pilot, frame.now) else {
@@ -2556,98 +5385,80 @@ impl Renderer {
         self.gl.depth_mask(true);
         self.gl.disable(glow::BLEND);
     }
-    unsafe fn paint_cockpit(&self, frame: &Frame) {
-        // Interior geometry occupies a separate depth layer inside the ship,
-        // while retaining the same view/projection as the outside universe.
+    unsafe fn paint_cockpit(&self, frame: &Frame, visibility: &mut ViewVisibility) {
         self.gl.depth_mask(true);
+        self.gl.clear_depth_f32(1.0);
         self.gl.clear(glow::DEPTH_BUFFER_BIT);
+        if let Some(occlusion) = &frame.cockpit_occlusion {
+            self.cockpit_depth
+                .paint_external(self, frame.cockpit_vp, occlusion);
+        }
         self.gl.enable(glow::DEPTH_TEST);
+        self.gl.depth_func(glow::LEQUAL);
         self.gl.disable(glow::BLEND);
         self.gl.uniform_matrix_4_f32_slice(
             self.uniforms.vp.as_ref(),
             false,
             &frame.cockpit_vp.to_cols_array(),
         );
-        let base =
-            Mat4::from_scale_rotation_translation(Vec3::splat(0.025), frame.rotation, frame.eye);
-        let steel = Vec3::new(0.055, 0.08, 0.09);
-        let glow = Vec3::new(0.08, 0.62, 0.43);
-        // Forward is local +X; glazing is open between structural pillars.
-        for side in [-1.0, 1.0] {
-            self.draw(
-                0,
-                base * transform(
-                    Vec3::new(0.88, 0.03, side * cockpit_span(frame.ship_class)),
-                    Vec3::new(0.025, 0.62, 0.018),
-                    Quat::from_rotation_x(side * 0.22),
-                ),
-                steel,
-                0.0,
+        if frame.ship_class == ShipClass::Pioneer {
+            let own = frame.scene.pilots.iter().find(|p| p.name == frame.own);
+            self.exterior_emission
+                .set(own.map_or_else(Default::default, |pilot| {
+                    exterior_visuals::EmissionPower::for_binding(
+                        exterior_visuals::for_pilot(frame, pilot),
+                        frame.carrier_advertised(pilot),
+                    )
+                }));
+            if let Some(parts) = frame.canonical_pioneer_parts() {
+                let mount = frame.pioneer_body_mount();
+                // Cull only this camera's colour submission. The canonical
+                // payload and its full depth/input scene stay unchanged, so a
+                // head turn or another feed independently sees the same ship.
+                for &(mesh, model, color, emission) in parts.iter() {
+                    let part = (mesh, mount * model, color, emission);
+                    if !is_registered_glass(mesh)
+                        && self.visible_part(frame.cockpit_vp, &part, visibility)
+                    {
+                        self.draw(mesh, part.1, color, emission);
+                    }
+                }
+                for &(mesh, model, color, emission) in parts.iter() {
+                    let part = (mesh, mount * model, color, emission);
+                    if is_registered_glass(mesh)
+                        && self.visible_part(frame.cockpit_vp, &part, visibility)
+                    {
+                        self.draw_registered_glass(&part);
+                    }
+                }
+            }
+            self.exterior_emission.set(Default::default());
+            return;
+        }
+        let origin = frame
+            .scene
+            .pilots
+            .iter()
+            .find(|pilot| pilot.name == frame.own)
+            .map_or_else(
+                || {
+                    frame.eye
+                        - frame.rotation * (cockpit_fit::eye_body_meters(frame.ship_class) / 100.0)
+                },
+                |pilot| frame.space.position(pilot, frame.now),
             );
-            self.draw(
-                0,
-                base * transform(
-                    Vec3::new(0.63, -0.38, side * 0.42),
-                    Vec3::new(0.35, 0.15, 0.13),
-                    Quat::IDENTITY,
-                ),
-                steel,
-                0.0,
-            );
-            for i in 0..6 {
-                self.draw(
-                    0,
-                    base * transform(
-                        Vec3::new(0.77, -0.34, side * (0.22 + i as f32 * 0.04)),
-                        Vec3::splat(0.013),
-                        Quat::IDENTITY,
-                    ),
-                    glow,
-                    0.8,
-                );
+        let base = cockpit_fit::mount(origin, frame.rotation, frame.ship_class);
+        if frame.ship_class == ShipClass::Pioneer {
+            let body = Mat4::from_rotation_translation(frame.rotation, origin);
+            for &(mesh, model, color, emission) in cached_ship_parts(frame.ship_class) {
+                if cockpit_fit::canopy_ranges(mesh).is_some_and(|ranges| ranges.is_empty()) {
+                    continue;
+                }
+                self.draw_material(mesh, body * model, color, emission, Material::BareMetal);
             }
         }
-        self.draw(
-            0,
-            base * transform(
-                Vec3::new(0.75, 0.57, 0.0),
-                Vec3::new(0.065, 0.035, 0.57),
-                Quat::IDENTITY,
-            ),
-            steel,
-            0.0,
-        );
-        self.draw(
-            0,
-            base * transform(
-                Vec3::new(0.82, -0.50, 0.0),
-                Vec3::new(0.22, 0.13, 0.58),
-                Quat::IDENTITY,
-            ),
-            steel,
-            0.0,
-        );
-        for (index, (center, size)) in cockpit_screens(frame.ship_class).into_iter().enumerate() {
-            if index == 0 {
-                continue;
-            } // Transparent canopy telemetry preserves forward visibility.
-            self.draw(
-                0,
-                base * transform(center, size, Quat::IDENTITY),
-                glow * 0.23,
-                0.25,
-            );
-            self.draw_material(
-                0,
-                base * transform(
-                    center - Vec3::X * 0.025,
-                    Vec3::new(0.006, size.y - 0.008, size.z - 0.008),
-                    Quat::IDENTITY,
-                ),
-                Vec3::new(0.004, 0.012, 0.010),
-                0.1,
-                Material::Glass,
-            );
+        for &((mesh, model, color, emission), material) in cached_cockpit_parts(frame.ship_class) {
+            self.draw_material(mesh, base * model, color, emission, material);
         }
     }
     unsafe fn paint_effects(&self, frame: &Frame) {
@@ -2656,8 +5467,14 @@ impl Renderer {
         gl.enable(glow::BLEND);
         gl.blend_func_separate(glow::ONE, glow::ONE, glow::ZERO, glow::ONE);
         gl.depth_mask(false);
-        for pilot in &frame.pilots {
-            let ship_position = space.position(pilot, frame.now);
+        for pilot in &frame.scene.pilots {
+            if frame.physical_for(pilot).is_some() {
+                continue;
+            }
+            let Some(confirmed_mount) = frame.ship_mount(pilot) else {
+                continue;
+            };
+            let ship_position = confirmed_mount.w_axis.truncate();
             if ship_position.distance(frame.eye) > 1100.0 {
                 continue;
             }
@@ -2672,7 +5489,17 @@ impl Renderer {
                 ship_orientation_at(pilot, frame.now),
             );
             let warp = super::motion::warp_phase(pilot, frame.now);
-            if let Location::Jumping { arrives_at_ms, .. } = pilot.location {
+            // Advertised carriers never inherit legacy class-only plume/warp anchors.
+            if frame.carrier_advertised(pilot) {
+                if let Ok(parts) = parallel_propulsion_effects::for_pilot(frame, pilot) {
+                    for (mesh, model, color, emission) in parts {
+                        self.draw(mesh, model, color, emission);
+                    }
+                }
+            }
+            if let (Location::Jumping { arrives_at_ms, .. }, false) =
+                (&pilot.location, frame.carrier_advertised(pilot))
+            {
                 let progress = 1.0
                     - arrives_at_ms
                         .saturating_sub(frame.now)
@@ -2693,7 +5520,7 @@ impl Renderer {
                 }
             }
 
-            if pilot.location != Location::Docked {
+            if !frame.carrier_advertised(pilot) && pilot.location != Location::Docked {
                 let (length, intensity) = match warp {
                     Some(("WARP WARMUP", progress)) => (3.8 + progress * 4.5, 1.4 + progress),
                     Some(("WARP LAUNCH", progress)) => (5.0 + progress * 5.0, 2.0 + progress),
@@ -2744,7 +5571,7 @@ impl Renderer {
                     }
                 }
             }
-            if frame.connected && warp.is_none() {
+            if !frame.carrier_advertised(pilot) && frame.connected && warp.is_none() {
                 let acceleration = confirmed_body_acceleration(pilot, frame.now);
                 let hull = transform(
                     ship_position,
@@ -2781,7 +5608,7 @@ impl Renderer {
                     }
                 }
             }
-            if let Some((stage, progress)) = warp {
+            if let (Some((stage, progress)), false) = (warp, frame.carrier_advertised(pilot)) {
                 if stage == "WARP WARMUP" {
                     let radius = 3.3 + progress * 1.2;
                     self.draw(
@@ -2824,7 +5651,7 @@ impl Renderer {
                     else {
                         continue;
                     };
-                    let Some(asteroid) = frame.asteroids.iter().find(|a| {
+                    let Some(asteroid) = frame.scene.asteroids.iter().find(|a| {
                         a.id == cycle.target_id && super::effects::can_extract_target(pilot, a)
                     }) else {
                         continue;
@@ -2832,17 +5659,23 @@ impl Renderer {
                     let Some(turret) = self.turrets.get(&(pilot.name.clone(), module_id)) else {
                         continue;
                     };
-                    let pose = transform(
-                        ship_position,
-                        Vec3::ONE,
-                        ship_orientation_at(pilot, frame.now),
-                    );
-                    let source = pose.transform_point3(turret_muzzle(
-                        pilot.ship_class,
-                        turret.rotation,
+                    let Some(rig) = parallel_turret_pose::resolve(
+                        pilot,
+                        frame.space,
+                        frame.snapshot_time,
+                        frame.now,
                         module_id,
-                    ));
-                    let forward = pose.transform_vector3(turret.rotation * Vec3::X);
+                        turret.rotation,
+                        frame.connected,
+                        frame.scene.carrier_inventory_registration.as_ref(),
+                    ) else {
+                        continue;
+                    };
+                    if !rig.can_fire {
+                        continue;
+                    }
+                    let source = rig.muzzle;
+                    let forward = rig.forward;
                     if (space.scene(asteroid.position) - source)
                         .normalize_or_zero()
                         .dot(forward)
@@ -2850,9 +5683,23 @@ impl Renderer {
                     {
                         continue;
                     }
-                    let Some(impact) = mining_impact(source, asteroid, space, frame.now) else {
+                    let impact = if rig.beam_radius_m.is_some() {
+                        // Exact accepted gun axis, not a second target-facing beam.
+                        ray_mesh_hit(
+                            source,
+                            forward,
+                            asteroid_model(asteroid, space, frame.snapshot_time),
+                            cached_rock(),
+                        )
+                        .map(|distance| source + forward * distance)
+                    } else {
+                        mining_impact(source, asteroid, space, frame.now)
+                    };
+                    let Some(impact) = impact else {
                         continue;
                     };
+                    let core_radius = rig.beam_radius_m.map_or(0.006, |r| r / 100. * 0.4);
+                    let outer_radius = rig.beam_radius_m.map_or(0.014, |r| r / 100.);
                     let pulse = 0.9
                         + 0.1 * ((frame.now % 400) as f32 / 400.0 * std::f32::consts::TAU).sin();
                     let cycle_brightness = 0.8 + 0.2 * cycle.progress;
@@ -2861,10 +5708,10 @@ impl Renderer {
                     } else {
                         Vec3::new(0.08, 0.45, 0.76)
                     }) * cycle_brightness;
-                    if let Some(beam) = segment_model(source, impact, 0.006 * pulse) {
+                    if let Some(beam) = segment_model(source, impact, core_radius * pulse) {
                         self.draw(0, beam, color, 1.8);
                     }
-                    if let Some(beam) = segment_model(source, impact, 0.014 * pulse) {
+                    if let Some(beam) = segment_model(source, impact, outer_radius * pulse) {
                         self.draw(0, beam, color * 0.16, 0.6);
                     }
                     self.draw(
@@ -2928,6 +5775,8 @@ impl Renderer {
             return;
         }
         self.destroyed = true;
+        #[cfg(not(target_arch = "wasm32"))]
+        self.view_profiler.borrow_mut().destroy(&self.gl);
         self.gl.delete_texture(self.shadow_fallback);
         for shadow in self.sun_shadows.drain(..) {
             shadow.destroy(&self.gl);
@@ -2942,7 +5791,7 @@ impl Renderer {
         self.gl.delete_vertex_array(self.empty);
         self.gl.delete_program(self.program);
         self.gl.delete_program(self.background);
-        #[cfg(target_arch = "wasm32")]
+        self.cockpit_depth.destroy(&self.gl);
         self.gl.delete_program(self.feed_program);
     }
 }
@@ -2973,7 +5822,12 @@ fn update_head_look(angles: &mut [f32; 2], held: bool, axes: [f32; 2], dt: f32) 
     let dt = dt.clamp(0.0, 0.1);
     for (index, angle) in angles.iter_mut().enumerate() {
         if held {
-            *angle = (*angle + axes[index] * dt * 1.4).clamp(-1.25, 1.25);
+            let limit = if index == 0 {
+                std::f32::consts::PI
+            } else {
+                1.45
+            };
+            *angle = (*angle + axes[index] * dt * 1.4).clamp(-limit, limit);
         } else {
             *angle *= (-dt * 12.0).exp();
             if angle.abs() < 0.002 {
@@ -2982,6 +5836,7 @@ fn update_head_look(angles: &mut [f32; 2], held: bool, axes: [f32; 2], dt: f32) 
         }
     }
 }
+#[cfg(test)]
 fn cockpit_camera(ship: Vec3, rotation: Quat) -> (Vec3, Mat4) {
     let eye = ship + rotation * Vec3::new(0.005, 0.015, 0.0);
     (
@@ -3148,7 +6003,21 @@ fn in_warp(location: &Location, now: u64) -> bool {
     matches!(location, Location::InTransit { arrives_at_ms, .. } if now < *arrives_at_ms)
 }
 /// Shared bezel geometry and instrument layout: +X forward, +Y up, +Z right.
+// Slot zero is the legacy HUD; fixed 1..=7, mechanisms 8..=14.
+// Reactor overview owns 15; fixed drone cassette metrics own 16..=20.
+// Other ship classes retain their existing five physical faces and HUD.
+const REACTOR_SURFACE_SLOT: usize = 15;
+const DRONE_CASSETTE_SURFACE_START: usize = 16;
+const DRONE_CASSETTE_SURFACE_COUNT: usize = 5;
+const COCKPIT_SURFACE_SLOTS: usize = 23; // External port/starboard cameras own 21..=22.
 const COCKPIT_FOV: f32 = 1.22;
+fn cockpit_fov(class: ShipClass) -> f32 {
+    if class == ShipClass::Pioneer {
+        hangar::pioneer_docked_scene::FOV_RADIANS
+    } else {
+        COCKPIT_FOV
+    }
+}
 fn cockpit_screens(class: ShipClass) -> [(Vec3, Vec3); 6] {
     let mut screens = [
         (Vec3::new(0.72, 0.12, 0.0), Vec3::new(0.020, 0.075, 0.18)),
@@ -3168,11 +6037,7 @@ fn cockpit_screens(class: ShipClass) -> [(Vec3, Vec3); 6] {
     screens
 }
 
-pub(super) fn cockpit_console_bounds(viewport: egui::Rect, class: ShipClass) -> egui::Rect {
-    let (center, size) = cockpit_screens(class)[3];
-    instrument_rect(viewport, center, size).shrink(5.0)
-}
-
+#[cfg(test)]
 fn drone_feed_rect(viewport: egui::Rect, class: ShipClass) -> egui::Rect {
     let (center, size) = cockpit_screens(class)[1];
     let screen = instrument_rect(viewport, center, size);
@@ -3191,6 +6056,68 @@ fn feed_due(previous: Option<u64>, now: u64, count: usize) -> bool {
         now < before || now.saturating_sub(before) >= if count > 1 { 33 } else { 16 }
     })
 }
+/// An explicit identity never silently switches when its entity leaves the active
+/// fleet (stored, destroyed, or temporarily unavailable). None retains automatic
+/// first-feed selection; bay projection supplies the stored view separately.
+pub(super) fn drone_mining_target(
+    pilot: &PilotView,
+    drone: &arkline_protocol::DroneView,
+    now: u64,
+) -> Option<u64> {
+    drone_work::mining_target(pilot, drone, now)
+}
+
+/// Same-ID confirmed yield evidence shared by impact and spatial audio cues.
+pub(super) fn drone_mining_yield_confirmed(
+    previous: &PilotView,
+    current: &PilotView,
+    drone_id: u64,
+) -> bool {
+    drone_work::mining_yield_confirmed(previous, current, drone_id)
+}
+
+pub(super) fn drone_work_head_world(
+    pilot: &PilotView,
+    drone: &arkline_protocol::DroneView,
+    now: u64,
+    target: Option<[f64; 3]>,
+) -> Option<[f64; 3]> {
+    drone_work::work_head_world(pilot, drone, now, target)
+}
+
+pub(super) fn ore_receiver_view_available(pilot: &PilotView) -> bool {
+    drone_bay_scene::validated_cargo(pilot).is_some()
+}
+
+pub(super) fn bay_view_available(pilot: &PilotView) -> bool {
+    drone_bay_scene::validated_bay(pilot).is_some()
+}
+
+/// Legacy paging keeps its old fallback. A physical-stock identity must never
+/// silently page to another deployed craft after it is stored or destroyed.
+pub(super) fn selected_drone_feed_ids(
+    pilot: &PilotView,
+    selected: Option<u64>,
+    split: bool,
+) -> Vec<u64> {
+    let ids: Vec<_> = fleet(pilot).iter().map(|d| d.id).collect();
+    if pilot.drone_bay.is_some() && selected.is_some_and(|id| !ids.contains(&id)) {
+        return Vec::new();
+    }
+    super::target_controls::feed_ids(&ids, selected, split)
+}
+
+fn selected_camera_drone(
+    pilot: &PilotView,
+    selected: Option<u64>,
+) -> Option<&arkline_protocol::DroneView> {
+    let available = fleet(pilot);
+    match selected {
+        Some(id) => available.into_iter().find(|drone| drone.id == id),
+        None => available.first().copied(),
+    }
+}
+
 fn drone_present_position(drone: &arkline_protocol::DroneView, now: u64) -> [f64; 3] {
     let seconds = now.saturating_sub(drone.updated_at_ms).min(350) as f64 / 1000.0;
     std::array::from_fn(|axis| drone.position[axis] + drone.velocity[axis] * seconds)
@@ -3245,13 +6172,21 @@ fn drone_camera_matrix(
     aspect: f32,
 ) -> (Vec3, Mat4) {
     let eye = space.scene(drone.position);
-    let direction = Vec3::from_array(drone.heading.map(|v| v as f32))
-        .try_normalize()
-        .unwrap_or(Vec3::X);
-    let up = if direction.dot(Vec3::Y).abs() > 0.98 {
-        Vec3::Z
+    let (direction, up) = if drone.orientation_xyzw.is_some() {
+        let attitude = drone_attitude(drone).unwrap_or(Quat::IDENTITY);
+        (attitude * Vec3::X, attitude * Vec3::Y)
     } else {
-        Vec3::Y
+        // Legacy heading-only cameras keep their original world-up horizon.
+        // Full physical attitude is additive, not a bank change for old fleets.
+        let direction = Vec3::from_array(drone.heading.map(|v| v as f32))
+            .try_normalize()
+            .unwrap_or(Vec3::X);
+        let up = if direction.dot(Vec3::Y).abs() > 0.98 {
+            Vec3::Z
+        } else {
+            Vec3::Y
+        };
+        (direction, up)
     };
     let view = Mat4::look_at_rh(eye, eye + direction, up);
     (
@@ -3260,6 +6195,7 @@ fn drone_camera_matrix(
     )
 }
 
+#[cfg(test)]
 fn instrument_rect(viewport: egui::Rect, center: Vec3, size: Vec3) -> egui::Rect {
     // Body-fixed screens and camera share orientation. Project directly in seat
     // coordinates to avoid astronomical-world precision and use the actual face.
@@ -3344,11 +6280,31 @@ fn instrument_rows(
         vec![
             format!("{} / {status}", own.ship_class.spec().name.to_uppercase()),
             mode,
-            format!("SPEED {}", super::format_speed(speed)),
-            format!("FWD {:+.1} m/s", body.x),
-            format!("RIGHT {:+.1} m/s", body.z),
-            format!("UP {:+.1} m/s", body.y),
-            format!("HDG {bearing:05.1}  PITCH {pitch:+.1}"),
+            if own.flight.is_some() {
+                format!("SPEED {}", super::format_speed(speed))
+            } else {
+                "SPEED UNAVAILABLE".into()
+            },
+            if own.flight.is_some() {
+                format!("FWD {:+.1} m/s", body.x)
+            } else {
+                "FWD UNAVAILABLE".into()
+            },
+            if own.flight.is_some() {
+                format!("RIGHT {:+.1} m/s", body.z)
+            } else {
+                "RIGHT UNAVAILABLE".into()
+            },
+            if own.flight.is_some() {
+                format!("UP {:+.1} m/s", body.y)
+            } else {
+                "UP UNAVAILABLE".into()
+            },
+            if own.flight.is_some() {
+                format!("HDG {bearing:05.1}  PITCH {pitch:+.1}")
+            } else {
+                "ATTITUDE UNAVAILABLE".into()
+            },
             own.surface
                 .as_ref()
                 .map_or("BODY-AXIS VELOCITY".into(), |s| {
@@ -3397,36 +6353,78 @@ fn instrument_rows(
             own.power.as_ref().map_or("CAPACITOR UNKNOWN".into(), |p| {
                 if p.charge_j < arkline_protocol::power_spec(own.ship_class).warp_cost_j {
                     "LOW POWER / WARP UNAVAILABLE".into()
+                } else if p.capacity_j > 0 && p.charge_j >= p.capacity_j {
+                    "CAPACITOR FULL / WARP ENERGY READY".into()
                 } else {
-                    "CAPACITOR / CHARGED".into()
+                    "WARP ENERGY READY".into()
                 }
             }),
         ],
     ]
 }
 
+#[allow(clippy::too_many_arguments)]
 fn paint_instruments(
-    painter: &egui::Painter,
-    viewport: egui::Rect,
+    ui: &egui::Ui,
+    surfaces: &[Option<CockpitSurface>; COCKPIT_SURFACE_SLOTS],
     own: &PilotView,
     snapshot: &Snapshot,
     target_distance: Option<f64>,
     now: u64,
     connected: bool,
+    authority: Option<&str>,
 ) {
-    let rows = instrument_rows(own, snapshot, target_distance, now, connected);
+    let mut rows = instrument_rows(own, snapshot, target_distance, now, connected);
+    if let Some(status) = authority {
+        rows[0][0] = format!("{} / {status}", own.ship_class.spec().name.to_uppercase());
+        rows[1][0] = format!("NAV / {status}");
+        rows[2][0] = format!("POWER / {status}");
+    }
     let connected = connected && now.saturating_sub(snapshot.server_time_ms) <= 1500;
     let color = if connected { super::TEAL } else { super::AMBER };
-    for (index, (center, size)) in cockpit_screens(own.ship_class)
-        .into_iter()
-        .take(3)
-        .enumerate()
-    {
-        let screen = instrument_rect(viewport, center, size);
-        let inner = screen.shrink(screen.width().min(screen.height()) * 0.045);
-        let painter = painter.with_clip_rect(inner.intersect(viewport));
-        if index != 0 {
-            painter.rect_filled(inner, 0.0, egui::Color32::from_rgb(2, 14, 10));
+    if own.ship_class == ShipClass::Pioneer {
+        let status = authority.unwrap_or(if connected {
+            "LIVE"
+        } else {
+            "STALE / DISCONNECTED"
+        });
+        if let Some(surface) = &surfaces[6] {
+            side_instruments::paint(ui, surface, own, status, color);
+        }
+    }
+    for index in 0..3 {
+        let Some(surface) = surfaces[index].as_ref() else {
+            continue;
+        };
+        let paint = surface.begin_paint(ui);
+        let inner = surface.canvas_rect().shrink(5.);
+        let painter = paint.painter().with_clip_rect(inner);
+        if index == 1 {
+            let readings = navigation_instrument::NavigationReadings::from_pilot(
+                own,
+                snapshot,
+                target_distance,
+                now,
+            );
+            navigation_instrument::paint(
+                &paint.painter().with_clip_rect(surface.canvas_rect()),
+                surface.canvas_rect(),
+                &rows[1][0],
+                color,
+                &readings,
+            );
+            continue;
+        }
+        if index == 2 {
+            let readings = power_instrument::PowerReadings::from_pilot(own, now);
+            power_instrument::paint(
+                &paint.painter().with_clip_rect(surface.canvas_rect()),
+                surface.canvas_rect(),
+                &rows[2][0],
+                color,
+                &readings,
+            );
+            continue;
         }
         let row_height = inner.height() / 10.0;
         let font = (inner.width() / 18.0).min(row_height * 0.75);
@@ -3451,21 +6449,243 @@ fn paint_instruments(
             ],
             egui::Stroke::new(1.0, color.gamma_multiply(0.35)),
         );
-        if index == 2 {
-            let width = inner.width()
-                * own.power.as_ref().map_or(0.0, |p| {
-                    (p.charge_j as f32 / p.capacity_j.max(1) as f32).clamp(0.0, 1.0)
-                });
-            painter.rect_filled(
-                egui::Rect::from_min_size(
-                    egui::pos2(inner.left(), baseline + 3.0),
-                    egui::vec2(width, row_height * 0.45),
-                ),
-                0.0,
-                color,
+    }
+}
+
+fn passive_authority(snapshot: &Snapshot, now: u64, connected: bool, paused: bool) -> &'static str {
+    if !connected {
+        "DISCONNECTED / LAST STATE"
+    } else if paused {
+        "PAUSED / SNAPSHOT HELD"
+    } else if now.saturating_sub(snapshot.server_time_ms) > 1500 {
+        "STALE TELEMETRY"
+    } else {
+        "LIVE TELEMETRY"
+    }
+}
+
+fn paint_passive_authority(
+    ui: &egui::Ui,
+    surface: &CockpitSurface,
+    snapshot: &Snapshot,
+    now: u64,
+    connected: bool,
+    paused: bool,
+) {
+    let status = passive_authority(snapshot, now, connected, paused);
+    surface.paint(ui, |painter| {
+        let rect = surface.canvas_rect().shrink(4.0);
+        let badge = egui::Rect::from_min_size(
+            rect.right_top() - egui::vec2(151.0, 0.0),
+            egui::vec2(151.0, 13.0),
+        );
+        painter.rect_filled(badge, 0.0, egui::Color32::from_rgb(1, 9, 7));
+        painter.text(
+            badge.right_top() - egui::vec2(2.0, -1.0),
+            egui::Align2::RIGHT_TOP,
+            status,
+            egui::FontId::monospace(8.0),
+            if status == "LIVE TELEMETRY" {
+                super::TEAL
+            } else {
+                super::AMBER
+            },
+        );
+    });
+}
+
+fn paint_passive_flight_console(
+    ui: &egui::Ui,
+    surface: &CockpitSurface,
+    pilot: &PilotView,
+    snapshot: &Snapshot,
+    now: u64,
+    connected: bool,
+    paused: bool,
+) {
+    surface.paint(ui, |painter| {
+        let rect = surface.canvas_rect().shrink(14.0);
+        painter.rect_filled(
+            surface.canvas_rect(),
+            0.0,
+            egui::Color32::from_rgb(2, 14, 10),
+        );
+        let mut rows = vec![
+            "FLIGHT STATUS / READ ONLY".to_owned(),
+            passive_authority(snapshot, now, connected, paused).to_owned(),
+            format!(
+                "{} / SYSTEM {}",
+                pilot.ship_class.spec().name,
+                pilot.system_id
+            ),
+            format!(
+                "HOLD {} / {}",
+                pilot.ore,
+                arkline_protocol::cargo_capacity(pilot.ship_class)
+            ),
+        ];
+        rows.push(
+            pilot
+                .power
+                .as_ref()
+                .map_or("POWER DATA UNAVAILABLE".into(), |power| {
+                    format!("CAPACITOR {} / {} J", power.charge_j, power.capacity_j)
+                }),
+        );
+        if let Some(job) = snapshot
+            .resource_jobs
+            .iter()
+            .find(|job| job.pilot == pilot.name)
+        {
+            rows.push(format!("MINING {:?}", job.phase));
+            rows.push(format!(
+                "STORED {} / {}",
+                job.stored_units, job.target_units
+            ));
+        } else {
+            rows.push("NO MINING ROUTINE".into());
+        }
+        rows.push("PILOT CONTROLS REQUIRE THE PHYSICAL SEAT".into());
+        let line_height = rect.height() / 10.0;
+        for (index, text) in rows.iter().enumerate() {
+            painter.text(
+                rect.left_top() + egui::vec2(0.0, index as f32 * line_height),
+                egui::Align2::LEFT_TOP,
+                text,
+                egui::FontId::monospace(15.0),
+                if index < 2 {
+                    super::TEAL
+                } else {
+                    egui::Color32::from_rgb(185, 226, 208)
+                },
             );
         }
+    });
+}
+
+fn bay_camera_source_key(
+    pilot: &str,
+    binding: &arkline_protocol::DroneBayBinding,
+    source: super::camera_sources::CameraSource,
+) -> u64 {
+    egui::Id::new((
+        pilot,
+        "physical-bay",
+        &binding.vessel_id,
+        binding.geometry_revision,
+        &binding.source_sha256,
+        source,
+    ))
+    .value()
+}
+
+fn camera_source_key(
+    pilot: &str,
+    drone: Option<u64>,
+    remote: Option<&str>,
+    mode: DroneCameraMode,
+    turret: Option<u8>,
+) -> u64 {
+    turret.map_or_else(
+        || egui::Id::new((pilot, drone, remote, mode)).value(),
+        |slot| egui::Id::new((pilot, "turret", slot)).value(),
+    )
+}
+
+fn turret_camera_frame(
+    frame: &Frame,
+    pilot: &PilotView,
+    slot: u8,
+    rotation: Quat,
+    aspect: f32,
+) -> Option<Frame> {
+    if slot >= 2
+        || pilot.flight.is_none()
+        || !rotation.is_finite()
+        || !aspect.is_finite()
+        || aspect <= 0.0
+    {
+        return None;
     }
+    let rig = parallel_turret_pose::resolve(
+        pilot,
+        frame.space,
+        frame.snapshot_time,
+        frame.now,
+        slot,
+        rotation,
+        frame.connected,
+        frame.scene.carrier_inventory_registration.as_ref(),
+    )?;
+    // Same physical muzzle/aim as color, depth and beam; observation offset only.
+    let eye = rig.muzzle + rig.up * 0.022;
+    let forward = rig.forward;
+    let up = rig.up;
+    if !eye.is_finite() || forward.length_squared() < 0.5 || up.length_squared() < 0.5 {
+        return None;
+    }
+    let view = Mat4::look_at_rh(eye, eye + forward, up);
+    let mut feed = frame.clone();
+    feed.eye = eye;
+    feed.vp = Mat4::perspective_rh_gl(1.05, aspect, 0.002, 1200.0) * view;
+    feed.planet_vp = Mat4::perspective_rh_gl(1.05, aspect, 1.0, 300_000.0) * view;
+    feed.cockpit = false;
+    feed.drone_camera = true;
+    feed.camera_drone = None;
+    feed.docking = None;
+    Some(feed)
+}
+
+/// Body-mounted observation cameras, not simulated powered sensors. The mount
+/// is 0.4 m outboard of the canonical hull's 19 m lateral envelope. Looking aft
+/// and slightly inboard keeps the actual hull flank in frame without hiding it.
+fn exterior_camera_label(side: arkline_protocol::ExteriorCameraSide) -> &'static str {
+    match side {
+        arkline_protocol::ExteriorCameraSide::Port => "PORT / HULL-SIDE VIEW",
+        arkline_protocol::ExteriorCameraSide::Starboard => "STARBOARD / HULL-SIDE VIEW",
+    }
+}
+fn exterior_camera_frame(
+    frame: &Frame,
+    pilot: &PilotView,
+    side: arkline_protocol::ExteriorCameraSide,
+    aspect: f32,
+) -> Option<Frame> {
+    if pilot.ship_class != ShipClass::Pioneer
+        || pilot.flight.is_none()
+        || !aspect.is_finite()
+        || aspect <= 0.
+    {
+        return None;
+    }
+    let sign = if side == arkline_protocol::ExteriorCameraSide::Port {
+        -1.
+    } else {
+        1.
+    };
+    let body = Mat4::from_scale_rotation_translation(
+        Vec3::splat(0.01),
+        ship_orientation_at(pilot, frame.now),
+        frame.space.position(pilot, frame.now),
+    );
+    let eye = body.transform_point3(Vec3::new(15., 6., sign * 19.4));
+    let forward = body
+        .transform_vector3(Vec3::new(-1., -0.08, -sign * 0.12))
+        .normalize_or_zero();
+    let up = body.transform_vector3(Vec3::Y).normalize_or_zero();
+    if !eye.is_finite() || forward.length_squared() < 0.5 || up.length_squared() < 0.5 {
+        return None;
+    }
+    let view = Mat4::look_at_rh(eye, eye + forward, up);
+    let mut feed = frame.clone();
+    feed.eye = eye;
+    feed.vp = Mat4::perspective_rh_gl(1.05, aspect, 0.002, 1200.) * view;
+    feed.planet_vp = Mat4::perspective_rh_gl(1.05, aspect, 1., 300_000.) * view;
+    feed.cockpit = false;
+    feed.drone_camera = true;
+    feed.camera_drone = None;
+    feed.docking = None;
+    Some(feed)
 }
 
 fn module_instrument(pilot: &PilotView, module_id: u8, now: u64) -> String {
@@ -3476,8 +6696,24 @@ fn module_instrument(pilot: &PilotView, module_id: u8, now: u64) -> String {
             cycle.target_id,
             cycle.remaining_ms as f64 / 1000.0
         )
+    } else if let Some(module) = pilot
+        .mining_modules
+        .iter()
+        .find(|m| m.module_id == module_id)
+    {
+        if let Some(target_id) = module.target_id {
+            format!("T{} #{} CYCLE UNCONFIRMED", module_id + 1, target_id)
+        } else if let Some(reason) = module
+            .stop_reason
+            .as_deref()
+            .filter(|reason| !reason.is_empty())
+        {
+            format!("T{} STOPPED / {}", module_id + 1, reason)
+        } else {
+            format!("T{} STANDBY", module_id + 1)
+        }
     } else {
-        format!("T{} STANDBY", module_id + 1)
+        format!("T{} DATA UNAVAILABLE", module_id + 1)
     }
 }
 struct TurretState {
@@ -3501,15 +6737,21 @@ fn turret_mount(class: ShipClass, module_id: u8) -> (Vec3, f32, f32) {
     let spec = class.spec();
     let radius = (spec.length_m as f32 * 0.012).clamp(0.6, 5.0) / 100.0;
     let barrel = (spec.length_m as f32 * 0.06).clamp(3.0, 24.0) / 100.0;
-    (
+    let mount = if class == ShipClass::Pioneer {
+        // Physical outboard sockets are independent of the conservative class
+        // envelope: raising the bridge must not lift the guns off their decks.
+        Vec3::from_array(
+            arkline_protocol::PIONEER_MINING_TURRET_MOUNTS_M[usize::from(module_id.min(1))]
+                .map(|v| v as f32),
+        ) / 100.0
+    } else {
         Vec3::new(
             spec.length_m as f32 * 0.0015,
             spec.height_m as f32 / 200.0 + radius,
             spec.width_m as f32 * 0.0007 * if module_id == 0 { -1.0 } else { 1.0 },
-        ),
-        radius,
-        barrel,
-    )
+        )
+    };
+    (mount, radius, barrel)
 }
 fn turret_muzzle(class: ShipClass, rotation: Quat, module_id: u8) -> Vec3 {
     let (mount, radius, barrel) = turret_mount(class, module_id);
@@ -3595,15 +6837,19 @@ fn turret_parts(class: ShipClass, rotation: Quat, module_id: u8) -> Vec<ModelPar
     let base = Mat4::from_rotation_translation(rotation, mount);
     let bottom = turret_deck(class, module_id) - radius * 0.3;
     let top = mount.y;
-    vec![
+    let mut parts = vec![
         (
-            2,
-            transform(mount, Vec3::splat(radius), Quat::IDENTITY),
+            8,
+            base * transform(
+                Vec3::ZERO,
+                Vec3::new(radius, radius * 0.7, radius * 0.8),
+                Quat::IDENTITY,
+            ),
             Vec3::new(0.24, 0.29, 0.31),
             0.0,
         ),
         (
-            0,
+            8,
             base * transform(
                 Vec3::X * (radius + barrel * 0.5),
                 Vec3::new(barrel * 0.5, radius * 0.22, radius * 0.22),
@@ -3632,7 +6878,44 @@ fn turret_parts(class: ShipClass, rotation: Quat, module_id: u8) -> Vec<ModelPar
             Vec3::new(0.20, 0.25, 0.27),
             0.0,
         ),
-    ]
+    ];
+    let pedestal = parts.pop().expect("turret pedestal");
+    // Armor, paired coolant jackets and rear power pack follow the same aim
+    // transform as the emitter; the muzzle and gameplay hardpoint stay unchanged.
+    for side in [-1.0, 1.0] {
+        parts.push((
+            8,
+            base * transform(
+                Vec3::new(radius * 0.1, 0.0, side * radius * 0.77),
+                Vec3::new(radius * 0.7, radius * 0.5, radius * 0.16),
+                Quat::IDENTITY,
+            ),
+            Vec3::new(0.035, 0.24, 0.10),
+            0.0,
+        ));
+        parts.push((
+            8,
+            base * transform(
+                Vec3::new(radius + barrel * 0.45, 0.0, side * radius * 0.31),
+                Vec3::new(barrel * 0.35, radius * 0.12, radius * 0.10),
+                Quat::IDENTITY,
+            ),
+            Vec3::new(0.28, 0.32, 0.31),
+            0.0,
+        ));
+    }
+    parts.push((
+        8,
+        base * transform(
+            Vec3::new(-radius * 0.8, radius * 0.15, 0.0),
+            Vec3::new(radius * 0.4, radius * 0.6, radius * 0.6),
+            Quat::IDENTITY,
+        ),
+        Vec3::new(0.065, 0.075, 0.072),
+        0.0,
+    ));
+    parts.push(pedestal);
+    parts
 }
 fn engine_mounts(class: ShipClass) -> Vec<Vec3> {
     if class == ShipClass::Pioneer {
@@ -3656,515 +6939,22 @@ fn ship_geometry(class: ShipClass, ship: Mat4) -> Vec<(Vec<Vertex>, Mat4)> {
         .map(|(mesh, model, _, _)| (mesh_vertices(mesh), ship * model))
         .collect()
 }
-// Mesh slots 0..10 remain stable for procedural world geometry. Embedded
-// primitive slots precede station batching, and are shared by every render pass.
-fn pioneer_asset() -> Result<&'static Vec<ship_asset::Primitive>, String> {
-    static ASSET: std::sync::OnceLock<Result<Vec<ship_asset::Primitive>, String>> =
-        std::sync::OnceLock::new();
-    ASSET
-        .get_or_init(|| {
-            let parts =
-                ship_asset::decode(include_bytes!("../../../assets/ships/pioneer/pioneer.glb"))?;
-            let mut lo = Vec3::splat(f32::INFINITY);
-            let mut hi = Vec3::splat(f32::NEG_INFINITY);
-            for p in &parts {
-                for v in &p.vertices {
-                    lo = lo.min(v.p);
-                    hi = hi.max(v.p);
-                }
-            }
-            let half = Vec3::new(0.36, 0.09, 0.19);
-            if (lo + half).abs().max_element() > 0.0003 || (hi - half).abs().max_element() > 0.0003
-            {
-                return Err(format!(
-                    "Pioneer asset must retain 72×38×18 m hull envelope; got {lo:?}..{hi:?}"
-                ));
-            }
-            Ok(parts)
-        })
-        .as_ref()
-        .map_err(Clone::clone)
-}
-fn embedded_primitive(mesh: usize) -> Option<&'static ship_asset::Primitive> {
-    mesh.checked_sub(10)
-        .and_then(|i| pioneer_asset().ok()?.get(i))
+/// Validate expanded triangle-corner draws before measuring or submitting them.
+fn triangle_draw_range(vertex_count: i32, range: Option<(usize, usize)>) -> Option<(i32, i32)> {
+    let vertex_count = usize::try_from(vertex_count).ok()?;
+    let (first, count) = range.unwrap_or((0, vertex_count));
+    if count == 0
+        || !first.is_multiple_of(3)
+        || !count.is_multiple_of(3)
+        || first.checked_add(count)? > vertex_count
+    {
+        return None;
+    }
+    Some((i32::try_from(first).ok()?, i32::try_from(count).ok()?))
 }
 
 type ModelPart = (usize, Mat4, Vec3, f32);
-fn ship_parts(class: ShipClass) -> Vec<ModelPart> {
-    cached_ship_parts(class).to_vec()
-}
-fn cached_ship_parts(class: ShipClass) -> &'static [ModelPart] {
-    static MODELS: [std::sync::OnceLock<Vec<ModelPart>>; 7] =
-        [const { std::sync::OnceLock::new() }; 7];
-    MODELS[match class {
-        ShipClass::Pioneer => 0,
-        ShipClass::Prospector => 1,
-        ShipClass::Hauler => 2,
-        ShipClass::Vanguard => 3,
-        ShipClass::Borealis => 4,
-        ShipClass::Stratum => 5,
-        ShipClass::Monolith => 6,
-    }]
-    .get_or_init(|| build_ship_parts(class))
-}
-fn build_ship_parts(class: ShipClass) -> Vec<ModelPart> {
-    if class == ShipClass::Pioneer {
-        return match pioneer_asset() {
-            Ok(parts) => parts
-                .iter()
-                .enumerate()
-                .map(|(i, p)| (10 + i, Mat4::IDENTITY, p.color, p.emission))
-                .collect(),
-            Err(_) => pioneer_construction_model(),
-        };
-    }
 
-    // Original procedural interpretation of the construction-fleet dossiers.
-    // Model-space proportions are fitted to measured public bounds below.
-    let mut parts = Parts(Vec::new());
-    let graphite = Vec3::new(0.075, 0.095, 0.105);
-    let plate = Vec3::new(0.15, 0.18, 0.19);
-    let edge = Vec3::new(0.24, 0.28, 0.29);
-    let green = Vec3::new(0.025, 0.28, 0.15);
-    let amber = Vec3::new(0.72, 0.39, 0.09);
-    let glass = Vec3::new(0.04, 0.30, 0.27);
-    let twin = matches!(class, ShipClass::Prospector | ShipClass::Borealis);
-    let sections = match class {
-        ShipClass::Pioneer => 3,
-        ShipClass::Prospector => 3,
-        ShipClass::Hauler => 5,
-        ShipClass::Vanguard => 5,
-        ShipClass::Borealis => 4,
-        ShipClass::Stratum => 6,
-        ShipClass::Monolith => 8,
-    };
-    let industrial = matches!(class, ShipClass::Stratum | ShipClass::Monolith);
-    // Box helper takes half-extents, preserving the existing mesh convention.
-    let mut block = |p: Vec3, size: Vec3, color: Vec3, emission: f32| {
-        let mesh = if emission == 0.0 && size.min_element() > 0.06 {
-            8
-        } else {
-            0
-        };
-        parts.draw(mesh, transform(p, size, Quat::IDENTITY), color, emission);
-    };
-    if twin {
-        // Two long extraction booms and a rear bridge; an open central channel.
-        for side in [-1.0, 1.0] {
-            block(
-                Vec3::new(0.0, 0.0, side * 0.72),
-                Vec3::new(1.85, 0.32, 0.29),
-                graphite,
-                0.0,
-            );
-            block(
-                Vec3::new(1.72, 0.03, side * 0.72),
-                Vec3::new(0.24, 0.24, 0.23),
-                green,
-                0.0,
-            );
-        }
-        block(
-            Vec3::new(-1.05, 0.04, 0.0),
-            Vec3::new(0.48, 0.30, 0.80),
-            plate,
-            0.0,
-        );
-        // Crossbeam under the unchanged inner turret pedestals.
-        block(
-            Vec3::new(0.65, -0.02, 0.0),
-            Vec3::new(0.38, 0.13, 0.76),
-            graphite,
-            0.0,
-        );
-    } else {
-        block(
-            Vec3::new(0.0, -0.13, 0.0),
-            Vec3::new(1.78, 0.16, 0.32),
-            graphite,
-            0.0,
-        );
-        block(
-            Vec3::new(1.50, 0.02, 0.0),
-            Vec3::new(0.34, 0.29, 0.48),
-            plate,
-            0.0,
-        );
-        block(
-            Vec3::new(1.49, 0.29, 0.0),
-            Vec3::new(0.23, 0.10, 0.38),
-            green,
-            0.0,
-        );
-    }
-    // Broad non-emissive identification bands and structural longitudinal rails.
-    for side in [-1.0, 1.0] {
-        for y in [-0.34, 0.34] {
-            block(
-                Vec3::new(-0.08, y, side * 0.94),
-                Vec3::new(1.74, 0.035, 0.045),
-                edge,
-                0.0,
-            );
-        }
-        for x in [-1.58, 1.20] {
-            block(
-                Vec3::new(x, 0.0, side * 0.89),
-                Vec3::new(0.11, 0.36, 0.13),
-                green,
-                0.0,
-            );
-        }
-        for i in 0..sections {
-            let x = -1.35 + i as f32 * 2.55 / sections as f32;
-            let half = 0.92 / sections as f32;
-            let z = if twin { 0.92 } else { 0.60 };
-            block(
-                Vec3::new(x, 0.0, side * z),
-                Vec3::new(
-                    half,
-                    if industrial { 0.23 } else { 0.29 },
-                    if twin { 0.11 } else { 0.28 },
-                ),
-                if class == ShipClass::Hauler {
-                    plate
-                } else {
-                    graphite * 1.45
-                },
-                0.0,
-            );
-            block(
-                Vec3::new(x - half, 0.0, side * (z + 0.12)),
-                Vec3::new(0.018, 0.33, 0.035),
-                edge,
-                0.0,
-            );
-            // Alternate lamps leave a bounded geometry budget for cargo tops.
-            if i % 2 == 0 {
-                block(
-                    Vec3::new(x, -0.27, side * (z + 0.12)),
-                    Vec3::new(0.033, 0.012, 0.018),
-                    amber,
-                    0.45,
-                );
-            }
-        }
-        // Engine housings and recessed luminous exhaust faces; no drill shapes.
-        block(
-            Vec3::new(-1.94, -0.02, side * 0.59),
-            Vec3::new(0.27, 0.26, 0.24),
-            graphite,
-            0.0,
-        );
-        block(
-            Vec3::new(-2.215, -0.02, side * 0.59),
-            Vec3::new(0.012, 0.17, 0.16),
-            green,
-            0.9,
-        );
-    }
-    if !twin && class != ShipClass::Hauler {
-        for i in 0..sections {
-            let x = -1.35 + i as f32 * 2.55 / sections as f32;
-            block(
-                Vec3::new(x, if industrial { 0.15 } else { 0.22 }, 0.0),
-                Vec3::new(
-                    0.88 / sections as f32,
-                    0.12,
-                    if industrial { 0.48 } else { 0.40 },
-                ),
-                if i % 3 == 0 { green } else { plate },
-                0.0,
-            );
-        }
-    }
-    let tower_x = if industrial {
-        -1.18
-    } else if twin {
-        -0.85
-    } else {
-        0.86
-    };
-    let tower_levels = match class {
-        ShipClass::Monolith => 3,
-        ShipClass::Stratum | ShipClass::Vanguard => 2,
-        _ => 1,
-    };
-    for level in 0..tower_levels {
-        let y = 0.42 + level as f32 * 0.13;
-        let scale = 1.0 - level as f32 * 0.18;
-        block(
-            Vec3::new(tower_x, y, 0.0),
-            Vec3::new(0.34 * scale, 0.065, 0.33 * scale),
-            graphite,
-            0.0,
-        );
-        block(
-            Vec3::new(tower_x + 0.345 * scale, y, 0.0),
-            Vec3::new(0.008, 0.027, 0.25 * scale),
-            glass,
-            0.25,
-        );
-    }
-    if class == ShipClass::Hauler {
-        // Exposed top cargo cassettes differ from the extraction-boom silhouettes.
-        for i in 0..4 {
-            block(
-                Vec3::new(-1.12 + i as f32 * 0.48, 0.35, 0.0),
-                Vec3::new(0.20, 0.12, 0.52),
-                plate,
-                0.0,
-            );
-        }
-    }
-    if class == ShipClass::Vanguard {
-        block(
-            Vec3::new(-0.35, 0.39, 0.0),
-            Vec3::new(1.1, 0.07, 0.31),
-            green,
-            0.0,
-        );
-    }
-    // End of helper borrow: diagonal structural braces use rotated cube beams.
-    if industrial || class == ShipClass::Borealis {
-        for side in [-1.0, 1.0] {
-            for i in 0..sections {
-                let x = -1.40 + i as f32 * 2.60 / sections as f32;
-                let a = Vec3::new(x, -0.28, side * if twin { 1.07 } else { 0.96 });
-                let b = Vec3::new(
-                    x + 2.35 / sections as f32,
-                    0.28,
-                    side * if twin { 1.07 } else { 0.96 },
-                );
-                let delta = b - a;
-                parts.draw(
-                    0,
-                    transform(
-                        (a + b) * 0.5,
-                        Vec3::new(delta.length() * 0.5, 0.018, 0.022),
-                        Quat::from_rotation_arc(Vec3::X, delta.normalize()),
-                    ),
-                    edge,
-                    0.0,
-                );
-            }
-        }
-    }
-    // Blunt armored brows: optical turrets remain the only extraction tools.
-    for z in if twin { vec![-0.72, 0.72] } else { vec![0.0] } {
-        parts.draw(
-            0,
-            transform(
-                Vec3::new(1.71, 0.26, z),
-                Vec3::new(0.23, 0.04, if twin { 0.22 } else { 0.54 }),
-                Quat::from_rotation_z(-0.16),
-            ),
-            green,
-            0.0,
-        );
-    }
-    // Fit measured vertices, including all appendages, to the public meter spec.
-    let (min, max) = parts_bounds(&parts.0);
-    // Keep a solid service core at the fitted center for all six reaction axes.
-    // Segmented cargo bays must not leave an axis nozzle firing from empty space.
-    // Its lower edge joins the keel/crossbeam; all vertices stay inside the
-    // measured envelope, preserving the public dimensions and turret supports.
-    let center = (min + max) * 0.5;
-    let bottom = -0.20;
-    let top = center.y + 0.10;
-    parts.draw(
-        0,
-        transform(
-            Vec3::new(center.x, (bottom + top) * 0.5, center.z),
-            Vec3::new(0.50, (top - bottom) * 0.5, 0.34),
-            Quat::IDENTITY,
-        ),
-        graphite,
-        0.0,
-    );
-    let spec = class.spec();
-    let dimensions = Vec3::new(
-        spec.length_m as f32,
-        spec.height_m as f32,
-        spec.width_m as f32,
-    ) / 100.0;
-    let fit =
-        Mat4::from_scale(dimensions / (max - min)) * Mat4::from_translation(-(min + max) * 0.5);
-    for (_, model, _, _) in &mut parts.0 {
-        *model = fit * *model;
-    }
-    parts.0
-}
-/// Enclosed cutter silhouette derived from Pioneer's concept: sloped bridge,
-/// shoulder armor, recessed service cassettes and rear drive housings.
-/// Still a procedural exterior; no claim of fitted structural/interior geometry.
-fn pioneer_construction_model() -> Vec<ModelPart> {
-    let mut p = Parts(Vec::new());
-    let dark = Vec3::new(0.055, 0.070, 0.075);
-    let steel = Vec3::new(0.15, 0.18, 0.19);
-    let trim = Vec3::new(0.25, 0.28, 0.29);
-    let green = Vec3::new(0.018, 0.20, 0.085);
-    let mut part = |mesh, pos, size, color, emission| {
-        p.draw(mesh, transform(pos, size, Quat::IDENTITY), color, emission)
-    };
-    part(9, Vec3::ZERO, Vec3::new(1.92, 0.42, 0.87), dark, 0.0);
-    // Nose is a continuous faceted pressure-body reservation, not stacked crates.
-    part(
-        9,
-        Vec3::new(1.20, 0.10, 0.0),
-        Vec3::new(0.80, 0.37, 0.88),
-        dark,
-        0.0,
-    );
-    part(
-        8,
-        Vec3::new(1.992, 0.10, 0.0),
-        Vec3::new(0.014, 0.19, 0.47),
-        trim,
-        0.0,
-    );
-    part(
-        8,
-        Vec3::new(2.010, 0.11, 0.0),
-        Vec3::new(0.008, 0.15, 0.42),
-        Vec3::new(0.025, 0.16, 0.17),
-        0.0,
-    );
-    for z in [-0.22, 0.0, 0.22] {
-        part(
-            0,
-            Vec3::new(2.020, 0.11, z),
-            Vec3::new(0.006, 0.16, 0.008),
-            trim,
-            0.0,
-        );
-    }
-    for side in [-1.0, 1.0] {
-        // Armored green collars and inset side service panels.
-        for x in [-1.40, 0.82] {
-            part(
-                8,
-                Vec3::new(x, 0.0, side * 0.78),
-                Vec3::new(0.22, 0.44, 0.21),
-                green,
-                0.0,
-            );
-            part(
-                8,
-                Vec3::new(x, 0.03, side * 0.988),
-                Vec3::new(0.14, 0.29, 0.018),
-                steel,
-                0.0,
-            );
-            for y in [-0.21, 0.21] {
-                part(
-                    0,
-                    Vec3::new(x, y, side * 1.01),
-                    Vec3::new(0.09, 0.012, 0.012),
-                    trim,
-                    0.0,
-                );
-            }
-        }
-        for x in [-0.81, -0.18, 0.45] {
-            part(
-                8,
-                Vec3::new(x, -0.015, side * 0.871),
-                Vec3::new(0.285, 0.285, 0.055),
-                steel,
-                0.0,
-            );
-            part(
-                8,
-                Vec3::new(x, -0.015, side * 0.928),
-                Vec3::new(0.24, 0.235, 0.014),
-                dark,
-                0.0,
-            );
-            part(
-                0,
-                Vec3::new(x, -0.292, side * 0.937),
-                Vec3::new(0.17, 0.006, 0.010),
-                Vec3::new(0.55, 0.30, 0.06),
-                0.4,
-            );
-        }
-        // Short service rails stay attached to the hull instead of framing empty air.
-        for y in [-0.32, 0.32] {
-            part(
-                8,
-                Vec3::new(-0.16, y, side * 0.92),
-                Vec3::new(0.92, 0.018, 0.025),
-                trim,
-                0.0,
-            );
-        }
-        part(
-            8,
-            Vec3::new(-1.85, -0.02, side * 0.55),
-            Vec3::new(0.30, 0.28, 0.27),
-            dark,
-            0.0,
-        );
-        part(
-            8,
-            Vec3::new(-2.15, -0.02, side * 0.55),
-            Vec3::new(0.016, 0.22, 0.21),
-            steel,
-            0.0,
-        );
-        part(
-            8,
-            Vec3::new(-2.17, -0.02, side * 0.55),
-            Vec3::new(0.008, 0.16, 0.15),
-            green,
-            0.75,
-        );
-        part(
-            8,
-            Vec3::new(1.35, 0.36, side * 0.55),
-            Vec3::new(0.33, 0.06, 0.19),
-            green,
-            0.0,
-        );
-        part(
-            0,
-            Vec3::new(1.72, -0.18, side * 0.57),
-            Vec3::new(0.04, 0.012, 0.020),
-            Vec3::new(0.50, 0.65, 0.63),
-            0.7,
-        );
-    }
-    for x in [-0.88, -0.25, 0.38] {
-        part(
-            8,
-            Vec3::new(x, 0.423, 0.0),
-            Vec3::new(0.285, 0.018, 0.57),
-            steel,
-            0.0,
-        );
-        part(
-            8,
-            Vec3::new(x, 0.444, 0.0),
-            Vec3::new(0.235, 0.006, 0.48),
-            dark,
-            0.0,
-        );
-    }
-    let (min, max) = parts_bounds(&p.0);
-    let spec = ShipClass::Pioneer.spec();
-    let extent = Vec3::new(
-        spec.length_m as f32,
-        spec.height_m as f32,
-        spec.width_m as f32,
-    ) / 100.0;
-    let fit = Mat4::from_scale(extent / (max - min)) * Mat4::from_translation(-(min + max) * 0.5);
-    for (_, m, _, _) in &mut p.0 {
-        *m = fit * *m;
-    }
-    p.0
-}
 fn parts_bounds(parts: &[(usize, Mat4, Vec3, f32)]) -> (Vec3, Vec3) {
     let mut min = Vec3::splat(f32::INFINITY);
     let mut max = Vec3::splat(f32::NEG_INFINITY);
@@ -4285,162 +7075,6 @@ impl Parts {
         self.0.push((mesh, model, color, emission));
     }
 }
-fn mesh_vertices(mesh: usize) -> Vec<Vertex> {
-    if let Some(primitive) = embedded_primitive(mesh) {
-        return primitive.vertices.clone();
-    }
-    match mesh {
-        0 => cube(),
-        1 => torus(1.0, 0.12),
-        2 => sphere(false),
-        8 => armor_block(),
-        9 => industrial_shell(),
-        _ => hull(),
-    }
-}
-fn station_batches_geometry() -> Vec<(Vec<Vertex>, Vec3, f32)> {
-    let parts = station_parts(Space {
-        origin: STATION_CENTER_POSITION,
-    });
-    let mut groups = std::collections::BTreeMap::<[u32; 4], (Vec<Vertex>, Vec3, f32)>::new();
-    for (mesh, model, color, emission) in parts {
-        let normal = model.inverse().transpose();
-        let entry = groups
-            .entry([
-                color.x.to_bits(),
-                color.y.to_bits(),
-                color.z.to_bits(),
-                emission.to_bits(),
-            ])
-            .or_insert((Vec::new(), color, emission));
-        entry
-            .0
-            .extend(mesh_vertices(mesh).into_iter().map(|v| Vertex {
-                p: model.transform_point3(v.p),
-                n: normal.transform_vector3(v.n).normalize(),
-            }));
-    }
-    groups.into_values().collect()
-}
-fn station_parts(space: Space) -> Vec<(usize, Mat4, Vec3, f32)> {
-    let mut parts = Parts(Vec::new());
-    let center = Mat4::from_translation(space.scene(STATION_CENTER_POSITION));
-    let steel = Vec3::new(0.19, 0.25, 0.29);
-    let window = Vec3::new(0.14, 0.43, 0.37);
-    let radius = STATION_DIAMETER_M as f32 / 200.0;
-    let half_height = STATION_HEIGHT_M as f32 / 200.0;
-    parts.draw(
-        0,
-        center * Mat4::from_scale(Vec3::new(11.0, half_height, 11.0)),
-        steel,
-        0.0,
-    );
-    // Habitat rings: the large rings sit above/below the docking plane. Their
-    // 1.12 torus extent exactly matches the advertised twenty-kilometer span.
-    for (y, r) in [(-15.0, radius / 1.12), (0.0, 68.0), (15.0, radius / 1.12)] {
-        parts.draw(
-            1,
-            center * transform(Vec3::new(0.0, y, 0.0), Vec3::new(r, 5.0, r), Quat::IDENTITY),
-            steel,
-            0.0,
-        );
-        for i in 0..32 {
-            let angle = i as f32 * std::f32::consts::TAU / 32.0;
-            let rotation = Quat::from_rotation_y(angle);
-            let p = rotation * Vec3::new(r, 0.0, 0.0) + Vec3::Y * (y + 0.7);
-            parts.draw(
-                0,
-                center * transform(p, Vec3::new(1.5, 0.12, 0.4), rotation),
-                window,
-                0.55,
-            );
-        }
-        for i in 0..8 {
-            let rotation = Quat::from_rotation_y(i as f32 * std::f32::consts::TAU / 8.0);
-            parts.draw(
-                0,
-                center
-                    * transform(
-                        rotation * Vec3::new(r * 0.52, y, 0.0),
-                        Vec3::new(r * 0.44, 0.65, 1.0),
-                        rotation,
-                    ),
-                steel * 0.8,
-                0.0,
-            );
-        }
-    }
-    for i in 0..8 {
-        let y = -24.0 + i as f32 * 6.5;
-        parts.draw(
-            1,
-            center * transform(Vec3::Y * y, Vec3::new(22.0, 3.0, 22.0), Quat::IDENTITY),
-            steel * 1.15,
-            0.0,
-        );
-        for side in [-1.0, 1.0] {
-            parts.draw(
-                0,
-                center
-                    * transform(
-                        Vec3::new(0.0, y, side * 24.0),
-                        Vec3::new(5.0, 1.7, 4.0),
-                        Quat::IDENTITY,
-                    ),
-                steel,
-                0.0,
-            );
-        }
-    }
-    // Recessed +Z-facing port. Nothing occupies the authoritative berth volume
-    // x/y +/-450m, z+1000m around STATION_POSITION, or the docked port point.
-    let port = Mat4::from_translation(space.scene(STATION_POSITION));
-    for y in [-5.5, 5.5] {
-        parts.draw(
-            0,
-            port * transform(
-                Vec3::new(-6.0, y, -6.0),
-                Vec3::new(6.0, 0.4, 6.0),
-                Quat::IDENTITY,
-            ),
-            steel,
-            0.0,
-        );
-        parts.draw(
-            0,
-            port * transform(
-                Vec3::new(-5.8, y, 0.1),
-                Vec3::new(5.5, 0.07, 0.07),
-                Quat::IDENTITY,
-            ),
-            window,
-            0.8,
-        );
-    }
-    parts.draw(
-        0,
-        port * transform(
-            Vec3::new(-12.0, 0.0, -6.0),
-            Vec3::new(0.4, 5.5, 6.0),
-            Quat::IDENTITY,
-        ),
-        steel,
-        0.0,
-    );
-    for i in 0..8 {
-        parts.draw(
-            0,
-            port * transform(
-                Vec3::new(-1.0 - i as f32 * 1.3, -5.0, -2.0),
-                Vec3::new(0.1, 0.1, 1.3),
-                Quat::IDENTITY,
-            ),
-            Vec3::new(0.48, 0.32, 0.07),
-            0.4,
-        );
-    }
-    parts.0
-}
 fn segment_model(start: Vec3, end: Vec3, radius: f32) -> Option<Mat4> {
     let delta = end - start;
     let length = delta.length();
@@ -4499,19 +7133,22 @@ in vec3 position;in vec3 normal;uniform mat4 model;uniform mat4 view_projection;
 out vec3 world;out vec3 surface_normal;out vec3 local_position;
 void main(){local_position=position;vec4 p=model*vec4(position,1.0);world=p.xyz;surface_normal=transpose(inverse(mat3(model)))*normal;gl_Position=view_projection*p;}
 "#;
-const FRAGMENT: &str = concat!(
-    "#version 150\n",
-    include_str!("shaders/sky.glsl"),
-    include_str!("shaders/materials.glsl"),
-    include_str!("shaders/local_lighting.glsl"),
-    r#"
+fn mesh_fragment_prefix() -> String {
+    format!(
+        "#version 150\n{}{}{}{}",
+        sun_shadows::GLSL,
+        include_str!("shaders/sky.glsl"),
+        include_str!("shaders/materials.glsl"),
+        include_str!("shaders/local_lighting.glsl")
+    )
+}
+const AUTHORED_MATERIAL_FUNCTION: &str = "struct ArkSurface{vec3 base_color;float roughness;float metallic;vec3 emission;};ArkSurface ark_graph_surface(vec3 body_meters,ArkSurface authored_surface){return authored_surface;}\n";
+const FRAGMENT_BODY: &str = r#"
 in vec3 world;in vec3 surface_normal;in vec3 local_position;
-uniform vec4 material_params;uniform float environment_atmosphere;uniform vec3 environment_up;
-uniform vec3 planet_center;uniform vec3 base_color;uniform vec3 eye;uniform float emission;uniform vec3 emissive_color;uniform int material_kind;out vec4 color;
-float ark_hash3(vec3 p){return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5453);}
-float ark_noise3(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
-return mix(mix(mix(ark_hash3(i),ark_hash3(i+vec3(1,0,0)),f.x),mix(ark_hash3(i+vec3(0,1,0)),ark_hash3(i+vec3(1,1,0)),f.x),f.y),
-mix(mix(ark_hash3(i+vec3(0,0,1)),ark_hash3(i+vec3(1,0,1)),f.x),mix(ark_hash3(i+vec3(0,1,1)),ark_hash3(i+vec3(1,1,1)),f.x),f.y),f.z);}
+uniform mat4 model;
+uniform float scene_meter_scale;
+uniform float surface_opacity;uniform int ark_graph_enabled;uniform vec4 material_params;uniform float hull_surface;uniform float station_lighting;uniform float environment_atmosphere;uniform vec3 environment_up;
+uniform vec3 planet_center;uniform vec3 base_color;uniform vec3 eye;uniform float emission;uniform float emission_power;uniform vec4 emission_override;uniform vec3 emissive_color;uniform int material_kind;out vec4 color;
 float ark_terrain(vec3 p){return ark_noise3(p)*0.53+ark_noise3(p*2.07+13.8)*0.27+ark_noise3(p*4.13-7.1)*0.13+ark_noise3(p*8.41+29.4)*0.07;}
 void main(){vec3 n=normalize(surface_normal);if(!gl_FrontFacing)n=-n;vec3 l=normalize(vec3(-0.5,0.8,0.65));vec3 v=normalize(eye-world);
 float diffuse=max(dot(n,l),0.0);float facing=max(dot(n,v),0.0);float rim=pow(1.0-facing,3.0);
@@ -4536,29 +7173,74 @@ if(material_kind==1 || material_kind==2){
 }else{
     vec3 albedo=max(base_color,vec3(0.0));
     float roughness=material_params.x,metallic=material_params.y;
-    if(material_params.z>0.5){
+    vec3 emitted=max(emissive_color,vec3(0.0))*max(emission,0.0);
+    if(ark_graph_enabled!=0){
+        ArkSurface authored=ArkSurface(albedo,roughness,metallic,emitted);
+        ArkSurface surface=ark_graph_surface(local_position*100.0,authored);
+        albedo=surface.base_color;roughness=surface.roughness;metallic=surface.metallic;emitted=surface.emission;
+    }
+    if(material_params.z>0.5 && material_params.z<1.5){
         float vein=1.0-smoothstep(0.045,0.11,abs(ark_noise3(local_position*5.0)-0.52));
         metallic=mix(0.0,0.82,vein);roughness=mix(0.90,0.34,vein);
         albedo=mix(albedo,vec3(0.48,0.38,0.22),vein*0.72);
     }
+    if(material_params.z>1.5){
+        // Each typed box retains metric dimensions through station/space scale.
+        vec3 meters=local_position*vec3(length(model[0].xyz),length(model[1].xyz),length(model[2].xyz))*max(scene_meter_scale,1.0);
+        vec3 face=abs(local_position);
+        vec2 uv=face.x>=face.y && face.x>=face.z ? meters.yz : (face.y>=face.z ? meters.xz : meters.xy);
+        float relief_m=ark_interior_surface(uv,material_params.z,albedo,roughness);
+        // Shading relief uses the same metre conversion in station and flight.
+        n=ark_relief_normal(world,n,relief_m/max(scene_meter_scale,1.0));
+    }
+    if(hull_surface>0.5){ark_hull_surface(local_position*100.0,albedo,roughness,metallic);}
     // Existing screen panels use a dark dielectric backing; no canopy transmission is invented.
     if(material_params.w>0.5) albedo*=0.70;
-    lit=ark_brdf(n,v,l,albedo,roughness,metallic)*vec3(3.8,3.45,2.95)*ark_sun_visibility(world,n,l);
-    lit+=ark_environment(n,v,albedo,roughness,metallic,environment_atmosphere,environment_up);
+    if(station_lighting>0.5){
+        lit=ark_station_environment(n,v,albedo,roughness,metallic);
+    }else{
+        lit=ark_brdf(n,v,l,albedo,roughness,metallic)*vec3(3.8,3.45,2.95)*ark_sun_visibility(world,n,l);
+        lit+=ark_environment(n,v,albedo,roughness,metallic,environment_atmosphere,environment_up);
+    }
     lit+=ark_local_lighting(world,n,v,albedo,roughness,metallic);
-    lit+=max(emissive_color,vec3(0.0))*max(emission,0.0);
+    if(emission_override.a>0.5) emitted=max(emission_override.rgb,vec3(0.0));
+    lit+=emitted*emission_power;
 }
-color=vec4(ark_display(lit),1.0);}
-"#
-);
+color=vec4(ark_display(lit),surface_opacity>0.0 ? surface_opacity : 1.0);}
+"#;
 const BACK_VERTEX: &str = r#"#version 150
 out vec2 uv;void main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);uv=p;gl_Position=vec4(p*2.0-1.0,0.999,1.0);}
 "#;
-#[cfg(target_arch = "wasm32")]
-const FEED_FRAGMENT: &str = r#"#version 150
-in vec2 uv; uniform sampler2D image; out vec4 color;
-void main(){color=texture(image,uv);}
+const FEED_VERTEX: &str = r#"#version 150
+uniform bool physical_surface;
+uniform mat4 local_to_clip;
+uniform vec3 surface_top_left;
+uniform vec3 surface_bottom_right;
+out vec2 uv;
+void main() {
+    vec2 corners[6] = vec2[6](
+        vec2(0.0, 0.0), vec2(1.0, 0.0), vec2(0.0, 1.0),
+        vec2(0.0, 1.0), vec2(1.0, 0.0), vec2(1.0, 1.0));
+    vec2 point = corners[gl_VertexID];
+    // Cached color attachments use GL bottom-up UVs; display canvases use Y down.
+    uv = vec2(point.x, 1.0 - point.y);
+    if (physical_surface) {
+        vec3 local = vec3(surface_top_left.x,
+            mix(surface_top_left.y, surface_bottom_right.y, point.y),
+            mix(surface_top_left.z, surface_bottom_right.z, point.x));
+        gl_Position = local_to_clip * vec4(local, 1.0);
+    } else {
+        gl_Position = vec4(point.x * 2.0 - 1.0, 1.0 - point.y * 2.0, 0.0, 1.0);
+    }
+}
 "#;
+const FEED_FRAGMENT: &str = r#"#version 150
+in vec2 uv;
+uniform sampler2D image;
+out vec4 color;
+void main() { color = texture(image, uv); }
+"#;
+
 const BACK_FRAGMENT: &str = concat!(
     "#version 150\n",
     include_str!("shaders/sky.glsl"),
@@ -4578,6 +7260,638 @@ c=mix(c,sky,atmosphere);color=vec4(ark_display(c),1.0);}
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_os = "linux")]
+    #[test]
+    #[ignore = "Explicit EGL regression: fourteen visible sources share bounded cache and capture admission"]
+    fn native_bay_workspace_and_thirteen_physical_sources_stay_bounded() {
+        unsafe {
+            let (_egl, gl) = super::exterior_gpu_tests::Egl::create();
+            let mut renderer = Renderer::new(gl.clone()).unwrap();
+            let target = CachedFeed::create(&gl, 999_999, 128, 128).unwrap();
+            gl.bind_framebuffer(glow::FRAMEBUFFER, Some(target.framebuffer));
+            let mut frame = frame_for_scene_clone_test();
+            frame.cockpit = false;
+            frame.drone_camera = true;
+            frame.vp = Mat4::perspective_rh_gl(1.0, 1.0, 0.002, 1200.)
+                * Mat4::look_at_rh(Vec3::ZERO, Vec3::X, Vec3::Y);
+            frame.planet_vp = frame.vp;
+            let physical: Vec<u64> = (100..113).collect();
+            for pass in 0..32_u64 {
+                let workspace = if pass < 14 { 200 } else { 200 + pass };
+                let mut visible = physical.clone();
+                visible.push(workspace);
+                let ui_ms = 1000 + pass * 50;
+                frame.now = ui_ms;
+                // Reverse callback order deliberately: budget choice must use
+                // the complete set, not whichever workspace paints first.
+                for key in visible.iter().rev().copied() {
+                    let width = if key == workspace {
+                        80.0 + (pass % 5) as f32
+                    } else {
+                        64.0
+                    };
+                    let info = egui::PaintCallbackInfo {
+                        viewport: egui::Rect::from_min_size(
+                            egui::Pos2::ZERO,
+                            egui::vec2(width, 64.),
+                        ),
+                        clip_rect: egui::Rect::from_min_size(
+                            egui::Pos2::ZERO,
+                            egui::vec2(128., 128.),
+                        ),
+                        pixels_per_point: 1.0,
+                        screen_size_px: [128, 128],
+                    };
+                    if key == workspace {
+                        renderer.prepare_workspace_feed(key);
+                    }
+                    renderer.paint_cached_feed_on_surface(
+                        &frame,
+                        key,
+                        info,
+                        visible.len(),
+                        Some(target.framebuffer),
+                        None,
+                        Some((pass, ui_ms, &visible)),
+                    );
+                }
+                assert_eq!(renderer.feed_cache.len(), MAX_CAMERA_CAPTURE_SOURCES);
+                assert!(visible
+                    .iter()
+                    .all(|key| renderer.feed_cache.iter().any(|c| c.key == *key)));
+                assert!(
+                    renderer
+                        .feed_cache
+                        .iter()
+                        .filter(|c| c.captured_ui_ms == Some(ui_ms))
+                        .count()
+                        <= 1
+                );
+                if pass == 13 {
+                    assert!(
+                        renderer
+                            .feed_cache
+                            .iter()
+                            .all(|c| c.captured_ui_ms.is_some()),
+                        "all fourteen visible sources must receive a capture"
+                    );
+                }
+                assert_eq!(gl.get_error(), glow::NO_ERROR);
+            }
+            // With no physical feeds currently visible, workspace resize/view
+            // changes still keep exactly one workspace image, not fourteen.
+            for pass in 32..40_u64 {
+                let workspace = 1000 + pass;
+                renderer.prepare_workspace_feed(workspace);
+                let visible = [workspace];
+                let ui_ms = 1000 + pass * 50;
+                frame.now = ui_ms;
+                let info = egui::PaintCallbackInfo {
+                    viewport: egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(90. + pass as f32, 64.),
+                    ),
+                    clip_rect: egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(128., 128.)),
+                    pixels_per_point: 1.,
+                    screen_size_px: [128, 128],
+                };
+                renderer.paint_cached_feed_on_surface(
+                    &frame,
+                    workspace,
+                    info,
+                    1,
+                    Some(target.framebuffer),
+                    None,
+                    Some((pass, ui_ms, &visible)),
+                );
+                assert_eq!(
+                    renderer
+                        .feed_cache
+                        .iter()
+                        .filter(|c| !physical.contains(&c.key))
+                        .count(),
+                    1
+                );
+                assert_eq!(renderer.workspace_feed_key, Some(workspace));
+                assert!(renderer.feed_cache.len() <= MAX_CAMERA_CAPTURE_SOURCES);
+                assert_eq!(gl.get_error(), glow::NO_ERROR);
+            }
+            // A cold switched monitor must not starve behind physical screens
+            // whose own simulation clock is frozen, even if its clock is newer.
+            let workspace = 9000;
+            renderer.prepare_workspace_feed(workspace);
+            let mut visible = physical.clone();
+            visible.push(workspace);
+            renderer.feed_source_clocks = physical.iter().map(|key| (*key, 1000)).collect();
+            renderer.feed_source_clocks.push((workspace, 2000));
+            frame.now = 2000;
+            // Settle unrelated exterior/material invalidation before modelling
+            // already-painted frozen screens; this test isolates source clocks.
+            renderer.prepare_spatial_material();
+            renderer.prepare_exterior(&frame);
+            for cache in &mut renderer.feed_cache {
+                cache.painted_ms = Some(1000);
+                cache.captured_ui_ms = Some(100);
+            }
+            renderer.feed_capture_budget = Default::default();
+            assert!(
+                physical
+                    .iter()
+                    .all(|key| renderer.feed_cache.iter().any(|cache| cache.key == *key)),
+                "physical={physical:?} cache={:?}",
+                renderer
+                    .feed_cache
+                    .iter()
+                    .map(|c| c.key)
+                    .collect::<Vec<_>>()
+            );
+            frame.now = 2000;
+            let info = egui::PaintCallbackInfo {
+                viewport: egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(128., 64.)),
+                clip_rect: egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(128., 128.)),
+                pixels_per_point: 1.,
+                screen_size_px: [128, 128],
+            };
+            renderer.paint_cached_feed_on_surface(
+                &frame,
+                workspace,
+                info,
+                visible.len(),
+                Some(target.framebuffer),
+                None,
+                Some((50, 3000, &visible)),
+            );
+            assert_eq!(
+                renderer
+                    .feed_cache
+                    .iter()
+                    .find(|cache| cache.key == workspace)
+                    .unwrap()
+                    .captured_ui_ms,
+                Some(3000)
+            );
+            assert_eq!(
+                renderer
+                    .feed_cache
+                    .iter()
+                    .filter(|cache| cache.captured_ui_ms == Some(3000))
+                    .count(),
+                1
+            );
+            assert!(renderer
+                .feed_cache
+                .iter()
+                .filter(|cache| physical.contains(&cache.key))
+                .all(|cache| cache.captured_ui_ms == Some(100)));
+            assert_eq!(gl.get_error(), glow::NO_ERROR);
+            renderer.destroy();
+            target.destroy(&gl);
+        }
+    }
+
+    #[test]
+    fn bay_operations_monitor_and_wrapped_captions_fit_visible_900px_workspace() {
+        assert_eq!(bay_monitor_image_height(460.0, 230.0, 50.0), Some(180.0));
+        assert_eq!(bay_monitor_image_height(460.0, 149.0, 50.0), None);
+        let ctx = egui::Context::default();
+        let _ = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(900., 650.),
+                )),
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let region =
+                        egui::Rect::from_min_max(egui::pos2(410., 365.), egui::pos2(870., 610.));
+                    ui.scope_builder(egui::UiBuilder::new().max_rect(region), |ui| {
+                        ui.set_clip_rect(region);
+                        {
+                            let camera = BayMonitorCamera::Wide;
+                            let caption = bay_monitor_caption_height(ui, region.width(), camera);
+                            let height =
+                                bay_monitor_image_height(region.width(), region.height(), caption)
+                                    .unwrap();
+                            let (image, _) = ui.allocate_exact_size(
+                                egui::vec2(region.width(), height),
+                                egui::Sense::hover(),
+                            );
+                            let status = ui.small(bay_monitor_image_status(
+                                true,
+                                false,
+                                true,
+                                Some(u64::MAX),
+                            ));
+                            let label = ui.small(bay_monitor_view_caption(camera));
+                            assert!(region.contains_rect(image));
+                            assert!(region.contains_rect(status.rect));
+                            assert!(region.contains_rect(label.rect));
+                            assert!((100.0..=240.0).contains(&height));
+                        }
+                    });
+                });
+            },
+        );
+    }
+
+    #[test]
+    fn bay_operations_session_reset_rejects_same_vessel_cached_pixels() {
+        let mut view = FlightView::new(None);
+        // Identical pilot/vessel/source/view/size in two freshly opened worlds.
+        let source_key = egui::Id::new(("same pilot", "v1:pilot:pioneer", "same source")).value();
+        let old = view.bay_monitor_session_key(source_key);
+        let old_cache = [(old, 1000_u64)];
+        view.clear_cockpit_presentation();
+        assert_eq!(view.bay_monitor_session_key(source_key), old);
+        view.reset_activity_session(); // Update::Ready on a new/reconnected session
+        let current = view.bay_monitor_session_key(source_key);
+        assert_ne!(current, old);
+        let age = old_cache
+            .iter()
+            .find(|(key, _)| *key == current)
+            .map(|(_, t)| 1010 - t);
+        assert_eq!(age, None);
+        assert!(bay_monitor_image_status(true, false, true, age).starts_with("WAITING"));
+        assert!(!bay_monitor_image_status(true, true, true, age).contains("10 ms old"));
+        view.invalidate_bay_monitor_session(); // connection attempt / rejected realm
+        assert_ne!(view.bay_monitor_session_key(source_key), current);
+    }
+
+    #[test]
+    fn bay_operations_capture_status_never_calls_old_pixels_live() {
+        assert!(bay_monitor_image_status(true, false, true, Some(10)).starts_with("LIVE"));
+        assert!(bay_monitor_image_status(true, false, true, Some(3000)).starts_with("CACHED"));
+        assert!(bay_monitor_image_status(true, false, true, None).starts_with("WAITING"));
+        assert!(bay_monitor_image_status(true, true, true, Some(10)).starts_with("PAUSED"));
+        assert!(bay_monitor_image_status(true, false, false, Some(10)).starts_with("STALE"));
+        assert!(bay_monitor_image_status(false, false, true, Some(10)).starts_with("DISCONNECTED"));
+    }
+
+    #[test]
+    fn bay_operations_source_clocks_are_pass_bound_and_duplicate_stable() {
+        let mut sources = VisibleFeedSources::default();
+        sources.register_clocks(1, [(10, 1000), (20, 2000)]);
+        sources.register_clocks(1, [(10, 1000)]);
+        assert_eq!(sources.for_pass(1), vec![10, 20]);
+        assert_eq!(sources.clocks_for_pass(1), vec![(10, 1000), (20, 2000)]);
+        sources.register_clocks(2, [(30, 3000)]);
+        assert!(sources.clocks_for_pass(1).is_empty());
+        assert_eq!(sources.clocks_for_pass(2), vec![(30, 3000)]);
+    }
+
+    #[test]
+    fn bay_operations_and_physical_feeds_share_one_complete_fair_budget() {
+        let mut registry = VisibleFeedSources::default();
+        registry.register(10, [30]); // workspace is constructed before central scene
+        registry.register(10, [10, 20, 10]); // physical screens, including duplicates
+        assert_eq!(registry.for_pass(10), vec![10, 20, 30]);
+        let candidates = camera_feed_budget::source_candidates(&registry.for_pass(10), &[], 100);
+        let mut budget = camera_feed_budget::FeedCaptureBudget::default();
+        assert!(!budget.should_capture(10, 100, 30, &candidates));
+        assert!(budget.should_capture(10, 100, 10, &candidates));
+        assert!(!budget.should_capture(10, 100, 20, &candidates));
+        assert!(!budget.should_capture(10, 100, 10, &candidates));
+        registry.register(11, [20, 30]);
+        assert!(registry.for_pass(10).is_empty());
+        assert_eq!(registry.for_pass(11), vec![20, 30]);
+        let candidates = camera_feed_budget::source_candidates(&registry.for_pass(11), &[], 140);
+        assert!(budget.should_capture(11, 140, 20, &candidates));
+        assert!(!budget.should_capture(11, 140, 30, &candidates));
+    }
+
+    pub(super) fn frame_for_scene_clone_test() -> Frame {
+        let vp = Mat4::IDENTITY;
+        Frame {
+            pioneer_parts: None,
+            exterior: None,
+            lighting_quality: Default::default(),
+            cockpit_vp: vp,
+            cockpit_occlusion: None,
+            snapshot_time: 1000,
+            paused: false,
+            planet_vp: vp,
+            system_id: 3,
+            ship_class: ShipClass::Pioneer,
+            drone_camera: false,
+            camera_drone: None,
+            scene: Arc::new(FrameScene {
+                physical: None,
+                carrier_inventory_registration: None,
+                world_layout: arkline_protocol::legacy_world_layout(),
+                traffic: vec![],
+                surface_props: vec![],
+                asteroids: vec![],
+                gates: vec![],
+                pilots: vec![],
+            }),
+            space: Space { origin: [0.; 3] },
+            cockpit: true,
+            rotation: Quat::IDENTITY,
+            connected: true,
+            vp,
+            eye: Vec3::ZERO,
+            now: 1000,
+            own: "fixture".into(),
+            docking: None,
+        }
+    }
+
+    #[test]
+    fn carrier_world_marker_is_class_qualified_and_missing_bodies_fail_closed() {
+        let registration = carrier_magazine_source::Source::registration(1703).unwrap();
+        let mut pilot: PilotView = serde_json::from_value(serde_json::json!({
+            "name":"fixture", "credits":0, "ore":0, "location":Location::Station,
+            "ship_class":ShipClass::Prospector,
+            "flight":{"position":[1200.,300.,800.],"velocity":[0.,0.,0.],"heading":[1.,0.,0.],
+                "mode":NavigationMode::Stop,"updated_at_ms":1000}
+        }))
+        .unwrap();
+        let mut frame = frame_for_scene_clone_test();
+        Arc::make_mut(&mut frame.scene).carrier_inventory_registration = Some(registration);
+        Arc::make_mut(&mut frame.scene).pilots = vec![pilot.clone()];
+        assert!(!frame.carrier_advertised(&pilot));
+        assert!(frame.ship_mount(&pilot).is_some());
+        assert!(!carrier_advertised_in_world(
+            &pilot,
+            frame.scene.carrier_inventory_registration.as_ref()
+        ));
+        pilot.ship_class = ShipClass::Pioneer;
+        Arc::make_mut(&mut frame.scene).pilots = vec![pilot.clone()];
+        assert!(frame.carrier_advertised(&pilot));
+        assert!(frame.ship_mount(&pilot).is_none());
+        assert!(frame.canonical_pioneer_parts().is_none());
+        assert!(frame.carrier_instances(&pilot).is_none());
+    }
+
+    #[test]
+    fn explicit_camera_identity_does_not_fall_back_after_recovery_or_loss() {
+        let make = |id| serde_json::json!({"id":id,"position":[0.,0.,0.],"velocity":[0.,0.,0.],"heading":[1.,0.,0.],"mode":{"kind":"hold"},"updated_at_ms":0});
+        let mut pilot: PilotView = serde_json::from_value(serde_json::json!({
+            "name":"camera identity", "credits":0,"ore":0,"location":{"kind":"station"},"drones":[make(7),make(9)]
+        })).unwrap();
+        assert_eq!(selected_camera_drone(&pilot, Some(9)).unwrap().id, 9);
+        pilot.drones.retain(|d| d.id != 9);
+        assert!(selected_camera_drone(&pilot, Some(9)).is_none());
+        assert_eq!(selected_camera_drone(&pilot, None).unwrap().id, 7);
+        assert_eq!(selected_camera_drone(&pilot, Some(7)).unwrap().id, 7);
+        pilot.drones.clear();
+        assert!(selected_camera_drone(&pilot, None).is_none());
+    }
+
+    #[test]
+    fn exterior_camera_uses_owned_ship_body_pose_and_shared_nonrecursive_scene() {
+        use arkline_protocol::ExteriorCameraSide::{Port, Starboard};
+        let frame = frame_for_scene_clone_test();
+        let mut pilot: PilotView = serde_json::from_value(serde_json::json!({
+            "name":"fixture", "credits":0, "ore":0, "location":Location::Station,
+            "ship_class":ShipClass::Pioneer,
+            "flight":{"position":[1200.,300.,800.],"velocity":[0.,0.,0.],"heading":[1.,0.,0.],
+                "mode":NavigationMode::Stop,"updated_at_ms":1000}
+        }))
+        .unwrap();
+        for rotation in [
+            Quat::IDENTITY,
+            Quat::from_rotation_y(1.2) * Quat::from_rotation_x(0.3),
+        ] {
+            pilot.flight.as_mut().unwrap().orientation = rotation.to_array().map(f64::from);
+            for (side, sign) in [(Port, -1.), (Starboard, 1.)] {
+                let feed = exterior_camera_frame(&frame, &pilot, side, 16. / 9.).unwrap();
+                let body = Mat4::from_scale_rotation_translation(
+                    Vec3::splat(0.01),
+                    ship_orientation_at(&pilot, frame.now),
+                    frame.space.position(&pilot, frame.now),
+                );
+                assert!(feed
+                    .eye
+                    .abs_diff_eq(body.transform_point3(Vec3::new(15., 6., sign * 19.4)), 1e-5));
+                assert!(feed.vp.is_finite() && feed.planet_vp.is_finite());
+                assert!(Arc::ptr_eq(&feed.scene, &frame.scene));
+                assert!(!feed.cockpit && feed.drone_camera && feed.camera_drone.is_none());
+                assert!(feed.docking.is_none());
+            }
+        }
+        assert!(exterior_camera_frame(&frame, &pilot, Port, f32::NAN).is_none());
+        pilot.flight = None;
+        assert!(exterior_camera_frame(&frame, &pilot, Port, 1.).is_none());
+    }
+
+    #[test]
+    fn camera_frame_clones_share_scene_and_keep_camera_overrides_local() {
+        let mut original = frame_for_scene_clone_test();
+        Arc::get_mut(&mut original.scene).unwrap().world_layout =
+            arkline_protocol::SceneLayoutRevision::OrbitalV1.definition();
+        let mut feed = original.clone();
+        assert!(Arc::ptr_eq(&original.scene, &feed.scene));
+        assert_eq!(
+            feed.scene.world_layout,
+            arkline_protocol::SceneLayoutRevision::OrbitalV1.definition()
+        );
+
+        feed.drone_camera = true;
+        feed.camera_drone = Some(42);
+        feed.eye = Vec3::X;
+        feed.vp = Mat4::from_translation(Vec3::ONE);
+
+        assert!(!original.drone_camera);
+        assert_eq!(original.camera_drone, None);
+        assert_eq!(original.eye, Vec3::ZERO);
+        assert_eq!(original.vp, Mat4::IDENTITY);
+        assert_eq!(feed.camera_drone, Some(42));
+        assert_eq!(feed.eye, Vec3::X);
+        assert_eq!(feed.vp, Mat4::from_translation(Vec3::ONE));
+    }
+
+    #[test]
+    fn drone_material_roles_follow_exact_shared_meshes_in_every_draw_context() {
+        let geometry = flight_geometry().unwrap();
+        let mut meshes = std::collections::BTreeSet::new();
+        for class in drone_models::CLASSES {
+            let model = drone_models::model(class);
+            let parts = &geometry.drone_parts[drone_models::class_index(class)];
+            assert_eq!(parts.len(), model.batches.len());
+            for (part, batch) in parts.iter().zip(&model.batches) {
+                assert!(meshes.insert(part.0));
+                assert!(batch.roughness.is_finite() && (0.0..=1.0).contains(&batch.roughness));
+                assert!(batch.metallic.is_finite() && (0.0..=1.0).contains(&batch.metallic));
+                let expected = [batch.roughness, batch.metallic, 0.0, 0.0];
+                for fallback in [Material::PaintedHull, Material::BareMetal] {
+                    assert_eq!(resolved_material_parameters(part.0, fallback), expected);
+                }
+                assert!(docked_source_primitive(part.0).is_none());
+            }
+        }
+        assert_eq!(meshes.len(), geometry.drone_materials.len());
+        assert_eq!(
+            resolved_material_parameters(0, Material::PaintedHull),
+            [0.46, 0.0, 0.0, 0.0]
+        );
+    }
+
+    #[test]
+    fn receiver_meshes_share_source_materials_and_body_metre_transforms() {
+        use arkline_protocol::drone_dropoff_geometry as receiver;
+        let geometry = flight_geometry().unwrap();
+        let module = geometry.receiver.as_ref().unwrap();
+        let source = ore_receiver_source::installed().unwrap();
+        assert!(receiver_body_parts(&std::collections::BTreeMap::new()).is_err());
+        for config in [
+            receiver::DropoffConfiguration::STOWED,
+            receiver::DropoffConfiguration::EXTENDED,
+            receiver::DropoffConfiguration::COUPLED,
+        ] {
+            let roots = receiver::mechanism_ids()
+                .into_iter()
+                .zip(receiver::mechanism_poses(config).unwrap())
+                .map(|(id, pose)| (id.semantic_id().to_owned(), pose))
+                .collect();
+            let parts = receiver_body_parts(&roots).unwrap();
+            assert_eq!(parts.len(), module.parts.len());
+            let mut count = 0;
+            for &(mesh, model, _, _) in &parts {
+                let primitive = module
+                    .source_meshes
+                    .iter()
+                    .find_map(|&(slot, primitive)| (slot == mesh).then_some(primitive))
+                    .unwrap();
+                let material = &source.primitives[primitive];
+                assert_eq!(
+                    resolved_material_parameters(mesh, Material::PaintedHull),
+                    [material.roughness, material.metallic, 0.0, 0.0]
+                );
+                assert!(
+                    docked_source_primitive(mesh).is_none(),
+                    "receiver must not inherit unrelated hull graph binding"
+                );
+                let vertices = mesh_vertices(mesh);
+                count += vertices.len() / 3;
+                for vertex in vertices {
+                    let p = model.transform_point3(vertex.p).to_array();
+                    for (axis, coordinate) in p.into_iter().enumerate() {
+                        assert!(
+                            f64::from(coordinate)
+                                >= receiver::DROPOFF_MODULE_WORKING_BOUNDS_M[0][axis]
+                        );
+                        assert!(
+                            f64::from(coordinate)
+                                <= receiver::DROPOFF_MODULE_WORKING_BOUNDS_M[1][axis]
+                        );
+                    }
+                }
+            }
+            assert_eq!(count, 4488);
+        }
+    }
+
+    #[test]
+    fn canonical_pioneer_views_share_painted_fallback_and_source_pbr() {
+        // Docked and flight canonical draws both use Renderer::draw. A plain
+        // procedural panel must retain its dielectric response in either view.
+        assert_eq!(
+            resolved_material_parameters(0, Material::PaintedHull),
+            [0.46, 0.0, 0.0, 0.0],
+        );
+        assert_ne!(
+            resolved_material_parameters(0, Material::PaintedHull),
+            resolved_material_parameters(0, Material::BareMetal),
+        );
+        let primitives = pioneer_asset().expect("Canonical source primitives");
+        let parts = docked_pioneer_parts().expect("Registered source cut geometry");
+        assert_eq!(primitives.len(), 9);
+        // Accepted source binding splits nine source materials into nine fixed
+        // batches and43 moving group/material batches; every split retains PBR.
+        assert_eq!(parts.len(), 52);
+        let geometry = flight_geometry().unwrap();
+        assert_eq!(geometry.source_meshes.len(), 52);
+        for (index, primitive) in primitives.iter().enumerate() {
+            assert_eq!(
+                resolved_material_parameters(10 + index, Material::PaintedHull),
+                [primitive.roughness, primitive.metallic, 0., 0.]
+            );
+        }
+        for part in parts.iter() {
+            let index = docked_source_primitive(part.0)
+                .expect("source material identity for every fixed/moving batch");
+            let primitive = &primitives[index];
+            let source = [primitive.roughness, primitive.metallic, 0., 0.];
+            assert_eq!(
+                resolved_material_parameters(part.0, Material::PaintedHull),
+                source
+            );
+            assert_eq!(
+                resolved_material_parameters(part.0, Material::BareMetal),
+                source,
+                "Source primitive {index} must override either procedural fallback"
+            );
+        }
+    }
+
+    #[test]
+    fn procedural_pioneer_fallback_keeps_editor_finish_roles() {
+        let preview = crate::EmbeddedMaterialPreview {
+            hull_rgb: [0.8, 0.1, 0.2],
+            trim_rgb: [0.2, 0.1, 0.8],
+            emissive_strength: 2.0,
+            ..Default::default()
+        };
+        let parts = pioneer_construction_model();
+        assert!(parts.iter().any(|p| paint_role(p.0) == HULL_ROLE));
+        assert!(parts.iter().any(|p| paint_role(p.0) == TRIM_ROLE));
+        assert!(parts.iter().any(|p| p.0 & !0x00ff_ffff == EMISSION_ROLE));
+        for &(mesh, _, color, emission) in &parts {
+            let (edited_color, edited_emission) =
+                preview_material(mesh, color, emission, Some(preview));
+            match paint_role(mesh) {
+                HULL_ROLE => assert_eq!(edited_color, Vec3::from_array(preview.hull_rgb)),
+                TRIM_ROLE => assert_eq!(edited_color, Vec3::from_array(preview.trim_rgb)),
+                _ => assert_eq!(edited_color, color),
+            }
+            if emission > 0.0 {
+                assert_eq!(edited_emission, emission * preview.emissive_strength);
+            }
+        }
+    }
+
+    #[test]
+    fn fleet_preview_roles_change_finish_not_geometry_or_station() {
+        let preview = crate::EmbeddedMaterialPreview {
+            hull_rgb: [0.8, 0.1, 0.2],
+            trim_rgb: [0.2, 0.1, 0.8],
+            ..Default::default()
+        };
+        for class in arkline_protocol::ALL_SHIP_CLASSES {
+            let parts = cached_ship_parts(class);
+            assert!(
+                parts.iter().any(|p| paint_role(p.0) == HULL_ROLE),
+                "{class:?}"
+            );
+            assert!(
+                parts.iter().any(|p| paint_role(p.0) == TRIM_ROLE),
+                "{class:?}"
+            );
+            for &(mesh, _, color, emission) in parts {
+                let edited = preview_material(mesh, color, emission, Some(preview));
+                assert_eq!(
+                    preview_material(mesh, color, emission, None),
+                    (color, emission)
+                );
+                if paint_role(mesh) == HULL_ROLE {
+                    assert_eq!(edited.0, Vec3::from_array(preview.hull_rgb));
+                }
+                if mesh & !0x00ff_ffff != 0 {
+                    let a = mesh_vertices(mesh);
+                    let b = mesh_vertices(mesh_index(mesh));
+                    assert_eq!(a.len(), b.len());
+                    assert!(a.iter().zip(&b).all(|(a, b)| a.p == b.p && a.n == b.n));
+                }
+            }
+        }
+        assert_eq!(
+            preview_material(0, Vec3::ONE, 0.0, Some(preview)),
+            (Vec3::ONE, 0.0)
+        );
+    }
     #[test]
     fn armor_surface_is_closed_outward_and_preserves_cube_envelope() {
         use std::collections::BTreeMap;
@@ -4654,6 +7968,109 @@ mod tests {
             .all(|(a, b)| a.p == b.p && a.n == b.n));
     }
     use super::*;
+    #[test]
+    fn drone_runtime_and_cockpit_depth_share_exact_uploaded_geometry() {
+        let geometry = flight_geometry().unwrap();
+        let source = flight_geometry().unwrap();
+        assert!(Arc::ptr_eq(&geometry, &source));
+        let first_drone_mesh = geometry.drone_parts[0][0].0;
+        assert!(geometry
+            .station_batches
+            .iter()
+            .all(|batch| batch.0 < first_drone_mesh));
+        let mut frame = frame_for_scene_clone_test();
+        frame.space = Space {
+            origin: [1000., 2000., 3000.],
+        };
+        frame.now = 1200;
+        let drones: Vec<arkline_protocol::DroneView> = drone_models::CLASSES
+            .into_iter()
+            .enumerate()
+            .map(|(i, class)| {
+                serde_json::from_value(serde_json::json!({
+                    "id": i + 1, "class": class, "position": [1025.,2025.,3025.],
+                    "velocity": [10.,0.,0.], "heading": [0.,0.,1.],
+                    "mode": {"kind":"hold"}, "updated_at_ms":1000
+                }))
+                .unwrap()
+            })
+            .collect();
+        let pilot: PilotView = serde_json::from_value(serde_json::json!({
+            "name":"fixture", "credits":0, "ore":0, "location":{"kind":"station"},
+            "drones":drones
+        }))
+        .unwrap();
+        Arc::get_mut(&mut frame.scene).unwrap().pilots.push(pilot);
+        let turrets = std::collections::HashMap::new();
+        let drone_meshes: std::collections::BTreeSet<_> = geometry
+            .drone_parts
+            .iter()
+            .flat_map(|parts| parts.iter().map(|p| p.0))
+            .collect();
+        assert!(geometry
+            .bay_meshes
+            .iter()
+            .all(|m| !drone_meshes.contains(&m.mesh)));
+        let collect = |frame: &Frame| {
+            cockpit_occlusion_geometry::build(
+                frame,
+                &geometry.catalog,
+                &geometry.station_batches,
+                &geometry.drone_parts,
+                &turrets,
+            )
+            .unwrap()
+            .0
+            .into_iter()
+            .filter(|draw| drone_meshes.contains(&draw.mesh))
+            .collect::<Vec<_>>()
+        };
+        let draws = collect(&frame);
+        let pilot = &frame.scene.pilots[0];
+        let expected_count: usize = pilot
+            .drones
+            .iter()
+            .map(|drone| geometry.drone_parts[drone_models::class_index(drone.class)].len())
+            .sum();
+        assert_eq!(draws.len(), expected_count);
+        let mut draw_index = 0;
+        for drone in &pilot.drones {
+            let cached = cached_drone_parts(drone.class).unwrap();
+            assert!(Arc::ptr_eq(
+                &cached,
+                &geometry.drone_parts[drone_models::class_index(drone.class)]
+            ));
+            let model = drone_models::model(drone.class);
+            let base = drone_model_transform(frame.space, drone, frame.now);
+            assert!(base
+                .transform_point3(Vec3::ZERO)
+                .abs_diff_eq(Vec3::new(0.27, 0.25, 0.25), 1e-6));
+            assert!(base.transform_vector3(Vec3::X).abs_diff_eq(Vec3::Z, 1e-5));
+            for (&(mesh, local, color, emission), batch) in cached.iter().zip(&model.batches) {
+                assert_eq!(color, batch.color);
+                assert_eq!(emission, batch.emission);
+                let vertices = &geometry.catalog.uploads()[mesh];
+                assert_eq!(vertices.len(), batch.vertices.len());
+                for (actual, authored) in vertices.iter().zip(&batch.vertices) {
+                    assert_eq!(actual.p, authored.p);
+                    assert_eq!(actual.n, authored.n);
+                }
+                assert_eq!(draws[draw_index].mesh, mesh);
+                assert_eq!(draws[draw_index].vertices, 0..vertices.len());
+                assert!(draws[draw_index].model.abs_diff_eq(base * local, 1e-6));
+                draw_index += 1;
+            }
+        }
+        // Preserve the actual camera-drone body exclusion, without hiding peers.
+        frame.camera_drone = Some(2);
+        assert_eq!(
+            collect(&frame).len(),
+            expected_count - geometry.drone_parts[1].len()
+        );
+        frame.own = "another pilot".into();
+        assert_eq!(collect(&frame).len(), expected_count);
+    }
+
     #[test]
     fn drone_feed_budget_and_tiles_are_bounded() {
         assert_eq!(feed_resolution(1920, 1080), (384, 216));
@@ -4755,26 +8172,35 @@ mod tests {
             let view = Mat4::look_at_rh(Vec3::ZERO, Vec3::X, Vec3::Y);
             let vp = Mat4::perspective_rh_gl(1.05, 1., 0.002, 1200.) * view;
             let mut frame = Frame {
+                pioneer_parts: None,
+                exterior: None,
                 lighting_quality: Default::default(),
                 cockpit_vp: vp,
+                cockpit_occlusion: None,
                 snapshot_time: 1000,
+                paused: false,
                 planet_vp: vp,
                 system_id: 3,
                 ship_class: ShipClass::Pioneer,
-                traffic: vec![],
-                surface_props: vec![],
                 drone_camera: true,
                 camera_drone: None,
+                scene: Arc::new(FrameScene {
+                    physical: None,
+                    carrier_inventory_registration: None,
+                    world_layout: arkline_protocol::legacy_world_layout(),
+                    traffic: vec![],
+                    surface_props: vec![],
+                    asteroids: vec![],
+                    gates: vec![],
+                    pilots: vec![],
+                }),
                 space: Space { origin: [0.; 3] },
                 cockpit: false,
                 rotation: Quat::IDENTITY,
-                asteroids: vec![],
-                gates: vec![],
                 connected: true,
                 vp,
                 eye: Vec3::ZERO,
                 now: 1000,
-                pilots: vec![],
                 own: "fixture".into(),
                 docking: None,
             };
@@ -4904,6 +8330,175 @@ mod tests {
                 material_pixels[0], material_pixels[4],
                 "rock and screen glass cannot share roughness response"
             );
+            // Live editor changes use the same draw path in flight and dock scenes.
+            // No mesh rebuild; paused feed pixels are invalidated on edits and reset.
+            let hull_index = pioneer_asset()
+                .unwrap()
+                .iter()
+                .position(|p| p.material_name == "Graphite ceramic armor")
+                .unwrap()
+                + 10;
+            let mut preview_pixels = Vec::new();
+            for preview in [
+                None,
+                Some(crate::EmbeddedMaterialPreview {
+                    hull_rgb: [0.9, 0.02, 0.03],
+                    roughness: Some(0.2),
+                    metallic: Some(0.7),
+                    ..Default::default()
+                }),
+                None,
+            ] {
+                renderer.set_material_preview(preview);
+                if preview.is_some() {
+                    assert!(renderer
+                        .feed_cache
+                        .iter()
+                        .all(|cache| cache.painted_ms.is_none()));
+                }
+                gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
+                let primitive = embedded_primitive(hull_index).unwrap();
+                for side in [-1.0, 1.0] {
+                    renderer.draw_material(
+                        hull_index,
+                        Mat4::from_translation(Vec3::new(side * 0.75, 0.0, 0.0))
+                            * Mat4::from_scale(Vec3::splat(1.7)),
+                        primitive.color,
+                        primitive.emission,
+                        Material::PaintedHull,
+                    );
+                }
+                let mut pixels = vec![0u8; 128 * 128 * 4];
+                gl.read_pixels(
+                    0,
+                    0,
+                    128,
+                    128,
+                    glow::RGBA,
+                    glow::UNSIGNED_BYTE,
+                    glow::PixelPackData::Slice(Some(&mut pixels)),
+                );
+                preview_pixels.push(pixels);
+            }
+            assert_ne!(
+                preview_pixels[0], preview_pixels[1],
+                "live hull preview must change GPU output"
+            );
+            for half in [0usize, 64] {
+                assert!(
+                    (0..128).any(|y| (half..half + 64).any(|x| {
+                        let i = (y * 128 + x) * 4;
+                        preview_pixels[0][i..i + 3] != preview_pixels[1][i..i + 3]
+                    })),
+                    "both Pioneer instances must receive live finish"
+                );
+            }
+            assert_eq!(
+                preview_pixels[0], preview_pixels[2],
+                "reset restores authored GPU output"
+            );
+            // Independent PBR controls: identical authored hull, base color, camera,
+            // lights and exposure. Each pair changes exactly one scalar uniform.
+            let mut pbr_pixels = Vec::new();
+            for (roughness, metallic) in [(0.15, 0.0), (0.85, 0.0), (0.4, 0.0), (0.4, 1.0)] {
+                renderer.set_material_preview(Some(crate::EmbeddedMaterialPreview {
+                    hull_rgb: [0.3, 0.3, 0.3],
+                    roughness: Some(roughness),
+                    metallic: Some(metallic),
+                    ..Default::default()
+                }));
+                gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
+                let primitive = embedded_primitive(hull_index).unwrap();
+                renderer.draw_material(
+                    hull_index,
+                    Mat4::from_scale(Vec3::splat(3.0)),
+                    primitive.color,
+                    primitive.emission,
+                    Material::PaintedHull,
+                );
+                let mut pixels = vec![0u8; 128 * 128 * 4];
+                gl.read_pixels(
+                    0,
+                    0,
+                    128,
+                    128,
+                    glow::RGBA,
+                    glow::UNSIGNED_BYTE,
+                    glow::PixelPackData::Slice(Some(&mut pixels)),
+                );
+                assert_eq!(gl.get_error(), glow::NO_ERROR);
+                assert!(
+                    pixels
+                        .chunks_exact(4)
+                        .filter(|p| p[..3].iter().any(|v| *v > 8))
+                        .count()
+                        > 64,
+                    "PBR fixture must contain visible hull pixels"
+                );
+                pbr_pixels.push(pixels);
+            }
+            for (name, a, b) in [("roughness", 0, 1), ("metallic", 2, 3)] {
+                let changed = pbr_pixels[a]
+                    .chunks_exact(4)
+                    .zip(pbr_pixels[b].chunks_exact(4))
+                    .filter(|(a, b)| a[..3].iter().zip(&b[..3]).any(|(a, b)| a.abs_diff(*b) >= 2))
+                    .count();
+                assert!(
+                    changed > 16,
+                    "{name} alone must visibly change the same RGB hull: {changed} pixels"
+                );
+                eprintln!("independent {name} GPU response: {changed} pixels differ by >=2/255");
+            }
+            renderer.set_material_preview(None);
+            // Actual cached triangle-edge overlay and native GL-state restoration.
+            let mut wire_pixels = Vec::new();
+            for enabled in [false, true] {
+                renderer.debug_wireframe = enabled;
+                renderer.debug_metrics.set(Default::default());
+                gl.polygon_mode(glow::FRONT_AND_BACK, glow::FILL);
+                gl.disable(glow::POLYGON_OFFSET_LINE);
+                gl.polygon_offset(2., 3.);
+                gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
+                renderer.draw(0, Mat4::IDENTITY, Vec3::splat(0.15), 0.);
+                let mut pixels = vec![0u8; 128 * 128 * 4];
+                gl.read_pixels(
+                    0,
+                    0,
+                    128,
+                    128,
+                    glow::RGBA,
+                    glow::UNSIGNED_BYTE,
+                    glow::PixelPackData::Slice(Some(&mut pixels)),
+                );
+                wire_pixels.push(pixels);
+                let mut modes = [0; 2];
+                gl.get_parameter_i32_slice(glow::POLYGON_MODE, &mut modes);
+                assert_eq!(modes, [glow::FILL as i32; 2]);
+                assert!(!gl.is_enabled(glow::POLYGON_OFFSET_LINE));
+                assert_eq!(gl.get_parameter_f32(glow::POLYGON_OFFSET_FACTOR), 2.);
+                assert_eq!(gl.get_parameter_f32(glow::POLYGON_OFFSET_UNITS), 3.);
+                assert_eq!(renderer.debug_metrics.get().draw_calls, 1);
+                assert_eq!(
+                    renderer.debug_metrics.get().triangles,
+                    renderer.meshes[0].count as u64 / 3
+                );
+                assert_eq!(
+                    renderer.debug_metrics.get().wireframe_draw_calls,
+                    u64::from(enabled)
+                );
+                assert_eq!(gl.get_error(), glow::NO_ERROR);
+            }
+            assert!(
+                wire_pixels[0]
+                    .iter()
+                    .zip(&wire_pixels[1])
+                    .filter(|(a, b)| a != b)
+                    .count()
+                    > 40,
+                "wireframe must change actual GPU pixels"
+            );
+            renderer.debug_wireframe = false;
+            gl.polygon_offset(0., 0.);
             // Exercise the integrated local-light hook through the actual mesh BRDF,
             // not only the isolated attenuation shader test.
             gl.uniform_1_i32(
@@ -4997,6 +8592,53 @@ mod tests {
             assert_eq!(gl.get_error(), glow::NO_ERROR);
             gl.use_program(None);
             gl.delete_program(environment_program);
+            // A dark metal hull must receive the dock ceiling environment, with
+            // direction-dependent reflections that broaden with roughness.
+            let dock_fragment = concat!(
+                "#version 150\n",
+                include_str!("shaders/sky.glsl"),
+                include_str!("shaders/materials.glsl"),
+                r#"uniform float rough; uniform float dock; out vec4 color;
+                void main(){vec3 n=vec3(0,1,0),v=normalize(vec3(0,1,-0.55)),a=vec3(0.07);
+                vec3 c=dock>0.5?ark_station_environment(n,v,a,rough,0.85):ark_environment(n,v,a,rough,0.85,0.0,n);
+                color=vec4(ark_display(c),1.0);}"#
+            );
+            let dock_program = compile(&gl, BACK_VERTEX, dock_fragment).unwrap();
+            gl.use_program(Some(dock_program));
+            let dock_uniform = gl.get_uniform_location(dock_program, "dock");
+            let rough_uniform = gl.get_uniform_location(dock_program, "rough");
+            let mut dock_pixels = Vec::new();
+            for (dock, rough) in [(0.0, 0.18), (1.0, 0.18), (1.0, 0.9)] {
+                gl.uniform_1_f32(dock_uniform.as_ref(), dock);
+                gl.uniform_1_f32(rough_uniform.as_ref(), rough);
+                gl.draw_arrays(glow::TRIANGLES, 0, 3);
+                let mut pixel = [0u8; 4];
+                gl.read_pixels(
+                    64,
+                    64,
+                    1,
+                    1,
+                    glow::RGBA,
+                    glow::UNSIGNED_BYTE,
+                    glow::PixelPackData::Slice(Some(&mut pixel)),
+                );
+                dock_pixels.push(pixel);
+            }
+            assert!(
+                dock_pixels[1][1] > dock_pixels[0][1].saturating_add(15),
+                "dock illumination must reveal dark metal: {dock_pixels:?}"
+            );
+            assert!(
+                dock_pixels[1][1] > dock_pixels[2][1],
+                "roughness must reduce the ceiling strip peak: {dock_pixels:?}"
+            );
+            assert!(
+                dock_pixels[1][1] < 245,
+                "dock reflection must retain highlight headroom: {dock_pixels:?}"
+            );
+            assert_eq!(gl.get_error(), glow::NO_ERROR);
+            gl.use_program(None);
+            gl.delete_program(dock_program);
             if let Ok(directory) = std::env::var("ARKLINE_SHIP_CAPTURE_DIR") {
                 std::fs::create_dir_all(&directory).unwrap();
                 let capture = CachedFeed::create(&gl, 1100, 1280, 800).unwrap();
@@ -5115,13 +8757,133 @@ mod tests {
         }
     }
     #[test]
+    fn head_look_obeys_viewport_permission_and_preserves_blocked_pose() {
+        fn step(
+            ctx: &egui::Context,
+            cockpit: &mut super::super::Cockpit,
+            tick: u32,
+            shift: bool,
+            events: Vec<egui::Event>,
+        ) {
+            let _ = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(1200., 850.),
+                    )),
+                    focused: true,
+                    time: Some(tick as f64 / 60.),
+                    modifiers: egui::Modifiers {
+                        shift,
+                        ..Default::default()
+                    },
+                    events,
+                    ..Default::default()
+                },
+                |ctx| eframe::App::update(cockpit, ctx, &mut eframe::Frame::_new_kittest()),
+            );
+        }
+        let ctx = egui::Context::default();
+        ctx.options_mut(|options| options.max_passes = std::num::NonZeroUsize::MIN);
+        let mut cockpit = super::super::tests::view_test_cockpit(&ctx);
+        // Paused editor presentation may inspect the view without issuing flight commands.
+        cockpit.embedded = true;
+        cockpit.embedded_input = false;
+        cockpit.embedded_paused = true;
+        cockpit.frozen_time = Some(1000);
+        for tick in 1..=4 {
+            step(&ctx, &mut cockpit, tick, false, vec![]);
+        }
+        let (viewport, layer) = cockpit.flight_view.input_surface().unwrap();
+        let pointer = [
+            viewport.center(),
+            viewport.center_top() + egui::vec2(0., 24.),
+            viewport.left_top() + egui::vec2(24., 24.),
+        ]
+        .into_iter()
+        .find(|point| ctx.layer_id_at(*point) == Some(layer))
+        .unwrap();
+        let authority = serde_json::to_value(&cockpit.snapshot).unwrap();
+        let (tx, requests) = std::sync::mpsc::channel();
+        cockpit.commands = Some(tx);
+        cockpit.flight_view.head_look = [0.2, -0.1];
+        cockpit.flight_view.set_head_look_input_allowed(false);
+        step(
+            &ctx,
+            &mut cockpit,
+            5,
+            true,
+            vec![egui::Event::PointerMoved(pointer)],
+        );
+        let pose = cockpit.flight_view.editor_camera_pose();
+        let before = cockpit.flight_view.head_look_angles();
+        step(
+            &ctx,
+            &mut cockpit,
+            6,
+            true,
+            vec![egui::Event::Key {
+                key: egui::Key::ArrowLeft,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::SHIFT,
+            }],
+        );
+        assert_eq!(cockpit.flight_view.head_look_angles(), before);
+        assert_eq!(cockpit.flight_view.editor_camera_pose(), pose);
+        assert!(cockpit.flight_view.computer_surface().is_some());
+
+        // Positive control: the identical held key rotates only after viewport ownership.
+        cockpit.flight_view.set_head_look_input_allowed(true);
+        step(&ctx, &mut cockpit, 7, true, vec![]);
+        assert!(cockpit.flight_view.head_look_angles()[0] > before[0]);
+        assert!(cockpit.flight_view.computer_surface().is_some());
+
+        let before_outside = cockpit.flight_view.head_look_angles();
+        let pose = cockpit.flight_view.editor_camera_pose();
+        step(
+            &ctx,
+            &mut cockpit,
+            8,
+            true,
+            vec![egui::Event::PointerMoved(egui::pos2(-20., -20.))],
+        );
+        assert_eq!(cockpit.flight_view.head_look_angles(), before_outside);
+        assert_eq!(cockpit.flight_view.editor_camera_pose(), pose);
+        let press = egui::Event::PointerButton {
+            pos: pointer,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: egui::Modifiers::SHIFT,
+        };
+        step(
+            &ctx,
+            &mut cockpit,
+            9,
+            true,
+            vec![egui::Event::PointerMoved(pointer), press],
+        );
+        step(&ctx, &mut cockpit, 10, true, vec![]);
+        assert_eq!(
+            cockpit.flight_view.head_look_angles(),
+            before_outside,
+            "a held pointer drag must neither capture Shift look nor recenter the view"
+        );
+        assert!(cockpit.flight_view.computer_surface().is_some());
+        assert_eq!(serde_json::to_value(&cockpit.snapshot).unwrap(), authority);
+        assert!(cockpit.controls.is_empty());
+        assert!(requests.try_recv().is_err());
+    }
+
+    #[test]
     fn head_look_is_bounded_and_release_recenters_without_ship_rotation() {
         let rotation = Quat::from_rotation_x(0.6);
         let mut angles = [0.0; 2];
         for _ in 0..200 {
             update_head_look(&mut angles, true, [-1.0, 1.0], 0.016);
         }
-        assert_eq!(angles, [-1.25, 1.25]);
+        assert_eq!(angles, [-std::f32::consts::PI, 1.45]);
         let (eye, _) = cockpit_camera(Vec3::ZERO, rotation);
         let looked = Mat4::look_at_rh(
             eye,
@@ -5145,6 +8907,7 @@ mod tests {
             origin: [149_597_870_700.0, 50.0, 100.0],
         };
         let mut drone = arkline_protocol::DroneView {
+            orientation_xyzw: None,
             id: 1,
             class: arkline_protocol::DroneClass::Recon,
             hit_points: 100,
@@ -5190,6 +8953,12 @@ mod tests {
         assert!(drone_camera_matrix(&drone, space, feed.aspect_ratio())
             .1
             .is_finite());
+        let eye = space.scene(drone.position);
+        let legacy_vertical = Mat4::perspective_rh_gl(1.05, feed.aspect_ratio(), 0.002, 1200.)
+            * Mat4::look_at_rh(eye, eye + Vec3::Y, Vec3::Z);
+        assert!(drone_camera_matrix(&drone, space, feed.aspect_ratio())
+            .1
+            .abs_diff_eq(legacy_vertical, 1e-6));
     }
 
     #[test]
@@ -5237,6 +9006,7 @@ mod tests {
         }))
         .unwrap();
         pilot.flight = Some(arkline_protocol::FlightState {
+            docking: None,
             acceleration: [0.0; 3],
             position: [0.0; 3],
             velocity: [3.0, 4.0, 0.0],
@@ -5248,6 +9018,13 @@ mod tests {
             warp: None,
         });
         let snapshot = Snapshot {
+            carrier_inventory_registration: None,
+            walk_sprint_v1: false,
+            drone_cargo_registration: None,
+            drone_cargo_totals: None,
+            docked_traversal_capability: None,
+            world_layout: None,
+            exterior: None,
             fleet_links: vec![],
             remote_controls: vec![],
             resource_jobs: vec![],
@@ -5282,6 +9059,45 @@ mod tests {
         let powered = instrument_rows(&pilot, &snapshot, None, 1000, true);
         assert!(powered[2].contains(&"CAP 25.0/240.0 kJ".to_string()));
         assert!(powered[2].contains(&"LOW POWER / WARP UNAVAILABLE".to_string()));
+        let warp_cost = arkline_protocol::power_spec(pilot.ship_class).warp_cost_j;
+        pilot.power.as_mut().unwrap().capacity_j = warp_cost * 2;
+        pilot.power.as_mut().unwrap().charge_j = warp_cost;
+        let partial = instrument_rows(&pilot, &snapshot, None, 1000, true);
+        assert!(partial[2].contains(&"WARP ENERGY READY".to_string()));
+        assert!(!partial[2].iter().any(|row| row.contains("FULL")));
+        pilot.power.as_mut().unwrap().charge_j = warp_cost * 2;
+        let full = instrument_rows(&pilot, &snapshot, None, 1000, true);
+        assert!(full[2].contains(&"CAPACITOR FULL / WARP ENERGY READY".to_string()));
+        assert_eq!(module_instrument(&pilot, 0, 1000), "T1 DATA UNAVAILABLE");
+        pilot.mining_modules.push(arkline_protocol::MiningModule {
+            module_id: 0,
+            target_id: None,
+            cycle_started_at_ms: None,
+            cycle_completes_at_ms: None,
+            stop_reason: Some("Insufficient capacitor".into()),
+        });
+        assert_eq!(
+            module_instrument(&pilot, 0, 1000),
+            "T1 STOPPED / Insufficient capacitor"
+        );
+        pilot.mining_modules[0].stop_reason = None;
+        assert_eq!(module_instrument(&pilot, 0, 1000), "T1 STANDBY");
+        pilot.mining_modules[0].target_id = Some(7);
+        assert_eq!(
+            module_instrument(&pilot, 0, 1000),
+            "T1 #7 CYCLE UNCONFIRMED"
+        );
+        pilot.flight = None;
+        let missing = instrument_rows(&pilot, &snapshot, None, 1000, true);
+        for label in [
+            "SPEED UNAVAILABLE",
+            "FWD UNAVAILABLE",
+            "RIGHT UNAVAILABLE",
+            "UP UNAVAILABLE",
+            "ATTITUDE UNAVAILABLE",
+        ] {
+            assert!(missing[0].contains(&label.to_string()));
+        }
         let stale = instrument_rows(&pilot, &snapshot, None, 1000, false);
         assert!(stale.iter().all(|rows| rows[0].contains("STALE DATA")));
         assert!(stale[1].contains(&"NO SELECTION".to_string()));
@@ -5368,7 +9184,13 @@ mod tests {
             }
             std::hint::black_box(mining_impact(source, &rock, space, 0));
         }
-        eprintln!("CPU render preparation500 iterations: reconstructed uncached {:?}; cached {:?}. Station draws {} -> {}",uncached,start.elapsed(),station_parts(space).len(),batches.len());
+        eprintln!(
+            "CPU render preparation500 iterations: reconstructed uncached {:?}; cached {:?}. Station draws {} -> {}",
+            uncached,
+            start.elapsed(),
+            station_parts(space).len(),
+            batches.len()
+        );
     }
     #[test]
     fn station_batches_preserve_bounds_vertices_and_reduce_draw_calls() {
@@ -5413,6 +9235,42 @@ mod tests {
         }
     }
     #[test]
+    fn pioneer_outboard_turret_bores_clear_the_actual_raised_bridge() {
+        let metres = Mat4::from_scale(Vec3::splat(100.));
+        let source = pioneer_asset().unwrap();
+        for module_id in 0..2 {
+            let (mount, _, _) = turret_mount(ShipClass::Pioneer, module_id);
+            let expected = Vec3::from_array(
+                arkline_protocol::PIONEER_MINING_TURRET_MOUNTS_M[module_id as usize]
+                    .map(|v| v as f32),
+            );
+            assert!((mount * 100.).abs_diff_eq(expected, 1e-5));
+            let muzzle = turret_muzzle(ShipClass::Pioneer, Quat::IDENTITY, module_id) * 100.;
+            for (primitive, part) in source.iter().enumerate() {
+                let hit = ray_mesh_hit(muzzle, Vec3::X, metres, &part.vertices);
+                assert!(
+                    hit.is_none(),
+                    "gun {module_id} forward bore hits actual hull primitive {primitive} at {hit:?}m"
+                );
+            }
+            // The old inboard line is demonstrably not an acceptable mount:
+            // it runs through the new bridge envelope rather than only checking
+            // the elevated camera eye above the gun.
+            let old_muzzle = Vec3::new(
+                muzzle.x,
+                muzzle.y,
+                if module_id == 0 { -2.66 } else { 2.66 },
+            );
+            assert!(
+                source.iter().any(
+                    |part| ray_mesh_hit(old_muzzle, Vec3::X, metres, &part.vertices).is_some()
+                ),
+                "the rejected inboard gun line must be checked against real bridge geometry"
+            );
+        }
+    }
+
+    #[test]
     fn turret_pedestal_extends_into_measured_hull_deck() {
         let module_id = 0;
         for class in arkline_protocol::ALL_SHIP_CLASSES {
@@ -5450,10 +9308,9 @@ mod tests {
             assert!((muzzle.distance(mount) - radius - barrel).abs() < 0.0001);
             let (_, model, _, _) = &turret_parts(class, aligned, module_id)[2];
             assert!(model.transform_point3(Vec3::ZERO).distance(muzzle) < 0.0001);
-            let spec = class.spec();
             assert!(
-                muzzle.y > spec.height_m as f32 / 200.0,
-                "turret is a roof appendage, excluded from published body dimensions"
+                muzzle.y > turret_deck(class, module_id),
+                "turret must stand above its actual mounting deck"
             );
         }
     }
@@ -5479,7 +9336,15 @@ mod tests {
         for _ in 0..100_000 {
             std::hint::black_box(pioneer_asset().unwrap());
         }
-        eprintln!("Pioneer asset: bytes={}, triangles={}, draw_calls={}, decode_once_us={}, cached_100000_accesses_us={}, debug_assertions={}", bytes.len(), parsed.iter().map(|p|p.vertices.len()/3).sum::<usize>(), cached.len(), decode.as_micros(), start.elapsed().as_micros(), cfg!(debug_assertions));
+        eprintln!(
+            "Pioneer asset: bytes={}, triangles={}, draw_calls={}, decode_once_us={}, cached_100000_accesses_us={}, debug_assertions={}",
+            bytes.len(),
+            parsed.iter().map(|p| p.vertices.len() / 3).sum::<usize>(),
+            cached.len(),
+            decode.as_micros(),
+            start.elapsed().as_micros(),
+            cfg!(debug_assertions)
+        );
     }
 
     #[test]
@@ -5518,10 +9383,11 @@ mod tests {
                     .map(area)
                     .sum();
                 assert!(luminous < total * 0.12, "Pioneer luminous surface budget");
-                assert!(primitives.iter().all(|p| p
-                    .vertices
-                    .iter()
-                    .all(|v| v.p.is_finite() && v.n.is_finite())));
+                assert!(primitives.iter().all(|p| {
+                    p.vertices
+                        .iter()
+                        .all(|v| v.p.is_finite() && v.n.is_finite())
+                }));
                 continue;
             }
             assert!(
@@ -5554,17 +9420,22 @@ mod tests {
             let (min, max) = parts_bounds(&parts);
             let spec = class.spec();
             let measured = (max - min) * 100.0;
-            assert!(
-                (measured
-                    - Vec3::new(
-                        spec.length_m as f32,
-                        spec.height_m as f32,
-                        spec.width_m as f32
-                    ))
-                .abs()
-                .max_element()
-                    < 0.01
-            );
+            let expected_dimensions = if class == ShipClass::Pioneer {
+                let bounds = arkline_protocol::PIONEER_BODY_BOUNDS_M
+                    .map(|v| Vec3::from_array(v.map(|n| n as f32)));
+                // Body origin stays fixed; symmetric gameplay bounds deliberately
+                // enclose the asymmetric raised bridge without shifting the ship.
+                assert!(min.y * 100. >= -(spec.height_m as f32) / 2.);
+                assert!(max.y * 100. <= spec.height_m as f32 / 2. + 0.001);
+                bounds[1] - bounds[0]
+            } else {
+                Vec3::new(
+                    spec.length_m as f32,
+                    spec.height_m as f32,
+                    spec.width_m as f32,
+                )
+            };
+            assert!((measured - expected_dimensions).abs().max_element() < 0.01);
             let geometry = ship_geometry(class, Mat4::IDENTITY);
             assert_eq!(geometry.len(), parts.len());
             let hits = geometry
@@ -5644,6 +9515,40 @@ mod tests {
         assert_eq!(warp_tunnel_intensity("WARP ARRIVAL", 1.0), 0.0);
     }
     #[test]
+    fn editor_free_camera_freezes_scene_origin_and_restores_live_player_origin() {
+        let initial = Space {
+            origin: [1_000_000.0, 20.0, -400.0],
+        };
+        let mut view = FlightView::new(None);
+        view.space = initial;
+        view.set_editor_free_camera(true, Some((Vec3::ZERO, 0.0, 0.0)));
+        assert_eq!(view.editor_free_camera_space, Some(initial));
+        view.set_editor_free_camera(false, None);
+        assert!(view.editor_free_camera_space.is_none());
+        let (first_frame, frozen) = editor_camera_scene_space(true, None, initial);
+        let camera = Vec3::new(7.0, 3.0, -2.0);
+        let camera_world = first_frame.world(camera);
+
+        // The ship's display origin moves by ten scene units, but the camera's
+        // scene transform remains anchored for the full free-camera session.
+        let ship_world = [1_001_000.0, 20.0, -400.0];
+        let moved_live = Space { origin: ship_world };
+        let (moving_frame, still_frozen) = editor_camera_scene_space(true, frozen, moved_live);
+        assert_eq!(moving_frame.origin, initial.origin);
+        assert_eq!(still_frozen.unwrap().origin, initial.origin);
+        assert_eq!(moving_frame.world(camera), camera_world);
+
+        // On disable, the normal scene origin follows the ship again, while the
+        // player target rebases to the same world point in that live frame.
+        let (restored, no_freeze) = editor_camera_scene_space(false, still_frozen, moved_live);
+        assert_eq!(restored.origin, ship_world);
+        assert!(no_freeze.is_none());
+        let player_target_during_freecam = moving_frame.scene(ship_world);
+        let restored_target =
+            rebased_camera_target(player_target_during_freecam, moving_frame, restored, false);
+        assert!(restored_target.length() < 1e-5);
+    }
+    #[test]
     fn cockpit_heading_and_au_relative_precision() {
         let origin = [
             8.0 * arkline_protocol::AU_METERS,
@@ -5670,6 +9575,12 @@ mod tests {
     fn extrapolation_is_bounded_and_warp_uses_server_position() {
         let space = Space::default();
         let mut pilot = PilotView {
+            carrier_inventory: None,
+            power_accounting: None,
+            drone_bay: None,
+            drone_cargo: None,
+            cockpit_mechanisms: None,
+            reactor_configuration: None,
             station_avatar: None,
             surface: None,
             power: None,
@@ -5687,6 +9598,7 @@ mod tests {
             ore: 0,
             location: Location::Station,
             flight: Some(arkline_protocol::FlightState {
+                docking: None,
                 acceleration: [0.0; 3],
                 orientation: [0.0, 0.0, 0.0, 1.0],
                 angular_velocity: [0.0; 3],
@@ -5950,6 +9862,12 @@ mod tests {
     fn stable_pilot_lane_does_not_depend_on_roster_or_view() {
         let space = Space::default();
         let pilot = PilotView {
+            carrier_inventory: None,
+            power_accounting: None,
+            drone_bay: None,
+            drone_cargo: None,
+            cockpit_mechanisms: None,
+            reactor_configuration: None,
             station_avatar: None,
             surface: None,
             power: None,
@@ -5972,5 +9890,96 @@ mod tests {
         let _other = lane("Another pilot");
         assert_eq!(before, space.position(&pilot, 100));
         assert!((lane(&pilot.name)).abs() <= 5.0);
+    }
+    #[test]
+    #[ignore = "writes exact CPU catalog fingerprints for organization before/after proof"]
+    fn export_geometry_catalog_organization_fingerprint() {
+        use serde_json::{json, Value};
+        use sha2::{Digest, Sha256};
+        fn vertices(v: &[Vertex]) -> Value {
+            let mut hash = Sha256::new();
+            for vertex in v {
+                for value in vertex.p.to_array().into_iter().chain(vertex.n.to_array()) {
+                    hash.update(value.to_bits().to_le_bytes());
+                }
+            }
+            json!({"vertices":v.len(),"position_normal_bits_sha256":hex::encode(hash.finalize())})
+        }
+        fn part(p: &ModelPart) -> Value {
+            json!([
+                p.0,
+                p.1.to_cols_array().map(f32::to_bits),
+                p.2.to_array().map(f32::to_bits),
+                p.3.to_bits()
+            ])
+        }
+        fn mount(m: &BayMeshMount) -> Value {
+            json!({"mesh":m.mesh,"group":m.group_id,"position_bits":m.reference_pose.position_m.map(f64::to_bits),"orientation_bits":m.reference_pose.orientation_xyzw.map(f64::to_bits)})
+        }
+        if std::env::var_os("ARKLINE_RECIPE_INIT_FIRST").is_some() {
+            for class in arkline_protocol::ALL_SHIP_CLASSES {
+                std::hint::black_box(cached_ship_parts(class));
+                std::hint::black_box(cached_cockpit_parts(class));
+            }
+            std::hint::black_box(station_parts(Space { origin: [0.0; 3] }));
+        }
+        let geometry = flight_geometry().unwrap();
+        assert!(Arc::ptr_eq(&geometry, &flight_geometry().unwrap()));
+        let source = pioneer_asset().unwrap();
+        assert!(std::ptr::eq(source, pioneer_asset().unwrap()));
+        for class in drone_models::CLASSES {
+            assert!(Arc::ptr_eq(
+                &cached_drone_parts(class).unwrap(),
+                &cached_drone_parts(class).unwrap()
+            ));
+        }
+        let uploads = geometry.catalog.uploads();
+        let gpu = uploads
+            .iter()
+            .enumerate()
+            .map(|(slot, v)| json!({"slot":slot,"geometry":vertices(v)}))
+            .collect::<Vec<_>>();
+        let cpu = (0..uploads.len())
+            .map(|slot| json!({"slot":slot,"geometry":vertices(&mesh_vertices(slot))}))
+            .collect::<Vec<_>>();
+        let materials = (0..uploads.len()).map(|slot| {
+            json!({"slot":slot,"source_primitive":docked_source_primitive(slot),"paint_role":paint_role(slot),"preview_paint":preview_paint(slot),"painted_fallback":resolved_material_parameters(slot,Material::PaintedHull).map(f32::to_bits),"glass_fallback":resolved_material_parameters(slot,Material::Glass).map(f32::to_bits)})
+        }).collect::<Vec<_>>();
+        let primitives = source.iter().enumerate().map(|(index,p)| json!({"index":index,"geometry":vertices(&p.vertices),"material_index":p.material_index,"material_name":p.material_name,"color":p.color.to_array().map(f32::to_bits),"emission":p.emission.to_bits(),"emissive_color":p.emissive_color.to_array().map(f32::to_bits),"roughness":p.roughness.to_bits(),"metallic":p.metallic.to_bits()})).collect::<Vec<_>>();
+        let docked = match &geometry.docked_parts {
+            Ok(parts) => json!({"ok":parts.iter().map(part).collect::<Vec<_>>()}),
+            Err(error) => json!({"err":error}),
+        };
+        let receiver = match &geometry.receiver {
+            Ok(r) => {
+                json!({"ok":{"parts":r.parts.iter().map(part).collect::<Vec<_>>(),"source_meshes":r.source_meshes,"moving":r.moving.iter().map(mount).collect::<Vec<_>>()}})
+            }
+            Err(error) => json!({"err":error}),
+        };
+        let recipes = arkline_protocol::ALL_SHIP_CLASSES.iter().map(|&class| {
+            let ship = cached_ship_parts(class);
+            let cockpit = cached_cockpit_parts(class);
+            assert!(std::ptr::eq(ship, cached_ship_parts(class)));
+            assert!(std::ptr::eq(cockpit, cached_cockpit_parts(class)));
+            let ship_bits = ship.iter().map(part).collect::<Vec<_>>();
+            assert_eq!(ship_bits, ship_parts(class).iter().map(part).collect::<Vec<_>>());
+            assert_eq!(ship_bits, build_ship_parts(class).iter().map(part).collect::<Vec<_>>());
+            json!({"class":class,"ship":ship_bits,"cockpit":cockpit.iter().map(|(p,m)|json!({"part":part(p),"material":format!("{m:?}"),"parameters":m.parameters().map(f32::to_bits)})).collect::<Vec<_>>()})
+        }).collect::<Vec<_>>();
+        let stations = [[0.0;3], STATION_CENTER_POSITION, [2.0*arkline_protocol::AU_METERS,-150.0,1000.0]].into_iter().map(|origin|json!({"origin_bits":origin.map(f64::to_bits),"parts":station_parts(Space{origin}).iter().map(part).collect::<Vec<_>>()})).collect::<Vec<_>>();
+        let report = json!({
+            "format":2,"pioneer_source_sha256":pioneer_asset_sha256(),
+            "model_recipes":recipes,"station_recipes":stations,"pioneer_fallback_recipe":pioneer_construction_model().iter().map(part).collect::<Vec<_>>(),
+            "role_constants":[PAINT_ROLE_MASK,HULL_ROLE,TRIM_ROLE,EMISSION_ROLE],
+            "gpu_uploads":gpu,"intentional_legacy_cpu_lookup":cpu,"slot_materials":materials,"source_primitives":primitives,
+            "station_batches":geometry.station_batches.iter().map(|(m,c,e)|json!([m,c.to_array().map(f32::to_bits),e.to_bits()])).collect::<Vec<_>>(),
+            "drone_parts":geometry.drone_parts.iter().map(|p|p.iter().map(part).collect::<Vec<_>>()).collect::<Vec<_>>(),
+            "drone_materials":geometry.drone_materials.iter().map(|(m,p)|json!([m,p.map(f32::to_bits)])).collect::<Vec<_>>(),
+            "source_meshes":geometry.source_meshes,"bay_meshes":geometry.bay_meshes.iter().map(mount).collect::<Vec<_>>(),
+            "docked_parts":docked,"receiver":receiver
+        });
+        let output =
+            std::env::var_os("ARKLINE_GEOMETRY_FINGERPRINT").expect("explicit fingerprint output");
+        std::fs::write(output, serde_json::to_vec_pretty(&report).unwrap()).unwrap();
     }
 }

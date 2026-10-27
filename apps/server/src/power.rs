@@ -6,7 +6,19 @@ pub(super) fn advance_state(
     class: ShipClass,
     now: u64,
 ) -> Result<()> {
+    advance_state_with_load(power, class, now, 0)
+}
+pub(super) fn advance_state_with_load(
+    power: &mut Option<PowerState>,
+    class: ShipClass,
+    now: u64,
+    load: u64,
+) -> Result<()> {
     let spec = power_spec(class);
+    ensure!(
+        load <= spec.regen_w,
+        "combined circuit load exceeds supported reactor budget"
+    );
     let state = power.get_or_insert(PowerState {
         charge_j: spec.capacity_j,
         capacity_j: spec.capacity_j,
@@ -29,7 +41,8 @@ pub(super) fn advance_state(
         return Ok(());
     }
     let elapsed = now - state.updated_at_ms;
-    let energy_mj = elapsed as u128 * state.regen_w as u128 + state.regen_remainder_mj as u128;
+    let energy_mj = elapsed as u128 * state.regen_w.saturating_sub(load) as u128
+        + state.regen_remainder_mj as u128;
     let charge = state.charge_j as u128 + energy_mj / 1000;
     state.charge_j = charge.min(state.capacity_j as u128) as u64;
     state.regen_remainder_mj = if state.charge_j == state.capacity_j {
@@ -42,10 +55,16 @@ pub(super) fn advance_state(
 }
 pub(super) fn advance(world: &mut World, now: u64) -> Result<()> {
     for p in world.pilots.values_mut() {
+        if p.view.ship_class == ShipClass::Pioneer {
+            continue;
+        }
         advance_state(&mut p.view.power, p.view.ship_class, now)?;
     }
     for account in world.accounts.values_mut() {
         for ship in &mut account.ships {
+            if ship.ship_class == ShipClass::Pioneer {
+                continue;
+            }
             advance_state(&mut ship.power, ship.ship_class, now)?;
         }
     }
@@ -66,6 +85,161 @@ pub(super) fn spend(power: &mut Option<PowerState>, cost: u64, now: u64) -> bool
     state.charge_j -= cost;
     true
 }
+
+/// Construct only response clones: accounting must never become a new persisted
+/// energy writer or force idle snapshots to rewrite the world.
+pub(super) fn accounting(
+    world: &World,
+    owner: &str,
+    class: ShipClass,
+    power: Option<&PowerState>,
+    now: u64,
+) -> Option<PowerAccountingView> {
+    let power = power?;
+    let account = world.accounts.get(owner)?;
+    let vessel_id = account.vessel_id(class)?.to_owned();
+    let mut loads = Vec::new();
+    let budget =
+        if class == ShipClass::Pioneer {
+            let exterior = if account.pioneer_exterior_enabled {
+                world.exterior_definition.document.load_w()
+            } else {
+                0
+            };
+            let budget = PowerLoadBudget::pioneer(
+                account.pioneer_room.as_ref(),
+                power.charge_j > 0,
+                exterior,
+            );
+            for (component_id, label, reserved_w) in [
+                (
+                    "pioneer.deck1.airlock.controller",
+                    "Airlock controller",
+                    budget.room_controller_w,
+                ),
+                (
+                    "pioneer.deck1.airlock.light",
+                    "Airlock main light",
+                    budget.room_light_w,
+                ),
+                (
+                    "pioneer.deck1.airlock.vent",
+                    "Airlock vent",
+                    budget.room_vent_w,
+                ),
+                (
+                    "pioneer.deck1.airlock.emergency",
+                    "Airlock emergency reserve recharge",
+                    budget.emergency_recharge_w,
+                ),
+            ] {
+                loads.push(PowerLoadRow {
+                    component_id: component_id.into(),
+                    label: label.into(),
+                    reserved_w,
+                });
+            }
+            loads.extend(world.exterior_definition.document.fixtures.iter().map(|f| {
+                PowerLoadRow {
+                    component_id: format!("pioneer.exterior.fixture.{}", f.id),
+                    label: format!("Exterior {:?} · {}", f.kind, f.id),
+                    reserved_w: if account.pioneer_exterior_enabled {
+                        f.load_w
+                    } else {
+                        0
+                    },
+                }
+            }));
+            budget
+        } else {
+            PowerLoadBudget::default()
+        };
+    let total = budget.total_reserved_w()?;
+    let net = power.regen_w.checked_sub(total)?;
+    let spec = power_spec(class);
+    let view = PowerAccountingView {
+        schema_version: POWER_ACCOUNTING_SCHEMA_VERSION,
+        owner_pilot: owner.into(),
+        vessel_id,
+        ship_class: class,
+        sampled_at_ms: now,
+        charge_j: power.charge_j,
+        capacity_j: power.capacity_j,
+        reactor_rating_w: power.regen_w,
+        loads,
+        accounted_reserved_w: total,
+        net_available_charge_w: net,
+        stored_charge_rate_w: if power.charge_j == power.capacity_j {
+            0
+        } else {
+            net
+        },
+        instantaneous_debits: PowerDebitRatings {
+            warp_j: spec.warp_cost_j,
+            mining_cycle_j: spec.mining_cycle_cost_j,
+            drone_mining_cycle_j: spec.drone_mining_cycle_cost_j,
+            drone_attack_j: spec.drone_attack_cost_j,
+        },
+        emergency_reserve: (class == ShipClass::Pioneer)
+            .then_some(account.pioneer_room.as_ref())
+            .flatten()
+            .map(|r| EmergencyReserveAccounting {
+                component_id: "pioneer.deck1.airlock.emergency".into(),
+                remaining_ms: r.emergency_remaining_ms,
+                capacity_ms: ROOM_EMERGENCY_MS,
+                output_w: if r.emergency_light_on {
+                    ROOM_EMERGENCY_W
+                } else {
+                    0
+                },
+                recharge_reserved_w: budget.emergency_recharge_w,
+            }),
+        unmetered: {
+            let mut systems = vec![
+                ("ship.propulsion", "Propulsion motors / thrusters"),
+                (
+                    "ship.general_systems",
+                    "Other hull systems without separate electrical metering",
+                ),
+            ];
+            if class == ShipClass::Pioneer {
+                systems.extend([
+                    (
+                        "pioneer.life_support",
+                        "Whole-ship life support (beyond modeled airlock vent)",
+                    ),
+                    (
+                        "pioneer.cockpit_displays",
+                        "Cockpit displays and camera hardware",
+                    ),
+                    ("pioneer.crew_lift", "Crew lift motors"),
+                    ("pioneer.reactor_collars", "Mechanical reactor collars"),
+                    (
+                        "pioneer.drone_bay",
+                        "Drone bay carriage, lift, forks and doors",
+                    ),
+                    (
+                        "pioneer.airlock_door_motor",
+                        "Airlock door motor (power-gated, not separately metered)",
+                    ),
+                ]);
+            }
+            systems
+                .into_iter()
+                .map(|(component_id, label)| UnmeteredPowerSystem {
+                    component_id: component_id.into(),
+                    label: label.into(),
+                })
+                .collect()
+        },
+    };
+    view.validate_for(owner, class, power).ok()?;
+    Some(view)
+}
+
+#[cfg(test)]
+#[path = "power_accounting_tests.rs"]
+mod accounting_tests;
 
 #[cfg(test)]
 mod tests {
@@ -125,7 +299,11 @@ mod tests {
                 .handle_at(
                     &mut session,
                     Request::Connect {
+                        supports_room_controls: false,
+                        world_layout_version: 1,
+                        supports_fleet_hangar: false,
                         supports_pioneer_interior: true,
+                        supports_docked_traversal_v2: false,
                         protocol_version: PROTOCOL_VERSION,
                         pilot: "PowerPilot".into(),
                         resume_token: None
@@ -188,6 +366,9 @@ mod tests {
             .handle_at(&mut session, Request::Snapshot, 500)
             .snapshot
             .unwrap();
-        assert_eq!(later.pilots[0].power.as_ref().unwrap().charge_j, 1600);
+        assert_eq!(
+            later.pilots[0].power.as_ref().unwrap().charge_j,
+            1600 - default_pioneer_exterior().load_w() / 2
+        );
     }
 }

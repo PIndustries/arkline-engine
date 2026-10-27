@@ -1,0 +1,363 @@
+{
+  "schema_version": 1,
+  "revision": "study-04",
+  "date_utc": "2026-10-15",
+  "status": "reviewable study; pending independent adoption review and native appearance; not engine-installed",
+  "source_base_commit": "3e415204747cd9adaa146a9777831a7acc82e7cb",
+  "integration_pull_request": "https://github.com/PIndustries/arkline-engine/pull/47",
+  "ownership_claim": "https://github.com/PIndustries/arkline-engine/issues/10#issuecomment-6195963159",
+  "original_source_sha256": "8ec754fc7afe6b67dcab6cbd6694bb04bdc03cc12e91ee96e0bca9e08bb24f6f",
+  "changes": [
+    "Extended visible green cladding over the evaluated outboard nacelles and fore/aft collars.",
+    "Connected frontal and side bridge glazing; lowered existing bow lamps below the glass.",
+    "Restored the upper centerline RCS ray surface to approximately Y=8.3 m with a transverse roof frame.",
+    "Replaced study 03's crossing corner fan with closed faceted bridge brow volumes."
+  ],
+  "artifacts": [
+    {
+      "path": "assets/ships/pioneer/studies/pioneer-study.blend",
+      "bytes": 497325,
+      "sha256": "772bf76aaf1416f28357e2f507963022c7c73b13fca58cb57e948e06761a7800"
+    },
+    {
+      "path": "assets/ships/pioneer/studies/pioneer-study.glb",
+      "bytes": 7664728,
+      "sha256": "bfb743f8c0bd5bb0dd23a5e58a7f6851ce142b5a7e1a57a3387902f584d0a279"
+    }
+  ],
+  "editable_source": {
+    "blender_version": "5.0.1",
+    "named_mesh_objects": 543,
+    "master_saved_before_batching": true,
+    "all_objects_unparented": true,
+    "authoritative_source": "pioneer-study.blend; preserve edits and export a derived copy"
+  },
+  "coordinates": {
+    "units": "metres",
+    "body_axes": {
+      "X": "forward",
+      "Y": "up",
+      "Z": "starboard"
+    },
+    "body_to_blender": [
+      "x",
+      "-z",
+      "y"
+    ],
+    "blender_to_body": [
+      "x",
+      "z",
+      "-y"
+    ],
+    "gltf_export_yup": true,
+    "declared_body_xyz_m": [
+      72,
+      18,
+      38
+    ],
+    "evaluated_source_min_m": [
+      -36.0,
+      -9.0,
+      -19.0
+    ],
+    "evaluated_source_max_m": [
+      36.0,
+      9.0,
+      19.0
+    ],
+    "turret_runtime_centers_body_m": [
+      [
+        10.8,
+        9.864,
+        -2.66
+      ],
+      [
+        10.8,
+        9.864,
+        2.66
+      ]
+    ],
+    "turret_support_y_m": 9,
+    "aft_drive_centers_body_m": [
+      [
+        -35.9,
+        0,
+        -12.5
+      ],
+      [
+        -35.9,
+        0,
+        12.5
+      ]
+    ],
+    "mount_note": "These retained gameplay registrations are not proof of mechanism clearance or interior fit."
+  },
+  "static_export_checks": {
+    "sha256": "bfb743f8c0bd5bb0dd23a5e58a7f6851ce142b5a7e1a57a3387902f584d0a279",
+    "bytes": 7664728,
+    "material_slots": [
+      "Graphite ceramic armor",
+      "Titanium machinery",
+      "Recessed carbon",
+      "Emerald structural frames",
+      "Drive emission",
+      "Working lights",
+      "Navigation glass",
+      "Safety amber",
+      "Hull identification ivory"
+    ],
+    "primitive_slots": [
+      3,
+      0,
+      6,
+      1,
+      2,
+      4,
+      5,
+      7,
+      8
+    ],
+    "mesh_count": 9,
+    "primitive_count": 9,
+    "triangles": 78246,
+    "expanded_corners": 234738,
+    "body_min_m": [
+      -36.000003814697266,
+      -9.0,
+      -19.00000035762787
+    ],
+    "body_max_m": [
+      35.999998569488525,
+      9.000000178813934,
+      19.0
+    ],
+    "body_xyz_m": [
+      72.00000238418579,
+      18.000000178813934,
+      38.00000035762787
+    ],
+    "bounds_match_72x18x38": true,
+    "centered_bounds": true,
+    "scope": "Read-only GLB structure, indexed bounds, finite normals and triangle/budget checks. This is not execution of the Rust decoder or GPU rendering.",
+    "indexed_body_min_m": [
+      -36.000003814697266,
+      -9.0,
+      -19.00000035762787
+    ],
+    "indexed_body_max_m": [
+      35.999998569488525,
+      9.000000178813934,
+      19.0
+    ],
+    "indexed_body_xyz_m": [
+      72.00000238418579,
+      18.000000178813934,
+      38.00000035762787
+    ],
+    "bounds_inspection_tolerance_m": 0.001,
+    "unused_position_rows": 0,
+    "nonfinite_positions_or_normals": 0,
+    "degenerate_triangles_at_cross_length_squared_le_1e_20": 0,
+    "maximum_normal_length_error": 1.389095685144781e-07,
+    "node_visits": 9,
+    "maximum_node_depth": 0,
+    "opaque_scalar_materials": true,
+    "limits": {
+      "file_bytes": 16777216,
+      "decoded_primitives": 128,
+      "triangles": 200000,
+      "material_batches_regression": 16,
+      "node_visits": 4096,
+      "node_depth": 32
+    }
+  },
+  "render": {
+    "engine": "CYCLES",
+    "device": "CPU",
+    "samples": 16,
+    "threads": 4,
+    "resolution": [
+      1200,
+      800
+    ],
+    "same_cameras_and_lighting_as_baseline": true,
+    "views": [
+      {
+        "view": "front",
+        "eye_body_m": [
+          120,
+          0,
+          0
+        ],
+        "target_body_m": [
+          0,
+          0,
+          0
+        ],
+        "ortho_scale": 88.0,
+        "path": "docs/ships/pioneer/images/model-study/front.png",
+        "bytes": 830761,
+        "sha256": "038bd9f18decb1d8a0a9a32f3e8e3b10d562fa6090b1e18472aecb8d3e675178"
+      },
+      {
+        "view": "side",
+        "eye_body_m": [
+          0,
+          0,
+          120
+        ],
+        "target_body_m": [
+          0,
+          0,
+          0
+        ],
+        "ortho_scale": 88.0,
+        "path": "docs/ships/pioneer/images/model-study/side.png",
+        "bytes": 877157,
+        "sha256": "0d33c94283288a4722849fce9b2d649e39e5d9a7a05d8942e77b1ba4db2e61ea"
+      },
+      {
+        "view": "top",
+        "eye_body_m": [
+          0,
+          120,
+          0
+        ],
+        "target_body_m": [
+          0,
+          0,
+          0
+        ],
+        "ortho_scale": 88.0,
+        "path": "docs/ships/pioneer/images/model-study/top.png",
+        "bytes": 1020471,
+        "sha256": "2d5aa52cb98dc6d39c64609627e7fbf6552624811c88abc70fcc28525bd9e33e"
+      },
+      {
+        "view": "quarter",
+        "eye_body_m": [
+          90,
+          60,
+          85
+        ],
+        "target_body_m": [
+          0,
+          0,
+          0
+        ],
+        "ortho_scale": 88.0,
+        "path": "docs/ships/pioneer/images/model-study/quarter.png",
+        "bytes": 1098480,
+        "sha256": "5f81d83df3f086e9ee38e9b8404497446910a0c8e8319a881c7925b6dfd8df8d"
+      }
+    ]
+  },
+  "provenance_worker_sha256": {
+    "study-worker.py": "4c0d3b70c99dc06b5c60db2a24e5bb5d828ecc33c30b007967a0ece5502f01c7",
+    "after-launcher.py": "ae568ad6adc814fe0070049c5258d6afd945b0577b1c1ae5785be38221de97fd",
+    "armor_volume.py": "8269989f1dbf01ab713fc3a54a3b61a0690e0eab31b7d114b67669d335fe84d1",
+    "canonicalize_glb.py": "d8360e3f08ded1888ddb04d9c89155c562b4a6121f08a1e6bee1ec4781724868",
+    "study-launcher.py": "ecd0042f3bdadc941b735ee571c6ebc96f8965a4b8b4f3b9efc1a02a673d009f"
+  },
+  "known_limits": [
+    "Broad gray brow/chin and repeated roof/service equipment still differ from v05.",
+    "A clean Blender view does not establish final model acceptance or in-engine appearance.",
+    "Study only: canonical game hull and exact-hash material default remain unchanged.",
+    "Static Blender renders omit the separate articulated gameplay mining turrets.",
+    "No working door, exterior light sequence, power connection, collision/interlock, interior registration or runtime animation is demonstrated.",
+    "Named editable mesh objects are preserved; no durable component IDs, semantic hierarchy or operational pivots are established.",
+    "Decorative lamps/emissive material do not establish actual illumination or a physical electrical/thermal simulation."
+  ],
+  "adoption_review_record": "https://github.com/PIndustries/arkline-engine/issues/10#issuecomment-6196169539",
+  "native_staging": {
+    "status": "not recorded for this revision"
+  },
+  "independent_static_and_visual_review": {
+    "reviewed_at_utc": "2026-10-15T15:52:07.254621+00:00",
+    "source_receipt_sha256": "752bd9a29f8f5a1b31ddf1bfc0bc61420439e244d283a35d286c65f1dec2442a",
+    "method": "Read-only NumPy float32 indexed default-scene transforms, normalized inverse-transpose normals and runtime ray conventions; compared with runtime source at the recorded base commit.",
+    "status": "static-pass",
+    "indexed_min_float32_m": [
+      -36.000003814697266,
+      -9,
+      -19
+    ],
+    "indexed_max_float32_m": [
+      36,
+      9,
+      19
+    ],
+    "source_normal_length_range": [
+      0.9999998807907104,
+      1.0000001192092896
+    ],
+    "transformed_normal_length_range": [
+      0.9999998807907104,
+      1.0000001192092896
+    ],
+    "degenerate_triangles": 0,
+    "minimum_cross_squared_scene": 4.533755430707218e-18,
+    "degenerate_cross_squared_scene_threshold": 1e-20,
+    "luminous_area_fraction": 0.0068013775162398815,
+    "luminous_area_fraction_limit": 0.12,
+    "turret_support_hit_points_m": [
+      [
+        10.800000190734863,
+        9,
+        -2.6600000858306885
+      ],
+      [
+        10.800000190734863,
+        9,
+        2.6600000858306885
+      ]
+    ],
+    "all_six_RCS_rays_hit": true,
+    "RCS_hit_points_m": {
+      "X+": [
+        35.96413040161133,
+        0,
+        0
+      ],
+      "X-": [
+        -36,
+        0,
+        0
+      ],
+      "Y+": [
+        0,
+        8.299982070922852,
+        0
+      ],
+      "Y-": [
+        0,
+        -9.000003814697266,
+        0
+      ],
+      "Z+": [
+        0,
+        0,
+        18.29814910888672
+      ],
+      "Z-": [
+        0,
+        0,
+        -18.298171997070312
+      ]
+    },
+    "views_inspected": [
+      "front",
+      "top",
+      "side",
+      "quarter"
+    ],
+    "bounded_brow_corner_cleanup": "pass",
+    "full_reference_fidelity": "not-established",
+    "limits": [
+      "Static validation is a read-only independent check, not execution of the Rust decoder.",
+      "No native GPU rendering, UI, full articulated swept-clearance, global intersection or watertightness proof was performed.",
+      "No model was edited or installed and no material graph hash was retargeted in this review.",
+      "New GLB hash adoption remains a reviewed source/material-binding operation; old-document mismatch rejection must remain."
+    ]
+  }
+}

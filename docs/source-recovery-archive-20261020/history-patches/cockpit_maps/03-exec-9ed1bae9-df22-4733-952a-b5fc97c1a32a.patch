@@ -1,0 +1,6 @@
+--- a/apps/client/src/cockpit_maps.rs
++++ b/apps/client/src/cockpit_maps.rs
+@@ -1199,2 +1199,3 @@
+             cockpit_vp: Mat4::IDENTITY,
++            cockpit_occlusion: None,
+             snapshot_time: 1000,

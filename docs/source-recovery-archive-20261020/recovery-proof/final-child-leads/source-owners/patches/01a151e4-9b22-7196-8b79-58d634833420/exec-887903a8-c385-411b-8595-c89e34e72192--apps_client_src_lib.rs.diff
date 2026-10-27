@@ -1,0 +1,7 @@
+@@ -6,2 +6,6 @@
+ #[cfg(not(target_arch = "wasm32"))]
++mod part_gizmo;
++#[cfg(not(target_arch = "wasm32"))]
++pub use part_gizmo::{PartAttentionKind, PartPreviewAttention, PartPreviewOptions, PartPreviewResponse, PartTransformActivity, PartTransformAxis, PartTransformEvent, PartTransformPhase, PartTransformTool};
++#[cfg(not(target_arch = "wasm32"))]
+ pub use flight3d::pioneer_parts::{

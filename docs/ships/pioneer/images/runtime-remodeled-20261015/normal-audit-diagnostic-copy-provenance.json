@@ -1,0 +1,9 @@
+{
+  "original_script_sha256": "830cb3ad80d5066499e0d4d5c4b57f79165b632600f0bfbfed699b0aeed545ce",
+  "candidate_script_sha256": "5cf2dc705806e5cb3f7769255b674143965181c83842167f9c37f160080539c6",
+  "only_changes": {
+    "OUT = Path('/workspace/arkline-runtime/correspondence-cloud-20261015')": "OUT = Path('/workspace/arkline-runtime/pioneer-mount-visual-audit/candidate-normal-audit-v2')",
+    "GLB = ROOT / 'assets/ships/pioneer/studies/pioneer-study.glb'": "GLB = Path('/workspace/arkline-runtime/export-candidate-v2/pioneer.glb')",
+    "bfb743f8c0bd5bb0dd23a5e58a7f6851ce142b5a7e1a57a3387902f584d0a279": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a"
+  }
+}

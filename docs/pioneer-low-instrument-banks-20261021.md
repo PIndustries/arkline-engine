@@ -1,0 +1,21 @@
+# Low instrument bank checkpoint
+
+The original strict five-drone mining composition check failed because the inner edges of both upper side displays entered the unchanged protected forward region by about 6 px at a 1500x826 viewport. Diagnostic capture now saves actual pixels and per-display bounds before assertions, so failed evidence is retained. The protected region and area/visibility assertions are unchanged.
+
+All four side screens move 40 mm outboard in the canonical protocol geometry. Their size, live roles, projection/input frame, camera, seat and source GLB are unchanged. Upper inner edges move from normalized x0.3340/0.6660 to x0.3149/0.6851, leaving about23px margin outside the same x0.33..0.67 region. The center display remains low. All five surfaces and every opaque console housing, support and bezel now clear the same protected region. The original face assertion remains unchanged; a stronger additional projected-solid check records every component and rejects any intrusion. All five surfaces pass the original strict mining-view assertion; actual docked/space/external/3D/return parity is covered by that same native fixture.
+
+Side mounts and housing inboard edges also stay outboard of the protected center; face clearance alone is not treated as complete console clearance. Connected side instrument housings, dividers, crowns and low pedestals now use existing canonical Carbon/Graphite/Titanium solids. The central knee/foot well and footrest remain open. No renderer, camera initialization, shared cargo adapter or original asset edit was needed. These are independently scoped cockpit geometry changes; denied cargo, lighting/shadow, walking and console operations remain untouched.
+
+The compact physical screen now shows real flight mode/speed, confirmed capacitor/reactor readings, the active owned mining routine (otherwise latest terminal result), delivered goal, hold contents and deployed drones. It reuses shared phase labels and existing actions. Live-age status no longer relies on frozen presentation time. No new hardware interface, remote display endpoint or listener was added. Stable instrument/action contracts for physical cockpit users remain architecture work, not a shipped capability.
+
+Focused checks: leg-well clearance through seat transition; rear-chair circulation; existing seat exit/boarding route; actual secondary-canvas fit/current-job selection; current saved-world copy open with exact world/fullledger/editorclock preservation except the same three normal actuator sample-clock refreshes. Strict initial byte-world comparison exposed those known refreshes; the final check permits only those exact fields and compares every other value and fullledger. No avatar relocation, world migration or registration change.
+
+Actual native captures are retained in .build/evidence/pioneer-low-banks-opaque-acceptance-20261021. They use an isolated ordinary five-drone mining authority, not the user world. Native CGL logged its existing unloadable-texture warning once; the check and inspected screenshots completed successfully. No GPU performance or acoustic acceptance claim. Full-size OS acceptance remains unavailable through the small angled desktop capture surface.
+
+This is a first physical console milestone, not final reference-quality interior acceptance. Remaining visual gaps include refined construction detail, angled peripheral display frames (which require coordinated geometry/input/occlusion support), original canopy/bridge architecture and actual-size typography across varied viewport sizes. Hardware/multi-monitor mapping and physical cargo authority remain unimplemented.
+
+Actual current geometry, isolated native authority (not conceptual or live OS capture):
+
+![Docked console banks](ships/pioneer/images/low-instrument-banks-20261021/docked-forward.png)
+
+![Five-drone mining and clear forward view](ships/pioneer/images/low-instrument-banks-20261021/belt-mining-forward.png)

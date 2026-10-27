@@ -48,7 +48,11 @@ fn full_formations_clear_every_hull_at_pitch_and_preserve_first_spawn_scale() {
             &mut s,
             &mut p,
             Request::Connect {
+                supports_room_controls: false,
+                world_layout_version: 1,
+                supports_fleet_hangar: false,
                 supports_pioneer_interior: true,
+                supports_docked_traversal_v2: false,
                 protocol_version: PROTOCOL_VERSION,
                 pilot: "Formation".into(),
                 resume_token: None,
@@ -97,7 +101,11 @@ fn full_formations_clear_every_hull_at_pitch_and_preserve_first_spawn_scale() {
                 pilot.drones[0].position,
                 pilot.flight.as_ref().unwrap().position,
             );
-            assert!((first_distance - 148.246416483).abs() < 0.01);
+            // Registration11 retains the launch rule (100m beyond the bow,
+            // 50m above the conservative half-height), while the raised canopy
+            // changes Pioneer's symmetric envelope from18m to22.8m.
+            let expected = 136.0_f64.hypot(61.4);
+            assert!((first_distance - expected).abs() < 0.01);
         }
     }
 }
@@ -109,7 +117,11 @@ fn recalled_middle_slot_is_reused_without_overlap_and_first_mirror_tracks_remova
         &mut s,
         &mut p,
         Request::Connect {
+            supports_room_controls: false,
+            world_layout_version: 1,
+            supports_fleet_hangar: false,
             supports_pioneer_interior: true,
+            supports_docked_traversal_v2: false,
             protocol_version: PROTOCOL_VERSION,
             pilot: "Slots".into(),
             resume_token: None,

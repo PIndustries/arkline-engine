@@ -1,0 +1,629 @@
+{
+  "schema_version": 1,
+  "at_utc": "2026-10-20T12:25:35.315333+00:00",
+  "status": "LOCAL_NATIVE_OS_ACCEPTANCE_PASS",
+  "runtime_build": "26.10.20.7",
+  "runtime_source_head": "cbf48c5cd09a97389d0260c79a09fbac63089f48",
+  "source_checkpoint_before_acceptance_docs": "ef53ed6168e856975edb955c10efafc51fec103b",
+  "running_pid": 64207,
+  "project": "/tmp/arkline-physical-native-osqa-20261020",
+  "pilot": "DockedOSQA",
+  "world_layout": "orbital_v1",
+  "fleet_layout": "circular_v1",
+  "registration_revision": 1,
+  "host_vessel_id": "v1:DockedOSQA:Pioneer",
+  "body_to_station_translation_m": [
+    0,
+    13,
+    25
+  ],
+  "body_yaw_rad": 0,
+  "evidence_directory": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-docked-fixed-20261020/native-os-acceptance",
+  "final_running_identity": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-docked-fixed-20261020/native-os-acceptance/final-running-identity.json",
+  "app_swap_receipts": [
+    "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-docked-fixed-20261020/app-swap-ordinary-quit-receipt.json",
+    "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-docked-fixed-20261020/native-os-acceptance/fresh-docked-launch-receipt.json"
+  ],
+  "audit_path": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-docked-fixed-20261020/native-os-acceptance/images-final-audit.json",
+  "audit_sha256": "09d35cdb2cedc629736f85d6f16e7ef1cd9d775b5b6fe7f01782aa71ac073780",
+  "image_summary": {
+    "added_after_prior_audit": [
+      "os-final-accepted-paused.png",
+      "os-physical-computer-corp-playing.png",
+      "os-physical-computer-corp.png",
+      "os-physical-computer-typed.png",
+      "os-physical-text-focus-blurred.png",
+      "os-physical-text-focus-headlook-blocked.png",
+      "os-physical-text-focus-pointer-away.png",
+      "os-seated-headlook-positive.png",
+      "os-seated-paused.png",
+      "os-seated-resumed-focus-check.png"
+    ],
+    "all_unchanged_during_read": true,
+    "count": 67,
+    "decode_failures": 0,
+    "decode_ok": 67,
+    "dimensions": {
+      "3000x1984": 67
+    }
+  },
+  "os_actions": {
+    "command_counts": {
+      "activate": 2,
+      "capture": 11,
+      "hold": 5,
+      "look": 7,
+      "move": 2,
+      "ui-click": 33,
+      "ui-drag": 1,
+      "ui-pan": 1,
+      "ui-scroll": 1,
+      "ui-search": 4
+    },
+    "first_at_utc": "2026-10-20T11:44:39.113164+00:00",
+    "last_at_utc": "2026-10-20T12:22:00.133880+00:00",
+    "parse_errors": [],
+    "pids": [
+      64207
+    ],
+    "return_code_counts": {
+      "0": 67
+    },
+    "valid_rows": 67
+  },
+  "walking_driver_holds": {
+    "completed": 344,
+    "return_code_counts": {
+      "0": 344
+    }
+  },
+  "walk_terminal_counts": {
+    "completed": 14,
+    "stopped": 3
+  },
+  "walks": [
+    {
+      "elapsed_seconds": 1.742701,
+      "file": "osqa-walk-cockpit-centre-20261020T115616048320Z-6c9aa0e8.jsonl",
+      "final_feet_station_m": [
+        34.339999999999996,
+        12.68,
+        24.999999999999957
+      ],
+      "final_grounded": true,
+      "final_moving": false,
+      "final_support": "cockpit",
+      "parse_errors": [],
+      "reason": null,
+      "terminal_event": "completed",
+      "total_steps": 2,
+      "valid_rows": 14
+    },
+    {
+      "elapsed_seconds": 22.141445,
+      "file": "osqa-walk-cockpit-return-to-pilot-seat-20261020T121747424692Z-35282e35.jsonl",
+      "final_feet_station_m": [
+        34.422842712474626,
+        12.68,
+        27.979898987322326
+      ],
+      "final_grounded": true,
+      "final_moving": false,
+      "final_support": "cockpit",
+      "parse_errors": [],
+      "reason": null,
+      "terminal_event": "completed",
+      "total_steps": 24,
+      "valid_rows": 106
+    },
+    {
+      "elapsed_seconds": 5.42732,
+      "file": "osqa-walk-inner-hatch-through-vestibule-20261020T120859816621Z-0d6507c6.jsonl",
+      "final_feet_station_m": [
+        32.52578643762683,
+        12.68,
+        15.785786437626754
+      ],
+      "final_grounded": true,
+      "final_moving": false,
+      "final_support": "connector",
+      "parse_errors": [],
+      "reason": null,
+      "terminal_event": "completed",
+      "total_steps": 6,
+      "valid_rows": 32
+    },
+    {
+      "elapsed_seconds": 9.769879,
+      "file": "osqa-walk-outer-hatch-to-lift-20261020T120938232414Z-c8a63f80.jsonl",
+      "final_feet_station_m": [
+        34.48142135623731,
+        12.68,
+        13.347308806541736
+      ],
+      "final_grounded": true,
+      "final_moving": false,
+      "final_support": "boarding_lift",
+      "parse_errors": [],
+      "reason": null,
+      "terminal_event": "completed",
+      "total_steps": 11,
+      "valid_rows": 52
+    },
+    {
+      "elapsed_seconds": 5.350316,
+      "file": "osqa-walk-return-inner-to-cockpit-20261020T121657451370Z-39d7240a.jsonl",
+      "final_feet_station_m": [
+        34.13999999999999,
+        12.68,
+        17.29705627484756
+      ],
+      "final_grounded": true,
+      "final_moving": false,
+      "final_support": "cockpit",
+      "parse_errors": [],
+      "reason": null,
+      "terminal_event": "completed",
+      "total_steps": 6,
+      "valid_rows": 32
+    },
+    {
+      "elapsed_seconds": 9.756251,
+      "file": "osqa-walk-return-outer-to-vestibule-20261020T121548355280Z-24cb48f4.jsonl",
+      "final_feet_station_m": [
+        32.584365081389514,
+        12.68,
+        15.741421356237158
+      ],
+      "final_grounded": true,
+      "final_moving": false,
+      "final_support": "connector",
+      "parse_errors": [],
+      "reason": null,
+      "terminal_event": "completed",
+      "total_steps": 11,
+      "valid_rows": 52
+    },
+    {
+      "elapsed_seconds": 38.336214,
+      "file": "osqa-walk-stairs-both-flights-up-20261020T120631808818Z-0e994844.jsonl",
+      "final_feet_station_m": [
+        -7.260000000000215,
+        12.68,
+        24.999999999999957
+      ],
+      "final_grounded": true,
+      "final_moving": false,
+      "final_support": "deck2",
+      "parse_errors": [],
+      "reason": null,
+      "terminal_event": "completed",
+      "total_steps": 41,
+      "valid_rows": 184
+    },
+    {
+      "elapsed_seconds": 5.530284,
+      "file": "osqa-walk-stairs-lower-entry-sampled-20261020T120601109384Z-0a00e741.jsonl",
+      "final_feet_station_m": [
+        -11.060000000000201,
+        8.879999999999999,
+        23.79999999999994
+      ],
+      "final_grounded": true,
+      "final_moving": false,
+      "final_support": "deck1",
+      "parse_errors": [],
+      "reason": null,
+      "terminal_event": "completed",
+      "total_steps": 6,
+      "valid_rows": 33
+    },
+    {
+      "elapsed_seconds": 28.017411,
+      "file": "osqa-walk-stairs-lower-flight-down-20261020T120429780261Z-92d31a5d.jsonl",
+      "final_feet_station_m": [
+        -7.260000000000215,
+        8.879999999999999,
+        24.999999999999957
+      ],
+      "final_grounded": true,
+      "final_moving": false,
+      "final_support": "deck1",
+      "parse_errors": [],
+      "reason": null,
+      "terminal_event": "completed",
+      "total_steps": 30,
+      "valid_rows": 135
+    },
+    {
+      "elapsed_seconds": 12.147047,
+      "file": "osqa-walk-stairs-lower-flight-return-entry-20261020T120514154589Z-8136ba60.jsonl",
+      "final_feet_station_m": [
+        -10.201421356237514,
+        8.879999999999999,
+        24.141421356237252
+      ],
+      "final_grounded": true,
+      "final_moving": false,
+      "final_support": "deck1",
+      "parse_errors": [],
+      "reason": "three bounded bursts made no authority progress toward target; inspect focus, pause, collision and input ownership",
+      "terminal_event": "stopped",
+      "total_steps": 13,
+      "valid_rows": 58
+    },
+    {
+      "elapsed_seconds": 25.118774,
+      "file": "osqa-walk-stairs-upper-flight-down-20261020T120340522227Z-a6bddcfe.jsonl",
+      "final_feet_station_m": [
+        -8.860000000000209,
+        11.16,
+        18.999999999999872
+      ],
+      "final_grounded": true,
+      "final_moving": false,
+      "final_support": "core_stairs",
+      "parse_errors": [],
+      "reason": null,
+      "terminal_event": "completed",
+      "total_steps": 27,
+      "valid_rows": 120
+    },
+    {
+      "elapsed_seconds": 26.451496,
+      "file": "osqa-walk-station-approach-continue-20261020T121236688724Z-4d7a1431.jsonl",
+      "final_feet_station_m": [
+        42.825281374238976,
+        0.0,
+        2.603448788540497
+      ],
+      "final_grounded": true,
+      "final_moving": false,
+      "final_support": "station",
+      "parse_errors": [],
+      "reason": null,
+      "terminal_event": "completed",
+      "total_steps": 29,
+      "valid_rows": 124
+    },
+    {
+      "elapsed_seconds": 30.163645,
+      "file": "osqa-walk-station-return-to-lift-20261020T121324027273Z-c1c03ab6.jsonl",
+      "final_feet_station_m": [
+        34.48142135623731,
+        0.0,
+        13.195836943965592
+      ],
+      "final_grounded": true,
+      "final_moving": false,
+      "final_support": "boarding_lift",
+      "parse_errors": [],
+      "reason": null,
+      "terminal_event": "completed",
+      "total_steps": 33,
+      "valid_rows": 142
+    },
+    {
+      "elapsed_seconds": 8.945167,
+      "file": "osqa-walk-station-walk-off-lift-20261020T121200660750Z-034715f9.jsonl",
+      "final_feet_station_m": [
+        35.32994949366121,
+        0.0,
+        12.098780669117883
+      ],
+      "final_grounded": true,
+      "final_moving": false,
+      "final_support": "station",
+      "parse_errors": [],
+      "reason": "position repeated four times outside target tolerance; stopped to avoid oscillation",
+      "terminal_event": "stopped",
+      "total_steps": 10,
+      "valid_rows": 44
+    },
+    {
+      "elapsed_seconds": 4.308029,
+      "file": "osqa-walk-upper-corridor-20261020T115652492660Z-97dafe3b.jsonl",
+      "final_feet_station_m": [
+        33.539999999999985,
+        12.68,
+        24.999999999999957
+      ],
+      "final_grounded": true,
+      "final_moving": false,
+      "final_support": "connector",
+      "parse_errors": [],
+      "reason": "three bounded bursts made no authority progress toward target; inspect focus, pause, collision and input ownership",
+      "terminal_event": "stopped",
+      "total_steps": 5,
+      "valid_rows": 24
+    },
+    {
+      "elapsed_seconds": 41.513447,
+      "file": "osqa-walk-upper-corridor-sampled-20261020T120239443550Z-6feff575.jsonl",
+      "final_feet_station_m": [
+        -7.260000000000215,
+        12.68,
+        24.999999999999957
+      ],
+      "final_grounded": true,
+      "final_moving": false,
+      "final_support": "deck2",
+      "parse_errors": [],
+      "reason": null,
+      "terminal_event": "completed",
+      "total_steps": 37,
+      "valid_rows": 161
+    },
+    {
+      "elapsed_seconds": 55.86893,
+      "file": "osqa-walk-upper-return-inner-hatch-20261020T120721646751Z-a1695ff6.jsonl",
+      "final_feet_station_m": [
+        34.13999999999999,
+        12.68,
+        17.199999999999847
+      ],
+      "final_grounded": true,
+      "final_moving": false,
+      "final_support": "cockpit",
+      "parse_errors": [],
+      "reason": null,
+      "terminal_event": "completed",
+      "total_steps": 53,
+      "valid_rows": 231
+    }
+  ],
+  "lift_rides": [
+    {
+      "expected_target": "station",
+      "file": "osqa-lift-actual-os-lift-down-station-20261020T121103081374Z-589485ffb147.jsonl",
+      "moving_observations": 122,
+      "observations": 135,
+      "parse_errors": [],
+      "result": {
+        "at_utc": "2026-10-20T12:11:17.167231+00:00",
+        "binding_unchanged": true,
+        "elapsed_seconds": 14.085499,
+        "event": "completed",
+        "expected_floor_station_m": 0.0,
+        "expected_target": "station",
+        "first_floor_station_m": 12.68,
+        "grounded_boarding_lift_through_observed_ride": true,
+        "max_observed_feet_floor_error_m": 7.91033905045424e-16,
+        "moving_samples": 122,
+        "moving_started_after_seconds": 1.266526,
+        "observed_feet_station_m": [
+          34.48142135623731,
+          0.0,
+          13.347308806541736
+        ],
+        "observed_stop_floor_station_m": 0.0,
+        "output_jsonl": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-docked-fixed-20261020/native-os-acceptance/osqa-lift-actual-os-lift-down-station-20261020T121103081374Z-589485ffb147.jsonl",
+        "sample_count": 135,
+        "saw_moving_before_stop": true
+      },
+      "state_helper_sha256": "ab993bcc08b8904d6d98c5e51b82b34f24d9e840b0c9f07b820596e0ed6bf49b",
+      "terminal_event": "completed"
+    },
+    {
+      "expected_target": "ship",
+      "file": "osqa-lift-actual-os-lift-up-ship-20261020T121426459867Z-7b33ee14b7b9.jsonl",
+      "moving_observations": 121,
+      "observations": 133,
+      "parse_errors": [],
+      "result": {
+        "at_utc": "2026-10-20T12:14:40.368154+00:00",
+        "binding_unchanged": true,
+        "elapsed_seconds": 13.907927,
+        "event": "completed",
+        "expected_floor_station_m": 12.68,
+        "expected_target": "ship",
+        "first_floor_station_m": 0.0,
+        "grounded_boarding_lift_through_observed_ride": true,
+        "max_observed_feet_floor_error_m": 8.326672684688674e-16,
+        "moving_samples": 121,
+        "moving_started_after_seconds": 1.141035,
+        "observed_feet_station_m": [
+          34.48142135623731,
+          12.68,
+          13.195836943965592
+        ],
+        "observed_stop_floor_station_m": 12.68,
+        "output_jsonl": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/pioneer-docked-fixed-20261020/native-os-acceptance/osqa-lift-actual-os-lift-up-ship-20261020T121426459867Z-7b33ee14b7b9.jsonl",
+        "sample_count": 133,
+        "saw_moving_before_stop": true
+      },
+      "state_helper_sha256": "ab993bcc08b8904d6d98c5e51b82b34f24d9e840b0c9f07b820596e0ed6bf49b",
+      "terminal_event": "completed"
+    }
+  ],
+  "model_checks": [
+    "Source-parts filter 686 of 797; clear filters 797 of 797",
+    "Pressure hull 4398 triangles, glazing 12 triangles, fastener 108 triangles",
+    "Actual search, selection, orbit, pan, wheel, Fit, Reset, isolate/context, Focus piece and Fit ship"
+  ],
+  "model_authority_invariance": {
+    "at_utc": "2026-10-20T11:48:56.104132+00:00",
+    "avatar_present": false,
+    "clock_ms": 1792496361159,
+    "fleet_hangar": true,
+    "location": {
+      "kind": "docked"
+    },
+    "model_viewer_did_not_change_authority": true,
+    "pilot": "DockedOSQA",
+    "scene_layout": "orbital_v1",
+    "ship_class": "pioneer",
+    "v2": null,
+    "v2_compatible": true,
+    "world_sha256": "5deb80b40181f3a67f81303f2dbd44be65140706607c8faf7be2b464f6970cef"
+  },
+  "physical_journey": [
+    "Leave pilot seat through actual visible UI",
+    "Cockpit to connector and complete upper corridor",
+    "Both stair flights down: 12.68 to 11.16 to 8.88 metres",
+    "Both stair flights back up to 12.68 metres",
+    "Inner hatch opened, crossed and closed; outer hatch opened, crossed and closed",
+    "Boarding lift actual OS call to station at 0 metres",
+    "Off-lift station approach and clear-floor endpoint [42.825281, 0, 2.603449]",
+    "Station return and actual OS lift call to ship at 12.68 metres",
+    "Outer and inner hatch return; both secured",
+    "Continuous cockpit return and Take pilot seat; avatar absent afterward"
+  ],
+  "input_checks": {
+    "blocked_geometry_exact_match": true,
+    "blocked_headlook": {
+      "after": "os-physical-text-focus-headlook-blocked.png",
+      "after_rgb_sha256": "82a384d4ec39e93dffd0332d52ee8ecb09e03ff9e65a9d05b99dc498d929fade",
+      "before": "os-physical-text-focus-pointer-away.png",
+      "before_rgb_sha256": "82a384d4ec39e93dffd0332d52ee8ecb09e03ff9e65a9d05b99dc498d929fade",
+      "changed_pixels": 0,
+      "maximum_channel_change": 0,
+      "mean_absolute_channel_change": 0.0,
+      "pixels": 550000,
+      "roi_px_xyxy_top_left": [
+        1000,
+        500,
+        2100,
+        1000
+      ]
+    },
+    "final_paused_capture": "os-final-accepted-paused.png",
+    "geometry_roi_description": "Fixed physical screenshot pixels containing upper canopy/background structural geometry; excludes physical computer text, inspector, status/footer and pointer",
+    "physical_computer_text_region": {
+      "after": "os-physical-text-focus-headlook-blocked.png",
+      "after_rgb_sha256": "5059a1b2108fe9fa673ad50d0fb1a65d6599307cc442ddcbca9a6523e4b27eb5",
+      "before": "os-physical-text-focus-pointer-away.png",
+      "before_rgb_sha256": "6e0b34bf95be6897e66c4ccbc745fcca1aec0b6b97dc87a2db247cdf8a2c7e1c",
+      "changed_pixels": 150,
+      "maximum_channel_change": 53,
+      "mean_absolute_channel_change": 0.08925154320987655,
+      "pixels": 43200,
+      "roi_px_xyxy_top_left": [
+        910,
+        1360,
+        1450,
+        1440
+      ]
+    },
+    "positive_geometry_changes": true,
+    "positive_headlook_after_blur": {
+      "after": "os-seated-headlook-positive.png",
+      "after_rgb_sha256": "28f1f0d83b95ea4825ddf5920c59de6015d0f76ca8a886b79070a27fd10f71b9",
+      "before": "os-physical-text-focus-blurred.png",
+      "before_rgb_sha256": "82a384d4ec39e93dffd0332d52ee8ecb09e03ff9e65a9d05b99dc498d929fade",
+      "changed_pixels": 549572,
+      "maximum_channel_change": 145,
+      "mean_absolute_channel_change": 29.203263636363637,
+      "pixels": 550000,
+      "roi_px_xyxy_top_left": [
+        1000,
+        500,
+        2100,
+        1000
+      ]
+    },
+    "text_was_not_submitted": true,
+    "typed_fixture_text": "NativeFocusQA"
+  },
+  "input_authority_invariance": {
+    "authority_world_unchanged_during_physical_computer_typing_focus_checks": true,
+    "before": {
+      "at_utc": "2026-10-20T12:18:44.539484+00:00",
+      "pilot": "DockedOSQA",
+      "clock_ms": 1792498115459,
+      "world_sha256": "7d729769995b08cd5cf3c85805ed326ee161718271b1769877cc289e70d0d153",
+      "location": {
+        "kind": "docked"
+      },
+      "ship_class": "pioneer",
+      "scene_layout": "orbital_v1",
+      "fleet_hangar": true,
+      "v2_compatible": true,
+      "avatar_present": false,
+      "v2": null,
+      "label": "roundtrip-reseated-os"
+    },
+    "after": {
+      "at_utc": "2026-10-20T12:22:00.172123+00:00",
+      "pilot": "DockedOSQA",
+      "clock_ms": 1792498225059,
+      "world_sha256": "7d729769995b08cd5cf3c85805ed326ee161718271b1769877cc289e70d0d153",
+      "location": {
+        "kind": "docked"
+      },
+      "ship_class": "pioneer",
+      "scene_layout": "orbital_v1",
+      "fleet_hangar": true,
+      "v2_compatible": true,
+      "avatar_present": false,
+      "v2": null,
+      "label": "accepted-seated-final-paused"
+    },
+    "clock_note": "Simulation clock advanced while playing; this assertion compares the persisted authority world payload, not the independent editor clock."
+  },
+  "final_state": {
+    "at_utc": "2026-10-20T12:22:00.172123+00:00",
+    "pilot": "DockedOSQA",
+    "clock_ms": 1792498225059,
+    "world_sha256": "7d729769995b08cd5cf3c85805ed326ee161718271b1769877cc289e70d0d153",
+    "location": {
+      "kind": "docked"
+    },
+    "ship_class": "pioneer",
+    "scene_layout": "orbital_v1",
+    "fleet_hangar": true,
+    "v2_compatible": true,
+    "avatar_present": false,
+    "v2": null,
+    "label": "accepted-seated-final-paused"
+  },
+  "pause_policy": "Physical computer input is intentionally disabled while embedded_paused; playing Corp navigation and typing succeeded. Headlook/text ownership was checked while playing.",
+  "permission_boundary": {
+    "documents_granted": false,
+    "allow_attempt_executed": false,
+    "automatic_approval_rejection": "Persistent whole-Documents access is broader than close/reopen authorization; explicit approval needed for that grant.",
+    "safe_alternative": "Clicked exact Don\u2019t Allow, ordinarily quit the blocked own candidate, relaunched same signed package on fresh disposable /tmp project. No subsequent Documents grant attempted."
+  },
+  "controller_precision_stops": [
+    "27.3ms holds missed sampled input at connector convenience waypoint; helper minimum50ms and zero-progress75/100ms retries",
+    "Small residual axis caused diagonal waypoint overshoot; helper minor-axis threshold9cm while arrivaltolerance remains12cm",
+    "Stationcall convenience waypoint oscillated at13cm error; actual station support established and continued along registered approach"
+  ],
+  "helper_provenance": {
+    "arkline-physical-os-ui-driver-20261020.swift": {
+      "sha256": "2d2f429988ddc60828f8f49d80d5840a5a0e26bf7748154bf37bdcfea6ef48ed",
+      "bytes": 17239
+    },
+    "arkline-os-action-20261020.py": {
+      "sha256": "2f2647de2f3408a76afec3cd6d7c57288bcf96dc56d65d1a5cf84c85973fb29b",
+      "bytes": 818
+    },
+    "arkline-osqa-walk-controller-20261020.py": {
+      "sha256": "dec8fc4282636ab15591ba5c27820b524bbbebae5571fed9342eb18d5fe14943",
+      "bytes": 19618
+    },
+    "arkline-read-osqa-state-20261020.py": {
+      "sha256": "ab993bcc08b8904d6d98c5e51b82b34f24d9e840b0c9f07b820596e0ed6bf49b",
+      "bytes": 1383
+    },
+    "arkline-osqa-lift-observer-20261020.py": {
+      "sha256": "fe572e8ce4089f53c1c84aed74abf4130e3e915a7199224c68853b7ed4c2fdf8",
+      "bytes": 11878
+    }
+  },
+  "lift_observer_provenance": {
+    "first_downride_loaded_helper_sha256": "6b0d913db5ff8de30257661a7dfb4ee5248d2b0867932befff34e4d6612ec96b",
+    "upward_current_helper_sha256": "fe572e8ce4089f53c1c84aed74abf4130e3e915a7199224c68853b7ed4c2fdf8",
+    "difference": "Later helper adds actual world orbital_v1 and fleet_hangar guards. Downride preflight separately verified both. No active input helper was changed."
+  },
+  "limits": [
+    "One fresh owned Pioneer in circular fleet at yaw0; no rotated multi-vessel OS journey claimed.",
+    "67 saved window images and sampled authority observations do not establish every rendered or25msauthorityframe. Lift observation is10Hz; seat animation endpoint evidence only.",
+    "Three keyboard convenience-waypoint stops were bounded and preserved; no runtime source repair was needed during OSacceptance.",
+    "Two vestibule headlookcaptures had pointer overUI and do not prove door-facing visualstates; explicit privateGPU hatch images remain separate.",
+    "OS computer window-focus-loss and resize checks were not repeated; GPU focus/layer tests remain separate.",
+    "Importer/material save/export, all686individual OS selections, middle-button-specific pan, browserGPU andLinuxCI not covered by this desktop run. Prior nativeGPU import/material regressions remain separate.",
+    "Local ad-hoc debug build; no publication or published exact-head CI implied.",
+    "No file moving/deletion, external-drive/MOVESPEED writes, upload, push, PR/issue/project mutation, merge, release, deployment or user-project modification."
+  ]
+}

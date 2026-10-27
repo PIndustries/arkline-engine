@@ -16,17 +16,17 @@ This archive documents how Arkline's ships are being designed. It is a review sp
 
 The archive includes every ship concept produced for this design discussion: 31 unique images across seven classes. Each ship page separates the latest interior review from superseded exterior and holographic studies. Earlier versions intentionally remain visible, including rejected drills, colors, brand marks and inaccurate status annotations. They are historical proposals, not specifications.
 
-The latest review images introduce top/side views, interior zoning, human-scale rooms, power reserves and holographic displays. The [design reference](design-reference.md) records source-backed prototype values and proposed dimensions. The [gap register](gaps.md) distinguishes current station walking from unimplemented shipboard interiors. The [systems reference](systems-reference.md) expands power, data, RF, water, air and cooling connections as proposed designs.
+The latest review images introduce top/side views, interior zoning, human-scale rooms, power reserves and holographic displays. The [design reference](design-reference.md) records source-backed prototype values and proposed dimensions. The [gap register](gaps.md) records station walking and the original shipboard-interior proposals. The [systems reference](systems-reference.md) expands power, data, RF, water, air and cooling connections as proposed designs.
 
 ## Numerical authority
 
 Source definitions win for current gameplay. Per-ship JSON files capture those values and explicitly proposed coordinate reservations. Vector drawings visualize the JSON; raster illustrations are art direction only. A drawing labeled with meters is not proof that its painted proportions match those meters. No delivered plan has passed hull-mesh fit, navmesh, egress or in-game collision acceptance.
 
-Current station avatars are 1.8 m tall and are blocked from entering the ship hull. Full interior navigation, doors/lifts, distributed power, fluid systems and model import remain implementation work. Large ships' human cores are detailed initial reservations, not an exhaustive design of every industrial compartment.
+Pioneer has two walkable docked decks in merged source. The development branch adds connected airlock equipment and native editor tools. Other ships' interior layouts and distributed utilities remain design proposals. See [Pioneer](pioneer/README.md) for implementation status and remaining hull-registration work.
 
 ## Storage and contribution workflow
 
-Repository images are compressed, full-resolution JPEG documentation previews; original PNGs remain in the downloadable review archive. This avoids adding production model packs or Git LFS to the code repository. [The image manifest](image-manifest.json) records every original and preview hash.
+The original concept-image collection uses compressed, full-resolution JPEG documentation previews; original PNGs remain in the downloadable review archive. Later model and engine evidence may use other image formats. [The image manifest](image-manifest.json) records every original and preview hash.
 
 Keep future revisions under the appropriate ship's `images/` directory, preserve previous versions and record what changed. Update the matching JSON, SVG and gap register when a design changes. Prefer pull requests with one coherent design change and link relevant issues. Publish the reviewed index to the official Wiki so artists and players can browse it without needing a checkout.
 

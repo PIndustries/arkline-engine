@@ -77,8 +77,8 @@ def wait_for_server(proc, log_path, offset, timeout=5):
     raise AssertionError('local server startup timeout')
 
 
-def run(binary_dir):
-    receipt = {'stages': [], 'transport': 'isolated loopback TCP', 'tokens_logged': False}
+def run(binary_dir, local_development=False):
+    receipt = {'stages': [], 'transport': 'isolated loopback TCP', 'tokens_logged': False, 'identity_mode': 'local-development' if local_development else 'legacy'}
     started = time.monotonic()
     def stage(name, **facts):
         row = dict(stage=name, elapsed_seconds=round(time.monotonic()-started, 2), **facts)
@@ -93,7 +93,8 @@ def run(binary_dir):
             nonlocal proc
             log.flush()
             offset = (tmp/'server.log').stat().st_size
-            proc = subprocess.Popen([str(binary_dir/'arkline-server'), '--bind', '127.0.0.1:0', '--db', str(tmp/'world.sqlite')], stdout=log, stderr=log)
+            data_args = ['--local-development', str(tmp/'local-world')] if local_development else ['--db', str(tmp/'world.sqlite')]
+            proc = subprocess.Popen([str(binary_dir/'arkline-server'), '--bind', '127.0.0.1:0', *data_args], stdout=log, stderr=log)
             return wait_for_server(proc, tmp/'server.log', offset)
         try:
             port = start()
@@ -190,8 +191,9 @@ if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--binary-dir',type=Path,default=Path('target/debug'))
     parser.add_argument('--receipt',type=Path)
+    parser.add_argument('--local-development',action='store_true')
     args=parser.parse_args()
-    result=run(args.binary_dir.resolve())
+    result=run(args.binary_dir.resolve(), args.local_development)
     if args.receipt:
         args.receipt.parent.mkdir(parents=True,exist_ok=True)
         args.receipt.write_text(json.dumps(result,indent=2)+'\n')

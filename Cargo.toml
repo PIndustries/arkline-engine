@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/arkline-protocol", "apps/server", "apps/client", "apps/verifier", "apps/cli", "apps/asset-tool"]
+members = ["crates/arkline-protocol", "apps/server", "apps/client", "apps/verifier", "apps/cli", "apps/asset-tool", "apps/editor"]
 resolver = "2"
 
 [workspace.package]
@@ -11,7 +11,22 @@ license = "AGPL-3.0-only"
 [workspace.dependencies]
 arkline-protocol = { path = "crates/arkline-protocol" }
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde_json = { version = "1", features = ["float_roundtrip"] }
 sha2 = "0.10"
 hex = "0.4"
 anyhow = "1"
+
+# Keep interactive simulation/render preparation usable in development builds.
+# Debug assertions and overflow checks retain the development profile defaults.
+[profile.dev.package.arkline-client]
+opt-level = 1
+
+[profile.dev.package.arkline-protocol]
+opt-level = 1
+
+[profile.dev.package.arkline-server]
+opt-level = 1
+
+# Matrix inversion/transform kernels must not use unoptimized dependency code.
+[profile.dev.package.glam]
+opt-level = 3

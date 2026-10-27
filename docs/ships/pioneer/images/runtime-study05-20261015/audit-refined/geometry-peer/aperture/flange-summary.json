@@ -1,0 +1,1767 @@
+{
+  "source_sha256": "61eb70e1978668f5ca7256f237d9df14c47140b9bbbbce327875b68efcbe57c9",
+  "script_sha256": "78e8685014c6fe00d9b67c25d6882fd3e5811114588c389f7f281962bff85cbe",
+  "aperture_report_sha256": "dd87d79363aad53f32b0f6c9b42dbfd590d90515d7e9afce9aaa944d1602ae0d",
+  "meshes": 686,
+  "ray_count": 266,
+  "seating_ray_count": 128,
+  "seating_radii_m": [
+    3.0,
+    3.05,
+    3.1,
+    3.15
+  ],
+  "angle_count_per_radius_per_drive": 16,
+  "all_global_first_distances_agree_1e_4_m": true,
+  "all_seating_first_hits_are_rim": true,
+  "rim_front_x_range_body_m": [
+    -35.9900016784668,
+    -35.9900016784668
+  ],
+  "rim_back_x_range_body_m": [
+    -35.650001525878906,
+    -35.650001525878906
+  ],
+  "nearest_cap_floor_x_range_body_m": [
+    -35.630001068115234,
+    -35.630001068115234
+  ],
+  "back_to_floor_gap_range_m": [
+    0.020000457763671875,
+    0.020000457763671875
+  ],
+  "non_rim_flange_depth_intrusion_count": 0,
+  "rays_with_two_mutually_coincident_cap_floor_parts": 64,
+  "interpretation": "Sampled geometry clears rim/cap coplanarity: all tested r=3.00..3.15m rays meet the front rim first, with no other part surface through its thickness and a positive 20mm gap behind its back to the cap floor. Center rays still meet the retained closed emissive throat, so this is a real recess rather than an open-through tube. Hull/nacelle cap floors remain mutually coincident behind the flange in some rays; this audit does not claim all source coplanarity is eliminated.",
+  "scope_limit": "Finite two-sided ray samples on evaluated source geometry, not a global triangle-triangle intersection proof, runtime appearance test or engineering verification. Exact r=2.96m secondary edge hits retain the documented BVH precision ambiguity.",
+  "seating_records": [
+    {
+      "side": "port",
+      "sample": "flange_r3_angle0deg",
+      "radius_m": 3.0,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3_angle22.5deg",
+      "radius_m": 2.9999999999999996,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3_angle45deg",
+      "radius_m": 3.0,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3_angle67.5deg",
+      "radius_m": 3.0,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3_angle90deg",
+      "radius_m": 3.0,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3_angle112.5deg",
+      "radius_m": 2.9999999999999996,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3_angle135deg",
+      "radius_m": 3.0,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3_angle157.5deg",
+      "radius_m": 3.0,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3_angle180deg",
+      "radius_m": 3.0,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3_angle202.5deg",
+      "radius_m": 3.0,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3_angle225deg",
+      "radius_m": 3.0,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3_angle247.5deg",
+      "radius_m": 3.0,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3_angle270deg",
+      "radius_m": 3.0,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3_angle292.5deg",
+      "radius_m": 3.0,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3_angle315deg",
+      "radius_m": 2.9999999999999996,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3_angle337.5deg",
+      "radius_m": 3.0,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.05_angle0deg",
+      "radius_m": 3.05,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.05_angle22.5deg",
+      "radius_m": 3.05,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.05_angle45deg",
+      "radius_m": 3.05,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.05_angle67.5deg",
+      "radius_m": 3.05,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.05_angle90deg",
+      "radius_m": 3.05,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.05_angle112.5deg",
+      "radius_m": 3.05,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.05_angle135deg",
+      "radius_m": 3.05,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.05_angle157.5deg",
+      "radius_m": 3.0500000000000003,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.05_angle180deg",
+      "radius_m": 3.05,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.05_angle202.5deg",
+      "radius_m": 3.05,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.05_angle225deg",
+      "radius_m": 3.05,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.05_angle247.5deg",
+      "radius_m": 3.05,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.05_angle270deg",
+      "radius_m": 3.05,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.05_angle292.5deg",
+      "radius_m": 3.05,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.05_angle315deg",
+      "radius_m": 3.05,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.05_angle337.5deg",
+      "radius_m": 3.05,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.1_angle0deg",
+      "radius_m": 3.1,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.1_angle22.5deg",
+      "radius_m": 3.1,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.1_angle45deg",
+      "radius_m": 3.0999999999999996,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.1_angle67.5deg",
+      "radius_m": 3.1,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.1_angle90deg",
+      "radius_m": 3.1,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.1_angle112.5deg",
+      "radius_m": 3.1,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.1_angle135deg",
+      "radius_m": 3.0999999999999996,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.1_angle157.5deg",
+      "radius_m": 3.1000000000000005,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.1_angle180deg",
+      "radius_m": 3.1,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.1_angle202.5deg",
+      "radius_m": 3.1,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.1_angle225deg",
+      "radius_m": 3.1,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.1_angle247.5deg",
+      "radius_m": 3.1,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.1_angle270deg",
+      "radius_m": 3.1,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.1_angle292.5deg",
+      "radius_m": 3.1,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.1_angle315deg",
+      "radius_m": 3.1,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.1_angle337.5deg",
+      "radius_m": 3.1,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.15_angle0deg",
+      "radius_m": 3.15,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.15_angle22.5deg",
+      "radius_m": 3.15,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.15_angle45deg",
+      "radius_m": 3.15,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.15_angle67.5deg",
+      "radius_m": 3.15,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.15_angle90deg",
+      "radius_m": 3.15,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.15_angle112.5deg",
+      "radius_m": 3.15,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.15_angle135deg",
+      "radius_m": 3.15,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.15_angle157.5deg",
+      "radius_m": 3.15,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.15_angle180deg",
+      "radius_m": 3.15,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.15_angle202.5deg",
+      "radius_m": 3.1500000000000004,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.15_angle225deg",
+      "radius_m": 3.15,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.15_angle247.5deg",
+      "radius_m": 3.15,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.15_angle270deg",
+      "radius_m": 3.15,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.15_angle292.5deg",
+      "radius_m": 3.15,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.15_angle315deg",
+      "radius_m": 3.15,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "port",
+      "sample": "flange_r3.15_angle337.5deg",
+      "radius_m": 3.15,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3_angle0deg",
+      "radius_m": 3.0,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3_angle22.5deg",
+      "radius_m": 2.9999999999999996,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3_angle45deg",
+      "radius_m": 3.0,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3_angle67.5deg",
+      "radius_m": 3.0,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3_angle90deg",
+      "radius_m": 3.0,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3_angle112.5deg",
+      "radius_m": 2.9999999999999996,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3_angle135deg",
+      "radius_m": 3.0,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3_angle157.5deg",
+      "radius_m": 3.0,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3_angle180deg",
+      "radius_m": 3.0,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3_angle202.5deg",
+      "radius_m": 3.0,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3_angle225deg",
+      "radius_m": 3.0,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3_angle247.5deg",
+      "radius_m": 3.0,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3_angle270deg",
+      "radius_m": 3.0,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3_angle292.5deg",
+      "radius_m": 3.0,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3_angle315deg",
+      "radius_m": 2.9999999999999996,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3_angle337.5deg",
+      "radius_m": 3.0,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.05_angle0deg",
+      "radius_m": 3.05,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.05_angle22.5deg",
+      "radius_m": 3.05,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.05_angle45deg",
+      "radius_m": 3.05,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.05_angle67.5deg",
+      "radius_m": 3.05,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.05_angle90deg",
+      "radius_m": 3.05,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.05_angle112.5deg",
+      "radius_m": 3.05,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.05_angle135deg",
+      "radius_m": 3.05,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.05_angle157.5deg",
+      "radius_m": 3.0500000000000003,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.05_angle180deg",
+      "radius_m": 3.05,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.05_angle202.5deg",
+      "radius_m": 3.05,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.05_angle225deg",
+      "radius_m": 3.05,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.05_angle247.5deg",
+      "radius_m": 3.05,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.05_angle270deg",
+      "radius_m": 3.05,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.05_angle292.5deg",
+      "radius_m": 3.05,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.05_angle315deg",
+      "radius_m": 3.05,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.05_angle337.5deg",
+      "radius_m": 3.05,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.1_angle0deg",
+      "radius_m": 3.1,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.1_angle22.5deg",
+      "radius_m": 3.1,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.1_angle45deg",
+      "radius_m": 3.0999999999999996,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.1_angle67.5deg",
+      "radius_m": 3.1,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.1_angle90deg",
+      "radius_m": 3.1,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.1_angle112.5deg",
+      "radius_m": 3.1,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.1_angle135deg",
+      "radius_m": 3.0999999999999996,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.1_angle157.5deg",
+      "radius_m": 3.1000000000000005,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.1_angle180deg",
+      "radius_m": 3.1,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.1_angle202.5deg",
+      "radius_m": 3.1,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.1_angle225deg",
+      "radius_m": 3.1,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.1_angle247.5deg",
+      "radius_m": 3.1,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.1_angle270deg",
+      "radius_m": 3.1,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.1_angle292.5deg",
+      "radius_m": 3.1,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.1_angle315deg",
+      "radius_m": 3.1,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.1_angle337.5deg",
+      "radius_m": 3.1,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.15_angle0deg",
+      "radius_m": 3.15,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.15_angle22.5deg",
+      "radius_m": 3.15,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.15_angle45deg",
+      "radius_m": 3.15,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.15_angle67.5deg",
+      "radius_m": 3.15,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.15_angle90deg",
+      "radius_m": 3.15,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.15_angle112.5deg",
+      "radius_m": 3.15,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.15_angle135deg",
+      "radius_m": 3.15,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.15_angle157.5deg",
+      "radius_m": 3.15,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.15_angle180deg",
+      "radius_m": 3.15,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.15_angle202.5deg",
+      "radius_m": 3.1500000000000004,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.15_angle225deg",
+      "radius_m": 3.15,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.15_angle247.5deg",
+      "radius_m": 3.15,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.15_angle270deg",
+      "radius_m": 3.15,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.15_angle292.5deg",
+      "radius_m": 3.15,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.15_angle315deg",
+      "radius_m": 3.15,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    },
+    {
+      "side": "starboard",
+      "sample": "flange_r3.15_angle337.5deg",
+      "radius_m": 3.15,
+      "rim_front_x_body_m": -35.9900016784668,
+      "rim_back_x_body_m": -35.650001525878906,
+      "nearest_cap_floor_x_body_m": -35.630001068115234,
+      "back_to_floor_gap_m": 0.020000457763671875,
+      "cap_parts_at_floor": [
+        "Outboard drive nacelle.001",
+        "Pressure hull"
+      ],
+      "non_rim_flange_depth_intrusions": []
+    }
+  ]
+}

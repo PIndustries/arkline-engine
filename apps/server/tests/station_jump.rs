@@ -21,7 +21,11 @@ fn jump_is_authoritative_bounded_and_cleared_on_disconnect_and_restart() {
     let connected = server.handle_at(
         &mut pilot,
         Request::Connect {
+            supports_room_controls: false,
+            world_layout_version: 1,
+            supports_fleet_hangar: false,
             supports_pioneer_interior: true,
+            supports_docked_traversal_v2: false,
             protocol_version: PROTOCOL_VERSION,
             pilot: "Jumper".into(),
             resume_token: None,
@@ -53,7 +57,11 @@ fn jump_is_authoritative_bounded_and_cleared_on_disconnect_and_restart() {
             .handle_at(
                 &mut pilot,
                 Request::Connect {
+                    supports_room_controls: false,
+                    world_layout_version: 1,
+                    supports_fleet_hangar: false,
                     supports_pioneer_interior: true,
+                    supports_docked_traversal_v2: false,
                     protocol_version: PROTOCOL_VERSION,
                     pilot: "Jumper".into(),
                     resume_token: connected.resume_token,

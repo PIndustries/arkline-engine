@@ -1,0 +1,9 @@
+@@ -181,6 +181,6 @@
+         let v = 0.5 - (hit.y - self.center.y) / (2.0 * self.half.y);
+-        if !(0.0..=1.0).contains(&u) || !(0.0..=1.0).contains(&v) {
++        if !(-1e-5..=1.0 + 1e-5).contains(&u) || !(-1e-5..=1.0 + 1e-5).contains(&v) {
+             return None;
+         }
+-        Some(self.canvas.min + egui::vec2(u * self.canvas.width(), v * self.canvas.height()))
++        Some(self.canvas.min + egui::vec2(u.clamp(0.0, 1.0) * self.canvas.width(), v.clamp(0.0, 1.0) * self.canvas.height()))
+     }

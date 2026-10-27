@@ -24,6 +24,10 @@ impl Journey {
             &mut session,
             Request::Connect {
                 supports_pioneer_interior: true,
+                supports_docked_traversal_v2: false,
+                world_layout_version: 1,
+                supports_fleet_hangar: true,
+                supports_room_controls: true,
                 protocol_version: PROTOCOL_VERSION,
                 pilot: "pilot".into(),
                 resume_token: None,
@@ -114,11 +118,22 @@ impl Journey {
     fn click(&mut self, label: &str) {
         self.step(vec![]);
         let rows = self.step(vec![]);
+        // Paint output also includes labels hidden behind another window.
+        // These legacy journey actions belong to the foreground station window,
+        // not a duplicate label in the automatically opened Station workspace.
+        let window_id = egui::Id::new("station_embodiment_controls");
+        let window = self.ctx.memory(|m| m.area_rect(window_id)).unwrap();
         let point = rows
             .iter()
-            .find(|(text, _)| text == label)
+            .rev()
+            .find(|(text, point)| text == label && window.contains(*point))
             .unwrap_or_else(|| panic!("button missing: {label}; {rows:?}"))
             .1;
+        assert_eq!(
+            self.ctx.layer_id_at(point),
+            Some(egui::LayerId::new(egui::Order::Middle, window_id)),
+            "Action must belong to the foreground station controls"
+        );
         for pressed in [true, false] {
             self.step(vec![
                 egui::Event::PointerMoved(point),
@@ -234,6 +249,16 @@ fn on_foot_camera_buttons_and_ship_command_boundary() {
     j.click("First person");
     assert_eq!(j.app.hangar_view.on_foot_view, OnFootView::FirstPerson);
     assert_eq!(j.avatar().position, start.position);
+    // Admission opens the Station workspace. Its focus deliberately blocks body
+    // movement; close it through the same Escape route available to the player.
+    assert!(j.app.services_open);
+    j.key(Some(egui::Key::W));
+    j.key(None);
+    assert_eq!(j.avatar().position, start.position);
+    j.key(Some(egui::Key::Escape));
+    j.key(None);
+    assert!(!j.app.services_open);
+    assert!(!j.app.workspace_input_waiting_release);
     for key in [
         egui::Key::W,
         egui::Key::S,
@@ -262,31 +287,37 @@ fn on_foot_camera_buttons_and_ship_command_boundary() {
         })
         .unwrap();
     j.step(vec![egui::Event::PointerMoved(start_pointer)]);
-    j.step(vec![
-        egui::Event::PointerMoved(start_pointer),
-        egui::Event::PointerButton {
+    assert!(
+        !j.app.hangar_view.first_person_mouse_captured(),
+        "Escape keeps cursor free until a deliberate viewport click"
+    );
+    j.step(vec![egui::Event::MouseMoved(Vec2::new(70.0, 0.0))]);
+    assert_eq!(
+        j.avatar().heading,
+        before_turn.heading,
+        "Uncaptured relative motion must not turn the avatar"
+    );
+    for pressed in [true, false] {
+        j.step(vec![egui::Event::PointerButton {
             pos: start_pointer,
-            button: egui::PointerButton::Secondary,
-            pressed: true,
+            button: egui::PointerButton::Primary,
+            pressed,
             modifiers: Default::default(),
-        },
-    ]);
-    let end_pointer = start_pointer + Vec2::new(70.0, 0.0);
-    j.step(vec![egui::Event::PointerMoved(end_pointer)]);
-    j.step(vec![egui::Event::PointerButton {
-        pos: end_pointer,
-        button: egui::PointerButton::Secondary,
-        pressed: false,
-        modifiers: Default::default(),
-    }]);
+        }]);
+    }
+    assert!(j.app.hangar_view.first_person_mouse_captured());
+    j.step(vec![egui::Event::MouseMoved(Vec2::new(70.0, 0.0))]);
     for _ in 0..40 {
         j.step(vec![]);
     }
     assert!(
         (j.avatar().heading - before_turn.heading).abs() > 0.1,
-        "RMB must turn actual avatar, not detach third-person orbit: desired {}, before {}, after {} at {:?}", j.app.hangar_view.camera_yaw(), before_turn.heading, j.avatar().heading, start_pointer
+        "Captured first-person motion must turn actual avatar, not detach an orbit: desired {}, before {}, after {} at {:?}", j.app.hangar_view.camera_yaw(), before_turn.heading, j.avatar().heading, start_pointer
     );
     assert!(distance_m(j.avatar().position, before_turn.position) < 0.001);
+    j.key(Some(egui::Key::Escape));
+    j.key(None);
+    assert!(!j.app.hangar_view.first_person_mouse_captured());
     j.click("Third person");
     assert_eq!(j.app.hangar_view.on_foot_view, OnFootView::ThirdPerson);
     for request in [
@@ -338,25 +369,23 @@ fn on_foot_camera_buttons_and_ship_command_boundary() {
             .join(" ");
         assert!(text.contains("ON FOOT"));
         assert!(!text.contains("Undock active vessel"));
-        assert!(!text.contains("Activate turret"));
-        let labels = j
-            .step(vec![])
-            .into_iter()
-            .map(|(t, _)| t)
-            .collect::<Vec<_>>();
-        for forbidden in [
-            "Flight", "Ship", "Modules", "Drones", "AI", "Surface", "M", "D", "H", "◎",
-        ] {
+        // Current workspaces remain inspectable on foot. Visible disabled
+        // controls are intentional, unlike the old hidden-launcher interface.
+        if matches!(tab, ServiceTab::Navigation | ServiceTab::Modules) {
             assert!(
-                !labels.iter().any(|t| t == forbidden),
-                "misleading on-foot launcher: {forbidden}"
+                text.contains("Inspection only"),
+                "Inspection guidance missing: {text}"
             );
         }
-        for retained in ["▣", "⌂", "L", "⇄", "C", "≡", "✓", "⚙"] {
-            assert!(
-                labels.iter().any(|t| t == retained),
-                "missing on-foot service: {retained}; {labels:?}"
-            );
-        }
+        assert!(!j.app.can_fly());
+        let before = j.avatar();
+        j.key(Some(egui::Key::W));
+        j.key(None);
+        assert_eq!(
+            j.avatar().position,
+            before.position,
+            "An open inspection workspace must retain movement focus"
+        );
+        assert!(j.commands.try_recv().is_err());
     }
 }

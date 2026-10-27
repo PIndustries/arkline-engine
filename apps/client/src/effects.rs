@@ -152,6 +152,13 @@ mod tests {
     use arkline_protocol::*;
     fn snapshot(ore: u64, remaining: u64) -> Snapshot {
         Snapshot {
+            carrier_inventory_registration: None,
+            walk_sprint_v1: false,
+            drone_cargo_registration: None,
+            drone_cargo_totals: None,
+            docked_traversal_capability: None,
+            world_layout: None,
+            exterior: None,
             resource_jobs: vec![],
             fleet_links: vec![],
             remote_controls: vec![],
@@ -169,6 +176,12 @@ mod tests {
                 ore: remaining,
             }],
             pilots: vec![PilotView {
+                carrier_inventory: None,
+                power_accounting: None,
+                drone_bay: None,
+                drone_cargo: None,
+                cockpit_mechanisms: None,
+                reactor_configuration: None,
                 surface: None,
                 station_avatar: None,
                 power: None,
@@ -186,6 +199,7 @@ mod tests {
                 drone: None,
                 drones: vec![],
                 flight: Some(FlightState {
+                    docking: None,
                     acceleration: [0.; 3],
                     warp: None,
                     orientation: [0.0, 0.0, 0.0, 1.0],

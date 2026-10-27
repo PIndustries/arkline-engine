@@ -16,6 +16,31 @@ pub(super) struct SunShadows {
     matrix: Option<glow::UniformLocation>,
     size: i32,
 }
+// Keep the shadow-only turret contribution separate from canonical hull/source
+// casters so physical source geometry is never suppressed with legacy guns.
+fn shadow_turret_pose(
+    frame: &Frame,
+    pilot: &PilotView,
+    slot: u8,
+    rotation: Quat,
+) -> Option<parallel_turret_pose::Resolved> {
+    // Match the color pass: this accepted physical source replaces legacy guns.
+    // Its canonical source casters were submitted separately above this call.
+    if frame.physical_for(pilot).is_some() {
+        return None;
+    }
+    parallel_turret_pose::resolve(
+        pilot,
+        frame.space,
+        frame.snapshot_time,
+        frame.now,
+        slot,
+        rotation,
+        false,
+        frame.scene.carrier_inventory_registration.as_ref(),
+    )
+}
+
 fn light_matrix(eye: Vec3, size: i32) -> Mat4 {
     let l = Vec3::new(-0.5, 0.8, 0.65).normalize();
     let rotation = Mat4::look_at_rh(Vec3::ZERO, -l, Vec3::Y);
@@ -185,27 +210,48 @@ impl Renderer {
                 let mut casters = Vec::new();
                 // The same ship and asteroid meshes/transforms as the visible pass,
                 // including the own ship in cockpit view: hulls really block sunlight.
-                for p in &frame.pilots {
+                for p in &frame.scene.pilots {
                     if frame.space.position(p, frame.now).distance(frame.eye) > DEPTH + RADIUS {
                         continue;
                     }
-                    let ship = transform(
-                        frame.space.position(p, frame.now),
-                        Vec3::ONE,
-                        ship_orientation_at(p, frame.now),
-                    );
-                    for &(mesh, model, _, _) in cached_ship_parts(p.ship_class) {
-                        push_caster(&mut casters, (mesh, ship * model), frame.eye);
+                    let Some(ship) = frame.ship_mount(p) else {
+                        continue;
+                    };
+                    if p.name == frame.own && p.ship_class == ShipClass::Pioneer {
+                        if let Some(parts) = frame.canonical_pioneer_parts() {
+                            let mount = frame.pioneer_body_mount();
+                            for &(mesh, model, _, _) in parts.iter() {
+                                if !is_registered_glass(mesh) {
+                                    push_caster(&mut casters, (mesh, mount * model), frame.eye);
+                                }
+                            }
+                        }
+                    } else if p.ship_class == ShipClass::Pioneer && p.carrier_inventory.is_some() {
+                        if let Some(parts) = frame.pioneer_exterior_parts(p) {
+                            let mount = ship * Mat4::from_scale(Vec3::splat(0.01));
+                            for (mesh, model, _, _) in parts {
+                                if !is_registered_glass(mesh) {
+                                    push_caster(&mut casters, (mesh, mount * model), frame.eye);
+                                }
+                            }
+                        }
+                    } else {
+                        for &(mesh, model, _, _) in cached_ship_parts(p.ship_class) {
+                            push_caster(&mut casters, (mesh, ship * model), frame.eye);
+                        }
                     }
                     for id in 0..2 {
                         if let Some(t) = self.turrets.get(&(p.name.clone(), id)) {
-                            for (mesh, model, _, _) in turret_parts(p.ship_class, t.rotation, id) {
-                                push_caster(&mut casters, (mesh, ship * model), frame.eye);
+                            for (mesh, model, _, _) in shadow_turret_pose(frame, p, id, t.rotation)
+                                .into_iter()
+                                .flat_map(|r| r.parts)
+                            {
+                                push_caster(&mut casters, (mesh, model), frame.eye);
                             }
                         }
                     }
                 }
-                for a in &frame.asteroids {
+                for a in &frame.scene.asteroids {
                     if frame.space.scene(a.position).distance(frame.eye) > DEPTH + RADIUS {
                         continue;
                     }
@@ -241,13 +287,22 @@ impl Renderer {
                         .total_cmp(&b.1.w_axis.truncate().distance_squared(frame.eye))
                 });
                 for (mesh, model) in casters.into_iter().take(MAX_CASTERS) {
+                    #[cfg(test)]
+                    {
+                        let (ms, draws, triangles) = self.profile_shadow.get();
+                        self.profile_shadow.set((
+                            ms,
+                            draws + 1,
+                            triangles + self.meshes[mesh_index(mesh)].count as u64 / 3,
+                        ));
+                    }
                     gl.uniform_matrix_4_f32_slice(
                         shadow.model.as_ref(),
                         false,
                         &model.to_cols_array(),
                     );
-                    gl.bind_vertex_array(Some(self.meshes[mesh].vao));
-                    gl.draw_arrays(glow::TRIANGLES, 0, self.meshes[mesh].count);
+                    gl.bind_vertex_array(Some(self.meshes[mesh_index(mesh)].vao));
+                    gl.draw_arrays(glow::TRIANGLES, 0, self.meshes[mesh_index(mesh)].count);
                 }
             }
         }
@@ -385,7 +440,7 @@ pub(super) unsafe fn assert_occluder_depth(
     target: glow::Framebuffer,
 ) {
     let mut sample = frame.clone();
-    sample.asteroids = vec![Asteroid {
+    std::sync::Arc::make_mut(&mut sample.scene).asteroids = vec![Asteroid {
         id: 998,
         system_id: frame.system_id,
         name: "shadow fixture".into(),
@@ -545,6 +600,98 @@ pub(super) unsafe fn test_sloped_pcf(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn physical1704_shadow_turrets_match_color_suppression() {
+        let response = physical_cargo_native_tests::initial_response_for_tests();
+        let frame = physical_cargo_native_tests::physical_frame(&response);
+        let pilot = frame
+            .scene
+            .pilots
+            .iter()
+            .find(|p| p.name == frame.own)
+            .unwrap();
+        assert!(frame.physical_for(pilot).is_some()); // Existing color-pass guard.
+        assert!(pilot.carrier_inventory.is_none());
+        let canonical = frame.canonical_pioneer_parts().unwrap();
+        let geometry = physical_geometry().unwrap();
+        let source = geometry
+            .carriers
+            .iter()
+            .filter_map(|c| c.as_ref().ok())
+            .find(|c| c.registration.assembly_revision == 1704)
+            .unwrap();
+        let source_casters: Vec<_> = source
+            .parts
+            .iter()
+            .filter(|(mesh, _, _, _)| !is_registered_glass(*mesh))
+            .collect();
+        assert!(!source_casters.is_empty());
+        for (mesh, _, _, _) in source_casters {
+            assert!(
+                canonical.iter().any(|part| part.0 == *mesh),
+                "exact1704 canonical source caster {mesh} must remain admitted"
+            );
+        }
+        for slot in 0..2 {
+            let old_extra = parallel_turret_pose::resolve(
+                pilot,
+                frame.space,
+                frame.snapshot_time,
+                frame.now,
+                slot,
+                Quat::IDENTITY,
+                false,
+                frame.scene.carrier_inventory_registration.as_ref(),
+            )
+            .expect("fixture exercises the old legacy fallback");
+            assert!(!old_extra.parts.is_empty());
+            assert!(
+                shadow_turret_pose(&frame, pilot, slot, Quat::IDENTITY).is_none(),
+                "physical1704 color suppresses legacy turret {slot}; shadow must match"
+            );
+        }
+        assert_eq!(*canonical, *frame.canonical_pioneer_parts().unwrap());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn legacy_shadow_turret_geometry_is_unchanged() {
+        let response = physical_cargo_native_tests::initial_response_for_tests();
+        let mut frame = physical_cargo_native_tests::physical_frame(&response);
+        Arc::make_mut(&mut frame.scene).physical = None;
+        let pilot = frame
+            .scene
+            .pilots
+            .iter()
+            .find(|p| p.name == frame.own)
+            .unwrap();
+        assert!(frame.physical_for(pilot).is_none());
+        for slot in 0..2 {
+            for rotation in [Quat::IDENTITY, Quat::from_rotation_y(0.2)] {
+                let expected = parallel_turret_pose::resolve(
+                    pilot,
+                    frame.space,
+                    frame.snapshot_time,
+                    frame.now,
+                    slot,
+                    rotation,
+                    false,
+                    frame.scene.carrier_inventory_registration.as_ref(),
+                )
+                .unwrap();
+                let actual = shadow_turret_pose(&frame, pilot, slot, rotation).unwrap();
+                assert!(!actual.parts.is_empty());
+                assert_eq!(actual.parts, expected.parts);
+                assert_eq!(actual.muzzle, expected.muzzle);
+                assert_eq!(actual.forward, expected.forward);
+                assert_eq!(actual.up, expected.up);
+                assert_eq!(actual.can_fire, expected.can_fire);
+                assert_eq!(actual.beam_radius_m, expected.beam_radius_m);
+            }
+        }
+    }
+
     #[test]
     fn caster_budget_retains_nearest_geometry() {
         let mut casters = Vec::new();

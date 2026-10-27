@@ -1,0 +1,53 @@
+{
+  "date_utc": "2026-10-15",
+  "source_commit": "47a3044",
+  "build": "26.10.15.7025",
+  "platform": "Linux x86_64 debug, MSAA0, Mesa llvmpipe; cloud Xorg97",
+  "package_sha256": "d82691c451cdf6426cdae682fa83a5df0fe3662071e25aead80ca292fda163ab",
+  "checks": {
+    "client_lib": {
+      "build": "26.10.15.7022",
+      "passed": 250,
+      "failed": 0,
+      "ignored": 17
+    },
+    "editor": {
+      "build": "26.10.15.7023",
+      "passed": 180,
+      "failed": 0,
+      "ignored": 1
+    },
+    "strict_workspace_all_targets_clippy": {
+      "build": "26.10.15.7024",
+      "passed": true
+    },
+    "format_and_whitespace": true,
+    "unsupported_definition_baseline": {
+      "build": "26.10.15.7021",
+      "reproduced": true,
+      "failure": "Invalid advertised definition incorrectly queued command id1"
+    },
+    "compatibility_regressions": "Unsupported schema/hash rejected before queuing; draft/saved state retained; late acknowledgements ignored; repeated warning persists; valid peer recovery tested"
+  },
+  "native_reopen": {
+    "from_build": "26.10.15.7019",
+    "unchanged_clock_definition_power_location_and_saved_bytes": true,
+    "simulation_time_ms": 1792084108007,
+    "accepted_definition_revision": 1,
+    "exterior_enabled": true,
+    "charge_j": 240000,
+    "saved_definition_sha256": "62b3cbb43a0c6d92b72801ef4ceff70c28d1863d99c14f505d0866410aa8e075",
+    "valid_peer_live_controls_visible": true,
+    "fixture_count": 13
+  },
+  "canonical_hull_sha256": "f8f8cc65772c678a46606c27abe205d62c4e6ab37c350f79a0f3a4cdc0c6f402",
+  "canonical_model_changed": false,
+  "publication": "reviewable draft carrier; no merge or deployment",
+  "artifacts": [
+    {
+      "path": "native-reopened-7025.png",
+      "bytes": 321683,
+      "sha256": "bb65460c2facb1049144556584807a43da9fc0b6f9bb50d55a540341c848e587"
+    }
+  ]
+}

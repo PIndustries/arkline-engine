@@ -1,0 +1,97 @@
+@@ -24,4 +24,5 @@
+ pub use embedded::{
+-    EmbeddedClient, EmbeddedEventAck, EmbeddedEventDebugState, EmbeddedRealm, EmbeddedSessionInfo,
+-    EmbeddedSessionMode, EmbeddedStatus, EmbeddedView, EmbeddedViewState, ViewTransition,
++    CommandObservation, CommandTraceDebug, CommandTraceHop, EmbeddedClient, EmbeddedEventAck,
++    EmbeddedEventDebugState, EmbeddedRealm, EmbeddedSessionInfo, EmbeddedSessionMode, EmbeddedStatus,
++    EmbeddedView, EmbeddedViewState, RoomLightTrace, ViewTransition,
+ };
+@@ -193,2 +194,5 @@
+     Response(Box<Response>, bool),
++    /// Private local-worker marker: this snapshot was requested after trace ID.
++    #[cfg(not(target_arch = "wasm32"))]
++    CommandTraceSnapshot(Box<Response>, u64),
+     Failure(String),
+@@ -620,2 +624,8 @@
+     snapshot: Option<Snapshot>,
++    #[cfg(not(target_arch = "wasm32"))]
++    snapshot_received_at: Option<Instant>,
++    #[cfg(not(target_arch = "wasm32"))]
++    snapshot_trace_id: Option<u64>,
++    #[cfg(not(target_arch = "wasm32"))]
++    authority_epoch: u64,
+     assets: Option<AssetsView>,
+@@ -741,2 +751,8 @@
+             snapshot: None,
++            #[cfg(not(target_arch = "wasm32"))]
++            snapshot_received_at: None,
++            #[cfg(not(target_arch = "wasm32"))]
++            snapshot_trace_id: None,
++            #[cfg(not(target_arch = "wasm32"))]
++            authority_epoch: 0,
+             assets: None,
+@@ -1184,4 +1200,10 @@
+         for update in updates {
+-            match update {
++            let (response, visible, trace_id) = match update {
+                 Update::Ready => {
++                    #[cfg(not(target_arch = "wasm32"))]
++                    {
++                        self.authority_epoch = self.authority_epoch.saturating_add(1);
++                        self.snapshot_received_at = None;
++                        self.snapshot_trace_id = None;
++                    }
+                     self.hangar_inspection.boarding_interrupted();
+@@ -1196,4 +1218,11 @@
+                     self.notice.clear();
++                    continue;
+                 }
+                 Update::Reconnecting(message) => {
++                    #[cfg(not(target_arch = "wasm32"))]
++                    {
++                        self.authority_epoch = self.authority_epoch.saturating_add(1);
++                        self.snapshot_received_at = None;
++                        self.snapshot_trace_id = None;
++                    }
+                     self.hangar_inspection.boarding_interrupted();
+@@ -1210,4 +1239,11 @@
+                     self.log(message, true);
++                    continue;
+                 }
+                 Update::Failure(error) => {
++                    #[cfg(not(target_arch = "wasm32"))]
++                    {
++                        self.authority_epoch = self.authority_epoch.saturating_add(1);
++                        self.snapshot_received_at = None;
++                        self.snapshot_trace_id = None;
++                    }
+                     self.hangar_inspection.boarding_interrupted();
+@@ -1227,4 +1263,11 @@
+                     self.log(error, true);
++                    continue;
+                 }
+-                Update::Response(response, visible) => {
++                Update::Response(response, visible) => (response, visible, None::<u64>),
++                #[cfg(not(target_arch = "wasm32"))]
++                Update::CommandTraceSnapshot(response, id) => (response, false, Some(id)),
++            };
++            #[cfg(target_arch = "wasm32")]
++            let _ = trace_id;
++            {
+                     let fresh_assets = response.assets.is_some();
+@@ -1308,2 +1351,11 @@
+                         self.motion.observe(&snapshot);
++                        #[cfg(not(target_arch = "wasm32"))]
++                        {
++                            self.snapshot_received_at = Some(Instant::now());
++                            // Ordinary later updates cannot undo an accepted
++                            // causal marker on this ordered worker channel.
++                            if let Some(id) = trace_id {
++                                self.snapshot_trace_id = Some(id);
++                            }
++                        }
+                         self.snapshot = Some(snapshot);
+@@ -1325,3 +1377,2 @@
+                     }
+-                }
+             }

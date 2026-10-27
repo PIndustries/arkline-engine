@@ -812,6 +812,10 @@ mod tests {
                 &mut s,
                 Request::Connect {
                     supports_pioneer_interior: true,
+                    supports_docked_traversal_v2: false,
+                    world_layout_version: 1,
+                    supports_fleet_hangar: true,
+                    supports_room_controls: true,
                     protocol_version: PROTOCOL_VERSION,
                     pilot: name.into(),
                     resume_token: None,
@@ -902,6 +906,10 @@ mod tests {
             &mut worker,
             Request::Connect {
                 supports_pioneer_interior: true,
+                supports_docked_traversal_v2: false,
+                world_layout_version: 1,
+                supports_fleet_hangar: true,
+                supports_room_controls: true,
                 protocol_version: PROTOCOL_VERSION,
                 pilot: "WorkerQA".into(),
                 resume_token: initial.resume_token,

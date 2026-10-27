@@ -1,0 +1,44 @@
+@@ -3,2 +3,4 @@
+ 
++pub(super) const NAV_CANVAS_SIZE: egui::Vec2 = egui::vec2(256.0, 128.0);
++
+ /// The exact display-face plane used by the cockpit renderer. The caller passes
+@@ -311,3 +313,3 @@
+     ui: &mut egui::Ui,
+-    viewport: egui::Rect,
++    surface: &CockpitSurface,
+     own: &PilotView,
+@@ -322,3 +324,6 @@
+         Err(error) => {
+-            ui.colored_label(egui::Color32::RED, error);
++            surface.paint(ui, |painter| {
++                painter.text(surface.canvas_rect().center(), egui::Align2::CENTER_CENTER,
++                    error, egui::FontId::monospace(10.0), egui::Color32::RED);
++            });
+             return None;
+@@ -391,5 +396,5 @@
+     {
+-        let (center, size) = cockpit_screens(own.ship_class)[index];
+-        let rect = instrument_rect(viewport, center, size).shrink(3.0);
+-        let painter = ui.painter_at(rect);
++        let rect = surface.canvas_rect().shrink(3.0);
++        let paint = surface.begin_paint(ui);
++        let painter = paint.painter();
+         painter.rect_filled(
+@@ -415,4 +420,5 @@
+         );
++        let physical_pointer = ui.input(|i| i.pointer.hover_pos()).and_then(|p| surface.unproject(p));
+         let response = ui.interact(
+-            rect,
++            if physical_pointer.is_some() { surface.bounds() } else { egui::Rect::NOTHING },
+             egui::Id::new(("cockpit_map", index)),
+@@ -420,3 +426,3 @@
+         );
+-        if response.hovered() {
++        if physical_pointer.is_some() && response.hovered() {
+             let scroll = ui.input(|i| i.smooth_scroll_delta.y);
+@@ -505,3 +511,3 @@
+             }
+-            if let Some(pointer) = response.interact_pointer_pos() {
++            if let Some(pointer) = response.interact_pointer_pos().and_then(|p| surface.unproject(p)) {
+                 let distance = pointer.distance(point);

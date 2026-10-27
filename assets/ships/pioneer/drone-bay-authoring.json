@@ -1,0 +1,5202 @@
+{
+  "schema": "arkline.pioneer-drone-bay-authoring/v1",
+  "source_sha256": "c5a55fe2c7e37c501e188249ae7eec90e292f35fb251b5b21e361013df8633de",
+  "output_sha256": "ee43c05cb1d4ebf907d609b5338b4d8a911b812d8fb05914c96ca48dbb06b1d9",
+  "tool": "official bpy5.0.1",
+  "units": "body metres +X forward +Y up +Z starboard",
+  "bounds_body_m": [
+    [
+      -36,
+      -9,
+      -19
+    ],
+    [
+      36,
+      11.35,
+      19
+    ]
+  ],
+  "slots": [
+    {
+      "id": "s00",
+      "station": 0,
+      "tier": 0,
+      "body_center_m": [
+        -30.5,
+        -5.4,
+        3.5
+      ],
+      "body_forward": [
+        -1,
+        0,
+        0
+      ],
+      "drone_bounds_relative_m": [
+        [
+          -2.5,
+          -0.9,
+          -3
+        ],
+        [
+          2.5,
+          0.9,
+          3
+        ]
+      ],
+      "tray_group": "tray/s00",
+      "reference_tray_body_contact_y": -6.300000000000001,
+      "class_seed": "recon"
+    },
+    {
+      "id": "s01",
+      "station": 0,
+      "tier": 1,
+      "body_center_m": [
+        -30.5,
+        -3.2,
+        3.5
+      ],
+      "body_forward": [
+        -1,
+        0,
+        0
+      ],
+      "drone_bounds_relative_m": [
+        [
+          -2.5,
+          -0.9,
+          -3
+        ],
+        [
+          2.5,
+          0.9,
+          3
+        ]
+      ],
+      "tray_group": "tray/s01",
+      "reference_tray_body_contact_y": -4.1000000000000005,
+      "class_seed": "recon"
+    },
+    {
+      "id": "s02",
+      "station": 0,
+      "tier": 2,
+      "body_center_m": [
+        -30.5,
+        -1.0,
+        3.5
+      ],
+      "body_forward": [
+        -1,
+        0,
+        0
+      ],
+      "drone_bounds_relative_m": [
+        [
+          -2.5,
+          -0.9,
+          -3
+        ],
+        [
+          2.5,
+          0.9,
+          3
+        ]
+      ],
+      "tray_group": "tray/s02",
+      "reference_tray_body_contact_y": -1.9,
+      "class_seed": "recon"
+    },
+    {
+      "id": "s03",
+      "station": 0,
+      "tier": 3,
+      "body_center_m": [
+        -30.5,
+        1.2,
+        3.5
+      ],
+      "body_forward": [
+        -1,
+        0,
+        0
+      ],
+      "drone_bounds_relative_m": [
+        [
+          -2.5,
+          -0.9,
+          -3
+        ],
+        [
+          2.5,
+          0.9,
+          3
+        ]
+      ],
+      "tray_group": "tray/s03",
+      "reference_tray_body_contact_y": 0.29999999999999993,
+      "class_seed": "recon"
+    },
+    {
+      "id": "s04",
+      "station": 0,
+      "tier": 4,
+      "body_center_m": [
+        -30.5,
+        3.4,
+        3.5
+      ],
+      "body_forward": [
+        -1,
+        0,
+        0
+      ],
+      "drone_bounds_relative_m": [
+        [
+          -2.5,
+          -0.9,
+          -3
+        ],
+        [
+          2.5,
+          0.9,
+          3
+        ]
+      ],
+      "tray_group": "tray/s04",
+      "reference_tray_body_contact_y": 2.5,
+      "class_seed": "recon"
+    },
+    {
+      "id": "s05",
+      "station": 1,
+      "tier": 0,
+      "body_center_m": [
+        -24.5,
+        -5.4,
+        3.5
+      ],
+      "body_forward": [
+        -1,
+        0,
+        0
+      ],
+      "drone_bounds_relative_m": [
+        [
+          -2.5,
+          -0.9,
+          -3
+        ],
+        [
+          2.5,
+          0.9,
+          3
+        ]
+      ],
+      "tray_group": "tray/s05",
+      "reference_tray_body_contact_y": -6.300000000000001,
+      "class_seed": "mining"
+    },
+    {
+      "id": "s06",
+      "station": 1,
+      "tier": 1,
+      "body_center_m": [
+        -24.5,
+        -3.2,
+        3.5
+      ],
+      "body_forward": [
+        -1,
+        0,
+        0
+      ],
+      "drone_bounds_relative_m": [
+        [
+          -2.5,
+          -0.9,
+          -3
+        ],
+        [
+          2.5,
+          0.9,
+          3
+        ]
+      ],
+      "tray_group": "tray/s06",
+      "reference_tray_body_contact_y": -4.1000000000000005,
+      "class_seed": "mining"
+    },
+    {
+      "id": "s07",
+      "station": 1,
+      "tier": 2,
+      "body_center_m": [
+        -24.5,
+        -1.0,
+        3.5
+      ],
+      "body_forward": [
+        -1,
+        0,
+        0
+      ],
+      "drone_bounds_relative_m": [
+        [
+          -2.5,
+          -0.9,
+          -3
+        ],
+        [
+          2.5,
+          0.9,
+          3
+        ]
+      ],
+      "tray_group": "tray/s07",
+      "reference_tray_body_contact_y": -1.9,
+      "class_seed": "mining"
+    },
+    {
+      "id": "s08",
+      "station": 1,
+      "tier": 3,
+      "body_center_m": [
+        -24.5,
+        1.2,
+        3.5
+      ],
+      "body_forward": [
+        -1,
+        0,
+        0
+      ],
+      "drone_bounds_relative_m": [
+        [
+          -2.5,
+          -0.9,
+          -3
+        ],
+        [
+          2.5,
+          0.9,
+          3
+        ]
+      ],
+      "tray_group": "tray/s08",
+      "reference_tray_body_contact_y": 0.29999999999999993,
+      "class_seed": "mining"
+    },
+    {
+      "id": "s09",
+      "station": 1,
+      "tier": 4,
+      "body_center_m": [
+        -24.5,
+        3.4,
+        3.5
+      ],
+      "body_forward": [
+        -1,
+        0,
+        0
+      ],
+      "drone_bounds_relative_m": [
+        [
+          -2.5,
+          -0.9,
+          -3
+        ],
+        [
+          2.5,
+          0.9,
+          3
+        ]
+      ],
+      "tray_group": "tray/s09",
+      "reference_tray_body_contact_y": 2.5,
+      "class_seed": "mining"
+    },
+    {
+      "id": "s10",
+      "station": 2,
+      "tier": 0,
+      "body_center_m": [
+        -18.5,
+        -5.4,
+        3.5
+      ],
+      "body_forward": [
+        -1,
+        0,
+        0
+      ],
+      "drone_bounds_relative_m": [
+        [
+          -2.5,
+          -0.9,
+          -3
+        ],
+        [
+          2.5,
+          0.9,
+          3
+        ]
+      ],
+      "tray_group": "tray/s10",
+      "reference_tray_body_contact_y": -6.300000000000001,
+      "class_seed": "attack"
+    },
+    {
+      "id": "s11",
+      "station": 2,
+      "tier": 1,
+      "body_center_m": [
+        -18.5,
+        -3.2,
+        3.5
+      ],
+      "body_forward": [
+        -1,
+        0,
+        0
+      ],
+      "drone_bounds_relative_m": [
+        [
+          -2.5,
+          -0.9,
+          -3
+        ],
+        [
+          2.5,
+          0.9,
+          3
+        ]
+      ],
+      "tray_group": "tray/s11",
+      "reference_tray_body_contact_y": -4.1000000000000005,
+      "class_seed": "attack"
+    },
+    {
+      "id": "s12",
+      "station": 2,
+      "tier": 2,
+      "body_center_m": [
+        -18.5,
+        -1.0,
+        3.5
+      ],
+      "body_forward": [
+        -1,
+        0,
+        0
+      ],
+      "drone_bounds_relative_m": [
+        [
+          -2.5,
+          -0.9,
+          -3
+        ],
+        [
+          2.5,
+          0.9,
+          3
+        ]
+      ],
+      "tray_group": "tray/s12",
+      "reference_tray_body_contact_y": -1.9,
+      "class_seed": "attack"
+    },
+    {
+      "id": "s13",
+      "station": 2,
+      "tier": 3,
+      "body_center_m": [
+        -18.5,
+        1.2,
+        3.5
+      ],
+      "body_forward": [
+        -1,
+        0,
+        0
+      ],
+      "drone_bounds_relative_m": [
+        [
+          -2.5,
+          -0.9,
+          -3
+        ],
+        [
+          2.5,
+          0.9,
+          3
+        ]
+      ],
+      "tray_group": "tray/s13",
+      "reference_tray_body_contact_y": 0.29999999999999993,
+      "class_seed": "attack"
+    },
+    {
+      "id": "s14",
+      "station": 2,
+      "tier": 4,
+      "body_center_m": [
+        -18.5,
+        3.4,
+        3.5
+      ],
+      "body_forward": [
+        -1,
+        0,
+        0
+      ],
+      "drone_bounds_relative_m": [
+        [
+          -2.5,
+          -0.9,
+          -3
+        ],
+        [
+          2.5,
+          0.9,
+          3
+        ]
+      ],
+      "tray_group": "tray/s14",
+      "reference_tray_body_contact_y": 2.5,
+      "class_seed": "attack"
+    }
+  ],
+  "aisle_z_m": -3.5,
+  "exit_y_m": -1,
+  "launch_release_body_m": [
+    -30.5,
+    -1,
+    -3.5
+  ],
+  "release_tray_center_m": [
+    -30.5,
+    -1.2,
+    -3.5
+  ],
+  "release_disengage_y_m": -0.2,
+  "release_contract": "Same drone holds Y=-1 while tray/lift/retracted forks lower0.20m; only then translate drone aft. Recovery reverses. Explicit choreography, not force simulation.",
+  "aperture_body_m": [
+    [
+      -36,
+      -2.6,
+      -7.5
+    ],
+    [
+      -35.25,
+      0.6,
+      0.5
+    ]
+  ],
+  "floor_profile_xy_m": [
+    [
+      -35.8,
+      -2.9
+    ],
+    [
+      -34.2,
+      -6.42
+    ],
+    [
+      -33.2,
+      -6.72
+    ],
+    [
+      -15.5,
+      -6.72
+    ]
+  ],
+  "door_pocket_body_m": [
+    [
+      -35.78,
+      -4.4,
+      -7.7
+    ],
+    [
+      -35.28,
+      2.4,
+      0.7
+    ]
+  ],
+  "parts": [
+    {
+      "semantic_id": "pioneer.drone_bay/compartment/floor/0",
+      "source_name": "pioneer.drone_bay/compartment/floor/0",
+      "group": null,
+      "material": "Recessed carbon"
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/compartment/floor/1",
+      "source_name": "pioneer.drone_bay/compartment/floor/1",
+      "group": null,
+      "material": "Recessed carbon"
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/compartment/floor/2",
+      "source_name": "pioneer.drone_bay/compartment/floor/2",
+      "group": null,
+      "material": "Recessed carbon"
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/compartment/forward_bulkhead",
+      "source_name": "pioneer.drone_bay/compartment/forward_bulkhead",
+      "group": null,
+      "material": "Graphite ceramic armor",
+      "bounds_body_m": [
+        [
+          -15.6,
+          -6.72,
+          -7.15
+        ],
+        [
+          -15.5,
+          5.25,
+          7.15
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/compartment/roof",
+      "source_name": "pioneer.drone_bay/compartment/roof",
+      "group": null,
+      "material": "Recessed carbon",
+      "bounds_body_m": [
+        [
+          -35.25,
+          5.15,
+          -7.15
+        ],
+        [
+          -15.5,
+          5.25,
+          7.15
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/compartment/wall/port",
+      "source_name": "pioneer.drone_bay/compartment/wall/port",
+      "group": null,
+      "material": "Graphite ceramic armor"
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/compartment/wall/starboard",
+      "source_name": "pioneer.drone_bay/compartment/wall/starboard",
+      "group": null,
+      "material": "Graphite ceramic armor"
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/0/aft/aisle/post",
+      "source_name": "pioneer.drone_bay/rack/0/aft/aisle/post",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -33.4,
+          -6.617000000000002,
+          0.03
+        ],
+        [
+          -33.26,
+          4.53,
+          0.17
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/0/aft/aisle/foot",
+      "source_name": "pioneer.drone_bay/rack/0/aft/aisle/foot",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -33.46,
+          -6.617000000000002,
+          -0.03
+        ],
+        [
+          -33.199999999999996,
+          -6.497000000000002,
+          0.23
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/0/aft/back/post",
+      "source_name": "pioneer.drone_bay/rack/0/aft/back/post",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -33.4,
+          -6.617000000000002,
+          6.83
+        ],
+        [
+          -33.26,
+          4.53,
+          6.970000000000001
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/0/aft/back/foot",
+      "source_name": "pioneer.drone_bay/rack/0/aft/back/foot",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -33.46,
+          -6.617000000000002,
+          6.7700000000000005
+        ],
+        [
+          -33.199999999999996,
+          -6.497000000000002,
+          7.03
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/0/fore/aisle/post",
+      "source_name": "pioneer.drone_bay/rack/0/fore/aisle/post",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -27.740000000000002,
+          -6.68,
+          0.03
+        ],
+        [
+          -27.6,
+          4.53,
+          0.17
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/0/fore/aisle/foot",
+      "source_name": "pioneer.drone_bay/rack/0/fore/aisle/foot",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -27.8,
+          -6.68,
+          -0.03
+        ],
+        [
+          -27.540000000000003,
+          -6.56,
+          0.23
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/0/fore/back/post",
+      "source_name": "pioneer.drone_bay/rack/0/fore/back/post",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -27.740000000000002,
+          -6.68,
+          6.83
+        ],
+        [
+          -27.6,
+          4.53,
+          6.970000000000001
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/0/fore/back/foot",
+      "source_name": "pioneer.drone_bay/rack/0/fore/back/foot",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -27.8,
+          -6.68,
+          6.7700000000000005
+        ],
+        [
+          -27.540000000000003,
+          -6.56,
+          7.03
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s00/runner/aft",
+      "source_name": "pioneer.drone_bay/rack/s00/runner/aft",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -33.199999999999996,
+          -6.44,
+          0.28
+        ],
+        [
+          -33.04,
+          -6.380000000000001,
+          6.94
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s00/bracket/aft/aisle",
+      "source_name": "pioneer.drone_bay/rack/s00/bracket/aft/aisle",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -33.37,
+          -6.48,
+          0.04000000000000001
+        ],
+        [
+          -33.08,
+          -6.380000000000001,
+          0.16
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s00/bracket/aft/back",
+      "source_name": "pioneer.drone_bay/rack/s00/bracket/aft/back",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -33.37,
+          -6.48,
+          6.840000000000001
+        ],
+        [
+          -33.08,
+          -6.380000000000001,
+          6.96
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s00/runner/fore",
+      "source_name": "pioneer.drone_bay/rack/s00/runner/fore",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -27.959999999999997,
+          -6.44,
+          0.28
+        ],
+        [
+          -27.8,
+          -6.380000000000001,
+          6.94
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s00/bracket/fore/aisle",
+      "source_name": "pioneer.drone_bay/rack/s00/bracket/fore/aisle",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -27.919999999999998,
+          -6.48,
+          0.04000000000000001
+        ],
+        [
+          -27.630000000000003,
+          -6.380000000000001,
+          0.16
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s00/bracket/fore/back",
+      "source_name": "pioneer.drone_bay/rack/s00/bracket/fore/back",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -27.919999999999998,
+          -6.48,
+          6.840000000000001
+        ],
+        [
+          -27.630000000000003,
+          -6.380000000000001,
+          6.96
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s00/deck",
+      "source_name": "pioneer.drone_bay/tray/s00/deck",
+      "group": "tray/s00",
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -33.14,
+          -6.380000000000001,
+          0.4
+        ],
+        [
+          -27.86,
+          -6.300000000000001,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s00/retainer/aft",
+      "source_name": "pioneer.drone_bay/tray/s00/retainer/aft",
+      "group": "tray/s00",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -33.115,
+          -6.300000000000001,
+          0.4
+        ],
+        [
+          -33.065000000000005,
+          -6.180000000000001,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s00/retainer/fore",
+      "source_name": "pioneer.drone_bay/tray/s00/retainer/fore",
+      "group": "tray/s00",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -27.935,
+          -6.300000000000001,
+          0.4
+        ],
+        [
+          -27.885,
+          -6.180000000000001,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s00/identifier",
+      "source_name": "pioneer.drone_bay/rack/s00/identifier",
+      "group": null,
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -27.77,
+          -6.120000000000001,
+          6.76
+        ],
+        [
+          -27.69,
+          -5.82,
+          6.86
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s01/runner/aft",
+      "source_name": "pioneer.drone_bay/rack/s01/runner/aft",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -33.199999999999996,
+          -4.24,
+          0.28
+        ],
+        [
+          -33.04,
+          -4.180000000000001,
+          6.94
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s01/bracket/aft/aisle",
+      "source_name": "pioneer.drone_bay/rack/s01/bracket/aft/aisle",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -33.37,
+          -4.28,
+          0.04000000000000001
+        ],
+        [
+          -33.08,
+          -4.180000000000001,
+          0.16
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s01/bracket/aft/back",
+      "source_name": "pioneer.drone_bay/rack/s01/bracket/aft/back",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -33.37,
+          -4.28,
+          6.840000000000001
+        ],
+        [
+          -33.08,
+          -4.180000000000001,
+          6.96
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s01/runner/fore",
+      "source_name": "pioneer.drone_bay/rack/s01/runner/fore",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -27.959999999999997,
+          -4.24,
+          0.28
+        ],
+        [
+          -27.8,
+          -4.180000000000001,
+          6.94
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s01/bracket/fore/aisle",
+      "source_name": "pioneer.drone_bay/rack/s01/bracket/fore/aisle",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -27.919999999999998,
+          -4.28,
+          0.04000000000000001
+        ],
+        [
+          -27.630000000000003,
+          -4.180000000000001,
+          0.16
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s01/bracket/fore/back",
+      "source_name": "pioneer.drone_bay/rack/s01/bracket/fore/back",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -27.919999999999998,
+          -4.28,
+          6.840000000000001
+        ],
+        [
+          -27.630000000000003,
+          -4.180000000000001,
+          6.96
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s01/deck",
+      "source_name": "pioneer.drone_bay/tray/s01/deck",
+      "group": "tray/s01",
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -33.14,
+          -4.180000000000001,
+          0.4
+        ],
+        [
+          -27.86,
+          -4.1000000000000005,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s01/retainer/aft",
+      "source_name": "pioneer.drone_bay/tray/s01/retainer/aft",
+      "group": "tray/s01",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -33.115,
+          -4.1000000000000005,
+          0.4
+        ],
+        [
+          -33.065000000000005,
+          -3.9800000000000004,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s01/retainer/fore",
+      "source_name": "pioneer.drone_bay/tray/s01/retainer/fore",
+      "group": "tray/s01",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -27.935,
+          -4.1000000000000005,
+          0.4
+        ],
+        [
+          -27.885,
+          -3.9800000000000004,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s01/identifier",
+      "source_name": "pioneer.drone_bay/rack/s01/identifier",
+      "group": null,
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -27.77,
+          -3.9200000000000004,
+          6.76
+        ],
+        [
+          -27.69,
+          -3.6200000000000006,
+          6.86
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s02/runner/aft",
+      "source_name": "pioneer.drone_bay/rack/s02/runner/aft",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -33.199999999999996,
+          -2.04,
+          0.28
+        ],
+        [
+          -33.04,
+          -1.98,
+          6.94
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s02/bracket/aft/aisle",
+      "source_name": "pioneer.drone_bay/rack/s02/bracket/aft/aisle",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -33.37,
+          -2.08,
+          0.04000000000000001
+        ],
+        [
+          -33.08,
+          -1.98,
+          0.16
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s02/bracket/aft/back",
+      "source_name": "pioneer.drone_bay/rack/s02/bracket/aft/back",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -33.37,
+          -2.08,
+          6.840000000000001
+        ],
+        [
+          -33.08,
+          -1.98,
+          6.96
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s02/runner/fore",
+      "source_name": "pioneer.drone_bay/rack/s02/runner/fore",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -27.959999999999997,
+          -2.04,
+          0.28
+        ],
+        [
+          -27.8,
+          -1.98,
+          6.94
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s02/bracket/fore/aisle",
+      "source_name": "pioneer.drone_bay/rack/s02/bracket/fore/aisle",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -27.919999999999998,
+          -2.08,
+          0.04000000000000001
+        ],
+        [
+          -27.630000000000003,
+          -1.98,
+          0.16
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s02/bracket/fore/back",
+      "source_name": "pioneer.drone_bay/rack/s02/bracket/fore/back",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -27.919999999999998,
+          -2.08,
+          6.840000000000001
+        ],
+        [
+          -27.630000000000003,
+          -1.98,
+          6.96
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s02/deck",
+      "source_name": "pioneer.drone_bay/tray/s02/deck",
+      "group": "tray/s02",
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -33.14,
+          -1.98,
+          0.4
+        ],
+        [
+          -27.86,
+          -1.9,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s02/retainer/aft",
+      "source_name": "pioneer.drone_bay/tray/s02/retainer/aft",
+      "group": "tray/s02",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -33.115,
+          -1.9,
+          0.4
+        ],
+        [
+          -33.065000000000005,
+          -1.7799999999999998,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s02/retainer/fore",
+      "source_name": "pioneer.drone_bay/tray/s02/retainer/fore",
+      "group": "tray/s02",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -27.935,
+          -1.9,
+          0.4
+        ],
+        [
+          -27.885,
+          -1.7799999999999998,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s02/identifier",
+      "source_name": "pioneer.drone_bay/rack/s02/identifier",
+      "group": null,
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -27.77,
+          -1.72,
+          6.76
+        ],
+        [
+          -27.69,
+          -1.42,
+          6.86
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s03/runner/aft",
+      "source_name": "pioneer.drone_bay/rack/s03/runner/aft",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -33.199999999999996,
+          0.15999999999999992,
+          0.28
+        ],
+        [
+          -33.04,
+          0.21999999999999992,
+          6.94
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s03/bracket/aft/aisle",
+      "source_name": "pioneer.drone_bay/rack/s03/bracket/aft/aisle",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -33.37,
+          0.11999999999999994,
+          0.04000000000000001
+        ],
+        [
+          -33.08,
+          0.21999999999999992,
+          0.16
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s03/bracket/aft/back",
+      "source_name": "pioneer.drone_bay/rack/s03/bracket/aft/back",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -33.37,
+          0.11999999999999994,
+          6.840000000000001
+        ],
+        [
+          -33.08,
+          0.21999999999999992,
+          6.96
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s03/runner/fore",
+      "source_name": "pioneer.drone_bay/rack/s03/runner/fore",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -27.959999999999997,
+          0.15999999999999992,
+          0.28
+        ],
+        [
+          -27.8,
+          0.21999999999999992,
+          6.94
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s03/bracket/fore/aisle",
+      "source_name": "pioneer.drone_bay/rack/s03/bracket/fore/aisle",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -27.919999999999998,
+          0.11999999999999994,
+          0.04000000000000001
+        ],
+        [
+          -27.630000000000003,
+          0.21999999999999992,
+          0.16
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s03/bracket/fore/back",
+      "source_name": "pioneer.drone_bay/rack/s03/bracket/fore/back",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -27.919999999999998,
+          0.11999999999999994,
+          6.840000000000001
+        ],
+        [
+          -27.630000000000003,
+          0.21999999999999992,
+          6.96
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s03/deck",
+      "source_name": "pioneer.drone_bay/tray/s03/deck",
+      "group": "tray/s03",
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -33.14,
+          0.21999999999999992,
+          0.4
+        ],
+        [
+          -27.86,
+          0.29999999999999993,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s03/retainer/aft",
+      "source_name": "pioneer.drone_bay/tray/s03/retainer/aft",
+      "group": "tray/s03",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -33.115,
+          0.29999999999999993,
+          0.4
+        ],
+        [
+          -33.065000000000005,
+          0.41999999999999993,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s03/retainer/fore",
+      "source_name": "pioneer.drone_bay/tray/s03/retainer/fore",
+      "group": "tray/s03",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -27.935,
+          0.29999999999999993,
+          0.4
+        ],
+        [
+          -27.885,
+          0.41999999999999993,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s03/identifier",
+      "source_name": "pioneer.drone_bay/rack/s03/identifier",
+      "group": null,
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -27.77,
+          0.4799999999999999,
+          6.76
+        ],
+        [
+          -27.69,
+          0.7799999999999999,
+          6.86
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s04/runner/aft",
+      "source_name": "pioneer.drone_bay/rack/s04/runner/aft",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -33.199999999999996,
+          2.36,
+          0.28
+        ],
+        [
+          -33.04,
+          2.42,
+          6.94
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s04/bracket/aft/aisle",
+      "source_name": "pioneer.drone_bay/rack/s04/bracket/aft/aisle",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -33.37,
+          2.32,
+          0.04000000000000001
+        ],
+        [
+          -33.08,
+          2.42,
+          0.16
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s04/bracket/aft/back",
+      "source_name": "pioneer.drone_bay/rack/s04/bracket/aft/back",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -33.37,
+          2.32,
+          6.840000000000001
+        ],
+        [
+          -33.08,
+          2.42,
+          6.96
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s04/runner/fore",
+      "source_name": "pioneer.drone_bay/rack/s04/runner/fore",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -27.959999999999997,
+          2.36,
+          0.28
+        ],
+        [
+          -27.8,
+          2.42,
+          6.94
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s04/bracket/fore/aisle",
+      "source_name": "pioneer.drone_bay/rack/s04/bracket/fore/aisle",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -27.919999999999998,
+          2.32,
+          0.04000000000000001
+        ],
+        [
+          -27.630000000000003,
+          2.42,
+          0.16
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s04/bracket/fore/back",
+      "source_name": "pioneer.drone_bay/rack/s04/bracket/fore/back",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -27.919999999999998,
+          2.32,
+          6.840000000000001
+        ],
+        [
+          -27.630000000000003,
+          2.42,
+          6.96
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s04/deck",
+      "source_name": "pioneer.drone_bay/tray/s04/deck",
+      "group": "tray/s04",
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -33.14,
+          2.42,
+          0.4
+        ],
+        [
+          -27.86,
+          2.5,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s04/retainer/aft",
+      "source_name": "pioneer.drone_bay/tray/s04/retainer/aft",
+      "group": "tray/s04",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -33.115,
+          2.5,
+          0.4
+        ],
+        [
+          -33.065000000000005,
+          2.62,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s04/retainer/fore",
+      "source_name": "pioneer.drone_bay/tray/s04/retainer/fore",
+      "group": "tray/s04",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -27.935,
+          2.5,
+          0.4
+        ],
+        [
+          -27.885,
+          2.62,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s04/identifier",
+      "source_name": "pioneer.drone_bay/rack/s04/identifier",
+      "group": null,
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -27.77,
+          2.68,
+          6.76
+        ],
+        [
+          -27.69,
+          2.98,
+          6.86
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/0/rear_diagonal",
+      "source_name": "pioneer.drone_bay/rack/0/rear_diagonal",
+      "group": null,
+      "material": "Emerald structural frames"
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/0/rear_tie/-6.45",
+      "source_name": "pioneer.drone_bay/rack/0/rear_tie/-6.45",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -33.4,
+          -6.45,
+          6.82
+        ],
+        [
+          -27.6,
+          -6.36,
+          6.98
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/0/rear_tie/4.35",
+      "source_name": "pioneer.drone_bay/rack/0/rear_tie/4.35",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -33.4,
+          4.35,
+          6.82
+        ],
+        [
+          -27.6,
+          4.4399999999999995,
+          6.98
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/1/aft/aisle/post",
+      "source_name": "pioneer.drone_bay/rack/1/aft/aisle/post",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -27.4,
+          -6.68,
+          0.03
+        ],
+        [
+          -27.259999999999998,
+          4.53,
+          0.17
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/1/aft/aisle/foot",
+      "source_name": "pioneer.drone_bay/rack/1/aft/aisle/foot",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -27.459999999999997,
+          -6.68,
+          -0.03
+        ],
+        [
+          -27.2,
+          -6.56,
+          0.23
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/1/aft/back/post",
+      "source_name": "pioneer.drone_bay/rack/1/aft/back/post",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -27.4,
+          -6.68,
+          6.83
+        ],
+        [
+          -27.259999999999998,
+          4.53,
+          6.970000000000001
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/1/aft/back/foot",
+      "source_name": "pioneer.drone_bay/rack/1/aft/back/foot",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -27.459999999999997,
+          -6.68,
+          6.7700000000000005
+        ],
+        [
+          -27.2,
+          -6.56,
+          7.03
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/1/fore/aisle/post",
+      "source_name": "pioneer.drone_bay/rack/1/fore/aisle/post",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -21.740000000000002,
+          -6.68,
+          0.03
+        ],
+        [
+          -21.6,
+          4.53,
+          0.17
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/1/fore/aisle/foot",
+      "source_name": "pioneer.drone_bay/rack/1/fore/aisle/foot",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -21.8,
+          -6.68,
+          -0.03
+        ],
+        [
+          -21.540000000000003,
+          -6.56,
+          0.23
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/1/fore/back/post",
+      "source_name": "pioneer.drone_bay/rack/1/fore/back/post",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -21.740000000000002,
+          -6.68,
+          6.83
+        ],
+        [
+          -21.6,
+          4.53,
+          6.970000000000001
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/1/fore/back/foot",
+      "source_name": "pioneer.drone_bay/rack/1/fore/back/foot",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -21.8,
+          -6.68,
+          6.7700000000000005
+        ],
+        [
+          -21.540000000000003,
+          -6.56,
+          7.03
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s05/runner/aft",
+      "source_name": "pioneer.drone_bay/rack/s05/runner/aft",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -27.2,
+          -6.44,
+          0.28
+        ],
+        [
+          -27.040000000000003,
+          -6.380000000000001,
+          6.94
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s05/bracket/aft/aisle",
+      "source_name": "pioneer.drone_bay/rack/s05/bracket/aft/aisle",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -27.369999999999997,
+          -6.48,
+          0.04000000000000001
+        ],
+        [
+          -27.080000000000002,
+          -6.380000000000001,
+          0.16
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s05/bracket/aft/back",
+      "source_name": "pioneer.drone_bay/rack/s05/bracket/aft/back",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -27.369999999999997,
+          -6.48,
+          6.840000000000001
+        ],
+        [
+          -27.080000000000002,
+          -6.380000000000001,
+          6.96
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s05/runner/fore",
+      "source_name": "pioneer.drone_bay/rack/s05/runner/fore",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -21.959999999999997,
+          -6.44,
+          0.28
+        ],
+        [
+          -21.8,
+          -6.380000000000001,
+          6.94
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s05/bracket/fore/aisle",
+      "source_name": "pioneer.drone_bay/rack/s05/bracket/fore/aisle",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -21.919999999999998,
+          -6.48,
+          0.04000000000000001
+        ],
+        [
+          -21.630000000000003,
+          -6.380000000000001,
+          0.16
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s05/bracket/fore/back",
+      "source_name": "pioneer.drone_bay/rack/s05/bracket/fore/back",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -21.919999999999998,
+          -6.48,
+          6.840000000000001
+        ],
+        [
+          -21.630000000000003,
+          -6.380000000000001,
+          6.96
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s05/deck",
+      "source_name": "pioneer.drone_bay/tray/s05/deck",
+      "group": "tray/s05",
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -27.14,
+          -6.380000000000001,
+          0.4
+        ],
+        [
+          -21.86,
+          -6.300000000000001,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s05/retainer/aft",
+      "source_name": "pioneer.drone_bay/tray/s05/retainer/aft",
+      "group": "tray/s05",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -27.115,
+          -6.300000000000001,
+          0.4
+        ],
+        [
+          -27.065,
+          -6.180000000000001,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s05/retainer/fore",
+      "source_name": "pioneer.drone_bay/tray/s05/retainer/fore",
+      "group": "tray/s05",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -21.935,
+          -6.300000000000001,
+          0.4
+        ],
+        [
+          -21.885,
+          -6.180000000000001,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s05/identifier",
+      "source_name": "pioneer.drone_bay/rack/s05/identifier",
+      "group": null,
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -21.77,
+          -6.120000000000001,
+          6.76
+        ],
+        [
+          -21.69,
+          -5.82,
+          6.86
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s06/runner/aft",
+      "source_name": "pioneer.drone_bay/rack/s06/runner/aft",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -27.2,
+          -4.24,
+          0.28
+        ],
+        [
+          -27.040000000000003,
+          -4.180000000000001,
+          6.94
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s06/bracket/aft/aisle",
+      "source_name": "pioneer.drone_bay/rack/s06/bracket/aft/aisle",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -27.369999999999997,
+          -4.28,
+          0.04000000000000001
+        ],
+        [
+          -27.080000000000002,
+          -4.180000000000001,
+          0.16
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s06/bracket/aft/back",
+      "source_name": "pioneer.drone_bay/rack/s06/bracket/aft/back",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -27.369999999999997,
+          -4.28,
+          6.840000000000001
+        ],
+        [
+          -27.080000000000002,
+          -4.180000000000001,
+          6.96
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s06/runner/fore",
+      "source_name": "pioneer.drone_bay/rack/s06/runner/fore",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -21.959999999999997,
+          -4.24,
+          0.28
+        ],
+        [
+          -21.8,
+          -4.180000000000001,
+          6.94
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s06/bracket/fore/aisle",
+      "source_name": "pioneer.drone_bay/rack/s06/bracket/fore/aisle",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -21.919999999999998,
+          -4.28,
+          0.04000000000000001
+        ],
+        [
+          -21.630000000000003,
+          -4.180000000000001,
+          0.16
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s06/bracket/fore/back",
+      "source_name": "pioneer.drone_bay/rack/s06/bracket/fore/back",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -21.919999999999998,
+          -4.28,
+          6.840000000000001
+        ],
+        [
+          -21.630000000000003,
+          -4.180000000000001,
+          6.96
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s06/deck",
+      "source_name": "pioneer.drone_bay/tray/s06/deck",
+      "group": "tray/s06",
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -27.14,
+          -4.180000000000001,
+          0.4
+        ],
+        [
+          -21.86,
+          -4.1000000000000005,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s06/retainer/aft",
+      "source_name": "pioneer.drone_bay/tray/s06/retainer/aft",
+      "group": "tray/s06",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -27.115,
+          -4.1000000000000005,
+          0.4
+        ],
+        [
+          -27.065,
+          -3.9800000000000004,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s06/retainer/fore",
+      "source_name": "pioneer.drone_bay/tray/s06/retainer/fore",
+      "group": "tray/s06",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -21.935,
+          -4.1000000000000005,
+          0.4
+        ],
+        [
+          -21.885,
+          -3.9800000000000004,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s06/identifier",
+      "source_name": "pioneer.drone_bay/rack/s06/identifier",
+      "group": null,
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -21.77,
+          -3.9200000000000004,
+          6.76
+        ],
+        [
+          -21.69,
+          -3.6200000000000006,
+          6.86
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s07/runner/aft",
+      "source_name": "pioneer.drone_bay/rack/s07/runner/aft",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -27.2,
+          -2.04,
+          0.28
+        ],
+        [
+          -27.040000000000003,
+          -1.98,
+          6.94
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s07/bracket/aft/aisle",
+      "source_name": "pioneer.drone_bay/rack/s07/bracket/aft/aisle",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -27.369999999999997,
+          -2.08,
+          0.04000000000000001
+        ],
+        [
+          -27.080000000000002,
+          -1.98,
+          0.16
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s07/bracket/aft/back",
+      "source_name": "pioneer.drone_bay/rack/s07/bracket/aft/back",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -27.369999999999997,
+          -2.08,
+          6.840000000000001
+        ],
+        [
+          -27.080000000000002,
+          -1.98,
+          6.96
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s07/runner/fore",
+      "source_name": "pioneer.drone_bay/rack/s07/runner/fore",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -21.959999999999997,
+          -2.04,
+          0.28
+        ],
+        [
+          -21.8,
+          -1.98,
+          6.94
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s07/bracket/fore/aisle",
+      "source_name": "pioneer.drone_bay/rack/s07/bracket/fore/aisle",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -21.919999999999998,
+          -2.08,
+          0.04000000000000001
+        ],
+        [
+          -21.630000000000003,
+          -1.98,
+          0.16
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s07/bracket/fore/back",
+      "source_name": "pioneer.drone_bay/rack/s07/bracket/fore/back",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -21.919999999999998,
+          -2.08,
+          6.840000000000001
+        ],
+        [
+          -21.630000000000003,
+          -1.98,
+          6.96
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s07/deck",
+      "source_name": "pioneer.drone_bay/tray/s07/deck",
+      "group": "tray/s07",
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -27.14,
+          -1.98,
+          0.4
+        ],
+        [
+          -21.86,
+          -1.9,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s07/retainer/aft",
+      "source_name": "pioneer.drone_bay/tray/s07/retainer/aft",
+      "group": "tray/s07",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -27.115,
+          -1.9,
+          0.4
+        ],
+        [
+          -27.065,
+          -1.7799999999999998,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s07/retainer/fore",
+      "source_name": "pioneer.drone_bay/tray/s07/retainer/fore",
+      "group": "tray/s07",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -21.935,
+          -1.9,
+          0.4
+        ],
+        [
+          -21.885,
+          -1.7799999999999998,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s07/identifier",
+      "source_name": "pioneer.drone_bay/rack/s07/identifier",
+      "group": null,
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -21.77,
+          -1.72,
+          6.76
+        ],
+        [
+          -21.69,
+          -1.42,
+          6.86
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s08/runner/aft",
+      "source_name": "pioneer.drone_bay/rack/s08/runner/aft",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -27.2,
+          0.15999999999999992,
+          0.28
+        ],
+        [
+          -27.040000000000003,
+          0.21999999999999992,
+          6.94
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s08/bracket/aft/aisle",
+      "source_name": "pioneer.drone_bay/rack/s08/bracket/aft/aisle",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -27.369999999999997,
+          0.11999999999999994,
+          0.04000000000000001
+        ],
+        [
+          -27.080000000000002,
+          0.21999999999999992,
+          0.16
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s08/bracket/aft/back",
+      "source_name": "pioneer.drone_bay/rack/s08/bracket/aft/back",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -27.369999999999997,
+          0.11999999999999994,
+          6.840000000000001
+        ],
+        [
+          -27.080000000000002,
+          0.21999999999999992,
+          6.96
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s08/runner/fore",
+      "source_name": "pioneer.drone_bay/rack/s08/runner/fore",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -21.959999999999997,
+          0.15999999999999992,
+          0.28
+        ],
+        [
+          -21.8,
+          0.21999999999999992,
+          6.94
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s08/bracket/fore/aisle",
+      "source_name": "pioneer.drone_bay/rack/s08/bracket/fore/aisle",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -21.919999999999998,
+          0.11999999999999994,
+          0.04000000000000001
+        ],
+        [
+          -21.630000000000003,
+          0.21999999999999992,
+          0.16
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s08/bracket/fore/back",
+      "source_name": "pioneer.drone_bay/rack/s08/bracket/fore/back",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -21.919999999999998,
+          0.11999999999999994,
+          6.840000000000001
+        ],
+        [
+          -21.630000000000003,
+          0.21999999999999992,
+          6.96
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s08/deck",
+      "source_name": "pioneer.drone_bay/tray/s08/deck",
+      "group": "tray/s08",
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -27.14,
+          0.21999999999999992,
+          0.4
+        ],
+        [
+          -21.86,
+          0.29999999999999993,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s08/retainer/aft",
+      "source_name": "pioneer.drone_bay/tray/s08/retainer/aft",
+      "group": "tray/s08",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -27.115,
+          0.29999999999999993,
+          0.4
+        ],
+        [
+          -27.065,
+          0.41999999999999993,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s08/retainer/fore",
+      "source_name": "pioneer.drone_bay/tray/s08/retainer/fore",
+      "group": "tray/s08",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -21.935,
+          0.29999999999999993,
+          0.4
+        ],
+        [
+          -21.885,
+          0.41999999999999993,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s08/identifier",
+      "source_name": "pioneer.drone_bay/rack/s08/identifier",
+      "group": null,
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -21.77,
+          0.4799999999999999,
+          6.76
+        ],
+        [
+          -21.69,
+          0.7799999999999999,
+          6.86
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s09/runner/aft",
+      "source_name": "pioneer.drone_bay/rack/s09/runner/aft",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -27.2,
+          2.36,
+          0.28
+        ],
+        [
+          -27.040000000000003,
+          2.42,
+          6.94
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s09/bracket/aft/aisle",
+      "source_name": "pioneer.drone_bay/rack/s09/bracket/aft/aisle",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -27.369999999999997,
+          2.32,
+          0.04000000000000001
+        ],
+        [
+          -27.080000000000002,
+          2.42,
+          0.16
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s09/bracket/aft/back",
+      "source_name": "pioneer.drone_bay/rack/s09/bracket/aft/back",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -27.369999999999997,
+          2.32,
+          6.840000000000001
+        ],
+        [
+          -27.080000000000002,
+          2.42,
+          6.96
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s09/runner/fore",
+      "source_name": "pioneer.drone_bay/rack/s09/runner/fore",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -21.959999999999997,
+          2.36,
+          0.28
+        ],
+        [
+          -21.8,
+          2.42,
+          6.94
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s09/bracket/fore/aisle",
+      "source_name": "pioneer.drone_bay/rack/s09/bracket/fore/aisle",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -21.919999999999998,
+          2.32,
+          0.04000000000000001
+        ],
+        [
+          -21.630000000000003,
+          2.42,
+          0.16
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s09/bracket/fore/back",
+      "source_name": "pioneer.drone_bay/rack/s09/bracket/fore/back",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -21.919999999999998,
+          2.32,
+          6.840000000000001
+        ],
+        [
+          -21.630000000000003,
+          2.42,
+          6.96
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s09/deck",
+      "source_name": "pioneer.drone_bay/tray/s09/deck",
+      "group": "tray/s09",
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -27.14,
+          2.42,
+          0.4
+        ],
+        [
+          -21.86,
+          2.5,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s09/retainer/aft",
+      "source_name": "pioneer.drone_bay/tray/s09/retainer/aft",
+      "group": "tray/s09",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -27.115,
+          2.5,
+          0.4
+        ],
+        [
+          -27.065,
+          2.62,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s09/retainer/fore",
+      "source_name": "pioneer.drone_bay/tray/s09/retainer/fore",
+      "group": "tray/s09",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -21.935,
+          2.5,
+          0.4
+        ],
+        [
+          -21.885,
+          2.62,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s09/identifier",
+      "source_name": "pioneer.drone_bay/rack/s09/identifier",
+      "group": null,
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -21.77,
+          2.68,
+          6.76
+        ],
+        [
+          -21.69,
+          2.98,
+          6.86
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/1/rear_diagonal",
+      "source_name": "pioneer.drone_bay/rack/1/rear_diagonal",
+      "group": null,
+      "material": "Emerald structural frames"
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/1/rear_tie/-6.45",
+      "source_name": "pioneer.drone_bay/rack/1/rear_tie/-6.45",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -27.4,
+          -6.45,
+          6.82
+        ],
+        [
+          -21.6,
+          -6.36,
+          6.98
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/1/rear_tie/4.35",
+      "source_name": "pioneer.drone_bay/rack/1/rear_tie/4.35",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -27.4,
+          4.35,
+          6.82
+        ],
+        [
+          -21.6,
+          4.4399999999999995,
+          6.98
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/2/aft/aisle/post",
+      "source_name": "pioneer.drone_bay/rack/2/aft/aisle/post",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -21.4,
+          -6.68,
+          0.03
+        ],
+        [
+          -21.259999999999998,
+          4.53,
+          0.17
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/2/aft/aisle/foot",
+      "source_name": "pioneer.drone_bay/rack/2/aft/aisle/foot",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -21.459999999999997,
+          -6.68,
+          -0.03
+        ],
+        [
+          -21.2,
+          -6.56,
+          0.23
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/2/aft/back/post",
+      "source_name": "pioneer.drone_bay/rack/2/aft/back/post",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -21.4,
+          -6.68,
+          6.83
+        ],
+        [
+          -21.259999999999998,
+          4.53,
+          6.970000000000001
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/2/aft/back/foot",
+      "source_name": "pioneer.drone_bay/rack/2/aft/back/foot",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -21.459999999999997,
+          -6.68,
+          6.7700000000000005
+        ],
+        [
+          -21.2,
+          -6.56,
+          7.03
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/2/fore/aisle/post",
+      "source_name": "pioneer.drone_bay/rack/2/fore/aisle/post",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -15.74,
+          -6.68,
+          0.03
+        ],
+        [
+          -15.6,
+          4.53,
+          0.17
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/2/fore/aisle/foot",
+      "source_name": "pioneer.drone_bay/rack/2/fore/aisle/foot",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -15.8,
+          -6.68,
+          -0.03
+        ],
+        [
+          -15.54,
+          -6.56,
+          0.23
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/2/fore/back/post",
+      "source_name": "pioneer.drone_bay/rack/2/fore/back/post",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -15.74,
+          -6.68,
+          6.83
+        ],
+        [
+          -15.6,
+          4.53,
+          6.970000000000001
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/2/fore/back/foot",
+      "source_name": "pioneer.drone_bay/rack/2/fore/back/foot",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -15.8,
+          -6.68,
+          6.7700000000000005
+        ],
+        [
+          -15.54,
+          -6.56,
+          7.03
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s10/runner/aft",
+      "source_name": "pioneer.drone_bay/rack/s10/runner/aft",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -21.2,
+          -6.44,
+          0.28
+        ],
+        [
+          -21.040000000000003,
+          -6.380000000000001,
+          6.94
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s10/bracket/aft/aisle",
+      "source_name": "pioneer.drone_bay/rack/s10/bracket/aft/aisle",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -21.369999999999997,
+          -6.48,
+          0.04000000000000001
+        ],
+        [
+          -21.080000000000002,
+          -6.380000000000001,
+          0.16
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s10/bracket/aft/back",
+      "source_name": "pioneer.drone_bay/rack/s10/bracket/aft/back",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -21.369999999999997,
+          -6.48,
+          6.840000000000001
+        ],
+        [
+          -21.080000000000002,
+          -6.380000000000001,
+          6.96
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s10/runner/fore",
+      "source_name": "pioneer.drone_bay/rack/s10/runner/fore",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -15.959999999999999,
+          -6.44,
+          0.28
+        ],
+        [
+          -15.799999999999999,
+          -6.380000000000001,
+          6.94
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s10/bracket/fore/aisle",
+      "source_name": "pioneer.drone_bay/rack/s10/bracket/fore/aisle",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -15.919999999999998,
+          -6.48,
+          0.04000000000000001
+        ],
+        [
+          -15.63,
+          -6.380000000000001,
+          0.16
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s10/bracket/fore/back",
+      "source_name": "pioneer.drone_bay/rack/s10/bracket/fore/back",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -15.919999999999998,
+          -6.48,
+          6.840000000000001
+        ],
+        [
+          -15.63,
+          -6.380000000000001,
+          6.96
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s10/deck",
+      "source_name": "pioneer.drone_bay/tray/s10/deck",
+      "group": "tray/s10",
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -21.14,
+          -6.380000000000001,
+          0.4
+        ],
+        [
+          -15.86,
+          -6.300000000000001,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s10/retainer/aft",
+      "source_name": "pioneer.drone_bay/tray/s10/retainer/aft",
+      "group": "tray/s10",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -21.115,
+          -6.300000000000001,
+          0.4
+        ],
+        [
+          -21.065,
+          -6.180000000000001,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s10/retainer/fore",
+      "source_name": "pioneer.drone_bay/tray/s10/retainer/fore",
+      "group": "tray/s10",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -15.935,
+          -6.300000000000001,
+          0.4
+        ],
+        [
+          -15.885,
+          -6.180000000000001,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s10/identifier",
+      "source_name": "pioneer.drone_bay/rack/s10/identifier",
+      "group": null,
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -15.77,
+          -6.120000000000001,
+          6.76
+        ],
+        [
+          -15.69,
+          -5.82,
+          6.86
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s11/runner/aft",
+      "source_name": "pioneer.drone_bay/rack/s11/runner/aft",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -21.2,
+          -4.24,
+          0.28
+        ],
+        [
+          -21.040000000000003,
+          -4.180000000000001,
+          6.94
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s11/bracket/aft/aisle",
+      "source_name": "pioneer.drone_bay/rack/s11/bracket/aft/aisle",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -21.369999999999997,
+          -4.28,
+          0.04000000000000001
+        ],
+        [
+          -21.080000000000002,
+          -4.180000000000001,
+          0.16
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s11/bracket/aft/back",
+      "source_name": "pioneer.drone_bay/rack/s11/bracket/aft/back",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -21.369999999999997,
+          -4.28,
+          6.840000000000001
+        ],
+        [
+          -21.080000000000002,
+          -4.180000000000001,
+          6.96
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s11/runner/fore",
+      "source_name": "pioneer.drone_bay/rack/s11/runner/fore",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -15.959999999999999,
+          -4.24,
+          0.28
+        ],
+        [
+          -15.799999999999999,
+          -4.180000000000001,
+          6.94
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s11/bracket/fore/aisle",
+      "source_name": "pioneer.drone_bay/rack/s11/bracket/fore/aisle",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -15.919999999999998,
+          -4.28,
+          0.04000000000000001
+        ],
+        [
+          -15.63,
+          -4.180000000000001,
+          0.16
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s11/bracket/fore/back",
+      "source_name": "pioneer.drone_bay/rack/s11/bracket/fore/back",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -15.919999999999998,
+          -4.28,
+          6.840000000000001
+        ],
+        [
+          -15.63,
+          -4.180000000000001,
+          6.96
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s11/deck",
+      "source_name": "pioneer.drone_bay/tray/s11/deck",
+      "group": "tray/s11",
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -21.14,
+          -4.180000000000001,
+          0.4
+        ],
+        [
+          -15.86,
+          -4.1000000000000005,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s11/retainer/aft",
+      "source_name": "pioneer.drone_bay/tray/s11/retainer/aft",
+      "group": "tray/s11",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -21.115,
+          -4.1000000000000005,
+          0.4
+        ],
+        [
+          -21.065,
+          -3.9800000000000004,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s11/retainer/fore",
+      "source_name": "pioneer.drone_bay/tray/s11/retainer/fore",
+      "group": "tray/s11",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -15.935,
+          -4.1000000000000005,
+          0.4
+        ],
+        [
+          -15.885,
+          -3.9800000000000004,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s11/identifier",
+      "source_name": "pioneer.drone_bay/rack/s11/identifier",
+      "group": null,
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -15.77,
+          -3.9200000000000004,
+          6.76
+        ],
+        [
+          -15.69,
+          -3.6200000000000006,
+          6.86
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s12/runner/aft",
+      "source_name": "pioneer.drone_bay/rack/s12/runner/aft",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -21.2,
+          -2.04,
+          0.28
+        ],
+        [
+          -21.040000000000003,
+          -1.98,
+          6.94
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s12/bracket/aft/aisle",
+      "source_name": "pioneer.drone_bay/rack/s12/bracket/aft/aisle",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -21.369999999999997,
+          -2.08,
+          0.04000000000000001
+        ],
+        [
+          -21.080000000000002,
+          -1.98,
+          0.16
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s12/bracket/aft/back",
+      "source_name": "pioneer.drone_bay/rack/s12/bracket/aft/back",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -21.369999999999997,
+          -2.08,
+          6.840000000000001
+        ],
+        [
+          -21.080000000000002,
+          -1.98,
+          6.96
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s12/runner/fore",
+      "source_name": "pioneer.drone_bay/rack/s12/runner/fore",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -15.959999999999999,
+          -2.04,
+          0.28
+        ],
+        [
+          -15.799999999999999,
+          -1.98,
+          6.94
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s12/bracket/fore/aisle",
+      "source_name": "pioneer.drone_bay/rack/s12/bracket/fore/aisle",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -15.919999999999998,
+          -2.08,
+          0.04000000000000001
+        ],
+        [
+          -15.63,
+          -1.98,
+          0.16
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s12/bracket/fore/back",
+      "source_name": "pioneer.drone_bay/rack/s12/bracket/fore/back",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -15.919999999999998,
+          -2.08,
+          6.840000000000001
+        ],
+        [
+          -15.63,
+          -1.98,
+          6.96
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s12/deck",
+      "source_name": "pioneer.drone_bay/tray/s12/deck",
+      "group": "tray/s12",
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -21.14,
+          -1.98,
+          0.4
+        ],
+        [
+          -15.86,
+          -1.9,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s12/retainer/aft",
+      "source_name": "pioneer.drone_bay/tray/s12/retainer/aft",
+      "group": "tray/s12",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -21.115,
+          -1.9,
+          0.4
+        ],
+        [
+          -21.065,
+          -1.7799999999999998,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s12/retainer/fore",
+      "source_name": "pioneer.drone_bay/tray/s12/retainer/fore",
+      "group": "tray/s12",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -15.935,
+          -1.9,
+          0.4
+        ],
+        [
+          -15.885,
+          -1.7799999999999998,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s12/identifier",
+      "source_name": "pioneer.drone_bay/rack/s12/identifier",
+      "group": null,
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -15.77,
+          -1.72,
+          6.76
+        ],
+        [
+          -15.69,
+          -1.42,
+          6.86
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s13/runner/aft",
+      "source_name": "pioneer.drone_bay/rack/s13/runner/aft",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -21.2,
+          0.15999999999999992,
+          0.28
+        ],
+        [
+          -21.040000000000003,
+          0.21999999999999992,
+          6.94
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s13/bracket/aft/aisle",
+      "source_name": "pioneer.drone_bay/rack/s13/bracket/aft/aisle",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -21.369999999999997,
+          0.11999999999999994,
+          0.04000000000000001
+        ],
+        [
+          -21.080000000000002,
+          0.21999999999999992,
+          0.16
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s13/bracket/aft/back",
+      "source_name": "pioneer.drone_bay/rack/s13/bracket/aft/back",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -21.369999999999997,
+          0.11999999999999994,
+          6.840000000000001
+        ],
+        [
+          -21.080000000000002,
+          0.21999999999999992,
+          6.96
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s13/runner/fore",
+      "source_name": "pioneer.drone_bay/rack/s13/runner/fore",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -15.959999999999999,
+          0.15999999999999992,
+          0.28
+        ],
+        [
+          -15.799999999999999,
+          0.21999999999999992,
+          6.94
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s13/bracket/fore/aisle",
+      "source_name": "pioneer.drone_bay/rack/s13/bracket/fore/aisle",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -15.919999999999998,
+          0.11999999999999994,
+          0.04000000000000001
+        ],
+        [
+          -15.63,
+          0.21999999999999992,
+          0.16
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s13/bracket/fore/back",
+      "source_name": "pioneer.drone_bay/rack/s13/bracket/fore/back",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -15.919999999999998,
+          0.11999999999999994,
+          6.840000000000001
+        ],
+        [
+          -15.63,
+          0.21999999999999992,
+          6.96
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s13/deck",
+      "source_name": "pioneer.drone_bay/tray/s13/deck",
+      "group": "tray/s13",
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -21.14,
+          0.21999999999999992,
+          0.4
+        ],
+        [
+          -15.86,
+          0.29999999999999993,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s13/retainer/aft",
+      "source_name": "pioneer.drone_bay/tray/s13/retainer/aft",
+      "group": "tray/s13",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -21.115,
+          0.29999999999999993,
+          0.4
+        ],
+        [
+          -21.065,
+          0.41999999999999993,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s13/retainer/fore",
+      "source_name": "pioneer.drone_bay/tray/s13/retainer/fore",
+      "group": "tray/s13",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -15.935,
+          0.29999999999999993,
+          0.4
+        ],
+        [
+          -15.885,
+          0.41999999999999993,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s13/identifier",
+      "source_name": "pioneer.drone_bay/rack/s13/identifier",
+      "group": null,
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -15.77,
+          0.4799999999999999,
+          6.76
+        ],
+        [
+          -15.69,
+          0.7799999999999999,
+          6.86
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s14/runner/aft",
+      "source_name": "pioneer.drone_bay/rack/s14/runner/aft",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -21.2,
+          2.36,
+          0.28
+        ],
+        [
+          -21.040000000000003,
+          2.42,
+          6.94
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s14/bracket/aft/aisle",
+      "source_name": "pioneer.drone_bay/rack/s14/bracket/aft/aisle",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -21.369999999999997,
+          2.32,
+          0.04000000000000001
+        ],
+        [
+          -21.080000000000002,
+          2.42,
+          0.16
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s14/bracket/aft/back",
+      "source_name": "pioneer.drone_bay/rack/s14/bracket/aft/back",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -21.369999999999997,
+          2.32,
+          6.840000000000001
+        ],
+        [
+          -21.080000000000002,
+          2.42,
+          6.96
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s14/runner/fore",
+      "source_name": "pioneer.drone_bay/rack/s14/runner/fore",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -15.959999999999999,
+          2.36,
+          0.28
+        ],
+        [
+          -15.799999999999999,
+          2.42,
+          6.94
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s14/bracket/fore/aisle",
+      "source_name": "pioneer.drone_bay/rack/s14/bracket/fore/aisle",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -15.919999999999998,
+          2.32,
+          0.04000000000000001
+        ],
+        [
+          -15.63,
+          2.42,
+          0.16
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s14/bracket/fore/back",
+      "source_name": "pioneer.drone_bay/rack/s14/bracket/fore/back",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -15.919999999999998,
+          2.32,
+          6.840000000000001
+        ],
+        [
+          -15.63,
+          2.42,
+          6.96
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s14/deck",
+      "source_name": "pioneer.drone_bay/tray/s14/deck",
+      "group": "tray/s14",
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -21.14,
+          2.42,
+          0.4
+        ],
+        [
+          -15.86,
+          2.5,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s14/retainer/aft",
+      "source_name": "pioneer.drone_bay/tray/s14/retainer/aft",
+      "group": "tray/s14",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -21.115,
+          2.5,
+          0.4
+        ],
+        [
+          -21.065,
+          2.62,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/tray/s14/retainer/fore",
+      "source_name": "pioneer.drone_bay/tray/s14/retainer/fore",
+      "group": "tray/s14",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -15.935,
+          2.5,
+          0.4
+        ],
+        [
+          -15.885,
+          2.62,
+          6.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/s14/identifier",
+      "source_name": "pioneer.drone_bay/rack/s14/identifier",
+      "group": null,
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -15.77,
+          2.68,
+          6.76
+        ],
+        [
+          -15.69,
+          2.98,
+          6.86
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/2/rear_diagonal",
+      "source_name": "pioneer.drone_bay/rack/2/rear_diagonal",
+      "group": null,
+      "material": "Emerald structural frames"
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/2/rear_tie/-6.45",
+      "source_name": "pioneer.drone_bay/rack/2/rear_tie/-6.45",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -21.4,
+          -6.45,
+          6.82
+        ],
+        [
+          -15.6,
+          -6.36,
+          6.98
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/rack/2/rear_tie/4.35",
+      "source_name": "pioneer.drone_bay/rack/2/rear_tie/4.35",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -21.4,
+          4.35,
+          6.82
+        ],
+        [
+          -15.6,
+          4.4399999999999995,
+          6.98
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/gantry/fixed/aft/port/post",
+      "source_name": "pioneer.drone_bay/gantry/fixed/aft/port/post",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -34.07,
+          -6.416000000000001,
+          -7.0200000000000005
+        ],
+        [
+          -33.93,
+          4.98,
+          -6.88
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/gantry/fixed/aft/port/foot",
+      "source_name": "pioneer.drone_bay/gantry/fixed/aft/port/foot",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -34.12,
+          -6.416000000000001,
+          -7.07
+        ],
+        [
+          -33.88,
+          -6.296000000000001,
+          -6.83
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/gantry/fixed/aft/starboard/post",
+      "source_name": "pioneer.drone_bay/gantry/fixed/aft/starboard/post",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -34.07,
+          -6.416000000000001,
+          -0.12000000000000001
+        ],
+        [
+          -33.93,
+          4.98,
+          0.020000000000000004
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/gantry/fixed/aft/starboard/foot",
+      "source_name": "pioneer.drone_bay/gantry/fixed/aft/starboard/foot",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -34.12,
+          -6.416000000000001,
+          -0.16999999999999998
+        ],
+        [
+          -33.88,
+          -6.296000000000001,
+          0.06999999999999999
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/gantry/fixed/fore/port/post",
+      "source_name": "pioneer.drone_bay/gantry/fixed/fore/port/post",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -15.49,
+          -6.68,
+          -7.0200000000000005
+        ],
+        [
+          -15.35,
+          4.98,
+          -6.88
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/gantry/fixed/fore/port/foot",
+      "source_name": "pioneer.drone_bay/gantry/fixed/fore/port/foot",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -15.54,
+          -6.68,
+          -7.07
+        ],
+        [
+          -15.3,
+          -6.56,
+          -6.83
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/gantry/fixed/fore/starboard/post",
+      "source_name": "pioneer.drone_bay/gantry/fixed/fore/starboard/post",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -15.49,
+          -6.68,
+          -0.12000000000000001
+        ],
+        [
+          -15.35,
+          4.98,
+          0.020000000000000004
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/gantry/fixed/fore/starboard/foot",
+      "source_name": "pioneer.drone_bay/gantry/fixed/fore/starboard/foot",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -15.54,
+          -6.68,
+          -0.16999999999999998
+        ],
+        [
+          -15.3,
+          -6.56,
+          0.06999999999999999
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/gantry/fixed/rail/port",
+      "source_name": "pioneer.drone_bay/gantry/fixed/rail/port",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -34.04,
+          4.78,
+          -7.05
+        ],
+        [
+          -15.35,
+          4.94,
+          -6.8500000000000005
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/gantry/fixed/rail/starboard",
+      "source_name": "pioneer.drone_bay/gantry/fixed/rail/starboard",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -34.04,
+          4.78,
+          -0.15000000000000002
+        ],
+        [
+          -15.35,
+          4.94,
+          0.05
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/mechanism/carriage/aft/port/mast",
+      "source_name": "pioneer.drone_bay/mechanism/carriage/aft/port/mast",
+      "group": "carriage_x",
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -33.32,
+          -6.6,
+          -6.8999999999999995
+        ],
+        [
+          -33.220000000000006,
+          4.76,
+          -6.8
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/mechanism/carriage/aft/port/head",
+      "source_name": "pioneer.drone_bay/mechanism/carriage/aft/port/head",
+      "group": "carriage_x",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -33.35,
+          4.64,
+          -7.0
+        ],
+        [
+          -33.190000000000005,
+          4.78,
+          -6.699999999999999
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/mechanism/carriage/aft/starboard/mast",
+      "source_name": "pioneer.drone_bay/mechanism/carriage/aft/starboard/mast",
+      "group": "carriage_x",
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -33.32,
+          -6.6,
+          -0.2
+        ],
+        [
+          -33.220000000000006,
+          4.76,
+          -0.09999999999999999
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/mechanism/carriage/aft/starboard/head",
+      "source_name": "pioneer.drone_bay/mechanism/carriage/aft/starboard/head",
+      "group": "carriage_x",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -33.35,
+          4.64,
+          -0.3
+        ],
+        [
+          -33.190000000000005,
+          4.78,
+          0.0
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/mechanism/carriage/aft/top_tie",
+      "source_name": "pioneer.drone_bay/mechanism/carriage/aft/top_tie",
+      "group": "carriage_x",
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -33.32,
+          4.64,
+          -6.85
+        ],
+        [
+          -33.220000000000006,
+          4.74,
+          -0.15
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/mechanism/carriage/fore/port/mast",
+      "source_name": "pioneer.drone_bay/mechanism/carriage/fore/port/mast",
+      "group": "carriage_x",
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -27.78,
+          -6.6,
+          -6.8999999999999995
+        ],
+        [
+          -27.68,
+          4.76,
+          -6.8
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/mechanism/carriage/fore/port/head",
+      "source_name": "pioneer.drone_bay/mechanism/carriage/fore/port/head",
+      "group": "carriage_x",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -27.81,
+          4.64,
+          -7.0
+        ],
+        [
+          -27.650000000000002,
+          4.78,
+          -6.699999999999999
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/mechanism/carriage/fore/starboard/mast",
+      "source_name": "pioneer.drone_bay/mechanism/carriage/fore/starboard/mast",
+      "group": "carriage_x",
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -27.78,
+          -6.6,
+          -0.2
+        ],
+        [
+          -27.68,
+          4.76,
+          -0.09999999999999999
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/mechanism/carriage/fore/starboard/head",
+      "source_name": "pioneer.drone_bay/mechanism/carriage/fore/starboard/head",
+      "group": "carriage_x",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -27.81,
+          4.64,
+          -0.3
+        ],
+        [
+          -27.650000000000002,
+          4.78,
+          0.0
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/mechanism/carriage/fore/top_tie",
+      "source_name": "pioneer.drone_bay/mechanism/carriage/fore/top_tie",
+      "group": "carriage_x",
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -27.78,
+          4.64,
+          -6.85
+        ],
+        [
+          -27.68,
+          4.74,
+          -0.15
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/mechanism/lift/aft/edge",
+      "source_name": "pioneer.drone_bay/mechanism/lift/aft/edge",
+      "group": "lift_xy",
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -33.22,
+          -2.15,
+          -6.85
+        ],
+        [
+          -33.14,
+          -2.1,
+          -0.15
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/mechanism/lift/fore/edge",
+      "source_name": "pioneer.drone_bay/mechanism/lift/fore/edge",
+      "group": "lift_xy",
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -27.86,
+          -2.15,
+          -6.85
+        ],
+        [
+          -27.78,
+          -2.1,
+          -0.15
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/mechanism/lift/port/tie",
+      "source_name": "pioneer.drone_bay/mechanism/lift/port/tie",
+      "group": "lift_xy",
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -33.22,
+          -2.15,
+          -6.79
+        ],
+        [
+          -27.78,
+          -2.1,
+          -6.71
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/mechanism/lift/starboard/tie",
+      "source_name": "pioneer.drone_bay/mechanism/lift/starboard/tie",
+      "group": "lift_xy",
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -33.22,
+          -2.15,
+          -0.29
+        ],
+        [
+          -27.78,
+          -2.1,
+          -0.21
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/mechanism/fork/aft/stage0",
+      "source_name": "pioneer.drone_bay/mechanism/fork/aft/stage0",
+      "group": "fork_stage0",
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -32.37,
+          -2.1,
+          -6.75
+        ],
+        [
+          -32.23,
+          -2.06,
+          -2.55
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/mechanism/fork/aft/stage1",
+      "source_name": "pioneer.drone_bay/mechanism/fork/aft/stage1",
+      "group": "fork_stage1",
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -32.37,
+          -2.06,
+          -6.75
+        ],
+        [
+          -32.23,
+          -2.02,
+          -2.55
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/mechanism/fork/aft/stage2",
+      "source_name": "pioneer.drone_bay/mechanism/fork/aft/stage2",
+      "group": "fork_stage2",
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -32.37,
+          -2.02,
+          -6.75
+        ],
+        [
+          -32.23,
+          -1.98,
+          -2.55
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/mechanism/fork/fore/stage0",
+      "source_name": "pioneer.drone_bay/mechanism/fork/fore/stage0",
+      "group": "fork_stage0",
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -28.77,
+          -2.1,
+          -6.75
+        ],
+        [
+          -28.63,
+          -2.06,
+          -2.55
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/mechanism/fork/fore/stage1",
+      "source_name": "pioneer.drone_bay/mechanism/fork/fore/stage1",
+      "group": "fork_stage1",
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -28.77,
+          -2.06,
+          -6.75
+        ],
+        [
+          -28.63,
+          -2.02,
+          -2.55
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/mechanism/fork/fore/stage2",
+      "source_name": "pioneer.drone_bay/mechanism/fork/fore/stage2",
+      "group": "fork_stage2",
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -28.77,
+          -2.02,
+          -6.75
+        ],
+        [
+          -28.63,
+          -1.98,
+          -2.55
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/door/frame/port",
+      "source_name": "pioneer.drone_bay/door/frame/port",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -35.99,
+          -2.75,
+          -7.68
+        ],
+        [
+          -35.8,
+          0.75,
+          -7.52
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/door/guide/port",
+      "source_name": "pioneer.drone_bay/door/guide/port",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -35.76,
+          -4.4,
+          -7.645
+        ],
+        [
+          -35.29,
+          2.4,
+          -7.555
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/door/frame/starboard",
+      "source_name": "pioneer.drone_bay/door/frame/starboard",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -35.99,
+          -2.75,
+          0.52
+        ],
+        [
+          -35.8,
+          0.75,
+          0.6799999999999999
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/door/guide/starboard",
+      "source_name": "pioneer.drone_bay/door/guide/starboard",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -35.76,
+          -4.4,
+          0.5549999999999999
+        ],
+        [
+          -35.29,
+          2.4,
+          0.645
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/door/frame/sill",
+      "source_name": "pioneer.drone_bay/door/frame/sill",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -35.99,
+          -2.77,
+          -7.6
+        ],
+        [
+          -35.8,
+          -2.6300000000000003,
+          0.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/door/frame/header",
+      "source_name": "pioneer.drone_bay/door/frame/header",
+      "group": null,
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -35.99,
+          0.6299999999999999,
+          -7.6
+        ],
+        [
+          -35.8,
+          0.77,
+          0.6
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/door/lower/leaf",
+      "source_name": "pioneer.drone_bay/door/lower/leaf",
+      "group": "door/lower",
+      "material": "Graphite ceramic armor",
+      "bounds_body_m": [
+        [
+          -35.66,
+          -2.62,
+          -7.52
+        ],
+        [
+          -35.5,
+          -1.0,
+          0.52
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/door/lower/rib",
+      "source_name": "pioneer.drone_bay/door/lower/rib",
+      "group": "door/lower",
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -35.49,
+          -1.87,
+          -7.5
+        ],
+        [
+          -35.4,
+          -1.75,
+          0.5
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/door/lower/edge_marker",
+      "source_name": "pioneer.drone_bay/door/lower/edge_marker",
+      "group": "door/lower",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -35.5,
+          -1.845,
+          -7.3
+        ],
+        [
+          -35.485,
+          -1.7750000000000001,
+          0.3
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/door/upper/leaf",
+      "source_name": "pioneer.drone_bay/door/upper/leaf",
+      "group": "door/upper",
+      "material": "Graphite ceramic armor",
+      "bounds_body_m": [
+        [
+          -35.66,
+          -1.0,
+          -7.52
+        ],
+        [
+          -35.5,
+          0.62,
+          0.52
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/door/upper/rib",
+      "source_name": "pioneer.drone_bay/door/upper/rib",
+      "group": "door/upper",
+      "material": "Emerald structural frames",
+      "bounds_body_m": [
+        [
+          -35.49,
+          -0.25,
+          -7.5
+        ],
+        [
+          -35.4,
+          -0.13,
+          0.5
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/door/upper/edge_marker",
+      "source_name": "pioneer.drone_bay/door/upper/edge_marker",
+      "group": "door/upper",
+      "material": "Safety amber",
+      "bounds_body_m": [
+        [
+          -35.5,
+          -0.225,
+          -7.3
+        ],
+        [
+          -35.485,
+          -0.155,
+          0.3
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/door/seal/port",
+      "source_name": "pioneer.drone_bay/door/seal/port",
+      "group": null,
+      "material": "Recessed carbon",
+      "bounds_body_m": [
+        [
+          -35.72,
+          -2.62,
+          -7.56
+        ],
+        [
+          -35.66,
+          0.62,
+          -7.5200000000000005
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/door/seal/starboard",
+      "source_name": "pioneer.drone_bay/door/seal/starboard",
+      "group": null,
+      "material": "Recessed carbon",
+      "bounds_body_m": [
+        [
+          -35.72,
+          -2.62,
+          0.52
+        ],
+        [
+          -35.66,
+          0.62,
+          0.56
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/door/seal/sill",
+      "source_name": "pioneer.drone_bay/door/seal/sill",
+      "group": null,
+      "material": "Recessed carbon",
+      "bounds_body_m": [
+        [
+          -35.72,
+          -2.66,
+          -7.54
+        ],
+        [
+          -35.66,
+          -2.62,
+          0.54
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/door/seal/header",
+      "source_name": "pioneer.drone_bay/door/seal/header",
+      "group": null,
+      "material": "Recessed carbon",
+      "bounds_body_m": [
+        [
+          -35.72,
+          0.62,
+          -7.54
+        ],
+        [
+          -35.66,
+          0.66,
+          0.54
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/lighting/0/housing",
+      "source_name": "pioneer.drone_bay/lighting/0/housing",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -32.3,
+          4.44,
+          6.65
+        ],
+        [
+          -28.7,
+          4.54,
+          6.93
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/lighting/0/emitter",
+      "source_name": "pioneer.drone_bay/lighting/0/emitter",
+      "group": null,
+      "material": "Working lights",
+      "bounds_body_m": [
+        [
+          -32.2,
+          4.42,
+          6.67
+        ],
+        [
+          -28.8,
+          4.44,
+          6.91
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/lighting/1/housing",
+      "source_name": "pioneer.drone_bay/lighting/1/housing",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -26.3,
+          4.44,
+          6.65
+        ],
+        [
+          -22.7,
+          4.54,
+          6.93
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/lighting/1/emitter",
+      "source_name": "pioneer.drone_bay/lighting/1/emitter",
+      "group": null,
+      "material": "Working lights",
+      "bounds_body_m": [
+        [
+          -26.2,
+          4.42,
+          6.67
+        ],
+        [
+          -22.8,
+          4.44,
+          6.91
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/lighting/2/housing",
+      "source_name": "pioneer.drone_bay/lighting/2/housing",
+      "group": null,
+      "material": "Titanium machinery",
+      "bounds_body_m": [
+        [
+          -20.3,
+          4.44,
+          6.65
+        ],
+        [
+          -16.7,
+          4.54,
+          6.93
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/lighting/2/emitter",
+      "source_name": "pioneer.drone_bay/lighting/2/emitter",
+      "group": null,
+      "material": "Working lights",
+      "bounds_body_m": [
+        [
+          -20.2,
+          4.42,
+          6.67
+        ],
+        [
+          -16.8,
+          4.44,
+          6.91
+        ]
+      ]
+    },
+    {
+      "semantic_id": "pioneer.drone_bay/systems/cable_trunk",
+      "source_name": "pioneer.drone_bay/systems/cable_trunk",
+      "group": null,
+      "material": "Recessed carbon",
+      "bounds_body_m": [
+        [
+          -33.3,
+          4.32,
+          7.0
+        ],
+        [
+          -15.65,
+          4.48,
+          7.1
+        ]
+      ]
+    }
+  ],
+  "dynamic_groups": {
+    "tray/s00": [
+      "pioneer.drone_bay/tray/s00/deck",
+      "pioneer.drone_bay/tray/s00/retainer/aft",
+      "pioneer.drone_bay/tray/s00/retainer/fore"
+    ],
+    "tray/s01": [
+      "pioneer.drone_bay/tray/s01/deck",
+      "pioneer.drone_bay/tray/s01/retainer/aft",
+      "pioneer.drone_bay/tray/s01/retainer/fore"
+    ],
+    "tray/s02": [
+      "pioneer.drone_bay/tray/s02/deck",
+      "pioneer.drone_bay/tray/s02/retainer/aft",
+      "pioneer.drone_bay/tray/s02/retainer/fore"
+    ],
+    "tray/s03": [
+      "pioneer.drone_bay/tray/s03/deck",
+      "pioneer.drone_bay/tray/s03/retainer/aft",
+      "pioneer.drone_bay/tray/s03/retainer/fore"
+    ],
+    "tray/s04": [
+      "pioneer.drone_bay/tray/s04/deck",
+      "pioneer.drone_bay/tray/s04/retainer/aft",
+      "pioneer.drone_bay/tray/s04/retainer/fore"
+    ],
+    "tray/s05": [
+      "pioneer.drone_bay/tray/s05/deck",
+      "pioneer.drone_bay/tray/s05/retainer/aft",
+      "pioneer.drone_bay/tray/s05/retainer/fore"
+    ],
+    "tray/s06": [
+      "pioneer.drone_bay/tray/s06/deck",
+      "pioneer.drone_bay/tray/s06/retainer/aft",
+      "pioneer.drone_bay/tray/s06/retainer/fore"
+    ],
+    "tray/s07": [
+      "pioneer.drone_bay/tray/s07/deck",
+      "pioneer.drone_bay/tray/s07/retainer/aft",
+      "pioneer.drone_bay/tray/s07/retainer/fore"
+    ],
+    "tray/s08": [
+      "pioneer.drone_bay/tray/s08/deck",
+      "pioneer.drone_bay/tray/s08/retainer/aft",
+      "pioneer.drone_bay/tray/s08/retainer/fore"
+    ],
+    "tray/s09": [
+      "pioneer.drone_bay/tray/s09/deck",
+      "pioneer.drone_bay/tray/s09/retainer/aft",
+      "pioneer.drone_bay/tray/s09/retainer/fore"
+    ],
+    "tray/s10": [
+      "pioneer.drone_bay/tray/s10/deck",
+      "pioneer.drone_bay/tray/s10/retainer/aft",
+      "pioneer.drone_bay/tray/s10/retainer/fore"
+    ],
+    "tray/s11": [
+      "pioneer.drone_bay/tray/s11/deck",
+      "pioneer.drone_bay/tray/s11/retainer/aft",
+      "pioneer.drone_bay/tray/s11/retainer/fore"
+    ],
+    "tray/s12": [
+      "pioneer.drone_bay/tray/s12/deck",
+      "pioneer.drone_bay/tray/s12/retainer/aft",
+      "pioneer.drone_bay/tray/s12/retainer/fore"
+    ],
+    "tray/s13": [
+      "pioneer.drone_bay/tray/s13/deck",
+      "pioneer.drone_bay/tray/s13/retainer/aft",
+      "pioneer.drone_bay/tray/s13/retainer/fore"
+    ],
+    "tray/s14": [
+      "pioneer.drone_bay/tray/s14/deck",
+      "pioneer.drone_bay/tray/s14/retainer/aft",
+      "pioneer.drone_bay/tray/s14/retainer/fore"
+    ],
+    "carriage_x": [
+      "pioneer.drone_bay/mechanism/carriage/aft/port/mast",
+      "pioneer.drone_bay/mechanism/carriage/aft/port/head",
+      "pioneer.drone_bay/mechanism/carriage/aft/starboard/mast",
+      "pioneer.drone_bay/mechanism/carriage/aft/starboard/head",
+      "pioneer.drone_bay/mechanism/carriage/aft/top_tie",
+      "pioneer.drone_bay/mechanism/carriage/fore/port/mast",
+      "pioneer.drone_bay/mechanism/carriage/fore/port/head",
+      "pioneer.drone_bay/mechanism/carriage/fore/starboard/mast",
+      "pioneer.drone_bay/mechanism/carriage/fore/starboard/head",
+      "pioneer.drone_bay/mechanism/carriage/fore/top_tie"
+    ],
+    "lift_xy": [
+      "pioneer.drone_bay/mechanism/lift/aft/edge",
+      "pioneer.drone_bay/mechanism/lift/fore/edge",
+      "pioneer.drone_bay/mechanism/lift/port/tie",
+      "pioneer.drone_bay/mechanism/lift/starboard/tie"
+    ],
+    "fork_stage0": [
+      "pioneer.drone_bay/mechanism/fork/aft/stage0",
+      "pioneer.drone_bay/mechanism/fork/fore/stage0"
+    ],
+    "fork_stage1": [
+      "pioneer.drone_bay/mechanism/fork/aft/stage1",
+      "pioneer.drone_bay/mechanism/fork/fore/stage1"
+    ],
+    "fork_stage2": [
+      "pioneer.drone_bay/mechanism/fork/aft/stage2",
+      "pioneer.drone_bay/mechanism/fork/fore/stage2"
+    ],
+    "door/lower": [
+      "pioneer.drone_bay/door/lower/leaf",
+      "pioneer.drone_bay/door/lower/rib",
+      "pioneer.drone_bay/door/lower/edge_marker"
+    ],
+    "door/upper": [
+      "pioneer.drone_bay/door/upper/leaf",
+      "pioneer.drone_bay/door/upper/rib",
+      "pioneer.drone_bay/door/upper/edge_marker"
+    ]
+  },
+  "kinematics": {
+    "carriage_x": {
+      "axes": [
+        "X"
+      ],
+      "reference_center_m": [
+        -30.5,
+        -1,
+        -3.5
+      ],
+      "x_range_m": [
+        -30.5,
+        -18.5
+      ]
+    },
+    "lift_xy": {
+      "inherits": "carriage_x",
+      "y_reference_m": -1,
+      "y_range_m": [
+        -5.4,
+        3.4
+      ]
+    },
+    "fork_stage0": {
+      "inherits": "lift_xy",
+      "extension_translation_z_m": [
+        0,
+        0.0
+      ],
+      "shared_extension_fraction_range": [
+        0,
+        1
+      ]
+    },
+    "fork_stage1": {
+      "inherits": "lift_xy",
+      "extension_translation_z_m": [
+        0,
+        3.5
+      ],
+      "shared_extension_fraction_range": [
+        0,
+        1
+      ]
+    },
+    "fork_stage2": {
+      "inherits": "lift_xy",
+      "extension_translation_z_m": [
+        0,
+        7.0
+      ],
+      "shared_extension_fraction_range": [
+        0,
+        1
+      ]
+    },
+    "tray/s00": {
+      "body_center_reference_m": [
+        -30.5,
+        -5.4,
+        3.5
+      ],
+      "path": "rack -> aisle at same X/Y -> exit Y=-1 -> aft station X=-30.5; then lower0.20m while same drone holds Y=-1; hold while drone departs; reverse to store",
+      "translation_m_at_aisle": [
+        0,
+        0,
+        -7
+      ]
+    },
+    "tray/s01": {
+      "body_center_reference_m": [
+        -30.5,
+        -3.2,
+        3.5
+      ],
+      "path": "rack -> aisle at same X/Y -> exit Y=-1 -> aft station X=-30.5; then lower0.20m while same drone holds Y=-1; hold while drone departs; reverse to store",
+      "translation_m_at_aisle": [
+        0,
+        0,
+        -7
+      ]
+    },
+    "tray/s02": {
+      "body_center_reference_m": [
+        -30.5,
+        -1.0,
+        3.5
+      ],
+      "path": "rack -> aisle at same X/Y -> exit Y=-1 -> aft station X=-30.5; then lower0.20m while same drone holds Y=-1; hold while drone departs; reverse to store",
+      "translation_m_at_aisle": [
+        0,
+        0,
+        -7
+      ]
+    },
+    "tray/s03": {
+      "body_center_reference_m": [
+        -30.5,
+        1.2,
+        3.5
+      ],
+      "path": "rack -> aisle at same X/Y -> exit Y=-1 -> aft station X=-30.5; then lower0.20m while same drone holds Y=-1; hold while drone departs; reverse to store",
+      "translation_m_at_aisle": [
+        0,
+        0,
+        -7
+      ]
+    },
+    "tray/s04": {
+      "body_center_reference_m": [
+        -30.5,
+        3.4,
+        3.5
+      ],
+      "path": "rack -> aisle at same X/Y -> exit Y=-1 -> aft station X=-30.5; then lower0.20m while same drone holds Y=-1; hold while drone departs; reverse to store",
+      "translation_m_at_aisle": [
+        0,
+        0,
+        -7
+      ]
+    },
+    "tray/s05": {
+      "body_center_reference_m": [
+        -24.5,
+        -5.4,
+        3.5
+      ],
+      "path": "rack -> aisle at same X/Y -> exit Y=-1 -> aft station X=-30.5; then lower0.20m while same drone holds Y=-1; hold while drone departs; reverse to store",
+      "translation_m_at_aisle": [
+        0,
+        0,
+        -7
+      ]
+    },
+    "tray/s06": {
+      "body_center_reference_m": [
+        -24.5,
+        -3.2,
+        3.5
+      ],
+      "path": "rack -> aisle at same X/Y -> exit Y=-1 -> aft station X=-30.5; then lower0.20m while same drone holds Y=-1; hold while drone departs; reverse to store",
+      "translation_m_at_aisle": [
+        0,
+        0,
+        -7
+      ]
+    },
+    "tray/s07": {
+      "body_center_reference_m": [
+        -24.5,
+        -1.0,
+        3.5
+      ],
+      "path": "rack -> aisle at same X/Y -> exit Y=-1 -> aft station X=-30.5; then lower0.20m while same drone holds Y=-1; hold while drone departs; reverse to store",
+      "translation_m_at_aisle": [
+        0,
+        0,
+        -7
+      ]
+    },
+    "tray/s08": {
+      "body_center_reference_m": [
+        -24.5,
+        1.2,
+        3.5
+      ],
+      "path": "rack -> aisle at same X/Y -> exit Y=-1 -> aft station X=-30.5; then lower0.20m while same drone holds Y=-1; hold while drone departs; reverse to store",
+      "translation_m_at_aisle": [
+        0,
+        0,
+        -7
+      ]
+    },
+    "tray/s09": {
+      "body_center_reference_m": [
+        -24.5,
+        3.4,
+        3.5
+      ],
+      "path": "rack -> aisle at same X/Y -> exit Y=-1 -> aft station X=-30.5; then lower0.20m while same drone holds Y=-1; hold while drone departs; reverse to store",
+      "translation_m_at_aisle": [
+        0,
+        0,
+        -7
+      ]
+    },
+    "tray/s10": {
+      "body_center_reference_m": [
+        -18.5,
+        -5.4,
+        3.5
+      ],
+      "path": "rack -> aisle at same X/Y -> exit Y=-1 -> aft station X=-30.5; then lower0.20m while same drone holds Y=-1; hold while drone departs; reverse to store",
+      "translation_m_at_aisle": [
+        0,
+        0,
+        -7
+      ]
+    },
+    "tray/s11": {
+      "body_center_reference_m": [
+        -18.5,
+        -3.2,
+        3.5
+      ],
+      "path": "rack -> aisle at same X/Y -> exit Y=-1 -> aft station X=-30.5; then lower0.20m while same drone holds Y=-1; hold while drone departs; reverse to store",
+      "translation_m_at_aisle": [
+        0,
+        0,
+        -7
+      ]
+    },
+    "tray/s12": {
+      "body_center_reference_m": [
+        -18.5,
+        -1.0,
+        3.5
+      ],
+      "path": "rack -> aisle at same X/Y -> exit Y=-1 -> aft station X=-30.5; then lower0.20m while same drone holds Y=-1; hold while drone departs; reverse to store",
+      "translation_m_at_aisle": [
+        0,
+        0,
+        -7
+      ]
+    },
+    "tray/s13": {
+      "body_center_reference_m": [
+        -18.5,
+        1.2,
+        3.5
+      ],
+      "path": "rack -> aisle at same X/Y -> exit Y=-1 -> aft station X=-30.5; then lower0.20m while same drone holds Y=-1; hold while drone departs; reverse to store",
+      "translation_m_at_aisle": [
+        0,
+        0,
+        -7
+      ]
+    },
+    "tray/s14": {
+      "body_center_reference_m": [
+        -18.5,
+        3.4,
+        3.5
+      ],
+      "path": "rack -> aisle at same X/Y -> exit Y=-1 -> aft station X=-30.5; then lower0.20m while same drone holds Y=-1; hold while drone departs; reverse to store",
+      "translation_m_at_aisle": [
+        0,
+        0,
+        -7
+      ]
+    },
+    "door/upper": {
+      "translation_y_m": [
+        0,
+        1.7
+      ]
+    },
+    "door/lower": {
+      "translation_y_m": [
+        0,
+        -1.7
+      ]
+    }
+  },
+  "cuts": [
+    "pioneer.drone_bay/temporary/chamber",
+    "pioneer.drone_bay/temporary/aperture",
+    "pioneer.drone_bay/temporary/leaf_pocket",
+    "pioneer.drone_bay/temporary/lining_pocket/compartment/floor/0",
+    "pioneer.drone_bay/temporary/lining_pocket/compartment/wall/port"
+  ],
+  "limits": [
+    "Geometry candidate; no pressure/strength/motor/power ratings",
+    "No crew access route",
+    "No drone bodies embedded: runtime persistent entities occupy slots",
+    "All state/roster/parent quaternion transforms remain runtime integration",
+    "Hardware clearance validation must pass before adopting anchors"
+  ]
+}

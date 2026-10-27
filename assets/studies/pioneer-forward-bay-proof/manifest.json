@@ -1,0 +1,389 @@
+{
+  "study_only": true,
+  "glb": "forward-bay-proof.glb",
+  "sha256": "7a2dbb0c78fe734a368eb2b697ab3c6e6dbad934245df77a87e3119baf79cd46",
+  "byte_length": 258456,
+  "mesh_count": 22,
+  "material_count": 3,
+  "triangle_count": 2872,
+  "instrument": {
+    "center": [
+      0.932,
+      1.0,
+      0
+    ],
+    "half": [
+      0.02,
+      0.183,
+      0.308
+    ],
+    "axes": [
+      [
+        1,
+        0,
+        0
+      ],
+      [
+        0,
+        1,
+        0
+      ],
+      [
+        0,
+        0,
+        1
+      ]
+    ],
+    "plane_x": 0.9,
+    "canvas": [
+      400,
+      240
+    ],
+    "id": "pioneer.study.central.primary",
+    "size_m": [
+      0.6,
+      0.35
+    ],
+    "backing_front_x": 0.914,
+    "content_policy": "Recorded or authoritative data only; no modeled telemetry"
+  },
+  "components": [
+    {
+      "id": "panorama.structural-surround",
+      "node": 0,
+      "mesh": 0,
+      "bounds_min": [
+        1.55,
+        0.3899999999999999,
+        -1.58
+      ],
+      "bounds_max": [
+        1.68,
+        2.12,
+        1.58
+      ]
+    },
+    {
+      "id": "panorama.metal-reveal",
+      "node": 1,
+      "mesh": 1,
+      "bounds_min": [
+        1.548,
+        0.4969999999999999,
+        -1.483
+      ],
+      "bounds_max": [
+        1.568,
+        2.013,
+        1.483
+      ]
+    },
+    {
+      "id": "instrument.central-sculpted-case",
+      "node": 2,
+      "mesh": 2,
+      "bounds_min": [
+        0.875,
+        0.782,
+        -0.338
+      ],
+      "bounds_max": [
+        1.055,
+        1.218,
+        0.338
+      ]
+    },
+    {
+      "id": "instrument.recessed-liner",
+      "node": 3,
+      "mesh": 3,
+      "bounds_min": [
+        0.887,
+        0.796,
+        -0.325
+      ],
+      "bounds_max": [
+        0.897,
+        1.204,
+        0.325
+      ]
+    },
+    {
+      "id": "instrument.central-substrate",
+      "node": 4,
+      "mesh": 4,
+      "bounds_min": [
+        0.914,
+        0.823,
+        -0.302
+      ],
+      "bounds_max": [
+        0.924,
+        1.177,
+        0.302
+      ]
+    },
+    {
+      "id": "console.continuous-dashboard-shell",
+      "node": 5,
+      "mesh": 5,
+      "bounds_min": [
+        0.77,
+        0.56,
+        -1.48
+      ],
+      "bounds_max": [
+        1.64439453125,
+        0.8,
+        1.48
+      ]
+    },
+    {
+      "id": "console.rising-central-shoulder",
+      "node": 6,
+      "mesh": 6,
+      "bounds_min": [
+        0.8698828125000001,
+        0.75,
+        0.32
+      ],
+      "bounds_max": [
+        1.48,
+        0.825,
+        0.64
+      ]
+    },
+    {
+      "id": "console.starboard-inset-worktop",
+      "node": 7,
+      "mesh": 7,
+      "bounds_min": [
+        0.9450000000000001,
+        0.75,
+        0.67
+      ],
+      "bounds_max": [
+        1.5750000000000002,
+        0.7910986328125,
+        1.38
+      ]
+    },
+    {
+      "id": "console.starboard-deck-web",
+      "node": 8,
+      "mesh": 8,
+      "bounds_min": [
+        1.26,
+        0.0,
+        1.26
+      ],
+      "bounds_max": [
+        1.61,
+        0.6,
+        1.52
+      ]
+    },
+    {
+      "id": "console.port-shoulder",
+      "node": 9,
+      "mesh": 9,
+      "bounds_min": [
+        0.8698828125000001,
+        0.75,
+        -0.64
+      ],
+      "bounds_max": [
+        1.48,
+        0.825,
+        -0.32
+      ]
+    },
+    {
+      "id": "console.port-inset-worktop",
+      "node": 10,
+      "mesh": 10,
+      "bounds_min": [
+        0.9450000000000001,
+        0.75,
+        -1.38
+      ],
+      "bounds_max": [
+        1.5750000000000002,
+        0.7910986328125,
+        -0.67
+      ]
+    },
+    {
+      "id": "console.port-deck-web",
+      "node": 11,
+      "mesh": 11,
+      "bounds_min": [
+        1.26,
+        0.0,
+        -1.52
+      ],
+      "bounds_max": [
+        1.61,
+        0.6,
+        -1.26
+      ]
+    },
+    {
+      "id": "console.central-deck-web",
+      "node": 12,
+      "mesh": 12,
+      "bounds_min": [
+        1.22,
+        0.0,
+        -0.2
+      ],
+      "bounds_max": [
+        1.48,
+        0.59,
+        0.2
+      ]
+    },
+    {
+      "id": "enclosure.deck",
+      "node": 13,
+      "mesh": 13,
+      "bounds_min": [
+        -1.55,
+        -0.08,
+        -1.6
+      ],
+      "bounds_max": [
+        1.68,
+        0.0,
+        1.6
+      ]
+    },
+    {
+      "id": "enclosure.raked-overhead",
+      "node": 14,
+      "mesh": 14,
+      "bounds_min": [
+        -1.55,
+        2.09,
+        -1.32
+      ],
+      "bounds_max": [
+        1.56,
+        2.48,
+        1.32
+      ]
+    },
+    {
+      "id": "enclosure.starboard-sidewall",
+      "node": 15,
+      "mesh": 15,
+      "bounds_min": [
+        -1.55,
+        0.28,
+        1.48
+      ],
+      "bounds_max": [
+        1.56,
+        2.24,
+        1.6
+      ]
+    },
+    {
+      "id": "enclosure.starboard-upper-haunch",
+      "node": 16,
+      "mesh": 16,
+      "bounds_min": [
+        -1.55,
+        1.93,
+        1.3
+      ],
+      "bounds_max": [
+        1.56,
+        2.48,
+        1.6
+      ]
+    },
+    {
+      "id": "enclosure.starboard-lower-haunch",
+      "node": 17,
+      "mesh": 17,
+      "bounds_min": [
+        -1.55,
+        -0.04,
+        1.3
+      ],
+      "bounds_max": [
+        1.56,
+        0.28,
+        1.6
+      ]
+    },
+    {
+      "id": "enclosure.port-sidewall",
+      "node": 18,
+      "mesh": 18,
+      "bounds_min": [
+        -1.55,
+        0.28,
+        -1.6
+      ],
+      "bounds_max": [
+        1.56,
+        2.24,
+        -1.48
+      ]
+    },
+    {
+      "id": "enclosure.port-upper-haunch",
+      "node": 19,
+      "mesh": 19,
+      "bounds_min": [
+        -1.55,
+        1.93,
+        -1.6
+      ],
+      "bounds_max": [
+        1.56,
+        2.48,
+        -1.3
+      ]
+    },
+    {
+      "id": "enclosure.port-lower-haunch",
+      "node": 20,
+      "mesh": 20,
+      "bounds_min": [
+        -1.55,
+        -0.04,
+        -1.6
+      ],
+      "bounds_max": [
+        1.56,
+        0.28,
+        -1.3
+      ]
+    },
+    {
+      "id": "enclosure.forward-sill-apron",
+      "node": 21,
+      "mesh": 21,
+      "bounds_min": [
+        1.55,
+        0.0,
+        -1.56
+      ],
+      "bounds_max": [
+        1.68,
+        0.44,
+        1.56
+      ]
+    }
+  ],
+  "proof_eye": [
+    0,
+    1.35,
+    0
+  ],
+  "coordinate_frame": "+X forward,+Y up,+Z right; metres",
+  "remaining_validation": "Runtime matched-view appearance, readability and occlusion; not canonical or shipped."
+}

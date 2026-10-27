@@ -1,0 +1,940 @@
+{
+  "schema": "arkline.pioneer-ore-receiver-authoring/v1",
+  "base_registration": 12,
+  "base_blend_sha256": "ee43c05cb1d4ebf907d609b5338b4d8a911b812d8fb05914c96ca48dbb06b1d9",
+  "base_glb_sha256": "7970f096a6aac9d95b6250b75cd19ea2e54046c9deb77f3592b82efa879112fd",
+  "output_sha256": "3b4a1ba43c0904063574118d7a42e9c246b58aab19eb0a6c015590a0086f84c1",
+  "parts": [
+    {
+      "name": "pioneer.ore_receiver/sealed_feedthrough_plate",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.08,
+          -1.65,
+          4.35
+        ],
+        [
+          -35.98,
+          -0.35,
+          5.65
+        ]
+      ],
+      "material": "Titanium machinery",
+      "hull_contact": true
+    },
+    {
+      "name": "pioneer.ore_receiver/anchor/port",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.1,
+          -1.8,
+          4.28
+        ],
+        [
+          -35.98,
+          -0.2,
+          4.38
+        ]
+      ],
+      "material": "Emerald structural frames",
+      "hull_contact": true
+    },
+    {
+      "name": "pioneer.ore_receiver/gusset/port",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.44,
+          -1.6,
+          4.28
+        ],
+        [
+          -36.08,
+          -0.4,
+          4.38
+        ]
+      ],
+      "material": "Emerald structural frames",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/shoe/port",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.46,
+          -1.64,
+          4.260000000000001
+        ],
+        [
+          -36.4,
+          -0.36,
+          4.4
+        ]
+      ],
+      "material": "Titanium machinery",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/anchor/starboard",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.1,
+          -1.8,
+          5.62
+        ],
+        [
+          -35.98,
+          -0.2,
+          5.72
+        ]
+      ],
+      "material": "Emerald structural frames",
+      "hull_contact": true
+    },
+    {
+      "name": "pioneer.ore_receiver/gusset/starboard",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.44,
+          -1.6,
+          5.62
+        ],
+        [
+          -36.08,
+          -0.4,
+          5.72
+        ]
+      ],
+      "material": "Emerald structural frames",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/shoe/starboard",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.46,
+          -1.64,
+          5.6000000000000005
+        ],
+        [
+          -36.4,
+          -0.36,
+          5.74
+        ]
+      ],
+      "material": "Titanium machinery",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/fixed_collar/bottom",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.5,
+          -1.3,
+          4.7
+        ],
+        [
+          -36.08,
+          -1.255,
+          5.3
+        ]
+      ],
+      "material": "Titanium machinery",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/fixed_collar/top",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.5,
+          -0.745,
+          4.7
+        ],
+        [
+          -36.08,
+          -0.7,
+          5.3
+        ]
+      ],
+      "material": "Titanium machinery",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/fixed_collar/port",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.5,
+          -1.255,
+          4.7
+        ],
+        [
+          -36.08,
+          -0.745,
+          4.745
+        ]
+      ],
+      "material": "Titanium machinery",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/fixed_collar/starboard",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.5,
+          -1.255,
+          5.255
+        ],
+        [
+          -36.08,
+          -0.745,
+          5.3
+        ]
+      ],
+      "material": "Titanium machinery",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/sleeve1/bottom",
+      "group": "stage/1",
+      "bounds_body_m": [
+        [
+          -36.5,
+          -1.25,
+          4.75
+        ],
+        [
+          -36.1,
+          -1.205,
+          5.25
+        ]
+      ],
+      "material": "Titanium machinery",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/sleeve1/top",
+      "group": "stage/1",
+      "bounds_body_m": [
+        [
+          -36.5,
+          -0.795,
+          4.75
+        ],
+        [
+          -36.1,
+          -0.75,
+          5.25
+        ]
+      ],
+      "material": "Titanium machinery",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/sleeve1/port",
+      "group": "stage/1",
+      "bounds_body_m": [
+        [
+          -36.5,
+          -1.205,
+          4.75
+        ],
+        [
+          -36.1,
+          -0.795,
+          4.795
+        ]
+      ],
+      "material": "Titanium machinery",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/sleeve1/starboard",
+      "group": "stage/1",
+      "bounds_body_m": [
+        [
+          -36.5,
+          -1.205,
+          5.205
+        ],
+        [
+          -36.1,
+          -0.795,
+          5.25
+        ]
+      ],
+      "material": "Titanium machinery",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/sleeve2/bottom",
+      "group": "stage/2",
+      "bounds_body_m": [
+        [
+          -36.5,
+          -1.2,
+          4.8
+        ],
+        [
+          -36.1,
+          -1.155,
+          5.2
+        ]
+      ],
+      "material": "Titanium machinery",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/sleeve2/top",
+      "group": "stage/2",
+      "bounds_body_m": [
+        [
+          -36.5,
+          -0.845,
+          4.8
+        ],
+        [
+          -36.1,
+          -0.8,
+          5.2
+        ]
+      ],
+      "material": "Titanium machinery",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/sleeve2/port",
+      "group": "stage/2",
+      "bounds_body_m": [
+        [
+          -36.5,
+          -1.155,
+          4.8
+        ],
+        [
+          -36.1,
+          -0.845,
+          4.845
+        ]
+      ],
+      "material": "Titanium machinery",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/sleeve2/starboard",
+      "group": "stage/2",
+      "bounds_body_m": [
+        [
+          -36.5,
+          -1.155,
+          5.155
+        ],
+        [
+          -36.1,
+          -0.845,
+          5.2
+        ]
+      ],
+      "material": "Titanium machinery",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/sleeve3/bottom",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.5,
+          -1.15,
+          4.85
+        ],
+        [
+          -36.1,
+          -1.105,
+          5.15
+        ]
+      ],
+      "material": "Titanium machinery",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/sleeve3/top",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.5,
+          -0.895,
+          4.85
+        ],
+        [
+          -36.1,
+          -0.85,
+          5.15
+        ]
+      ],
+      "material": "Titanium machinery",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/sleeve3/port",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.5,
+          -1.105,
+          4.85
+        ],
+        [
+          -36.1,
+          -0.895,
+          4.895
+        ]
+      ],
+      "material": "Titanium machinery",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/sleeve3/starboard",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.5,
+          -1.105,
+          5.105
+        ],
+        [
+          -36.1,
+          -0.895,
+          5.15
+        ]
+      ],
+      "material": "Titanium machinery",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/coupling_head/bottom",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.58,
+          -1.22,
+          4.78
+        ],
+        [
+          -36.5,
+          -1.105,
+          5.22
+        ]
+      ],
+      "material": "Titanium machinery",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/coupling_head/top",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.58,
+          -0.895,
+          4.78
+        ],
+        [
+          -36.5,
+          -0.78,
+          5.22
+        ]
+      ],
+      "material": "Titanium machinery",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/coupling_head/port/front",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.58,
+          -1.105,
+          4.78
+        ],
+        [
+          -36.56,
+          -0.895,
+          4.895
+        ]
+      ],
+      "material": "Titanium machinery",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/coupling_head/port/back",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.52,
+          -1.105,
+          4.78
+        ],
+        [
+          -36.5,
+          -0.895,
+          4.895
+        ]
+      ],
+      "material": "Titanium machinery",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/coupling_head/port/lower",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.56,
+          -1.105,
+          4.78
+        ],
+        [
+          -36.52,
+          -1.08,
+          4.895
+        ]
+      ],
+      "material": "Titanium machinery",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/coupling_head/port/upper",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.56,
+          -0.92,
+          4.78
+        ],
+        [
+          -36.52,
+          -0.895,
+          4.895
+        ]
+      ],
+      "material": "Titanium machinery",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/locking_shoe/port",
+      "group": "latch/port",
+      "bounds_body_m": [
+        [
+          -36.56,
+          -1.08,
+          4.78
+        ],
+        [
+          -36.52,
+          -0.92,
+          4.88
+        ]
+      ],
+      "material": "Safety amber",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/coupling_head/starboard/front",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.58,
+          -1.105,
+          5.105
+        ],
+        [
+          -36.56,
+          -0.895,
+          5.22
+        ]
+      ],
+      "material": "Titanium machinery",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/coupling_head/starboard/back",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.52,
+          -1.105,
+          5.105
+        ],
+        [
+          -36.5,
+          -0.895,
+          5.22
+        ]
+      ],
+      "material": "Titanium machinery",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/coupling_head/starboard/lower",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.56,
+          -1.105,
+          5.105
+        ],
+        [
+          -36.52,
+          -1.08,
+          5.22
+        ]
+      ],
+      "material": "Titanium machinery",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/coupling_head/starboard/upper",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.56,
+          -0.92,
+          5.105
+        ],
+        [
+          -36.52,
+          -0.895,
+          5.22
+        ]
+      ],
+      "material": "Titanium machinery",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/locking_shoe/starboard",
+      "group": "latch/starboard",
+      "bounds_body_m": [
+        [
+          -36.56,
+          -1.08,
+          5.12
+        ],
+        [
+          -36.52,
+          -0.92,
+          5.22
+        ]
+      ],
+      "material": "Safety amber",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/head_seal/bottom",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.515,
+          -1.225,
+          4.775
+        ],
+        [
+          -36.505,
+          -1.218,
+          5.225
+        ]
+      ],
+      "material": "Recessed carbon",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/head_seal/top",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.515,
+          -0.782,
+          4.775
+        ],
+        [
+          -36.505,
+          -0.775,
+          5.225
+        ]
+      ],
+      "material": "Recessed carbon",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/head_seal/port",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.515,
+          -1.218,
+          4.775
+        ],
+        [
+          -36.505,
+          -0.782,
+          4.782
+        ]
+      ],
+      "material": "Recessed carbon",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/head_seal/starboard",
+      "group": "stage/3",
+      "bounds_body_m": [
+        [
+          -36.515,
+          -1.218,
+          5.218
+        ],
+        [
+          -36.505,
+          -0.782,
+          5.225
+        ]
+      ],
+      "material": "Recessed carbon",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/mount_gasket/bottom",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.09,
+          -1.6099999999999999,
+          4.39
+        ],
+        [
+          -36.075,
+          -1.5699999999999998,
+          5.61
+        ]
+      ],
+      "material": "Recessed carbon",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/mount_gasket/top",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.09,
+          -0.43000000000000005,
+          4.39
+        ],
+        [
+          -36.075,
+          -0.39,
+          5.61
+        ]
+      ],
+      "material": "Recessed carbon",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/mount_gasket/port",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.09,
+          -1.5699999999999998,
+          4.39
+        ],
+        [
+          -36.075,
+          -0.43000000000000005,
+          4.43
+        ]
+      ],
+      "material": "Recessed carbon",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/mount_gasket/starboard",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.09,
+          -1.5699999999999998,
+          5.57
+        ],
+        [
+          -36.075,
+          -0.43000000000000005,
+          5.61
+        ]
+      ],
+      "material": "Recessed carbon",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/service_band/-1.57",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.105,
+          -1.57,
+          4.58
+        ],
+        [
+          -36.09,
+          -1.5450000000000002,
+          5.42
+        ]
+      ],
+      "material": "Safety amber",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/service_band/-0.45",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.105,
+          -0.45,
+          4.58
+        ],
+        [
+          -36.09,
+          -0.425,
+          5.42
+        ]
+      ],
+      "material": "Safety amber",
+      "hull_contact": false
+    },
+    {
+      "name": "pioneer.ore_receiver/cargo_identifier",
+      "group": null,
+      "bounds_body_m": [
+        [
+          -36.115,
+          -0.37,
+          4.72
+        ],
+        [
+          -36.1,
+          -0.32,
+          5.28
+        ]
+      ],
+      "material": "Hull identification ivory",
+      "hull_contact": false
+    }
+  ],
+  "dynamic_groups": {
+    "stage/1": [
+      "pioneer.ore_receiver/sleeve1/bottom",
+      "pioneer.ore_receiver/sleeve1/top",
+      "pioneer.ore_receiver/sleeve1/port",
+      "pioneer.ore_receiver/sleeve1/starboard"
+    ],
+    "stage/2": [
+      "pioneer.ore_receiver/sleeve2/bottom",
+      "pioneer.ore_receiver/sleeve2/top",
+      "pioneer.ore_receiver/sleeve2/port",
+      "pioneer.ore_receiver/sleeve2/starboard"
+    ],
+    "stage/3": [
+      "pioneer.ore_receiver/sleeve3/bottom",
+      "pioneer.ore_receiver/sleeve3/top",
+      "pioneer.ore_receiver/sleeve3/port",
+      "pioneer.ore_receiver/sleeve3/starboard",
+      "pioneer.ore_receiver/coupling_head/bottom",
+      "pioneer.ore_receiver/coupling_head/top",
+      "pioneer.ore_receiver/coupling_head/port/front",
+      "pioneer.ore_receiver/coupling_head/port/back",
+      "pioneer.ore_receiver/coupling_head/port/lower",
+      "pioneer.ore_receiver/coupling_head/port/upper",
+      "pioneer.ore_receiver/coupling_head/starboard/front",
+      "pioneer.ore_receiver/coupling_head/starboard/back",
+      "pioneer.ore_receiver/coupling_head/starboard/lower",
+      "pioneer.ore_receiver/coupling_head/starboard/upper",
+      "pioneer.ore_receiver/head_seal/bottom",
+      "pioneer.ore_receiver/head_seal/top",
+      "pioneer.ore_receiver/head_seal/port",
+      "pioneer.ore_receiver/head_seal/starboard"
+    ],
+    "latch/port": [
+      "pioneer.ore_receiver/locking_shoe/port"
+    ],
+    "latch/starboard": [
+      "pioneer.ore_receiver/locking_shoe/starboard"
+    ]
+  },
+  "reference_root_body_m": [
+    -36.5,
+    -1,
+    5
+  ],
+  "gate_pose": {
+    "position_m": [
+      -50,
+      -1,
+      5
+    ],
+    "orientation_xyzw": [
+      0,
+      1,
+      0,
+      0
+    ]
+  },
+  "hold_pose": {
+    "position_m": [
+      -40,
+      -1,
+      5
+    ],
+    "orientation_xyzw": [
+      0,
+      1,
+      0,
+      0
+    ]
+  },
+  "socket": {
+    "mouth_body_m": [
+      -37.5,
+      -1,
+      5
+    ],
+    "clear_square_m": 0.5,
+    "flange_square_m": 0.72,
+    "head_square_m": 0.44,
+    "insertion_m": 0.08,
+    "final_tip_x_m": -37.58
+  },
+  "kinematics": {
+    "stages_travel_x_m": [
+      -0.3333333333333333,
+      -0.6666666666666666,
+      -1.0
+    ],
+    "latch_head_travel_x_m": -1.0,
+    "latch_travel_z_m": {
+      "port": -0.03,
+      "starboard": 0.03
+    },
+    "order": "extend all three stages together; then close jaws; open jaws before retract; drone stationary through coupling"
+  },
+  "limits": [
+    "Separate additive module; canonical hull/old saves remain byte-identical",
+    "Sealed feedthrough face only; no open cargo-room tunnel or crew access",
+    "Stationary carrier; no force,pressure,power,kg,throughput or inventory simulation in this asset",
+    "Static mounting shoes intentionally contact hull; moving sleeves must not intersect it",
+    "Runtime compatibility and native visuals require separate acceptance"
+  ]
+}

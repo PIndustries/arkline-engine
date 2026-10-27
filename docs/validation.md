@@ -1,5 +1,7 @@
 # Private model validation
 
+Historical record, primarily 9-10 October 2026. For current guides, see the [documentation index](README.md).
+
 This document records evidence for the initial Rust model, not approval to publish.
 
 ## Automated local checks

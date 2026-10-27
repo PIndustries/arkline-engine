@@ -77,6 +77,23 @@ impl Cockpit {
             self.remote_ship = None;
         }
     }
+    fn on_foot_ship_status(&self) -> &'static str {
+        match self.own() {
+            Some(pilot) if pilot.location == Location::Docked => "SHIP DOCKED",
+            Some(pilot) => pilot
+                .flight
+                .as_ref()
+                .and_then(|f| f.docking.as_ref())
+                .map_or("SHIP UNDOCKED", |d| {
+                    if d.phase == arkline_protocol::DockingPhase::Free {
+                        "SHIP UNDOCKED"
+                    } else {
+                        d.phase.label()
+                    }
+                }),
+            None => "SHIP STATUS UNAVAILABLE",
+        }
+    }
     pub(super) fn ship_connection_panel(&mut self, ui: &mut egui::Ui) {
         ui.label(egui::RichText::new(format!("PLAYER  {}", self.pilot)).strong());
         if let Some(target) = self.manual_remote.clone() {
@@ -93,7 +110,7 @@ impl Cockpit {
             ui.colored_label(
                 self.accent(),
                 if on_foot {
-                    format!("ON FOOT  {}  ·  SHIP DOCKED", self.pilot)
+                    format!("ON FOOT  {}  ·  {}", self.pilot, self.on_foot_ship_status())
                 } else {
                     format!("YOUR SHIP  {}  ·  LOCAL CONTROLS", self.pilot)
                 },
@@ -106,5 +123,26 @@ impl Cockpit {
         {
             self.return_to_my_ship();
         }
+    }
+}
+
+#[cfg(test)]
+mod status_tests {
+    use super::*;
+    #[test]
+    fn on_foot_ship_label_uses_confirmed_location_not_avatar_presence() {
+        let ctx = egui::Context::default();
+        let mut app = crate::tests::view_test_cockpit(&ctx);
+        app.snapshot.as_mut().unwrap().pilots[0].location = Location::Docked;
+        assert_eq!(app.on_foot_ship_status(), "SHIP DOCKED");
+        app.snapshot.as_mut().unwrap().pilots[0].location = Location::Station;
+        app.snapshot.as_mut().unwrap().pilots[0]
+            .flight
+            .as_mut()
+            .unwrap()
+            .docking = None;
+        assert_eq!(app.on_foot_ship_status(), "SHIP UNDOCKED");
+        app.snapshot = None;
+        assert_eq!(app.on_foot_ship_status(), "SHIP STATUS UNAVAILABLE");
     }
 }

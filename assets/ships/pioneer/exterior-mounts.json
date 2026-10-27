@@ -1,0 +1,306 @@
+{
+  "schema": "pioneer-fixture-mount-recommendations/v1",
+  "status": "local revision12 source rebinding; fixture geometry unchanged, native bay acceptance separate",
+  "date_utc": "2026-10-24",
+  "claim": "https://github.com/PIndustries/arkline-engine/issues/62",
+  "source_head": "71228c1ad06761fe8a74be40e59e9b367e45bbff",
+  "source_master_sha256": "ee43c05cb1d4ebf907d609b5338b4d8a911b812d8fb05914c96ca48dbb06b1d9",
+  "target_export_sha256": "7970f096a6aac9d95b6250b75cd19ea2e54046c9deb77f3592b82efa879112fd",
+  "coordinate_frame": "centered body metres +Xforward,+Yup,+Zstarboard",
+  "current_definition_sha256": "3c7ce06880f703fa5187b485a618ef82308c4771cce55c5db37f5e2a2f937770",
+  "prior_mount_receipt": "https://github.com/PIndustries/arkline-engine/blob/2abbc22197b5530bd11e76bf665b828a4033db27/assets/ships/pioneer/exterior-mounts.json",
+  "fixtures": [
+    {
+      "fixture_id": "pioneer.exterior.nav.port",
+      "kind": "navigation",
+      "applied_position_body_m": [
+        -24.0,
+        2.8,
+        -18.95
+      ],
+      "color": [
+        1.0,
+        0.04,
+        0.02
+      ],
+      "emission": 2.0,
+      "light_range_m": 6.0,
+      "light_intensity": 0.65,
+      "load_w": 4,
+      "pulse": null,
+      "source_reference": "Unchanged registration from prior verified Study04 mount receipt at2abbc221",
+      "basis": "Geometry in the corresponding fixture region retained; source coordinates unchanged."
+    },
+    {
+      "fixture_id": "pioneer.exterior.nav.starboard",
+      "kind": "navigation",
+      "applied_position_body_m": [
+        -24.0,
+        2.8,
+        18.95
+      ],
+      "color": [
+        0.04,
+        1.0,
+        0.15
+      ],
+      "emission": 2.0,
+      "light_range_m": 6.0,
+      "light_intensity": 0.65,
+      "load_w": 4,
+      "pulse": null,
+      "source_reference": "Unchanged registration from prior verified Study04 mount receipt at2abbc221",
+      "basis": "Geometry in the corresponding fixture region retained; source coordinates unchanged."
+    },
+    {
+      "fixture_id": "pioneer.exterior.nav.aft",
+      "kind": "navigation",
+      "applied_position_body_m": [
+        -36.05,
+        4.0,
+        0.0
+      ],
+      "color": [
+        0.9,
+        0.95,
+        1.0
+      ],
+      "emission": 2.0,
+      "light_range_m": 6.0,
+      "light_intensity": 0.65,
+      "load_w": 4,
+      "pulse": null,
+      "source_reference": "Unchanged registration from prior verified Study04 mount receipt at2abbc221",
+      "basis": "Geometry in the corresponding fixture region retained; source coordinates unchanged."
+    },
+    {
+      "fixture_id": "pioneer.exterior.strobe.dorsal",
+      "kind": "strobe",
+      "applied_position_body_m": [
+        -8.0,
+        6.3,
+        0.0
+      ],
+      "color": [
+        0.85,
+        0.93,
+        1.0
+      ],
+      "emission": 2.0,
+      "light_range_m": 6.0,
+      "light_intensity": 0.65,
+      "load_w": 8,
+      "pulse": {
+        "period_ms": 1000,
+        "on_ms": 100,
+        "phase_ms": 0
+      },
+      "source_reference": "Unchanged registration from prior verified Study04 mount receipt at2abbc221",
+      "basis": "Geometry in the corresponding fixture region retained; source coordinates unchanged."
+    },
+    {
+      "fixture_id": "pioneer.exterior.strobe.ventral",
+      "kind": "strobe",
+      "applied_position_body_m": [
+        0.0,
+        -9.1,
+        0.0
+      ],
+      "color": [
+        0.85,
+        0.93,
+        1.0
+      ],
+      "emission": 2.0,
+      "light_range_m": 6.0,
+      "light_intensity": 0.65,
+      "load_w": 8,
+      "pulse": {
+        "period_ms": 1000,
+        "on_ms": 100,
+        "phase_ms": 500
+      },
+      "source_reference": "Unchanged registration from prior verified Study04 mount receipt at2abbc221",
+      "basis": "Geometry in the corresponding fixture region retained; source coordinates unchanged."
+    },
+    {
+      "fixture_id": "pioneer.exterior.window.port.forward",
+      "kind": "window",
+      "applied_position_body_m": [
+        35.7025,
+        9.56,
+        -1.25
+      ],
+      "color": [
+        0.1,
+        0.42,
+        0.5
+      ],
+      "emission": 0.025,
+      "light_range_m": 2.0,
+      "light_intensity": 0.08,
+      "load_w": 12,
+      "pulse": null,
+      "source_part": "Bridge front glazing port",
+      "basis": "Measured center of the actual canonical raised-bridge pane; stable fixture identity, explicit new hull binding.",
+      "source_reference": "pioneer-export.json exact source_part and new source-hash identity"
+    },
+    {
+      "fixture_id": "pioneer.exterior.window.starboard.forward",
+      "kind": "window",
+      "applied_position_body_m": [
+        35.7025,
+        9.56,
+        1.25
+      ],
+      "color": [
+        0.1,
+        0.42,
+        0.5
+      ],
+      "emission": 0.025,
+      "light_range_m": 2.0,
+      "light_intensity": 0.08,
+      "load_w": 12,
+      "pulse": null,
+      "source_part": "Bridge front glazing starboard",
+      "basis": "Measured center of the actual canonical raised-bridge pane; stable fixture identity, explicit new hull binding.",
+      "source_reference": "pioneer-export.json exact source_part and new source-hash identity"
+    },
+    {
+      "fixture_id": "pioneer.exterior.window.port.aft",
+      "kind": "window",
+      "applied_position_body_m": [
+        31.0,
+        9.865,
+        -2.9025
+      ],
+      "color": [
+        0.1,
+        0.42,
+        0.5
+      ],
+      "emission": 0.025,
+      "light_range_m": 2.0,
+      "light_intensity": 0.08,
+      "load_w": 12,
+      "pulse": null,
+      "source_part": "Bridge wrap glazing port",
+      "basis": "Measured center of the actual canonical raised-bridge pane; stable fixture identity, explicit new hull binding.",
+      "source_reference": "pioneer-export.json exact source_part and new source-hash identity"
+    },
+    {
+      "fixture_id": "pioneer.exterior.window.starboard.aft",
+      "kind": "window",
+      "applied_position_body_m": [
+        31.0,
+        9.865,
+        2.9025
+      ],
+      "color": [
+        0.1,
+        0.42,
+        0.5
+      ],
+      "emission": 0.025,
+      "light_range_m": 2.0,
+      "light_intensity": 0.08,
+      "load_w": 12,
+      "pulse": null,
+      "source_part": "Bridge wrap glazing starboard",
+      "basis": "Measured center of the actual canonical raised-bridge pane; stable fixture identity, explicit new hull binding.",
+      "source_reference": "pioneer-export.json exact source_part and new source-hash identity"
+    },
+    {
+      "fixture_id": "pioneer.exterior.panel.port",
+      "kind": "panel",
+      "applied_position_body_m": [
+        36.04,
+        -2.3,
+        -6.5
+      ],
+      "color": [
+        0.15,
+        0.65,
+        1.0
+      ],
+      "emission": 2.0,
+      "light_range_m": 6.0,
+      "light_intensity": 0.65,
+      "load_w": 6,
+      "pulse": null,
+      "source_reference": "Unchanged registration from prior verified Study04 mount receipt at2abbc221",
+      "basis": "Geometry in the corresponding fixture region retained; source coordinates unchanged."
+    },
+    {
+      "fixture_id": "pioneer.exterior.panel.starboard",
+      "kind": "panel",
+      "applied_position_body_m": [
+        36.04,
+        -2.3,
+        6.5
+      ],
+      "color": [
+        0.15,
+        0.65,
+        1.0
+      ],
+      "emission": 2.0,
+      "light_range_m": 6.0,
+      "light_intensity": 0.65,
+      "load_w": 6,
+      "pulse": null,
+      "source_reference": "Unchanged registration from prior verified Study04 mount receipt at2abbc221",
+      "basis": "Geometry in the corresponding fixture region retained; source coordinates unchanged."
+    },
+    {
+      "fixture_id": "pioneer.exterior.drive.port",
+      "kind": "engine_glow",
+      "applied_position_body_m": [
+        -33.28,
+        0.0,
+        -12.5
+      ],
+      "color": [
+        0.15,
+        0.5,
+        1.0
+      ],
+      "emission": 2.0,
+      "light_range_m": 6.0,
+      "light_intensity": 0.65,
+      "load_w": 0,
+      "pulse": null,
+      "source_part": "Drive throat",
+      "basis": "0.08m aft of the existing throat front atX=-33.2, inside real cap/counterbore openings; existing drive telemetry retained."
+    },
+    {
+      "fixture_id": "pioneer.exterior.drive.starboard",
+      "kind": "engine_glow",
+      "applied_position_body_m": [
+        -33.28,
+        0.0,
+        12.5
+      ],
+      "color": [
+        0.15,
+        0.5,
+        1.0
+      ],
+      "emission": 2.0,
+      "light_range_m": 6.0,
+      "light_intensity": 0.65,
+      "load_w": 0,
+      "pulse": null,
+      "source_part": "Drive throat.001",
+      "basis": "0.08m aft of the existing throat front atX=-33.2, inside real cap/counterbore openings; existing drive telemetry retained."
+    }
+  ],
+  "load_w": 88,
+  "limits": [
+    "All13 stable fixtureIDs/kinds/loads/pulses and real power/clock semantics retained.",
+    "FourWindow presentation values deliberately reduced; sourceglassmetallic.60/roughness.12. No transparency/optical rating.",
+    "Sourcepart-specific independent batch emitters remain unfinished."
+  ],
+  "source_preservation_receipt": "drone-bay-preserved-source-parts.json"
+}

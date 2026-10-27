@@ -1,0 +1,8 @@
+@@ -1525,3 +1525,6 @@
+                 command_receipt = None;
+-                pending_graph_state = None;
++                if let Some(debug) = &mut pending_graph_state {
++                    debug.command_trace = CommandTraceDebug::default();
++                    debug.command_receipt = None;
++                }
+                 snapshot_dirty = true;

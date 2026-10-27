@@ -1,0 +1,131 @@
+{
+  "at_utc": "2026-10-20T05:13:41.381426+00:00",
+  "source_parent_commit": "5a2b893bfb21f04598f16e7f5cef94179c0d0616",
+  "running_pid": 26743,
+  "running_command": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/reconstruction-native-fixed-20261020/Arkline Editor Reconstructed.app/Contents/MacOS/arkline-editor --project /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/reconstruction-native-fixed-20261020/disposable-project --pilot ReconstructionQA",
+  "current_runtime_state": "Disposable project left playing with one Recon; no submitted text fixture; keys released.",
+  "corrected_bundle": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/reconstruction-native-metadata-20261020/Arkline Editor Reconstructed.app",
+  "corrected_bundle_launch": "Not cold-launched; preserve the running editor while foreground ownership cannot be established.",
+  "source_scope": [
+    "tools/build.py",
+    "tools/package-editor-macos.sh",
+    "tools/test_build_version.py"
+  ],
+  "matrix": [
+    {
+      "journey": "Build identity and owned window",
+      "result": "passed",
+      "evidence": [
+        "owned-window-initial.png",
+        "ordinary-open.json"
+      ],
+      "observation": "Title and toolbar show26.10.19.2; ReconstructionQA disposable project."
+    },
+    {
+      "journey": "Actual OS Shift+Left, Shift+Right and release",
+      "result": "passed",
+      "evidence": [
+        "os-shift-left-held.png",
+        "os-shift-right-held.png",
+        "os-shift-right-released.png",
+        "shift-os-events.json"
+      ],
+      "observation": "0.8s holds rotate in opposite directions; release recenters. No crash; all posted keys released."
+    },
+    {
+      "journey": "Instrument perspective and visibility",
+      "result": "partial",
+      "evidence": [
+        "os-shift-left-held.png",
+        "os-shift-right-held.png",
+        "os-shift-right-released.png"
+      ],
+      "observation": "Mounted panels move with 3D view and all return at centre. Controlled OS depth probing and Shift-alone live-update captures were not completed."
+    },
+    {
+      "journey": "Play, physical Flight/Drones tabs and Undock clicks",
+      "result": "passed",
+      "evidence": [
+        "os-physical-flight-tab-click.png",
+        "os-physical-drones-tab.png",
+        "play-physical-click-events.json",
+        "undock-drone-tab-events.json"
+      ],
+      "observation": "Real OS mouse events changed mounted-screen tabs and local authority changed docked to near-station flight."
+    },
+    {
+      "journey": "Recon launch and camera visibility",
+      "result": "passed",
+      "evidence": [
+        "os-recon-launch.png",
+        "recon-launch-second-attempt-events.json"
+      ],
+      "observation": "Recon1 appears in world, fleet and physical camera display. Continuous camera motion/freshness was not verified by OS captures."
+    },
+    {
+      "journey": "Physical text entry, retained text focus and further travel controls",
+      "result": "unavailable",
+      "evidence": [
+        "text-shift-live-os-events.json",
+        "text-shift-live-second-attempt-events.json"
+      ],
+      "observation": "Foreground guard rejected before typing. Normal AppKit activation also failed to obtain owned foreground focus. No fixture text or further travel request was sent."
+    },
+    {
+      "journey": "Ordinary opening of existing app",
+      "result": "passed",
+      "evidence": [
+        "ordinary-open.json"
+      ],
+      "observation": "Minimal open -a succeeded; same original PID retained. Earlier forced-new/redirection/env invocation failed -10810; causality not established."
+    },
+    {
+      "journey": "Corrected bundle metadata",
+      "result": "passed_static_not_cold_launched",
+      "evidence": [
+        "packaging-fix-validation.json",
+        "bundle-version-validation.json"
+      ],
+      "observation": "14 build/version tests and8 packaging tests pass. New separately signed bundle encodesCFBundleVersion2484.0.2 and retains human26.10.19.2. Current app was not forced closed."
+    },
+    {
+      "journey": "Browser GPU runtime",
+      "result": "unverified",
+      "evidence": [],
+      "observation": "No existing callable permitted browser runtime automation route was available; browser Clippy had passed earlier."
+    }
+  ],
+  "known_stopped_owned_operation": "Read-only broad AX-tree scan hit60s guard and was terminated. App unaffected.",
+  "permissions": "Existing AX/screen preflight true; console logged in and lock flags false/absent. No permission/security/quarantine changes.",
+  "build_label_explanation": "Native build2 was allocated at2026-10-20T04:40UTC, still October19 in repository policyAmerica/Chicago. New local checkout allocated .1 then .2; this is not recovered original build46.",
+  "evidence_directory": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/reconstruction-native-fixed-20261020/os-ui-acceptance-20261020",
+  "artifact_sha256": {
+    "ordinary-open.json": "b21baa05d831649c20bda323ee3aa75a9afdc140aa546943f23d760f09c7b6ad",
+    "text-shift-live-second-attempt-events.json": "09ec2c1e2aa45e81195fe7e06cac70078ef29d961b98033368f28462b77ffbc5",
+    "owned-window-initial.png": "f05ec1e3a07f07ce83ed12a5226922f088a712f60043c5c21dbb294dca8acf39",
+    "recon-launch-second-attempt-events.json": "30b973d2e1a06064bf1e17c287d60de6f4a73de6e2bc3d42984edcbb74a35f35",
+    "os-physical-flight-tab-click.png": "0c85361ab18d448c7ef14af12b3a3dda5112e3dc17ebe0fd70f7716ad3ca3b6a",
+    "packaging-fix-validation.json": "b04b8dfdc1eb59b6156ccd904c637dec388b95f4280cb9e347a7a5a65ac3a0f7",
+    "os-shift-left-held.png": "06e92f7d55106e18205a92113b1feb9687281e7df82cb86b04911f7fa0da1e28",
+    "corporation-form-events.json": "829a326b46301b141cd64e6386dd6a793579d04c01c17b9afda1e24adc9d79d0",
+    "os-shift-right-released.png": "f05ec1e3a07f07ce83ed12a5226922f088a712f60043c5c21dbb294dca8acf39",
+    "shift-os-events.json": "4307733d69fedf3b543de12a14181dbfa430c3bea5cb690a75d787337b91c1a9",
+    "os-shift-right-held.png": "220958c1ea9366ea11a3ce6aad344364e83930b6576feba9923e9c271f3261ed",
+    "os-recon-launch.png": "2509460dd328d3c25c4f76a4c4be74cb0fcc86b3d4e6cb3dc7fef6766f921135",
+    "os-shift-left-released.png": "f05ec1e3a07f07ce83ed12a5226922f088a712f60043c5c21dbb294dca8acf39",
+    "os-recon-orbit-selected.png": "f059411ee11b4ff0e75911e7d6147b1140d58a632d8c5092b4231fcd8c01a878",
+    "os-play-running.png": "bf6ac90498365edb85e19250943b4171f0ba16d1b2325f2e87053ca276138446",
+    "os-physical-drones-tab.png": "f69e79177769b45a8b14bdc06f60ea3e5fb3fd435249ffe05e79a4c6f88ba88c",
+    "text-shift-live-os-events.json": "1109a93ab59e81d92f579786e43d657289fa5da7153c8ae1d0c1ae6bb4363591",
+    "os-physical-corporation-form.png": "6cee88b247234dee9487768cba09d3ae97e79fe99808ab1bf58a180ea4649398",
+    "orbit-corp-tab-events.json": "30c9343b086fa303bcb7c8dd29a82b34ba4d13e4410014af4f63810bfb082c44",
+    "baseline-before-shift.png": "f05ec1e3a07f07ce83ed12a5226922f088a712f60043c5c21dbb294dca8acf39",
+    "recon-launch-events.json": "07955cb52308d66be23bf62e3866a5e1b814b74d5353f4adeafaed6e9abf6c88",
+    "undock-drone-tab-events.json": "0beff55e1de8656e55a05e8ab62ba651e7d0d26fbc01d91cd790313881df20e1",
+    "bundle-version-validation.json": "89e01e56e271e27c686e8ba590e2d375b1c848ba5b18db87bc6d37f6d2aad07e",
+    "play-physical-click-events.json": "cdfd5c55afca4b3ae575ac32dd2eea4c9eec028a732c17c0e953de965211ec4c",
+    "os-physical-corp-tab.png": "049a8d72cf4043dd8cedb4fe0347ae35ea7cbe296f7adf2113db292d7aa8a2b7",
+    "os-undock-click.png": "a2bcc827c3a1ba793af0ece351d53bf297d7a6e500a70f9797122344be763fd5"
+  },
+  "superseded_by_delivery": "DRONE-MODEL-VALIDATION-20261020.json"
+}

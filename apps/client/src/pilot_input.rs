@@ -1,4 +1,5 @@
 //! Latest-value direct controls; neutral release is emitted once, never queued repeatedly.
+use super::control_bindings::{FLIGHT_ROTATION, FLIGHT_TRANSLATION, LOOK_BUTTON};
 use arkline_protocol::Request;
 use eframe::egui;
 use std::sync::{Arc, Mutex};
@@ -50,7 +51,7 @@ impl Mailbox {
             remote,
         });
     }
-    pub fn publish_station(&self, forward: f64, strafe: f64, turn: f64) {
+    pub fn publish_station(&self, forward: f64, strafe: f64, turn: f64, sprint: bool) {
         let mut state = self.0.lock().unwrap();
         state.generation = state.generation.wrapping_add(1);
         state.pending = Some(PendingControl {
@@ -59,9 +60,49 @@ impl Mailbox {
                 forward,
                 strafe,
                 turn,
+                sprint,
             },
             remote: None,
         });
+    }
+    /// Latest own-vessel sample carries its immutable physical registration.
+    pub fn publish_docked(
+        &self,
+        binding: arkline_protocol::DockedTraversalBinding,
+        forward: f64,
+        strafe: f64,
+        turn: f64,
+        sprint: bool,
+    ) {
+        let mut state = self.0.lock().unwrap();
+        state.generation = state.generation.wrapping_add(1);
+        state.pending = Some(PendingControl {
+            generation: state.generation,
+            request: Request::DockedTraversal {
+                request: arkline_protocol::DockedTraversalRequest::Walk {
+                    binding,
+                    forward,
+                    strafe,
+                    turn,
+                    sprint,
+                },
+            },
+            remote: None,
+        });
+    }
+    /// Releasing a flight viewport must preserve an already queued walking stop.
+    pub fn clear_flight(&self) {
+        let mut state = self.0.lock().unwrap();
+        let flight = state.pending.as_ref().is_some_and(|pending| {
+            matches!(
+                pending.request,
+                Request::PilotInput { .. } | Request::RemoteControl { .. }
+            )
+        });
+        if flight {
+            state.generation = state.generation.wrapping_add(1);
+            state.pending = None;
+        }
     }
     pub fn clear(&self) {
         let mut state = self.0.lock().unwrap();
@@ -94,8 +135,13 @@ pub struct PilotInput {
     aiming: bool,
     captured: bool,
     capture_failed: bool,
+    capture_disabled: bool,
 }
 impl PilotInput {
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn disable_capture(&mut self) {
+        self.capture_disabled = true;
+    }
     pub fn relinquish(&mut self, mailbox: &Mailbox) {
         mailbox.clear();
         self.active = false;
@@ -136,8 +182,8 @@ impl PilotInput {
         });
         let (held, pressed, escape, absolute_delta) = ctx.input(|i| {
             (
-                i.pointer.secondary_down(),
-                i.pointer.secondary_pressed(),
+                i.pointer.button_down(LOOK_BUTTON),
+                i.pointer.button_pressed(LOOK_BUTTON),
                 i.key_pressed(egui::Key::Escape),
                 i.pointer.delta(),
             )
@@ -157,17 +203,13 @@ impl PilotInput {
             self.aiming = true;
             // macOS winit supports Locked. Other backends retain visible aiming
             // until their lock support can be checked through a result-bearing API.
-            if cfg!(target_os = "macos") && !self.capture_failed {
+            if cfg!(target_os = "macos") && !self.capture_failed && !self.capture_disabled {
                 ctx.send_viewport_cmd(egui::ViewportCommand::CursorGrab(egui::CursorGrab::Locked));
                 ctx.send_viewport_cmd(egui::ViewportCommand::CursorVisible(false));
                 self.captured = true;
             }
         }
         let control = ctx.input(|i| {
-            let axis = |positive, negative| {
-                f64::from(i.key_down(positive) || i.key_pressed(positive))
-                    - f64::from(i.key_down(negative) || i.key_pressed(negative))
-            };
             let aiming = self.aiming && (self.captured || over_world);
             let delta = if aiming {
                 i.pointer.motion().unwrap_or_else(|| i.pointer.delta())
@@ -177,21 +219,15 @@ impl PilotInput {
             let dt = i.stable_dt.max(1.0 / 240.0) as f64;
             // Mouse rates are normalized to angular speed, independent of render cadence.
             Controls {
-                translation: [
-                    axis(egui::Key::W, egui::Key::S),
-                    axis(egui::Key::Space, egui::Key::C),
-                    axis(egui::Key::D, egui::Key::A),
-                ],
+                translation: FLIGHT_TRANSLATION.map(|binding| binding.sample(i, true)),
                 rotation: if i.modifiers.shift {
                     [0.0; 3]
                 } else {
                     [
-                        axis(egui::Key::E, egui::Key::Q),
-                        (axis(egui::Key::ArrowLeft, egui::Key::ArrowRight)
-                            - delta.x as f64 * 0.002 / dt)
+                        FLIGHT_ROTATION[0].sample(i, true),
+                        (FLIGHT_ROTATION[1].sample(i, true) - delta.x as f64 * 0.002 / dt)
                             .clamp(-1.0, 1.0),
-                        (axis(egui::Key::ArrowUp, egui::Key::ArrowDown)
-                            - delta.y as f64 * 0.002 / dt)
+                        (FLIGHT_ROTATION[2].sample(i, true) - delta.y as f64 * 0.002 / dt)
                             .clamp(-1.0, 1.0),
                     ]
                 },
@@ -204,7 +240,7 @@ impl PilotInput {
 mod tests {
     use super::*;
     #[test]
-    fn shift_arrows_do_not_send_ship_rotation() {
+    fn controls_reference_shift_arrows_do_not_send_ship_rotation() {
         let ctx = egui::Context::default();
         let mut pilot = PilotInput::default();
         let _ = ctx.run(
@@ -403,6 +439,28 @@ mod tests {
                 assert!(sample.rotation[1] < 0.0);
             },
         );
+    }
+    #[test]
+    fn flight_release_preserves_queued_station_stop_but_clears_thrust() {
+        let mailbox = Mailbox::default();
+        mailbox.publish_station(0.0, 0.0, 0.0, false);
+        mailbox.clear_flight();
+        mailbox.clear_flight();
+        assert!(matches!(
+            mailbox.take(),
+            Some(Request::StationWalk {
+                forward: 0.0,
+                strafe: 0.0,
+                turn: 0.0,
+                sprint: false,
+            })
+        ));
+        mailbox.publish(Controls {
+            translation: [1.0, 0.0, 0.0],
+            rotation: [0.0; 3],
+        });
+        mailbox.clear_flight();
+        assert!(mailbox.take().is_none());
     }
     #[test]
     fn mailbox_replaces_stale_thrust_with_release() {

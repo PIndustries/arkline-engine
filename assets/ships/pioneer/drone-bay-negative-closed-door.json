@@ -1,0 +1,936 @@
+{
+  "schema": "arkline.drone-bay-relative-motion-proof/v1",
+  "authoring_manifest_sha256": "342d050e111ff239d9d3ef540ffa5023906a2ae528db5ae9359eb73a46f32ae8",
+  "export_glb_sha256": "7970f096a6aac9d95b6250b75cd19ea2e54046c9deb77f3592b82efa879112fd",
+  "method": "Exact relative linear interval overlap for conservative authored boxes; positive-volume threshold10micrometres",
+  "mesh_binding": {
+    "receipt_source_matches_manifest": true,
+    "all_dynamic_boxes_contain_exported_vertices_within_m": 1e-05,
+    "dynamic_source_ranges_disjoint": true,
+    "dynamic_triangles": 7668
+  },
+  "dynamic_groups": 22,
+  "dynamic_source_parts": 71,
+  "drone_boxes": 15,
+  "phases": [
+    "empty_carriage_x",
+    "empty_lift_y",
+    "fork_extend",
+    "extract",
+    "loaded_lift_y",
+    "loaded_carriage_x",
+    "release_support",
+    "drone_depart"
+  ],
+  "pair_segment_tests": 426000,
+  "closed_door_negative_control": true,
+  "omitted_release_negative_control": false,
+  "hits": [
+    {
+      "slot": "s00",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/leaf",
+      "b": "drone/s00",
+      "interval": [
+        0.26315894736842105,
+        0.806314736842105
+      ]
+    },
+    {
+      "slot": "s00",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/rib",
+      "b": "drone/s00",
+      "interval": [
+        0.2526326315789472,
+        0.7884200000000002
+      ]
+    },
+    {
+      "slot": "s00",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/edge_marker",
+      "b": "drone/s00",
+      "interval": [
+        0.2615799999999999,
+        0.7894726315789474
+      ]
+    },
+    {
+      "slot": "s00",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/leaf",
+      "b": "drone/s00",
+      "interval": [
+        0.26315894736842105,
+        0.806314736842105
+      ]
+    },
+    {
+      "slot": "s00",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/rib",
+      "b": "drone/s00",
+      "interval": [
+        0.2526326315789472,
+        0.7884200000000002
+      ]
+    },
+    {
+      "slot": "s00",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/edge_marker",
+      "b": "drone/s00",
+      "interval": [
+        0.2615799999999999,
+        0.7894726315789474
+      ]
+    },
+    {
+      "slot": "s01",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/leaf",
+      "b": "drone/s01",
+      "interval": [
+        0.26315894736842105,
+        0.806314736842105
+      ]
+    },
+    {
+      "slot": "s01",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/rib",
+      "b": "drone/s01",
+      "interval": [
+        0.2526326315789472,
+        0.7884200000000002
+      ]
+    },
+    {
+      "slot": "s01",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/edge_marker",
+      "b": "drone/s01",
+      "interval": [
+        0.2615799999999999,
+        0.7894726315789474
+      ]
+    },
+    {
+      "slot": "s01",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/leaf",
+      "b": "drone/s01",
+      "interval": [
+        0.26315894736842105,
+        0.806314736842105
+      ]
+    },
+    {
+      "slot": "s01",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/rib",
+      "b": "drone/s01",
+      "interval": [
+        0.2526326315789472,
+        0.7884200000000002
+      ]
+    },
+    {
+      "slot": "s01",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/edge_marker",
+      "b": "drone/s01",
+      "interval": [
+        0.2615799999999999,
+        0.7894726315789474
+      ]
+    },
+    {
+      "slot": "s02",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/leaf",
+      "b": "drone/s02",
+      "interval": [
+        0.26315894736842105,
+        0.806314736842105
+      ]
+    },
+    {
+      "slot": "s02",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/rib",
+      "b": "drone/s02",
+      "interval": [
+        0.2526326315789472,
+        0.7884200000000002
+      ]
+    },
+    {
+      "slot": "s02",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/edge_marker",
+      "b": "drone/s02",
+      "interval": [
+        0.2615799999999999,
+        0.7894726315789474
+      ]
+    },
+    {
+      "slot": "s02",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/leaf",
+      "b": "drone/s02",
+      "interval": [
+        0.26315894736842105,
+        0.806314736842105
+      ]
+    },
+    {
+      "slot": "s02",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/rib",
+      "b": "drone/s02",
+      "interval": [
+        0.2526326315789472,
+        0.7884200000000002
+      ]
+    },
+    {
+      "slot": "s02",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/edge_marker",
+      "b": "drone/s02",
+      "interval": [
+        0.2615799999999999,
+        0.7894726315789474
+      ]
+    },
+    {
+      "slot": "s03",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/leaf",
+      "b": "drone/s03",
+      "interval": [
+        0.26315894736842105,
+        0.806314736842105
+      ]
+    },
+    {
+      "slot": "s03",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/rib",
+      "b": "drone/s03",
+      "interval": [
+        0.2526326315789472,
+        0.7884200000000002
+      ]
+    },
+    {
+      "slot": "s03",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/edge_marker",
+      "b": "drone/s03",
+      "interval": [
+        0.2615799999999999,
+        0.7894726315789474
+      ]
+    },
+    {
+      "slot": "s03",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/leaf",
+      "b": "drone/s03",
+      "interval": [
+        0.26315894736842105,
+        0.806314736842105
+      ]
+    },
+    {
+      "slot": "s03",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/rib",
+      "b": "drone/s03",
+      "interval": [
+        0.2526326315789472,
+        0.7884200000000002
+      ]
+    },
+    {
+      "slot": "s03",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/edge_marker",
+      "b": "drone/s03",
+      "interval": [
+        0.2615799999999999,
+        0.7894726315789474
+      ]
+    },
+    {
+      "slot": "s04",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/leaf",
+      "b": "drone/s04",
+      "interval": [
+        0.26315894736842105,
+        0.806314736842105
+      ]
+    },
+    {
+      "slot": "s04",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/rib",
+      "b": "drone/s04",
+      "interval": [
+        0.2526326315789472,
+        0.7884200000000002
+      ]
+    },
+    {
+      "slot": "s04",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/edge_marker",
+      "b": "drone/s04",
+      "interval": [
+        0.2615799999999999,
+        0.7894726315789474
+      ]
+    },
+    {
+      "slot": "s04",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/leaf",
+      "b": "drone/s04",
+      "interval": [
+        0.26315894736842105,
+        0.806314736842105
+      ]
+    },
+    {
+      "slot": "s04",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/rib",
+      "b": "drone/s04",
+      "interval": [
+        0.2526326315789472,
+        0.7884200000000002
+      ]
+    },
+    {
+      "slot": "s04",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/edge_marker",
+      "b": "drone/s04",
+      "interval": [
+        0.2615799999999999,
+        0.7894726315789474
+      ]
+    },
+    {
+      "slot": "s05",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/leaf",
+      "b": "drone/s05",
+      "interval": [
+        0.26315894736842105,
+        0.806314736842105
+      ]
+    },
+    {
+      "slot": "s05",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/rib",
+      "b": "drone/s05",
+      "interval": [
+        0.2526326315789472,
+        0.7884200000000002
+      ]
+    },
+    {
+      "slot": "s05",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/edge_marker",
+      "b": "drone/s05",
+      "interval": [
+        0.2615799999999999,
+        0.7894726315789474
+      ]
+    },
+    {
+      "slot": "s05",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/leaf",
+      "b": "drone/s05",
+      "interval": [
+        0.26315894736842105,
+        0.806314736842105
+      ]
+    },
+    {
+      "slot": "s05",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/rib",
+      "b": "drone/s05",
+      "interval": [
+        0.2526326315789472,
+        0.7884200000000002
+      ]
+    },
+    {
+      "slot": "s05",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/edge_marker",
+      "b": "drone/s05",
+      "interval": [
+        0.2615799999999999,
+        0.7894726315789474
+      ]
+    },
+    {
+      "slot": "s06",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/leaf",
+      "b": "drone/s06",
+      "interval": [
+        0.26315894736842105,
+        0.806314736842105
+      ]
+    },
+    {
+      "slot": "s06",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/rib",
+      "b": "drone/s06",
+      "interval": [
+        0.2526326315789472,
+        0.7884200000000002
+      ]
+    },
+    {
+      "slot": "s06",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/edge_marker",
+      "b": "drone/s06",
+      "interval": [
+        0.2615799999999999,
+        0.7894726315789474
+      ]
+    },
+    {
+      "slot": "s06",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/leaf",
+      "b": "drone/s06",
+      "interval": [
+        0.26315894736842105,
+        0.806314736842105
+      ]
+    },
+    {
+      "slot": "s06",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/rib",
+      "b": "drone/s06",
+      "interval": [
+        0.2526326315789472,
+        0.7884200000000002
+      ]
+    },
+    {
+      "slot": "s06",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/edge_marker",
+      "b": "drone/s06",
+      "interval": [
+        0.2615799999999999,
+        0.7894726315789474
+      ]
+    },
+    {
+      "slot": "s07",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/leaf",
+      "b": "drone/s07",
+      "interval": [
+        0.26315894736842105,
+        0.806314736842105
+      ]
+    },
+    {
+      "slot": "s07",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/rib",
+      "b": "drone/s07",
+      "interval": [
+        0.2526326315789472,
+        0.7884200000000002
+      ]
+    },
+    {
+      "slot": "s07",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/edge_marker",
+      "b": "drone/s07",
+      "interval": [
+        0.2615799999999999,
+        0.7894726315789474
+      ]
+    },
+    {
+      "slot": "s07",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/leaf",
+      "b": "drone/s07",
+      "interval": [
+        0.26315894736842105,
+        0.806314736842105
+      ]
+    },
+    {
+      "slot": "s07",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/rib",
+      "b": "drone/s07",
+      "interval": [
+        0.2526326315789472,
+        0.7884200000000002
+      ]
+    },
+    {
+      "slot": "s07",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/edge_marker",
+      "b": "drone/s07",
+      "interval": [
+        0.2615799999999999,
+        0.7894726315789474
+      ]
+    },
+    {
+      "slot": "s08",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/leaf",
+      "b": "drone/s08",
+      "interval": [
+        0.26315894736842105,
+        0.806314736842105
+      ]
+    },
+    {
+      "slot": "s08",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/rib",
+      "b": "drone/s08",
+      "interval": [
+        0.2526326315789472,
+        0.7884200000000002
+      ]
+    },
+    {
+      "slot": "s08",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/edge_marker",
+      "b": "drone/s08",
+      "interval": [
+        0.2615799999999999,
+        0.7894726315789474
+      ]
+    },
+    {
+      "slot": "s08",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/leaf",
+      "b": "drone/s08",
+      "interval": [
+        0.26315894736842105,
+        0.806314736842105
+      ]
+    },
+    {
+      "slot": "s08",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/rib",
+      "b": "drone/s08",
+      "interval": [
+        0.2526326315789472,
+        0.7884200000000002
+      ]
+    },
+    {
+      "slot": "s08",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/edge_marker",
+      "b": "drone/s08",
+      "interval": [
+        0.2615799999999999,
+        0.7894726315789474
+      ]
+    },
+    {
+      "slot": "s09",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/leaf",
+      "b": "drone/s09",
+      "interval": [
+        0.26315894736842105,
+        0.806314736842105
+      ]
+    },
+    {
+      "slot": "s09",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/rib",
+      "b": "drone/s09",
+      "interval": [
+        0.2526326315789472,
+        0.7884200000000002
+      ]
+    },
+    {
+      "slot": "s09",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/edge_marker",
+      "b": "drone/s09",
+      "interval": [
+        0.2615799999999999,
+        0.7894726315789474
+      ]
+    },
+    {
+      "slot": "s09",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/leaf",
+      "b": "drone/s09",
+      "interval": [
+        0.26315894736842105,
+        0.806314736842105
+      ]
+    },
+    {
+      "slot": "s09",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/rib",
+      "b": "drone/s09",
+      "interval": [
+        0.2526326315789472,
+        0.7884200000000002
+      ]
+    },
+    {
+      "slot": "s09",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/edge_marker",
+      "b": "drone/s09",
+      "interval": [
+        0.2615799999999999,
+        0.7894726315789474
+      ]
+    },
+    {
+      "slot": "s10",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/leaf",
+      "b": "drone/s10",
+      "interval": [
+        0.26315894736842105,
+        0.806314736842105
+      ]
+    },
+    {
+      "slot": "s10",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/rib",
+      "b": "drone/s10",
+      "interval": [
+        0.2526326315789472,
+        0.7884200000000002
+      ]
+    },
+    {
+      "slot": "s10",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/edge_marker",
+      "b": "drone/s10",
+      "interval": [
+        0.2615799999999999,
+        0.7894726315789474
+      ]
+    },
+    {
+      "slot": "s10",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/leaf",
+      "b": "drone/s10",
+      "interval": [
+        0.26315894736842105,
+        0.806314736842105
+      ]
+    },
+    {
+      "slot": "s10",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/rib",
+      "b": "drone/s10",
+      "interval": [
+        0.2526326315789472,
+        0.7884200000000002
+      ]
+    },
+    {
+      "slot": "s10",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/edge_marker",
+      "b": "drone/s10",
+      "interval": [
+        0.2615799999999999,
+        0.7894726315789474
+      ]
+    },
+    {
+      "slot": "s11",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/leaf",
+      "b": "drone/s11",
+      "interval": [
+        0.26315894736842105,
+        0.806314736842105
+      ]
+    },
+    {
+      "slot": "s11",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/rib",
+      "b": "drone/s11",
+      "interval": [
+        0.2526326315789472,
+        0.7884200000000002
+      ]
+    },
+    {
+      "slot": "s11",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/edge_marker",
+      "b": "drone/s11",
+      "interval": [
+        0.2615799999999999,
+        0.7894726315789474
+      ]
+    },
+    {
+      "slot": "s11",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/leaf",
+      "b": "drone/s11",
+      "interval": [
+        0.26315894736842105,
+        0.806314736842105
+      ]
+    },
+    {
+      "slot": "s11",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/rib",
+      "b": "drone/s11",
+      "interval": [
+        0.2526326315789472,
+        0.7884200000000002
+      ]
+    },
+    {
+      "slot": "s11",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/edge_marker",
+      "b": "drone/s11",
+      "interval": [
+        0.2615799999999999,
+        0.7894726315789474
+      ]
+    },
+    {
+      "slot": "s12",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/leaf",
+      "b": "drone/s12",
+      "interval": [
+        0.26315894736842105,
+        0.806314736842105
+      ]
+    },
+    {
+      "slot": "s12",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/rib",
+      "b": "drone/s12",
+      "interval": [
+        0.2526326315789472,
+        0.7884200000000002
+      ]
+    },
+    {
+      "slot": "s12",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/edge_marker",
+      "b": "drone/s12",
+      "interval": [
+        0.2615799999999999,
+        0.7894726315789474
+      ]
+    },
+    {
+      "slot": "s12",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/leaf",
+      "b": "drone/s12",
+      "interval": [
+        0.26315894736842105,
+        0.806314736842105
+      ]
+    },
+    {
+      "slot": "s12",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/rib",
+      "b": "drone/s12",
+      "interval": [
+        0.2526326315789472,
+        0.7884200000000002
+      ]
+    },
+    {
+      "slot": "s12",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/edge_marker",
+      "b": "drone/s12",
+      "interval": [
+        0.2615799999999999,
+        0.7894726315789474
+      ]
+    },
+    {
+      "slot": "s13",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/leaf",
+      "b": "drone/s13",
+      "interval": [
+        0.26315894736842105,
+        0.806314736842105
+      ]
+    },
+    {
+      "slot": "s13",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/rib",
+      "b": "drone/s13",
+      "interval": [
+        0.2526326315789472,
+        0.7884200000000002
+      ]
+    },
+    {
+      "slot": "s13",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/edge_marker",
+      "b": "drone/s13",
+      "interval": [
+        0.2615799999999999,
+        0.7894726315789474
+      ]
+    },
+    {
+      "slot": "s13",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/leaf",
+      "b": "drone/s13",
+      "interval": [
+        0.26315894736842105,
+        0.806314736842105
+      ]
+    },
+    {
+      "slot": "s13",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/rib",
+      "b": "drone/s13",
+      "interval": [
+        0.2526326315789472,
+        0.7884200000000002
+      ]
+    },
+    {
+      "slot": "s13",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/edge_marker",
+      "b": "drone/s13",
+      "interval": [
+        0.2615799999999999,
+        0.7894726315789474
+      ]
+    },
+    {
+      "slot": "s14",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/leaf",
+      "b": "drone/s14",
+      "interval": [
+        0.26315894736842105,
+        0.806314736842105
+      ]
+    },
+    {
+      "slot": "s14",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/rib",
+      "b": "drone/s14",
+      "interval": [
+        0.2526326315789472,
+        0.7884200000000002
+      ]
+    },
+    {
+      "slot": "s14",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/lower/edge_marker",
+      "b": "drone/s14",
+      "interval": [
+        0.2615799999999999,
+        0.7894726315789474
+      ]
+    },
+    {
+      "slot": "s14",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/leaf",
+      "b": "drone/s14",
+      "interval": [
+        0.26315894736842105,
+        0.806314736842105
+      ]
+    },
+    {
+      "slot": "s14",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/rib",
+      "b": "drone/s14",
+      "interval": [
+        0.2526326315789472,
+        0.7884200000000002
+      ]
+    },
+    {
+      "slot": "s14",
+      "phase": "drone_depart",
+      "a": "pioneer.drone_bay/door/upper/edge_marker",
+      "b": "drone/s14",
+      "interval": [
+        0.2615799999999999,
+        0.7894726315789474
+      ]
+    }
+  ],
+  "limitations": [
+    "Static environment not checked here",
+    "Authored boxes contain bevel geometry; no runtime execution or force proof",
+    "Tangent bearing and drone/cradle contact accepted within10micrometres",
+    "Departure endpoint X\u221240m; larger world hazards not covered"
+  ]
+}

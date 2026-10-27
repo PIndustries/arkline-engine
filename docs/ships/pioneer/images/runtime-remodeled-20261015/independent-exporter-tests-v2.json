@@ -1,0 +1,16 @@
+{
+  "code_before": {
+    "export_pioneer.py": "ce1c5b64008223cfc06acce932cb2dbaf46c013a585bf586d7211422e8bea1cb",
+    "pioneer_export_contract.py": "c786532a9d380f02d9a9715bc9057c896a7971b36ec8ea049f9a2b553cb57c1d",
+    "test_pioneer_export_contract.py": "b2a63b347c3193d25ca4d0a5428cb1d7597b50ed718defd7a393fd84c76a4584"
+  },
+  "code_after": {
+    "export_pioneer.py": "ce1c5b64008223cfc06acce932cb2dbaf46c013a585bf586d7211422e8bea1cb",
+    "pioneer_export_contract.py": "c786532a9d380f02d9a9715bc9057c896a7971b36ec8ea049f9a2b553cb57c1d",
+    "test_pioneer_export_contract.py": "b2a63b347c3193d25ca4d0a5428cb1d7597b50ed718defd7a393fd84c76a4584"
+  },
+  "code_unchanged": true,
+  "exit_code": 0,
+  "seconds": 40.54948091506958,
+  "scope": "Independent execution after nested-node-tree driver hardening; stdlib and official bpy5.0.1 fixture journeys, published source unchanged."
+}

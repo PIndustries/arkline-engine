@@ -39,7 +39,7 @@ impl MotionHistory {
                 INTERPOLATION_DELAY_MS
             };
             let time = now.saturating_sub(delay);
-            if !normal(pilot) {
+            if pilot.flight.as_ref().is_some_and(|f| f.docking.is_some()) || !normal(pilot) {
                 continue;
             }
             let mut samples = Vec::new();
@@ -98,6 +98,13 @@ pub fn position(pilot: &PilotView, now: u64) -> [f64; 3] {
     let Some(flight) = &pilot.flight else {
         return STATION_POSITION;
     };
+    if let Some(docking) = &flight.docking {
+        if let Some(segment) = &docking.segment {
+            return segment
+                .sample(now.min(docking.updated_at_ms.saturating_add(150)))
+                .0;
+        }
+    }
     if let Some(warp) = &flight.warp {
         if matches!(pilot.location, Location::InTransit { .. }) {
             return sample_warp(warp, now).0;
@@ -143,6 +150,13 @@ mod tests {
     use super::*;
     fn snapshot(time: u64, x: f64) -> Snapshot {
         Snapshot {
+            carrier_inventory_registration: None,
+            walk_sprint_v1: false,
+            drone_cargo_registration: None,
+            drone_cargo_totals: None,
+            docked_traversal_capability: None,
+            world_layout: None,
+            exterior: None,
             resource_jobs: vec![],
             fleet_links: vec![],
             remote_controls: vec![],
@@ -153,6 +167,12 @@ mod tests {
             online_pilots: vec![],
             asteroids: vec![],
             pilots: vec![PilotView {
+                carrier_inventory: None,
+                power_accounting: None,
+                drone_bay: None,
+                drone_cargo: None,
+                cockpit_mechanisms: None,
+                reactor_configuration: None,
                 surface: None,
                 station_avatar: None,
                 power: None,
@@ -170,6 +190,7 @@ mod tests {
                 drone: None,
                 location: Location::Station,
                 flight: Some(FlightState {
+                    docking: None,
                     acceleration: [0.; 3],
                     position: [x, 0.0, 0.0],
                     velocity: [100.0, 0.0, 0.0],
@@ -186,6 +207,59 @@ mod tests {
             ledger_sequence: 0,
             ledger_hash: String::new(),
         }
+    }
+    #[test]
+    fn docking_sampling_is_bounded_and_never_rewinds_at_free_flight_handoff() {
+        let mut s = snapshot(1000, 0.);
+        let segment = DockingSegment {
+            source_m: [0.; 3],
+            target_m: [250., 0., 0.],
+            initial_velocity_mps: [0.; 3],
+            source_orientation: [0., 0., 0., 1.],
+            target_orientation: [0., 0., 0., 1.],
+            started_at_ms: 1000,
+            duration_ms: 15000,
+        };
+        s.pilots[0].flight.as_mut().unwrap().docking = Some(DockingState {
+            version: DOCKING_VERSION,
+            host_vessel_id: "test".into(),
+            berth_id: 0,
+            operation_id: 1,
+            phase: DockingPhase::Departing,
+            segment: Some(segment.clone()),
+            clamps: 0.,
+            updated_at_ms: 1000,
+            hold_reason: None,
+            departing: true,
+        });
+        assert_eq!(position(&s.pilots[0], 100_000), segment.sample(1150).0);
+        let mut history = MotionHistory::default();
+        history.observe(&s);
+        let mut free = s.clone();
+        free.server_time_ms = 16000;
+        let f = free.pilots[0].flight.as_mut().unwrap();
+        f.position = [250., 0., 0.];
+        f.velocity = [0.; 3];
+        f.updated_at_ms = 16000;
+        let d = f.docking.as_mut().unwrap();
+        d.phase = DockingPhase::Free;
+        d.segment = None;
+        d.updated_at_ms = 16000;
+        history.observe(&free);
+        let displayed = history.sample(&free, 16000);
+        assert_eq!(displayed.pilots[0].flight, free.pilots[0].flight);
+        assert_eq!(position(&displayed.pilots[0], 16000), [250., 0., 0.]);
+        assert_eq!(
+            s.pilots[0]
+                .flight
+                .as_ref()
+                .unwrap()
+                .docking
+                .as_ref()
+                .unwrap()
+                .phase,
+            DockingPhase::Departing
+        );
     }
     #[test]
     fn snapshots_interpolate_continuously_and_never_change_economic_data() {

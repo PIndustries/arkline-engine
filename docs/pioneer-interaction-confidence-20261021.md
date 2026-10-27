@@ -1,0 +1,11 @@
+# Fleet selection and pending door actuation
+
+Fleet selection now uses explicit pointer/focus IDs bound to the pilot and drone ID. An authoritative removal or reorder during a mouse gesture cannot transfer the pressed row to another drone. The existing missing-selected-drone explanation and command authority gates remain intact.
+
+The Airlock/EVA engineering panel offers Apply pending request manually when powered intent differs from the confirmed door output. This sends the existing requested target with manual actuation, without first cancelling it. It preserves pressure and occupied-doorway interlocks and never predicts motion or completion. Already-manual, uncommissioned and caller-disabled controls cannot dispatch it; matched targets do not show the action.
+
+Focused evidence: five room-control pointer/state checks and the actual fleet-controls press/remove-or-reorder/release regression passed. The existing native whole-client Operations review passed; its Drones capture shows an empty authoritative fleet during transit, so it verifies workspace/empty-state presentation rather than deployed-row appearance. No live player, drone or door command was used for these checks. No full workspace suite was repeated.
+
+Earlier .11 handoff was verified live: PioneerFinish11QA connected, no ERROR, populated cockpit/instrument pixels, current avatar and completed job preserved, full ledgers equal at 1,587 Pioneer and 346 FirstProject entries. Running mode was restored from the actual pre-restart state. Only three actuator refresh timestamps changed on load. Evidence: /tmp/pioneer-room-navigation-handoff-20261021/live-acceptance.json. OS capture remains a small angled preview, not full-size visual acceptance.
+
+Known next items: target-rack freshness still uses presentation time rather than live snapshot age. Engineering room controls also lack the local live-age guard; its correction touches a previously blocked station/walking file and remains unapplied. Cargo geometry/shared adapters, camera initialization, renderer, console and denied walking edits remain untouched. Physical cargo contracts remain design-only; no world migration or ore quantity conversion occurred. Audio audibility remains unconfirmed.

@@ -1,0 +1,5185 @@
+//! Shared registered geometry for the Pioneer walking scene and raised bridge.
+//!
+//! Positions are body metres until explicitly transformed into station metres.
+//! The dimensions below are presentation and walking geometry, not engineering
+//! ratings. The original room document and the canonical hull remain separate
+//! sources; this registration deliberately binds them to one measured snapshot.
+use crate::{
+    FleetLayoutRevision, RoomLayoutDocument, ShipClass, StationObstacleKind, AVATAR_HEIGHT_M,
+    PIONEER_CONNECTED_ROOM, STATION_AVATAR_RADIUS_M,
+};
+use serde::{Deserialize, Serialize};
+
+// Experimental revision 12 preserves the raised bridge and binds the authored
+// aft drone bay source. Existing bridge, room and boarding geometry is unchanged.
+// Fresh test worlds only: no implicit migration of earlier saved bindings.
+pub const PIONEER_DOCKED_REGISTRATION_REVISION: u32 = 12;
+/// Rigid raised bridge placement in the canonical body frame. Cabin, joints,
+/// instruments, mechanisms and input planes share this one translation.
+pub const PIONEER_BRIDGE_RISE_M: f64 = 8.0;
+pub fn bridge_point(point: [f64; 3]) -> [f64; 3] {
+    add(point, [0.0, PIONEER_BRIDGE_RISE_M, 0.0])
+}
+pub const PIONEER_DOCKED_SOURCE_SHA256: &str =
+    "7970f096a6aac9d95b6250b75cd19ea2e54046c9deb77f3592b82efa879112fd";
+/// Dial coordinates in the complete canonical glass rectangle (u right, v down).
+/// Physical bezels and authoritative instrument painting share this contract.
+pub const PIONEER_DIAL_CENTERS: [[f64; 2]; 2] = [[0.25, 0.42], [0.75, 0.42]];
+pub const PIONEER_DIAL_RADIUS_HEIGHT: f64 = 0.28;
+/// Dedicated rectangular range module in the navigation glass coordinate frame.
+pub const PIONEER_RANGE_MODULE_RECT: [[f64; 2]; 2] = [[0.58, 0.16], [0.97, 0.70]];
+
+const EPS: f64 = 1.0e-8;
+const FLOOR: f64 = -0.32;
+// Fitted interior authoring choices in the unchanged canonical body frame.
+// Registration admission/recovery must be coordinated before accepting this recipe.
+const COCKPIT_REAR_X_M: f64 = 27.0;
+const PILOT_STATION_SHIFT_X_M: f64 = -2.74;
+const PILOT_SEAT_RISE_M: f64 = 0.35;
+fn workstation_point(point: [f64; 3]) -> [f64; 3] {
+    add(pilot_station_point(point), [0.0, PILOT_SEAT_RISE_M, 0.0])
+}
+fn pilot_station_point(point: [f64; 3]) -> [f64; 3] {
+    add(point, [PILOT_STATION_SHIFT_X_M, 0.0, -3.0])
+}
+const P: [f64; 3] = [32.985, 0.0, -9.815];
+const T: [f64; 3] = [0.7903075524006599, 0.0, 0.6127103495719207];
+const N: [f64; 3] = [0.6127103495719207, 0.0, -0.7903075524006599];
+const VESTIBULE_START: [f64; 3] = [34.1, FLOOR, -7.8];
+const VESTIBULE_END: [f64; 3] = [32.49483172034246, FLOOR, -9.182753958079472];
+const X: [f64; 3] = [1.0, 0.0, 0.0];
+const Y: [f64; 3] = [0.0, 1.0, 0.0];
+const Z: [f64; 3] = [0.0, 0.0, 1.0];
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PioneerDockedPose {
+    pub origin_m: [f64; 3],
+    /// +X turns towards +Z; the renderer uses a negative Y rotation.
+    pub yaw: f64,
+}
+
+impl PioneerDockedPose {
+    pub fn private() -> Self {
+        Self {
+            origin_m: crate::hangar_layout(ShipClass::Pioneer).ship_center,
+            yaw: 0.0,
+        }
+    }
+    pub fn fleet(revision: FleetLayoutRevision) -> Self {
+        let berth = crate::fleet_berth_pose(revision, ShipClass::Pioneer);
+        Self {
+            origin_m: berth.position,
+            yaw: berth.yaw,
+        }
+    }
+    pub fn body_to_station(self, point: [f64; 3]) -> [f64; 3] {
+        body_to_station(self, point)
+    }
+    pub fn station_to_body(self, point: [f64; 3]) -> [f64; 3] {
+        station_to_body(self, point)
+    }
+    pub fn valid(self) -> bool {
+        finite(self.origin_m) && self.yaw.is_finite() && self.origin_m[1] > -FLOOR
+    }
+}
+
+pub fn deck_floor_y(deck: u8) -> Option<f64> {
+    match deck {
+        1 => Some(-4.12),
+        2 => Some(FLOOR),
+        _ => None,
+    }
+}
+pub fn deck_to_body(deck: u8, point: [f64; 3]) -> Option<[f64; 3]> {
+    finite(point).then_some([
+        point[0] - 12.0,
+        deck_floor_y(deck)? + point[1],
+        point[2] - 7.0,
+    ])
+}
+pub fn body_to_station(pose: PioneerDockedPose, p: [f64; 3]) -> [f64; 3] {
+    let (s, c) = pose.yaw.sin_cos();
+    add(
+        pose.origin_m,
+        [c * p[0] - s * p[2], p[1], s * p[0] + c * p[2]],
+    )
+}
+pub fn station_to_body(pose: PioneerDockedPose, p: [f64; 3]) -> [f64; 3] {
+    let (s, c) = pose.yaw.sin_cos();
+    let p = sub(p, pose.origin_m);
+    [c * p[0] + s * p[2], p[1], -s * p[0] + c * p[2]]
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PioneerDockedSupport {
+    Station,
+    Deck1,
+    Deck2,
+    Cockpit,
+    Connector,
+    CoreStairs,
+    BoardingLift,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PioneerDockedCell {
+    Station,
+    Deck1,
+    Deck2,
+    Core,
+    Cockpit,
+    Connector,
+    Vestibule,
+    Room { deck: u8, room_id: u64 },
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PioneerDockedMaterial {
+    WallPanel,
+    /// Passive fitted finish; the existing solid bounds remain authoritative.
+    FittedBulkhead,
+    GripDeck,
+    ServiceCeiling,
+    Graphite,
+    Titanium,
+    Carbon,
+    Emerald,
+    WorkingLight,
+    Amber,
+    Glass,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PioneerDockedCollision {
+    Solid,
+    Support,
+    Decoration,
+    TraversalBarrier,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PioneerDockedPanelKind {
+    Structure,
+    RoomObstacle,
+    Furniture,
+    Instrument,
+    Door,
+    Lift,
+    Rail,
+    Light,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PioneerDockedGate {
+    RoomDoor,
+    InnerHatch,
+    OuterHatch,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PioneerDockedHatch {
+    Inner,
+    Outer,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PioneerDockedBox {
+    pub center_m: [f64; 3],
+    pub half_m: [f64; 3],
+    /// Orthonormal column vectors, in body metres.
+    pub axes: [[f64; 3]; 3],
+}
+impl PioneerDockedBox {
+    pub fn valid(self) -> bool {
+        finite(self.center_m)
+            && finite(self.half_m)
+            && self.half_m.iter().all(|v| *v > 0.0)
+            && self
+                .axes
+                .iter()
+                .all(|a| finite(*a) && (dot(*a, *a) - 1.0).abs() < 1.0e-7)
+            && dot(self.axes[0], self.axes[1]).abs() < 1.0e-7
+            && dot(self.axes[0], self.axes[2]).abs() < 1.0e-7
+            && dot(self.axes[1], self.axes[2]).abs() < 1.0e-7
+    }
+    fn local(self, point: [f64; 3]) -> [f64; 3] {
+        let p = sub(point, self.center_m);
+        self.axes.map(|axis| dot(p, axis))
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct PioneerDockedPanel {
+    pub id: String,
+    pub bounds: PioneerDockedBox,
+    pub material: PioneerDockedMaterial,
+    pub collision: PioneerDockedCollision,
+    pub cell: PioneerDockedCell,
+    pub kind: PioneerDockedPanelKind,
+}
+#[derive(Clone, Debug, PartialEq)]
+pub struct PioneerDockedSurface {
+    pub id: String,
+    pub support: PioneerDockedSupport,
+    pub center_m: [f64; 3],
+    pub half_m: [f64; 2],
+    pub axes: [[f64; 3]; 2],
+    /// Allowed centre inset. Stair treads require a side inset, not a radius
+    /// inset in their short run direction; consecutive treads share support.
+    pub inset_m: [f64; 2],
+}
+#[derive(Clone, Debug, PartialEq)]
+pub struct PioneerDockedPortal {
+    pub id: String,
+    pub from: PioneerDockedCell,
+    pub to: PioneerDockedCell,
+    pub center_m: [f64; 3],
+    pub half_m: [f64; 2],
+    pub axes: [[f64; 3]; 2],
+    pub normal_m: [f64; 3],
+    pub gate: Option<PioneerDockedGate>,
+}
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct PioneerDockedGeometry {
+    pub panels: Vec<PioneerDockedPanel>,
+    pub supports: Vec<PioneerDockedSurface>,
+    pub portals: Vec<PioneerDockedPortal>,
+}
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PioneerDockedActuators {
+    pub hatch_fractions: Option<[f64; 2]>,
+    pub room_door_open: bool,
+    pub inner_hatch_open: bool,
+    pub outer_hatch_open: bool,
+    pub lift_floor_station_m: f64,
+    /// 0 deployed, 1 stowed. The pan folds down into its explicit recess.
+    pub chair_fold: f64,
+}
+#[derive(Clone, Debug, PartialEq)]
+pub struct PioneerDockedSupportHit {
+    pub support: PioneerDockedSupport,
+    pub surface_id: String,
+    pub height_m: f64,
+}
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PioneerDockedSeatAnchors {
+    pub root_station_m: [f64; 3],
+    pub egress_station_m: [f64; 3],
+    pub eye_station_m: [f64; 3],
+    pub heading: f64,
+}
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PioneerDockedHatchAnchors {
+    pub inner_inside_station_m: [f64; 3],
+    pub inner_outside_station_m: [f64; 3],
+    pub outer_inside_station_m: [f64; 3],
+    pub outer_outside_station_m: [f64; 3],
+    /// These two bounds retain the body frame for shared occupancy checks.
+    pub inner_bounds: PioneerDockedBox,
+    pub outer_bounds: PioneerDockedBox,
+}
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PioneerDockedLiftGeometry {
+    pub center_station_m: [f64; 3],
+    pub station_floor_m: f64,
+    pub ship_floor_m: f64,
+    pub half_m: [f64; 2],
+    pub tangent_station: [f64; 3],
+    pub normal_station: [f64; 3],
+}
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PioneerDockedLiftCallAnchors {
+    pub station_station_m: [f64; 3],
+    pub ship_station_m: [f64; 3],
+}
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PioneerDockedPilotJoints {
+    pub root_m: [f64; 3],
+    pub eye_m: [f64; 3],
+    pub head_m: [f64; 3],
+    pub neck_m: [f64; 3],
+    pub shoulders_m: [[f64; 3]; 2],
+    pub elbows_m: [[f64; 3]; 2],
+    pub hands_m: [[f64; 3]; 2],
+    pub hips_m: [[f64; 3]; 2],
+    pub knees_m: [[f64; 3]; 2],
+    pub feet_m: [[f64; 3]; 2],
+}
+
+pub fn pilot_joints(standing_fraction: f64) -> PioneerDockedPilotJoints {
+    let p = finite_fraction(standing_fraction);
+    let sides = [-1.0, 1.0];
+    let shoulders = sides.map(|s| {
+        lerp(
+            [34.22, 0.76, 3.0 + s * 0.28],
+            [34.54, 1.08, 3.0 + s * 0.28],
+            p,
+        )
+    });
+    let hands = sides.map(|s| {
+        lerp(
+            [34.50, 0.55, 3.0 + s * 0.20],
+            [34.54, 0.55, 3.0 + s * 0.31],
+            p,
+        )
+    });
+    let mut joints = PioneerDockedPilotJoints {
+        root_m: pilot_station_point([34.54, FLOOR, 3.0]),
+        eye_m: pilot_station_point(lerp([34.22, 1.0, 3.0], [34.54, 1.33, 3.0], p)),
+        head_m: pilot_station_point(lerp([34.22, 1.0, 3.0], [34.54, 1.32, 3.0], p)),
+        neck_m: pilot_station_point(lerp([34.22, 0.82, 3.0], [34.54, 1.14, 3.0], p)),
+        shoulders_m: shoulders.map(pilot_station_point),
+        elbows_m: std::array::from_fn(|i| {
+            pilot_station_point(add(
+                lerp(shoulders[i], hands[i], 0.55),
+                [-0.04, -0.035, 0.0],
+            ))
+        }),
+        hands_m: hands.map(pilot_station_point),
+        hips_m: sides.map(|s| {
+            pilot_station_point(lerp(
+                [34.22, 0.31, 3.0 + s * 0.13],
+                [34.54, 0.62, 3.0 + s * 0.13],
+                p,
+            ))
+        }),
+        knees_m: sides.map(|s| {
+            pilot_station_point(lerp(
+                [34.72, 0.23, 3.0 + s * 0.13],
+                [34.58, 0.1875, 3.0 + s * 0.13],
+                p,
+            ))
+        }),
+        feet_m: sides.map(|s| {
+            pilot_station_point(lerp(
+                [34.87, -0.23, 3.0 + s * 0.13],
+                [34.54, -0.245, 3.0 + s * 0.13],
+                p,
+            ))
+        }),
+    };
+    // Only the seated body is elevated. Standing root, exit anchors and walking
+    // supports remain in their existing body frame; transition is continuous.
+    let rise = PILOT_SEAT_RISE_M * (1.0 - p);
+    for point in [&mut joints.eye_m, &mut joints.head_m, &mut joints.neck_m]
+        .into_iter()
+        .chain(joints.shoulders_m.iter_mut())
+        .chain(joints.elbows_m.iter_mut())
+        .chain(joints.hands_m.iter_mut())
+        .chain(joints.hips_m.iter_mut())
+        .chain(joints.knees_m.iter_mut())
+        .chain(joints.feet_m.iter_mut())
+    {
+        point[1] += rise;
+    }
+    joints.root_m = bridge_point(joints.root_m);
+    for point in [&mut joints.eye_m, &mut joints.head_m, &mut joints.neck_m]
+        .into_iter()
+        .chain(joints.shoulders_m.iter_mut())
+        .chain(joints.elbows_m.iter_mut())
+        .chain(joints.hands_m.iter_mut())
+        .chain(joints.hips_m.iter_mut())
+        .chain(joints.knees_m.iter_mut())
+        .chain(joints.feet_m.iter_mut())
+    {
+        *point = bridge_point(*point);
+    }
+    joints
+}
+pub fn seat_transition_pose(leaving: bool, progress: f64) -> (f64, f64) {
+    let p = if leaving {
+        finite_fraction(progress)
+    } else {
+        1.0 - finite_fraction(progress)
+    };
+    ((p * 2.0).min(1.0), (p * 2.0 - 1.0).max(0.0))
+}
+pub fn seat_anchors(pose: PioneerDockedPose) -> PioneerDockedSeatAnchors {
+    PioneerDockedSeatAnchors {
+        root_station_m: body_to_station(pose, pilot_joints(0.0).root_m),
+        egress_station_m: body_to_station(
+            pose,
+            bridge_point(pilot_station_point([34.36, FLOOR, 3.0])),
+        ),
+        eye_station_m: body_to_station(pose, pilot_joints(0.0).eye_m),
+        heading: pose.yaw,
+    }
+}
+
+pub fn hatch_anchors(pose: PioneerDockedPose) -> PioneerDockedHatchAnchors {
+    let d = normalized(sub(VESTIBULE_END, VESTIBULE_START));
+    let lateral = [-d[2], 0.0, d[0]];
+    // Leave the bow walkway clear for its turn into the vestibule.
+    let inner_center = add(VESTIBULE_START, mul(d, 0.75));
+    PioneerDockedHatchAnchors {
+        inner_inside_station_m: body_to_station(pose, add(inner_center, mul(d, -0.75))),
+        inner_outside_station_m: body_to_station(pose, add(inner_center, mul(d, 0.75))),
+        outer_inside_station_m: body_to_station(pose, add(at_p(0.0, -0.65), [0.0, FLOOR, 0.0])),
+        outer_outside_station_m: body_to_station(pose, add(at_p(0.0, 0.80), [0.0, FLOOR, 0.0])),
+        inner_bounds: PioneerDockedBox {
+            center_m: add(inner_center, [0.0, 1.2, 0.0]),
+            half_m: [0.6, 1.2, 0.04],
+            axes: [lateral, Y, d],
+        },
+        outer_bounds: PioneerDockedBox {
+            center_m: add(P, [0.0, FLOOR + 1.2, 0.0]),
+            half_m: [0.7, 1.2, 0.04],
+            axes: [T, Y, N],
+        },
+    }
+}
+pub fn lift_geometry(pose: PioneerDockedPose) -> PioneerDockedLiftGeometry {
+    let center = body_to_station(pose, at_p(0.0, 2.4));
+    let rotation = |v| sub(body_to_station(pose, v), pose.origin_m);
+    PioneerDockedLiftGeometry {
+        center_station_m: [center[0], 0.0, center[2]],
+        station_floor_m: 0.0,
+        ship_floor_m: pose.origin_m[1] + FLOOR,
+        half_m: [1.0, 0.8],
+        tangent_station: rotation(T),
+        normal_station: rotation(N),
+    }
+}
+pub fn lift_call_anchors(pose: PioneerDockedPose) -> PioneerDockedLiftCallAnchors {
+    let station = body_to_station(pose, at_p(0.0, 4.0));
+    PioneerDockedLiftCallAnchors {
+        station_station_m: [station[0], 0.0, station[2]],
+        ship_station_m: body_to_station(pose, add(at_p(0.0, 0.9), [0.0, FLOOR, 0.0])),
+    }
+}
+pub fn portal_open(portal: &PioneerDockedPortal, state: PioneerDockedActuators) -> bool {
+    match portal.gate {
+        None => true,
+        Some(PioneerDockedGate::RoomDoor) => state.room_door_open,
+        Some(PioneerDockedGate::InnerHatch) => state.inner_hatch_open,
+        Some(PioneerDockedGate::OuterHatch) => state.outer_hatch_open,
+    }
+}
+
+/// Closed-leaf occupancy is independent of the requested open state.
+pub fn hatch_occupied(
+    pose: PioneerDockedPose,
+    hatch: PioneerDockedHatch,
+    feet_station_m: [f64; 3],
+) -> bool {
+    if !pose.valid() || !finite(feet_station_m) {
+        return true;
+    }
+    let anchors = hatch_anchors(pose);
+    let bounds = match hatch {
+        PioneerDockedHatch::Inner => anchors.inner_bounds,
+        PioneerDockedHatch::Outer => anchors.outer_bounds,
+    };
+    box_intersects_capsule(
+        bounds,
+        station_to_body(pose, feet_station_m),
+        AVATAR_HEIGHT_M,
+        STATION_AVATAR_RADIUS_M,
+    )
+}
+
+#[derive(Clone, Debug)]
+pub struct PioneerDockedSourceCut {
+    pub source_id: &'static str,
+    pub primitive: usize,
+    pub source_first_vertex: usize,
+    pub source_vertex_count: usize,
+    pub affected_triangle_starts: &'static [usize],
+    pub volumes: Vec<PioneerDockedBox>,
+}
+pub fn pioneer_docked_source_cuts() -> Vec<PioneerDockedSourceCut> {
+    // Revision11 exports physical cabin/access openings in the canonical hull.
+    // No view-specific triangle clipping or obsolete source-index bindings.
+    Vec::new()
+}
+
+impl PioneerDockedGeometry {
+    fn panel(
+        &mut self,
+        id: impl Into<String>,
+        bounds: PioneerDockedBox,
+        material: PioneerDockedMaterial,
+        collision: PioneerDockedCollision,
+        cell: PioneerDockedCell,
+        kind: PioneerDockedPanelKind,
+    ) {
+        self.panels.push(PioneerDockedPanel {
+            id: id.into(),
+            bounds,
+            material,
+            collision,
+            cell,
+            kind,
+        });
+    }
+    #[allow(clippy::too_many_arguments)] // Keep geometry bounds and semantic tags explicit.
+    fn block(
+        &mut self,
+        id: impl Into<String>,
+        min: [f64; 3],
+        max: [f64; 3],
+        material: PioneerDockedMaterial,
+        collision: PioneerDockedCollision,
+        cell: PioneerDockedCell,
+        kind: PioneerDockedPanelKind,
+    ) {
+        self.panel(id, axis_box(min, max), material, collision, cell, kind);
+    }
+    fn surface(
+        &mut self,
+        id: impl Into<String>,
+        support: PioneerDockedSupport,
+        center_m: [f64; 3],
+        half_m: [f64; 2],
+        axes: [[f64; 3]; 2],
+        inset_m: [f64; 2],
+    ) {
+        self.supports.push(PioneerDockedSurface {
+            id: id.into(),
+            support,
+            center_m,
+            half_m,
+            axes,
+            inset_m,
+        });
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn floor(
+        &mut self,
+        id: &str,
+        min: [f64; 2],
+        max: [f64; 2],
+        height: f64,
+        thickness: f64,
+        support: PioneerDockedSupport,
+        cell: PioneerDockedCell,
+        inset: [f64; 2],
+    ) {
+        self.block(
+            id,
+            [min[0], height - thickness, min[1]],
+            [max[0], height, max[1]],
+            PioneerDockedMaterial::GripDeck,
+            PioneerDockedCollision::Support,
+            cell,
+            PioneerDockedPanelKind::Structure,
+        );
+        self.surface(
+            id,
+            support,
+            [(min[0] + max[0]) * 0.5, height, (min[1] + max[1]) * 0.5],
+            [(max[0] - min[0]) * 0.5, (max[1] - min[1]) * 0.5],
+            [X, Z],
+            inset,
+        );
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn oriented_floor(
+        &mut self,
+        id: &str,
+        center: [f64; 3],
+        half: [f64; 2],
+        axes: [[f64; 3]; 2],
+        support: PioneerDockedSupport,
+        cell: PioneerDockedCell,
+        inset: [f64; 2],
+    ) {
+        self.panel(
+            id,
+            PioneerDockedBox {
+                center_m: add(center, [0.0, -0.06, 0.0]),
+                half_m: [half[0], 0.06, half[1]],
+                axes: [axes[0], Y, axes[1]],
+            },
+            PioneerDockedMaterial::GripDeck,
+            PioneerDockedCollision::Support,
+            cell,
+            PioneerDockedPanelKind::Structure,
+        );
+        self.surface(id, support, center, half, axes, inset);
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn portal(
+        &mut self,
+        id: &str,
+        from: PioneerDockedCell,
+        to: PioneerDockedCell,
+        center: [f64; 3],
+        half: [f64; 2],
+        axes: [[f64; 3]; 2],
+        normal: [f64; 3],
+        gate: Option<PioneerDockedGate>,
+    ) {
+        self.portals.push(PioneerDockedPortal {
+            id: id.into(),
+            from,
+            to,
+            center_m: center,
+            half_m: half,
+            axes,
+            normal_m: normal,
+            gate,
+        });
+    }
+}
+
+/// Subtract the two flights and their shared landing from the actual ceiling
+/// and upper-floor slabs. The room document itself is never rewritten.
+fn well_rectangles() -> [[f64; 4]; 3] {
+    [
+        [0.3, 1.68, 1.5, 5.2],
+        [2.5, 1.68, 3.7, 3.92],
+        [0.3, 0.2, 3.7, 1.68],
+    ]
+}
+fn subtract_rect(rect: [f64; 4], hole: [f64; 4]) -> Vec<[f64; 4]> {
+    let x0 = rect[0].max(hole[0]);
+    let z0 = rect[1].max(hole[1]);
+    let x1 = rect[2].min(hole[2]);
+    let z1 = rect[3].min(hole[3]);
+    if x1 <= x0 + EPS || z1 <= z0 + EPS {
+        return vec![rect];
+    }
+    [
+        [rect[0], rect[1], x0, rect[3]],
+        [x1, rect[1], rect[2], rect[3]],
+        [x0, rect[1], x1, z0],
+        [x0, z1, x1, rect[3]],
+    ]
+    .into_iter()
+    .filter(|r| r[2] > r[0] + EPS && r[3] > r[1] + EPS)
+    .collect()
+}
+fn slab_rectangles(well: bool) -> Vec<[f64; 4]> {
+    let mut result = vec![[0.0, 0.0, 32.0, 14.0]];
+    if well {
+        for hole in well_rectangles() {
+            result = result
+                .into_iter()
+                .flat_map(|r| subtract_rect(r, hole))
+                .collect();
+        }
+    }
+    result
+}
+
+/// Build immutable layout geometry once per installed room-document hash.
+pub fn registered_geometry(document: &RoomLayoutDocument) -> Result<PioneerDockedGeometry, String> {
+    document.validate_live()?;
+    let mut g = PioneerDockedGeometry::default();
+    for deck in [1, 2] {
+        let floor = deck_floor_y(deck).expect("two registered decks");
+        let cell = if deck == 1 {
+            PioneerDockedCell::Deck1
+        } else {
+            PioneerDockedCell::Deck2
+        };
+        let support = if deck == 1 {
+            PioneerDockedSupport::Deck1
+        } else {
+            PioneerDockedSupport::Deck2
+        };
+        for (i, r) in slab_rectangles(deck == 2).into_iter().enumerate() {
+            g.floor(
+                &format!("deck{deck}/floor/{i}"),
+                [r[0] - 12.0, r[1] - 7.0],
+                [r[2] - 12.0, r[3] - 7.0],
+                floor,
+                0.1,
+                support,
+                cell,
+                [0.0, 0.0],
+            );
+        }
+        for (i, r) in slab_rectangles(deck == 1).into_iter().enumerate() {
+            g.block(
+                format!("deck{deck}/ceiling/{i}"),
+                [r[0] - 12.0, floor + 3.2, r[1] - 7.0],
+                [r[2] - 12.0, floor + 3.3, r[3] - 7.0],
+                PioneerDockedMaterial::ServiceCeiling,
+                PioneerDockedCollision::Solid,
+                cell,
+                PioneerDockedPanelKind::Structure,
+            );
+        }
+        // Side and aft boundaries retain the live plan. Only deck two's
+        // forward corridor receives the explicitly registered 1.4 m opening.
+        let walls = [
+            ([0.0, 0.0, 0.0], [32.0, 3.2, 0.15]),
+            ([0.0, 0.0, 13.85], [32.0, 3.2, 14.0]),
+            ([0.0, 0.0, 0.0], [0.15, 3.2, 14.0]),
+        ];
+        for (i, (min, max)) in walls.into_iter().enumerate() {
+            g.block(
+                format!("deck{deck}/boundary/{i}"),
+                deck_to_body(deck, min).unwrap(),
+                deck_to_body(deck, max).unwrap(),
+                PioneerDockedMaterial::WallPanel,
+                PioneerDockedCollision::Solid,
+                cell,
+                PioneerDockedPanelKind::Structure,
+            );
+        }
+        let front = if deck == 2 {
+            vec![
+                ([31.85, 0.0, 0.0], [32.0, 3.2, 6.3]),
+                ([31.85, 0.0, 7.7], [32.0, 3.2, 14.0]),
+                ([31.85, 2.4, 6.3], [32.0, 3.2, 7.7]),
+            ]
+        } else {
+            vec![([31.85, 0.0, 0.0], [32.0, 3.2, 14.0])]
+        };
+        for (i, (min, max)) in front.into_iter().enumerate() {
+            g.block(
+                format!("deck{deck}/forward/{i}"),
+                deck_to_body(deck, min).unwrap(),
+                deck_to_body(deck, max).unwrap(),
+                PioneerDockedMaterial::WallPanel,
+                PioneerDockedCollision::Solid,
+                cell,
+                PioneerDockedPanelKind::Structure,
+            );
+        }
+        g.block(
+            format!("deck{deck}/access-cabinet"),
+            deck_to_body(deck, [0.7, 0.0, 6.45]).unwrap(),
+            deck_to_body(deck, [1.0, 1.3, 7.55]).unwrap(),
+            PioneerDockedMaterial::Carbon,
+            PioneerDockedCollision::Solid,
+            PioneerDockedCell::Core,
+            PioneerDockedPanelKind::Structure,
+        );
+        g.portal(
+            &format!("deck{deck}/core"),
+            cell,
+            PioneerDockedCell::Core,
+            [-8.0, floor + 1.6, -0.05],
+            [1.15, 1.6],
+            [Z, Y],
+            X,
+            None,
+        );
+        for room in document.rooms.iter().filter(|room| room.deck == deck) {
+            let roomcell = PioneerDockedCell::Room {
+                deck,
+                room_id: room.id,
+            };
+            for (i, o) in room.obstacles().into_iter().enumerate() {
+                g.block(
+                    format!("room/{}/{i}", room.id),
+                    deck_to_body(deck, o.min).unwrap(),
+                    deck_to_body(deck, o.max).unwrap(),
+                    if o.kind == StationObstacleKind::Storage {
+                        PioneerDockedMaterial::Carbon
+                    } else {
+                        PioneerDockedMaterial::WallPanel
+                    },
+                    PioneerDockedCollision::Solid,
+                    roomcell,
+                    PioneerDockedPanelKind::RoomObstacle,
+                );
+            }
+            add_room_program_blockout(&mut g, room);
+            if room.source_room_id.as_deref() == Some("D1-S1")
+                && reactor_configuration_supported(document)
+            {
+                add_reactor_configuration_fixed(&mut g, room.id);
+            }
+            let x = room.door_center_xz_m[0];
+            let z = room.door_wall_z();
+            let [w, h] = room.door_clear_wh_m;
+            // A real header closes the space above the advertised doorway.
+            if room.clear_lwh_m[2] > h + EPS {
+                g.block(
+                    format!("room/{}/header", room.id),
+                    deck_to_body(deck, [x - w * 0.5, h, z]).unwrap(),
+                    deck_to_body(deck, [x + w * 0.5, room.clear_lwh_m[2], z + 0.15]).unwrap(),
+                    PioneerDockedMaterial::WallPanel,
+                    PioneerDockedCollision::Solid,
+                    roomcell,
+                    PioneerDockedPanelKind::Structure,
+                );
+            }
+            g.portal(
+                &format!("room/{}/door", room.id),
+                roomcell,
+                cell,
+                deck_to_body(deck, [x, h * 0.5, z + 0.075]).unwrap(),
+                [w * 0.5, h * 0.5],
+                [X, Y],
+                Z,
+                (room.runtime_room_id.as_deref() == Some(PIONEER_CONNECTED_ROOM.room_id))
+                    .then_some(PioneerDockedGate::RoomDoor),
+            );
+        }
+    }
+    add_stairs(&mut g);
+    add_connector(&mut g);
+    add_cockpit_furniture(&mut g);
+    add_service_finish(&mut g);
+    place_raised_bridge(&mut g);
+    add_bridge_access(&mut g);
+    validate_geometry(&g)?;
+    Ok(g)
+}
+
+/// Construction finish shares the registered geometry in every camera/route.
+/// These static ceiling/service housings create no equipment or powered circuit.
+/// Physical reservations for the complete room program. These are static
+/// blockout fittings, not claims that power, life support or cameras operate.
+/// All bodies share the authority's geometry; no pass-through cabinets.
+fn add_room_program_blockout(g: &mut PioneerDockedGeometry, room: &crate::RoomLayout) {
+    if room.clear_lwh_m[0] < 7.0 || room.clear_lwh_m[1] < 4.5 {
+        return;
+    }
+    let Some(id) = room.source_room_id.as_deref() else {
+        return;
+    };
+    let [x, z] = room.origin_xz_m;
+    let depth = room.clear_lwh_m[1];
+    let rear = if room.deck == 1 && id.ends_with("P1") || id.contains("-P") {
+        z + 0.22
+    } else {
+        z + depth - 1.0
+    };
+    let cell = PioneerDockedCell::Room {
+        deck: room.deck,
+        room_id: room.id,
+    };
+    let spec: Vec<(&str, f64, f64, f64, f64)> = match id {
+        "D1-P1" => vec![("eva-lockers", 0.45, 2.2, 0.65, 2.0)],
+        "D1-S1" if reactor_room_supported(room) => vec![("service-space", 6.0, 1.0, 0.65, 1.2)],
+        "D1-S1" => vec![
+            ("power-cabinet-a", 0.45, 1.1, 0.65, 2.2),
+            ("power-cabinet-b", 1.75, 1.1, 0.65, 2.2),
+            ("service-space", 6.0, 1.0, 0.65, 1.2),
+        ],
+        "D1-P2" => vec![
+            ("drone-bench", 0.45, 2.4, 0.75, 0.9),
+            ("drone-cradle", 6.0, 1.2, 0.75, 0.5),
+        ],
+        "D1-S2" => vec![
+            ("cargo-staging-a", 0.45, 1.2, 0.8, 1.3),
+            ("cargo-staging-b", 1.85, 1.2, 0.8, 1.3),
+        ],
+        "D1-P3" => vec![
+            ("stores-rack-a", 0.45, 1.2, 0.65, 2.0),
+            ("stores-rack-b", 1.85, 1.2, 0.65, 2.0),
+        ],
+        "D1-S3" => vec![
+            ("workbench", 0.45, 2.5, 0.75, 0.9),
+            ("tool-cabinet", 6.0, 1.0, 0.65, 1.8),
+        ],
+        "D2-P1" => vec![
+            ("planning-table", 0.7, 2.0, 0.8, 0.85),
+            ("chart-storage", 6.0, 1.0, 0.65, 1.7),
+        ],
+        "D2-S1" => vec![], // Existing physical galley remains part of the shared room recipe.
+        "D2-P2" => vec![
+            ("sensor-rack", 0.45, 1.2, 0.65, 2.0),
+            ("comms-rack", 1.85, 1.2, 0.65, 2.0),
+        ],
+        "D2-S2" => vec![
+            ("medical-berth-a", 0.45, 2.0, 0.8, 0.65),
+            ("medical-berth-b", 5.9, 2.0, 0.8, 0.65),
+        ],
+        "D2-P3" => vec![
+            ("operations-table", 0.7, 2.0, 0.8, 0.85),
+            ("operations-console", 6.0, 1.0, 0.65, 1.2),
+        ],
+        "D2-S3" => vec![
+            ("life-support-rack-a", 0.45, 1.2, 0.65, 2.2),
+            ("life-support-rack-b", 1.85, 1.2, 0.65, 2.2),
+        ],
+        _ => vec![],
+    };
+    for (name, offset, length, d, h) in spec {
+        g.block(
+            format!("room/{}/program/{name}", room.id),
+            deck_to_body(room.deck, [x + offset, 0.0, rear]).unwrap(),
+            deck_to_body(room.deck, [x + offset + length, h, rear + d]).unwrap(),
+            PioneerDockedMaterial::Graphite,
+            PioneerDockedCollision::Solid,
+            cell,
+            PioneerDockedPanelKind::Furniture,
+        );
+        g.block(
+            format!("room/{}/program/{name}/cap", room.id),
+            deck_to_body(room.deck, [x + offset, h, rear]).unwrap(),
+            deck_to_body(room.deck, [x + offset + length, h + 0.04, rear + d]).unwrap(),
+            PioneerDockedMaterial::WallPanel,
+            PioneerDockedCollision::Solid,
+            cell,
+            PioneerDockedPanelKind::Furniture,
+        );
+    }
+}
+
+fn add_service_finish(g: &mut PioneerDockedGeometry) {
+    for deck in [1, 2] {
+        let floor = deck_floor_y(deck).unwrap();
+        let cell = if deck == 1 {
+            PioneerDockedCell::Deck1
+        } else {
+            PioneerDockedCell::Deck2
+        };
+        // Service cassettes and separated longitudinal cable trays stay above
+        // 2.9 m clear height; the aft stairwell retains its existing open well.
+        for bay in 0..12 {
+            let x = -5.5 + bay as f64 * 2.0;
+            g.block(
+                format!("finish/deck{deck}/cassette/{bay}"),
+                [x, floor + 3.08, -0.68],
+                [x + 1.82, floor + 3.18, 0.68],
+                PioneerDockedMaterial::ServiceCeiling,
+                PioneerDockedCollision::Decoration,
+                cell,
+                PioneerDockedPanelKind::Structure,
+            );
+            for side in [-1.0, 1.0] {
+                let z = side * 0.82;
+                g.block(
+                    format!("finish/deck{deck}/tray/{bay}/{side}"),
+                    [x, floor + 2.98, z - 0.08],
+                    [x + 1.82, floor + 3.11, z + 0.08],
+                    PioneerDockedMaterial::Titanium,
+                    PioneerDockedCollision::Decoration,
+                    cell,
+                    PioneerDockedPanelKind::Structure,
+                );
+                g.block(
+                    format!("finish/deck{deck}/tray-lid/{bay}/{side}"),
+                    [x + 0.05, floor + 2.96, z - 0.055],
+                    [x + 1.77, floor + 2.98, z + 0.055],
+                    PioneerDockedMaterial::Carbon,
+                    PioneerDockedCollision::Decoration,
+                    cell,
+                    PioneerDockedPanelKind::Structure,
+                );
+            }
+        }
+    }
+    // The fitted bridge has its own service ceiling, not an exposed hull void.
+    for bay in 0..3 {
+        let x = 28.25 + bay as f64 * 2.0;
+        for side in [-1.0, 1.0] {
+            let z = side * 1.9;
+            g.block(
+                format!("finish/bridge/service/{bay}/{side}"),
+                [x, 2.72, z - 0.25],
+                [x + 0.82, 2.87, z + 0.25],
+                PioneerDockedMaterial::ServiceCeiling,
+                PioneerDockedCollision::Decoration,
+                PioneerDockedCell::Cockpit,
+                PioneerDockedPanelKind::Structure,
+            );
+        }
+    }
+}
+
+/// The lower boarding vestibule/service passage is not part of the bridge body.
+/// Only the inhabited cabin assembly rises; external access and both main decks
+/// keep their measured body coordinates.
+fn lower_service_part(id: &str) -> bool {
+    id.starts_with("cockpit/port-walkway")
+        || id.starts_with("cockpit/port-service-passage")
+        || id.starts_with("guidance/")
+}
+fn place_raised_bridge(g: &mut PioneerDockedGeometry) {
+    for panel in &mut g.panels {
+        if panel.cell == PioneerDockedCell::Cockpit && !lower_service_part(&panel.id) {
+            panel.bounds.center_m = bridge_point(panel.bounds.center_m);
+        }
+    }
+    for surface in &mut g.supports {
+        if surface.support == PioneerDockedSupport::Cockpit && !lower_service_part(&surface.id) {
+            surface.center_m = bridge_point(surface.center_m);
+        }
+    }
+    for portal in &mut g.portals {
+        if portal.id == "cockpit/backwall-portal" {
+            portal.center_m = bridge_point(portal.center_m);
+        }
+    }
+    // Replace the narrow ground-level connector roof/walls with the shared
+    // stair tower. The original central lower corridor remains walkable below it.
+    g.panels
+        .retain(|p| p.id != "connector/roof" && !p.id.starts_with("connector/wall/"));
+    // Match the exact authored side panes, not the former wide wall rectangle.
+    // Canonical glass supplies the visual; these solid proxies retain collision.
+    g.panels.retain(|p| {
+        ![
+            "cockpit/starboard-wall",
+            "cockpit/port-aft-wall",
+            "cockpit/port-forward-wall",
+            "cockpit/port-exit-header",
+        ]
+        .contains(&p.id.as_str())
+    });
+    for (side, id) in [
+        (1.0, "cockpit/starboard-wall"),
+        (-1.0, "cockpit/port-forward-wall"),
+    ] {
+        let z = side * 2.74;
+        for (name, x0, x1, y0, y1) in [
+            ("sill", 27., 34.9, 7.68, 9.10),
+            ("header", 27., 34.9, 10.63, 10.88),
+            ("aft-frame", 27., 28.2, 9.10, 10.63),
+            ("forward-frame", 33.8, 34.9, 9.10, 10.63),
+        ] {
+            g.block(
+                format!("{id}/{name}"),
+                [x0, y0, z - 0.04],
+                [x1, y1, z + 0.04],
+                PioneerDockedMaterial::FittedBulkhead,
+                PioneerDockedCollision::Solid,
+                PioneerDockedCell::Cockpit,
+                PioneerDockedPanelKind::Structure,
+            );
+        }
+        let z = side * 2.9025;
+        g.block(
+            format!("{id}/window"),
+            [28.2, 9.10, z - 0.0175],
+            [33.8, 10.63, z + 0.0175],
+            PioneerDockedMaterial::Glass,
+            PioneerDockedCollision::Solid,
+            PioneerDockedCell::Cockpit,
+            PioneerDockedPanelKind::Structure,
+        );
+    }
+}
+
+/// Three real switchback stair flights connect the existing upper main deck to
+/// the raised bridge. They reuse the established step-support/capsule contract,
+/// not an instantaneous teleport or an invented powered lift.
+fn add_bridge_access(g: &mut PioneerDockedGeometry) {
+    use PioneerDockedMaterial::{Carbon, FittedBulkhead, Graphite, Titanium, WorkingLight};
+    let cell = PioneerDockedCell::Connector;
+    let solid = PioneerDockedCollision::Solid;
+    let upper = FLOOR + PIONEER_BRIDGE_RISE_M;
+    g.floor(
+        "bridge/lower-service-foyer",
+        [27.0, -2.7],
+        [34.9, 2.7],
+        FLOOR,
+        0.12,
+        PioneerDockedSupport::Connector,
+        cell,
+        [0., 0.],
+    );
+    // Tower shell ties the decks and bridge together. Doorways at both ends
+    // remain 1.4m clear; the forward ground route still reaches the boarding bay.
+    for side in [-1.0, 1.0] {
+        let z = side * 2.12;
+        g.block(
+            format!("bridge/tower/wall/{side}"),
+            [20., FLOOR, z - 0.06],
+            [27., upper + 3.2, z + 0.06],
+            FittedBulkhead,
+            solid,
+            cell,
+            PioneerDockedPanelKind::Structure,
+        );
+    }
+    for (side, z0, z1) in [("port", -2.18, -0.7), ("starboard", 0.7, 2.18)] {
+        g.block(
+            format!("bridge/tower/aft/{side}"),
+            [19.94, FLOOR, z0],
+            [20., upper + 3.2, z1],
+            FittedBulkhead,
+            solid,
+            cell,
+            PioneerDockedPanelKind::Structure,
+        );
+    }
+    g.block(
+        "bridge/tower/aft-header",
+        [19.94, 2.08, -0.7],
+        [20., upper + 3.2, 0.7],
+        FittedBulkhead,
+        solid,
+        cell,
+        PioneerDockedPanelKind::Structure,
+    );
+    g.block(
+        "bridge/tower/roof",
+        [20., upper + 3.08, -2.18],
+        [27., upper + 3.2, 2.18],
+        Graphite,
+        solid,
+        cell,
+        PioneerDockedPanelKind::Structure,
+    );
+    // Keep the central lower corridor unobstructed. Flight centres are ±1.30m;
+    // their inner rail faces sit outside the 1.2m clear central walking channel.
+    g.floor(
+        "bridge/stairs/base",
+        [20., -1.96],
+        [21., 1.96],
+        FLOOR,
+        0.12,
+        PioneerDockedSupport::CoreStairs,
+        cell,
+        [0., 0.],
+    );
+    let rise = PIONEER_BRIDGE_RISE_M / 3.0;
+    for flight in 0..3 {
+        let forward = flight != 1;
+        let z = if forward { -1.30 } else { 1.30 };
+        let base = FLOOR + flight as f64 * rise;
+        for step in 1..=15 {
+            let x0 = if forward {
+                21.0 + (step - 1) as f64 * 0.32
+            } else {
+                25.8 - step as f64 * 0.32
+            };
+            let y = base + step as f64 * rise / 15.0;
+            g.block(
+                format!("bridge/stairs/{flight}/tread/{step}"),
+                [x0, base - 0.10, z - 0.60],
+                [x0 + 0.32, y, z + 0.60],
+                Titanium,
+                PioneerDockedCollision::Support,
+                cell,
+                PioneerDockedPanelKind::Structure,
+            );
+            // Axes order makes CoreStairs' rounded leading-edge contact apply
+            // to the run (X), with a capsule-radius inset across the width (Z).
+            g.surface(
+                format!("bridge/stairs/{flight}/tread/{step}"),
+                PioneerDockedSupport::CoreStairs,
+                [x0 + 0.16, y, z],
+                [0.60, 0.16],
+                [Z, X],
+                [0.30, 0.0],
+            );
+            g.block(
+                format!("bridge/stairs/{flight}/nosing/{step}"),
+                [x0 + 0.01, y + 0.001, z - 0.48],
+                [x0 + 0.035, y + 0.004, z + 0.48],
+                WorkingLight,
+                PioneerDockedCollision::Decoration,
+                cell,
+                PioneerDockedPanelKind::Light,
+            );
+        }
+        let top = base + rise;
+        let (a, b) = if forward { (25.8, 27.0) } else { (20.0, 21.0) };
+        g.floor(
+            &format!("bridge/stairs/landing/{flight}"),
+            [a, -1.96],
+            [b, 1.96],
+            top,
+            0.12,
+            PioneerDockedSupport::CoreStairs,
+            cell,
+            [0., 0.],
+        );
+        // Guard the central drop between the stair lanes at each landing.
+        // Lane ends stay open, and the upper centered bridge doorway is beyond
+        // this edge rather than obstructed by the rail.
+        let edge_x = if forward { 25.825 } else { 20.975 };
+        rail(
+            g,
+            &format!("bridge/stairs/landing/{flight}/guard"),
+            [edge_x, top + 0.98, -0.665],
+            [edge_x, top + 0.98, 0.665],
+            0.025,
+            cell,
+        );
+        for z in [-0.64, 0.0, 0.64] {
+            g.block(
+                format!("bridge/stairs/landing/{flight}/guard-post/{z}"),
+                [edge_x - 0.025, top, z - 0.025],
+                [edge_x + 0.025, top + 0.98, z + 0.025],
+                Titanium,
+                solid,
+                cell,
+                PioneerDockedPanelKind::Rail,
+            );
+        }
+        for side in [-1.0, 1.0] {
+            let rz = z + side * 0.635;
+            let (x0, x1) = if forward { (21.0, 25.8) } else { (25.8, 21.0) };
+            rail(
+                g,
+                &format!("bridge/stairs/{flight}/rail/{side}"),
+                [x0, base + 0.98, rz],
+                [x1, top + 0.98, rz],
+                0.025,
+                cell,
+            );
+            for step in [1, 5, 10, 15] {
+                let f = (step as f64 - 0.5) / 15.0;
+                let x = x0 + (x1 - x0) * f;
+                let tread = base + step as f64 * rise / 15.0;
+                let hand = base + rise * f + 0.98;
+                g.block(
+                    format!("bridge/stairs/{flight}/post/{side}/{step}"),
+                    [x - 0.025, tread, rz - 0.025],
+                    [x + 0.025, hand, rz + 0.025],
+                    Titanium,
+                    solid,
+                    cell,
+                    PioneerDockedPanelKind::Rail,
+                );
+                // Bracket roots overlap the real tread edge; no unsupported
+                // rail beam or post floats outside the walking slab.
+                let edge = z + side * 0.58;
+                g.block(
+                    format!("bridge/stairs/{flight}/bracket/{side}/{step}"),
+                    [x - 0.045, tread - 0.04, edge.min(rz) - 0.025],
+                    [x + 0.045, tread + 0.025, edge.max(rz) + 0.025],
+                    Titanium,
+                    solid,
+                    cell,
+                    PioneerDockedPanelKind::Rail,
+                );
+            }
+        }
+    }
+    // Bridge landing access frame continues the existing centered rear doorway.
+    g.portal(
+        "bridge/stairs/top",
+        cell,
+        PioneerDockedCell::Cockpit,
+        [27., upper + 1.2, 0.],
+        [0.7, 1.2],
+        [Z, Y],
+        X,
+        None,
+    );
+    // Fixed wayfinding is architectural marking, not a new powered system.
+    for (name, y) in [("lower", FLOOR), ("upper", upper)] {
+        for (i, x) in [26.20, 26.42, 26.64].into_iter().enumerate() {
+            g.block(
+                format!("bridge/guidance/{name}/{i}"),
+                [x, y + 0.003, -0.20],
+                [x + 0.10, y + 0.007, 0.20],
+                Carbon,
+                PioneerDockedCollision::Decoration,
+                cell,
+                PioneerDockedPanelKind::Structure,
+            );
+        }
+    }
+}
+
+fn add_stairs(g: &mut PioneerDockedGeometry) {
+    let y = deck_floor_y(1).unwrap();
+    let cell = PioneerDockedCell::Core;
+    for i in 1..=11 {
+        let z1 = 5.2 - (i - 1) as f64 * 0.32;
+        let z0 = z1 - 0.32;
+        let h = y + i as f64 * 0.19;
+        g.block(
+            format!("stairs/a/{i}"),
+            [-11.7, y, z0 - 7.0],
+            [-10.5, h, z1 - 7.0],
+            PioneerDockedMaterial::Titanium,
+            PioneerDockedCollision::Support,
+            cell,
+            PioneerDockedPanelKind::Structure,
+        );
+        g.surface(
+            format!("stairs/a/{i}"),
+            PioneerDockedSupport::CoreStairs,
+            [-11.1, h, (z0 + z1) * 0.5 - 7.0],
+            [0.6, 0.16],
+            [X, Z],
+            [0.3, 0.0],
+        );
+    }
+    let mid = y + 2.28;
+    g.floor(
+        "stairs/midlanding",
+        [-11.7, -6.8],
+        [-8.3, -5.32],
+        mid,
+        0.12,
+        PioneerDockedSupport::CoreStairs,
+        cell,
+        [0.3, 0.0],
+    );
+    g.block(
+        "stairs/a/final-riser",
+        [-11.7, y + 2.09, -5.34],
+        [-10.5, mid, -5.30],
+        PioneerDockedMaterial::Titanium,
+        PioneerDockedCollision::Support,
+        cell,
+        PioneerDockedPanelKind::Structure,
+    );
+    for i in 1..=7 {
+        let z0 = 1.68 + (i - 1) as f64 * 0.32;
+        let z1 = z0 + 0.32;
+        let h = mid + i as f64 * 0.19;
+        g.block(
+            format!("stairs/b/{i}"),
+            [-9.5, mid, z0 - 7.0],
+            [-8.3, h, z1 - 7.0],
+            PioneerDockedMaterial::Titanium,
+            PioneerDockedCollision::Support,
+            cell,
+            PioneerDockedPanelKind::Structure,
+        );
+        g.surface(
+            format!("stairs/b/{i}"),
+            PioneerDockedSupport::CoreStairs,
+            [-8.9, h, (z0 + z1) * 0.5 - 7.0],
+            [0.6, 0.16],
+            [X, Z],
+            [0.3, 0.0],
+        );
+    }
+    g.block(
+        "stairs/b/final-riser",
+        [-9.5, mid + 1.33, -3.10],
+        [-8.3, FLOOR, -3.06],
+        PioneerDockedMaterial::Titanium,
+        PioneerDockedCollision::Support,
+        cell,
+        PioneerDockedPanelKind::Structure,
+    );
+    // Rails lie outside the stated 1.2 m flight width. The central approach
+    // remains 0.9 m wide after its two 5 cm rail faces.
+    for (label, xs, z0, z1, h0, h1) in [
+        ("a", [-11.725, -10.475], -5.32, -1.8, mid, y + 0.19),
+        ("b", [-9.525, -8.275], -5.32, -3.08, mid + 0.19, FLOOR),
+    ] {
+        for (side, x) in xs.into_iter().enumerate() {
+            rail(
+                g,
+                &format!("stairs/{label}/rail/{side}"),
+                [x, h0 + 0.95, z0],
+                [x, h1 + 0.95, z1],
+                0.025,
+                cell,
+            );
+            for j in 0..=3 {
+                let f = j as f64 / 3.0;
+                let z = z0 + (z1 - z0) * f;
+                let h = h0 + (h1 - h0) * f;
+                g.block(
+                    format!("stairs/{label}/post/{side}/{j}"),
+                    [x - 0.025, h - 0.03, z - 0.025],
+                    [x + 0.025, h + 0.95, z + 0.025],
+                    PioneerDockedMaterial::Emerald,
+                    PioneerDockedCollision::Solid,
+                    cell,
+                    PioneerDockedPanelKind::Rail,
+                );
+            }
+        }
+    }
+    rail(
+        g,
+        "stairs/mid/back-rail",
+        [-11.7, mid + 0.95, -6.825],
+        [-8.3, mid + 0.95, -6.825],
+        0.025,
+        cell,
+    );
+    for x in [-11.725, -8.275] {
+        rail(
+            g,
+            &format!("stairs/mid/side/{x}"),
+            [x, mid + 0.95, -6.8],
+            [x, mid + 0.95, -5.32],
+            0.025,
+            cell,
+        );
+    }
+    g.portal(
+        "stairs/well",
+        PioneerDockedCell::Deck1,
+        PioneerDockedCell::Deck2,
+        [-10.0, FLOOR, -5.99],
+        [1.7, 0.74],
+        [X, Z],
+        Y,
+        None,
+    );
+}
+
+fn rail(
+    g: &mut PioneerDockedGeometry,
+    id: &str,
+    a: [f64; 3],
+    b: [f64; 3],
+    radius: f64,
+    cell: PioneerDockedCell,
+) {
+    let d = sub(b, a);
+    let length = dot(d, d).sqrt();
+    let u = mul(d, 1.0 / length);
+    let helper = if u[0].abs() < 0.8 { X } else { Z };
+    let w = normalized(cross(u, helper));
+    let v = cross(w, u);
+    g.panel(
+        id,
+        PioneerDockedBox {
+            center_m: mul(add(a, b), 0.5),
+            half_m: [length * 0.5, radius, radius],
+            axes: [u, v, w],
+        },
+        PioneerDockedMaterial::Emerald,
+        PioneerDockedCollision::Solid,
+        cell,
+        PioneerDockedPanelKind::Rail,
+    );
+}
+
+fn add_connector(g: &mut PioneerDockedGeometry) {
+    let cell = PioneerDockedCell::Connector;
+    g.floor(
+        "connector/floor",
+        [20.0, -0.9],
+        [COCKPIT_REAR_X_M, 0.9],
+        FLOOR,
+        0.12,
+        PioneerDockedSupport::Connector,
+        cell,
+        [0.0, 0.3],
+    );
+    g.block(
+        "connector/roof",
+        [20.0, 2.08, -0.78],
+        [COCKPIT_REAR_X_M, 2.20, 0.78],
+        PioneerDockedMaterial::ServiceCeiling,
+        PioneerDockedCollision::Solid,
+        cell,
+        PioneerDockedPanelKind::Structure,
+    );
+    for side in [-1.0, 1.0] {
+        let z = side * 0.74;
+        g.block(
+            format!("connector/wall/{side}"),
+            [20.0, FLOOR, z - 0.04],
+            [COCKPIT_REAR_X_M, 2.08, z + 0.04],
+            PioneerDockedMaterial::FittedBulkhead,
+            PioneerDockedCollision::Solid,
+            cell,
+            PioneerDockedPanelKind::Structure,
+        );
+    }
+    g.floor(
+        "cockpit/aft-crosswalk",
+        [COCKPIT_REAR_X_M, -2.7],
+        [34.7, 2.7],
+        FLOOR,
+        0.12,
+        PioneerDockedSupport::Cockpit,
+        PioneerDockedCell::Cockpit,
+        [0.0, 0.0],
+    );
+    g.floor(
+        "cockpit/seat-floor",
+        [34.7, -2.7],
+        [34.9, 2.7],
+        FLOOR,
+        0.12,
+        PioneerDockedSupport::Cockpit,
+        PioneerDockedCell::Cockpit,
+        [0.0, 0.0],
+    );
+    g.floor(
+        "cockpit/port-walkway",
+        [33.4, -8.4],
+        [34.8, -3.5],
+        FLOOR,
+        0.12,
+        PioneerDockedSupport::Cockpit,
+        PioneerDockedCell::Cockpit,
+        [0.0, 0.0],
+    );
+    // The centered rear entry and 1.4 m aft port service exit are distinct.
+    // The service passage routes around the continuous side console.
+    for (i, (z0, z1)) in [(-2.78, -0.7), (0.7, 2.78)].into_iter().enumerate() {
+        g.block(
+            format!("cockpit/rear-bulkhead/{i}"),
+            [COCKPIT_REAR_X_M - 0.12, FLOOR, z0],
+            [COCKPIT_REAR_X_M, 2.88, z1],
+            PioneerDockedMaterial::FittedBulkhead,
+            PioneerDockedCollision::Solid,
+            PioneerDockedCell::Cockpit,
+            PioneerDockedPanelKind::Structure,
+        );
+    }
+    g.block(
+        "cockpit/rear-header",
+        [COCKPIT_REAR_X_M - 0.12, 2.08, -0.7],
+        [COCKPIT_REAR_X_M, 2.88, 0.7],
+        PioneerDockedMaterial::Titanium,
+        PioneerDockedCollision::Solid,
+        PioneerDockedCell::Cockpit,
+        PioneerDockedPanelKind::Structure,
+    );
+    for (id, min, max) in [
+        (
+            "ceiling",
+            [COCKPIT_REAR_X_M - 0.12, 2.88, -2.78],
+            [34.901, 2.98, 2.78],
+        ),
+        (
+            "starboard-wall",
+            [COCKPIT_REAR_X_M, FLOOR, 2.7],
+            [34.9, 2.88, 2.78],
+        ),
+        (
+            "port-aft-wall",
+            [COCKPIT_REAR_X_M, FLOOR, -2.78],
+            [28.5, 2.88, -2.7],
+        ),
+        (
+            "port-forward-wall",
+            [29.9, FLOOR, -2.78],
+            [34.9, 2.88, -2.7],
+        ),
+        ("port-exit-header", [28.5, 2.08, -2.78], [29.9, 2.88, -2.7]),
+    ] {
+        g.block(
+            format!("cockpit/{id}"),
+            min,
+            max,
+            if id == "ceiling" {
+                PioneerDockedMaterial::ServiceCeiling
+            } else if id == "starboard-wall" || id == "port-aft-wall" {
+                PioneerDockedMaterial::FittedBulkhead
+            } else {
+                PioneerDockedMaterial::Graphite
+            },
+            PioneerDockedCollision::Solid,
+            PioneerDockedCell::Cockpit,
+            PioneerDockedPanelKind::Structure,
+        );
+    }
+    g.floor(
+        "cockpit/port-service-passage",
+        [28.5, -4.2],
+        [34.8, -2.70],
+        FLOOR,
+        0.12,
+        PioneerDockedSupport::Cockpit,
+        PioneerDockedCell::Cockpit,
+        [0.0, 0.0],
+    );
+    g.block(
+        "cockpit/port-service-passage/roof",
+        [28.5, 2.08, -4.2],
+        [34.8, 2.20, -2.70],
+        PioneerDockedMaterial::ServiceCeiling,
+        PioneerDockedCollision::Solid,
+        PioneerDockedCell::Cockpit,
+        PioneerDockedPanelKind::Structure,
+    );
+    g.block(
+        "cockpit/port-service-passage/aft",
+        [28.42, FLOOR, -4.2],
+        [28.5, 2.08, -2.70],
+        PioneerDockedMaterial::FittedBulkhead,
+        PioneerDockedCollision::Solid,
+        PioneerDockedCell::Cockpit,
+        PioneerDockedPanelKind::Structure,
+    );
+    g.block(
+        "cockpit/port-service-passage/outer",
+        [28.5, FLOOR, -4.28],
+        [33.4, 2.08, -4.2],
+        PioneerDockedMaterial::FittedBulkhead,
+        PioneerDockedCollision::Solid,
+        PioneerDockedCell::Cockpit,
+        PioneerDockedPanelKind::Structure,
+    );
+    add_cockpit_exit_guidance(g);
+    let d = normalized(sub(VESTIBULE_END, VESTIBULE_START));
+    let lateral = [-d[2], 0.0, d[0]];
+    let length = dot(
+        sub(VESTIBULE_END, VESTIBULE_START),
+        sub(VESTIBULE_END, VESTIBULE_START),
+    )
+    .sqrt();
+    g.oriented_floor(
+        "vestibule/floor",
+        mul(add(VESTIBULE_START, VESTIBULE_END), 0.5),
+        [0.7, length * 0.5 + 0.05],
+        [lateral, d],
+        PioneerDockedSupport::Connector,
+        PioneerDockedCell::Vestibule,
+        [0.3, 0.0],
+    );
+    // The bend into the outer doorway stays open. No pressure-volume or
+    // engineering seal is claimed for these new walking vestibule surfaces.
+    for side in [-1.0, 1.0] {
+        let a = add(VESTIBULE_START, mul(lateral, side * 0.64));
+        let b = add(add(VESTIBULE_END, mul(d, -0.75)), mul(lateral, side * 0.64));
+        let c = mul(add(a, b), 0.5);
+        let len = dot(sub(b, a), sub(b, a)).sqrt();
+        g.panel(
+            format!("vestibule/wall/{side}"),
+            PioneerDockedBox {
+                center_m: add(c, [0.0, 1.2, 0.0]),
+                half_m: [0.04, 1.2, len * 0.5],
+                axes: [lateral, Y, d],
+            },
+            PioneerDockedMaterial::Graphite,
+            PioneerDockedCollision::Solid,
+            PioneerDockedCell::Vestibule,
+            PioneerDockedPanelKind::Structure,
+        );
+    }
+    // This is the same physical floor as the vestibule and the ship-level
+    // lift. Its support and solid top must coincide exactly at their joins.
+    g.oriented_floor(
+        "boarding/threshold",
+        add(at_p(0.0, 0.4), [0.0, FLOOR, 0.0]),
+        [0.9, 1.2],
+        [T, N],
+        PioneerDockedSupport::Connector,
+        PioneerDockedCell::Vestibule,
+        [0.3, 0.0],
+    );
+    let anchors = hatch_anchors(PioneerDockedPose::private());
+    hatch_frame(
+        g,
+        "boarding/inner",
+        anchors.inner_bounds,
+        PioneerDockedCell::Vestibule,
+    );
+    hatch_frame(
+        g,
+        "boarding/outer",
+        anchors.outer_bounds,
+        PioneerDockedCell::Vestibule,
+    );
+    g.portal(
+        "deck2/forward-portal",
+        PioneerDockedCell::Deck2,
+        cell,
+        [20.0, FLOOR + 1.2, 0.0],
+        [0.7, 1.2],
+        [Z, Y],
+        X,
+        None,
+    );
+    g.portal(
+        "cockpit/backwall-portal",
+        cell,
+        PioneerDockedCell::Cockpit,
+        [COCKPIT_REAR_X_M, FLOOR + 1.2, 0.0],
+        [0.7, 1.2],
+        [Z, Y],
+        X,
+        None,
+    );
+    g.portal(
+        "boarding/inner-portal",
+        PioneerDockedCell::Cockpit,
+        PioneerDockedCell::Vestibule,
+        anchors.inner_bounds.center_m,
+        [0.6, 1.2],
+        [lateral, Y],
+        d,
+        Some(PioneerDockedGate::InnerHatch),
+    );
+    g.portal(
+        "boarding/outer-portal",
+        PioneerDockedCell::Vestibule,
+        PioneerDockedCell::Station,
+        anchors.outer_bounds.center_m,
+        [0.7, 1.2],
+        [T, Y],
+        N,
+        Some(PioneerDockedGate::OuterHatch),
+    );
+    for side in [-1.0, 1.0] {
+        g.panel(
+            format!("threshold/rail/{side}"),
+            pane_box(
+                [side * 0.82 - 0.04, 0.69, 0.85],
+                [side * 0.82 + 0.04, 0.77, 1.6],
+            ),
+            PioneerDockedMaterial::Emerald,
+            PioneerDockedCollision::Solid,
+            PioneerDockedCell::Station,
+            PioneerDockedPanelKind::Rail,
+        );
+        for n in [0.95, 1.5] {
+            g.panel(
+                format!("threshold/post/{side}/{n}"),
+                pane_box(
+                    [side * 0.82 - 0.04, FLOOR, n - 0.04],
+                    [side * 0.82 + 0.04, 0.73, n + 0.04],
+                ),
+                PioneerDockedMaterial::Titanium,
+                PioneerDockedCollision::Solid,
+                PioneerDockedCell::Station,
+                PioneerDockedPanelKind::Rail,
+            );
+        }
+    }
+}
+
+/// A physical sign and floor arrow at the actual port boarding route. These
+/// reflective markings do not add a lamp, powered device, collision or shortcut.
+fn add_cockpit_exit_guidance(g: &mut PioneerDockedGeometry) {
+    g.block(
+        "guidance/cockpit-exit-to-hangar/backing",
+        [33.69, 2.28, -6.797],
+        [34.51, 2.66, -6.777],
+        PioneerDockedMaterial::Carbon,
+        PioneerDockedCollision::Decoration,
+        PioneerDockedCell::Cockpit,
+        PioneerDockedPanelKind::Structure,
+    );
+    for (line, text, y) in [(0, "EXIT TO", 2.49), (1, "HANGAR", 2.33)] {
+        let advance = 0.092;
+        let width = text.len() as f64 * advance - 0.017;
+        for (letter, ch) in text.chars().enumerate() {
+            let x = 34.1 - width * 0.5 + letter as f64 * advance;
+            for (stroke, (a, b)) in exit_glyph(ch).iter().enumerate() {
+                let p = [x + a[0] * 0.075, y + a[1] * 0.115, -6.773];
+                let q = [x + b[0] * 0.075, y + b[1] * 0.115, -6.773];
+                guidance_bar(
+                    g,
+                    format!("guidance/cockpit-exit-to-hangar/{line}/{letter}/{stroke}"),
+                    p,
+                    q,
+                    0.006,
+                );
+            }
+        }
+    }
+    for (i, (a, b)) in [
+        ([34.1, FLOOR + 0.005, -5.55], [34.1, FLOOR + 0.005, -6.35]),
+        ([33.93, FLOOR + 0.005, -6.15], [34.1, FLOOR + 0.005, -6.35]),
+        ([34.27, FLOOR + 0.005, -6.15], [34.1, FLOOR + 0.005, -6.35]),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let direction = normalized(sub(b, a));
+        g.panel(
+            format!("guidance/cockpit-exit-arrow/{i}"),
+            PioneerDockedBox {
+                center_m: mul(add(a, b), 0.5),
+                half_m: [dot(sub(b, a), sub(b, a)).sqrt() * 0.5, 0.002, 0.015],
+                axes: [direction, Y, [-direction[2], 0.0, direction[0]]],
+            },
+            PioneerDockedMaterial::Amber,
+            PioneerDockedCollision::Decoration,
+            PioneerDockedCell::Cockpit,
+            PioneerDockedPanelKind::Structure,
+        );
+    }
+}
+fn guidance_bar(g: &mut PioneerDockedGeometry, id: String, a: [f64; 3], b: [f64; 3], width: f64) {
+    let direction = normalized(sub(b, a));
+    g.panel(
+        id,
+        PioneerDockedBox {
+            center_m: mul(add(a, b), 0.5),
+            half_m: [dot(sub(b, a), sub(b, a)).sqrt() * 0.5, width * 0.5, 0.002],
+            axes: [direction, [-direction[1], direction[0], 0.0], Z],
+        },
+        PioneerDockedMaterial::Amber,
+        PioneerDockedCollision::Decoration,
+        PioneerDockedCell::Cockpit,
+        PioneerDockedPanelKind::Structure,
+    );
+}
+fn exit_glyph(ch: char) -> &'static [([f64; 2], [f64; 2])] {
+    match ch {
+        'E' => &[
+            ([0., 0.], [0., 1.]),
+            ([0., 1.], [1., 1.]),
+            ([0., 0.5], [0.8, 0.5]),
+            ([0., 0.], [1., 0.]),
+        ],
+        'X' => &[([0., 0.], [1., 1.]), ([0., 1.], [1., 0.])],
+        'I' => &[
+            ([0., 1.], [1., 1.]),
+            ([0.5, 0.], [0.5, 1.]),
+            ([0., 0.], [1., 0.]),
+        ],
+        'T' => &[([0., 1.], [1., 1.]), ([0.5, 0.], [0.5, 1.])],
+        'O' => &[
+            ([0., 0.], [0., 1.]),
+            ([0., 1.], [1., 1.]),
+            ([1., 0.], [1., 1.]),
+            ([0., 0.], [1., 0.]),
+        ],
+        'H' => &[
+            ([0., 0.], [0., 1.]),
+            ([1., 0.], [1., 1.]),
+            ([0., 0.5], [1., 0.5]),
+        ],
+        'A' => &[
+            ([0., 0.], [0.5, 1.]),
+            ([0.5, 1.], [1., 0.]),
+            ([0.2, 0.4], [0.8, 0.4]),
+        ],
+        'N' => &[
+            ([0., 0.], [0., 1.]),
+            ([1., 0.], [1., 1.]),
+            ([0., 1.], [1., 0.]),
+        ],
+        'G' => &[
+            ([0., 0.], [0., 1.]),
+            ([0., 1.], [1., 1.]),
+            ([0., 0.], [1., 0.]),
+            ([1., 0.], [1., 0.5]),
+            ([0.5, 0.5], [1., 0.5]),
+        ],
+        'R' => &[
+            ([0., 0.], [0., 1.]),
+            ([0., 1.], [1., 1.]),
+            ([1., 0.5], [1., 1.]),
+            ([0., 0.5], [1., 0.5]),
+            ([0.5, 0.5], [1., 0.]),
+        ],
+        _ => &[],
+    }
+}
+
+fn hatch_frame(
+    g: &mut PioneerDockedGeometry,
+    prefix: &str,
+    b: PioneerDockedBox,
+    cell: PioneerDockedCell,
+) {
+    for side in [-1.0, 1.0] {
+        let c = add(b.center_m, mul(b.axes[0], side * (b.half_m[0] + 0.04)));
+        g.panel(
+            format!("{prefix}/jamb/{side}"),
+            PioneerDockedBox {
+                center_m: add(c, mul(b.axes[2], -0.12)),
+                half_m: [0.04, b.half_m[1], 0.04],
+                axes: b.axes,
+            },
+            PioneerDockedMaterial::Emerald,
+            PioneerDockedCollision::Solid,
+            cell,
+            PioneerDockedPanelKind::Structure,
+        );
+    }
+    g.panel(
+        format!("{prefix}/header"),
+        PioneerDockedBox {
+            center_m: add(
+                add(b.center_m, [0.0, b.half_m[1] + 0.04, 0.0]),
+                mul(b.axes[2], -0.12),
+            ),
+            half_m: [b.half_m[0] + 0.08, 0.04, 0.04],
+            axes: b.axes,
+        },
+        PioneerDockedMaterial::Titanium,
+        PioneerDockedCollision::Solid,
+        cell,
+        PioneerDockedPanelKind::Structure,
+    );
+}
+
+/// Serviceable case inside its declared solid envelope. The opaque case box is
+/// replaced, not retained behind a decorative inset: the shallow cover, seam,
+/// flange and fastener caps are real depth. Every new solid is a subset of the
+/// declared envelope; this detail recipe does not add protrusions.
+/// Passive physical bezel around a real instrument, in the same canonical
+/// content frame. Tangential boxes leave the complete dial radius uncovered.
+fn add_cockpit_dial_rim(
+    g: &mut PioneerDockedGeometry,
+    slot: usize,
+    dial: usize,
+    center: [f64; 3],
+    half: [f64; 3],
+    axes: [[f64; 3]; 3],
+) {
+    let [u, v] = PIONEER_DIAL_CENTERS[dial];
+    let width = 2.0 * (half[2] - 0.008);
+    let height = 2.0 * (half[1] - 0.008);
+    let dial_center = add(
+        center,
+        add(
+            mul(axes[0], -0.032),
+            add(
+                mul(axes[1], (0.5 - v) * height),
+                mul(axes[2], (u - 0.5) * width),
+            ),
+        ),
+    );
+    // Sixteen overlapping inscribed diameter chords form a genuinely round
+    // backing. Its front is 2mm behind the live content plane; there is no
+    // surviving whole-face rectangular glass or opaque slab in front of it.
+    let backing_radius = PIONEER_DIAL_RADIUS_HEIGHT * height + 0.002;
+    let alpha = std::f64::consts::PI / 32.0;
+    for chord in 0..16 {
+        let angle = chord as f64 * std::f64::consts::PI / 16.0;
+        let (sin, cos) = angle.sin_cos();
+        g.panel(
+            format!("cockpit/screen/{slot}/dial/{dial}/backing/chord/{chord}"),
+            PioneerDockedBox {
+                center_m: add(dial_center, mul(axes[0], 0.006)),
+                half_m: [
+                    0.004,
+                    backing_radius * alpha.cos(),
+                    backing_radius * alpha.sin(),
+                ],
+                axes: [
+                    axes[0],
+                    add(mul(axes[1], cos), mul(axes[2], sin)),
+                    add(mul(axes[1], -sin), mul(axes[2], cos)),
+                ],
+            },
+            PioneerDockedMaterial::Carbon,
+            PioneerDockedCollision::Solid,
+            PioneerDockedCell::Cockpit,
+            PioneerDockedPanelKind::Instrument,
+        );
+    }
+    let radius = PIONEER_DIAL_RADIUS_HEIGHT * height;
+    // The dial is a cartridge rather than a thin ring stuck to a rectangular
+    // screen. Three stepped annular sections run aft from the existing face:
+    // a retaining collar, the instrument barrel, and its mounting flange.
+    // Their fronts stay behind the unchanged live needle/label/input plane.
+    // Passive detail does not change the registered solid collision recipe.
+    for (name, front, rear, inner, outer, material) in [
+        (
+            "retaining-collar",
+            0.002,
+            0.012,
+            radius + 0.004,
+            radius + 0.010,
+            PioneerDockedMaterial::Titanium,
+        ),
+        (
+            "barrel",
+            0.012,
+            0.045,
+            radius + 0.002,
+            radius + 0.006,
+            PioneerDockedMaterial::Graphite,
+        ),
+        (
+            "mounting-flange",
+            0.045,
+            0.052,
+            radius + 0.002,
+            radius + 0.014,
+            PioneerDockedMaterial::Carbon,
+        ),
+    ] {
+        let middle = (inner + outer) * 0.5;
+        let tangent_half = middle * (std::f64::consts::PI / 16.0).tan();
+        for segment in 0..16 {
+            let angle = segment as f64 * std::f64::consts::TAU / 16.0;
+            let (sin, cos) = angle.sin_cos();
+            let radial = add(mul(axes[1], cos), mul(axes[2], sin));
+            let tangent = add(mul(axes[1], -sin), mul(axes[2], cos));
+            g.panel(
+                format!("cockpit/screen/{slot}/dial/{dial}/housing/{name}/{segment}"),
+                PioneerDockedBox {
+                    center_m: add(
+                        dial_center,
+                        add(mul(axes[0], (front + rear) * 0.5), mul(radial, middle)),
+                    ),
+                    half_m: [(rear - front) * 0.5, (outer - inner) * 0.5, tangent_half],
+                    axes: [axes[0], radial, tangent],
+                },
+                material,
+                PioneerDockedCollision::Decoration,
+                PioneerDockedCell::Cockpit,
+                PioneerDockedPanelKind::Instrument,
+            );
+        }
+    }
+    // Four diagonal ears and recessed captive fasteners give each separate
+    // cartridge an actual mounting interface. The ears bridge aft into the
+    // existing shared case backplate. No marks imply a control/state.
+    for ear in 0..4 {
+        let angle = std::f64::consts::FRAC_PI_4 + ear as f64 * std::f64::consts::FRAC_PI_2;
+        let (sin, cos) = angle.sin_cos();
+        let radial = add(mul(axes[1], cos), mul(axes[2], sin));
+        let tangent = add(mul(axes[1], -sin), mul(axes[2], cos));
+        for (name, depth, half_depth, radial_center, half_radial, half_tangent, material) in [
+            (
+                "ear",
+                0.062,
+                0.012,
+                radius + 0.013,
+                0.009,
+                0.006,
+                PioneerDockedMaterial::Graphite,
+            ),
+            (
+                "fastener",
+                0.048,
+                0.002,
+                radius + 0.016,
+                0.003,
+                0.003,
+                PioneerDockedMaterial::Titanium,
+            ),
+        ] {
+            g.panel(
+                format!("cockpit/screen/{slot}/dial/{dial}/housing/{name}/{ear}"),
+                PioneerDockedBox {
+                    center_m: add(
+                        dial_center,
+                        add(mul(axes[0], depth), mul(radial, radial_center)),
+                    ),
+                    half_m: [half_depth, half_radial, half_tangent],
+                    axes: [axes[0], radial, tangent],
+                },
+                material,
+                PioneerDockedCollision::Decoration,
+                PioneerDockedCell::Cockpit,
+                PioneerDockedPanelKind::Instrument,
+            );
+        }
+    }
+    let radial_half = 0.002;
+    let middle = radius + 0.001 + radial_half;
+    let tangent_half = middle * (std::f64::consts::PI / 16.0).tan() * 0.96;
+    for segment in 0..16 {
+        let angle = segment as f64 * std::f64::consts::TAU / 16.0;
+        let (sin, cos) = angle.sin_cos();
+        let radial = add(mul(axes[1], cos), mul(axes[2], sin));
+        let tangent = add(mul(axes[1], -sin), mul(axes[2], cos));
+        g.panel(
+            format!("cockpit/screen/{slot}/dial/{dial}/rim/{segment}"),
+            PioneerDockedBox {
+                center_m: add(dial_center, mul(radial, middle)),
+                half_m: [0.006, radial_half, tangent_half],
+                axes: [axes[0], radial, tangent],
+            },
+            PioneerDockedMaterial::Titanium,
+            PioneerDockedCollision::Solid,
+            PioneerDockedCell::Cockpit,
+            PioneerDockedPanelKind::Instrument,
+        );
+    }
+}
+
+/// Separate navigation range readout, not a second circular gauge.
+fn add_cockpit_range_module(
+    g: &mut PioneerDockedGeometry,
+    center: [f64; 3],
+    half: [f64; 3],
+    axes: [[f64; 3]; 3],
+) {
+    let [[u0, v0], [u1, v1]] = PIONEER_RANGE_MODULE_RECT;
+    let width = 2.0 * (half[2] - 0.008);
+    let height = 2.0 * (half[1] - 0.008);
+    let mid = add(
+        center,
+        add(
+            mul(axes[0], -0.026),
+            add(
+                mul(axes[1], (0.5 - (v0 + v1) * 0.5) * height),
+                mul(axes[2], ((u0 + u1) * 0.5 - 0.5) * width),
+            ),
+        ),
+    );
+    let y = (v1 - v0) * height * 0.5;
+    let z = (u1 - u0) * width * 0.5;
+    g.panel(
+        "cockpit/screen/1/range/backing",
+        PioneerDockedBox {
+            center_m: mid,
+            half_m: [0.004, y, z],
+            axes,
+        },
+        PioneerDockedMaterial::Carbon,
+        PioneerDockedCollision::Solid,
+        PioneerDockedCell::Cockpit,
+        PioneerDockedPanelKind::Instrument,
+    );
+    for (name, dy, dz, half_y, half_z) in [
+        ("top", y + 0.002, 0.0, 0.002, z + 0.004),
+        ("bottom", -y - 0.002, 0.0, 0.002, z + 0.004),
+        ("port", 0.0, -z - 0.002, y, 0.002),
+        ("starboard", 0.0, z + 0.002, y, 0.002),
+    ] {
+        g.panel(
+            format!("cockpit/screen/1/range/rim/{name}"),
+            PioneerDockedBox {
+                center_m: add(
+                    mid,
+                    add(
+                        mul(axes[0], -0.006),
+                        add(mul(axes[1], dy), mul(axes[2], dz)),
+                    ),
+                ),
+                half_m: [0.006, half_y, half_z],
+                axes,
+            },
+            PioneerDockedMaterial::Titanium,
+            PioneerDockedCollision::Solid,
+            PioneerDockedCell::Cockpit,
+            PioneerDockedPanelKind::Instrument,
+        );
+    }
+}
+
+fn add_cockpit_furniture(g: &mut PioneerDockedGeometry) {
+    use PioneerDockedMaterial::{Carbon, Graphite, Titanium};
+    let cell = PioneerDockedCell::Cockpit;
+    let solid = PioneerDockedCollision::Solid;
+    // Open structural chair frame rather than a solid room-dividing plate.
+    for (name, min, max) in [
+        ("port-rail", [33.70, -0.20, 2.60], [33.77, 1.05, 2.67]),
+        ("starboard-rail", [33.70, -0.20, 3.33], [33.77, 1.05, 3.40]),
+        (
+            "upper-crossmember",
+            [33.70, 0.98, 2.60],
+            [33.77, 1.05, 3.40],
+        ),
+        (
+            "lower-crossmember",
+            [33.70, 0.12, 2.60],
+            [33.77, 0.20, 3.40],
+        ),
+    ] {
+        g.block(
+            format!("pilot-chair/frame/{name}"),
+            workstation_point(min),
+            workstation_point(max),
+            Titanium,
+            solid,
+            cell,
+            PioneerDockedPanelKind::Furniture,
+        );
+    }
+    g.block(
+        "pilot-chair/backrest",
+        workstation_point([33.80, 0.32, 2.70]),
+        workstation_point([33.86, 1.05, 3.30]),
+        Carbon,
+        solid,
+        cell,
+        PioneerDockedPanelKind::Furniture,
+    );
+    for (i, (z0, z1)) in [(2.60, 2.68), (3.32, 3.40)].into_iter().enumerate() {
+        g.block(
+            format!("pilot-chair/hinge/{i}"),
+            workstation_point([33.77, 0.12, z0]),
+            workstation_point([34.0, 0.32, z1]),
+            Titanium,
+            solid,
+            cell,
+            PioneerDockedPanelKind::Furniture,
+        );
+    }
+    // The former wall-mounted back-frame is now carried by a declared deck
+    // support; it does not float in the new aft circulation aisle. The support
+    // ends before the folded pan's measured minimum X=32.801 m.
+    g.block(
+        "pilot-chair/deck-support",
+        [30.92, FLOOR, -0.40],
+        [31.04, -0.19 + PILOT_SEAT_RISE_M, 0.40],
+        Titanium,
+        solid,
+        cell,
+        PioneerDockedPanelKind::Furniture,
+    );
+    // A complete experimental chamber, not an overlay on the former crosswalk.
+    add_cockpit_chamber_structure(g);
+    add_cockpit_low_console(g);
+    add_cockpit_mechanism_pockets(g);
+
+    // Index identities mirror the existing six screen slots. Slot zero is
+    // transparent telemetry, not a depth-writing console panel.
+    for i in (1..8).chain(std::iter::once(15)) {
+        let (center, half) = cockpit_screen_local(i).expect("seven physical panels");
+        let axes = cockpit_screen_axes(i).expect("same five physical panel frames");
+        if i == 1 || i == 2 {
+            add_cockpit_dial_rim(g, i, 0, center, half, axes);
+            if i == 2 {
+                add_cockpit_dial_rim(g, i, 1, center, half, axes);
+            }
+            if i == 1 {
+                add_cockpit_range_module(g, center, half, axes);
+            }
+            // Metadata and pointer plane stay canonical, but these lower
+            // instruments no longer have a full rectangular screen silhouette.
+            continue;
+        }
+        // Four real lips surround, never cover, the live glass aperture.
+        // The live content plane is local X=-.032; the lip front is -.038, giving
+        // about 7 mm actual recess. Keep 11 mm aperture clearance to the
+        // glass edge so these real lips cannot eclipse an oblique pilot ray.
+        let rim_y = half[1] + 0.007;
+        let rim_z = half[2] + 0.007;
+        for (name, local, lip_half) in [
+            ("top", [-0.032, rim_y, 0.0], [0.006, 0.004, half[2] + 0.003]),
+            (
+                "bottom",
+                [-0.032, -rim_y, 0.0],
+                [0.006, 0.004, half[2] + 0.003],
+            ),
+            (
+                "port",
+                [-0.032, 0.0, -rim_z],
+                [0.006, half[1] - 0.005, 0.004],
+            ),
+            (
+                "starboard",
+                [-0.032, 0.0, rim_z],
+                [0.006, half[1] - 0.005, 0.004],
+            ),
+        ] {
+            let lip_center = add(
+                center,
+                add(
+                    mul(axes[0], local[0]),
+                    add(mul(axes[1], local[1]), mul(axes[2], local[2])),
+                ),
+            );
+            g.panel(
+                format!("cockpit/screen/{i}/rim/{name}"),
+                PioneerDockedBox {
+                    center_m: lip_center,
+                    half_m: lip_half,
+                    axes,
+                },
+                Titanium,
+                solid,
+                cell,
+                PioneerDockedPanelKind::Instrument,
+            );
+        }
+        g.panel(
+            format!("cockpit/screen/{i}/bezel"),
+            PioneerDockedBox {
+                center_m: center,
+                half_m: half,
+                axes,
+            },
+            Graphite,
+            solid,
+            cell,
+            PioneerDockedPanelKind::Instrument,
+        );
+        g.panel(
+            format!("cockpit/screen/{i}/backing"),
+            PioneerDockedBox {
+                center_m: add(center, mul(axes[0], -0.025)),
+                half_m: [0.006, half[1] - 0.008, half[2] - 0.008],
+                axes,
+            },
+            PioneerDockedMaterial::Glass,
+            solid,
+            cell,
+            PioneerDockedPanelKind::Instrument,
+        );
+        if i == 3 {
+            add_cockpit_button_cartridges(g, center, half, axes);
+        }
+    }
+}
+
+/// Only the central button substrate has separately modeled construction.
+/// Console mounts now have their own true collision geometry, not hidden rack
+/// proxies left behind at previous screen positions.
+pub fn cockpit_panel_has_visual_replacement(id: &str) -> bool {
+    id == "cockpit/screen/3/backing"
+}
+
+/// A continuous low chassis carries the instruments in their actual inclined
+/// mount frames. Cream returns surround open apertures; dark recesses and metal
+/// edge strips are passive construction, not additional controls or indicators.
+fn add_cockpit_low_console(g: &mut PioneerDockedGeometry) {
+    use PioneerDockedMaterial::{Carbon, Graphite, Titanium, WallPanel};
+    let cell = PioneerDockedCell::Cockpit;
+    let solid = PioneerDockedCollision::Solid;
+    // One horseshoe chassis: lateral systems benches join the forward belt.
+    // The aft ends stop before the rear circulation space. No center barrier.
+    for side in [-1.0, 1.0] {
+        let (z0, z1) = if side < 0.0 {
+            (-2.40, -1.18)
+        } else {
+            (1.18, 2.40)
+        };
+        for (name, min, max, material) in [
+            ("bench", [30.25, FLOOR, z0], [34.35, 0.48, z1], Graphite),
+            (
+                "toe-recess",
+                [30.30, FLOOR + 0.02, z0 + 0.06],
+                [34.30, FLOOR + 0.12, z1 - 0.06],
+                Carbon,
+            ),
+        ] {
+            g.block(
+                format!("cockpit/console/wing/{side}/{name}"),
+                min,
+                max,
+                material,
+                solid,
+                cell,
+                PioneerDockedPanelKind::Furniture,
+            );
+        }
+        // The instrument wing is a continuous inclined chassis, not tablets
+        // placed on a horizontal counter. Its lower edge joins the inner lip;
+        // the outer rise supports the side displays without filling their aperture.
+        let slope = (0.25_f64 / 1.22).atan();
+        let (sn, cs) = slope.sin_cos();
+        g.panel(
+            format!("cockpit/console/wing/{side}/inclined-fascia"),
+            PioneerDockedBox {
+                center_m: [33.70, 0.65, side * 1.79],
+                half_m: [
+                    0.65,
+                    0.035,
+                    (1.22_f64.powi(2) + 0.25_f64.powi(2)).sqrt() / 2.0,
+                ],
+                axes: [[1.0, 0.0, 0.0], [0.0, cs, -side * sn], [0.0, side * sn, cs]],
+            },
+            WallPanel,
+            solid,
+            cell,
+            PioneerDockedPanelKind::Furniture,
+        );
+        // Narrow aft service return replaces the unused pale desktop. The
+        // full-width working wedge begins at X=33.05 around the instruments.
+        // Floor bench and rear circulation boundaries remain unchanged.
+        g.block(
+            format!("cockpit/console/wing/{side}/aft-service-return"),
+            [30.25, 0.48, if side < 0.0 { -2.40 } else { 2.05 }],
+            [33.05, 0.69, if side < 0.0 { -2.05 } else { 2.40 }],
+            Graphite,
+            solid,
+            cell,
+            PioneerDockedPanelKind::Furniture,
+        );
+        // Physical divisions and inset service panels, no invented powered state.
+        for section in 0..5 {
+            let x = 30.45 + section as f64 * 0.73;
+            let z = if side < 0.0 { z1 + 0.002 } else { z0 - 0.012 };
+            g.block(
+                format!("cockpit/console/wing/{side}/service/{section}"),
+                [x, -0.12, z],
+                [x + 0.58, 0.36, z + 0.010],
+                Carbon,
+                PioneerDockedCollision::Decoration,
+                cell,
+                PioneerDockedPanelKind::Furniture,
+            );
+        }
+    }
+    // The turret cassettes occupy a real open well in the forward chassis.
+    // Four solid returns surround the complete swept volume; no screen travels
+    // through a countertop. The bottom remains below the actuator anchor.
+    for (name, min, max) in [
+        ("port", [33.65, FLOOR, -1.18], [34.35, 0.55, -0.66]),
+        ("starboard", [33.65, FLOOR, 0.66], [34.35, 0.55, 1.18]),
+        ("aft", [33.65, FLOOR, -0.66], [33.76, 0.55, 0.66]),
+        ("fore", [34.07, FLOOR, -0.66], [34.35, 0.55, 0.66]),
+        ("well-floor", [33.76, FLOOR, -0.66], [34.07, 0.15, 0.66]),
+    ] {
+        g.block(
+            format!("cockpit/console/forward-belt/{name}"),
+            min,
+            max,
+            Graphite,
+            solid,
+            cell,
+            PioneerDockedPanelKind::Furniture,
+        );
+    }
+    g.block(
+        "cockpit/console/center-plinth",
+        [32.63, 0.16, -0.33],
+        [33.14, 0.73, 0.33],
+        Graphite,
+        solid,
+        cell,
+        PioneerDockedPanelKind::Furniture,
+    );
+    for slot in (1..8).chain(std::iter::once(15)) {
+        let (center, half) = cockpit_screen_local(slot).unwrap();
+        let axes = cockpit_screen_axes(slot).unwrap();
+        let point = |local: [f64; 3]| {
+            add(
+                center,
+                add(
+                    mul(axes[0], local[0]),
+                    add(mul(axes[1], local[1]), mul(axes[2], local[2])),
+                ),
+            )
+        };
+        if slot == 15 {
+            for side in [-1., 1.] {
+                let top = point([0.075, -half[1] - 0.020, side * 0.28]);
+                g.block(
+                    format!("cockpit/console/reactor-support/{side}"),
+                    [top[0] - 0.035, 0.48, top[2] - 0.035],
+                    [top[0] + 0.035, top[1] + 0.015, top[2] + 0.035],
+                    Titanium,
+                    solid,
+                    cell,
+                    PioneerDockedPanelKind::Structure,
+                );
+            }
+        }
+        if slot == 6 || slot == 7 {
+            // Structural pedestal joins the raised side face to the inclined
+            // working wedge. It remains behind the canonical live glass plane.
+            g.panel(
+                format!("cockpit/console/wing-display/{slot}/pedestal"),
+                PioneerDockedBox {
+                    center_m: point([0.12, -0.42, 0.0]),
+                    half_m: [0.08, 0.25, 0.16],
+                    axes,
+                },
+                Graphite,
+                solid,
+                cell,
+                PioneerDockedPanelKind::Furniture,
+            );
+        }
+        for (name, local, extent, material) in [
+            (
+                "case",
+                [0.055, 0.0, 0.0],
+                [0.065, half[1] + 0.025, half[2] + 0.025],
+                Graphite,
+            ),
+            (
+                "crown",
+                [0.0, half[1] + 0.021, 0.0],
+                [0.045, 0.015, half[2] + 0.030],
+                WallPanel,
+            ),
+            (
+                "sill",
+                [0.0, -half[1] - 0.021, 0.0],
+                [0.045, 0.015, half[2] + 0.030],
+                WallPanel,
+            ),
+            (
+                "port",
+                [0.0, 0.0, -half[2] - 0.021],
+                [0.045, half[1] + 0.020, 0.015],
+                Titanium,
+            ),
+            (
+                "starboard",
+                [0.0, 0.0, half[2] + 0.021],
+                [0.045, half[1] + 0.020, 0.015],
+                Titanium,
+            ),
+        ] {
+            g.panel(
+                format!("cockpit/console/mount/{slot}/{name}"),
+                PioneerDockedBox {
+                    center_m: point(local),
+                    half_m: extent,
+                    axes,
+                },
+                material,
+                solid,
+                cell,
+                PioneerDockedPanelKind::Furniture,
+            );
+        }
+    }
+}
+
+/// Repeated real ribs and trim unify roof, sidewalls and deck. Palette and
+/// lighting systems are unchanged; the blockout gets depth from construction.
+fn add_cockpit_chamber_structure(g: &mut PioneerDockedGeometry) {
+    use PioneerDockedMaterial::{Carbon, Graphite, Titanium, WallPanel};
+    let cell = PioneerDockedCell::Cockpit;
+    let solid = PioneerDockedCollision::Solid;
+    for (name, min, max, material) in [
+        (
+            "forward-sill",
+            [34.55, FLOOR, -2.70],
+            [34.88, 0.52, 2.70],
+            Graphite,
+        ),
+        (
+            "canopy-header",
+            [34.55, 2.60, -2.70],
+            [34.88, 2.88, 2.70],
+            WallPanel,
+        ),
+        (
+            "canopy-port",
+            [34.55, 0.52, -2.70],
+            [34.88, 2.30, -2.50],
+            Titanium,
+        ),
+        (
+            "canopy-starboard",
+            [34.55, 0.52, 2.50],
+            [34.88, 2.30, 2.70],
+            Titanium,
+        ),
+        (
+            "rear-door-header",
+            [27.0, 2.08, -0.90],
+            [27.20, 2.50, 0.90],
+            WallPanel,
+        ),
+        (
+            "rear-door-port",
+            [27.0, FLOOR, -0.90],
+            [27.20, 2.08, -0.70],
+            WallPanel,
+        ),
+        (
+            "rear-door-starboard",
+            [27.0, FLOOR, 0.70],
+            [27.20, 2.08, 0.90],
+            WallPanel,
+        ),
+    ] {
+        g.block(
+            format!("cockpit/chamber/{name}"),
+            min,
+            max,
+            material,
+            solid,
+            cell,
+            PioneerDockedPanelKind::Structure,
+        );
+    }
+    // Revision-5 canopy refit replaces the exact saved-source center mullion
+    // with outboard load-path reservations. No pressure/strength rating is claimed.
+    // The source glass remains intact and these frames join its X=35.72 plane
+    // to the new chamber rather than leaving disconnected interior trim.
+    for side in [-1.0, 1.0] {
+        g.block(
+            format!("cockpit/chamber/canopy-outboard/{side}"),
+            [34.55, 0.44, side * 2.55 - 0.08],
+            [35.84, 2.71, side * 2.55 + 0.08],
+            Titanium,
+            solid,
+            cell,
+            PioneerDockedPanelKind::Structure,
+        );
+    }
+    for (name, y0, y1) in [("upper", 2.60, 2.71), ("lower", 0.44, 0.52)] {
+        g.block(
+            format!("cockpit/chamber/canopy-transom/{name}"),
+            [34.55, y0, -2.63],
+            [35.84, y1, 2.63],
+            Titanium,
+            solid,
+            cell,
+            PioneerDockedPanelKind::Structure,
+        );
+    }
+    for i in 0..5 {
+        // Refit the last complete structural hoop behind the wider seven-cassette arc.
+        // All solid roof/haunch/upright members remain; no pass-through masks.
+        let x = 27.35 + i as f64 * 1.40 - if i == 4 { 0.45 } else { 0.0 };
+        g.block(
+            format!("cockpit/chamber/rib/{i}/roof"),
+            [x, 2.68, -2.15],
+            [x + 0.12, 2.88, 2.15],
+            WallPanel,
+            solid,
+            cell,
+            PioneerDockedPanelKind::Structure,
+        );
+        for side in [-1.0, 1.0] {
+            let slope = (0.55_f64 / 0.45).atan();
+            let (sn, cs) = slope.sin_cos();
+            g.panel(
+                format!("cockpit/chamber/rib/{i}/{side}/haunch"),
+                PioneerDockedBox {
+                    center_m: [x + 0.06, 2.475, side * 2.375],
+                    half_m: [
+                        0.06,
+                        0.08,
+                        (0.55_f64.powi(2) + 0.45_f64.powi(2)).sqrt() / 2.0,
+                    ],
+                    axes: [[1.0, 0.0, 0.0], [0.0, cs, side * sn], [0.0, -side * sn, cs]],
+                },
+                WallPanel,
+                solid,
+                cell,
+                PioneerDockedPanelKind::Structure,
+            );
+            let z = side * 2.60;
+            g.block(
+                format!("cockpit/chamber/rib/{i}/{side}"),
+                [x, FLOOR, z - 0.06],
+                [x + 0.12, 2.20, z + 0.06],
+                WallPanel,
+                solid,
+                cell,
+                PioneerDockedPanelKind::Structure,
+            );
+        }
+    }
+    for side in [-1.0, 1.0] {
+        let z = side * 1.02;
+        g.block(
+            format!("cockpit/chamber/aisle-edge/{side}"),
+            [27.3, FLOOR + 0.001, z - 0.018],
+            [33.5, FLOOR + 0.004, z + 0.018],
+            Titanium,
+            PioneerDockedCollision::Decoration,
+            cell,
+            PioneerDockedPanelKind::Structure,
+        );
+        g.block(
+            format!("cockpit/chamber/rear-locker/{side}"),
+            [27.35, FLOOR, side * 1.95 - 0.34],
+            [28.15, 1.85, side * 1.95 + 0.34],
+            Graphite,
+            solid,
+            cell,
+            PioneerDockedPanelKind::Furniture,
+        );
+    }
+    for i in 0..8 {
+        let x = 27.25 + i as f64 * 0.88;
+        g.block(
+            format!("cockpit/chamber/deck-joint/{i}"),
+            [x, FLOOR + 0.001, -2.45],
+            [x + 0.012, FLOOR + 0.003, 2.45],
+            Carbon,
+            PioneerDockedCollision::Decoration,
+            cell,
+            PioneerDockedPanelKind::Structure,
+        );
+    }
+}
+
+fn add_cockpit_button_cartridges(
+    g: &mut PioneerDockedGeometry,
+    center: [f64; 3],
+    half: [f64; 3],
+    axes: [[f64; 3]; 3],
+) {
+    use PioneerDockedMaterial::{Carbon, Glass, Graphite, Titanium};
+    let width = 2.0 * (half[2] - 0.008);
+    let height = 2.0 * (half[1] - 0.008);
+    let mut part = |name: &str, rect: [f64; 4], front: f64, rear: f64, material| {
+        let [left, top, right, bottom] = rect;
+        let local = [
+            (front + rear) * 0.5,
+            (0.5 - (top + bottom) * 0.5 / 380.0) * height,
+            ((left + right) * 0.5 / 560.0 - 0.5) * width,
+        ];
+        g.panel(
+            format!("cockpit/screen/3/button-construction/{name}"),
+            PioneerDockedBox {
+                center_m: add(
+                    center,
+                    add(
+                        mul(axes[0], local[0]),
+                        add(mul(axes[1], local[1]), mul(axes[2], local[2])),
+                    ),
+                ),
+                half_m: [
+                    (rear - front) * 0.5,
+                    (bottom - top) * height / 760.0,
+                    (right - left) * width / 1120.0,
+                ],
+                axes,
+            },
+            material,
+            PioneerDockedCollision::Decoration,
+            PioneerDockedCell::Cockpit,
+            PioneerDockedPanelKind::Instrument,
+        );
+    };
+    // Exact complement of the two command pockets and three workspace-key
+    // pockets. The shared backing extent and fixed input plane are unchanged.
+    for (name, rect) in [
+        ("substrate/top", [0.0, 0.0, 560.0, 29.0]),
+        ("substrate/middle", [0.0, 73.0, 560.0, 327.0]),
+        ("substrate/bottom", [0.0, 377.0, 560.0, 380.0]),
+        ("substrate/workspace-port", [0.0, 327.0, 9.0, 377.0]),
+        (
+            "substrate/workspace-flight-drone",
+            [183.0, 327.0, 193.0, 377.0],
+        ),
+        (
+            "substrate/workspace-drone-mining",
+            [367.0, 327.0, 377.0, 377.0],
+        ),
+        (
+            "substrate/workspace-starboard",
+            [551.0, 327.0, 560.0, 377.0],
+        ),
+        ("substrate/port", [0.0, 29.0, 9.0, 73.0]),
+        ("substrate/between", [147.0, 29.0, 161.0, 73.0]),
+        ("substrate/starboard", [263.0, 29.0, 560.0, 73.0]),
+    ] {
+        part(name, rect, -0.031, -0.019, Glass);
+    }
+    for (name, [left, top, right, bottom]) in [
+        ("berth", [12.0, 32.0, 144.0, 70.0]),
+        ("stop", [164.0, 32.0, 260.0, 70.0]),
+    ] {
+        let pocket = [left - 3.0, top - 3.0, right + 3.0, bottom + 3.0];
+        part(
+            &format!("{name}/pocket-floor"),
+            pocket,
+            -0.022,
+            -0.019,
+            Carbon,
+        );
+        // Narrow metal liners expose the pocket's real depth outside the live
+        // response rectangle. Their fronts never cross the fixed input face.
+        for (edge, rect) in [
+            ("top", [left - 3.0, top - 3.0, right + 3.0, top - 2.0]),
+            (
+                "bottom",
+                [left - 3.0, bottom + 2.0, right + 3.0, bottom + 3.0],
+            ),
+            ("port", [left - 3.0, top - 2.0, left - 2.0, bottom + 2.0]),
+            (
+                "starboard",
+                [right + 2.0, top - 2.0, right + 3.0, bottom + 2.0],
+            ),
+        ] {
+            part(
+                &format!("{name}/pocket-liner/{edge}"),
+                rect,
+                -0.0305,
+                -0.022,
+                Titanium,
+            );
+        }
+        // A separate base seats on the recessed floor. The cap body projects
+        // 6.2 mm from its base, with a smaller face forming a stepped edge.
+        part(
+            &format!("{name}/base"),
+            [left - 1.0, top - 1.0, right + 1.0, bottom + 1.0],
+            -0.0255,
+            -0.0216,
+            Carbon,
+        );
+        part(
+            &format!("{name}/cap-body"),
+            [left, top, right, bottom],
+            -0.0297,
+            -0.0255,
+            Graphite,
+        );
+        part(
+            &format!("{name}/cap-face"),
+            [left + 1.5, top + 1.5, right - 1.5, bottom - 1.5],
+            -0.0317,
+            -0.0297,
+            Titanium,
+        );
+    }
+    // The workspace row is a single recessed cartridge rail with three
+    // independent stepped keys. Shared floor/edge pieces avoid duplicating a
+    // full eight-piece command-button housing for each view selector. These
+    // keys select existing workspaces; they do not represent ship commands.
+    part(
+        "workspace/pocket-floor",
+        [9.0, 327.0, 551.0, 377.0],
+        -0.022,
+        -0.019,
+        Carbon,
+    );
+    for (edge, rect) in [
+        ("top", [9.0, 327.0, 551.0, 328.0]),
+        ("bottom", [9.0, 376.0, 551.0, 377.0]),
+    ] {
+        part(
+            &format!("workspace/pocket-liner/{edge}"),
+            rect,
+            -0.0305,
+            -0.022,
+            Titanium,
+        );
+    }
+    for (name, [left, top, right, bottom]) in [
+        ("workspace-flight", [12.0, 330.0, 180.0, 374.0]),
+        ("workspace-drone", [196.0, 330.0, 364.0, 374.0]),
+        ("workspace-mining", [380.0, 330.0, 548.0, 374.0]),
+    ] {
+        part(
+            &format!("{name}/base"),
+            [left - 1.0, top - 1.0, right + 1.0, bottom + 1.0],
+            -0.0255,
+            -0.0216,
+            Carbon,
+        );
+        part(
+            &format!("{name}/cap-body"),
+            [left, top, right, bottom],
+            -0.0297,
+            -0.0255,
+            Graphite,
+        );
+        part(
+            &format!("{name}/cap-face"),
+            [left + 1.5, top + 1.5, right - 1.5, bottom - 1.5],
+            -0.0317,
+            -0.0297,
+            Titanium,
+        );
+    }
+}
+
+/// Existing screen slot identities, now fitted to the same physical console.
+/// Returns body-space centre and half extents; zero is canopy telemetry only.
+pub fn cockpit_screen(index: usize) -> Option<([f64; 3], [f64; 3])> {
+    cockpit_screen_local(index).map(|(center, half)| (bridge_point(center), half))
+}
+fn cockpit_screen_local(index: usize) -> Option<([f64; 3], [f64; 3])> {
+    Some(match index {
+        0 => ([34.80, 1.46, 0.0], [0.020, 0.075, 0.18]),
+        1 => ([33.65, 0.85, -0.95], [0.012, 0.14, 0.30]),
+        2 => ([33.65, 0.85, 0.95], [0.012, 0.14, 0.30]),
+        3 => ([32.90, 0.95, 0.0], [0.020, 0.22, 0.36]),
+        4 => ([33.88, 1.20, -0.95], [0.012, 0.17, 0.30]),
+        5 => ([33.88, 1.20, 0.95], [0.012, 0.17, 0.30]),
+        6 => ([33.70, 1.25, -1.80], [0.020, 0.22, 0.42]),
+        7 => ([33.70, 1.25, 1.80], [0.020, 0.22, 0.42]),
+        15 => ([31.0, 1.18, 1.65], [0.020, 0.22, 0.42]),
+        _ => return None,
+    })
+}
+
+/// Shared by structural cases, emitted UI and physical pointer rays.
+pub fn cockpit_screen_axes(index: usize) -> Option<[[f64; 3]; 3]> {
+    let (yaw, pitch): (f64, f64) = match index {
+        0 => return Some([X, Y, Z]),
+        1 => (18.0, -35.0),
+        2 => (-18.0, -35.0),
+        3 => (0.0, -45.0),
+        4 => (18.0, -15.0),
+        5 => (-18.0, -15.0),
+        6 => (39.0, -15.0),
+        7 => (-39.0, -15.0),
+        15 => (-90.0, -15.0),
+        _ => return None,
+    };
+    let (sy, cy) = yaw.to_radians().sin_cos();
+    let (sp, cp) = pitch.to_radians().sin_cos();
+    Some([
+        [cp * cy, sp * cy, -sy],
+        [-sp, cp, 0.0],
+        [cp * sy, sp * sy, cy],
+    ])
+}
+
+// RECONSTRUCTION: retained task transcript, not asserted original 20bd7ea bytes.
+fn reactor_room_supported(room: &crate::RoomLayout) -> bool {
+    room.deck == 1
+        && room.source_room_id.as_deref() == Some("D1-S1")
+        && room
+            .origin_xz_m
+            .iter()
+            .zip([4.2, 8.4])
+            .all(|(a, b)| (a - b).abs() < 1e-6)
+        && room
+            .clear_lwh_m
+            .iter()
+            .zip([8.9333333333, 5.4, 3.2])
+            .all(|(a, b)| (a - b).abs() < 1e-6)
+}
+pub fn reactor_configuration_supported(document: &RoomLayoutDocument) -> bool {
+    document.rooms.iter().any(reactor_room_supported)
+}
+pub const REACTOR_CONFIGURATION_CENTER: [f64; 3] = [-5.55, -2.82, 5.90];
+pub fn reactor_core_box() -> PioneerDockedBox {
+    PioneerDockedBox {
+        center_m: REACTOR_CONFIGURATION_CENTER,
+        half_m: [1.30, 0.42, 0.27],
+        axes: [X, Y, Z],
+    }
+}
+fn add_reactor_configuration_fixed(g: &mut PioneerDockedGeometry, room_id: u64) {
+    use PioneerDockedMaterial::{Carbon, Graphite, Titanium};
+    let c = REACTOR_CONFIGURATION_CENTER;
+    let cell = PioneerDockedCell::Room { deck: 1, room_id };
+    for (name, offset, half, material) in [
+        ("core-envelope", [0., 0., 0.], [1.30, 0.42, 0.27], Graphite),
+        ("plinth", [0., -1.18, 0.], [1.80, 0.12, 0.60], Carbon),
+        (
+            "port-rail",
+            [0., -0.96, -0.46],
+            [1.72, 0.055, 0.055],
+            Titanium,
+        ),
+        (
+            "starboard-rail",
+            [0., -0.96, 0.46],
+            [1.72, 0.055, 0.055],
+            Titanium,
+        ),
+        (
+            "aft-anchor",
+            [-1.60, -0.57, 0.],
+            [0.10, 0.49, 0.34],
+            Titanium,
+        ),
+        (
+            "forward-anchor",
+            [1.60, -0.57, 0.],
+            [0.10, 0.49, 0.34],
+            Titanium,
+        ),
+    ] {
+        g.panel(
+            format!("reactor/configuration/fixed/{name}"),
+            PioneerDockedBox {
+                center_m: add(c, offset),
+                half_m: half,
+                axes: [X, Y, Z],
+            },
+            material,
+            PioneerDockedCollision::Solid,
+            cell,
+            PioneerDockedPanelKind::Furniture,
+        );
+    }
+    for side in [-1., 1.] {
+        g.panel(
+            format!("reactor/configuration/fixed/core-bracket/{side}"),
+            PioneerDockedBox {
+                center_m: add(c, [side * 1.40, -0.30, 0.]),
+                half_m: [0.15, 0.06, 0.20],
+                axes: [X, Y, Z],
+            },
+            Titanium,
+            PioneerDockedCollision::Solid,
+            cell,
+            PioneerDockedPanelKind::Structure,
+        );
+        g.block(
+            format!("reactor/configuration/fixed/core-support/{side}"),
+            add(c, [side * 1.45 - 0.06, -1.06, -0.20]),
+            add(c, [side * 1.45 + 0.06, -0.35, 0.20]),
+            Titanium,
+            PioneerDockedCollision::Solid,
+            cell,
+            PioneerDockedPanelKind::Structure,
+        );
+    }
+}
+pub fn reactor_configuration_box(collar: usize, fraction: f64) -> Option<PioneerDockedBox> {
+    if !fraction.is_finite() || !(0.0..=1.0).contains(&fraction) {
+        return None;
+    }
+    let expanded = *[-1.2, -0.4, 0.4, 1.2].get(collar)?;
+    let compact = *[-0.42, -0.14, 0.14, 0.42].get(collar)?;
+    Some(PioneerDockedBox {
+        center_m: add(
+            REACTOR_CONFIGURATION_CENTER,
+            [expanded + (compact - expanded) * fraction, 0., 0.],
+        ),
+        half_m: [0.09, 1.04, 0.55],
+        axes: [X, Y, Z],
+    })
+}
+pub fn reactor_configuration_sweep(collar: usize, from: f64, to: f64) -> Option<PioneerDockedBox> {
+    let a = reactor_configuration_box(collar, from)?;
+    let b = reactor_configuration_box(collar, to)?;
+    let low = (a.center_m[0] - a.half_m[0]).min(b.center_m[0] - b.half_m[0]);
+    let high = (a.center_m[0] + a.half_m[0]).max(b.center_m[0] + b.half_m[0]);
+    Some(PioneerDockedBox {
+        center_m: [(low + high) * 0.5, a.center_m[1], a.center_m[2]],
+        half_m: [(high - low) * 0.5, a.half_m[1], a.half_m[2]],
+        axes: a.axes,
+    })
+}
+pub fn reactor_configuration_geometry(
+    pose: PioneerDockedPose,
+    fraction: f64,
+) -> Result<PioneerDockedGeometry, String> {
+    if !pose.valid() {
+        return Err("Invalid reactor configuration placement".into());
+    }
+    use PioneerDockedMaterial::{Graphite, Titanium, WallPanel};
+    let mut g = PioneerDockedGeometry::default();
+    for collar in 0..4 {
+        let c = reactor_configuration_box(collar, fraction)
+            .ok_or("Invalid reactor configuration fraction")?
+            .center_m;
+        for (name, offset, half, material) in [
+            ("top", [0., 0.82, 0.], [0.09, 0.08, 0.52], Titanium),
+            ("bottom", [0., -0.82, 0.], [0.09, 0.08, 0.52], Titanium),
+            ("near", [0., 0., -0.45], [0.09, 0.74, 0.07], Graphite),
+            ("far", [0., 0., 0.45], [0.09, 0.74, 0.07], Graphite),
+            (
+                "near-insert",
+                [0., 0.18, -0.525],
+                [0.065, 0.35, 0.015],
+                WallPanel,
+            ),
+        ] {
+            g.panel(
+                format!("reactor/configuration/collar/{collar}/{name}"),
+                PioneerDockedBox {
+                    center_m: add(c, offset),
+                    half_m: half,
+                    axes: [X, Y, Z],
+                },
+                material,
+                PioneerDockedCollision::Solid,
+                PioneerDockedCell::Deck1,
+                PioneerDockedPanelKind::Furniture,
+            );
+        }
+        for side in [-1., 1.] {
+            for (name, dy, dz, hy, hz) in [
+                ("top", 0.068, 0., 0.012, 0.056),
+                ("bottom", -0.068, 0., 0.012, 0.056),
+                ("near", 0., -0.068, 0.080, 0.012),
+                ("far", 0., 0.068, 0.080, 0.012),
+            ] {
+                g.panel(
+                    format!("reactor/configuration/collar/{collar}/shoe/{side}/{name}"),
+                    PioneerDockedBox {
+                        center_m: add(c, [0., -0.96 + dy, side * 0.46 + dz]),
+                        half_m: [0.09, hy, hz],
+                        axes: [X, Y, Z],
+                    },
+                    Titanium,
+                    PioneerDockedCollision::Solid,
+                    PioneerDockedCell::Deck1,
+                    PioneerDockedPanelKind::Rail,
+                );
+            }
+        }
+    }
+    validate_geometry(&g)?;
+    Ok(g)
+}
+
+/// Physical mining display frames in body metres. Hardware slots are independent
+/// of source identities: 0..5 and 7..9 lower from the roof; 5..7 rise from the console.
+/// Fraction zero is stowed; one is deployed. No local presentation clock here.
+pub type CockpitMechanismScreen = ([f64; 3], [f64; 3], [[f64; 3]; 3]);
+pub fn cockpit_mechanism_screen(slot: usize, fraction: f64) -> Option<CockpitMechanismScreen> {
+    cockpit_mechanism_screen_local(slot, fraction)
+        .map(|(center, half, axes)| (bridge_point(center), half, axes))
+}
+fn cockpit_mechanism_screen_local(slot: usize, fraction: f64) -> Option<CockpitMechanismScreen> {
+    if !fraction.is_finite() || !(0.0..=1.0).contains(&fraction) {
+        return None;
+    }
+    let (x, z, yaw, stowed_y, deployed_y, half) = match slot {
+        // Re-spaced seven-cassette arc, retaining the canonical pilot eye.
+        // Hardware order along the arc is D1, Port, D2, D3, D4, Starboard, D5.
+        0..=4 | 7..=8 => {
+            let yaw: f64 = match slot {
+                0 => 54.,
+                1 => 18.,
+                2 => 0.,
+                3 => -18.,
+                4 => -54.,
+                7 => 36.,
+                8 => -36.,
+                _ => unreachable!(),
+            };
+            let (s, c) = yaw.to_radians().sin_cos();
+            (
+                31.48 + 2.62 * c,
+                -2.62 * s,
+                yaw,
+                2.45,
+                1.95,
+                [0.035, 0.18, 0.32],
+            )
+        }
+        5 => (33.90, -0.32, 0., 0.42, 1.55, [0.035, 0.16, 0.28]),
+        6 => (33.90, 0.32, 0., 0.42, 1.55, [0.035, 0.16, 0.28]),
+        _ => return None,
+    };
+    let (s, c) = yaw.to_radians().sin_cos();
+    Some((
+        [x, stowed_y + (deployed_y - stowed_y) * fraction, z],
+        half,
+        [[c, 0., -s], Y, [s, 0., c]],
+    ))
+}
+
+/// Stable mapping preserves existing camera, reactor and cassette surface IDs.
+pub fn cockpit_mechanism_surface_slot(slot: usize) -> Option<usize> {
+    match slot {
+        0..=6 => Some(slot + 8),
+        7 => Some(21),
+        8 => Some(22),
+        _ => None,
+    }
+}
+pub fn cockpit_surface_mechanism_slot(surface: usize) -> Option<usize> {
+    match surface {
+        8..=14 => Some(surface - 8),
+        21 => Some(7),
+        22 => Some(8),
+        _ => None,
+    }
+}
+pub fn cockpit_mechanism_is_overhead(slot: usize) -> bool {
+    matches!(slot, 0..=4 | 7..=8)
+}
+
+/// Conservative collision envelope includes the case and its telescoping stem.
+/// Vertical translation keeps the axes constant, so the endpoint union is exact
+/// for this conservative envelope (not a rotational swept-volume approximation).
+pub fn cockpit_mechanism_box(slot: usize, fraction: f64) -> Option<PioneerDockedBox> {
+    let (mut center, half, axes) = cockpit_mechanism_screen(slot, fraction)?;
+    let anchor = PIONEER_BRIDGE_RISE_M
+        + if cockpit_mechanism_is_overhead(slot) {
+            2.65
+        } else {
+            0.20
+        };
+    let low = (center[1] - half[1]).min(anchor);
+    let high = (center[1] + half[1]).max(anchor);
+    center[1] = (low + high) * 0.5;
+    Some(PioneerDockedBox {
+        center_m: center,
+        half_m: [0.105, (high - low) * 0.5, half[2] + 0.015],
+        axes,
+    })
+}
+pub fn cockpit_mechanism_sweep(slot: usize, from: f64, to: f64) -> Option<PioneerDockedBox> {
+    let a = cockpit_mechanism_box(slot, from)?;
+    let b = cockpit_mechanism_box(slot, to)?;
+    let low = (a.center_m[1] - a.half_m[1]).min(b.center_m[1] - b.half_m[1]);
+    let high = (a.center_m[1] + a.half_m[1]).max(b.center_m[1] + b.half_m[1]);
+    Some(PioneerDockedBox {
+        center_m: [a.center_m[0], (low + high) * 0.5, a.center_m[2]],
+        half_m: [a.half_m[0], (high - low) * 0.5, a.half_m[2]],
+        axes: a.axes,
+    })
+}
+
+/// Actual moving parts only. Fixed pockets stay in registered geometry; neither
+/// receives fake passthrough collision. The returned recipe is in body metres,
+/// like dynamic_geometry; callers apply the same station/ship placement once.
+pub fn cockpit_mechanism_geometry(
+    pose: PioneerDockedPose,
+    fractions: [f64; 9],
+) -> Result<PioneerDockedGeometry, String> {
+    if !pose.valid() {
+        return Err("Invalid cockpit mechanism placement".into());
+    }
+    use PioneerDockedMaterial::{Glass, Graphite, Titanium};
+    let mut g = PioneerDockedGeometry::default();
+    for (slot, fraction) in fractions.into_iter().enumerate() {
+        let (center, half, axes) =
+            cockpit_mechanism_screen(slot, fraction).ok_or("Invalid cockpit mechanism fraction")?;
+        let point = |v: [f64; 3]| {
+            add(
+                center,
+                add(
+                    mul(axes[0], v[0]),
+                    add(mul(axes[1], v[1]), mul(axes[2], v[2])),
+                ),
+            )
+        };
+        for (name, local, extent, material) in [
+            ("case", [0., 0., 0.], half, Graphite),
+            (
+                "glass",
+                [-0.040, 0., 0.],
+                [0.003, half[1] - 0.012, half[2] - 0.012],
+                Glass,
+            ),
+            (
+                "top",
+                [-0.045, half[1], 0.],
+                [0.008, 0.008, half[2] + 0.008],
+                Titanium,
+            ),
+            (
+                "bottom",
+                [-0.045, -half[1], 0.],
+                [0.008, 0.008, half[2] + 0.008],
+                Titanium,
+            ),
+            (
+                "port",
+                [-0.045, 0., -half[2]],
+                [0.008, half[1], 0.008],
+                Titanium,
+            ),
+            (
+                "starboard",
+                [-0.045, 0., half[2]],
+                [0.008, half[1], 0.008],
+                Titanium,
+            ),
+        ] {
+            g.panel(
+                format!("cockpit/mechanism/{slot}/{name}"),
+                PioneerDockedBox {
+                    center_m: point(local),
+                    half_m: extent,
+                    axes,
+                },
+                material,
+                PioneerDockedCollision::Solid,
+                PioneerDockedCell::Cockpit,
+                PioneerDockedPanelKind::Instrument,
+            );
+        }
+        let edge = center[1]
+            + if cockpit_mechanism_is_overhead(slot) {
+                half[1]
+            } else {
+                -half[1]
+            };
+        let anchor = PIONEER_BRIDGE_RISE_M
+            + if cockpit_mechanism_is_overhead(slot) {
+                2.65
+            } else {
+                0.20
+            };
+        let length = (anchor - edge).abs();
+        if length > 0.001 {
+            let mut stem = point([0.075, 0., 0.]);
+            stem[1] = (anchor + edge) * 0.5;
+            g.panel(
+                format!("cockpit/mechanism/{slot}/stem"),
+                PioneerDockedBox {
+                    center_m: stem,
+                    half_m: [0.020, length * 0.5, 0.035],
+                    axes,
+                },
+                Titanium,
+                PioneerDockedCollision::Solid,
+                PioneerDockedCell::Cockpit,
+                PioneerDockedPanelKind::Rail,
+            );
+        }
+    }
+    validate_geometry(&g)?;
+    Ok(g)
+}
+
+fn add_cockpit_mechanism_pockets(g: &mut PioneerDockedGeometry) {
+    use PioneerDockedMaterial::{Graphite, Titanium};
+    for slot in 0..9 {
+        let (center, half, axes) = cockpit_mechanism_screen_local(slot, 0.).unwrap();
+        let point = |v: [f64; 3]| {
+            add(
+                center,
+                add(
+                    mul(axes[0], v[0]),
+                    add(mul(axes[1], v[1]), mul(axes[2], v[2])),
+                ),
+            )
+        };
+        // Hollow fixed cassette: front, back, sides and closed far end; deployment end
+        // remains physically open. No solid box through which screens teleport.
+        for (name, local, extent, material) in [
+            (
+                "front",
+                [-0.095, 0., 0.],
+                [0.015, half[1] + 0.035, half[2] + 0.040],
+                Graphite,
+            ),
+            (
+                "back",
+                [0.135, 0., 0.],
+                [0.025, half[1] + 0.035, half[2] + 0.040],
+                Graphite,
+            ),
+            (
+                "port",
+                [0.025, 0., -half[2] - 0.030],
+                [0.110, half[1] + 0.035, 0.015],
+                Titanium,
+            ),
+            (
+                "starboard",
+                [0.025, 0., half[2] + 0.030],
+                [0.110, half[1] + 0.035, 0.015],
+                Titanium,
+            ),
+            (
+                "end",
+                [
+                    0.025,
+                    if cockpit_mechanism_is_overhead(slot) {
+                        half[1] + 0.025
+                    } else {
+                        -half[1] - 0.025
+                    },
+                    0.,
+                ],
+                [0.110, 0.015, half[2] + 0.040],
+                Graphite,
+            ),
+        ] {
+            g.panel(
+                format!("cockpit/mechanism-pocket/{slot}/{name}"),
+                PioneerDockedBox {
+                    center_m: point(local),
+                    half_m: extent,
+                    axes,
+                },
+                material,
+                PioneerDockedCollision::Solid,
+                PioneerDockedCell::Cockpit,
+                PioneerDockedPanelKind::Structure,
+            );
+        }
+        // Declared structural attachments: ceiling hangers or deck pedestals,
+        // not floating cassette housings. They stay behind the travel aperture.
+        let (low, high) = if cockpit_mechanism_is_overhead(slot) {
+            (2.64, 2.88)
+        } else {
+            (FLOOR, 0.24)
+        };
+        let mut anchor = point([0.135, 0., 0.]);
+        anchor[1] = (low + high) * 0.5;
+        g.panel(
+            format!("cockpit/mechanism-pocket/{slot}/anchor"),
+            PioneerDockedBox {
+                center_m: anchor,
+                half_m: [0.025, (high - low) * 0.5, 0.065],
+                axes,
+            },
+            Titanium,
+            PioneerDockedCollision::Solid,
+            PioneerDockedCell::Cockpit,
+            PioneerDockedPanelKind::Structure,
+        );
+    }
+}
+
+/// Paired inward-opening leaves, shared by rendering, collision and sweep checks.
+/// Measured travel has no undeclared sliding pocket; open leaves remain physical.
+pub fn hatch_leaf_bounds(
+    hatch: PioneerDockedHatch,
+    fraction: f64,
+) -> Result<[PioneerDockedBox; 2], String> {
+    if !fraction.is_finite() || !(0.0..=1.0).contains(&fraction) {
+        return Err("Invalid hatch fraction".into());
+    }
+    let anchors = hatch_anchors(PioneerDockedPose::private());
+    let b = match hatch {
+        PioneerDockedHatch::Inner => anchors.inner_bounds,
+        PioneerDockedHatch::Outer => anchors.outer_bounds,
+    };
+    let a = b.half_m[0];
+    let m = (0.01 + a - 0.005) * 0.5;
+    let w = (a - 0.005 - 0.01) * 0.5;
+    let (sin, cos) = (fraction * std::f64::consts::FRAC_PI_2).sin_cos();
+    Ok([-1.0, 1.0].map(|side| {
+        let u = add(mul(b.axes[0], cos), mul(b.axes[2], -side * sin));
+        let v = add(mul(b.axes[0], side * sin), mul(b.axes[2], cos));
+        let hinge = add(
+            b.center_m,
+            add(mul(b.axes[0], side * a), mul(b.axes[2], 0.05)),
+        );
+        PioneerDockedBox {
+            center_m: add(hinge, add(mul(u, side * (m - a)), mul(v, -0.05))),
+            half_m: [w, b.half_m[1], 0.04],
+            axes: [u, Y, v],
+        }
+    }))
+}
+/// Conservative boxes enclose every intermediate angle, not only sampled poses.
+pub fn hatch_leaf_sweep_bounds(
+    hatch: PioneerDockedHatch,
+    from: f64,
+    to: f64,
+) -> Result<Vec<PioneerDockedBox>, String> {
+    hatch_leaf_bounds(hatch, from)?;
+    hatch_leaf_bounds(hatch, to)?;
+    let steps = ((to - from).abs() * 90.0).ceil().max(1.0) as usize;
+    let radius: f64 = match hatch {
+        PioneerDockedHatch::Inner => 0.597,
+        PioneerDockedHatch::Outer => 0.696,
+    };
+    let delta =
+        2.0 * radius * ((to - from).abs() * std::f64::consts::FRAC_PI_2 / steps as f64 / 4.0).sin()
+            + 1e-8;
+    let mut result = Vec::with_capacity(steps * 2);
+    for step in 0..steps {
+        let f = from + (to - from) * (step as f64 + 0.5) / steps as f64;
+        for mut b in hatch_leaf_bounds(hatch, f)? {
+            b.half_m[0] += delta;
+            b.half_m[2] += delta;
+            result.push(b);
+        }
+    }
+    Ok(result)
+}
+
+pub fn dynamic_geometry(
+    pose: PioneerDockedPose,
+    state: PioneerDockedActuators,
+) -> Result<PioneerDockedGeometry, String> {
+    let lift = lift_geometry(pose);
+    if !pose.valid()
+        || !state.lift_floor_station_m.is_finite()
+        || state.lift_floor_station_m < -EPS
+        || state.lift_floor_station_m > lift.ship_floor_m + EPS
+        || !state.chair_fold.is_finite()
+        || !(0.0..=1.0).contains(&state.chair_fold)
+        || (state.inner_hatch_open && state.outer_hatch_open)
+    {
+        return Err(
+            "Invalid Pioneer docked pose, actuator range, or boarding-hatch interlock".into(),
+        );
+    }
+    let mut g = PioneerDockedGeometry::default();
+    let a = hatch_anchors(pose);
+    let fractions = state.hatch_fractions.unwrap_or([
+        f64::from(state.inner_hatch_open),
+        f64::from(state.outer_hatch_open),
+    ]);
+    for (index, (id, bounds, hatch)) in [
+        (
+            "boarding/inner-leaf",
+            a.inner_bounds,
+            PioneerDockedHatch::Inner,
+        ),
+        (
+            "boarding/outer-leaf",
+            a.outer_bounds,
+            PioneerDockedHatch::Outer,
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        for (leaf, bounds) in hatch_leaf_bounds(hatch, fractions[index])?
+            .into_iter()
+            .enumerate()
+        {
+            g.panel(
+                format!("{id}/{leaf}"),
+                bounds,
+                PioneerDockedMaterial::Titanium,
+                PioneerDockedCollision::Solid,
+                PioneerDockedCell::Vestibule,
+                PioneerDockedPanelKind::Door,
+            );
+        }
+        if fractions[index] > 0.0 && fractions[index] < 1.0 {
+            g.panel(
+                format!("{id}/travel-barrier"),
+                bounds,
+                PioneerDockedMaterial::Graphite,
+                PioneerDockedCollision::TraversalBarrier,
+                PioneerDockedCell::Vestibule,
+                PioneerDockedPanelKind::Door,
+            );
+        }
+    }
+    if !state.room_door_open {
+        g.block(
+            "room/connected/door",
+            deck_to_body(1, PIONEER_CONNECTED_ROOM.door_min).unwrap(),
+            deck_to_body(1, PIONEER_CONNECTED_ROOM.door_max).unwrap(),
+            PioneerDockedMaterial::Graphite,
+            PioneerDockedCollision::Solid,
+            PioneerDockedCell::Deck1,
+            PioneerDockedPanelKind::Door,
+        );
+    }
+    // The pan is a tilted rectangular box: it starts 5 mm below the existing
+    // thigh underside and rotates downward into a real unoccupied recess.
+    let tilt = (-0.2_f64).atan();
+    let fold = state.chair_fold * std::f64::consts::FRAC_PI_2;
+    let rotation = tilt - fold;
+    let (s, c) = rotation.sin_cos();
+    let hinge = bridge_point(workstation_point([33.96, 0.265218, 3.0]));
+    let length = 0.5_f64.hypot(0.1);
+    let local = [length * 0.5, -0.03, 0.0];
+    let tilt_axes = [[c, s, 0.0], [-s, c, 0.0], Z];
+    let center = add(
+        hinge,
+        add(mul(tilt_axes[0], local[0]), mul(tilt_axes[1], local[1])),
+    );
+    g.panel(
+        "pilot-chair/pan",
+        PioneerDockedBox {
+            center_m: center,
+            half_m: [length * 0.5, 0.03, 0.28],
+            axes: tilt_axes,
+        },
+        PioneerDockedMaterial::Carbon,
+        PioneerDockedCollision::Solid,
+        PioneerDockedCell::Cockpit,
+        PioneerDockedPanelKind::Furniture,
+    );
+    let floor = state.lift_floor_station_m - pose.origin_m[1];
+    let center = add(at_p(0.0, 2.4), [0.0, floor, 0.0]);
+    g.oriented_floor(
+        "boarding/lift-floor",
+        center,
+        [1.0, 0.8],
+        [T, N],
+        PioneerDockedSupport::BoardingLift,
+        PioneerDockedCell::Station,
+        [0.38, 0.0],
+    );
+    for side in [-1.0, 1.0] {
+        let x = side * 0.96;
+        g.panel(
+            format!("boarding/lift-side/{side}"),
+            pane_box(
+                [x - 0.04, floor + 0.96, 1.64],
+                [x + 0.04, floor + 1.04, 3.16],
+            ),
+            PioneerDockedMaterial::Emerald,
+            PioneerDockedCollision::Solid,
+            PioneerDockedCell::Station,
+            PioneerDockedPanelKind::Rail,
+        );
+        for n in [1.68, 3.12] {
+            g.panel(
+                format!("boarding/lift-post/{side}/{n}"),
+                pane_box(
+                    [x - 0.04, floor, n - 0.04],
+                    [x + 0.04, floor + 1.0, n + 0.04],
+                ),
+                PioneerDockedMaterial::Titanium,
+                PioneerDockedCollision::Solid,
+                PioneerDockedCell::Station,
+                PioneerDockedPanelKind::Lift,
+            );
+        }
+    }
+    for (id, n, open) in [
+        (
+            "ship",
+            1.64,
+            (state.lift_floor_station_m - lift.ship_floor_m).abs() < 0.01,
+        ),
+        ("station", 3.16, state.lift_floor_station_m.abs() < 0.01),
+    ] {
+        if !open {
+            g.panel(
+                format!("boarding/lift-gate/{id}"),
+                pane_box(
+                    [-0.92, floor + 0.96, n - 0.04],
+                    [0.92, floor + 1.04, n + 0.04],
+                ),
+                PioneerDockedMaterial::Amber,
+                PioneerDockedCollision::Solid,
+                PioneerDockedCell::Station,
+                PioneerDockedPanelKind::Rail,
+            );
+        }
+    }
+    // The existing station slab supplies this walking surface; do not duplicate
+    // it with a coplanar rendered floor or waive the station's other obstacles.
+    let n0 = if state.lift_floor_station_m.abs() < 0.01 {
+        2.4
+    } else {
+        3.5
+    };
+    g.surface(
+        "boarding/station-approach",
+        PioneerDockedSupport::Station,
+        add(at_p(0.0, (n0 + 16.0) * 0.5), [0.0, -pose.origin_m[1], 0.0]),
+        [0.6, (16.0 - n0) * 0.5],
+        [T, N],
+        [0.3, 0.0],
+    );
+    validate_geometry(&g)?;
+    Ok(g)
+}
+
+fn validate_geometry(g: &PioneerDockedGeometry) -> Result<(), String> {
+    let mut ids = std::collections::BTreeSet::new();
+    if g.panels.len() > 2048 || g.supports.len() > 256 || g.portals.len() > 64 {
+        return Err("Docked geometry exceeds its finite recipe budget".into());
+    }
+    for p in &g.panels {
+        if !p.bounds.valid() || !ids.insert(p.id.as_str()) {
+            return Err(format!("Invalid or duplicate docked panel: {}", p.id));
+        }
+    }
+    for s in &g.supports {
+        if !finite(s.center_m)
+            || s.half_m.iter().any(|v| !v.is_finite() || *v <= 0.0)
+            || s.inset_m
+                .iter()
+                .zip(s.half_m)
+                .any(|(a, b)| !a.is_finite() || *a < 0.0 || *a > b + EPS)
+            || s.axes
+                .iter()
+                .any(|a| !finite(*a) || (dot(*a, *a) - 1.0).abs() > 1e-7 || a[1].abs() > EPS)
+            || dot(s.axes[0], s.axes[1]).abs() > 1e-7
+        {
+            return Err(format!("Invalid docked support: {}", s.id));
+        }
+    }
+    Ok(())
+}
+
+fn surface_contains(surface: &PioneerDockedSurface, p: [f64; 3]) -> bool {
+    let d = sub(p, surface.center_m);
+    (0..2).all(|i| {
+        // The rounded foot meets a riser before its centre crosses the tread
+        // edge. Retain that contact while the authority limits the actual rise.
+        let contact = match surface.support {
+            PioneerDockedSupport::CoreStairs if i == 1 => STATION_AVATAR_RADIUS_M,
+            PioneerDockedSupport::Deck1 | PioneerDockedSupport::Deck2 => STATION_AVATAR_RADIUS_M,
+            _ if surface.inset_m[i] == 0.0 && surface.center_m[1] > p[1] + EPS => {
+                let rise = surface.center_m[1] - p[1];
+                (2.0 * STATION_AVATAR_RADIUS_M * rise - rise * rise)
+                    .max(0.0)
+                    .sqrt()
+            }
+            _ => 0.0,
+        };
+        dot(d, surface.axes[i]).abs() <= surface.half_m[i] - surface.inset_m[i] + contact + EPS
+    })
+}
+
+pub fn support_at_station(
+    static_geometry: &PioneerDockedGeometry,
+    dynamic: &PioneerDockedGeometry,
+    pose: PioneerDockedPose,
+    feet_station_m: [f64; 3],
+    previous: Option<PioneerDockedSupport>,
+    max_step_m: f64,
+) -> Option<PioneerDockedSupportHit> {
+    if !pose.valid() || !finite(feet_station_m) || !max_step_m.is_finite() || max_step_m < 0.0 {
+        return None;
+    }
+    let feet = station_to_body(pose, feet_station_m);
+    let mut best: Option<&PioneerDockedSurface> = None;
+    for s in static_geometry.supports.iter().chain(&dynamic.supports) {
+        if !surface_contains(s, feet) {
+            continue;
+        }
+        let riding = previous == Some(PioneerDockedSupport::BoardingLift)
+            && s.support == PioneerDockedSupport::BoardingLift;
+        if !riding && (s.center_m[1] - feet[1]).abs() > max_step_m + EPS {
+            continue;
+        }
+        if riding {
+            best = Some(s);
+            break;
+        }
+        if best.is_none_or(|b| s.center_m[1] > b.center_m[1]) {
+            best = Some(s);
+        }
+    }
+    best.map(|s| PioneerDockedSupportHit {
+        support: s.support,
+        surface_id: s.id.clone(),
+        height_m: s.center_m[1] + pose.origin_m[1],
+    })
+}
+
+/// This is a narrowly proved floor approach, not permission to ignore all hull
+/// bounds. The authority must also find support and check station obstacles.
+pub fn is_registered_station_approach(pose: PioneerDockedPose, feet_station_m: [f64; 3]) -> bool {
+    if !pose.valid() || !finite(feet_station_m) || feet_station_m[1].abs() > 0.05 {
+        return false;
+    }
+    let p = sub(station_to_body(pose, feet_station_m), P);
+    let t = dot(p, T);
+    let n = dot(p, N);
+    t.abs() <= 0.3 + EPS && (2.4 - EPS..=16.0 + EPS).contains(&n)
+}
+
+pub fn capsule_clear_station(
+    static_geometry: &PioneerDockedGeometry,
+    dynamic: &PioneerDockedGeometry,
+    pose: PioneerDockedPose,
+    feet_station_m: [f64; 3],
+) -> bool {
+    if !pose.valid() || !finite(feet_station_m) {
+        return false;
+    }
+    let feet = station_to_body(pose, feet_station_m);
+    static_geometry
+        .panels
+        .iter()
+        .chain(&dynamic.panels)
+        .all(|p| {
+            p.collision == PioneerDockedCollision::Decoration
+                || !box_intersects_capsule(p.bounds, feet, AVATAR_HEIGHT_M, STATION_AVATAR_RADIUS_M)
+        })
+}
+
+pub fn box_intersects_capsule(
+    bounds: PioneerDockedBox,
+    feet: [f64; 3],
+    height: f64,
+    radius: f64,
+) -> bool {
+    if !bounds.valid()
+        || !finite(feet)
+        || !height.is_finite()
+        || !radius.is_finite()
+        || radius <= 0.0
+        || height < radius * 2.0
+    {
+        return true;
+    }
+    let a = bounds.local(add(feet, [0.0, radius, 0.0]));
+    let b = bounds.local(add(feet, [0.0, height - radius, 0.0]));
+    segment_box_distance2(a, b, bounds.half_m) < radius * radius - EPS
+}
+
+/// Earliest hit of a swept camera sphere against the same solid/support boxes.
+/// None means the complete segment is clear; a start inside a solid returns 0.
+pub fn camera_segment_station(
+    static_geometry: &PioneerDockedGeometry,
+    dynamic: &PioneerDockedGeometry,
+    pose: PioneerDockedPose,
+    start: [f64; 3],
+    end: [f64; 3],
+    radius: f64,
+) -> Option<f64> {
+    if !pose.valid() || !finite(start) || !finite(end) || !radius.is_finite() || radius < 0.0 {
+        return Some(0.0);
+    }
+    let a = station_to_body(pose, start);
+    let b = station_to_body(pose, end);
+    static_geometry
+        .panels
+        .iter()
+        .chain(&dynamic.panels)
+        .filter(|p| p.collision != PioneerDockedCollision::Decoration)
+        .filter_map(|p| {
+            segment_box_first_hit(
+                p.bounds.local(a),
+                p.bounds.local(b),
+                p.bounds.half_m,
+                radius,
+            )
+        })
+        .min_by(f64::total_cmp)
+}
+
+fn segment_intervals(a: [f64; 3], b: [f64; 3], half: [f64; 3]) -> Vec<f64> {
+    let d = sub(b, a);
+    let mut times = vec![0.0, 1.0];
+    for i in 0..3 {
+        if d[i].abs() > EPS {
+            for face in [-half[i], half[i]] {
+                let t = (face - a[i]) / d[i];
+                if t > 0.0 && t < 1.0 {
+                    times.push(t);
+                }
+            }
+        }
+    }
+    times.sort_by(f64::total_cmp);
+    times.dedup_by(|a, b| (*a - *b).abs() < EPS);
+    times
+}
+fn distance_coefficients(a: [f64; 3], d: [f64; 3], half: [f64; 3], time: f64) -> (f64, f64, f64) {
+    let mut aa = 0.0;
+    let mut bb = 0.0;
+    let mut cc = 0.0;
+    for i in 0..3 {
+        let p = a[i] + d[i] * time;
+        let bound = if p < -half[i] {
+            -half[i]
+        } else if p > half[i] {
+            half[i]
+        } else {
+            continue;
+        };
+        let v = a[i] - bound;
+        aa += d[i] * d[i];
+        bb += 2.0 * d[i] * v;
+        cc += v * v;
+    }
+    (aa, bb, cc)
+}
+fn segment_box_distance2(a: [f64; 3], b: [f64; 3], half: [f64; 3]) -> f64 {
+    let d = sub(b, a);
+    let times = segment_intervals(a, b, half);
+    let mut best = f64::INFINITY;
+    for w in times.windows(2) {
+        let (aa, bb, cc) = distance_coefficients(a, d, half, (w[0] + w[1]) * 0.5);
+        let t = if aa > EPS {
+            (-bb / (2.0 * aa)).clamp(w[0], w[1])
+        } else {
+            w[0]
+        };
+        best = best.min((aa * t * t + bb * t + cc).max(0.0));
+    }
+    best
+}
+fn segment_box_first_hit(a: [f64; 3], b: [f64; 3], half: [f64; 3], radius: f64) -> Option<f64> {
+    let d = sub(b, a);
+    let times = segment_intervals(a, b, half);
+    for w in times.windows(2) {
+        let (aa, bb, mut cc) = distance_coefficients(a, d, half, (w[0] + w[1]) * 0.5);
+        cc -= radius * radius;
+        if aa * w[0] * w[0] + bb * w[0] + cc <= EPS {
+            return Some(w[0]);
+        }
+        if aa > EPS {
+            let disc = bb * bb - 4.0 * aa * cc;
+            if disc >= 0.0 {
+                let t = (-bb - disc.sqrt()) / (2.0 * aa);
+                if t >= w[0] - EPS && t <= w[1] + EPS {
+                    return Some(t.clamp(0.0, 1.0));
+                }
+            }
+        } else if bb.abs() > EPS {
+            let t = -cc / bb;
+            if t >= w[0] - EPS && t <= w[1] + EPS {
+                return Some(t.clamp(0.0, 1.0));
+            }
+        }
+    }
+    None
+}
+
+fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
+    [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ]
+}
+
+fn add(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
+    std::array::from_fn(|i| a[i] + b[i])
+}
+fn sub(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
+    std::array::from_fn(|i| a[i] - b[i])
+}
+fn mul(a: [f64; 3], s: f64) -> [f64; 3] {
+    a.map(|v| v * s)
+}
+fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
+    (0..3).map(|i| a[i] * b[i]).sum()
+}
+fn finite(a: [f64; 3]) -> bool {
+    a.iter().all(|v| v.is_finite())
+}
+fn normalized(a: [f64; 3]) -> [f64; 3] {
+    mul(a, 1.0 / dot(a, a).sqrt())
+}
+fn lerp(a: [f64; 3], b: [f64; 3], t: f64) -> [f64; 3] {
+    add(a, mul(sub(b, a), t))
+}
+fn finite_fraction(p: f64) -> f64 {
+    if p.is_finite() {
+        p.clamp(0.0, 1.0)
+    } else {
+        0.0
+    }
+}
+fn at_p(t: f64, n: f64) -> [f64; 3] {
+    add(P, add(mul(T, t), mul(N, n)))
+}
+fn axis_box(min: [f64; 3], max: [f64; 3]) -> PioneerDockedBox {
+    PioneerDockedBox {
+        center_m: mul(add(min, max), 0.5),
+        half_m: mul(sub(max, min), 0.5),
+        axes: [X, Y, Z],
+    }
+}
+fn pane_box(min: [f64; 3], max: [f64; 3]) -> PioneerDockedBox {
+    let c = mul(add(min, max), 0.5);
+    PioneerDockedBox {
+        center_m: add(at_p(c[0], c[2]), [0.0, c[1], 0.0]),
+        half_m: mul(sub(max, min), 0.5),
+        axes: [T, Y, N],
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn deployed_mechanism_glass_has_clear_pilot_rays_and_stowed_covers_are_opaque() {
+        let g = registered_geometry(&crate::default_pioneer()).unwrap();
+        let mut conflicts = Vec::new();
+        for standing in [0., 0.5, 1.] {
+            let eye = pilot_joints(standing).eye_m;
+            for fraction in [0., 1.] {
+                let d = cockpit_mechanism_geometry(PioneerDockedPose::private(), [fraction; 9])
+                    .unwrap();
+                for slot in 0..9 {
+                    let (center, half, axes) = cockpit_mechanism_screen(slot, fraction).unwrap();
+                    for v in [-0.95, -0.475, 0., 0.475, 0.95] {
+                        for u in [-0.95, -0.475, 0., 0.475, 0.95] {
+                            let target = add(
+                                center,
+                                add(
+                                    mul(axes[0], -0.044),
+                                    add(
+                                        mul(axes[1], v * (half[1] - 0.012)),
+                                        mul(axes[2], u * (half[2] - 0.012)),
+                                    ),
+                                ),
+                            );
+                            let hits: Vec<_> = g
+                                .panels
+                                .iter()
+                                .chain(&d.panels)
+                                .filter(|p| p.collision != PioneerDockedCollision::Decoration)
+                                .filter(|p| {
+                                    segment_box_first_hit(
+                                        p.bounds.local(eye),
+                                        p.bounds.local(target),
+                                        p.bounds.half_m,
+                                        0.,
+                                    )
+                                    .is_some()
+                                })
+                                .map(|p| p.id.clone())
+                                .collect();
+                            if fraction == 1. && !hits.is_empty() {
+                                conflicts.push(format!("slot{slot} uv{u}/{v}: {hits:?}"));
+                            }
+                            if fraction == 0. && u == 0. && v == 0. {
+                                assert!(!hits.is_empty(), "stowed {slot} lacks physical mask");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assert!(
+            conflicts.is_empty(),
+            "deployed glass blocked: {conflicts:#?}"
+        );
+    }
+
+    fn mechanism_boxes_overlap(a: PioneerDockedBox, b: PioneerDockedBox) -> bool {
+        let separation = sub(b.center_m, a.center_m);
+        let mut axes = a.axes.to_vec();
+        axes.extend(b.axes);
+        for x in a.axes {
+            for y in b.axes {
+                axes.push(cross(x, y));
+            }
+        }
+        axes.into_iter()
+            .filter(|axis| dot(*axis, *axis) > 1e-12)
+            .all(|axis| {
+                let ra = (0..3)
+                    .map(|i| a.half_m[i] * dot(a.axes[i], axis).abs())
+                    .sum::<f64>();
+                let rb = (0..3)
+                    .map(|i| b.half_m[i] * dot(b.axes[i], axis).abs())
+                    .sum::<f64>();
+                dot(separation, axis).abs() < ra + rb - 1e-7
+            })
+    }
+    #[test]
+    fn nine_mechanism_sweeps_are_disjoint_and_preserve_seat_and_rear_aisles() {
+        let sweeps: Vec<_> = (0..9)
+            .map(|i| cockpit_mechanism_sweep(i, 0., 1.).unwrap())
+            .collect();
+        for (i, a) in sweeps.iter().enumerate() {
+            assert!(a.valid());
+            for (j, b) in sweeps.iter().enumerate().skip(i + 1) {
+                assert!(!mechanism_boxes_overlap(*a, *b), "mechanism sweeps {i}/{j}");
+            }
+            for feet in [
+                [31.8, FLOOR, 0.],
+                [30.0, FLOOR, 0.],
+                [29.2, FLOOR, -1.5],
+                [31.8, FLOOR, -0.85],
+                [31.8, FLOOR, 0.85],
+            ] {
+                assert!(
+                    !box_intersects_capsule(*a, feet, AVATAR_HEIGHT_M, STATION_AVATAR_RADIUS_M),
+                    "slot {i} blocks {feet:?}"
+                );
+            }
+            for step in 0..=100 {
+                let f = step as f64 / 100.;
+                let (center, half, axes) = cockpit_mechanism_screen(i, f).unwrap();
+                for x in [-1., 1.] {
+                    for y in [-1., 1.] {
+                        for z in [-1., 1.] {
+                            let point = add(
+                                center,
+                                add(
+                                    mul(axes[0], x * half[0]),
+                                    add(mul(axes[1], y * half[1]), mul(axes[2], z * half[2])),
+                                ),
+                            );
+                            let local = a.local(point);
+                            assert!((0..3).all(|k| local[k].abs() <= a.half_m[k] + 1e-9));
+                        }
+                    }
+                }
+                assert!(cockpit_mechanism_geometry(PioneerDockedPose::private(), [f; 9]).is_ok());
+            }
+        }
+        assert!(cockpit_mechanism_screen(9, 0.).is_none());
+        assert!(cockpit_mechanism_screen(0, f64::NAN).is_none());
+        assert!(cockpit_mechanism_screen(0, 1.01).is_none());
+    }
+    #[test]
+    fn mechanism_travel_clears_existing_solids_except_declared_anchor_contacts() {
+        let g = registered_geometry(&crate::default_pioneer()).unwrap();
+        let mut conflicts = Vec::new();
+        for slot in 0..9 {
+            // Moving case's endpoint union, excluding the stem's deliberate
+            // insertion into its own fixed anchor. All other solids must clear.
+            let (a, h, axes) = cockpit_mechanism_screen(slot, 0.).unwrap();
+            let (b, _, _) = cockpit_mechanism_screen(slot, 1.).unwrap();
+            let sweep = PioneerDockedBox {
+                center_m: [a[0], (a[1] + b[1]) / 2., a[2]],
+                half_m: [
+                    h[0] + 0.020,
+                    h[1] + (a[1] - b[1]).abs() / 2. + 0.008,
+                    h[2] + 0.008,
+                ],
+                axes,
+            };
+            for p in &g.panels {
+                if p.collision == PioneerDockedCollision::Decoration {
+                    continue;
+                }
+                if mechanism_boxes_overlap(sweep, p.bounds) {
+                    conflicts.push(format!("{slot}: {}", p.id));
+                }
+            }
+        }
+        assert!(
+            conflicts.is_empty(),
+            "moving screen conflicts: {conflicts:#?}"
+        );
+    }
+
+    #[test]
+    fn seven_overhead_housings_clear_other_cassettes_and_registered_structure() {
+        let g = registered_geometry(&crate::default_pioneer()).unwrap();
+        let mut conflicts = Vec::new();
+        // The unchanged two lower turret cassettes have an existing overlapping center
+        // housing joint. This test checks the redesigned seven overhead cases
+        // against every other case and structure; all nine moving sweeps are
+        // independently required to clear solids above.
+        for slot in [0, 1, 2, 3, 4, 7, 8] {
+            let prefix = format!("cockpit/mechanism-pocket/{slot}/");
+            for case in g
+                .panels
+                .iter()
+                .filter(|p| p.id.starts_with(&prefix) && !p.id.ends_with("/anchor"))
+            {
+                for other in g.panels.iter().filter(|p| {
+                    !p.id.starts_with(&prefix) && p.collision != PioneerDockedCollision::Decoration
+                }) {
+                    if mechanism_boxes_overlap(case.bounds, other.bounds) {
+                        conflicts.push(format!("{} / {}", case.id, other.id));
+                    }
+                }
+            }
+        }
+        assert!(
+            conflicts.is_empty(),
+            "fixed cassette collisions: {conflicts:#?}"
+        );
+        for (hardware, surface) in [
+            (0, 8),
+            (1, 9),
+            (2, 10),
+            (3, 11),
+            (4, 12),
+            (5, 13),
+            (6, 14),
+            (7, 21),
+            (8, 22),
+        ] {
+            assert_eq!(cockpit_mechanism_surface_slot(hardware), Some(surface));
+            assert_eq!(cockpit_surface_mechanism_slot(surface), Some(hardware));
+        }
+        for permanent in 15..=20 {
+            assert_eq!(cockpit_surface_mechanism_slot(permanent), None);
+        }
+        assert_eq!(cockpit_mechanism_surface_slot(9), None);
+    }
+
+    #[test]
+    fn boarding_lift_station_edge_remains_blocked_by_closed_safety_gate() {
+        let document = crate::default_pioneer_room_layout();
+        let binding = crate::docked_traversal_binding(
+            "regression-pioneer".into(),
+            &document,
+            crate::FleetLayoutRevision::CircularV1,
+            true,
+        );
+        let pose = crate::docked_binding_pose(&binding).unwrap();
+        let geometry = registered_geometry(&document).unwrap();
+        let feet = [35.21121219213874, 0.0, 12.87997700947309];
+        let mut actuator = state(pose);
+        actuator.hatch_fractions = Some([0.0, 0.0]);
+        actuator.inner_hatch_open = false;
+        actuator.outer_hatch_open = false;
+        actuator.lift_floor_station_m = 0.0;
+        let at_station = dynamic_geometry(pose, actuator).unwrap();
+        assert!(capsule_clear_station(&geometry, &at_station, pose, feet));
+        for height in [0.005, 0.01, 0.025, 0.05] {
+            actuator.lift_floor_station_m = height;
+            let dynamic = dynamic_geometry(pose, actuator).unwrap();
+            let riding = [feet[0], height, feet[2]];
+            let blocked = blockers(&geometry, &dynamic, station_to_body(pose, riding));
+            eprintln!("lift floor {height}: capsule blockers {blocked:?}");
+            if height < 0.01 {
+                assert!(blocked.is_empty());
+            } else {
+                assert_eq!(blocked, vec!["boarding/lift-gate/station"]);
+            }
+        }
+    }
+
+    fn state(pose: PioneerDockedPose) -> PioneerDockedActuators {
+        PioneerDockedActuators {
+            hatch_fractions: None,
+            room_door_open: true,
+            inner_hatch_open: true,
+            outer_hatch_open: false,
+            lift_floor_station_m: lift_geometry(pose).ship_floor_m,
+            chair_fold: 1.0,
+        }
+    }
+    fn blockers(
+        g: &PioneerDockedGeometry,
+        d: &PioneerDockedGeometry,
+        feet: [f64; 3],
+    ) -> Vec<String> {
+        g.panels
+            .iter()
+            .chain(&d.panels)
+            .filter(|p| {
+                p.collision != PioneerDockedCollision::Decoration
+                    && box_intersects_capsule(
+                        p.bounds,
+                        feet,
+                        AVATAR_HEIGHT_M,
+                        STATION_AVATAR_RADIUS_M,
+                    )
+            })
+            .map(|p| p.id.clone())
+            .collect()
+    }
+    fn walk(
+        g: &PioneerDockedGeometry,
+        d: &PioneerDockedGeometry,
+        pose: PioneerDockedPose,
+        feet: &mut [f64; 3],
+        target: [f64; 2],
+        previous: &mut Option<PioneerDockedSupport>,
+    ) {
+        let start = station_to_body(pose, *feet);
+        let count = ((target[0] - start[0]).hypot(target[1] - start[2]) / 0.025)
+            .ceil()
+            .max(1.0) as usize;
+        for i in 1..=count {
+            let t = i as f64 / count as f64;
+            let old = station_to_body(pose, *feet);
+            let body = [
+                start[0] + (target[0] - start[0]) * t,
+                old[1],
+                start[2] + (target[1] - start[2]) * t,
+            ];
+            let mut next = body_to_station(pose, body);
+            let hit = support_at_station(g, d, pose, next, *previous, 0.24)
+                .unwrap_or_else(|| panic!("No support at body {body:?}; previous={previous:?}"));
+            assert!(
+                (hit.height_m - feet[1]).abs() <= 0.24 + 1e-7
+                    || *previous == Some(PioneerDockedSupport::BoardingLift)
+            );
+            next[1] = hit.height_m;
+            let b = station_to_body(pose, next);
+            assert!(
+                capsule_clear_station(g, d, pose, next),
+                "Blocked body {b:?}: {:?}",
+                blockers(g, d, b)
+            );
+            *feet = next;
+            *previous = Some(hit.support);
+        }
+    }
+
+    #[test]
+    fn transforms_keep_metres_room_documents_and_station_frames_distinct() {
+        let source = crate::default_pioneer();
+        let before = source.clone();
+        let geometry = registered_geometry(&source).unwrap();
+        assert_eq!(source, before);
+        for pose in [
+            PioneerDockedPose::private(),
+            PioneerDockedPose::fleet(FleetLayoutRevision::LinearV1),
+            PioneerDockedPose::fleet(FleetLayoutRevision::CircularV1),
+            PioneerDockedPose {
+                origin_m: [123.0, 13.0, -91.0],
+                yaw: 1.27,
+            },
+        ] {
+            for p in [[0.0; 3], [34.54, FLOOR, 3.0], [-12.0, -4.12, -7.0]] {
+                let back = station_to_body(pose, body_to_station(pose, p));
+                assert!((0..3).all(|i| (back[i] - p[i]).abs() < 1e-10));
+            }
+            assert_eq!(lift_geometry(pose).ship_floor_m, pose.origin_m[1] + FLOOR);
+        }
+        assert_eq!(deck_to_body(1, [0.0, 0.0, 0.0]), Some([-12.0, -4.12, -7.0]));
+        assert_eq!(deck_to_body(2, [32.0, 0.0, 7.0]), Some([20.0, FLOOR, 0.0]));
+        assert!(deck_to_body(3, [0.0; 3]).is_none());
+        assert!(deck_to_body(1, [f64::NAN, 0.0, 0.0]).is_none());
+        assert_eq!(geometry, registered_geometry(&source).unwrap());
+        assert!(geometry.panels.len() < 1280 && geometry.supports.len() < 192);
+        assert!(geometry.panels.iter().all(|p| p.bounds.valid()));
+    }
+
+    #[test]
+    fn actual_capsule_walks_both_stair_flights_up_and_down_without_moving_cabinet() {
+        let g = registered_geometry(&crate::default_pioneer()).unwrap();
+        for pose in [
+            PioneerDockedPose::private(),
+            PioneerDockedPose::fleet(FleetLayoutRevision::LinearV1),
+            PioneerDockedPose::fleet(FleetLayoutRevision::CircularV1),
+            PioneerDockedPose {
+                origin_m: [70.0, 13.0, -20.0],
+                yaw: 0.81,
+            },
+        ] {
+            let d = dynamic_geometry(pose, state(pose)).unwrap();
+            let mut feet = body_to_station(pose, deck_to_body(1, [4.8, 0.0, 7.0]).unwrap());
+            let mut previous = Some(PioneerDockedSupport::Deck1);
+            let route = [
+                [2.0, 7.0],
+                [2.0, 5.8],
+                [0.9, 5.8],
+                [0.9, 1.0],
+                [3.1, 1.0],
+                [3.1, 5.8],
+                [2.0, 5.8],
+                [2.0, 7.0],
+                [4.8, 7.0],
+            ];
+            for [x, z] in route {
+                walk(&g, &d, pose, &mut feet, [x - 12.0, z - 7.0], &mut previous);
+            }
+            assert!((feet[1] - (pose.origin_m[1] + FLOOR)).abs() < 1e-8);
+            for [x, z] in route
+                .into_iter()
+                .rev()
+                .skip(1)
+                .chain(std::iter::once([4.8, 7.0]))
+            {
+                walk(&g, &d, pose, &mut feet, [x - 12.0, z - 7.0], &mut previous);
+            }
+            assert!((feet[1] - (pose.origin_m[1] - 4.12)).abs() < 1e-8);
+        }
+        let cabinet = g
+            .panels
+            .iter()
+            .find(|p| p.id == "deck1/access-cabinet")
+            .unwrap();
+        let expected = axis_box([-11.3, -4.12, -0.55], [-11.0, -2.82, 0.55]);
+        assert!((0..3).all(
+            |i| (cabinet.bounds.center_m[i] - expected.center_m[i]).abs() < EPS
+                && (cabinet.bounds.half_m[i] - expected.half_m[i]).abs() < EPS
+        ));
+        // The real wells, rather than hidden whole slabs, leave the stair heads
+        // clear while preserving ceiling geometry in the adjacent rooms.
+        for hole in well_rectangles() {
+            let x = (hole[0] + hole[2]) * 0.5 - 12.0;
+            let z = (hole[1] + hole[3]) * 0.5 - 7.0;
+            assert!(!g
+                .panels
+                .iter()
+                .filter(|p| p.id.starts_with("deck1/ceiling/") || p.id.starts_with("deck2/floor/"))
+                .any(|p| {
+                    let q = p.bounds.local([x, p.bounds.center_m[1], z]);
+                    q[0].abs() < p.bounds.half_m[0] - EPS && q[2].abs() < p.bounds.half_m[2] - EPS
+                }));
+        }
+    }
+
+    #[test]
+    fn raised_side_windows_clear_seated_and_standing_horizontal_horizon() {
+        let g = registered_geometry(&crate::default_pioneer()).unwrap();
+        for standing in [0.0, 1.0] {
+            let eye = pilot_joints(standing).eye_m;
+            for side in [-1.0, 1.0] {
+                let end = [eye[0], eye[1], side * 3.1];
+                let hits: Vec<_> = g
+                    .panels
+                    .iter()
+                    .filter(|p| {
+                        p.collision != PioneerDockedCollision::Decoration
+                            && p.material != PioneerDockedMaterial::Glass
+                            && segment_box_first_hit(
+                                p.bounds.local(eye),
+                                p.bounds.local(end),
+                                p.bounds.half_m,
+                                0.0,
+                            )
+                            .is_some()
+                    })
+                    .map(|p| p.id.as_str())
+                    .collect();
+                assert!(
+                    hits.is_empty(),
+                    "side horizon standing={standing} side={side}: {hits:?}"
+                );
+                assert!(
+                    g.panels
+                        .iter()
+                        .any(|p| p.material == PioneerDockedMaterial::Glass
+                            && segment_box_first_hit(
+                                p.bounds.local(eye),
+                                p.bounds.local(end),
+                                p.bounds.half_m,
+                                0.0
+                            )
+                            .is_some()),
+                    "side horizon must cross an actual window"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn raised_bridge_three_flights_are_a_continuous_capsule_route_in_all_placements() {
+        let g = registered_geometry(&crate::default_pioneer()).unwrap();
+        for pose in [
+            PioneerDockedPose::private(),
+            PioneerDockedPose::fleet(FleetLayoutRevision::LinearV1),
+            PioneerDockedPose::fleet(FleetLayoutRevision::CircularV1),
+            PioneerDockedPose {
+                origin_m: [70., 15.35, -20.],
+                yaw: 0.81,
+            },
+        ] {
+            let d = dynamic_geometry(pose, state(pose)).unwrap();
+            let mut feet = body_to_station(pose, [19.5, FLOOR, 0.]);
+            let mut previous = Some(PioneerDockedSupport::Deck2);
+            let route = [
+                [20.5, 0.],
+                [20.5, -1.30],
+                [26.4, -1.30],
+                [26.4, 1.30],
+                [20.5, 1.30],
+                [20.5, -1.30],
+                [26.4, -1.30],
+                [26.4, 0.],
+                [29.2, 0.],
+            ];
+            for target in route {
+                walk(&g, &d, pose, &mut feet, target, &mut previous);
+            }
+            assert!((feet[1] - pose.origin_m[1] - FLOOR - PIONEER_BRIDGE_RISE_M).abs() < 1e-7);
+            for target in route.into_iter().rev().skip(1).chain([[19.5, 0.]]) {
+                walk(&g, &d, pose, &mut feet, target, &mut previous);
+            }
+            assert!((feet[1] - pose.origin_m[1] - FLOOR).abs() < 1e-7);
+        }
+    }
+
+    #[test]
+    fn fitted_cockpit_has_continuous_rear_chair_circulation() {
+        let g = registered_geometry(&crate::default_pioneer()).unwrap();
+        for pose in [
+            PioneerDockedPose::private(),
+            PioneerDockedPose::fleet(FleetLayoutRevision::CircularV1),
+        ] {
+            let d = dynamic_geometry(pose, state(pose)).unwrap();
+            let mut feet = seat_anchors(pose).root_station_m;
+            let mut previous = Some(PioneerDockedSupport::Cockpit);
+            // Walk from the folded seat around its port side, through the aft
+            // aisle, around the starboard side, and back to the same seat root.
+            // Every 25 mm sample uses full-height capsule and floor collision.
+            for target in [
+                [31.62, 0.0],
+                [31.62, -0.76],
+                [29.2, -0.76],
+                [29.2, 0.76],
+                [31.62, 0.76],
+                [31.62, 0.0],
+                [31.80, 0.0],
+            ] {
+                walk(&g, &d, pose, &mut feet, target, &mut previous);
+            }
+            assert!((0..3).all(|i| (feet[i] - seat_anchors(pose).root_station_m[i]).abs() < 1e-8));
+        }
+    }
+
+    #[test]
+    fn fitted_seat_egress_and_interlocked_boarding_route_have_continuous_support() {
+        let g = registered_geometry(&crate::default_pioneer()).unwrap();
+        for pose in [
+            PioneerDockedPose::private(),
+            PioneerDockedPose::fleet(FleetLayoutRevision::LinearV1),
+            PioneerDockedPose::fleet(FleetLayoutRevision::CircularV1),
+        ] {
+            let mut a = state(pose);
+            let mut d = dynamic_geometry(pose, a).unwrap();
+            let mut feet = seat_anchors(pose).root_station_m;
+            let mut previous = Some(PioneerDockedSupport::Cockpit);
+            assert!(capsule_clear_station(&g, &d, pose, feet));
+            for point in [
+                [31.62, 0.0],
+                [31.62, -0.76],
+                [29.2, -0.76],
+                [28.0, 0.0],
+                [26.4, 0.0],
+                [26.4, -1.30],
+                [20.5, -1.30],
+                [20.5, 1.30],
+                [26.4, 1.30],
+                [26.4, -1.30],
+                [20.5, -1.30],
+                [20.5, 0.0],
+                [29.2, 0.0],
+                [29.2, -3.5],
+                [34.1, -3.5],
+                [34.1, -7.8],
+            ] {
+                walk(&g, &d, pose, &mut feet, point, &mut previous);
+            }
+            let anchors = hatch_anchors(pose);
+            assert!((0..3).all(|i| (feet[i] - anchors.inner_inside_station_m[i]).abs() < 1e-8));
+            let inner_out = station_to_body(pose, anchors.inner_outside_station_m);
+            walk(
+                &g,
+                &d,
+                pose,
+                &mut feet,
+                [inner_out[0], inner_out[2]],
+                &mut previous,
+            );
+            assert!(!hatch_occupied(pose, PioneerDockedHatch::Inner, feet));
+            a.inner_hatch_open = false;
+            a.outer_hatch_open = true;
+            d = dynamic_geometry(pose, a).unwrap();
+            let outer_in = station_to_body(pose, anchors.outer_inside_station_m);
+            walk(
+                &g,
+                &d,
+                pose,
+                &mut feet,
+                [outer_in[0], outer_in[2]],
+                &mut previous,
+            );
+            let outer_out = station_to_body(pose, anchors.outer_outside_station_m);
+            walk(
+                &g,
+                &d,
+                pose,
+                &mut feet,
+                [outer_out[0], outer_out[2]],
+                &mut previous,
+            );
+            let center = station_to_body(pose, lift_geometry(pose).center_station_m);
+            walk(
+                &g,
+                &d,
+                pose,
+                &mut feet,
+                [center[0], center[2]],
+                &mut previous,
+            );
+            assert_eq!(previous, Some(PioneerDockedSupport::BoardingLift));
+            assert!((feet[1] - lift_geometry(pose).ship_floor_m).abs() < 1e-8);
+            a.outer_hatch_open = false;
+            for i in 0..=40 {
+                a.lift_floor_station_m = lift_geometry(pose).ship_floor_m * (1.0 - i as f64 / 40.0);
+                d = dynamic_geometry(pose, a).unwrap();
+                let hit = support_at_station(&g, &d, pose, feet, previous, 0.24).unwrap();
+                feet[1] = hit.height_m;
+                assert_eq!(hit.support, PioneerDockedSupport::BoardingLift);
+                assert!(capsule_clear_station(&g, &d, pose, feet));
+            }
+            let target = at_p(0.0, 16.0);
+            walk(
+                &g,
+                &d,
+                pose,
+                &mut feet,
+                [target[0], target[2]],
+                &mut previous,
+            );
+            assert_eq!(previous, Some(PioneerDockedSupport::Station));
+            assert!(feet[1].abs() < EPS && is_registered_station_approach(pose, feet));
+            if pose == PioneerDockedPose::fleet(FleetLayoutRevision::LinearV1) {
+                assert!(crate::fleet_walkable(FleetLayoutRevision::LinearV1, feet));
+            }
+        }
+    }
+
+    #[test]
+    fn door_occupancy_lift_height_and_camera_queries_use_the_same_three_dimensional_boxes() {
+        let pose = PioneerDockedPose::private();
+        let g = registered_geometry(&crate::default_pioneer()).unwrap();
+        let mut a = state(pose);
+        a.inner_hatch_open = false;
+        let d = dynamic_geometry(pose, a).unwrap();
+        let h = hatch_anchors(pose);
+        let middle = body_to_station(pose, sub(h.inner_bounds.center_m, [0.0, 1.2, 0.0]));
+        assert!(hatch_occupied(pose, PioneerDockedHatch::Inner, middle));
+        assert!(!capsule_clear_station(&g, &d, pose, middle));
+        let start = add(h.inner_inside_station_m, [0.0, 1.65, 0.0]);
+        let end = add(h.inner_outside_station_m, [0.0, 1.65, 0.0]);
+        assert!(camera_segment_station(&g, &d, pose, start, end, 0.08).is_some());
+        a.inner_hatch_open = true;
+        let d = dynamic_geometry(pose, a).unwrap();
+        assert!(camera_segment_station(&g, &d, pose, start, end, 0.08).is_none());
+        a.outer_hatch_open = true;
+        assert!(dynamic_geometry(pose, a).is_err());
+        a.outer_hatch_open = false;
+        a.lift_floor_station_m = 99.0;
+        assert!(dynamic_geometry(pose, a).is_err());
+        assert!(!capsule_clear_station(&g, &d, pose, [f64::NAN, 0.0, 0.0]));
+        let floor = body_to_station(pose, [0.0, FLOOR, 0.0]);
+        assert!(support_at_station(&g, &d, pose, floor, None, 1.5).is_some());
+        assert!(support_at_station(&g, &d, pose, floor, None, f64::INFINITY).is_none());
+    }
+
+    #[test]
+    fn pilot_joints_and_pan_have_fixed_roots_and_a_real_continuous_stow_recess() {
+        let pose = PioneerDockedPose::private();
+        let g = registered_geometry(&crate::default_pioneer()).unwrap();
+        let mut a = state(pose);
+        let frame: Vec<_> = g
+            .panels
+            .iter()
+            .filter(|p| p.id.starts_with("pilot-chair/"))
+            .collect();
+        for i in 0..=1000 {
+            a.chair_fold = i as f64 / 1000.0;
+            let d = dynamic_geometry(pose, a).unwrap();
+            let pan = &d
+                .panels
+                .iter()
+                .find(|p| p.id == "pilot-chair/pan")
+                .unwrap()
+                .bounds;
+            for sx in [-1.0, 1.0] {
+                for sy in [-1.0, 1.0] {
+                    for sz in [-1.0, 1.0] {
+                        let p = add(
+                            pan.center_m,
+                            add(
+                                mul(pan.axes[0], sx * pan.half_m[0]),
+                                add(
+                                    mul(pan.axes[1], sy * pan.half_m[1]),
+                                    mul(pan.axes[2], sz * pan.half_m[2]),
+                                ),
+                            ),
+                        );
+                        assert!(p[1] > FLOOR + 0.06);
+                        for panel in &frame {
+                            let q = panel.bounds.local(p);
+                            assert!(
+                                !(0..3).all(|axis| q[axis].abs() < panel.bounds.half_m[axis] - EPS),
+                                "{} intersects pan at {}",
+                                panel.id,
+                                a.chair_fold
+                            );
+                        }
+                    }
+                }
+            }
+            let (fold, standing) = seat_transition_pose(true, i as f64 / 1000.0);
+            let joints = pilot_joints(standing);
+            assert!(
+                (joints.root_m[0] - 31.8).abs() < EPS
+                    && joints.root_m[1] == FLOOR + PIONEER_BRIDGE_RISE_M
+                    && joints.root_m[2] == 0.0
+            );
+            assert!(standing == 0.0 || (fold - 1.0).abs() < EPS);
+            assert!(joints
+                .hands_m
+                .iter()
+                .all(|p| p[1] > PIONEER_BRIDGE_RISE_M + 0.48));
+            let reverse = seat_transition_pose(false, 1.0 - i as f64 / 1000.0);
+            assert!((reverse.0 - fold).abs() < EPS && (reverse.1 - standing).abs() < EPS);
+        }
+        assert!((pilot_joints(0.0).eye_m[0] - 31.48).abs() < EPS);
+        assert_eq!(
+            pilot_joints(0.0).eye_m[1..],
+            [1.35 + PIONEER_BRIDGE_RISE_M, 0.0]
+        );
+        assert!((pilot_joints(1.0).eye_m[0] - 31.8).abs() < EPS);
+        assert_eq!(
+            pilot_joints(1.0).eye_m[1..],
+            [1.33 + PIONEER_BRIDGE_RISE_M, 0.0]
+        );
+        let (center, half) = cockpit_screen(3).unwrap();
+        assert!(center
+            .iter()
+            .zip(bridge_point([32.90, 0.95, 0.0]))
+            .all(|(a, b)| (a - b).abs() < EPS));
+        assert_eq!(half, [0.020, 0.22, 0.36]);
+        assert!(cockpit_screen(8).is_none());
+    }
+
+    #[test]
+    fn physical_dial_rims_share_content_frames_and_leave_dials_open() {
+        let g = registered_geometry(&crate::default_pioneer()).unwrap();
+        let mut total = 0;
+        for (slot, dial_count) in [(1, 1), (2, 2)] {
+            let (center, half) = cockpit_screen(slot).unwrap();
+            let axes = cockpit_screen_axes(slot).unwrap();
+            let height = 2.0 * (half[1] - 0.008);
+            let width = 2.0 * (half[2] - 0.008);
+            let radius = PIONEER_DIAL_RADIUS_HEIGHT * height;
+            for (dial, &[u, v]) in PIONEER_DIAL_CENTERS[..dial_count].iter().enumerate() {
+                let dial_center = add(
+                    center,
+                    add(
+                        mul(axes[0], -0.032),
+                        add(
+                            mul(axes[1], (0.5 - v) * height),
+                            mul(axes[2], (u - 0.5) * width),
+                        ),
+                    ),
+                );
+                let prefix = format!("cockpit/screen/{slot}/dial/{dial}/rim/");
+                let parts: Vec<_> = g
+                    .panels
+                    .iter()
+                    .filter(|p| p.id.starts_with(&prefix))
+                    .collect();
+                assert_eq!(parts.len(), 16);
+                total += parts.len();
+                for part in parts {
+                    let d = sub(part.bounds.center_m, dial_center);
+                    assert!(
+                        dot(d, part.bounds.axes[1]) - part.bounds.half_m[1] >= radius + 0.001 - EPS,
+                        "{} covers its real dial interior",
+                        part.id
+                    );
+                    for x in [-1.0, 1.0] {
+                        for y in [-1.0, 1.0] {
+                            for z in [-1.0, 1.0] {
+                                let corner = add(
+                                    part.bounds.center_m,
+                                    add(
+                                        mul(part.bounds.axes[0], x * part.bounds.half_m[0]),
+                                        add(
+                                            mul(part.bounds.axes[1], y * part.bounds.half_m[1]),
+                                            mul(part.bounds.axes[2], z * part.bounds.half_m[2]),
+                                        ),
+                                    ),
+                                );
+                                let local = sub(corner, center);
+                                assert!(
+                                    dot(local, axes[0]) >= -0.038 - EPS
+                                        && dot(local, axes[0]) <= -0.026 + EPS
+                                );
+                                assert!(dot(local, axes[1]).abs() <= half[1] - 0.008 + EPS);
+                                assert!(
+                                    dot(local, axes[2]).abs() <= half[2] - 0.008 + EPS,
+                                    "{} leaves its existing power/navigation case envelope",
+                                    part.id
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assert_eq!(total, 48);
+        assert!(
+            !g.panels
+                .iter()
+                .any(|p| p.id.starts_with("cockpit/screen/1/dial/1/")),
+            "Navigation range is a rectangular readout, not a second dial"
+        );
+    }
+
+    #[test]
+    fn lower_instruments_have_round_backings_and_open_center_rays() {
+        let g = registered_geometry(&crate::default_pioneer()).unwrap();
+        for (slot, count) in [(1, 1), (2, 2)] {
+            assert!(
+                !g.panels
+                    .iter()
+                    .any(|p| p.id == format!("cockpit/screen/{slot}/backing")
+                        || p.id == format!("cockpit/screen/{slot}/bezel")
+                        || p.id.starts_with(&format!("cockpit/screen/{slot}/rim/"))),
+                "Lower modules must not retain the old whole rectangular face"
+            );
+            let (center, half) = cockpit_screen(slot).unwrap();
+            let axes = cockpit_screen_axes(slot).unwrap();
+            let width = 2.0 * (half[2] - 0.008);
+            let height = 2.0 * (half[1] - 0.008);
+            let radius = PIONEER_DIAL_RADIUS_HEIGHT * height;
+            for (dial, &[u, v]) in PIONEER_DIAL_CENTERS[..count].iter().enumerate() {
+                let mid = add(
+                    center,
+                    add(
+                        mul(axes[0], -0.032),
+                        add(
+                            mul(axes[1], (0.5 - v) * height),
+                            mul(axes[2], (u - 0.5) * width),
+                        ),
+                    ),
+                );
+                let prefix = format!("cockpit/screen/{slot}/dial/{dial}/");
+                let backing: Vec<_> = g
+                    .panels
+                    .iter()
+                    .filter(|p| p.id.starts_with(&format!("{prefix}backing/")))
+                    .collect();
+                assert_eq!(backing.len(), 16);
+                for part in &backing {
+                    assert!(
+                        part.bounds.half_m[1].hypot(part.bounds.half_m[2]) <= radius + 0.002 + EPS
+                    );
+                    assert!(
+                        part.bounds.half_m[1] >= radius,
+                        "Backing must cover the full real dial"
+                    );
+                    let d = sub(part.bounds.center_m, mid);
+                    assert!((dot(d, axes[0]) - 0.006).abs() < EPS);
+                    assert!(dot(d, axes[1]).abs() < EPS && dot(d, axes[2]).abs() < EPS);
+                }
+                let intersects = |panel: &PioneerDockedPanel, a, b| {
+                    let local = |point| {
+                        let d = sub(point, panel.bounds.center_m);
+                        panel.bounds.axes.map(|axis| dot(d, axis))
+                    };
+                    segment_box_first_hit(local(a), local(b), panel.bounds.half_m, 0.0).is_some()
+                };
+                let rims: Vec<_> = g
+                    .panels
+                    .iter()
+                    .filter(|p| p.id.starts_with(&format!("{prefix}rim/")))
+                    .collect();
+                for offset in [
+                    [0.0, 0.0],
+                    [radius, 0.0],
+                    [-radius, 0.0],
+                    [0.0, radius],
+                    [0.0, -radius],
+                ] {
+                    let target = add(mid, add(mul(axes[1], offset[0]), mul(axes[2], offset[1])));
+                    let before = add(target, mul(axes[0], -0.020));
+                    assert!(
+                        rims.iter().all(|p| !intersects(p, before, target)),
+                        "Physical rim blocks a dial center/edge ray"
+                    );
+                    let after = add(target, mul(axes[0], 0.020));
+                    assert!(
+                        backing.iter().any(|p| intersects(p, target, after)),
+                        "Visible dial lacks a physical backing"
+                    );
+                }
+            }
+        }
+        assert_eq!(
+            g.panels
+                .iter()
+                .filter(|p| p.id.starts_with("cockpit/screen/1/range/"))
+                .count(),
+            5
+        );
+    }
+
+    #[test]
+    fn inclined_console_cases_share_real_mounts_and_leave_live_planes_open() {
+        let g = registered_geometry(&crate::default_pioneer()).unwrap();
+        for slot in (1..8).chain(std::iter::once(15)) {
+            let (center, half) = cockpit_screen(slot).unwrap();
+            let axes = cockpit_screen_axes(slot).unwrap();
+            let prefix = format!("cockpit/console/mount/{slot}/");
+            let parts: Vec<_> = g
+                .panels
+                .iter()
+                .filter(|p| p.id.starts_with(&prefix))
+                .collect();
+            assert_eq!(parts.len(), 5);
+            for part in parts {
+                assert_eq!(part.collision, PioneerDockedCollision::Solid);
+                assert_eq!(part.bounds.axes, axes);
+                let d = sub(part.bounds.center_m, center);
+                // Every structural case either stays behind the live plane or
+                // outside its full rectangular aperture, for all seven faces.
+                assert!(
+                    dot(d, axes[0]) - part.bounds.half_m[0] > -0.032
+                        || dot(d, axes[1]).abs() - part.bounds.half_m[1] >= half[1] - EPS
+                        || dot(d, axes[2]).abs() - part.bounds.half_m[2] >= half[2] - EPS,
+                    "{} covers glass",
+                    part.id
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn refitted_faces_are_glanceable_and_clear_through_camera_travel() {
+        let g = registered_geometry(&crate::default_pioneer()).unwrap();
+        let mut conflicts = Vec::new();
+        for standing in [0., 0.5, 1.] {
+            let eye = pilot_joints(standing).eye_m;
+            for fraction in [0., 0.25, 0.5, 0.75, 1.] {
+                let moving =
+                    cockpit_mechanism_geometry(PioneerDockedPose::private(), [fraction; 9])
+                        .unwrap();
+                for slot in 1..8 {
+                    // All permanent faces must be clear at both stable endpoints.
+                    // During travel the rising turret faces cross front readouts;
+                    // side faces remain clear through every sampled travel pose.
+                    if slot < 6 && fraction != 0. && fraction != 1. {
+                        continue;
+                    }
+                    let (center, half) = cockpit_screen(slot).unwrap();
+                    let axes = cockpit_screen_axes(slot).unwrap();
+                    assert!((center[2].abs() / (center[0] - eye[0])).atan().to_degrees() <= 44.);
+                    for u in [-0.8, -0.4, 0., 0.4, 0.8] {
+                        for v in [-0.8, -0.4, 0., 0.4, 0.8] {
+                            let target = add(
+                                center,
+                                add(
+                                    mul(axes[0], -0.033),
+                                    add(mul(axes[1], v * half[1]), mul(axes[2], u * half[2])),
+                                ),
+                            );
+                            for panel in g
+                                .panels
+                                .iter()
+                                .chain(&moving.panels)
+                                .filter(|p| p.collision != PioneerDockedCollision::Decoration)
+                                .filter(|p| {
+                                    !(slot == 1 || slot == 2)
+                                        || !p.id.starts_with(&format!("cockpit/screen/{slot}/"))
+                                })
+                            {
+                                if segment_box_first_hit(
+                                    panel.bounds.local(eye),
+                                    panel.bounds.local(target),
+                                    panel.bounds.half_m,
+                                    0.,
+                                )
+                                .is_some()
+                                {
+                                    conflicts.push(format!(
+                                        "slot{slot} stand{standing} travel{fraction} uv{u}/{v}: {}",
+                                        panel.id
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assert!(conflicts.is_empty(), "side glass blocked: {conflicts:#?}");
+    }
+
+    #[test]
+    fn redesigned_chamber_has_centerline_seat_rear_entry_and_real_side_wings() {
+        let g = registered_geometry(&crate::default_pioneer()).unwrap();
+        assert_eq!(PIONEER_DOCKED_REGISTRATION_REVISION, 12);
+        assert_eq!(pilot_joints(0.0).eye_m[2], 0.0);
+        assert_eq!(pilot_joints(1.0).root_m[2], 0.0);
+        let portal = g
+            .portals
+            .iter()
+            .find(|p| p.id == "cockpit/backwall-portal")
+            .unwrap();
+        assert_eq!(portal.center_m[2], 0.0);
+        for slot in [6, 7] {
+            let (c, _) = cockpit_screen(slot).unwrap();
+            assert!(c[0] > cockpit_screen(3).unwrap().0[0]);
+            let eye = pilot_joints(0.0).eye_m;
+            let bearing = (c[2].abs() / (c[0] - eye[0])).atan().to_degrees();
+            assert!(bearing <= 40.0, "side face requires {bearing} degree turn");
+            assert!(c[2].abs() > 1.4);
+        }
+        assert!(g
+            .panels
+            .iter()
+            .any(|p| p.id == "cockpit/console/wing/-1/bench"));
+        assert!(g
+            .panels
+            .iter()
+            .any(|p| p.id == "cockpit/console/wing/1/bench"));
+    }
+
+    #[test]
+    fn room_program_reservations_are_solid_bounded_and_leave_entry_centers_open() {
+        let document = crate::default_pioneer();
+        let g = registered_geometry(&document).unwrap();
+        for room in &document.rooms {
+            let prefix = format!("room/{}/program/", room.id);
+            let panels: Vec<_> = g
+                .panels
+                .iter()
+                .filter(|p| p.id.starts_with(&prefix))
+                .collect();
+            if room.source_room_id.as_deref() == Some("D2-S1") {
+                assert!(panels.is_empty(), "Galley keeps its existing shared recipe");
+                continue;
+            }
+            assert!(
+                !panels.is_empty(),
+                "{} needs actual program geometry",
+                room.name
+            );
+            for panel in panels {
+                assert_eq!(panel.collision, PioneerDockedCollision::Solid);
+                assert!(panel.bounds.valid());
+                let entry = deck_to_body(
+                    room.deck,
+                    [
+                        room.door_center_xz_m[0],
+                        0.0,
+                        room.origin_xz_m[1] + room.clear_lwh_m[1] * 0.5,
+                    ],
+                )
+                .unwrap();
+                assert!(
+                    !box_intersects_capsule(
+                        panel.bounds,
+                        entry,
+                        AVATAR_HEIGHT_M,
+                        STATION_AVATAR_RADIUS_M
+                    ),
+                    "{} blocks room center",
+                    panel.id
+                );
+                let min = deck_to_body(room.deck, [room.origin_xz_m[0], 0.0, room.origin_xz_m[1]])
+                    .unwrap();
+                let max = deck_to_body(
+                    room.deck,
+                    [
+                        room.origin_xz_m[0] + room.clear_lwh_m[0],
+                        room.clear_lwh_m[2],
+                        room.origin_xz_m[1] + room.clear_lwh_m[1],
+                    ],
+                )
+                .unwrap();
+                for axis in 0..3 {
+                    assert!(
+                        panel.bounds.center_m[axis] - panel.bounds.half_m[axis] >= min[axis] - EPS
+                    );
+                    assert!(
+                        panel.bounds.center_m[axis] + panel.bounds.half_m[axis] <= max[axis] + EPS
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn cockpit_instrument_banks_preserve_leg_well_through_seat_transition() {
+        let g = registered_geometry(&crate::default_pioneer()).unwrap();
+        let bank: Vec<_> = g
+            .panels
+            .iter()
+            .filter(|p| p.id.starts_with("cockpit/console/") && p.id != "cockpit/console/footrest")
+            .collect();
+        assert!(!bank.is_empty());
+        for i in 0..=100 {
+            let joints = pilot_joints(i as f64 / 100.0);
+            for joint in joints.feet_m.iter().chain(joints.knees_m.iter()) {
+                for panel in &bank {
+                    let feet = add(*joint, [0.0, -0.065, 0.0]);
+                    assert!(
+                        !box_intersects_capsule(panel.bounds, feet, 0.13, 0.065),
+                        "{} clips pilot leg at transition {}",
+                        panel.id,
+                        i
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn capsule_and_camera_use_exact_segment_to_oriented_box_distance() {
+        let b = axis_box([-1.0, 0.0, -1.0], [1.0, 1.0, 1.0]);
+        assert!(!box_intersects_capsule(b, [1.3, 0.0, 0.0], 1.8, 0.3));
+        assert!(box_intersects_capsule(b, [1.29, 0.0, 0.0], 1.8, 0.3));
+        assert!(!box_intersects_capsule(b, [0.0, 1.0, 0.0], 1.8, 0.3));
+        assert!(!box_intersects_capsule(b, [0.0, 2.0, 0.0], 1.8, 0.3));
+        assert!(box_intersects_capsule(b, [0.0, 0.9, 0.0], 1.8, 0.3));
+        assert!(
+            (segment_box_first_hit([-3.0, 0.0, 0.0], [3.0, 0.0, 0.0], [1.0; 3], 0.2).unwrap()
+                - 0.3)
+                .abs()
+                < 1e-10
+        );
+        assert!(segment_box_first_hit([-3.0, 2.0, 0.0], [3.0, 2.0, 0.0], [1.0; 3], 0.2).is_none());
+        assert!(box_intersects_capsule(b, [0.0; 3], f64::NAN, 0.3));
+    }
+
+    #[test]
+    fn reactor_rigid_collars_clear_core_rails_room_and_keep_constant_dimensions() {
+        let document = crate::default_pioneer();
+        let g = registered_geometry(&document).unwrap();
+        let initial = reactor_configuration_geometry(PioneerDockedPose::private(), 0.).unwrap();
+        let fixed: Vec<_> = g
+            .panels
+            .iter()
+            .filter(|p| p.id.starts_with("reactor/configuration/fixed/"))
+            .collect();
+        assert_eq!(fixed.len(), 10);
+        assert!(!g.panels.iter().any(|p| p.id.contains("power-cabinet")));
+        for tick in 0..=100 {
+            let f = tick as f64 / 100.;
+            let d = reactor_configuration_geometry(PioneerDockedPose::private(), f).unwrap();
+            assert_eq!(initial.panels.len(), d.panels.len());
+            for (base, p) in initial.panels.iter().zip(&d.panels) {
+                assert_eq!(base.bounds.half_m, p.bounds.half_m);
+                assert_eq!(base.bounds.axes, p.bounds.axes);
+                for q in &fixed {
+                    assert!(
+                        !mechanism_boxes_overlap(p.bounds, q.bounds),
+                        "{} intersects {} at {f}",
+                        p.id,
+                        q.id
+                    );
+                }
+                for q in g.panels.iter().filter(|q| {
+                    !q.id.starts_with("reactor/")
+                        && q.collision != PioneerDockedCollision::Decoration
+                }) {
+                    assert!(
+                        !mechanism_boxes_overlap(p.bounds, q.bounds),
+                        "{} intersects room {} at {f}",
+                        p.id,
+                        q.id
+                    );
+                }
+                let collar: usize = p.id.split('/').nth(3).unwrap().parse().unwrap();
+                let sweep = reactor_configuration_sweep(collar, 0., 1.).unwrap();
+                for axis in 0..3 {
+                    assert!(
+                        (p.bounds.center_m[axis] - sweep.center_m[axis]).abs()
+                            + p.bounds.half_m[axis]
+                            <= sweep.half_m[axis] + EPS
+                    );
+                }
+            }
+            for a in 0..4 {
+                for b in a + 1..4 {
+                    assert!(!mechanism_boxes_overlap(
+                        reactor_configuration_box(a, f).unwrap(),
+                        reactor_configuration_box(b, f).unwrap()
+                    ));
+                }
+            }
+        }
+        assert!(reactor_configuration_geometry(PioneerDockedPose::private(), f64::NAN).is_err());
+        assert!(reactor_configuration_box(4, 0.).is_none());
+    }
+    #[test]
+    fn reactor_installation_gate_and_service_aisle_are_explicit() {
+        let mut document = crate::default_pioneer();
+        assert!(reactor_configuration_supported(&document));
+        let room = document
+            .rooms
+            .iter_mut()
+            .find(|r| r.source_room_id.as_deref() == Some("D1-S1"))
+            .unwrap();
+        room.clear_lwh_m[0] -= 0.1;
+        assert!(!reactor_configuration_supported(&document));
+        let g = registered_geometry(&document).unwrap();
+        assert!(!g.panels.iter().any(|p| p.id.starts_with("reactor/")));
+        assert!(g.panels.iter().any(|p| p.id.contains("power-cabinet")));
+        for x in [-7., -6., -5., -4., -3.] {
+            for collar in 0..4 {
+                assert!(!box_intersects_capsule(
+                    reactor_configuration_sweep(collar, 0., 1.).unwrap(),
+                    [x, -4.12, 4.5],
+                    AVATAR_HEIGHT_M,
+                    STATION_AVATAR_RADIUS_M
+                ));
+            }
+        }
+    }
+    #[test]
+    fn reactor_overview_glass_has_clear_seated_and_standing_rays() {
+        let g = registered_geometry(&crate::default_pioneer()).unwrap();
+        let (center, half) = cockpit_screen(15).unwrap();
+        let axes = cockpit_screen_axes(15).unwrap();
+        for stand in [0., 0.5, 1.] {
+            let eye = pilot_joints(stand).eye_m;
+            for v in [-0.95, -0.7, 0., 0.7, 0.95] {
+                for u in [-0.95, -0.7, 0., 0.7, 0.95] {
+                    let target = add(
+                        center,
+                        add(
+                            mul(axes[0], -0.033),
+                            add(mul(axes[1], v * half[1]), mul(axes[2], u * half[2])),
+                        ),
+                    );
+                    let hits: Vec<_> = g
+                        .panels
+                        .iter()
+                        .filter(|p| p.collision != PioneerDockedCollision::Decoration)
+                        .filter(|p| {
+                            segment_box_first_hit(
+                                p.bounds.local(eye),
+                                p.bounds.local(target),
+                                p.bounds.half_m,
+                                0.,
+                            )
+                            .is_some()
+                        })
+                        .map(|p| p.id.clone())
+                        .collect();
+                    assert!(
+                        hits.is_empty(),
+                        "stand{stand} uv{u}/{v} blocked by {hits:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn source_cut_contract_keeps_exact_snapshot_object_and_triangle_bindings() {
+        assert!(
+            pioneer_docked_source_cuts().is_empty(),
+            "raised bridge openings are baked into the verified canonical export"
+        );
+    }
+}
+
+#[cfg(test)]
+mod hatch_motion_geometry_tests {
+    use super::*;
+    #[test]
+    fn paired_leaves_retain_open_geometry_and_conservatively_enclose_every_angle() {
+        for hatch in [PioneerDockedHatch::Inner, PioneerDockedHatch::Outer] {
+            assert!(hatch_leaf_bounds(hatch, f64::NAN).is_err());
+            assert!(hatch_leaf_bounds(hatch, -0.01).is_err());
+            let swept = hatch_leaf_sweep_bounds(hatch, 0.0, 1.0).unwrap();
+            assert_eq!(swept.len(), 180);
+            for tick in 0..=1800 {
+                let fraction = tick as f64 / 1800.0;
+                for (leaf_index, b) in hatch_leaf_bounds(hatch, fraction)
+                    .unwrap()
+                    .iter()
+                    .enumerate()
+                {
+                    let i = ((fraction * 90.0).floor() as usize).min(89) * 2 + leaf_index;
+                    for x in [-1.0, 1.0] {
+                        for y in [-1.0, 1.0] {
+                            for z in [-1.0, 1.0] {
+                                let point = add(
+                                    b.center_m,
+                                    add(
+                                        mul(b.axes[0], x * b.half_m[0]),
+                                        add(
+                                            mul(b.axes[1], y * b.half_m[1]),
+                                            mul(b.axes[2], z * b.half_m[2]),
+                                        ),
+                                    ),
+                                );
+                                let local = swept[i].local(point);
+                                assert!((0..3)
+                                    .all(|axis| local[axis].abs() <= swept[i].half_m[axis] + 1e-7));
+                            }
+                        }
+                    }
+                }
+            }
+            let open = hatch_leaf_bounds(hatch, 1.0).unwrap();
+            assert!(open.iter().all(|b| b.valid()));
+            assert_ne!(open, hatch_leaf_bounds(hatch, 0.0).unwrap());
+        }
+    }
+}

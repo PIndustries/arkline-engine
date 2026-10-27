@@ -1,0 +1,142 @@
+{
+  "review_outcome": "CLEAR for export/data integration of exact candidate; native appearance and concept completion outside this review",
+  "exporter_author_commit": "ff17e8727bda54e32ecf239d2136bd1074489701",
+  "root_integration_commit_abbrev": "3ee211f",
+  "source_master_sha256": "772bf76aaf1416f28357e2f507963022c7c73b13fca58cb57e948e06761a7800",
+  "candidate_glb_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+  "candidate_glb_bytes": 6582300,
+  "receipt_sha256": "5467b970e6254c63fef552d5c1a609636fd913a1b333a8025a31dd112035adab",
+  "recipe_hashes_matching_author_and_root_worktrees": {
+    "export_pioneer.py": "ce1c5b64008223cfc06acce932cb2dbaf46c013a585bf586d7211422e8bea1cb",
+    "pioneer_export_contract.py": "c786532a9d380f02d9a9715bc9057c896a7971b36ec8ea049f9a2b553cb57c1d"
+  },
+  "blender_version": "5.0.1",
+  "models_unchanged": true,
+  "autoexecution_disabled": true,
+  "original_diagnostic_sha256": "830cb3ad80d5066499e0d4d5c4b57f79165b632600f0bfbfed699b0aeed545ce",
+  "candidate_diagnostic_sha256": "5cf2dc705806e5cb3f7769255b674143965181c83842167f9c37f160080539c6",
+  "diagnostic_change_scope": "Only GLB path, expected GLB hash and output directory changed; exact replacement comparison passed. Original frozen report and diagnostic retained.",
+  "full_report_sha256": "1a3998b1e96e5833a20c929008374bfdcf065cd4f7727039fb1c5da7aa1d2e3d",
+  "comparisons": [
+    {
+      "tolerance_m": 1e-05,
+      "strict_global_mutual_unique_same_winding_triangles": 78240,
+      "strict_corners": 234720,
+      "strict_normal_mismatch_bins": {
+        "dot_lt_0": 0,
+        "dot_lt_05": 0,
+        "dot_lt_095": 0,
+        "dot_lt_0999": 0,
+        "dot_lt_099999": 0
+      },
+      "strict_min_normal_dot": 0.9999999999999987,
+      "strict_max_corner_distance_m": 1.9224655954737354e-06,
+      "strict_min_geometric_face_dot": 0.9999999404311886,
+      "winding_prioritized_same_winding_triangles": 78244,
+      "winding_prioritized_normal_mismatch_bins": {
+        "dot_lt_0": 0,
+        "dot_lt_05": 0,
+        "dot_lt_095": 0,
+        "dot_lt_0999": 0,
+        "dot_lt_099999": 0
+      },
+      "unique_opposite_winding_triangles": 0,
+      "mixed_orientation_duplicate_triangles_excluded_from_strict": 4,
+      "ambiguous_glb_triangles": 0,
+      "unmatched_glb_triangles": 0,
+      "unmatched_source_triangles": 696
+    },
+    {
+      "tolerance_m": 2e-05,
+      "strict_global_mutual_unique_same_winding_triangles": 78240,
+      "strict_corners": 234720,
+      "strict_normal_mismatch_bins": {
+        "dot_lt_0": 0,
+        "dot_lt_05": 0,
+        "dot_lt_095": 0,
+        "dot_lt_0999": 0,
+        "dot_lt_099999": 0
+      },
+      "strict_min_normal_dot": 0.9999999999999987,
+      "strict_max_corner_distance_m": 1.9224655954737354e-06,
+      "strict_min_geometric_face_dot": 0.9999999404311886,
+      "winding_prioritized_same_winding_triangles": 78244,
+      "winding_prioritized_normal_mismatch_bins": {
+        "dot_lt_0": 0,
+        "dot_lt_05": 0,
+        "dot_lt_095": 0,
+        "dot_lt_0999": 0,
+        "dot_lt_099999": 0
+      },
+      "unique_opposite_winding_triangles": 0,
+      "mixed_orientation_duplicate_triangles_excluded_from_strict": 4,
+      "ambiguous_glb_triangles": 0,
+      "unmatched_glb_triangles": 0,
+      "unmatched_source_triangles": 696
+    },
+    {
+      "tolerance_m": 0.0001,
+      "strict_global_mutual_unique_same_winding_triangles": 78240,
+      "strict_corners": 234720,
+      "strict_normal_mismatch_bins": {
+        "dot_lt_0": 0,
+        "dot_lt_05": 0,
+        "dot_lt_095": 0,
+        "dot_lt_0999": 0,
+        "dot_lt_099999": 0
+      },
+      "strict_min_normal_dot": 0.9999999999999987,
+      "strict_max_corner_distance_m": 1.9224655954737354e-06,
+      "strict_min_geometric_face_dot": 0.9999999404311886,
+      "winding_prioritized_same_winding_triangles": 78244,
+      "winding_prioritized_normal_mismatch_bins": {
+        "dot_lt_0": 0,
+        "dot_lt_05": 0,
+        "dot_lt_095": 0,
+        "dot_lt_0999": 0,
+        "dot_lt_099999": 0
+      },
+      "unique_opposite_winding_triangles": 0,
+      "mixed_orientation_duplicate_triangles_excluded_from_strict": 4,
+      "ambiguous_glb_triangles": 0,
+      "unmatched_glb_triangles": 0,
+      "unmatched_source_triangles": 696
+    }
+  ],
+  "mapping_proof": {
+    "path": "/workspace/arkline-runtime/pioneer-mount-visual-audit/candidate-mapping-audit-v2.json",
+    "sha256": "f30c6436928be7ca474779ed6df53b8323f770b209b5688611986ddfddbaf39a",
+    "source_parts": 543,
+    "material_slots": 9,
+    "complete_snapshot_name_hash_ids_and_part_spans": true,
+    "evaluated_triangles": 79168,
+    "explicit_runtime_f32_gate_drops": 924,
+    "retained_triangles": 78244,
+    "body_bounds_m": [
+      [
+        -36,
+        -9,
+        -19
+      ],
+      [
+        36,
+        9,
+        19
+      ]
+    ]
+  },
+  "independent_tests": {
+    "path": "/workspace/arkline-runtime/pioneer-mount-visual-audit/independent-exporter-tests-v2.json",
+    "sha256": "b07d3f4433ea3d88fdd14d43ac6ad698f265f348501649953a70694376f1403c",
+    "tests_passed": 18,
+    "unsupported_source_variants": 22,
+    "exit_code": 0
+  },
+  "limits": [
+    "Strict correspondence covers 78,240 globally unique material/position triangle pairs. Four triangles in two mixed-orientation duplicate groups are excluded from this strict normal claim; same-winding-prioritized matches are reported separately.",
+    "The diagnostic separately excludes 228 analysis-near-zero source triangles; 696 remaining source triangles have no retained GLB match. The authoritative export receipt explicitly reports all 924 dropped triangles using the actual scaled float32 runtime threshold. No topology-equality claim.",
+    "Part IDs bind exact source hash and exact object name within this snapshot; they are not durable cross-revision component identities.",
+    "This proof validates export data, not actual engine appearance, v05 concept completion, nozzle apertures, power behavior or turret visibility. Root handles native verification and adoption.",
+    "No model bytes, production source files, repository documentation or canonical asset bindings were edited by this audit."
+  ]
+}

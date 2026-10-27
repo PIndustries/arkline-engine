@@ -1,0 +1,19 @@
+@@ -870,2 +870,18 @@
+     #[test]
++    fn cockpit_surface_feed_geometry_matches_exact_projected_glass_and_clamps_tiles() {
++        let surface = CockpitSurface::new(viewport(), matrix(Vec3::ZERO, Quat::from_rotation_y(-0.2)), ShipClass::Pioneer, 1, NAV_CANVAS_SIZE).unwrap();
++        let tile = egui::Rect::from_min_max(egui::pos2(-20.0, 30.0), egui::pos2(180.0, 110.0));
++        let clipped = tile.intersect(surface.canvas);
++        let (mvp, top_left, bottom_right) = surface.feed_geometry(tile).unwrap();
++        assert_eq!(mvp, surface.local_to_clip);
++        assert!((mvp * top_left.extend(1.0) - surface.vertex(clipped.left_top(), egui::Pos2::ZERO, egui::Color32::WHITE).clip).length() < 1e-6);
++        assert!((mvp * bottom_right.extend(1.0) - surface.vertex(clipped.right_bottom(), egui::Pos2::ZERO, egui::Color32::WHITE).clip).length() < 1e-6);
++        assert_eq!(top_left.x, bottom_right.x);
++        assert!(top_left.y > bottom_right.y && top_left.z < bottom_right.z);
++        assert!(surface.feed_geometry(egui::Rect::from_min_size(egui::pos2(400.0, 200.0), egui::vec2(20.0, 20.0))).is_none());
++        assert!(surface.feed_geometry(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::Vec2::ZERO)).is_none());
++        assert!(surface.feed_geometry(egui::Rect::from_min_size(egui::pos2(f32::NAN, 0.0), egui::vec2(20.0, 20.0))).is_none());
++    }
++
++    #[test]
+     fn cockpit_surface_inverse_hit_rejects_bounding_box_outside_actual_quad() {

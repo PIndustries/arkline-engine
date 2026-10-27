@@ -1,0 +1,1381 @@
+{
+  "all_pose_legacy_route_separation": {
+    "legacy_authoring_sha256": "342d050e111ff239d9d3ef540ffa5023906a2ae528db5ae9359eb73a46f32ae8",
+    "method": "Conservative Cartesian axis domains; separation from union of every receiver pose. Covers BOTH directions, all door fractions and empty-return axes without relying on eight outbound samples.",
+    "route_source_sha256": "bd1c848d14a61cb3856fede8133bd4330813b191fca248b0080ddd4e36123ff2",
+    "carriage_center_x_m": [
+      -30.5,
+      -18.5
+    ],
+    "support_center_y_m": [
+      -5.4,
+      3.4
+    ],
+    "fork_fraction": [
+      0,
+      1
+    ],
+    "door_fraction": [
+      0,
+      1
+    ],
+    "tray_centers_body_m": [
+      [
+        -30.5,
+        -5.4,
+        -3.5
+      ],
+      [
+        -18.5,
+        3.4,
+        3.5
+      ]
+    ],
+    "drone_domain_split": "Internal route centerX>=-30.5; external-throat centerZ=-3.5,Y=-1. All current launch keyframes and exact reversed recovery stay in one of these closed domains.",
+    "domains": [
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s00/deck",
+        "body_bounds_m": [
+          [
+            -33.14,
+            -6.380000000000001,
+            -6.6
+          ],
+          [
+            -15.86,
+            2.5,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 2.8399999999999963
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s00/retainer/aft",
+        "body_bounds_m": [
+          [
+            -33.115,
+            -6.300000000000001,
+            -6.6
+          ],
+          [
+            -21.065000000000005,
+            2.62,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 2.864999999999995
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s00/retainer/fore",
+        "body_bounds_m": [
+          [
+            -27.935,
+            -6.300000000000001,
+            -6.6
+          ],
+          [
+            -15.885000000000002,
+            2.62,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 8.044999999999998
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s01/deck",
+        "body_bounds_m": [
+          [
+            -33.14,
+            -6.380000000000001,
+            -6.6
+          ],
+          [
+            -15.86,
+            2.499999999999999,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 2.8399999999999963
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s01/retainer/aft",
+        "body_bounds_m": [
+          [
+            -33.115,
+            -6.300000000000001,
+            -6.6
+          ],
+          [
+            -21.065000000000005,
+            2.619999999999999,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 2.864999999999995
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s01/retainer/fore",
+        "body_bounds_m": [
+          [
+            -27.935,
+            -6.300000000000001,
+            -6.6
+          ],
+          [
+            -15.885000000000002,
+            2.619999999999999,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 8.044999999999998
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s02/deck",
+        "body_bounds_m": [
+          [
+            -33.14,
+            -6.380000000000001,
+            -6.6
+          ],
+          [
+            -15.86,
+            2.5000000000000004,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 2.8399999999999963
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s02/retainer/aft",
+        "body_bounds_m": [
+          [
+            -33.115,
+            -6.300000000000001,
+            -6.6
+          ],
+          [
+            -21.065000000000005,
+            2.6200000000000006,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 2.864999999999995
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s02/retainer/fore",
+        "body_bounds_m": [
+          [
+            -27.935,
+            -6.300000000000001,
+            -6.6
+          ],
+          [
+            -15.885000000000002,
+            2.6200000000000006,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 8.044999999999998
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s03/deck",
+        "body_bounds_m": [
+          [
+            -33.14,
+            -6.380000000000001,
+            -6.6
+          ],
+          [
+            -15.86,
+            2.5,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 2.8399999999999963
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s03/retainer/aft",
+        "body_bounds_m": [
+          [
+            -33.115,
+            -6.300000000000001,
+            -6.6
+          ],
+          [
+            -21.065000000000005,
+            2.62,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 2.864999999999995
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s03/retainer/fore",
+        "body_bounds_m": [
+          [
+            -27.935,
+            -6.300000000000001,
+            -6.6
+          ],
+          [
+            -15.885000000000002,
+            2.62,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 8.044999999999998
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s04/deck",
+        "body_bounds_m": [
+          [
+            -33.14,
+            -6.380000000000001,
+            -6.6
+          ],
+          [
+            -15.86,
+            2.5,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 2.8399999999999963
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s04/retainer/aft",
+        "body_bounds_m": [
+          [
+            -33.115,
+            -6.300000000000001,
+            -6.6
+          ],
+          [
+            -21.065000000000005,
+            2.62,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 2.864999999999995
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s04/retainer/fore",
+        "body_bounds_m": [
+          [
+            -27.935,
+            -6.300000000000001,
+            -6.6
+          ],
+          [
+            -15.885000000000002,
+            2.62,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 8.044999999999998
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s05/deck",
+        "body_bounds_m": [
+          [
+            -33.14,
+            -6.380000000000001,
+            -6.6
+          ],
+          [
+            -15.86,
+            2.5,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 2.8399999999999963
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s05/retainer/aft",
+        "body_bounds_m": [
+          [
+            -33.114999999999995,
+            -6.300000000000001,
+            -6.6
+          ],
+          [
+            -21.065,
+            2.62,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 2.865000000000002
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s05/retainer/fore",
+        "body_bounds_m": [
+          [
+            -27.935,
+            -6.300000000000001,
+            -6.6
+          ],
+          [
+            -15.885000000000002,
+            2.62,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 8.044999999999998
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s06/deck",
+        "body_bounds_m": [
+          [
+            -33.14,
+            -6.380000000000001,
+            -6.6
+          ],
+          [
+            -15.86,
+            2.499999999999999,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 2.8399999999999963
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s06/retainer/aft",
+        "body_bounds_m": [
+          [
+            -33.114999999999995,
+            -6.300000000000001,
+            -6.6
+          ],
+          [
+            -21.065,
+            2.619999999999999,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 2.865000000000002
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s06/retainer/fore",
+        "body_bounds_m": [
+          [
+            -27.935,
+            -6.300000000000001,
+            -6.6
+          ],
+          [
+            -15.885000000000002,
+            2.619999999999999,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 8.044999999999998
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s07/deck",
+        "body_bounds_m": [
+          [
+            -33.14,
+            -6.380000000000001,
+            -6.6
+          ],
+          [
+            -15.86,
+            2.5000000000000004,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 2.8399999999999963
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s07/retainer/aft",
+        "body_bounds_m": [
+          [
+            -33.114999999999995,
+            -6.300000000000001,
+            -6.6
+          ],
+          [
+            -21.065,
+            2.6200000000000006,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 2.865000000000002
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s07/retainer/fore",
+        "body_bounds_m": [
+          [
+            -27.935,
+            -6.300000000000001,
+            -6.6
+          ],
+          [
+            -15.885000000000002,
+            2.6200000000000006,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 8.044999999999998
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s08/deck",
+        "body_bounds_m": [
+          [
+            -33.14,
+            -6.380000000000001,
+            -6.6
+          ],
+          [
+            -15.86,
+            2.5,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 2.8399999999999963
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s08/retainer/aft",
+        "body_bounds_m": [
+          [
+            -33.114999999999995,
+            -6.300000000000001,
+            -6.6
+          ],
+          [
+            -21.065,
+            2.62,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 2.865000000000002
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s08/retainer/fore",
+        "body_bounds_m": [
+          [
+            -27.935,
+            -6.300000000000001,
+            -6.6
+          ],
+          [
+            -15.885000000000002,
+            2.62,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 8.044999999999998
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s09/deck",
+        "body_bounds_m": [
+          [
+            -33.14,
+            -6.380000000000001,
+            -6.6
+          ],
+          [
+            -15.86,
+            2.5,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 2.8399999999999963
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s09/retainer/aft",
+        "body_bounds_m": [
+          [
+            -33.114999999999995,
+            -6.300000000000001,
+            -6.6
+          ],
+          [
+            -21.065,
+            2.62,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 2.865000000000002
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s09/retainer/fore",
+        "body_bounds_m": [
+          [
+            -27.935,
+            -6.300000000000001,
+            -6.6
+          ],
+          [
+            -15.885000000000002,
+            2.62,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 8.044999999999998
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s10/deck",
+        "body_bounds_m": [
+          [
+            -33.14,
+            -6.380000000000001,
+            -6.6
+          ],
+          [
+            -15.86,
+            2.5,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 2.8399999999999963
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s10/retainer/aft",
+        "body_bounds_m": [
+          [
+            -33.114999999999995,
+            -6.300000000000001,
+            -6.6
+          ],
+          [
+            -21.065,
+            2.62,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 2.865000000000002
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s10/retainer/fore",
+        "body_bounds_m": [
+          [
+            -27.935000000000002,
+            -6.300000000000001,
+            -6.6
+          ],
+          [
+            -15.885,
+            2.62,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 8.044999999999995
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s11/deck",
+        "body_bounds_m": [
+          [
+            -33.14,
+            -6.380000000000001,
+            -6.6
+          ],
+          [
+            -15.86,
+            2.499999999999999,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 2.8399999999999963
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s11/retainer/aft",
+        "body_bounds_m": [
+          [
+            -33.114999999999995,
+            -6.300000000000001,
+            -6.6
+          ],
+          [
+            -21.065,
+            2.619999999999999,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 2.865000000000002
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s11/retainer/fore",
+        "body_bounds_m": [
+          [
+            -27.935000000000002,
+            -6.300000000000001,
+            -6.6
+          ],
+          [
+            -15.885,
+            2.619999999999999,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 8.044999999999995
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s12/deck",
+        "body_bounds_m": [
+          [
+            -33.14,
+            -6.380000000000001,
+            -6.6
+          ],
+          [
+            -15.86,
+            2.5000000000000004,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 2.8399999999999963
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s12/retainer/aft",
+        "body_bounds_m": [
+          [
+            -33.114999999999995,
+            -6.300000000000001,
+            -6.6
+          ],
+          [
+            -21.065,
+            2.6200000000000006,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 2.865000000000002
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s12/retainer/fore",
+        "body_bounds_m": [
+          [
+            -27.935000000000002,
+            -6.300000000000001,
+            -6.6
+          ],
+          [
+            -15.885,
+            2.6200000000000006,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 8.044999999999995
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s13/deck",
+        "body_bounds_m": [
+          [
+            -33.14,
+            -6.380000000000001,
+            -6.6
+          ],
+          [
+            -15.86,
+            2.5,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 2.8399999999999963
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s13/retainer/aft",
+        "body_bounds_m": [
+          [
+            -33.114999999999995,
+            -6.300000000000001,
+            -6.6
+          ],
+          [
+            -21.065,
+            2.62,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 2.865000000000002
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s13/retainer/fore",
+        "body_bounds_m": [
+          [
+            -27.935000000000002,
+            -6.300000000000001,
+            -6.6
+          ],
+          [
+            -15.885,
+            2.62,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 8.044999999999995
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s14/deck",
+        "body_bounds_m": [
+          [
+            -33.14,
+            -6.380000000000001,
+            -6.6
+          ],
+          [
+            -15.86,
+            2.5,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 2.8399999999999963
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s14/retainer/aft",
+        "body_bounds_m": [
+          [
+            -33.114999999999995,
+            -6.300000000000001,
+            -6.6
+          ],
+          [
+            -21.065,
+            2.62,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 2.865000000000002
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/tray/s14/retainer/fore",
+        "body_bounds_m": [
+          [
+            -27.935000000000002,
+            -6.300000000000001,
+            -6.6
+          ],
+          [
+            -15.885,
+            2.62,
+            6.6
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 8.044999999999995
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/mechanism/carriage/aft/port/mast",
+        "body_bounds_m": [
+          [
+            -33.32,
+            -6.6,
+            -6.8999999999999995
+          ],
+          [
+            -21.220000000000006,
+            4.76,
+            -6.8
+          ]
+        ],
+        "separating_axis": 2,
+        "minimum_gap_m": 11.06
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/mechanism/carriage/aft/port/head",
+        "body_bounds_m": [
+          [
+            -33.35,
+            4.64,
+            -7.0
+          ],
+          [
+            -21.190000000000005,
+            4.78,
+            -6.699999999999999
+          ]
+        ],
+        "separating_axis": 2,
+        "minimum_gap_m": 10.96
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/mechanism/carriage/aft/starboard/mast",
+        "body_bounds_m": [
+          [
+            -33.32,
+            -6.6,
+            -0.2
+          ],
+          [
+            -21.220000000000006,
+            4.76,
+            -0.09999999999999999
+          ]
+        ],
+        "separating_axis": 2,
+        "minimum_gap_m": 4.36
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/mechanism/carriage/aft/starboard/head",
+        "body_bounds_m": [
+          [
+            -33.35,
+            4.64,
+            -0.3
+          ],
+          [
+            -21.190000000000005,
+            4.78,
+            0.0
+          ]
+        ],
+        "separating_axis": 1,
+        "minimum_gap_m": 4.84
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/mechanism/carriage/aft/top_tie",
+        "body_bounds_m": [
+          [
+            -33.32,
+            4.64,
+            -6.85
+          ],
+          [
+            -21.220000000000006,
+            4.74,
+            -0.15
+          ]
+        ],
+        "separating_axis": 1,
+        "minimum_gap_m": 4.84
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/mechanism/carriage/fore/port/mast",
+        "body_bounds_m": [
+          [
+            -27.78,
+            -6.6,
+            -6.8999999999999995
+          ],
+          [
+            -15.68,
+            4.76,
+            -6.8
+          ]
+        ],
+        "separating_axis": 2,
+        "minimum_gap_m": 11.06
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/mechanism/carriage/fore/port/head",
+        "body_bounds_m": [
+          [
+            -27.81,
+            4.64,
+            -7.0
+          ],
+          [
+            -15.650000000000002,
+            4.78,
+            -6.699999999999999
+          ]
+        ],
+        "separating_axis": 2,
+        "minimum_gap_m": 10.96
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/mechanism/carriage/fore/starboard/mast",
+        "body_bounds_m": [
+          [
+            -27.78,
+            -6.6,
+            -0.2
+          ],
+          [
+            -15.68,
+            4.76,
+            -0.09999999999999999
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 8.199999999999996
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/mechanism/carriage/fore/starboard/head",
+        "body_bounds_m": [
+          [
+            -27.81,
+            4.64,
+            -0.3
+          ],
+          [
+            -15.650000000000002,
+            4.78,
+            0.0
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 8.169999999999998
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/mechanism/carriage/fore/top_tie",
+        "body_bounds_m": [
+          [
+            -27.78,
+            4.64,
+            -6.85
+          ],
+          [
+            -15.68,
+            4.74,
+            -0.15
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 8.199999999999996
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/mechanism/lift/aft/edge",
+        "body_bounds_m": [
+          [
+            -33.22,
+            -6.550000000000001,
+            -6.85
+          ],
+          [
+            -21.14,
+            2.3000000000000003,
+            -0.15
+          ]
+        ],
+        "separating_axis": 2,
+        "minimum_gap_m": 4.410000000000001
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/mechanism/lift/fore/edge",
+        "body_bounds_m": [
+          [
+            -27.86,
+            -6.550000000000001,
+            -6.85
+          ],
+          [
+            -15.780000000000001,
+            2.3000000000000003,
+            -0.15
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 8.119999999999997
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/mechanism/lift/port/tie",
+        "body_bounds_m": [
+          [
+            -33.22,
+            -6.550000000000001,
+            -6.79
+          ],
+          [
+            -15.780000000000001,
+            2.3000000000000003,
+            -6.71
+          ]
+        ],
+        "separating_axis": 2,
+        "minimum_gap_m": 10.97
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/mechanism/lift/starboard/tie",
+        "body_bounds_m": [
+          [
+            -33.22,
+            -6.550000000000001,
+            -0.29
+          ],
+          [
+            -15.780000000000001,
+            2.3000000000000003,
+            -0.21
+          ]
+        ],
+        "separating_axis": 2,
+        "minimum_gap_m": 4.470000000000001
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/mechanism/fork/aft/stage0",
+        "body_bounds_m": [
+          [
+            -32.37,
+            -6.5,
+            -6.75
+          ],
+          [
+            -20.229999999999997,
+            2.3400000000000003,
+            -2.55
+          ]
+        ],
+        "separating_axis": 2,
+        "minimum_gap_m": 6.8100000000000005
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/mechanism/fork/aft/stage1",
+        "body_bounds_m": [
+          [
+            -32.37,
+            -6.460000000000001,
+            -6.75
+          ],
+          [
+            -20.229999999999997,
+            2.3800000000000003,
+            0.9500000000000002
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 3.6099999999999994
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/mechanism/fork/aft/stage2",
+        "body_bounds_m": [
+          [
+            -32.37,
+            -6.42,
+            -6.75
+          ],
+          [
+            -20.229999999999997,
+            2.4200000000000004,
+            4.45
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 3.6099999999999994
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/mechanism/fork/fore/stage0",
+        "body_bounds_m": [
+          [
+            -28.77,
+            -6.5,
+            -6.75
+          ],
+          [
+            -16.63,
+            2.3400000000000003,
+            -2.55
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 7.209999999999997
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/mechanism/fork/fore/stage1",
+        "body_bounds_m": [
+          [
+            -28.77,
+            -6.460000000000001,
+            -6.75
+          ],
+          [
+            -16.63,
+            2.3800000000000003,
+            0.9500000000000002
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 7.209999999999997
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/mechanism/fork/fore/stage2",
+        "body_bounds_m": [
+          [
+            -28.77,
+            -6.42,
+            -6.75
+          ],
+          [
+            -16.63,
+            2.4200000000000004,
+            4.45
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 7.209999999999997
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/door/lower/leaf",
+        "body_bounds_m": [
+          [
+            -35.66,
+            -4.32,
+            -7.52
+          ],
+          [
+            -35.5,
+            -1.0,
+            0.52
+          ]
+        ],
+        "separating_axis": 2,
+        "minimum_gap_m": 3.7400000000000007
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/door/lower/rib",
+        "body_bounds_m": [
+          [
+            -35.49,
+            -3.5700000000000003,
+            -7.5
+          ],
+          [
+            -35.4,
+            -1.75,
+            0.5
+          ]
+        ],
+        "separating_axis": 2,
+        "minimum_gap_m": 3.7600000000000007
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/door/lower/edge_marker",
+        "body_bounds_m": [
+          [
+            -35.5,
+            -3.545,
+            -7.3
+          ],
+          [
+            -35.485,
+            -1.7750000000000001,
+            0.3
+          ]
+        ],
+        "separating_axis": 2,
+        "minimum_gap_m": 3.960000000000001
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/door/upper/leaf",
+        "body_bounds_m": [
+          [
+            -35.66,
+            -1.0,
+            -7.52
+          ],
+          [
+            -35.5,
+            2.32,
+            0.52
+          ]
+        ],
+        "separating_axis": 2,
+        "minimum_gap_m": 3.7400000000000007
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/door/upper/rib",
+        "body_bounds_m": [
+          [
+            -35.49,
+            -0.25,
+            -7.5
+          ],
+          [
+            -35.4,
+            1.5699999999999998,
+            0.5
+          ]
+        ],
+        "separating_axis": 2,
+        "minimum_gap_m": 3.7600000000000007
+      },
+      {
+        "part_or_domain": "pioneer.drone_bay/door/upper/edge_marker",
+        "body_bounds_m": [
+          [
+            -35.5,
+            -0.225,
+            -7.3
+          ],
+          [
+            -35.485,
+            1.545,
+            0.3
+          ]
+        ],
+        "separating_axis": 2,
+        "minimum_gap_m": 3.960000000000001
+      },
+      {
+        "part_or_domain": "every_drone_internal_transport",
+        "body_bounds_m": [
+          [
+            -33.0,
+            -6.3,
+            -6.5
+          ],
+          [
+            -16.0,
+            4.3,
+            6.5
+          ]
+        ],
+        "separating_axis": 0,
+        "minimum_gap_m": 2.979999999999997
+      },
+      {
+        "part_or_domain": "every_drone_external_throat",
+        "body_bounds_m": [
+          [
+            -42.5,
+            -1.9,
+            -6.5
+          ],
+          [
+            -28.0,
+            -0.1,
+            -0.5
+          ]
+        ],
+        "separating_axis": 2,
+        "minimum_gap_m": 4.760000000000001
+      }
+    ],
+    "domain_count": 73,
+    "minimum_separating_gap_m": 2.8399999999999963
+  },
+  "negative_closed_socket_hits": [
+    "pioneer.ore_receiver/coupling_head/bottom",
+    "pioneer.ore_receiver/coupling_head/top",
+    "pioneer.ore_receiver/coupling_head/port/front",
+    "pioneer.ore_receiver/coupling_head/port/back",
+    "pioneer.ore_receiver/coupling_head/port/lower",
+    "pioneer.ore_receiver/coupling_head/port/upper",
+    "pioneer.ore_receiver/locking_shoe/port",
+    "pioneer.ore_receiver/coupling_head/starboard/front",
+    "pioneer.ore_receiver/coupling_head/starboard/back",
+    "pioneer.ore_receiver/coupling_head/starboard/lower",
+    "pioneer.ore_receiver/coupling_head/starboard/upper",
+    "pioneer.ore_receiver/locking_shoe/starboard",
+    "pioneer.ore_receiver/head_seal/bottom",
+    "pioneer.ore_receiver/head_seal/top",
+    "pioneer.ore_receiver/head_seal/port",
+    "pioneer.ore_receiver/head_seal/starboard"
+  ],
+  "schema": "arkline.ore-receiver-clearance/v1",
+  "base_sha256": "7970f096a6aac9d95b6250b75cd19ea2e54046c9deb77f3592b82efa879112fd",
+  "receiver_sha256": "7101f1cfaf7ca4aa6bcae7ed8de966eb97dc47d00c087c644efc242be0f171ff",
+  "checks": 180093,
+  "legacy_15_route_pair_checks": 474720,
+  "hits": [],
+  "hardware_hits": [],
+  "explicit_sealed_hull_mount_contacts": [
+    [
+      "pioneer.ore_receiver/sealed_feedthrough_plate/0",
+      "Pressure hull"
+    ],
+    [
+      "pioneer.ore_receiver/sealed_feedthrough_plate/1",
+      "Pressure hull"
+    ],
+    [
+      "pioneer.ore_receiver/sealed_feedthrough_plate/2",
+      "Pressure hull"
+    ],
+    [
+      "pioneer.ore_receiver/sealed_feedthrough_plate/3",
+      "Pressure hull"
+    ],
+    [
+      "pioneer.ore_receiver/anchor/port/0",
+      "Pressure hull"
+    ],
+    [
+      "pioneer.ore_receiver/anchor/port/1",
+      "Pressure hull"
+    ],
+    [
+      "pioneer.ore_receiver/anchor/port/2",
+      "Pressure hull"
+    ],
+    [
+      "pioneer.ore_receiver/anchor/port/3",
+      "Pressure hull"
+    ],
+    [
+      "pioneer.ore_receiver/anchor/starboard/0",
+      "Pressure hull"
+    ],
+    [
+      "pioneer.ore_receiver/anchor/starboard/1",
+      "Pressure hull"
+    ],
+    [
+      "pioneer.ore_receiver/anchor/starboard/2",
+      "Pressure hull"
+    ],
+    [
+      "pioneer.ore_receiver/anchor/starboard/3",
+      "Pressure hull"
+    ]
+  ],
+  "negative_closed_bay_hits": [
+    "pioneer.drone_bay/door/lower/leaf",
+    "pioneer.drone_bay/door/upper/leaf",
+    "pioneer.drone_bay/door/lower/rib",
+    "pioneer.drone_bay/door/upper/rib",
+    "pioneer.drone_bay/door/lower/edge_marker",
+    "pioneer.drone_bay/door/upper/edge_marker"
+  ],
+  "expanded_module_bounds_m": [
+    [
+      -37.58,
+      -1.8,
+      4.260000000000001
+    ],
+    [
+      -35.98,
+      -0.2,
+      5.74
+    ]
+  ],
+  "limitations": [
+    "Conservative continuous source/box proof only, not runtime world hazards",
+    "Socket carve requires matching independent procedural Mining drone proof",
+    "Hull contact allowed only named fixed mount pads/plate; no generic self-hull bypass"
+  ]
+}

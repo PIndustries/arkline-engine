@@ -1,0 +1,417 @@
+{
+  "at_utc": "2026-10-20T05:54:11.966884+00:00",
+  "workspace": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020",
+  "branch": "reconstruct/cockpit-worldspace-20261020",
+  "foundation_commit": "a404e06179d2b3c54e28f0548d97a4443f961d87",
+  "feature_commit": "c26128d8dabca3872d7232647facd2c2298e5910",
+  "visual_fix_commit": "c785de0c8479835f216908dd04347d921fd48fa4",
+  "source_composition": "c785de0 plus BUILD_VERSION=26.10.20.2; later delivery commit changes only documentation and version stamp",
+  "full_workspace_before_trim_fix": {
+    "receipt": ".build/logs/20261020T053443186517Z.json",
+    "command": [
+      "cargo",
+      "test",
+      "--offline",
+      "--workspace",
+      "--locked",
+      "--no-fail-fast"
+    ],
+    "exit_code": 0,
+    "guard_error": null,
+    "timeout_seconds": 600.0,
+    "passed": 854,
+    "failed": 0,
+    "ignored": 30,
+    "top_level_suites": 55,
+    "scope": "Feature runtime before the subsequent two-position Attack trim correction; two GPU-only assertion improvements were also added after this full run and passed in explicit native acceptance."
+  },
+  "drone_checks_after_trim_fix": {
+    "receipt": ".build/logs/20261020T054718502880Z.json",
+    "command": [
+      "cargo",
+      "test",
+      "--offline",
+      "--locked",
+      "-p",
+      "arkline-client",
+      "drone_",
+      "--",
+      "--test-threads=1"
+    ],
+    "exit_code": 0,
+    "guard_error": null,
+    "timeout_seconds": 180.0,
+    "passed": 16,
+    "failed": 0,
+    "ignored": 2,
+    "scope": "After the two-position trim correction; includes geometry, viewer, exact cockpit catalog parity, camera and gameplay command regressions."
+  },
+  "native_clippy": {
+    "receipt": ".build/logs/20261020T054805781975Z.json",
+    "command": [
+      "cargo",
+      "clippy",
+      "--offline",
+      "--workspace",
+      "--all-targets",
+      "--locked",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 0,
+    "guard_error": null,
+    "timeout_seconds": 240.0
+  },
+  "browser_clippy": {
+    "receipt": ".build/logs/20261020T054823908034Z.json",
+    "command": [
+      "cargo",
+      "clippy",
+      "--offline",
+      "--locked",
+      "-p",
+      "arkline-client",
+      "--target",
+      "wasm32-unknown-unknown",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 0,
+    "guard_error": null,
+    "timeout_seconds": 240.0
+  },
+  "format": {
+    "receipt": ".build/logs/20261020T054717461127Z.json",
+    "command": [
+      "cargo",
+      "fmt",
+      "--all"
+    ],
+    "exit_code": 0,
+    "guard_error": null,
+    "timeout_seconds": 30.0
+  },
+  "versioned_build": {
+    "receipt": ".build/logs/20261020T054827974717Z.json",
+    "command": [
+      "/opt/homebrew/bin/python3",
+      "-S",
+      "tools/build.py",
+      "--artifact-copy",
+      "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/drone-model-viewer-fixed-20261020/arkline-editor",
+      "--version-output",
+      "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/drone-model-viewer-fixed-20261020/BUILD_VERSION",
+      "--",
+      "build",
+      "-p",
+      "arkline-editor",
+      "--offline",
+      "--locked",
+      "--message-format=json-render-diagnostics"
+    ],
+    "exit_code": 0,
+    "guard_error": null,
+    "timeout_seconds": 240.0
+  },
+  "native_gpu_tests": {
+    "build": "26.10.20.2",
+    "receipt": ".build/packages/drone-model-viewer-fixed-20261020/native-final-batch.json",
+    "results": [
+      {
+        "test": "native_drone_gallery_all_classes_orbit_zoom_reset_share_runtime_geometry",
+        "exit_code": 0,
+        "evidence_directory": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/drone-model-viewer-fixed-20261020/drone-models-gpu",
+        "guard_announcement": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T054914797230Z.log"
+      },
+      {
+        "test": "native_cockpit_depth_query_uses_draw_framebuffer_without_rebinding",
+        "exit_code": 0,
+        "evidence_directory": null,
+        "guard_announcement": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T054935927053Z.log"
+      },
+      {
+        "test": "native_cockpit_display_preserves_depth_perspective_and_state",
+        "exit_code": 0,
+        "evidence_directory": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/drone-model-viewer-fixed-20261020/display-depth",
+        "guard_announcement": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T054936974128Z.log"
+      },
+      {
+        "test": "native_pioneer_cockpit_enclosure_matches_source_and_keeps_window_apertures",
+        "exit_code": 0,
+        "evidence_directory": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/drone-model-viewer-fixed-20261020/enclosure",
+        "guard_announcement": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T054938025494Z.log"
+      },
+      {
+        "test": "native_cockpit_cached_feed_tracks_physical_quad_under_head_look_and_roll",
+        "exit_code": 0,
+        "evidence_directory": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/drone-model-viewer-fixed-20261020/physical-feed",
+        "guard_announcement": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T054950120255Z.log"
+      },
+      {
+        "test": "native_cockpit_shift_keeps_both_instrument_layers_and_live_feed_updating",
+        "exit_code": 0,
+        "evidence_directory": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/drone-model-viewer-fixed-20261020/shift-live-feed",
+        "guard_announcement": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T054952173113Z.log"
+      }
+    ]
+  },
+  "drone_gpu_cases": [
+    {
+      "captures": [
+        {
+          "height": 640,
+          "occupied_depth_pixels": 36499,
+          "orientation": "top-left RGBA8",
+          "png": "recon-default.png",
+          "rgba_sha256": "209567bf9ee0ecc75549a9d468b18cbb52fab348c82b215d0b271088313ec862",
+          "width": 960
+        },
+        {
+          "height": 640,
+          "occupied_depth_pixels": 37496,
+          "orientation": "top-left RGBA8",
+          "png": "recon-orbit.png",
+          "rgba_sha256": "0db5f8c370f95761bd246f5eda982c42acea3c379c553db5b5d924ece58ed5d2",
+          "width": 960
+        },
+        {
+          "height": 640,
+          "occupied_depth_pixels": 29575,
+          "orientation": "top-left RGBA8",
+          "png": "recon-zoom-out.png",
+          "rgba_sha256": "5c8c1f43c6899b62b524cc38e761c1e3202076c3e750b355914b8e0c794beaf5",
+          "width": 960
+        },
+        {
+          "height": 640,
+          "occupied_depth_pixels": 36499,
+          "orientation": "top-left RGBA8",
+          "png": "recon-reset.png",
+          "rgba_sha256": "209567bf9ee0ecc75549a9d468b18cbb52fab348c82b215d0b271088313ec862",
+          "width": 960
+        }
+      ],
+      "class": "Recon",
+      "geometry_material_parity": true,
+      "gpu_buffers_retained": true,
+      "orbit_changed_pixels": 46102,
+      "orbit_changed_silhouette_pixels": 20649,
+      "reset_exact_model_pixels": true,
+      "runtime_parts": 5,
+      "source_sha256": "7c75166a1785f08a16b0169fbf3f8e79dde6311701c0c912dbae20b72f3ce99d",
+      "triangles": 900
+    },
+    {
+      "captures": [
+        {
+          "height": 640,
+          "occupied_depth_pixels": 44281,
+          "orientation": "top-left RGBA8",
+          "png": "mining-default.png",
+          "rgba_sha256": "6494f37cbd9c63b85a1057374f3b624946c0545c2db1c019db988c375492fadc",
+          "width": 960
+        },
+        {
+          "height": 640,
+          "occupied_depth_pixels": 50271,
+          "orientation": "top-left RGBA8",
+          "png": "mining-orbit.png",
+          "rgba_sha256": "8419fbee38aed4cc4c52144404de484129f3afdb5e40eade32ca837ea5794005",
+          "width": 960
+        },
+        {
+          "height": 640,
+          "occupied_depth_pixels": 35799,
+          "orientation": "top-left RGBA8",
+          "png": "mining-zoom-out.png",
+          "rgba_sha256": "05fd761617c98a456308912a43e1e4daf843b3df337d94c47ac3bf93ebf8f117",
+          "width": 960
+        },
+        {
+          "height": 640,
+          "occupied_depth_pixels": 44281,
+          "orientation": "top-left RGBA8",
+          "png": "mining-reset.png",
+          "rgba_sha256": "6494f37cbd9c63b85a1057374f3b624946c0545c2db1c019db988c375492fadc",
+          "width": 960
+        }
+      ],
+      "class": "Mining",
+      "geometry_material_parity": true,
+      "gpu_buffers_retained": true,
+      "orbit_changed_pixels": 53836,
+      "orbit_changed_silhouette_pixels": 18104,
+      "reset_exact_model_pixels": true,
+      "runtime_parts": 5,
+      "source_sha256": "17326ef6d11c06ec1ed4c8107b9fb968a5334936a11cbd2fcd14117d1c47c0bf",
+      "triangles": 956
+    },
+    {
+      "captures": [
+        {
+          "height": 640,
+          "occupied_depth_pixels": 47144,
+          "orientation": "top-left RGBA8",
+          "png": "attack-default.png",
+          "rgba_sha256": "0ca2e57d477414f872841332e926386453b2eb8d6561add6b76c946b12b9de7c",
+          "width": 960
+        },
+        {
+          "height": 640,
+          "occupied_depth_pixels": 50820,
+          "orientation": "top-left RGBA8",
+          "png": "attack-orbit.png",
+          "rgba_sha256": "6aa50f82f917e8c1b6c44609a1915ff794cefe730094093ecd426c13451091fe",
+          "width": 960
+        },
+        {
+          "height": 640,
+          "occupied_depth_pixels": 38044,
+          "orientation": "top-left RGBA8",
+          "png": "attack-zoom-out.png",
+          "rgba_sha256": "6c0a518787aac913a105c3dbfea630d36c5aef4b36f0680d70e8ae2a0dd521d0",
+          "width": 960
+        },
+        {
+          "height": 640,
+          "occupied_depth_pixels": 47144,
+          "orientation": "top-left RGBA8",
+          "png": "attack-reset.png",
+          "rgba_sha256": "0ca2e57d477414f872841332e926386453b2eb8d6561add6b76c946b12b9de7c",
+          "width": 960
+        }
+      ],
+      "class": "Attack",
+      "geometry_material_parity": true,
+      "gpu_buffers_retained": true,
+      "orbit_changed_pixels": 57885,
+      "orbit_changed_silhouette_pixels": 19278,
+      "reset_exact_model_pixels": true,
+      "runtime_parts": 5,
+      "source_sha256": "5affe2269a05e5b3004b94f19d3325e8f5fa1938b39445e81f0a9c7efe503bc8",
+      "triangles": 1000
+    }
+  ],
+  "package": {
+    "build_version": "26.10.20.2",
+    "cf_bundle_version": "2485.0.2",
+    "source_head_before_version_commit": "c785de0c8479835f216908dd04347d921fd48fa4",
+    "binary_sha256_before_signing": "85a09463fa655dced222e5fa8c13a36b69f3d06c7e76bb5f7bd0b375632cfb62",
+    "packaged_executable_sha256": "fdece742b6603ef0c5eb08bb542184e3b6718fda79215f8cc7f26413d9baa344",
+    "app": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/drone-model-viewer-fixed-20261020/Arkline Editor Reconstructed.app",
+    "signature": "local ad-hoc; verified deep strict",
+    "profile": "debug; debug information disabled; incremental disabled"
+  },
+  "app_swap": {
+    "at_utc": "2026-10-20T05:50:08.286217+00:00",
+    "old_pid": 5329,
+    "old_command": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/drone-model-viewer-20261020/Arkline Editor Reconstructed.app/Contents/MacOS/arkline-editor --project /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/reconstruction-native-fixed-20261020/disposable-project --pilot ReconstructionQA",
+    "close_exit": 0,
+    "close_stdout": "Guarded target: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target; log: /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/logs/20261020T055007272266Z.log\nNormal owned-window close completed for PID 5329; no forced termination\n",
+    "close_stderr": "",
+    "method": "Normal AX window close; no forced termination",
+    "project_preserved": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/reconstruction-native-fixed-20261020/disposable-project",
+    "launch_command": [
+      "/usr/bin/open",
+      "-a",
+      "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/drone-model-viewer-fixed-20261020/Arkline Editor Reconstructed.app",
+      "--args",
+      "--project",
+      "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/reconstruction-native-fixed-20261020/disposable-project",
+      "--pilot",
+      "ReconstructionQA"
+    ],
+    "open_exit": 0,
+    "open_stdout": "",
+    "open_stderr": "",
+    "new_matching_processes": [
+      "9337 /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/drone-model-viewer-fixed-20261020/Arkline Editor Reconstructed.app/Contents/MacOS/arkline-editor --project /Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/packages/reconstruction-native-fixed-20261020/disposable-project --pilot ReconstructionQA"
+    ],
+    "old_pid_present": false,
+    "build": "26.10.20.2",
+    "new_pid": 9337
+  },
+  "actual_os_acceptance": {
+    "pid": 9337,
+    "receipt": ".build/packages/drone-model-viewer-fixed-20261020/os-ui-acceptance-20261020/os-events.json",
+    "class_selection": "Recon, Mining and Attack selected explicitly; visible selected labels and geometry inspected",
+    "journeys": "Actual OS drag, pixel-wheel zoom and Reset captured for every class",
+    "canvas_comparison": {
+      "cases": [
+        {
+          "class": "recon",
+          "height": 1984,
+          "orbit_changed_canvas_pixels": 340742,
+          "reset_changed_canvas_pixels": 0,
+          "width": 3000,
+          "zoom_changed_canvas_pixels": 200038
+        },
+        {
+          "class": "mining",
+          "height": 1984,
+          "orbit_changed_canvas_pixels": 397142,
+          "reset_changed_canvas_pixels": 0,
+          "width": 3000,
+          "zoom_changed_canvas_pixels": 219242
+        },
+        {
+          "class": "attack",
+          "height": 1984,
+          "orbit_changed_canvas_pixels": 427484,
+          "reset_changed_canvas_pixels": 0,
+          "width": 3000,
+          "zoom_changed_canvas_pixels": 258122
+        }
+      ],
+      "method": "Decoded native owned-window PNG pixel comparison; x16..width-16,y480..height-48 excludes controls and footer"
+    },
+    "png_sha256": {
+      "model-menu.png": "8d5080588c0abb7d1ebd63f8777ebc39402934b6cc294264ee9065d14c6dc2f9",
+      "new-build-initial.png": "668221e473e28e51910d2ed286157949d9b7f0242db96374d0b75158851c1e86",
+      "os-attack-default.png": "bc968c4173549d144c09c5af1d6fb75f12d40187016c98bdeb2c0f4ccc1cc782",
+      "os-attack-orbit.png": "c765f14b3d76d0b23f12366f67999e05a0c896f813df7d79a4b14b4e464d00db",
+      "os-attack-reset.png": "1c9550ea4e895e32b52394a8e0a882fc95f73d3220471c857fd407a18f6b044e",
+      "os-attack-zoom-out.png": "c83043f5d3f8cb177c96cfd3884c6cedcb88960e35afeef51d3cf98ee4d3fa6e",
+      "os-mining-default.png": "73c681b3a54afde4cb80a9ddbc8b2e2744241977c20a7107b4ad224de6679124",
+      "os-mining-orbit.png": "dff06f5701e843c3c3602c865cb2a0d060a702b66b111343feab75a6f724930b",
+      "os-mining-reset.png": "40a2f1003ab879ac3a5904a2ebe7113cd39e2c1f812d9e5e56183e677fe6b403",
+      "os-mining-zoom-out.png": "01ee7ea6bb4585945f25010441877108edb246a2e0e87ecf53201fd2407b3499",
+      "os-recon-default.png": "67a81ab45c2624f07be80ef150731c52e89d5b39f4cebdc7629192d0ee23b68c",
+      "os-recon-orbit.png": "e4d61b068b6d6e8dd808d3d5023e730d5ec703b09b73108aa4c203d2f41c85cd",
+      "os-recon-reset.png": "e18458a847bb1b0bedd0e7731dc5baa82837600b26135280f0d3f31923baf80a",
+      "os-recon-zoom-out.png": "96e7d133748a402a85262c4b5cfeac7936788bf74909f02627a342b327bafbc3",
+      "viewer-open.png": "71643ea123954de986b2fdf04555193e5d47fc748320431791e6444fee82b857"
+    }
+  },
+  "source_sha256": {
+    "apps/client/src/drone_models.rs": "792405e4fcb2472367de984b925f897f7388fcdf1a883bc5ffecfe59d96ef204",
+    "apps/client/src/drone_gallery.rs": "fc05b23e6a2839d313a543d7805dffdda0bc3229bfd422ff6fd75855c342b54d",
+    "apps/client/src/drone_model_gpu_tests.rs": "54fe42adb6f0cdac932c9f31e14f563b899577debbce2fe143b1df7d8ef01d02",
+    "apps/client/src/flight3d.rs": "76e4df340bc634c3823dad6a3b6f7e5c89230e3f9c2622e20def1f27f9418211",
+    "apps/client/src/cockpit_occlusion_geometry.rs": "58e67db3b49b319e0e5b4958b18cab940202f777f035a9d05e16700a6bc80c3d",
+    "apps/editor/src/main.rs": "b5c904069614399b3fb000fbc12e26a9353b5cda233c47546442b31c4557d2a2",
+    "apps/editor/src/drone_gallery_tests.rs": "1730aac755b98c420452d0812d640c52b1e16555507308f31fca9d76e0d6860d",
+    "BUILD_VERSION": "5b065098951b28dfb0a4fd3e158301f1f9486b8b749f50153935c8ab9e149d02"
+  },
+  "preservation": {
+    "one_guarded_internal_target": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020/.build/target",
+    "workspace_identity": [
+      16777234,
+      235182980
+    ],
+    "free_gib": 207.86,
+    "old_bundles_and_fixtures_retained": true,
+    "original_recovery_and_shared_runner_edited": false,
+    "external_drive_operations": false,
+    "remote_publication": false
+  },
+  "limits": [
+    "Local checks; no published exact-head CI or remote PR/merge/release.",
+    "Browser GPU runtime remains unverified; browser-target warnings-denied Clippy passed.",
+    "Earlier reconstruction OS text-focus/controlled continuous-feed/depth acceptance is not established by this model-viewer journey; separate native GPU depth and Shift checks passed.",
+    "Initial26.10.20.1 files named os-recon-* show Attack selected and are not Recon acceptance; superseded by explicit26.10.20.2 class journeys.",
+    "Reconstructed integration source is not a byte-exact recovery of missing combined builds46/47."
+  ]
+}

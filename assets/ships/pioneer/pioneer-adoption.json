@@ -1,0 +1,192 @@
+{
+  "schema": "arkline.pioneer-model-adoption/v1",
+  "date_utc": "2026-10-24",
+  "status": "local registration12 authored drone-bay source candidate; source and existing bridge clearance accepted, dynamic runtime/inventory/native acceptance pending",
+  "base_commit": "71228c1ad06761fe8a74be40e59e9b367e45bbff",
+  "prior_canonical_glb_sha256": "26eb88de6e05ecc2b1f5e019642ef7a475186d0a0978f0b82e12296d0bd82ca7",
+  "canonical": {
+    "editable_source": "pioneer.blend",
+    "source_sha256": "ee43c05cb1d4ebf907d609b5338b4d8a911b812d8fb05914c96ca48dbb06b1d9",
+    "glb": "pioneer.glb",
+    "glb_sha256": "7970f096a6aac9d95b6250b75cd19ea2e54046c9deb77f3592b82efa879112fd",
+    "triangles": 131438,
+    "material_batches": 9,
+    "source_parts": 953,
+    "body_bounds_xyz_m": [
+      [
+        -36.000003814697266,
+        -9.0,
+        -19.0
+      ],
+      [
+        36.0,
+        11.350000381469727,
+        19.0
+      ]
+    ],
+    "body_envelope_xyz_m": [
+      72,
+      20.35,
+      38
+    ]
+  },
+  "export_receipt": {
+    "path": "pioneer-export.json",
+    "sha256": "979748932dfe690cf1a48347286bbad4ee9e73b0ecfaa4505003237c9d9a2ed9",
+    "source_copy_note": "Canonical pioneer.blend is byte-identical to receipt-selected pioneer-drone-bay.blend."
+  },
+  "selected_scope": [
+    "Authored aft unmanned drone bay with15 cradles, supported trays/racks, shared handling gantry/lift/forks and8x3.2m rear aperture",
+    "22 uniquely identified moving groups,71 source parts,7668 dynamic triangles; all709 prior non-Pressure-hull parts geometrically unchanged",
+    "Existing raised bridge, crew route, port access, turrets and exterior fixtures preserved; no new crew bay access"
+  ],
+  "compatibility": "Registration12 requires matching source/client/server and fresh opted-in preview. Registration11 and prior bound saves are preserved and incompatible, never rewritten or silently initialized. Physical stock/lifecycle activation remains separate integration.",
+  "validation": {
+    "source_export": "strict saved-master bpy5.0.1 export passed; exact source and GLB hashes checked",
+    "source_static_clearance": "267 continuous translated hardware-box vs source-triangle sweeps passed;10um contact tolerance",
+    "relative_motion": "426000 continuous relative-motion checks passed; closed-door and missing-release negative controls detect90 and15 hits",
+    "existing_parts": "709 prior non-Pressure-hull parts retain bit-identical exported positions and normals; no previous part removed",
+    "bridge_source_clearance": "4971 capsule-axis supercover poses; minimum0.41999999m;0 violations; all aperture/turret/closure rays pass on exact new master",
+    "native_engine": "pending combined renderer, stock, mechanism, camera and interaction integration; source renders are not native acceptance"
+  },
+  "receipts": {
+    "authoring": "drone-bay-authoring.json",
+    "runtime_binding": "drone-bay-runtime-binding.json",
+    "static_clearance": "drone-bay-static-clearance.json",
+    "relative_clearance": "drone-bay-relative-clearance.json",
+    "existing_parts": "drone-bay-preserved-source-parts.json",
+    "bridge_clearance": "drone-bay-bridge-source-clearance.json"
+  },
+  "limits": [
+    "No mass, strength, pressure, motor, power, thermal or thrust simulation from these static/kinematic assets",
+    "No drone bodies baked into hull; persistent stock renders separately from authority",
+    "No crew access to new bay",
+    "43 moving material batches plus up to9 static batches; not a nine-draw-call runtime claim",
+    "No runtime performance, live-feed, inventory, launch/recovery or release acceptance claim",
+    "No public source publication, merge or deployment"
+  ],
+  "previous_adoption": {
+    "schema": "arkline.pioneer-model-adoption/v1",
+    "date_utc": "2026-10-24",
+    "status": "local revision11 raised bridge source candidate; exact asset export and source clearance checked, combined engine acceptance recorded separately",
+    "claim": "https://github.com/PIndustries/arkline-engine/issues/62",
+    "base_commit": "28817c23ee0d5b6d84ffe207fe60317cff3afe13",
+    "prior_canonical_glb_sha256": "8125644f007537437942d34169e527c08ddd2dfaed575c874e2263ff2b7cb123",
+    "canonical": {
+      "editable_source": "pioneer.blend",
+      "source_sha256": "c5a55fe2c7e37c501e188249ae7eec90e292f35fb251b5b21e361013df8633de",
+      "glb": "pioneer.glb",
+      "glb_sha256": "26eb88de6e05ecc2b1f5e019642ef7a475186d0a0978f0b82e12296d0bd82ca7",
+      "triangles": 105344,
+      "material_batches": 9,
+      "source_parts": 710,
+      "body_bounds_xyz_m": [
+        [
+          -36.000003814697266,
+          -9.0,
+          -19.0
+        ],
+        [
+          36.0,
+          11.350000381469727,
+          19.0
+        ]
+      ],
+      "body_envelope_xyz_m": [
+        72,
+        20.35,
+        38
+      ]
+    },
+    "export_receipt": {
+      "path": "pioneer-export.json",
+      "sha256": "b189d6ad7e07e4467c6c637ce3d31c10448eedd0caa1249f27fd5e537939d97d",
+      "source_copy_note": "Canonical pioneer.blend is byte-identical to receipt-selected pioneer-raised-bridge.blend."
+    },
+    "selected_scope": [
+      "Complete compact raised bridge shell at +8m body Y with actual front/side apertures",
+      "Connected canonical two-deck, lower service and bridge stair cavities; lower boarding aperture retained",
+      "Obsolete low glazing replaced with opaque service shell; wide old cockpit framing retired",
+      "Supported outboard mining turret sockets at body Z\u00b15.2m; propulsion/cargo/drone architecture retained",
+      "Repair retired low-bridge recess perimeter with overlapping opaque closure edges and physical corner/aft returns; preserve port boarding aperture"
+    ],
+    "compatibility": "Registration11 and new asset/source bindings require matching fresh test worlds; previous saves and asset documents are not migrated or rewritten.",
+    "validation": {
+      "source_export": "strict saved-master bpy5.0.1 export passed",
+      "contract_unit_tests": "18 passed including all3 bpy5.0.1 fixture groups; no skipped tests",
+      "source_clearance": "4971 foot-height-supercover body poses,25 capsule-axis samples each; radius0.3m height1.8m, minimum0.42m source-triangle distance,0 violations; conservative sampling bound, not exact analytic capsule test",
+      "native_engine": "pending combined integration; do not substitute Blender views",
+      "source_apertures": "7 horizontal eye/turret rays clear all opaque source triangles; glass excluded only for aperture rays",
+      "repeat_export": "Final sealed v8 repeated byte-identically in an independent strict saved-master export",
+      "retired_low_bridge_closure": "40 short source rays hit opaque closures around retired sill/chamfer perimeter; same regression fails on prior bridge source at32 locations",
+      "port_boarding_aperture": "Three short rays through the intended port boarding doorway remain clear at Y0.1,0.8,1.45m; dynamic hatch and lift tested by runtime"
+    },
+    "limits": [
+      "Glass remains supported opaque scalar PBR; no new transparency simulation",
+      "Static hull geometry does not model pressure, strength, mass, motor power or heat",
+      "Source clearance complements, not replaces, runtime traversal and support tests",
+      "No public source publication, merge or deployment"
+    ],
+    "previous_adoption": {
+      "schema": "arkline.pioneer-model-adoption/v1",
+      "date_utc": "2026-10-15",
+      "status": "Study05 refined source adopted, actual engine7040 and native7042 accepted; selected bow/service scope visually reviewed; overall v05 unfinished; draft unmerged",
+      "claim": "https://github.com/PIndustries/arkline-engine/issues/10#issuecomment-6199911507",
+      "prior_published_head": "2abbc22197b5530bd11e76bf665b828a4033db27",
+      "prior_canonical_glb_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+      "prior_study05_preview_glb_sha256": "df8490f42379aca161df0aa26b24cb32ab8dbf73e83e0681ed2cfc29ef43a2c9",
+      "canonical": {
+        "editable_source": "pioneer.blend",
+        "source_sha256": "61eb70e1978668f5ca7256f237d9df14c47140b9bbbbce327875b68efcbe57c9",
+        "glb": "pioneer.glb",
+        "glb_sha256": "8125644f007537437942d34169e527c08ddd2dfaed575c874e2263ff2b7cb123",
+        "triangles": 103466,
+        "material_batches": 9,
+        "source_parts": 686,
+        "body_envelope_xyz_m": [
+          72,
+          18,
+          38
+        ]
+      },
+      "export_receipt": {
+        "path": "pioneer-export.json",
+        "sha256": "fadece504f99169f645559f5c903636b6555f8d8b3f3c3b856cc267b639d5429",
+        "source_copy_note": "Canonical pioneer.blend is byte-identical to receipt-selected pioneer-study05.blend."
+      },
+      "source_identity": "source-hash/exact-name snapshot mappings;35 prior lids/rails explicitly removed, retained material identities preserved; no durable cross-revision ID claim",
+      "selected_scope": [
+        "faceted layered bow and true recessed framed glazing with connected braces",
+        "recessed service/work bays and stowed visual handling arm",
+        "true recessed existing drive openings with counterbored flange joints"
+      ],
+      "presentation": "Windows emission 0.025 with cool state-driven output; opaque PBR glass metallic 0.60/roughness 0.12. No fitted interior/transmission claim. Default load 88 W; pulse/drive/power semantics retained.",
+      "compatibility": "Prior accepted-hash worlds refuse without rewriting state; old graphs retain hashes and require explicit replacement/rebinding. New preview project; no automatic migration.",
+      "visual_gaps": [
+        "broader side/collar and underside architecture still needs review againstv05",
+        "textures/normalmaps/interiorreflection/transmission unsupported",
+        "moving/crane/hatch operation and fitted interior not implemented"
+      ],
+      "engine_acceptance": {
+        "authority_build": "26.10.15.7040",
+        "authority_source_commit": "15ce32c1d18975383d1d4e9a13e4e479c9085cfd",
+        "receipt": "../../../docs/ships/pioneer/images/runtime-study05-20261015/refined/authority-receipt.json",
+        "matched_before_build": "26.10.15.7036",
+        "first_study05_build": "26.10.15.7038",
+        "changes_between_runs": "Source geometry and declared Window tuning differ. Cameras, renderer/sunlight, fixture identities, loads and pulse periods are retained. Separate real disposable worlds; no fabricated flight/power state.",
+        "native_build": "26.10.15.7042",
+        "native_source_commit": "c663a3bf9afd550495118e0d7f105f9c13a79b07",
+        "native_receipt": "../../../docs/ships/pioneer/images/runtime-study05-20261015/native/native-receipt.json"
+      },
+      "normal_review": {
+        "strict_same_winding_triangles": 103458,
+        "strict_corners": 310374,
+        "normal_mismatch_bins": 0,
+        "separate_exact_position_thin_triangles": 8,
+        "separate_normal_dots": 1.0,
+        "report": "../../../docs/ships/pioneer/images/runtime-study05-20261015/audit-refined/summary.json"
+      }
+    },
+    "prior_local_bridge_glb_sha256": "9f248a454ffdb9754efa2c2b2a810b571248e1e898a3d252b77a9f5a48d24ed6"
+  }
+}

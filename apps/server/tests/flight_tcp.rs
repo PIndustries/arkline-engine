@@ -59,13 +59,22 @@ impl Client {
     }
     fn connect(&mut self, token: Option<String>) -> Response {
         self.request(Request::Connect {
+            supports_room_controls: false,
+            world_layout_version: 1,
+            supports_fleet_hangar: false,
             supports_pioneer_interior: true,
+            supports_docked_traversal_v2: false,
             protocol_version: PROTOCOL_VERSION,
             pilot: "Navigator".into(),
             resume_token: token,
         })
     }
 }
+
+fn flight_is_stopped(flight: &FlightState) -> bool {
+    flight.velocity == [0.0; 3]
+}
+
 #[test]
 fn commanded_flight_stops_and_survives_process_restart_without_economic_changes() {
     let nonce = SystemTime::now()
@@ -108,21 +117,15 @@ fn commanded_flight_stops_and_survives_process_restart_without_economic_changes(
     client.request(Request::Navigate {
         mode: NavigationMode::Stop,
     });
-    // Let authoritative braking finish without issuing more navigation commands.
+    // Wait for exact model rest: a small nonzero velocity can still change the
+    // persisted position between this snapshot and process shutdown.
     let speed = moved.velocity.iter().map(|v| v * v).sum::<f64>().sqrt();
     let stop_seconds =
         speed / ship_braking_acceleration(moving.pilots[0].ship_class, moving.pilots[0].ore) + 2.0;
     let deadline = std::time::Instant::now() + Duration::from_secs_f64(stop_seconds);
     let stopped = loop {
         let snapshot = client.request(Request::Snapshot).snapshot.unwrap();
-        if snapshot.pilots[0]
-            .flight
-            .as_ref()
-            .unwrap()
-            .velocity
-            .iter()
-            .all(|v| v.abs() < 0.1)
-        {
+        if flight_is_stopped(snapshot.pilots[0].flight.as_ref().unwrap()) {
             break snapshot;
         }
         assert!(
@@ -132,13 +135,9 @@ fn commanded_flight_stops_and_survives_process_restart_without_economic_changes(
         thread::sleep(Duration::from_millis(100));
     };
     let position = stopped.pilots[0].flight.as_ref().unwrap().position;
-    assert!(stopped.pilots[0]
-        .flight
-        .as_ref()
-        .unwrap()
-        .velocity
-        .iter()
-        .all(|v| v.abs() < 0.1));
+    assert!(flight_is_stopped(
+        stopped.pilots[0].flight.as_ref().unwrap()
+    ));
     assert_eq!(
         stopped.ledger_hash, before.ledger_hash,
         "navigation must not mint economic events"
@@ -158,4 +157,89 @@ fn commanded_flight_stops_and_survives_process_restart_without_economic_changes(
     drop(client);
     drop(host);
     fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn almost_stopped_flight_still_moves_before_exact_rest() {
+    let mut server = arkline_server::Server::open(":memory:").unwrap();
+    let mut session = None;
+    let mut request = |request: Request, now: u64| {
+        let response = server.handle_at(&mut session, request, now);
+        assert!(response.ok, "{}", response.message);
+        response.snapshot.unwrap()
+    };
+    request(
+        Request::Connect {
+            supports_room_controls: false,
+            world_layout_version: 1,
+            supports_fleet_hangar: false,
+            supports_pioneer_interior: true,
+            supports_docked_traversal_v2: false,
+            protocol_version: PROTOCOL_VERSION,
+            pilot: "StopBoundary".into(),
+            resume_token: None,
+        },
+        0,
+    );
+    request(
+        Request::SelectShip {
+            ship_class: ShipClass::Pioneer,
+        },
+        0,
+    );
+    let before = request(Request::Undock, 0);
+    let initial = before.pilots[0].flight.as_ref().unwrap().position;
+    request(
+        Request::Navigate {
+            mode: NavigationMode::FlyTo {
+                position: [
+                    initial[0] + 4000.0,
+                    initial[1] + 1000.0,
+                    initial[2] + 2000.0,
+                ],
+            },
+        },
+        0,
+    );
+    let stopping_at = 1600;
+    let moving = request(Request::Snapshot, stopping_at);
+    let speed = moving.pilots[0]
+        .flight
+        .as_ref()
+        .unwrap()
+        .velocity
+        .iter()
+        .map(|v| v * v)
+        .sum::<f64>()
+        .sqrt();
+    let braking = ship_braking_acceleration(moving.pilots[0].ship_class, moving.pilots[0].ore);
+    let stopped_at = stopping_at + (1000.0 * speed / braking).round() as u64;
+    request(
+        Request::Navigate {
+            mode: NavigationMode::Stop,
+        },
+        stopping_at,
+    );
+
+    // The old <0.1 predicate admits this state one millisecond before rest.
+    let almost_stopped = request(Request::Snapshot, stopped_at - 1);
+    let flight = almost_stopped.pilots[0].flight.as_ref().unwrap();
+    assert!(flight.velocity.iter().all(|v| v.abs() < 0.1));
+    assert!(
+        !flight_is_stopped(flight),
+        "small residual velocity must not establish rest: {:?}",
+        flight.velocity
+    );
+
+    let stopped = request(Request::Snapshot, stopped_at + 1);
+    let stopped_flight = stopped.pilots[0].flight.as_ref().unwrap();
+    assert!(flight_is_stopped(stopped_flight));
+    assert_ne!(stopped_flight.position, flight.position);
+    let later = request(Request::Snapshot, stopped_at + 100);
+    let later_flight = later.pilots[0].flight.as_ref().unwrap();
+    assert!(flight_is_stopped(later_flight));
+    assert_eq!(later_flight.position, stopped_flight.position);
+    assert_eq!(later.pilots[0].ore, before.pilots[0].ore);
+    assert_eq!(later.pilots[0].credits, before.pilots[0].credits);
+    assert_eq!(later.ledger_hash, before.ledger_hash);
 }

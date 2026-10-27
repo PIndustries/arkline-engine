@@ -1,0 +1,23 @@
+@@ -140,2 +140,4 @@
+     pub snapshot_confirmed: bool,
++    /// An unknown prior outcome does not disable a new explicit user command.
++    pub notice: Option<String>,
+     pub unavailable: Option<String>,
+@@ -375,8 +377,9 @@
+             .is_some_and(|(_, started)| started.elapsed() >= COMMAND_TRACE_TIMEOUT);
++        let notice = if timed_out {
++            Some("Command outcome unknown after 3 seconds. Nothing was retried; inspect a later receipt or snapshot.".into())
++        } else {
++            diagnostics.unknown.clone()
++        };
+         let unavailable = if !matches!(self.mode, EmbeddedSessionMode::Local) {
+             Some("Command tracing is available only in the local editor world; shared sessions are not instrumented.".into())
+-        } else if timed_out {
+-            Some("Command outcome unknown after 3 seconds. Nothing was retried; inspect a later receipt or snapshot.".into())
+-        } else if let Some(reason) = &diagnostics.unknown {
+-            Some(reason.clone())
+         } else if self.state != EmbeddedStatus::Running {
+@@ -437,2 +440,3 @@
+             snapshot_confirmed,
++            notice,
+             unavailable,

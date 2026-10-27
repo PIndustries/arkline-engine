@@ -1,0 +1,267 @@
+{
+  "schema_version": 1,
+  "status": "PASS selected-bay source completeness and fixed-world route scope",
+  "candidate_revision": 1704,
+  "bay_id": 0,
+  "cassette_id": 0,
+  "class": "mining",
+  "fixture_sha256": "0c1c62c55330d236df9fae60d551e6840ece044e761be2749829a3d2c7bcbd35",
+  "assembly_manifest_sha256": "5315dedb22972d1429cb23cc2d53b81836c416d30ff106fa266523e1671f22f2",
+  "ship_glb_sha256": "08241a77914f7b909b666cde14c4f7efd6f4ed8364e3fe25e8926dee75a2e011",
+  "donor_glb_sha256": "9363b725e154f7219533461766c2dee2d1a6aaed7d662db38ad1e7c25071cf14",
+  "ship_source_sha256": "1fdeee298023251b6907ff4ba64bda4f8117103f99e65cb31cd7f35ce6d8c718",
+  "ship_manifest_sha256": "7eabc9186d4bf361fde89fd4b921bf4b89f850f13e438c1b52197beabf3293bd",
+  "export_receipt_sha256": "c95ef60d79065ea0fd44f39767271346bb751575d3d4bf0607e2673c68f27478",
+  "source_extraction_sha256": "8ec2792fb34b826103a41570fdc95f98e5907bee98a98709be44d667e016205d",
+  "source_triangles_sha256": "099b3014ebca7a2c1bc52fb819e696f28fd04c1bcf54bba180a6e45212ff8dd3",
+  "source_material_correspondence_sha256": "4e12b6e298613c74a83a4a1a118dfe0b4515c726d66c2faba4724b2045504e05",
+  "dynamic_export_coverage_sha256": "ebeccb494f57ff76841237d5b43ce6d12e5acc58f017c0abeba4117904ad5cd6",
+  "guarded_static_route_sha256": "af6cff6fd8ff1ed5c9637b6b2a93f3f2887cb4483ee0059f1ef70f9c4040a03f",
+  "original_route_proof_sha256": "b687594bd981b33aee780730fbe393bbfa85a3c3c0d243c98be57c534727b031",
+  "source_configuration_sha256": "6643466e56f61cfd54f073675d5ab76b6a228199d1fb9a7b7dc5282918db7e86",
+  "contact_boundary_m": 1e-05,
+  "source_export_remote_guard_m": 3e-06,
+  "normal_gameplay_admitted": false,
+  "physical_path_proofs": {
+    "fixed_network_path": {
+      "sha256": "0ec730cfd74870ce7033f8a8c82a836db1822705a9059c62f124c92b517a851a",
+      "status": "PASS bounded whole fixed-network lumen geometry; NOT installed material clearance or flow rating"
+    },
+    "receiver_fixed_joint": {
+      "sha256": "b55e9f81a1b2dcf9c516103faacf4153a433c3f1992c5f916bca1dc57ae1d2bd",
+      "status": "PASS bounded intentional fixed/fixed overlap joint and unobstructed interface; original surface-separation FAIL retained"
+    },
+    "receiver_motion_proof": {
+      "sha256": "5f4b1ac06257fe99fa69b87270ca6788ad2130890cf212fdbbb354c22d4af6f5",
+      "status": "PASS new94mm candidate full valve stroke, captured geometry, closed section and open interface; runtime unmodified"
+    },
+    "receiver_isolated_path": {
+      "sha256": "697371ecc4f6a54d6ff5ee5cc6e85bcc89678a54126f223358a3fc86eea02e0a",
+      "status": "PASS bounded actual isolated receiver topology, motion and connected lumen; UNADMITTED"
+    },
+    "drone_full_cell_path_valve": {
+      "sha256": "32762793560eb5f628d50c204b71ebfbdd21ab860e56c7dad9b3c4072c7cbdb9",
+      "status": "PASS exact full counted cell, closed overlapping material components, connected conservative path and continuous valve sweep"
+    },
+    "drone_receiver_interface": {
+      "sha256": "745230aa1a40e08761a7bae585d3bd159088a1e65d216fdec7be4efd8f5df948",
+      "status": "PASS actual seated all10 connected 168mm-square interface bridges; no pressure seal claim"
+    }
+  },
+  "unclassified_export_components": 0,
+  "partition_complete": true,
+  "selected_material_sweep_beam_join_pass": true,
+  "total_export_triangles": 199632,
+  "dynamic_export_triangles": 62220,
+  "fixed_local_parts": [
+    "pioneer.magazine_ready/render_batch/0490",
+    "pioneer.magazine_ready/b00/portal lower",
+    "pioneer.magazine_ready/render_batch/0491",
+    "pioneer.physical_cargo/b00/fixed-fluid-join",
+    "pioneer.physical_cargo/b00/fixed-split-valve-frame",
+    "pioneer.physical_cargo_rebuild/fixed_fluid_network"
+  ],
+  "fixed_remote_parts": 1046,
+  "local_static_surface_coverage": [
+    {
+      "part": "pioneer.magazine_ready/render_batch/0490",
+      "reachable_covered": 0,
+      "remote_triangles": 912,
+      "exact_union_checks": 0,
+      "total": 912
+    },
+    {
+      "part": "pioneer.magazine_ready/b00/portal lower",
+      "reachable_covered": 6,
+      "remote_triangles": 38,
+      "exact_union_checks": 0,
+      "total": 44
+    },
+    {
+      "part": "pioneer.magazine_ready/render_batch/0491",
+      "reachable_covered": 0,
+      "remote_triangles": 6504,
+      "exact_union_checks": 0,
+      "total": 6504
+    },
+    {
+      "part": "pioneer.physical_cargo/b00/fixed-fluid-join",
+      "reachable_covered": 0,
+      "remote_triangles": 32,
+      "exact_union_checks": 0,
+      "total": 32
+    },
+    {
+      "part": "pioneer.physical_cargo/b00/fixed-split-valve-frame",
+      "reachable_covered": 46,
+      "remote_triangles": 50,
+      "exact_union_checks": 0,
+      "total": 96
+    },
+    {
+      "part": "pioneer.physical_cargo_rebuild/fixed_fluid_network",
+      "reachable_covered": 0,
+      "remote_triangles": 1304,
+      "exact_union_checks": 0,
+      "total": 1304
+    }
+  ],
+  "local_static_mesh_sweep_queries": 3218,
+  "local_static_mesh_failures": [],
+  "source_material_classification_count": 9936,
+  "unique_source_material_classifications": 1122,
+  "route_joins": {
+    "launch_to_service": true,
+    "service_to_capture": true,
+    "capture_to_launch": true,
+    "service_to_deployed": true
+  },
+  "mining_fixture": {
+    "target_center_mm": [
+      -26000,
+      -100,
+      -48800
+    ],
+    "target_radius_mm": 1000,
+    "mining_range_mm": 12000,
+    "muzzle_local_mm": [
+      2450,
+      -100,
+      0
+    ],
+    "muzzle_world_mm": [
+      -26000,
+      -100,
+      -41250
+    ],
+    "beam_target_near_mm": [
+      -26000,
+      -100,
+      -47800
+    ],
+    "beam_corridor_half_width_mm": 10,
+    "head_rotation": "fixed source +X, no articulated aim during this inspection",
+    "source_mount_file_sha256": "0094d6b4f59c135062dc8b9b5633ab62a88353bb999d6c3b63350713a5a6cf0a",
+    "target_and_ray_obstruction_failures": []
+  },
+  "checker_sha256": "5b4b1820fad84c6ee0b6ace6ad2b8aaf54ec09229d18ea2012eebb06093dc38c",
+  "validation_helper_sha256": "49b6510dc616ef524563353460285ee50213852ce00e333050c7bea076352b64",
+  "helper_hashes": {
+    "continuous_geometry": "5480483d57f4afabe94de376a9efd01056a7f68dff16a4f2a9d9d6e807c28d93",
+    "source_ray": "bc1b1880413a9733c4dd767f0a3787cd987373c926ad179268159469fde35520",
+    "source_topology": "ef3c73c514b2422731efd98d831dd7fc625b47b7664523495ae439b9db4e165b",
+    "source_decode": "157d8b54fe3c4c820d159d343181e259ecc38afd7aa82811454e1cac9d3da1ba",
+    "triangle_union": "d92e9f1ae8b6153807b9066683742bc669b7150f35ba1958a6cad6e64f8889b3"
+  },
+  "negative_controls": [
+    "range gaps/duplicates or unknown source owner rejected before classification",
+    "reachable uncovered face rejected without namespace bypass",
+    "contained material signed crossings nonzero",
+    "overlapping positive solids cannot cancel by even parity",
+    "exact union rejects triangle with only vertices covered",
+    "source/fixture/host motion mismatch rejected",
+    "narrow ray intersects full obstacle negative"
+  ],
+  "limits": [
+    "Selected bay0 Mining donor only; all other mechanics frozen; no external dynamic world objects or arbitrary targets.",
+    "Inherited10\u00b5m handling contact boundary retained; not exactzero-gap mechanical certification or structural/load rating.",
+    "One closed-source material object is classified at a time using signed crossings; no cross-object cancellation.",
+    "Remote support must remain at exact certified source poses.",
+    "Full fleet, concurrent routes, acceleration, flight, warp, camera rendering and normal gameplay remain outside this certificate."
+  ],
+  "detailed_proof_sha256": "4efb95ad9c995a7f9eb15ddc8debd9f63d455a85d8fe6b12aa3952eddadc841d",
+  "export_partition_sha256": "b9884020c0c1393c47bb1082bbf350cb4d994561067e7fed3b81eb93c172f170",
+  "reachable_sweeps_sha256": "ccf392d55e7164d19851119a6824180a0f3ed3dd89f652a467371373434a1ed2",
+  "source_material_classifications_sha256": "9843cefd449b2cc892c2d62b7eec3484c5ce6bb9f4dbd1b07daf3a0692c7151a",
+  "host_constraints": {
+    "stationary_source_frame": 1,
+    "all_carrier_roots": 500,
+    "active_roots": [
+      "b00/door/lower",
+      "b00/door/upper",
+      "b00/fluid/valve/-1",
+      "b00/fluid/valve/1",
+      "b00/receiver/head",
+      "b00/receiver/latch/port",
+      "b00/receiver/latch/starboard",
+      "b00/receiver/stage/1",
+      "b00/receiver/stage/2",
+      "b00/receiver/stage/3",
+      "b00/receiver/stage/4",
+      "b00/receiver/stage/5",
+      "c00/clamp/port",
+      "c00/clamp/starboard",
+      "c00/cradle",
+      "c00/cradle/stage/1",
+      "c00/cradle/stage/2",
+      "c00/cradle/stage/3",
+      "c00/cradle/stage/4"
+    ],
+    "unrelated_host_roots_frozen_at_export": [
+      "carriage_x",
+      "door/lower",
+      "door/upper",
+      "fork_stage0",
+      "fork_stage1",
+      "fork_stage2",
+      "lift_xy",
+      "tray/s00",
+      "tray/s01",
+      "tray/s02",
+      "tray/s03",
+      "tray/s04",
+      "tray/s05",
+      "tray/s06",
+      "tray/s07",
+      "tray/s08",
+      "tray/s09",
+      "tray/s10",
+      "tray/s11",
+      "tray/s12",
+      "tray/s13",
+      "tray/s14"
+    ],
+    "other_bays_classes_reserve_staging_warp_closed": true,
+    "frozen_carrier_root_poses_sha256": "ebab9c3d78f67f8a8ac247fa19781573a7b6c87c2f7b7c6a26f6b5a49668be8c",
+    "frozen_carrier_root_count": 481
+  },
+  "canonical_stored": {
+    "body": {
+      "position_m": [
+        -26.0,
+        0.0,
+        -22.8
+      ],
+      "orientation_xyzw": [
+        0.0,
+        0.7071067811865476,
+        0.0,
+        0.7071067811865476
+      ]
+    },
+    "inlet": 0,
+    "all_machinery_sha256": "ac75d737a864837d9d75fc4c1aa9932dd3e1c014708c49f399f28f944d744284"
+  },
+  "canonical_deployed": {
+    "body": {
+      "position_m": [
+        -26.0,
+        0.0,
+        -38.8
+      ],
+      "orientation_xyzw": [
+        0.0,
+        0.7071067811865476,
+        0.0,
+        0.7071067811865476
+      ]
+    },
+    "inlet": 0,
+    "all_machinery_sha256": "ac75d737a864837d9d75fc4c1aa9932dd3e1c014708c49f399f28f944d744284"
+  },
+  "negative_tests": {
+    "passed": 7,
+    "log_sha256": "6bb81384e1f95b1f0fec199d75f93075f74211212c2c1c92769a150deb5f7865",
+    "test_script_sha256": "e601f319de431e17ce4c3f31b014186dda19620ad93193aa4b13946bb69b0084"
+  }
+}

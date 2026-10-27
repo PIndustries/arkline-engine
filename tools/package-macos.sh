@@ -8,7 +8,23 @@ if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
 fi
 OUTPUT="$1"
 PROFILE="${2:-release}"
-BUILD_VERSION="$(cat "$ROOT/BUILD_VERSION")"
+if [ ! -f "$ROOT/assets/Arkline.icns" ]; then
+  echo "Missing bundle icon: $ROOT/assets/Arkline.icns" >&2
+  exit 2
+fi
+case "$PROFILE" in
+  release|debug) ;;
+  *) echo "Profile must be debug or release" >&2; exit 2 ;;
+esac
+cd "$ROOT"
+STAGING="$(mktemp -d "${TMPDIR:-/tmp}/arkline-package.XXXXXX")"
+trap 'rm -rf "$STAGING"' EXIT
+if [ "$PROFILE" = release ]; then
+  python3 "$ROOT/tools/build.py" --artifact-dir "$STAGING/bin" --version-output "$STAGING/BUILD_VERSION" -- build --workspace --locked --release --message-format=json-render-diagnostics > /dev/null
+else
+  python3 "$ROOT/tools/build.py" --artifact-dir "$STAGING/bin" --version-output "$STAGING/BUILD_VERSION" -- build --workspace --locked --message-format=json-render-diagnostics > /dev/null
+fi
+BUILD_VERSION="$(cat "$STAGING/BUILD_VERSION")"
 if [[ ! "$BUILD_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   echo "BUILD_VERSION must contain four numeric components: year.month.day.build" >&2
   exit 2
@@ -22,34 +38,20 @@ if (( 10#$BUILD_MONTH < 1 || 10#$BUILD_MONTH > 12 || 10#$BUILD_DAY < 1 || 10#$BU
   echo "BUILD_VERSION month/day/build components are out of range" >&2
   exit 2
 fi
-# Calendar identity stays visible in ArklineBuildVersion; the bundle build
-# uses numeric date.sequence spelling (26.10.9.1 becomes 20261009.1).
 printf -v BUILD_NUMBER '20%02d%02d%02d.%d' "$((10#$BUILD_YEAR))" "$((10#$BUILD_MONTH))" "$((10#$BUILD_DAY))" "$((10#$BUILD_SEQUENCE))"
-if [ ! -f "$ROOT/assets/Arkline.icns" ]; then
-  echo "Missing bundle icon: $ROOT/assets/Arkline.icns" >&2
-  exit 2
-fi
-case "$PROFILE" in
-  release|debug) ;;
-  *) echo "Profile must be debug or release" >&2; exit 2 ;;
-esac
-cd "$ROOT"
-if [ "$PROFILE" = release ]; then
-  cargo build --workspace --locked --release
-else
-  cargo build --workspace --locked
-fi
-BINARIES="${CARGO_TARGET_DIR:-$ROOT/target}/$PROFILE"
+BINARIES="$STAGING/bin"
 APP="$OUTPUT/Arkline.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$OUTPUT/command-tools"
 cp -f "$BINARIES/arkline-client" "$APP/Contents/MacOS/Arkline"
 cp -f "$BINARIES/arkline-server" "$APP/Contents/MacOS/arkline-server"
 cp -f "$BINARIES/arkline" "$OUTPUT/command-tools/arkline"
 cp -f "$BINARIES/arkline-verifier" "$OUTPUT/command-tools/arkline-verifier"
-cp -f README.md LICENSE TRADEMARKS.md BUILD_VERSION "$OUTPUT/"
+cp -f README.md LICENSE TRADEMARKS.md "$OUTPUT/"
+cp -f "$STAGING/BUILD_VERSION" "$OUTPUT/BUILD_VERSION"
 mkdir -p "$OUTPUT/docs"
 cp -f docs/licensing.md "$OUTPUT/docs/licensing.md"
-cp -f LICENSE TRADEMARKS.md BUILD_VERSION "$APP/Contents/Resources/"
+cp -f LICENSE TRADEMARKS.md "$APP/Contents/Resources/"
+cp -f "$STAGING/BUILD_VERSION" "$APP/Contents/Resources/BUILD_VERSION"
 if [ -d ThirdParty ]; then
   cp -R ThirdParty "$APP/Contents/Resources/ThirdParty"
 fi

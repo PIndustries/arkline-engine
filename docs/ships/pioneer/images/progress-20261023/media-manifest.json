@@ -1,0 +1,86 @@
+{
+  "date": "2026-10-23",
+  "scope": "Pioneer actual-engine development timeline media; no release or deployment implied",
+  "files": [
+    {
+      "file": "seven-screen-deploy-warp-historical.gif",
+      "width": 1280,
+      "height": 720,
+      "bytes": 3529161,
+      "frames": 75,
+      "duration_ms": 7500,
+      "sha256": "79b177e6cfd88b2aab66423a246a669a05eed71cce07d07ae3d5e82b10546c62",
+      "source_commit": "f2f3bb7071447ca7fd063728ec7b0ba1fd4fb068",
+      "caption": "Historical seven-screen deployment and accepted-warp stow capture from the published mechanism checkpoint, before the closer side-console and metrics refinement.",
+      "presentation": "Previously delivered 7.5-second edited presentation of actual capture frames; playback duration is not desktop performance evidence."
+    },
+    {
+      "file": "ergonomics-deploy-warp.gif",
+      "width": 960,
+      "height": 540,
+      "bytes": 2069699,
+      "frames": 27,
+      "duration_ms": 4840,
+      "sha256": "b9cca0d03bbd5d1b31a5131f88430f8d06cf41d201645d2ae1e0472a79d6a0bb",
+      "source_commit": "4819300073fad27ba6e19ac4042440a35b5b92bb",
+      "caption": "Actual engine capture of locally validated closer side consoles and cassette-front drone metrics. Unpublished prototype; not integrated with reactor replacement.",
+      "presentation": "26 actual captured motion samples, plus repeated final endpoint; 100 ms sample spacing and 1.2 s endpoint holds. GIF playback is edited presentation timing, not desktop frame-rate evidence. Scaled from 1280x720 captures to 960x540."
+    },
+    {
+      "file": "ergonomics-metrics-starboard.png",
+      "width": 1280,
+      "height": 720,
+      "bytes": 477140,
+      "frames": 1,
+      "duration_ms": 0,
+      "sha256": "92a190e580a508580c845797519df49399a328c717a64b18ada07bf3a29e777f",
+      "source_commit": "4819300073fad27ba6e19ac4042440a35b5b92bb",
+      "caption": "Actual engine capture of locally validated closer side consoles and cassette-front drone metrics. Unpublished prototype; not integrated with reactor replacement."
+    },
+    {
+      "file": "ergonomics-side-console-15deg.png",
+      "width": 1280,
+      "height": 720,
+      "bytes": 559454,
+      "frames": 1,
+      "duration_ms": 0,
+      "sha256": "f7c68f1f7adf715fa8b31a25522837ddf902457c28cb99e721fb73fb3e2d69c6",
+      "source_commit": "4819300073fad27ba6e19ac4042440a35b5b92bb",
+      "caption": "Actual engine capture of locally validated closer side consoles and cassette-front drone metrics. Unpublished prototype; not integrated with reactor replacement."
+    },
+    {
+      "file": "reactor-cockpit-compact.png",
+      "width": 1280,
+      "height": 720,
+      "bytes": 246549,
+      "frames": 1,
+      "duration_ms": 0,
+      "sha256": "0e1109299eac0c55614ed9df1db2feed8dda1fd5522cf23f68a0506030c16a97",
+      "source_commit": "a154a3ca437cc2c139613b7053d009d012908d18",
+      "caption": "Actual engine capture of locally rebuilt and revalidated four-collar reactor prototype. Unpublished replacement; original tested commit was not recovered. Room view is diagnostic inspection, not a player walk route."
+    },
+    {
+      "file": "reactor-compress-open.gif",
+      "width": 960,
+      "height": 540,
+      "bytes": 1868857,
+      "frames": 27,
+      "duration_ms": 4840,
+      "sha256": "dd34800ac905075a503de8bb715fa7de0a44c5613f5370be903ae28fbd5d9ba6",
+      "source_commit": "a154a3ca437cc2c139613b7053d009d012908d18",
+      "caption": "Actual engine capture of locally rebuilt and revalidated four-collar reactor prototype. Unpublished replacement; original tested commit was not recovered. Room view is diagnostic inspection, not a player walk route.",
+      "presentation": "26 actual captured motion samples, plus repeated final endpoint; 100 ms sample spacing and 1.2 s endpoint holds. GIF playback is edited presentation timing, not desktop frame-rate evidence. Scaled from 1280x720 captures to 960x540."
+    },
+    {
+      "file": "reactor-expanded.png",
+      "width": 1280,
+      "height": 720,
+      "bytes": 425411,
+      "frames": 1,
+      "duration_ms": 0,
+      "sha256": "19714043063ef91cb322eb1e9c0ef1168aebe415845b3038d9884aed4ffd96f1",
+      "source_commit": "a154a3ca437cc2c139613b7053d009d012908d18",
+      "caption": "Actual engine capture of locally rebuilt and revalidated four-collar reactor prototype. Unpublished replacement; original tested commit was not recovered. Room view is diagnostic inspection, not a player walk route."
+    }
+  ]
+}

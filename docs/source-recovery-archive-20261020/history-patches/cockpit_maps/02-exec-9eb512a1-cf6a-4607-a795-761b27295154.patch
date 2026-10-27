@@ -1,0 +1,89 @@
+--- a/apps/client/src/cockpit_maps.rs
++++ b/apps/client/src/cockpit_maps.rs
+@@ -1029,3 +1029,3 @@
+     #[test]
+-    fn cockpit_surface_partially_visible_contents_clip_to_viewport_and_bezel() {
++    fn cockpit_surface_local_clip_retains_3d_vertices_for_gpu_frustum_and_depth() {
+         let look = Quat::from_rotation_y(0.3);
+@@ -1042,16 +1042,20 @@
+         mesh.add_colored_rect(surface.canvas.expand(50.0), egui::Color32::WHITE);
+-        let projected = surface.project_mesh(mesh, surface.canvas);
+-        assert!(!projected.indices.is_empty());
+-        assert!(projected
+-            .vertices
+-            .iter()
+-            .all(|v| viewport().expand(0.01).contains(v.pos)));
+-        assert!(projected
+-            .vertices
+-            .iter()
+-            .all(|v| surface.unproject(v.pos).is_some()));
+-        assert!(projected
+-            .indices
+-            .iter()
+-            .all(|i| (*i as usize) < projected.vertices.len()));
++        let vertices = surface.mesh_geometry(&mesh, surface.canvas);
++        assert!(!vertices.is_empty());
++        assert_eq!(vertices.len() % 3, 0);
++        assert!(vertices.iter().all(|v| {
++            (v.position.x - surface.plane_x).abs() < 1e-6
++                && (v.position.y - surface.center.y).abs() <= surface.half.y + 1e-6
++                && (v.position.z - surface.center.z).abs() <= surface.half.z + 1e-6
++        }));
++        // The CPU clips only the canonical bezel. Geometry outside the visible
++        // frustum remains homogeneous input to the GPU rather than flattened UI.
++        assert!(vertices.iter().any(|v| {
++            let clip = surface.local_to_clip * v.position.extend(1.0);
++            clip.x.abs() > clip.w || clip.y.abs() > clip.w
++        }));
++        let depths: Vec<_> = vertices.iter().map(|v| {
++            (surface.local_to_clip * v.position.extend(1.0)).w
++        }).collect();
++        assert!(depths.iter().any(|w| (w - depths[0]).abs() > 0.001));
+     }
+@@ -1089,3 +1093,3 @@
+     #[test]
+-    fn cockpit_surface_text_and_shapes_are_real_projected_meshes_without_floating_text() {
++    fn cockpit_surface_text_and_shapes_remain_canonical_3d_without_2d_fallback() {
+         let surface = CockpitSurface::new(
+@@ -1099,2 +1103,3 @@
+         let context = egui::Context::default();
++        let mut canonical_shapes = Vec::new();
+         let output = context.run(
+@@ -1106,3 +1111,5 @@
+                 egui::CentralPanel::default().show(ctx, |ui| {
+-                    surface.paint(ui, |painter| {
++                    let paint = surface.begin_paint(ui);
++                    {
++                        let painter = paint.painter();
+                         painter.rect_filled(surface.canvas, 0.0, egui::Color32::BLACK);
+@@ -1115,2 +1122,5 @@
+                         );
++                    }
++                    canonical_shapes = context.graphics_mut(|graphics| {
++                        graphics.entry(paint.layer).all_entries().cloned().collect()
+                     });
+@@ -1123,15 +1133,11 @@
+             .any(|s| matches!(&s.shape, egui::Shape::Text(_))));
+-        let meshes: Vec<_> = output
+-            .shapes
+-            .iter()
+-            .filter_map(|s| match &s.shape {
+-                egui::Shape::Mesh(mesh) => Some(mesh),
+-                _ => None,
+-            })
+-            .collect();
+-        assert!(!meshes.is_empty());
+-        assert!(meshes
+-            .iter()
+-            .flat_map(|m| &m.vertices)
+-            .all(|v| surface.unproject(v.pos).is_some()));
++        assert!(!output.shapes.iter().any(|s| matches!(&s.shape, egui::Shape::Mesh(_))));
++        let primitives = context.tessellate(canonical_shapes, output.pixels_per_point);
++        let batches = surface.geometry(&primitives);
++        assert!(!batches.is_empty());
++        assert!(batches.iter().flat_map(|batch| &batch.vertices).all(|v| {
++            (v.position.x - surface.plane_x).abs() < 1e-6
++                && (v.position.y - surface.center.y).abs() <= surface.half.y + 1e-6
++                && (v.position.z - surface.center.z).abs() <= surface.half.z + 1e-6
++        }));
+     }

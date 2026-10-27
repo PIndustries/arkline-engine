@@ -24,10 +24,11 @@ pub(super) fn gate(id: u64) -> Result<Stargate> {
         .context("gate not found")
 }
 pub(super) fn normal(p: &Pilot) -> bool {
-    !matches!(
-        p.view.location,
-        Location::Docked | Location::InTransit { .. } | Location::Jumping { .. }
-    )
+    !docking::busy(p)
+        && !matches!(
+            p.view.location,
+            Location::Docked | Location::InTransit { .. } | Location::Jumping { .. }
+        )
 }
 pub(super) fn surface(p: &Pilot, a: &Asteroid) -> f64 {
     (flight::distance(p.view.flight.as_ref().unwrap().position, a.position) - a.radius).max(0.0)

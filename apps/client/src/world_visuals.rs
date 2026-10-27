@@ -1,6 +1,6 @@
 //! Meter-scaled world detail. Traffic and construction objects come from snapshots.
 use super::*;
-use arkline_protocol::{planets, SurfaceProp, TrafficActor};
+use arkline_protocol::{SurfaceProp, TrafficActor, WorldLayoutDefinition};
 
 pub(super) fn cockpit_span(class: ShipClass) -> f32 {
     0.74 + f32::from(class.spec().mining_tier.unwrap_or(2)) * 0.025
@@ -8,8 +8,9 @@ pub(super) fn cockpit_span(class: ShipClass) -> f32 {
 
 // A spherical tangent patch shares the server's ground radius. It adds visual
 // resolution close to the ground without inventing collision terrain.
+const PATCH_REFERENCE_RADIUS_M: f64 = 6_000_000.0;
 pub(super) fn surface_patch() -> Vec<Vertex> {
-    let radius = arkline_protocol::PLANET_RADIUS_M / 100.0;
+    let radius = PATCH_REFERENCE_RADIUS_M / 100.0;
     let point = |x: usize, z: usize| {
         let x = (x as f64 / 96.0 - 0.5) * 2400.0;
         let z = (z as f64 / 96.0 - 0.5) * 2400.0;
@@ -41,22 +42,68 @@ pub(super) fn surface_patch() -> Vec<Vertex> {
     out
 }
 
-pub(super) fn surface_prop_model(prop: &SurfaceProp, space: Space) -> Mat4 {
-    let normal = planets()
+pub(super) fn surface_prop_model(
+    prop: &SurfaceProp,
+    space: Space,
+    layout: &WorldLayoutDefinition,
+) -> Option<Mat4> {
+    let planet = layout
+        .planets
         .iter()
-        .find(|p| p.system_id == prop.system_id)
-        .map(|p| {
-            Vec3::from_array(std::array::from_fn(|i| {
-                (prop.position[i] - p.center[i]) as f32
-            }))
-            .normalize_or_zero()
-        })
-        .unwrap_or(Vec3::Y);
-    transform(
+        .filter(|p| p.system_id == prop.system_id)
+        .min_by(|left, right| {
+            left.altitude(prop.position)
+                .abs()
+                .total_cmp(&right.altitude(prop.position).abs())
+        })?;
+    let normal =
+        glam::DVec3::from_array(std::array::from_fn(|i| prop.position[i] - planet.center[i]))
+            .try_normalize()?
+            .as_vec3();
+    Some(transform(
         space.scene(prop.position),
         Vec3::from_array(prop.kind.size().map(|v| v as f32 / 200.0)),
         Quat::from_rotation_arc(Vec3::Y, normal),
-    )
+    ))
+}
+
+/// Exact body and top marker used by live construction props and inspection.
+pub(super) fn surface_prop_parts(model: Mat4) -> [ModelPart; 2] {
+    let marker = model
+        * (Mat4::from_translation(Vec3::Y * 1.01) * Mat4::from_scale(Vec3::new(0.75, 0.025, 0.75)));
+    [
+        (0, model, Vec3::new(0.17, 0.3, 0.27), 0.1),
+        (0, marker, Vec3::new(0.13, 0.7, 0.45), 0.7),
+    ]
+}
+
+pub(super) fn atmosphere_at(
+    layout: &WorldLayoutDefinition,
+    system_id: u32,
+    camera: [f64; 3],
+) -> (f32, Vec3) {
+    let Some(planet) = layout
+        .planets
+        .iter()
+        .filter(|p| p.system_id == system_id)
+        .min_by(|left, right| {
+            left.altitude(camera)
+                .abs()
+                .total_cmp(&right.altitude(camera).abs())
+        })
+    else {
+        return (0.0, Vec3::Y);
+    };
+    let radial = glam::DVec3::from_array(std::array::from_fn(|i| camera[i] - planet.center[i]));
+    let up = radial.try_normalize().unwrap_or(glam::DVec3::Y).as_vec3();
+    let density = if planet.atmosphere_height_m > 0.0 {
+        ((1.0 - (radial.length() - planet.radius_m) / planet.atmosphere_height_m).clamp(0.0, 1.0)
+            as f32)
+            .powi(2)
+    } else {
+        0.0
+    };
+    (density, up)
 }
 
 fn traffic_position(actor: &TrafficActor, frame: &Frame) -> Vec3 {
@@ -73,8 +120,11 @@ fn traffic_position(actor: &TrafficActor, frame: &Frame) -> Vec3 {
 impl Renderer {
     pub(super) unsafe fn paint_environment(&self, frame: &Frame) {
         let gl = &self.gl;
-        for planet in planets()
-            .into_iter()
+        for planet in frame
+            .scene
+            .world_layout
+            .planets
+            .iter()
             .filter(|p| p.system_id == frame.system_id)
         {
             gl.uniform_matrix_4_f32_slice(
@@ -106,7 +156,9 @@ impl Renderer {
                 glam::DVec3::from_array(std::array::from_fn(|i| camera[i] - planet.center[i]));
             let altitude = radial.length() - planet.radius_m;
             if altitude < 100_000.0 {
-                let normal = radial.normalize();
+                let Some(normal) = radial.try_normalize() else {
+                    continue;
+                };
                 let anchor =
                     std::array::from_fn(|i| planet.center[i] + normal[i] * planet.radius_m);
                 gl.uniform_1_i32(self.uniforms.material.as_ref(), 2);
@@ -120,7 +172,7 @@ impl Renderer {
                     7,
                     transform(
                         frame.space.scene(anchor),
-                        Vec3::ONE,
+                        Vec3::splat((planet.radius_m / PATCH_REFERENCE_RADIUS_M) as f32),
                         Quat::from_rotation_arc(Vec3::Y, normal.as_vec3()),
                     ),
                     Vec3::new(0.22, 0.26, 0.18),
@@ -171,7 +223,7 @@ impl Renderer {
     }
 
     pub(super) unsafe fn paint_living_world(&self, frame: &Frame) {
-        for actor in &frame.traffic {
+        for actor in &frame.scene.traffic {
             let pos = traffic_position(actor, frame);
             if pos.distance(frame.eye) > 1100.0 {
                 continue;
@@ -199,32 +251,34 @@ impl Renderer {
                 );
             }
         }
-        for pilot in &frame.pilots {
-            let pos = frame.space.position(pilot, frame.now);
-            if pos.distance(frame.eye) > 1100.0 || (frame.cockpit && pilot.name == frame.own) {
+        for pilot in &frame.scene.pilots {
+            let Some(pose) = frame.ship_mount(pilot) else {
+                continue;
+            };
+            if pose.w_axis.truncate().distance(frame.eye) > 1100.0
+                || (frame.cockpit && pilot.name == frame.own)
+            {
                 continue;
             }
-            self.navigation_lights(
-                transform(pos, Vec3::ONE, ship_orientation_at(pilot, frame.now)),
-                pilot.ship_class,
-                frame.now,
-                0,
-            );
+            if let Some(binding) = exterior_visuals::for_pilot(frame, pilot) {
+                for (mesh, model, color, emission) in binding.parts(pose) {
+                    self.draw(mesh, model, color, emission);
+                }
+            } else if !frame.carrier_advertised(pilot) {
+                self.navigation_lights(pose, pilot.ship_class, frame.now, 0);
+            }
         }
-        for prop in &frame.surface_props {
+        for prop in &frame.scene.surface_props {
             if frame.space.scene(prop.position).distance(frame.eye) > 1100.0 {
                 continue;
             }
-            self.draw(
-                0,
-                surface_prop_model(prop, frame.space),
-                Vec3::new(0.17, 0.3, 0.27),
-                0.1,
-            );
-            let mut marker = surface_prop_model(prop, frame.space);
-            marker *= Mat4::from_translation(Vec3::Y * 1.01)
-                * Mat4::from_scale(Vec3::new(0.75, 0.025, 0.75));
-            self.draw(0, marker, Vec3::new(0.13, 0.7, 0.45), 0.7);
+            let Some(model) = surface_prop_model(prop, frame.space, &frame.scene.world_layout)
+            else {
+                continue;
+            };
+            for (mesh, model, color, emission) in surface_prop_parts(model) {
+                self.draw(mesh, model, color, emission);
+            }
         }
         if frame
             .space
@@ -267,35 +321,81 @@ mod tests {
     use super::*;
     #[test]
     fn surface_visuals_share_authoritative_spherical_ground() {
-        let r = arkline_protocol::PLANET_RADIUS_M as f32 / 100.0;
+        let r = PATCH_REFERENCE_RADIUS_M as f32 / 100.0;
         for v in surface_patch() {
             assert!(((v.p + Vec3::Y * r).length() - r).abs() < 0.01);
             assert!((v.n.length() - 1.0).abs() < 0.00001);
         }
-        let p = arkline_protocol::planets().remove(0);
-        for kind in [
-            arkline_protocol::SurfacePropKind::Crate,
-            arkline_protocol::SurfacePropKind::Pylon,
-            arkline_protocol::SurfacePropKind::Platform,
+        for revision in [
+            arkline_protocol::SceneLayoutRevision::LegacyV1,
+            arkline_protocol::SceneLayoutRevision::OrbitalV1,
         ] {
-            let size = kind.size();
-            let prop = SurfaceProp {
-                id: 1,
-                owner: "test".into(),
-                system_id: p.system_id,
-                kind,
-                position: [
-                    p.center[0],
-                    p.center[1] + p.radius_m + size[1] * 0.5,
-                    p.center[2],
-                ],
-            };
-            let space = Space {
-                origin: prop.position,
-            };
-            let model = surface_prop_model(&prop, space);
-            let bottom = space.world(model.transform_point3(-Vec3::Y));
-            assert!((bottom[1] - (p.center[1] + p.radius_m)).abs() < 0.01);
+            let layout = revision.definition();
+            let p = &layout.planets[0];
+            let up = glam::DVec3::new(0.6, 0.8, 0.0);
+            for kind in [
+                arkline_protocol::SurfacePropKind::Crate,
+                arkline_protocol::SurfacePropKind::Pylon,
+                arkline_protocol::SurfacePropKind::Platform,
+            ] {
+                let size = kind.size();
+                let prop = SurfaceProp {
+                    id: 1,
+                    owner: "test".into(),
+                    system_id: p.system_id,
+                    kind,
+                    position: std::array::from_fn(|i| {
+                        p.center[i] + up[i] * (p.radius_m + size[1] * 0.5)
+                    }),
+                };
+                let space = Space {
+                    origin: prop.position,
+                };
+                let model = surface_prop_model(&prop, space, &layout).unwrap();
+                let bottom = space.world(model.transform_point3(-Vec3::Y));
+                let ground = glam::DVec3::from_array(p.center) + up * p.radius_m;
+                assert!(
+                    glam::DVec3::from_array(bottom).distance(ground) < 0.01,
+                    "{revision:?} {kind:?}"
+                );
+            }
         }
+    }
+
+    #[test]
+    fn atmosphere_uses_the_same_orbital_geometry_as_the_surface() {
+        let layout = arkline_protocol::SceneLayoutRevision::OrbitalV1.definition();
+        let planet = &layout.planets[0];
+        let (density, up) = atmosphere_at(&layout, planet.system_id, planet.approach_position);
+        assert!((density - (55_000.0_f32 / 60_000.0).powi(2)).abs() < 0.00001);
+        assert!((up - Vec3::Y).length() < 0.00001);
+        assert_eq!(
+            atmosphere_at(
+                &arkline_protocol::legacy_world_layout(),
+                planet.system_id,
+                planet.approach_position
+            )
+            .0,
+            0.0
+        );
+        assert_eq!(
+            atmosphere_at(&layout, planet.system_id + 1, planet.approach_position).0,
+            0.0
+        );
+        let ground = std::array::from_fn(|i| planet.center[i] + [0.0, planet.radius_m, 0.0][i]);
+        assert_eq!(atmosphere_at(&layout, planet.system_id, ground).0, 1.0);
+    }
+
+    #[test]
+    fn prop_without_a_planet_in_its_system_is_not_given_guessed_ground() {
+        let layout = arkline_protocol::SceneLayoutRevision::OrbitalV1.definition();
+        let prop = SurfaceProp {
+            id: 1,
+            owner: "fixture".into(),
+            system_id: layout.planets[0].system_id + 1,
+            kind: arkline_protocol::SurfacePropKind::Crate,
+            position: [0.0; 3],
+        };
+        assert!(surface_prop_model(&prop, Space::default(), &layout).is_none());
     }
 }

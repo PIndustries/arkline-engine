@@ -16,7 +16,11 @@ fn docked_hull_selection_persists_without_changing_economy_and_rejects_space() {
         let response = server.handle_at(
             &mut session,
             Request::Connect {
+                supports_room_controls: false,
+                world_layout_version: 1,
+                supports_fleet_hangar: false,
                 supports_pioneer_interior: true,
+                supports_docked_traversal_v2: false,
                 protocol_version: PROTOCOL_VERSION,
                 pilot: "Shipwright".into(),
                 resume_token: None,
@@ -71,7 +75,11 @@ fn docked_hull_selection_persists_without_changing_economy_and_rejects_space() {
         let response = server.handle_at(
             &mut None,
             Request::Connect {
+                supports_room_controls: false,
+                world_layout_version: 1,
+                supports_fleet_hangar: false,
                 supports_pioneer_interior: true,
+                supports_docked_traversal_v2: false,
                 protocol_version: PROTOCOL_VERSION,
                 pilot: "Shipwright".into(),
                 resume_token: Some(token),

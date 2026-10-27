@@ -47,7 +47,11 @@ fn connect(s: &mut Server) -> Option<String> {
         s,
         &mut p,
         Request::Connect {
+            supports_room_controls: false,
+            world_layout_version: 1,
+            supports_fleet_hangar: false,
             supports_pioneer_interior: true,
+            supports_docked_traversal_v2: false,
             protocol_version: PROTOCOL_VERSION,
             pilot: "Power".into(),
             resume_token: None,
@@ -67,7 +71,7 @@ fn reactor_regenerates_caps_and_failed_warp_never_draws_charge() {
     let state = ok(&mut s, &mut p, Request::Snapshot, 1000);
     assert_eq!(
         state.pilots[0].power.as_ref().unwrap().charge_j,
-        100 + spec.regen_w
+        100 + spec.regen_w - default_pioneer_exterior().load_w()
     );
     f.charge("Power", spec.warp_cost_j - 1, 1000);
     assert!(
@@ -209,7 +213,11 @@ fn attack_drone_draws_only_for_actual_shot_and_holds_when_empty() {
         &mut s,
         &mut b,
         Request::Connect {
+            supports_room_controls: false,
+            world_layout_version: 1,
+            supports_fleet_hangar: false,
             supports_pioneer_interior: true,
+            supports_docked_traversal_v2: false,
             protocol_version: PROTOCOL_VERSION,
             pilot: "Target".into(),
             resume_token: None,

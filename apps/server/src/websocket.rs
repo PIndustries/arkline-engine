@@ -211,12 +211,16 @@ pub(super) fn serve_ws(
     let mut session = TransportSession {
         server: server.clone(),
         pilot: None,
+        account_expires: None,
     };
     let mut messages = Bucket::new(60., 30.);
     let mut exports = Bucket::new(1., 1. / 30.);
     let mut auth_failures = 0;
     loop {
-        ws.get_mut().deadline = Instant::now() + MESSAGE_TIMEOUT;
+        let Some(timeout) = session.remaining(MESSAGE_TIMEOUT) else {
+            return Ok(());
+        };
+        ws.get_mut().deadline = Instant::now() + timeout;
         ws.get_mut().write_deadline = Instant::now() + MESSAGE_TIMEOUT + Duration::from_secs(10);
         let message = ws.read()?;
         ws.get_mut().write_deadline = Instant::now() + Duration::from_secs(10);
@@ -245,7 +249,10 @@ pub(super) fn serve_ws(
                         continue;
                     }
                 };
-                let connecting = matches!(request, Request::Connect { .. });
+                let connecting = matches!(
+                    request,
+                    Request::Connect { .. } | Request::AccountConnect { .. }
+                );
                 let response = if matches!(request, Request::ExportLedger)
                     && (!exports.take()
                         || !limits
@@ -275,7 +282,11 @@ pub(super) fn serve_ws(
                             {
                                 Response::error("public registration rate exceeded; retry later")
                             } else {
-                                authority.handle(&mut session.pilot, request)
+                                authority.handle_authenticated(
+                                    &mut session.pilot,
+                                    &mut session.account_expires,
+                                    request,
+                                )
                             }
                         }
                     }

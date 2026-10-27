@@ -1,0 +1,43 @@
+{
+  "capture_source": "30618f0d204d6db817d972fd4dbc83fc134ac6bd",
+  "later_docking_milestone": "d1e86f8ed1e26dbbaec56b7a4bc9789dee9b8a0f",
+  "source_dimensions": [
+    960,
+    640
+  ],
+  "source_cadence_fps": 10,
+  "previously_verified_source_pngs": 984,
+  "provenance": "Publication summary reconstructed from retained producer validation and byte-identical restored GIFs. Full source frames are not included here. Later milestone changes tests/docs/equivalent cleanup, not captured behavior; not the combined polish build.",
+  "source_receipt_sha256": "187f5b3b617b062db6f80ec9bac65b560d639bce44ffad918af5013663e7a79c",
+  "source_validation_sha256": "9c79f476b58586609fae624bff2a84b5dcae29eed94e71946fca34890696b99c",
+  "limits": [
+    "Production renderer offscreen Mesa EGL, not live FPS.",
+    "Fresh preview realms, no existing-world migration.",
+    "No timed unloading or complete station/interior acceptance.",
+    "No generated frames, interpolation or crossfades.",
+    "Full source image scaled to900x600 within labeled960x640 canvas."
+  ],
+  "items": [
+    {
+      "file": "pioneer-docking-before-after-motion.gif",
+      "size_bytes": 2056978,
+      "sha256": "06fe0e9eb821863106d8fe490e9a740ef337903edfe517a29c84d4e70993aec0",
+      "duration_seconds": 18.47,
+      "timing": "Retained unchanged legacy path in same modified binary at1x, hard cut to full new sequence at3x; not exactbaselinebinary or same-worldAB."
+    },
+    {
+      "file": "pioneer-docking-return-continuous.gif",
+      "size_bytes": 1102202,
+      "sha256": "e2f6829eac7e4950139541d8fb33b9a2fd1560e95d796ca6fa712d030e0d93f9",
+      "duration_seconds": 27.1,
+      "timing": "Continuous sampled motion at1x simulation cadence; no live frame-rate claim."
+    },
+    {
+      "file": "pioneer-undocking-cockpit-continuous.gif",
+      "size_bytes": 2792363,
+      "sha256": "effb0a8478dcdc562aeef39025c53213c7af85b50fe49c16a49382441515a192",
+      "duration_seconds": 18.1,
+      "timing": "Continuous sampled motion at1x simulation cadence; no live frame-rate claim."
+    }
+  ]
+}

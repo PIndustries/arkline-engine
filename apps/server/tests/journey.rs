@@ -72,7 +72,11 @@ impl Client {
     }
     fn login(&mut self, pilot: &str, token: Option<String>) -> Response {
         self.ok(Request::Connect {
+            supports_room_controls: false,
+            world_layout_version: 1,
+            supports_fleet_hangar: false,
             supports_pioneer_interior: true,
+            supports_docked_traversal_v2: false,
             protocol_version: PROTOCOL_VERSION,
             pilot: pilot.into(),
             resume_token: token,
@@ -179,7 +183,11 @@ fn two_pilots_trade_recover_and_export_consistent_history() {
     assert!(
         !attacker
             .send(Request::Connect {
+                supports_room_controls: false,
+                world_layout_version: 1,
+                supports_fleet_hangar: false,
                 supports_pioneer_interior: true,
+                supports_docked_traversal_v2: false,
                 protocol_version: PROTOCOL_VERSION,
                 pilot: "Alice".into(),
                 resume_token: None
@@ -227,7 +235,34 @@ fn two_pilots_trade_recover_and_export_consistent_history() {
         order_id: order,
         units: 35,
     });
-    let before = alice.ok(Request::Snapshot).snapshot.unwrap();
+    // This comparison tests quiescent persistence, not ongoing actuator motion.
+    // Returning from warp now physically reopens the reactor, so wait on actual
+    // confirmed mechanism state rather than assuming Dock implies settled parts.
+    // Keep exact non-power equality below; midstroke restart has separate tests.
+    let settle_deadline = Instant::now() + Duration::from_secs(5);
+    let before = loop {
+        let snapshot = alice.ok(Request::Snapshot).snapshot.unwrap();
+        let now = snapshot.server_time_ms;
+        let settled = snapshot.pilots.iter().all(|pilot| {
+            pilot
+                .reactor_configuration
+                .as_ref()
+                .is_none_or(|state| state.blocked.is_none() && !state.moving_at(now))
+                && pilot.cockpit_mechanisms.as_ref().is_none_or(|state| {
+                    state
+                        .iter_screens()
+                        .all(|screen| screen.blocked.is_none() && !screen.moving_at(now))
+                })
+        });
+        if settled {
+            break snapshot;
+        }
+        assert!(
+            Instant::now() < settle_deadline,
+            "physical mechanisms did not settle before persistence comparison"
+        );
+        thread::sleep(Duration::from_millis(20));
+    };
     let observed = bob.ok(Request::Snapshot).snapshot.unwrap();
     assert_same_pilots_with_regeneration(&before, &observed);
     assert_eq!(before.orders, observed.orders);
@@ -344,12 +379,34 @@ fn transport_presence_counts_sessions_without_removing_persistent_ships() {
     // Reauthentication on the same connection must not leak an extra reference.
     second.login("PresencePilot", Some(token.clone()));
     let rejected = second.send(Request::Connect {
+        supports_room_controls: false,
+        world_layout_version: 1,
+        supports_fleet_hangar: false,
         supports_pioneer_interior: true,
+        supports_docked_traversal_v2: false,
         protocol_version: PROTOCOL_VERSION,
         pilot: "PresencePilot".into(),
         resume_token: Some("wrong".into()),
     });
     assert!(!rejected.ok);
+    // Undock now deploys the external AUTO monitors. Establish a stationary
+    // world before comparing complete pilot snapshots across transport changes.
+    let settle_deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let snapshot = observer.ok(Request::Snapshot).snapshot.unwrap();
+        let mechanisms = snapshot.pilots[0].cockpit_mechanisms.as_ref().unwrap();
+        if mechanisms
+            .iter_screens()
+            .all(|screen| screen.blocked.is_none() && !screen.moving_at(snapshot.server_time_ms))
+        {
+            break;
+        }
+        assert!(
+            Instant::now() < settle_deadline,
+            "monitor deployment did not settle"
+        );
+        thread::sleep(Duration::from_millis(20));
+    }
     drop(first);
     assert_eq!(
         observer
@@ -380,7 +437,22 @@ fn transport_presence_counts_sessions_without_removing_persistent_ships() {
     );
     let export = observer.ok(Request::ExportLedger).ledger.unwrap();
     assert!(export.snapshot.online_pilots.is_empty());
-    assert_eq!(export.snapshot.pilots, offline.pilots);
+    // Accounting is a response-only observation, so each fresh response has
+    // its own sample clock. Validate those clocks before comparing every
+    // remaining pilot/accounting field unchanged across the presence boundary.
+    let mut offline_pilots = offline.pilots.clone();
+    for pilot in &mut offline_pilots {
+        let accounting = pilot.power_accounting.as_mut().unwrap();
+        assert_eq!(accounting.sampled_at_ms, offline.server_time_ms);
+        accounting.sampled_at_ms = export.snapshot.server_time_ms;
+    }
+    for pilot in &export.snapshot.pilots {
+        assert_eq!(
+            pilot.power_accounting.as_ref().unwrap().sampled_at_ms,
+            export.snapshot.server_time_ms
+        );
+    }
+    assert_eq!(export.snapshot.pilots, offline_pilots);
     drop(observer);
     drop(server);
     // Restart clears transport presence, but keeps undocked ship and credential.
@@ -645,6 +717,22 @@ fn assert_same_pilots_with_regeneration(before: &Snapshot, after: &Snapshot) {
         let mut new = new.clone();
         let old_power = old.power.take().expect("authoritative power");
         let new_power = new.power.take().expect("authoritative power");
+        let mut old_accounting = old.power_accounting.take().expect("power accounting");
+        let new_accounting = new.power_accounting.take().expect("power accounting");
+        old_accounting
+            .validate_for(&old.name, old.ship_class, &old_power)
+            .unwrap();
+        new_accounting
+            .validate_for(&new.name, new.ship_class, &new_power)
+            .unwrap();
+        assert_eq!(old_accounting.sampled_at_ms, before.server_time_ms);
+        assert_eq!(new_accounting.sampled_at_ms, after.server_time_ms);
+        // Only these validated projections of advancing capacitor/time state
+        // may differ. All circuit reservations, ratings and identity remain exact.
+        old_accounting.sampled_at_ms = new_accounting.sampled_at_ms;
+        old_accounting.charge_j = new_accounting.charge_j;
+        old_accounting.stored_charge_rate_w = new_accounting.stored_charge_rate_w;
+        assert_eq!(old_accounting, new_accounting);
         assert_eq!(old, new);
         assert_eq!(old_power.capacity_j, new_power.capacity_j);
         assert_eq!(old_power.regen_w, new_power.regen_w);

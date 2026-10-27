@@ -1,0 +1,2375 @@
+{
+  "status": "PASS original full-cell geometric clearance with exact zero-volume boundary contact",
+  "source_sha256": "1fdeee298023251b6907ff4ba64bda4f8117103f99e65cb31cd7f35ce6d8c718",
+  "glb_sha256": "08241a77914f7b909b666cde14c4f7efd6f4ed8364e3fe25e8926dee75a2e011",
+  "source_extraction_sha256": "8ec2792fb34b826103a41570fdc95f98e5907bee98a98709be44d667e016205d",
+  "source_triangles_sha256": "099b3014ebca7a2c1bc52fb819e696f28fd04c1bcf54bba180a6e45212ff8dd3",
+  "receipt_sha256": "c95ef60d79065ea0fd44f39767271346bb751575d3d4bf0607e2673c68f27478",
+  "checker_sha256": "bc1b1880413a9733c4dd767f0a3787cd987373c926ad179268159469fde35520",
+  "cells_sha256": "e50fa208418bde5f05049dbc6a40ce6ffc132281b9d90ed7ee4c556f0f50b114",
+  "full_counted_cells": 43,
+  "protocol_per_cell_floor_cm3": 214121238,
+  "max_source_export_coordinate_error_m": 1.9073486328125e-06,
+  "conservative_global_error_bound_um": 3,
+  "query_error_guard": "Per part outward ceil coordinate error plus1\u00b5m, zero only for exact source/export identity; never inward",
+  "pipe_recipe_sha256": "5b6c7cdde69750df7d6f24a7f39340a7b3e9d5d5c4539355a2cd73e7e0976286",
+  "actual_pipe_oriented_triangle_multiset_exact": true,
+  "all_process_outer_envelopes_excluded": 31,
+  "omitted_pipe_exclusion_negative_cells": 3,
+  "parts": 1882,
+  "source_triangles": 203188,
+  "dropped_triangles_included_in_source_clearance": 3556,
+  "material_cell_pairs": 121,
+  "exact_coordinate_topologies": {
+    "pioneer.physical_cargo_rebuild/tank/rib/-4/exact-union": {
+      "vertex_link_failures": 0,
+      "triangles": 32,
+      "signed_volume_m3": 0.25804836492860855,
+      "unpaired_or_nonmanifold_directed_edges": 0,
+      "first_edge_defects": []
+    },
+    "pioneer.physical_cargo_rebuild/fixed_fluid_network": {
+      "vertex_link_failures": 0,
+      "triangles": 1304,
+      "signed_volume_m3": 4.5515311933071665,
+      "unpaired_or_nonmanifold_directed_edges": 0,
+      "first_edge_defects": []
+    },
+    "pioneer.physical_cargo_rebuild/tank/rib/2/exact-union": {
+      "vertex_link_failures": 0,
+      "triangles": 32,
+      "signed_volume_m3": 0.25804836492861827,
+      "unpaired_or_nonmanifold_directed_edges": 0,
+      "first_edge_defects": []
+    },
+    "pioneer.physical_cargo_rebuild/tank/rib/8/exact-union": {
+      "vertex_link_failures": 0,
+      "triangles": 32,
+      "signed_volume_m3": 0.25804836492860816,
+      "unpaired_or_nonmanifold_directed_edges": 0,
+      "first_edge_defects": []
+    },
+    "pioneer.physical_cargo_rebuild/tank/rib/14/exact-union": {
+      "vertex_link_failures": 0,
+      "triangles": 32,
+      "signed_volume_m3": 0.25804836492864613,
+      "unpaired_or_nonmanifold_directed_edges": 0,
+      "first_edge_defects": []
+    }
+  },
+  "records": [
+    {
+      "cell": 0,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "-59/10",
+          "-337/50",
+          "-187/50"
+        ]
+      }
+    },
+    {
+      "cell": 0,
+      "part": "pioneer.physical_cargo_rebuild/tank/rib/-4/exact-union",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "-59/10",
+          "-337/50",
+          "-187/50"
+        ]
+      }
+    },
+    {
+      "cell": 1,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "-59/10",
+          "-337/50",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 1,
+      "part": "pioneer.physical_cargo_rebuild/tank/rib/-4/exact-union",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "-59/10",
+          "-337/50",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 2,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "-59/10",
+          "-337/50",
+          "187/50"
+        ]
+      }
+    },
+    {
+      "cell": 2,
+      "part": "pioneer.physical_cargo_rebuild/tank/rib/-4/exact-union",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "-59/10",
+          "-337/50",
+          "187/50"
+        ]
+      }
+    },
+    {
+      "cell": 3,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "-59/10",
+          "-12279/2000",
+          "-187/50"
+        ]
+      }
+    },
+    {
+      "cell": 3,
+      "part": "pioneer.magazine_ready/render_batch/0490",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "-59/10",
+          "-12279/2000",
+          "-187/50"
+        ]
+      }
+    },
+    {
+      "cell": 3,
+      "part": "pioneer.physical_cargo_rebuild/fixed_fluid_network",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "-59/10",
+          "-12279/2000",
+          "-187/50"
+        ]
+      }
+    },
+    {
+      "cell": 3,
+      "part": "pioneer.physical_cargo_rebuild/tank/rib/-4/exact-union",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "-59/10",
+          "-12279/2000",
+          "-187/50"
+        ]
+      }
+    },
+    {
+      "cell": 4,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "-59/10",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 4,
+      "part": "pioneer.magazine_ready/render_batch/0490",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "-59/10",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 4,
+      "part": "pioneer.physical_cargo_rebuild/fixed_fluid_network",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "-59/10",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 4,
+      "part": "pioneer.physical_cargo_rebuild/tank/rib/-4/exact-union",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "-59/10",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 5,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "-59/10",
+          "-12279/2000",
+          "187/50"
+        ]
+      }
+    },
+    {
+      "cell": 5,
+      "part": "pioneer.magazine_ready/render_batch/0490",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "-59/10",
+          "-12279/2000",
+          "187/50"
+        ]
+      }
+    },
+    {
+      "cell": 5,
+      "part": "pioneer.physical_cargo_rebuild/fixed_fluid_network",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "-59/10",
+          "-12279/2000",
+          "187/50"
+        ]
+      }
+    },
+    {
+      "cell": 5,
+      "part": "pioneer.physical_cargo_rebuild/tank/rib/-4/exact-union",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "-59/10",
+          "-12279/2000",
+          "187/50"
+        ]
+      }
+    },
+    {
+      "cell": 6,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "-7881/2000",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 6,
+      "part": "pioneer.magazine_ready/render_batch/0490",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "-7881/2000",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 6,
+      "part": "pioneer.physical_cargo_rebuild/fixed_fluid_network",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "-7881/2000",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 6,
+      "part": "pioneer.physical_cargo_rebuild/tank/rib/-4/exact-union",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "-7881/2000",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 7,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "-47/50",
+          "-337/50",
+          "-187/50"
+        ]
+      }
+    },
+    {
+      "cell": 7,
+      "part": "pioneer.physical_cargo_rebuild/tank/rib/2/exact-union",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "-47/50",
+          "-337/50",
+          "-187/50"
+        ]
+      }
+    },
+    {
+      "cell": 8,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "-47/50",
+          "-337/50",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 8,
+      "part": "pioneer.physical_cargo_rebuild/tank/rib/2/exact-union",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "-47/50",
+          "-337/50",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 9,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "-47/50",
+          "-337/50",
+          "187/50"
+        ]
+      }
+    },
+    {
+      "cell": 9,
+      "part": "pioneer.physical_cargo_rebuild/tank/rib/2/exact-union",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "-47/50",
+          "-337/50",
+          "187/50"
+        ]
+      }
+    },
+    {
+      "cell": 10,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "-47/50",
+          "-12279/2000",
+          "-187/50"
+        ]
+      }
+    },
+    {
+      "cell": 10,
+      "part": "pioneer.magazine_ready/render_batch/0490",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "-47/50",
+          "-12279/2000",
+          "-187/50"
+        ]
+      }
+    },
+    {
+      "cell": 10,
+      "part": "pioneer.physical_cargo_rebuild/fixed_fluid_network",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "-47/50",
+          "-12279/2000",
+          "-187/50"
+        ]
+      }
+    },
+    {
+      "cell": 10,
+      "part": "pioneer.physical_cargo_rebuild/tank/rib/2/exact-union",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "-47/50",
+          "-12279/2000",
+          "-187/50"
+        ]
+      }
+    },
+    {
+      "cell": 11,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "-47/50",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 11,
+      "part": "pioneer.magazine_ready/render_batch/0490",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "-47/50",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 11,
+      "part": "pioneer.physical_cargo_rebuild/fixed_fluid_network",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "-47/50",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 11,
+      "part": "pioneer.physical_cargo_rebuild/tank/rib/2/exact-union",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "-47/50",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 12,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "-47/50",
+          "-12279/2000",
+          "187/50"
+        ]
+      }
+    },
+    {
+      "cell": 12,
+      "part": "pioneer.magazine_ready/render_batch/0490",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "-47/50",
+          "-12279/2000",
+          "187/50"
+        ]
+      }
+    },
+    {
+      "cell": 12,
+      "part": "pioneer.physical_cargo_rebuild/fixed_fluid_network",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "-47/50",
+          "-12279/2000",
+          "187/50"
+        ]
+      }
+    },
+    {
+      "cell": 12,
+      "part": "pioneer.physical_cargo_rebuild/tank/rib/2/exact-union",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "-47/50",
+          "-12279/2000",
+          "187/50"
+        ]
+      }
+    },
+    {
+      "cell": 13,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "4119/2000",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 13,
+      "part": "pioneer.magazine_ready/render_batch/0490",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "4119/2000",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 13,
+      "part": "pioneer.physical_cargo_rebuild/fixed_fluid_network",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "4119/2000",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 13,
+      "part": "pioneer.physical_cargo_rebuild/tank/rib/2/exact-union",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "4119/2000",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 14,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "253/50",
+          "-337/50",
+          "-187/50"
+        ]
+      }
+    },
+    {
+      "cell": 14,
+      "part": "pioneer.physical_cargo_rebuild/tank/rib/8/exact-union",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "253/50",
+          "-337/50",
+          "-187/50"
+        ]
+      }
+    },
+    {
+      "cell": 15,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "253/50",
+          "-337/50",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 15,
+      "part": "pioneer.physical_cargo_rebuild/tank/rib/8/exact-union",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "253/50",
+          "-337/50",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 16,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "253/50",
+          "-337/50",
+          "187/50"
+        ]
+      }
+    },
+    {
+      "cell": 16,
+      "part": "pioneer.physical_cargo_rebuild/tank/rib/8/exact-union",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "253/50",
+          "-337/50",
+          "187/50"
+        ]
+      }
+    },
+    {
+      "cell": 17,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "1601/400",
+          "-12279/2000",
+          "-187/50"
+        ]
+      }
+    },
+    {
+      "cell": 17,
+      "part": "pioneer.magazine_ready/render_batch/0490",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "1601/400",
+          "-12279/2000",
+          "-187/50"
+        ]
+      }
+    },
+    {
+      "cell": 17,
+      "part": "pioneer.physical_cargo_rebuild/fixed_fluid_network",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "1601/400",
+          "-12279/2000",
+          "-187/50"
+        ]
+      }
+    },
+    {
+      "cell": 18,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "2823/400",
+          "-12279/2000",
+          "-187/50"
+        ]
+      }
+    },
+    {
+      "cell": 18,
+      "part": "pioneer.magazine_ready/render_batch/0490",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "2823/400",
+          "-12279/2000",
+          "-187/50"
+        ]
+      }
+    },
+    {
+      "cell": 18,
+      "part": "pioneer.physical_cargo_rebuild/fixed_fluid_network",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "2823/400",
+          "-12279/2000",
+          "-187/50"
+        ]
+      }
+    },
+    {
+      "cell": 18,
+      "part": "pioneer.physical_cargo_rebuild/tank/rib/8/exact-union",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "2823/400",
+          "-12279/2000",
+          "-187/50"
+        ]
+      }
+    },
+    {
+      "cell": 19,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "6",
+          "-2479/400",
+          "-187/50"
+        ]
+      }
+    },
+    {
+      "cell": 19,
+      "part": "pioneer.magazine_ready/render_batch/0490",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "6",
+          "-2479/400",
+          "-187/50"
+        ]
+      }
+    },
+    {
+      "cell": 19,
+      "part": "pioneer.physical_cargo_rebuild/fixed_fluid_network",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "6",
+          "-2479/400",
+          "-187/50"
+        ]
+      }
+    },
+    {
+      "cell": 20,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "1601/400",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 20,
+      "part": "pioneer.magazine_ready/render_batch/0490",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "1601/400",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 20,
+      "part": "pioneer.physical_cargo_rebuild/fixed_fluid_network",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "1601/400",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 21,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "2823/400",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 21,
+      "part": "pioneer.magazine_ready/render_batch/0490",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "2823/400",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 21,
+      "part": "pioneer.physical_cargo_rebuild/fixed_fluid_network",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "2823/400",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 21,
+      "part": "pioneer.physical_cargo_rebuild/tank/rib/8/exact-union",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "2823/400",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 22,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "6",
+          "-631/100",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 23,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "6",
+          "-11657/2000",
+          "-456/125"
+        ]
+      }
+    },
+    {
+      "cell": 23,
+      "part": "pioneer.magazine_ready/render_batch/0490",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "6",
+          "-11657/2000",
+          "-456/125"
+        ]
+      }
+    },
+    {
+      "cell": 23,
+      "part": "pioneer.physical_cargo_rebuild/fixed_fluid_network",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "6",
+          "-11657/2000",
+          "-456/125"
+        ]
+      }
+    },
+    {
+      "cell": 24,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "6",
+          "-11657/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 24,
+      "part": "pioneer.magazine_ready/render_batch/0490",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "6",
+          "-11657/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 24,
+      "part": "pioneer.physical_cargo_rebuild/fixed_fluid_network",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "6",
+          "-11657/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 25,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "6",
+          "-11657/2000",
+          "456/125"
+        ]
+      }
+    },
+    {
+      "cell": 25,
+      "part": "pioneer.magazine_ready/render_batch/0490",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "6",
+          "-11657/2000",
+          "456/125"
+        ]
+      }
+    },
+    {
+      "cell": 25,
+      "part": "pioneer.physical_cargo_rebuild/fixed_fluid_network",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "6",
+          "-11657/2000",
+          "456/125"
+        ]
+      }
+    },
+    {
+      "cell": 26,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "1601/400",
+          "-12279/2000",
+          "187/50"
+        ]
+      }
+    },
+    {
+      "cell": 26,
+      "part": "pioneer.magazine_ready/render_batch/0490",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "1601/400",
+          "-12279/2000",
+          "187/50"
+        ]
+      }
+    },
+    {
+      "cell": 26,
+      "part": "pioneer.physical_cargo_rebuild/fixed_fluid_network",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "1601/400",
+          "-12279/2000",
+          "187/50"
+        ]
+      }
+    },
+    {
+      "cell": 27,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "2823/400",
+          "-12279/2000",
+          "187/50"
+        ]
+      }
+    },
+    {
+      "cell": 27,
+      "part": "pioneer.magazine_ready/render_batch/0490",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "2823/400",
+          "-12279/2000",
+          "187/50"
+        ]
+      }
+    },
+    {
+      "cell": 27,
+      "part": "pioneer.physical_cargo_rebuild/fixed_fluid_network",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "2823/400",
+          "-12279/2000",
+          "187/50"
+        ]
+      }
+    },
+    {
+      "cell": 27,
+      "part": "pioneer.physical_cargo_rebuild/tank/rib/8/exact-union",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "2823/400",
+          "-12279/2000",
+          "187/50"
+        ]
+      }
+    },
+    {
+      "cell": 28,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "6",
+          "-2479/400",
+          "187/50"
+        ]
+      }
+    },
+    {
+      "cell": 28,
+      "part": "pioneer.magazine_ready/render_batch/0490",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "6",
+          "-2479/400",
+          "187/50"
+        ]
+      }
+    },
+    {
+      "cell": 28,
+      "part": "pioneer.physical_cargo_rebuild/fixed_fluid_network",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "6",
+          "-2479/400",
+          "187/50"
+        ]
+      }
+    },
+    {
+      "cell": 29,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "16119/2000",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 29,
+      "part": "pioneer.magazine_ready/render_batch/0490",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "16119/2000",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 29,
+      "part": "pioneer.physical_cargo_rebuild/fixed_fluid_network",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "16119/2000",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 29,
+      "part": "pioneer.physical_cargo_rebuild/tank/rib/8/exact-union",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "16119/2000",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 30,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "553/50",
+          "-337/50",
+          "-187/50"
+        ]
+      }
+    },
+    {
+      "cell": 30,
+      "part": "pioneer.physical_cargo_rebuild/tank/rib/14/exact-union",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "553/50",
+          "-337/50",
+          "-187/50"
+        ]
+      }
+    },
+    {
+      "cell": 31,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "553/50",
+          "-337/50",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 31,
+      "part": "pioneer.physical_cargo_rebuild/tank/rib/14/exact-union",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "553/50",
+          "-337/50",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 32,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "553/50",
+          "-337/50",
+          "187/50"
+        ]
+      }
+    },
+    {
+      "cell": 32,
+      "part": "pioneer.physical_cargo_rebuild/tank/rib/14/exact-union",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "553/50",
+          "-337/50",
+          "187/50"
+        ]
+      }
+    },
+    {
+      "cell": 33,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "553/50",
+          "-12279/2000",
+          "-187/50"
+        ]
+      }
+    },
+    {
+      "cell": 33,
+      "part": "pioneer.magazine_ready/render_batch/0490",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "553/50",
+          "-12279/2000",
+          "-187/50"
+        ]
+      }
+    },
+    {
+      "cell": 33,
+      "part": "pioneer.physical_cargo_rebuild/fixed_fluid_network",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "553/50",
+          "-12279/2000",
+          "-187/50"
+        ]
+      }
+    },
+    {
+      "cell": 33,
+      "part": "pioneer.physical_cargo_rebuild/tank/rib/14/exact-union",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "553/50",
+          "-12279/2000",
+          "-187/50"
+        ]
+      }
+    },
+    {
+      "cell": 34,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "553/50",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 34,
+      "part": "pioneer.magazine_ready/render_batch/0490",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "553/50",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 34,
+      "part": "pioneer.physical_cargo_rebuild/fixed_fluid_network",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "553/50",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 34,
+      "part": "pioneer.physical_cargo_rebuild/tank/rib/14/exact-union",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "553/50",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 35,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "553/50",
+          "-12279/2000",
+          "187/50"
+        ]
+      }
+    },
+    {
+      "cell": 35,
+      "part": "pioneer.magazine_ready/render_batch/0490",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "553/50",
+          "-12279/2000",
+          "187/50"
+        ]
+      }
+    },
+    {
+      "cell": 35,
+      "part": "pioneer.physical_cargo_rebuild/fixed_fluid_network",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "553/50",
+          "-12279/2000",
+          "187/50"
+        ]
+      }
+    },
+    {
+      "cell": 35,
+      "part": "pioneer.physical_cargo_rebuild/tank/rib/14/exact-union",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "553/50",
+          "-12279/2000",
+          "187/50"
+        ]
+      }
+    },
+    {
+      "cell": 36,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "28119/2000",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 36,
+      "part": "pioneer.magazine_ready/render_batch/0490",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "28119/2000",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 36,
+      "part": "pioneer.physical_cargo_rebuild/tank/rib/14/exact-union",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "exact-source-coordinate-no-tolerance",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "28119/2000",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 37,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "374/25",
+          "-337/50",
+          "-187/50"
+        ]
+      }
+    },
+    {
+      "cell": 38,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "374/25",
+          "-337/50",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 39,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "374/25",
+          "-337/50",
+          "187/50"
+        ]
+      }
+    },
+    {
+      "cell": 40,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "374/25",
+          "-12279/2000",
+          "-187/50"
+        ]
+      }
+    },
+    {
+      "cell": 40,
+      "part": "pioneer.magazine_ready/render_batch/0490",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "374/25",
+          "-12279/2000",
+          "-187/50"
+        ]
+      }
+    },
+    {
+      "cell": 41,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "374/25",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 41,
+      "part": "pioneer.magazine_ready/render_batch/0490",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "374/25",
+          "-12279/2000",
+          "0"
+        ]
+      }
+    },
+    {
+      "cell": 42,
+      "part": "Pressure hull",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 2,
+        "witness": [
+          "374/25",
+          "-12279/2000",
+          "187/50"
+        ]
+      }
+    },
+    {
+      "cell": 42,
+      "part": "pioneer.magazine_ready/render_batch/0490",
+      "source_surface_hits_expanded_by_error": [],
+      "export_full_cell_surface_hits": [],
+      "source_closed": true,
+      "closure_basis": "evaluated-source-index",
+      "source_export_max_coordinate_error_m": 0.0,
+      "exact_source_ray": {
+        "parity": 0,
+        "signed_crossings": 0,
+        "crossings": 0,
+        "witness": [
+          "374/25",
+          "-12279/2000",
+          "187/50"
+        ]
+      }
+    }
+  ],
+  "failures": [],
+  "negative_controls": [
+    "exact contained-solid ray parity detects enclosing tetrahedron",
+    "contained surface triangle detects internal obstacle",
+    "exact zero-volume boundary contact accepted but1nm positive penetration rejected",
+    "two overlapping positive solids cannot cancel by even ray parity",
+    "missing or inverted material face rejected by exact topology",
+    "proper nested inward cavity is empty by exact oriented crossing sum",
+    "omitted process envelope exclusion detects original-cell overcount"
+  ],
+  "limits": [
+    "Geometry only, not assembly service-motion admission, maintenance, mass, pressure, usable operational fill fraction or runtime registration.",
+    "Closed evaluated source defines material volume. Global exact-position exported closure is not claimed; all source triangles including dropped ones are clear of counted cells by the measured export displacement bound."
+  ]
+}

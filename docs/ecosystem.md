@@ -37,6 +37,36 @@ from the official service under the [branding policy](../TRADEMARKS.md). See
 published reader documentation; versioned documents remain in the source
 repository so documentation changes can be reviewed alongside code.
 
+## Current development priority: local Arkline Editor
+
+The immediate focus is the integrated local editor: one place to run the real
+simulation, edit ship definitions, inspect authoritative results and prepare
+reviewable contributions. Follow the [community project](https://github.com/orgs/PIndustries/projects/14)
+and [local editor milestone](https://github.com/PIndustries/arkline-engine/milestone/5).
+
+The active integration work in [PR #47](https://github.com/PIndustries/arkline-engine/pull/47)
+includes shared live fleet materials, local simulation controls, native contributor
+sign-in and the first typed event graph. These are integration-branch capabilities,
+not a claim that the public release or official services have been updated.
+
+| Workstream | Current boundary | Acceptance still needed |
+| --- | --- | --- |
+| [Editor workflow #45](https://github.com/PIndustries/arkline-engine/issues/45) | Embedded client/authority, saved project documents and bounded background work | Complete native edit, apply, save, restart and recovery journeys |
+| [Event flow #49](https://github.com/PIndustries/arkline-engine/issues/49) | Editable typed nodes, revision checks, breakpoints, causal traces and independent event/tick stepping | Native device round trips, deeper subsystem hooks, entity bindings and replay design |
+| [Contributor identity #48](https://github.com/PIndustries/arkline-engine/issues/48) | Native GitHub device flow and direct API; public reading works signed out | Register app, verify approved login/credential lifecycle and enforce a wiki clone disk bound |
+| [Rendering #36](https://github.com/PIndustries/arkline-engine/issues/36) | Shared materials, actual wireframe/draw counters and fewer redundant paused snapshots | Measured frame-time baseline and sustained native performance |
+| [Ship fidelity #41](https://github.com/PIndustries/arkline-engine/issues/41) | Existing ship assets and shared material controls | Geometry/interior fidelity against the ship specification |
+
+Graph documents and material edits can change without recompiling the editor;
+new engine primitives still need reviewed Rust changes. The server remains the
+authority for permissions, conservation and device interlocks. A graph trace is
+not yet a recording of every internal subsystem or a replayable universe history.
+
+The project's **Focus** field separates Now, Next, Later and Delivered. **Status** tracks active work: Todo includes implementation or acceptance waiting for its next pass; In Progress identifies active work. A merged PR can be Done while its broader issue stays open. Delivered records historical scoped completion, not a fresh service availability check. Issue bodies retain published results, integration-only work and unresolved acceptance separately.
+
+The larger ecosystem journeys below remain future work. Local authoring and
+stability take priority over expanding hosting, governance or reward systems.
+
 ## Current foundation
 
 - Pilot: saved identity, station departure, timed travel, finite-resource mining,

@@ -78,6 +78,7 @@ fn initial(name: &str, location: &Location, class: ShipClass) -> [f64; 3] {
 pub(super) fn ensure_flight(p: &mut Pilot, now: u64) {
     if p.view.flight.is_none() {
         p.view.flight = Some(FlightState {
+            docking: None,
             acceleration: [0.0; 3],
             position: initial(&p.view.name, &p.view.location, p.view.ship_class),
             velocity: [0.0; 3],
@@ -197,16 +198,22 @@ fn target(
 }
 pub(super) fn begin_warp(p: &mut Pilot, destination: Destination, now: u64) {
     let f = p.view.flight.as_mut().unwrap();
+    let target = if destination == Destination::Station {
+        f.docking.as_ref().map(|d| {
+            let mut gate = docking_gate_position(d.berth_id);
+            gate[0] += 500.;
+            gate
+        })
+    } else {
+        None
+    }
+    .unwrap_or_else(|| berth(&p.view.name, destination, p.view.ship_class));
     p.warp = Some(WarpPath {
         source: f.position,
-        target: berth(&p.view.name, destination, p.view.ship_class),
+        target,
         started_ms: now,
     });
-    f.warp = Some(plan_warp(
-        f.position,
-        berth(&p.view.name, destination, p.view.ship_class),
-        now,
-    ));
+    f.warp = Some(plan_warp(f.position, target, now));
     if let Some(path) = &mut f.warp {
         path.initial_heading = Some(f.heading);
     }
@@ -218,16 +225,40 @@ pub(super) fn begin_warp(p: &mut Pilot, destination: Destination, now: u64) {
     f.updated_at_ms = now;
 }
 pub(super) fn advance(world: &mut World, now: u64) {
+    super::docking::advance(world, now);
+    let planet = world.planet();
     for p in world.pilots.values_mut() {
         ensure_flight(p, now);
     }
+    let continuous_docking = super::docking::enabled(world);
+    let envelopes = super::docking::envelopes(world);
     let views = world.pilots.clone();
     for p in world.pilots.values_mut() {
+        if !envelopes.contains_key(&p.view.name) {
+            if let Some(f) = p.view.flight.as_mut() {
+                f.velocity = [0.; 3];
+                f.acceleration = [0.; 3];
+                f.angular_velocity = [0.; 3];
+                f.mode = NavigationMode::Stop;
+                f.updated_at_ms = now;
+            }
+            p.controls = None;
+            continue;
+        }
+        if super::docking::busy(p) {
+            continue;
+        }
         let acceleration = ship_acceleration(p.view.ship_class, p.view.ore);
         if matches!(p.view.flight.as_ref().unwrap().mode, NavigationMode::Manual)
             && universe::normal(p)
         {
-            advance_manual(p, now);
+            advance_manual(
+                p,
+                now,
+                &planet,
+                continuous_docking.then_some(&views),
+                &envelopes,
+            );
             continue;
         }
         let f = p.view.flight.as_mut().unwrap();
@@ -363,8 +394,30 @@ pub(super) fn advance(world: &mut World, now: u64) {
             };
             f.velocity = add(old, limit(sub(desired, old), applied * dt));
             f.acceleration = std::array::from_fn(|i| (f.velocity[i] - old[i]) / dt);
+            let previous_position = f.position;
             f.position = add(f.position, mul(add(old, f.velocity), dt * 0.5));
-            super::surface::constrain(f, p.view.ship_class, p.view.system_id);
+            if continuous_docking
+                && !super::docking::free_step_clear(
+                    &views,
+                    &p.view.name,
+                    p.view.system_id,
+                    previous_position,
+                    f.position,
+                    &envelopes,
+                )
+            {
+                f.position = previous_position;
+                f.velocity = [0.; 3];
+                f.acceleration = [0.; 3];
+                f.mode = NavigationMode::Stop;
+            }
+            super::surface::constrain(
+                f,
+                p.view.ship_class,
+                p.view.system_id,
+                &planet,
+                envelopes[&p.view.name],
+            );
             if let Some(point) = destination {
                 if distance(f.position, point) < 0.6 && length(f.velocity) < 12.0 {
                     f.position = point;
@@ -541,7 +594,13 @@ pub(super) fn controls(translation: [f64; 3], rotation: [f64; 3], now: u64) -> C
         expires_at_ms: now.saturating_add(PILOT_INPUT_LEASE_MS),
     }
 }
-fn advance_manual(p: &mut Pilot, now: u64) {
+fn advance_manual(
+    p: &mut Pilot,
+    now: u64,
+    planet: &PlanetDefinition,
+    docking_views: Option<&BTreeMap<String, Pilot>>,
+    envelopes: &super::docking::EnvelopeMap,
+) {
     let acceleration = ship_acceleration(p.view.ship_class, p.view.ore);
     let input = p.controls.clone();
     let f = p.view.flight.as_mut().unwrap();
@@ -583,8 +642,29 @@ fn advance_manual(p: &mut Pilot, now: u64) {
             add(old, limit(mul(old, -1.0), acceleration * 0.15 * dt))
         };
         f.acceleration = std::array::from_fn(|i| (f.velocity[i] - old[i]) / dt);
+        let previous_position = f.position;
         f.position = add(f.position, mul(add(old, f.velocity), dt * 0.5));
-        super::surface::constrain(f, p.view.ship_class, p.view.system_id);
+        if docking_views.is_some_and(|views| {
+            !super::docking::free_step_clear(
+                views,
+                &p.view.name,
+                p.view.system_id,
+                previous_position,
+                f.position,
+                envelopes,
+            )
+        }) {
+            f.position = previous_position;
+            f.velocity = [0.; 3];
+            f.acceleration = [0.; 3];
+        }
+        super::surface::constrain(
+            f,
+            p.view.ship_class,
+            p.view.system_id,
+            planet,
+            envelopes[&p.view.name],
+        );
         for i in 0..3 {
             if f.position[i].abs() > SPACE_BOUND {
                 f.position[i] = f.position[i].clamp(-SPACE_BOUND, SPACE_BOUND);

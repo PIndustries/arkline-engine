@@ -1,0 +1,7 @@
+@@ -8,2 +8,6 @@
+ #[cfg(not(target_arch = "wasm32"))]
++mod part_explosion;
++#[cfg(not(target_arch = "wasm32"))]
++pub use part_explosion::{exploded_part_draw_specs, PART_EXPLOSION_MAX_SPREAD};
++#[cfg(not(target_arch = "wasm32"))]
+ pub use flight3d::pioneer_parts::{

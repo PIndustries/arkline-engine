@@ -1,0 +1,30 @@
+{
+  "schema": "arkline.physical-receiver-valve-motion-candidate/v1",
+  "status": "NEW_UNADMITTED_EXPLICIT_OVERRIDE",
+  "geometry_glb_sha256": "08241a77914f7b909b666cde14c4f7efd6f4ed8364e3fe25e8926dee75a2e011",
+  "source_blend_sha256": "1fdeee298023251b6907ff4ba64bda4f8117103f99e65cb31cd7f35ce6d8c718",
+  "receiver_module_sha256": "daa77de93195ab605a4c197f6b4362565c9d109d7b0a08b86db53936880a82ce",
+  "fixed_pipe_json_sha256": "5b6c7cdde69750df7d6f24a7f39340a7b3e9d5d5c4539355a2cd73e7e0976286",
+  "prior_nominal_motion_m": 0.095,
+  "scope": "Only fixed-valve-panel/-1 and fixed-valve-panel/1 for all10 matching bay transforms",
+  "parameter": {
+    "travel_mm": 94,
+    "negative_panel_y_sign": -1,
+    "positive_panel_y_sign": 1,
+    "position_rule": "At normalized progress u in [0,1], body Y displacement = sign * (94/1000 metres) * u. Geometry is unchanged.",
+    "f32_metre_lower_bound": 0.09399998933076859,
+    "f32_metre_upper_bound": 0.09400000423192978
+  },
+  "required_runtime_semantics": [
+    "Explicit candidate binding to this contract and exact source/GLB hashes before use.",
+    "Clamp normalized progress to[0,1], deterministic position from original pose, no additive accumulated drift or extrapolation.",
+    "Use integer94mm or f32 metre displacement within the certified bounds.",
+    "Same reverse path for close, idempotent endpoints and no unbounded catch-up.",
+    "Closed/open interlocks and source candidate admission remain required; this file alone changes no runtime."
+  ],
+  "does_not_modify": [
+    "original module motion95mm",
+    "old geometry/source identities",
+    "published baseline or runtime registration"
+  ]
+}

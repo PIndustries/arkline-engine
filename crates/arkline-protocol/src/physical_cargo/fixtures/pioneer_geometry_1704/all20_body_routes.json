@@ -1,0 +1,325 @@
+{
+  "status": "PASS bounded supported all20 launch identities and10 loaded reserve reloads",
+  "source_sha256": "1fdeee298023251b6907ff4ba64bda4f8117103f99e65cb31cd7f35ce6d8c718",
+  "manifest_sha256": "7eabc9186d4bf361fde89fd4b921bf4b89f850f13e438c1b52197beabf3293bd",
+  "drone_glb_sha256": "9363b725e154f7219533461766c2dee2d1a6aaed7d662db38ad1e7c25071cf14",
+  "drone_triangles": 2064,
+  "provider_hashes": {
+    "candidate_routes.py": "cd3de5094a73efa37391decb8ac057ca84cd098985d0c076cab9123ac51f8e86",
+    "parallel_routes.py": "565916b6fd1891e4dfbc6f5d47c9de0bf0260d22b2fb4d662088b80a98c4707a",
+    "parallel_bank_routes.py": "04671d027bc5d1c63c293b69af9df06fe6a063016a701455bfaae0db75738709"
+  },
+  "base_static_bounds_sha256": "3b36bb7901ec207c1556f6bd1378f4b8c34f0a034fa755412af08f7747d89b2b",
+  "fixed_pipe_sha256": "5b6c7cdde69750df7d6f24a7f39340a7b3e9d5d5c4539355a2cd73e7e0976286",
+  "checker_sha256": "07c0d57663955f93d19177a14dfa9ca021754bcb34645a240077cd3daa62458b",
+  "glb_decoder_sha256": "9c14501e762dbe37447eecffb887d7eb794d01fc84898ec3b5909407323fedc2",
+  "routes": [
+    {
+      "bay": 0,
+      "cassette_id": 0,
+      "route": "ready_launch",
+      "phases": 6,
+      "relative_domains": 37584,
+      "unique_near_domains": 16,
+      "failures": 0,
+      "frames_sha256": "5e39e30fe56f48c318c133d410e95bb19b7ad01f4f02e09e3afcabf3ccc9f6d1"
+    },
+    {
+      "bay": 0,
+      "cassette_id": 10,
+      "route": "reload",
+      "phases": 41,
+      "relative_domains": 256824,
+      "unique_near_domains": 4,
+      "failures": 0,
+      "frames_sha256": "f836160f4174f8e05d4b41132683679a6574622b9bdf1b4720e0b20b7cffbf8c"
+    },
+    {
+      "bay": 0,
+      "cassette_id": 10,
+      "route": "reserve_launch",
+      "phases": 6,
+      "relative_domains": 37584,
+      "unique_near_domains": 12,
+      "failures": 0,
+      "frames_sha256": "ab970ad7d94b99ee70a547976b4e579958c79182956311f673671d0f51ed32d3"
+    },
+    {
+      "bay": 1,
+      "cassette_id": 1,
+      "route": "ready_launch",
+      "phases": 6,
+      "relative_domains": 37584,
+      "unique_near_domains": 16,
+      "failures": 0,
+      "frames_sha256": "095e4768fa66dc771fcfe3add1e091200f4a483b6bf4f5dd103b51bd201dce73"
+    },
+    {
+      "bay": 1,
+      "cassette_id": 11,
+      "route": "reload",
+      "phases": 41,
+      "relative_domains": 256824,
+      "unique_near_domains": 4,
+      "failures": 0,
+      "frames_sha256": "5c5d2e48e1a31440dfb422bbfdcbfd35552e7bfa5224c67005e2c6dd69c091b0"
+    },
+    {
+      "bay": 1,
+      "cassette_id": 11,
+      "route": "reserve_launch",
+      "phases": 6,
+      "relative_domains": 37584,
+      "unique_near_domains": 12,
+      "failures": 0,
+      "frames_sha256": "5f278d7bac373c12088df6c0a408f21b06fd5c7a26bb855d07d1edb905776d98"
+    },
+    {
+      "bay": 2,
+      "cassette_id": 2,
+      "route": "ready_launch",
+      "phases": 6,
+      "relative_domains": 37584,
+      "unique_near_domains": 16,
+      "failures": 0,
+      "frames_sha256": "3d242fbb15c2f1b197d0f651d8ab7b5a552c01f369fd4059733317641e51bcf2"
+    },
+    {
+      "bay": 2,
+      "cassette_id": 12,
+      "route": "reload",
+      "phases": 41,
+      "relative_domains": 256824,
+      "unique_near_domains": 4,
+      "failures": 0,
+      "frames_sha256": "7bbed3d2d6f08a93487d64979c9c23aa9a135e8df0361b64363e0f1978c0fe4c"
+    },
+    {
+      "bay": 2,
+      "cassette_id": 12,
+      "route": "reserve_launch",
+      "phases": 6,
+      "relative_domains": 37584,
+      "unique_near_domains": 12,
+      "failures": 0,
+      "frames_sha256": "f2edb45318ce14096c812a8c0aed8df4fcc150f9dafaaf31d854fcad057c2c0e"
+    },
+    {
+      "bay": 3,
+      "cassette_id": 3,
+      "route": "ready_launch",
+      "phases": 6,
+      "relative_domains": 37584,
+      "unique_near_domains": 16,
+      "failures": 0,
+      "frames_sha256": "b09d67b9d19fc1f6e7bf9fe4284f8313dbff0022137eb82c90acf07929896ff0"
+    },
+    {
+      "bay": 3,
+      "cassette_id": 13,
+      "route": "reload",
+      "phases": 41,
+      "relative_domains": 256824,
+      "unique_near_domains": 4,
+      "failures": 0,
+      "frames_sha256": "d61aaba7222c0e997700ff7ffb4a64a1b3108c29b0334f0fb50fe30b2842fe22"
+    },
+    {
+      "bay": 3,
+      "cassette_id": 13,
+      "route": "reserve_launch",
+      "phases": 6,
+      "relative_domains": 37584,
+      "unique_near_domains": 12,
+      "failures": 0,
+      "frames_sha256": "9186450571d6f293b2a97c1ec94e362f2055d99ca624297421091ba387f9e5c3"
+    },
+    {
+      "bay": 4,
+      "cassette_id": 4,
+      "route": "ready_launch",
+      "phases": 6,
+      "relative_domains": 37584,
+      "unique_near_domains": 16,
+      "failures": 0,
+      "frames_sha256": "ac51f2678333e69fb1adea14e604beb5668c55aaef6b67dac3b72a7494e08229"
+    },
+    {
+      "bay": 4,
+      "cassette_id": 14,
+      "route": "reload",
+      "phases": 41,
+      "relative_domains": 256824,
+      "unique_near_domains": 4,
+      "failures": 0,
+      "frames_sha256": "aac63f47e5c8c21add4a6674d066821965e9d264b96cc8103f1b5de42775a208"
+    },
+    {
+      "bay": 4,
+      "cassette_id": 14,
+      "route": "reserve_launch",
+      "phases": 6,
+      "relative_domains": 37584,
+      "unique_near_domains": 12,
+      "failures": 0,
+      "frames_sha256": "ced8b94a4a92dd8b30f838ed10c56e5d473d7c65bbe5e5b5091147b41897707f"
+    },
+    {
+      "bay": 5,
+      "cassette_id": 5,
+      "route": "ready_launch",
+      "phases": 6,
+      "relative_domains": 37584,
+      "unique_near_domains": 16,
+      "failures": 0,
+      "frames_sha256": "32fbb3724dc4c347ee34be9f979613d545c30fd74f7eb141f795162b35349675"
+    },
+    {
+      "bay": 5,
+      "cassette_id": 15,
+      "route": "reload",
+      "phases": 41,
+      "relative_domains": 256824,
+      "unique_near_domains": 4,
+      "failures": 0,
+      "frames_sha256": "85efe6a26d06c30bede6c285fbffcfbe93b801df4b10b299f6d716f95bc5a83c"
+    },
+    {
+      "bay": 5,
+      "cassette_id": 15,
+      "route": "reserve_launch",
+      "phases": 6,
+      "relative_domains": 37584,
+      "unique_near_domains": 12,
+      "failures": 0,
+      "frames_sha256": "44db8343953e07dfa26699bbbb005c243b3818ad15dc8842617c694604f611cc"
+    },
+    {
+      "bay": 6,
+      "cassette_id": 6,
+      "route": "ready_launch",
+      "phases": 6,
+      "relative_domains": 37584,
+      "unique_near_domains": 16,
+      "failures": 0,
+      "frames_sha256": "1e4c379333708b39b6d36bfdb211bc96abc802ad6e5365d549c60e2e76a2422c"
+    },
+    {
+      "bay": 6,
+      "cassette_id": 16,
+      "route": "reload",
+      "phases": 41,
+      "relative_domains": 256824,
+      "unique_near_domains": 4,
+      "failures": 0,
+      "frames_sha256": "adf1cb220eb335a11191f6cbf30bb206c225f739cd50f66c37439e6fdf4ab4ac"
+    },
+    {
+      "bay": 6,
+      "cassette_id": 16,
+      "route": "reserve_launch",
+      "phases": 6,
+      "relative_domains": 37584,
+      "unique_near_domains": 12,
+      "failures": 0,
+      "frames_sha256": "e4b5da4f18342c3bd4412a6b8bc9f88a4341759100314ac30dfbe4f9da9e448a"
+    },
+    {
+      "bay": 7,
+      "cassette_id": 7,
+      "route": "ready_launch",
+      "phases": 6,
+      "relative_domains": 37584,
+      "unique_near_domains": 16,
+      "failures": 0,
+      "frames_sha256": "7a9c2daa56e784dda26306c0627d87061a08faeb85b6643423bd9d656c47e8b4"
+    },
+    {
+      "bay": 7,
+      "cassette_id": 17,
+      "route": "reload",
+      "phases": 41,
+      "relative_domains": 256824,
+      "unique_near_domains": 4,
+      "failures": 0,
+      "frames_sha256": "1b5d70cef2839dd2b62565f8b42cf85dd8f4f05682e760090ae9037b1b645afe"
+    },
+    {
+      "bay": 7,
+      "cassette_id": 17,
+      "route": "reserve_launch",
+      "phases": 6,
+      "relative_domains": 37584,
+      "unique_near_domains": 12,
+      "failures": 0,
+      "frames_sha256": "52b138a58c1acbc4274ae49034c2d8dd926a55adaf3c94559437d6ba58b4c042"
+    },
+    {
+      "bay": 8,
+      "cassette_id": 8,
+      "route": "ready_launch",
+      "phases": 6,
+      "relative_domains": 37584,
+      "unique_near_domains": 16,
+      "failures": 0,
+      "frames_sha256": "688ca3c837b8b196636d02d6e1d16aff4745f0adc8287a15097868187643102d"
+    },
+    {
+      "bay": 8,
+      "cassette_id": 18,
+      "route": "reload",
+      "phases": 41,
+      "relative_domains": 256824,
+      "unique_near_domains": 4,
+      "failures": 0,
+      "frames_sha256": "1bc2946c74fa0984557a05c5b93e3192b68154fb161d3842e69b55d9f022a20b"
+    },
+    {
+      "bay": 8,
+      "cassette_id": 18,
+      "route": "reserve_launch",
+      "phases": 6,
+      "relative_domains": 37584,
+      "unique_near_domains": 12,
+      "failures": 0,
+      "frames_sha256": "c72bb3dca0ae033f34f8271e0440afb2164afb3759ffa85b618cf8d23f27cf3f"
+    },
+    {
+      "bay": 9,
+      "cassette_id": 9,
+      "route": "ready_launch",
+      "phases": 6,
+      "relative_domains": 37584,
+      "unique_near_domains": 16,
+      "failures": 0,
+      "frames_sha256": "eed7a6147e703fd804397e5ed9948b5b90bf9944b60273d24a053e66ea7c50a2"
+    },
+    {
+      "bay": 9,
+      "cassette_id": 19,
+      "route": "reload",
+      "phases": 41,
+      "relative_domains": 256824,
+      "unique_near_domains": 4,
+      "failures": 0,
+      "frames_sha256": "72aa763df7d3aab0323f79e8af6efbc35c3bb13ed3a38c56b8c68e91584baf0b"
+    },
+    {
+      "bay": 9,
+      "cassette_id": 19,
+      "route": "reserve_launch",
+      "phases": 6,
+      "relative_domains": 37584,
+      "unique_near_domains": 12,
+      "failures": 0,
+      "frames_sha256": "6c974a6b1c22a97a37eb7afe619652487f9647bd38e4301b867266dda46f05b1"
+    }
+  ],
+  "failures": [],
+  "limitations": [
+    "Actual mining variant only; no invented return route or concurrent handling admission.",
+    "Reload fixture requires outgoing Ready cassette empty; other18 occupants retain full bodies.",
+    "Conservative continuous swept part boxes; exact partial-source preservation and source bounds coverage are separate pinned gates.",
+    "No pressure, structural or serviceability rating."
+  ]
+}

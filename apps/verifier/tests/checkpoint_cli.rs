@@ -23,6 +23,13 @@ fn checkpoint_advances_only_after_full_verification() {
         protocol_version: PROTOCOL_VERSION,
         entries: vec![],
         snapshot: Snapshot {
+            carrier_inventory_registration: None,
+            drone_cargo_registration: None,
+            drone_cargo_totals: None,
+            walk_sprint_v1: false,
+            docked_traversal_capability: None,
+            world_layout: None,
+            exterior: None,
             remote_controls: vec![],
             fleet_links: vec![],
             resource_jobs: vec![],
@@ -77,6 +84,12 @@ fn checkpoint_advances_only_after_full_verification() {
     entry.hash = entry.calculate_hash();
     export.snapshot.belt_ore = INITIAL_BELT_ORE;
     export.snapshot.pilots.push(PilotView {
+        carrier_inventory: None,
+        power_accounting: None,
+        drone_bay: None,
+        drone_cargo: None,
+        cockpit_mechanisms: None,
+        reactor_configuration: None,
         station_avatar: None,
         surface: None,
         power: None,

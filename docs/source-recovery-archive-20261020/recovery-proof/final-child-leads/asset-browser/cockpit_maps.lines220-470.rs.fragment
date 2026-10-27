@@ -1,0 +1,251 @@
+        let u = (point.x - self.canvas.left()) / self.canvas.width();
+        let v = (point.y - self.canvas.top()) / self.canvas.height();
+        let local = Vec3::new(
+            self.plane_x,
+            self.center.y + (0.5 - v) * self.half.y * 2.0,
+            self.center.z + (u - 0.5) * self.half.z * 2.0,
+        );
+        SurfaceVertex {
+            clip: self.local_to_clip * local.extend(1.0),
+            uv,
+            color,
+        }
+    }
+
+    fn screen_position(&self, clip: glam::Vec4) -> Option<egui::Pos2> {
+        if !clip.is_finite() || clip.w <= 1e-7 {
+            return None;
+        }
+        Some(
+            self.viewport.center()
+                + egui::vec2(
+                    clip.x / clip.w * self.viewport.width() * 0.5,
+                    -clip.y / clip.w * self.viewport.height() * 0.5,
+                ),
+        )
+    }
+
+    fn project_mesh(&self, mesh: egui::epaint::Mesh, local_clip: egui::Rect) -> egui::epaint::Mesh {
+        let clip = local_clip.intersect(self.canvas);
+        let mut output = egui::epaint::Mesh::with_texture(mesh.texture_id);
+        for triangle in mesh.indices.chunks_exact(3) {
+            // Clip local content first, including glyphs that cross the bezel.
+            let mut polygon: Vec<_> = triangle
+                .iter()
+                .map(|i| {
+                    let v = mesh.vertices[*i as usize];
+                    SurfaceVertex {
+                        clip: glam::Vec4::new(v.pos.x, v.pos.y, 0.0, 1.0),
+                        uv: v.uv,
+                        color: v.color,
+                    }
+                })
+                .collect();
+            for edge in 0..4 {
+                polygon = clip_surface_polygon(polygon, |v| match edge {
+                    0 => v.clip.x - clip.left(),
+                    1 => clip.right() - v.clip.x,
+                    2 => v.clip.y - clip.top(),
+                    _ => clip.bottom() - v.clip.y,
+                });
+            }
+            let polygon = clip_surface_frustum(
+                polygon
+                    .into_iter()
+                    .map(|v| self.vertex(egui::pos2(v.clip.x, v.clip.y), v.uv, v.color))
+                    .collect(),
+            );
+            let start = output.vertices.len() as u32;
+            for v in &polygon {
+                if let Some(pos) = self.screen_position(v.clip) {
+                    output.vertices.push(egui::epaint::Vertex {
+                        pos,
+                        uv: v.uv,
+                        color: v.color,
+                    });
+                }
+            }
+            for index in 1..polygon.len().saturating_sub(1) {
+                output.add_triangle(start, start + index as u32, start + index as u32 + 1);
+            }
+        }
+        output
+    }
+
+    /// Collect ordinary egui shapes in display-local coordinates. The guard
+    /// tessellates and projects them (including font glyphs) onto this real face.
+    pub(super) fn begin_paint(&self, ui: &egui::Ui) -> SurfacePaint {
+        let layer = egui::LayerId::new(
+            egui::Order::Background,
+            egui::Id::new(("cockpit_surface_canvas", self.index)),
+        );
+        SurfacePaint {
+            surface: self.clone(),
+            output: ui.painter_at(self.viewport),
+            painter: egui::Painter::new(ui.ctx().clone(), layer, self.canvas),
+            layer,
+        }
+    }
+
+    pub(super) fn paint(&self, ui: &egui::Ui, draw: impl FnOnce(&egui::Painter)) {
+        let paint = self.begin_paint(ui);
+        draw(paint.painter());
+    }
+}
+
+pub(super) struct SurfacePaint {
+    surface: CockpitSurface,
+    output: egui::Painter,
+    painter: egui::Painter,
+    layer: egui::LayerId,
+}
+impl SurfacePaint {
+    pub(super) fn painter(&self) -> &egui::Painter {
+        &self.painter
+    }
+}
+impl Drop for SurfacePaint {
+    fn drop(&mut self) {
+        let context = self.painter.ctx();
+        let shapes = context.graphics_mut(|graphics| {
+            let list = graphics.entry(self.layer);
+            let shapes: Vec<_> = list.all_entries().cloned().collect();
+            *list = Default::default();
+            shapes
+        });
+        for primitive in context.tessellate(shapes, context.pixels_per_point()) {
+            if let egui::epaint::Primitive::Mesh(mesh) = primitive.primitive {
+                let mesh = self.surface.project_mesh(mesh, primitive.clip_rect);
+                if !mesh.indices.is_empty() {
+                    self.output.add(egui::Shape::mesh(mesh));
+                }
+            }
+        }
+    }
+}
+
+pub(super) fn fleet(pilot: &PilotView) -> Vec<&arkline_protocol::DroneView> {
+    if pilot.drones.is_empty() {
+        pilot.drone.iter().collect()
+    } else {
+        pilot.drones.iter().collect()
+    }
+}
+
+pub(super) fn drone_view_matrix(
+    drone: &arkline_protocol::DroneView,
+    space: Space,
+    aspect: f32,
+    orbit: bool,
+    now: u64,
+) -> (Vec3, Mat4) {
+    if !orbit {
+        return drone_camera_matrix(drone, space, aspect);
+    }
+    let target = space.scene(drone.position);
+    let phase = (now % 120_000) as f32 / 120_000.0 * std::f32::consts::TAU;
+    let eye = target + Vec3::new(phase.cos() * 0.35, 0.16, phase.sin() * 0.35);
+    (
+        eye,
+        Mat4::perspective_rh_gl(1.05, aspect.max(0.1), 0.002, 1200.0)
+            * Mat4::look_at_rh(eye, target, Vec3::Y),
+    )
+}
+
+pub(super) fn paint_camera_signal(
+    painter: &egui::Painter,
+    screen: egui::Rect,
+    drone: Option<&arkline_protocol::DroneView>,
+    now: u64,
+    fresh: bool,
+) {
+    let painter = painter.with_clip_rect(screen);
+    let signal = if fresh {
+        drone.map_or(0.0, |d| d.signal_strength.clamp(0.0, 1.0)) as f32
+    } else {
+        0.0
+    };
+    let loss = 1.0 - signal;
+    if drone.is_none() || !fresh || signal <= 0.0 {
+        painter.rect_filled(screen, 0.0, egui::Color32::from_rgb(1, 8, 5));
+    }
+    if drone.is_some() && fresh && loss > 0.01 {
+        // Bounded screen-space noise: no extra world pass, allocation or random generator.
+        for line in 0..(loss * 90.0) as u32 {
+            let hash = line
+                .wrapping_mul(747796405)
+                .wrapping_add((now / 65) as u32)
+                .wrapping_mul(2891336453);
+            let y = screen.top() + (hash & 65535) as f32 / 65535.0 * screen.height();
+            let x = screen.left() + (hash >> 16) as f32 / 65535.0 * screen.width();
+            let alpha = (loss * 160.0) as u8;
+            painter.line_segment(
+                [
+                    egui::pos2(x, y),
+                    egui::pos2((x + screen.width() * 0.35).min(screen.right()), y),
+                ],
+                egui::Stroke::new(
+                    1.0,
+                    egui::Color32::from_rgba_unmultiplied(160, 205, 175, alpha),
+                ),
+            );
+        }
+        painter.rect_filled(
+            screen,
+            0.0,
+            egui::Color32::from_black_alpha((loss * 165.0) as u8),
+        );
+    }
+    if signal <= 0.0 {
+        painter.text(
+            screen.center(),
+            egui::Align2::CENTER_CENTER,
+            if !fresh {
+                "TELEMETRY STALE"
+            } else if drone.is_none() {
+                "NO CAMERA SELECTED"
+            } else {
+                "SIGNAL LOST / RETURNING"
+            },
+            egui::FontId::monospace(11.0),
+            super::super::AMBER,
+        );
+    }
+}
+
+fn map_offset(
+    relative: [f64; 3],
+    rotation: Quat,
+    range: f64,
+    radius: f32,
+    tactical: bool,
+) -> egui::Vec2 {
+    let body = rotation.inverse() * Vec3::from_array(relative.map(|v| (v / range) as f32));
+    if tactical {
+        egui::vec2(body.z, -body.x * 0.55 - body.y * 0.8) * radius
+    } else {
+        egui::vec2(body.z, -body.x) * radius
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn paint_cockpit_maps(
+    ui: &mut egui::Ui,
+    surface: &CockpitSurface,
+    own: &PilotView,
+    snapshot: &Snapshot,
+    now: u64,
+    connected: bool,
+    selected: &super::super::SelectedObject,
+    range: &mut f64,
+) -> Option<ViewAction> {
+    let world_layout = match super::super::snapshot_world_layout(snapshot) {
+        Ok(layout) => layout,
+        Err(error) => {
+            surface.paint(ui, |painter| {
+                painter.text(
+                    surface.canvas_rect().center(),
+                    egui::Align2::CENTER_CENTER,
+                    error,
+                    egui::FontId::monospace(10.0),
+                    egui::Color32::RED,

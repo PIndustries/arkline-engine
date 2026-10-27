@@ -1,0 +1,2729 @@
+{
+  "asset_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+  "authority": "disposable arkline_server::editor::EditorWorld",
+  "build": "26.10.15.7036",
+  "captures": [
+    {
+      "authority": {
+        "definition_revision": 0,
+        "flight": {
+          "acceleration_m_s2": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "orientation": [
+            0.0,
+            -0.9978978933704145,
+            0.0,
+            0.06480582077937998
+          ],
+          "position_m": [
+            299195741250.0,
+            0.0,
+            1000.0
+          ],
+          "updated_at_ms": 1792091069837,
+          "velocity_m_s": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "hull_asset_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+        "location": {
+          "kind": "belt"
+        },
+        "power": {
+          "capacity_j": 240000,
+          "charge_j": 232240,
+          "regen_remainder_mj": 0,
+          "regen_w": 1200,
+          "updated_at_ms": 1792091069837
+        },
+        "simulation_time_ms": 1792091069837,
+        "strobe_outputs": [
+          {
+            "id": "pioneer.exterior.strobe.dorsal",
+            "output": 0.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 0
+            }
+          },
+          {
+            "id": "pioneer.exterior.strobe.ventral",
+            "output": 0.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 500
+            }
+          }
+        ],
+        "system_id": 1,
+        "vessel": {
+          "drive": "idle",
+          "enabled": false,
+          "load_w": 0,
+          "pilot": "PioneerAdoptionQA",
+          "powered": false,
+          "ship_class": "pioneer",
+          "vessel_id": "v1:PioneerAdoptionQA:Pioneer"
+        }
+      },
+      "camera": {
+        "eye_body_m": [
+          95.0,
+          50.0,
+          -95.0
+        ],
+        "eye_scene": [
+          -0.8191481828689575,
+          0.5000001192092896,
+          1.0648926496505737
+        ],
+        "half_height_m": 36.0,
+        "half_width_m": 54.0,
+        "name": "front-quarter",
+        "origin_world_m": [
+          299195741250.0,
+          0.0,
+          1000.0
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up_body": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "view_projection": [
+          1.4678221940994263,
+          0.5907252430915833,
+          0.14287322759628296,
+          0.0,
+          0.0,
+          2.6033358573913574,
+          -0.08720843493938446,
+          0.0,
+          1.129094123840332,
+          -0.7679427266120911,
+          -0.18573518097400665,
+          0.0,
+          -1.103789699641311e-7,
+          -8.278422569674149e-8,
+          -0.6418234705924988,
+          1.0
+        ]
+      },
+      "file": "pioneer-authority-exterior-off.png"
+    },
+    {
+      "authority": {
+        "definition_revision": 0,
+        "flight": {
+          "acceleration_m_s2": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "orientation": [
+            0.0,
+            -0.9978978933704145,
+            0.0,
+            0.06480582077937998
+          ],
+          "position_m": [
+            299195741250.0,
+            0.0,
+            1000.0
+          ],
+          "updated_at_ms": 1792091069837,
+          "velocity_m_s": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "hull_asset_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+        "location": {
+          "kind": "belt"
+        },
+        "power": {
+          "capacity_j": 240000,
+          "charge_j": 232240,
+          "regen_remainder_mj": 0,
+          "regen_w": 1200,
+          "updated_at_ms": 1792091069837
+        },
+        "simulation_time_ms": 1792091069837,
+        "strobe_outputs": [
+          {
+            "id": "pioneer.exterior.strobe.dorsal",
+            "output": 0.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 0
+            }
+          },
+          {
+            "id": "pioneer.exterior.strobe.ventral",
+            "output": 0.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 500
+            }
+          }
+        ],
+        "system_id": 1,
+        "vessel": {
+          "drive": "idle",
+          "enabled": true,
+          "load_w": 88,
+          "pilot": "PioneerAdoptionQA",
+          "powered": true,
+          "ship_class": "pioneer",
+          "vessel_id": "v1:PioneerAdoptionQA:Pioneer"
+        }
+      },
+      "camera": {
+        "eye_body_m": [
+          95.0,
+          50.0,
+          -95.0
+        ],
+        "eye_scene": [
+          -0.8191481828689575,
+          0.5000001192092896,
+          1.0648926496505737
+        ],
+        "half_height_m": 36.0,
+        "half_width_m": 54.0,
+        "name": "front-quarter",
+        "origin_world_m": [
+          299195741250.0,
+          0.0,
+          1000.0
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up_body": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "view_projection": [
+          1.4678221940994263,
+          0.5907252430915833,
+          0.14287322759628296,
+          0.0,
+          0.0,
+          2.6033358573913574,
+          -0.08720843493938446,
+          0.0,
+          1.129094123840332,
+          -0.7679427266120911,
+          -0.18573518097400665,
+          0.0,
+          -1.103789699641311e-7,
+          -8.278422569674149e-8,
+          -0.6418234705924988,
+          1.0
+        ]
+      },
+      "file": "pioneer-authority-idle-front-quarter.png"
+    },
+    {
+      "authority": {
+        "definition_revision": 0,
+        "flight": {
+          "acceleration_m_s2": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "orientation": [
+            0.0,
+            -0.9978978933704145,
+            0.0,
+            0.06480582077937998
+          ],
+          "position_m": [
+            299195741250.0,
+            0.0,
+            1000.0
+          ],
+          "updated_at_ms": 1792091069837,
+          "velocity_m_s": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "hull_asset_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+        "location": {
+          "kind": "belt"
+        },
+        "power": {
+          "capacity_j": 240000,
+          "charge_j": 232240,
+          "regen_remainder_mj": 0,
+          "regen_w": 1200,
+          "updated_at_ms": 1792091069837
+        },
+        "simulation_time_ms": 1792091069837,
+        "strobe_outputs": [
+          {
+            "id": "pioneer.exterior.strobe.dorsal",
+            "output": 0.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 0
+            }
+          },
+          {
+            "id": "pioneer.exterior.strobe.ventral",
+            "output": 0.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 500
+            }
+          }
+        ],
+        "system_id": 1,
+        "vessel": {
+          "drive": "idle",
+          "enabled": false,
+          "load_w": 0,
+          "pilot": "PioneerAdoptionQA",
+          "powered": false,
+          "ship_class": "pioneer",
+          "vessel_id": "v1:PioneerAdoptionQA:Pioneer"
+        }
+      },
+      "camera": {
+        "eye_body_m": [
+          65.0,
+          12.0,
+          -38.0
+        ],
+        "eye_scene": [
+          -0.5953914523124695,
+          0.12000001221895218,
+          0.4608786404132843
+        ],
+        "half_height_m": 12.0,
+        "half_width_m": 18.0,
+        "name": "bridge-quarter",
+        "origin_world_m": [
+          299195741250.0,
+          0.0,
+          1000.0
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          33.5,
+          0.800000011920929,
+          0.0
+        ],
+        "up_body": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "view_projection": [
+          4.699753284454346,
+          0.9833477139472961,
+          0.13002461194992065,
+          0.0,
+          0.0,
+          8.126739501953125,
+          -0.05532851815223694,
+          0.0,
+          2.9625189304351807,
+          -1.559987187385559,
+          -0.20627161860466003,
+          0.0,
+          1.4328311681747437,
+          0.32923275232315063,
+          -0.8211289644241333,
+          1.0
+        ]
+      },
+      "file": "pioneer-authority-off-bridge-quarter.png"
+    },
+    {
+      "authority": {
+        "definition_revision": 0,
+        "flight": {
+          "acceleration_m_s2": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "orientation": [
+            0.0,
+            -0.9978978933704145,
+            0.0,
+            0.06480582077937998
+          ],
+          "position_m": [
+            299195741250.0,
+            0.0,
+            1000.0
+          ],
+          "updated_at_ms": 1792091069837,
+          "velocity_m_s": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "hull_asset_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+        "location": {
+          "kind": "belt"
+        },
+        "power": {
+          "capacity_j": 240000,
+          "charge_j": 232240,
+          "regen_remainder_mj": 0,
+          "regen_w": 1200,
+          "updated_at_ms": 1792091069837
+        },
+        "simulation_time_ms": 1792091069837,
+        "strobe_outputs": [
+          {
+            "id": "pioneer.exterior.strobe.dorsal",
+            "output": 0.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 0
+            }
+          },
+          {
+            "id": "pioneer.exterior.strobe.ventral",
+            "output": 0.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 500
+            }
+          }
+        ],
+        "system_id": 1,
+        "vessel": {
+          "drive": "idle",
+          "enabled": true,
+          "load_w": 88,
+          "pilot": "PioneerAdoptionQA",
+          "powered": true,
+          "ship_class": "pioneer",
+          "vessel_id": "v1:PioneerAdoptionQA:Pioneer"
+        }
+      },
+      "camera": {
+        "eye_body_m": [
+          65.0,
+          12.0,
+          -38.0
+        ],
+        "eye_scene": [
+          -0.5953914523124695,
+          0.12000001221895218,
+          0.4608786404132843
+        ],
+        "half_height_m": 12.0,
+        "half_width_m": 18.0,
+        "name": "bridge-quarter",
+        "origin_world_m": [
+          299195741250.0,
+          0.0,
+          1000.0
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          33.5,
+          0.800000011920929,
+          0.0
+        ],
+        "up_body": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "view_projection": [
+          4.699753284454346,
+          0.9833477139472961,
+          0.13002461194992065,
+          0.0,
+          0.0,
+          8.126739501953125,
+          -0.05532851815223694,
+          0.0,
+          2.9625189304351807,
+          -1.559987187385559,
+          -0.20627161860466003,
+          0.0,
+          1.4328311681747437,
+          0.32923275232315063,
+          -0.8211289644241333,
+          1.0
+        ]
+      },
+      "file": "pioneer-authority-idle-bridge-quarter.png"
+    },
+    {
+      "authority": {
+        "definition_revision": 0,
+        "flight": {
+          "acceleration_m_s2": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "orientation": [
+            0.0,
+            -0.9978978933704145,
+            0.0,
+            0.06480582077937998
+          ],
+          "position_m": [
+            299195741250.0,
+            0.0,
+            1000.0
+          ],
+          "updated_at_ms": 1792091069837,
+          "velocity_m_s": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "hull_asset_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+        "location": {
+          "kind": "belt"
+        },
+        "power": {
+          "capacity_j": 240000,
+          "charge_j": 232240,
+          "regen_remainder_mj": 0,
+          "regen_w": 1200,
+          "updated_at_ms": 1792091069837
+        },
+        "simulation_time_ms": 1792091069837,
+        "strobe_outputs": [
+          {
+            "id": "pioneer.exterior.strobe.dorsal",
+            "output": 0.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 0
+            }
+          },
+          {
+            "id": "pioneer.exterior.strobe.ventral",
+            "output": 0.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 500
+            }
+          }
+        ],
+        "system_id": 1,
+        "vessel": {
+          "drive": "idle",
+          "enabled": true,
+          "load_w": 88,
+          "pilot": "PioneerAdoptionQA",
+          "powered": true,
+          "ship_class": "pioneer",
+          "vessel_id": "v1:PioneerAdoptionQA:Pioneer"
+        }
+      },
+      "camera": {
+        "eye_body_m": [
+          60.0,
+          5.0,
+          -18.0
+        ],
+        "eye_scene": [
+          -0.5716792345046997,
+          0.05000000074505806,
+          0.2560915946960449
+        ],
+        "half_height_m": 4.666666507720947,
+        "half_width_m": 7.0,
+        "name": "bridge-port-pane",
+        "origin_world_m": [
+          299195741250.0,
+          0.0,
+          1000.0
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          35.79999923706055,
+          1.274999976158142,
+          -3.555000066757202
+        ],
+        "up_body": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "view_projection": [
+          8.84702205657959,
+          2.204580307006836,
+          0.1946222484111786,
+          0.0,
+          0.0,
+          21.243820190429688,
+          -0.0327618345618248,
+          0.0,
+          11.216588020324707,
+          -1.7388505935668945,
+          -0.15350721776485443,
+          0.0,
+          2.1851847171783447,
+          0.6434268951416016,
+          -0.8480386137962341,
+          1.0
+        ]
+      },
+      "file": "pioneer-authority-idle-bridge-port-pane.png"
+    },
+    {
+      "authority": {
+        "definition_revision": 0,
+        "flight": {
+          "acceleration_m_s2": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "orientation": [
+            0.0,
+            -0.9978978933704145,
+            0.0,
+            0.06480582077937998
+          ],
+          "position_m": [
+            299195741250.0,
+            0.0,
+            1000.0
+          ],
+          "updated_at_ms": 1792091069837,
+          "velocity_m_s": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "hull_asset_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+        "location": {
+          "kind": "belt"
+        },
+        "power": {
+          "capacity_j": 240000,
+          "charge_j": 232240,
+          "regen_remainder_mj": 0,
+          "regen_w": 1200,
+          "updated_at_ms": 1792091069837
+        },
+        "simulation_time_ms": 1792091069837,
+        "strobe_outputs": [
+          {
+            "id": "pioneer.exterior.strobe.dorsal",
+            "output": 0.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 0
+            }
+          },
+          {
+            "id": "pioneer.exterior.strobe.ventral",
+            "output": 0.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 500
+            }
+          }
+        ],
+        "system_id": 1,
+        "vessel": {
+          "drive": "idle",
+          "enabled": true,
+          "load_w": 88,
+          "pilot": "PioneerAdoptionQA",
+          "powered": true,
+          "ship_class": "pioneer",
+          "vessel_id": "v1:PioneerAdoptionQA:Pioneer"
+        }
+      },
+      "camera": {
+        "eye_body_m": [
+          -62.0,
+          35.0,
+          -48.0
+        ],
+        "eye_scene": [
+          0.6768750548362732,
+          0.3499999940395355,
+          0.3957778811454773
+        ],
+        "half_height_m": 15.333333015441895,
+        "half_width_m": 23.0,
+        "name": "aft-roof",
+        "origin_world_m": [
+          299195741250.0,
+          0.0,
+          1000.0
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          -20.0,
+          4.0,
+          0.0
+        ],
+        "up_body": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "view_projection": [
+          2.874282121658325,
+          -2.139073371887207,
+          -0.16872729361057281,
+          0.0,
+          0.0,
+          5.8656086921691895,
+          -0.10929875075817108,
+          0.0,
+          -3.2622220516204834,
+          -1.8846970796585083,
+          -0.14866241812705994,
+          0.0,
+          -0.6544144153594971,
+          0.14084386825561523,
+          -0.7889509201049805,
+          1.0
+        ]
+      },
+      "file": "pioneer-authority-idle-aft-roof.png"
+    },
+    {
+      "authority": {
+        "definition_revision": 0,
+        "flight": {
+          "acceleration_m_s2": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "orientation": [
+            0.0,
+            -0.9978978933704145,
+            0.0,
+            0.06480582077937998
+          ],
+          "position_m": [
+            299195741250.0,
+            0.0,
+            1000.0
+          ],
+          "updated_at_ms": 1792091069837,
+          "velocity_m_s": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "hull_asset_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+        "location": {
+          "kind": "belt"
+        },
+        "power": {
+          "capacity_j": 240000,
+          "charge_j": 232240,
+          "regen_remainder_mj": 0,
+          "regen_w": 1200,
+          "updated_at_ms": 1792091069837
+        },
+        "simulation_time_ms": 1792091069837,
+        "strobe_outputs": [
+          {
+            "id": "pioneer.exterior.strobe.dorsal",
+            "output": 0.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 0
+            }
+          },
+          {
+            "id": "pioneer.exterior.strobe.ventral",
+            "output": 0.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 500
+            }
+          }
+        ],
+        "system_id": 1,
+        "vessel": {
+          "drive": "idle",
+          "enabled": true,
+          "load_w": 88,
+          "pilot": "PioneerAdoptionQA",
+          "powered": true,
+          "ship_class": "pioneer",
+          "vessel_id": "v1:PioneerAdoptionQA:Pioneer"
+        }
+      },
+      "camera": {
+        "eye_body_m": [
+          -68.0,
+          5.0,
+          -12.5
+        ],
+        "eye_scene": [
+          0.6904556751251221,
+          0.05000000074505806,
+          0.03599941357970238
+        ],
+        "half_height_m": 6.0,
+        "half_width_m": 9.0,
+        "name": "port-nozzle",
+        "origin_world_m": [
+          299195741250.0,
+          0.0,
+          1000.0
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          -35.900001525878906,
+          0.0,
+          -12.5
+        ],
+        "up_body": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "view_projection": [
+          -1.4371018409729004,
+          -2.543577194213867,
+          -0.24497708678245544,
+          0.0,
+          0.0,
+          16.468090057373047,
+          -0.038481660187244415,
+          0.0,
+          -11.017782211303711,
+          0.3317708969116211,
+          0.03195352852344513,
+          0.0,
+          1.3888888359069824,
+          0.9208793044090271,
+          -0.830330491065979,
+          1.0
+        ]
+      },
+      "file": "pioneer-authority-idle-port-nozzle.png"
+    },
+    {
+      "authority": {
+        "definition_revision": 0,
+        "flight": {
+          "acceleration_m_s2": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "orientation": [
+            0.0,
+            -0.9978978933704145,
+            0.0,
+            0.06480582077937998
+          ],
+          "position_m": [
+            299195741250.0,
+            0.0,
+            1000.0
+          ],
+          "updated_at_ms": 1792091069837,
+          "velocity_m_s": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "hull_asset_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+        "location": {
+          "kind": "belt"
+        },
+        "power": {
+          "capacity_j": 240000,
+          "charge_j": 232240,
+          "regen_remainder_mj": 0,
+          "regen_w": 1200,
+          "updated_at_ms": 1792091069837
+        },
+        "simulation_time_ms": 1792091069837,
+        "strobe_outputs": [
+          {
+            "id": "pioneer.exterior.strobe.dorsal",
+            "output": 0.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 0
+            }
+          },
+          {
+            "id": "pioneer.exterior.strobe.ventral",
+            "output": 0.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 500
+            }
+          }
+        ],
+        "system_id": 1,
+        "vessel": {
+          "drive": "idle",
+          "enabled": true,
+          "load_w": 88,
+          "pilot": "PioneerAdoptionQA",
+          "powered": true,
+          "ship_class": "pioneer",
+          "vessel_id": "v1:PioneerAdoptionQA:Pioneer"
+        }
+      },
+      "camera": {
+        "eye_body_m": [
+          0.0,
+          20.0,
+          -120.0
+        ],
+        "eye_scene": [
+          0.15520702302455902,
+          0.20000000298023224,
+          1.1899205446243286
+        ],
+        "half_height_m": 30.0,
+        "half_width_m": 45.0,
+        "name": "side",
+        "origin_world_m": [
+          299195741250.0,
+          0.0,
+          1000.0
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up_body": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "view_projection": [
+          2.203556537628174,
+          -0.07087743282318115,
+          -0.03189883381128311,
+          0.0,
+          0.0,
+          3.2879796028137207,
+          -0.04110488295555115,
+          0.0,
+          -0.2874204218387604,
+          -0.543393611907959,
+          -0.2445577085018158,
+          0.0,
+          -0.0,
+          -0.0,
+          -0.6960740089416504,
+          1.0
+        ]
+      },
+      "file": "pioneer-authority-idle-side.png"
+    },
+    {
+      "authority": {
+        "definition_revision": 0,
+        "flight": {
+          "acceleration_m_s2": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "orientation": [
+            0.0,
+            -0.9978978933704145,
+            0.0,
+            0.06480582077937998
+          ],
+          "position_m": [
+            299195741250.0,
+            0.0,
+            1000.0
+          ],
+          "updated_at_ms": 1792091069837,
+          "velocity_m_s": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "hull_asset_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+        "location": {
+          "kind": "belt"
+        },
+        "power": {
+          "capacity_j": 240000,
+          "charge_j": 232240,
+          "regen_remainder_mj": 0,
+          "regen_w": 1200,
+          "updated_at_ms": 1792091069837
+        },
+        "simulation_time_ms": 1792091069837,
+        "strobe_outputs": [
+          {
+            "id": "pioneer.exterior.strobe.dorsal",
+            "output": 0.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 0
+            }
+          },
+          {
+            "id": "pioneer.exterior.strobe.ventral",
+            "output": 0.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 500
+            }
+          }
+        ],
+        "system_id": 1,
+        "vessel": {
+          "drive": "idle",
+          "enabled": true,
+          "load_w": 88,
+          "pilot": "PioneerAdoptionQA",
+          "powered": true,
+          "ship_class": "pioneer",
+          "vessel_id": "v1:PioneerAdoptionQA:Pioneer"
+        }
+      },
+      "camera": {
+        "eye_body_m": [
+          0.0,
+          120.0,
+          0.0
+        ],
+        "eye_scene": [
+          -0.0,
+          1.2000000476837158,
+          0.0
+        ],
+        "half_height_m": 30.0,
+        "half_width_m": 45.0,
+        "name": "top",
+        "origin_world_m": [
+          299195741250.0,
+          0.0,
+          1000.0
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up_body": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "view_projection": [
+          2.203556776046753,
+          -0.43113064765930176,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          -0.2500312626361847,
+          0.0,
+          -0.2874204218387604,
+          -3.30533504486084,
+          0.0,
+          0.0,
+          -0.0,
+          -0.0,
+          -0.7002125978469849,
+          1.0
+        ]
+      },
+      "file": "pioneer-authority-idle-top.png"
+    },
+    {
+      "authority": {
+        "definition_revision": 0,
+        "flight": {
+          "acceleration_m_s2": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "orientation": [
+            0.0,
+            -0.9978978933704145,
+            0.0,
+            0.06480582077937998
+          ],
+          "position_m": [
+            299195741250.0,
+            0.0,
+            1000.0
+          ],
+          "updated_at_ms": 1792091069837,
+          "velocity_m_s": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "hull_asset_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+        "location": {
+          "kind": "belt"
+        },
+        "power": {
+          "capacity_j": 240000,
+          "charge_j": 232240,
+          "regen_remainder_mj": 0,
+          "regen_w": 1200,
+          "updated_at_ms": 1792091069837
+        },
+        "simulation_time_ms": 1792091069837,
+        "strobe_outputs": [
+          {
+            "id": "pioneer.exterior.strobe.dorsal",
+            "output": 0.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 0
+            }
+          },
+          {
+            "id": "pioneer.exterior.strobe.ventral",
+            "output": 0.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 500
+            }
+          }
+        ],
+        "system_id": 1,
+        "vessel": {
+          "drive": "idle",
+          "enabled": true,
+          "load_w": 88,
+          "pilot": "PioneerAdoptionQA",
+          "powered": true,
+          "ship_class": "pioneer",
+          "vessel_id": "v1:PioneerAdoptionQA:Pioneer"
+        }
+      },
+      "camera": {
+        "eye_body_m": [
+          120.0,
+          0.0,
+          0.0
+        ],
+        "eye_scene": [
+          -1.1899205446243286,
+          0.0,
+          0.15520702302455902
+        ],
+        "half_height_m": 20.0,
+        "half_width_m": 30.0,
+        "name": "front",
+        "origin_world_m": [
+          299195741250.0,
+          0.0,
+          1000.0
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up_body": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "view_projection": [
+          0.43113061785697937,
+          0.0,
+          0.247931107878685,
+          0.0,
+          0.0,
+          5.000000476837158,
+          0.0,
+          0.0,
+          3.3053348064422607,
+          0.0,
+          -0.032338839024305344,
+          0.0,
+          -0.0,
+          -0.0,
+          -0.7002125382423401,
+          1.0
+        ]
+      },
+      "file": "pioneer-authority-idle-front.png"
+    },
+    {
+      "authority": {
+        "definition_revision": 0,
+        "flight": {
+          "acceleration_m_s2": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "orientation": [
+            0.0,
+            -0.9978978933704145,
+            0.0,
+            0.06480582077937998
+          ],
+          "position_m": [
+            299195741250.0,
+            0.0,
+            1000.0
+          ],
+          "updated_at_ms": 1792091069837,
+          "velocity_m_s": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "hull_asset_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+        "location": {
+          "kind": "belt"
+        },
+        "power": {
+          "capacity_j": 240000,
+          "charge_j": 232240,
+          "regen_remainder_mj": 0,
+          "regen_w": 1200,
+          "updated_at_ms": 1792091069837
+        },
+        "simulation_time_ms": 1792091069837,
+        "strobe_outputs": [
+          {
+            "id": "pioneer.exterior.strobe.dorsal",
+            "output": 0.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 0
+            }
+          },
+          {
+            "id": "pioneer.exterior.strobe.ventral",
+            "output": 0.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 500
+            }
+          }
+        ],
+        "system_id": 1,
+        "vessel": {
+          "drive": "idle",
+          "enabled": true,
+          "load_w": 88,
+          "pilot": "PioneerAdoptionQA",
+          "powered": true,
+          "ship_class": "pioneer",
+          "vessel_id": "v1:PioneerAdoptionQA:Pioneer"
+        }
+      },
+      "camera": {
+        "eye_body_m": [
+          0.0,
+          -120.0,
+          0.0
+        ],
+        "eye_scene": [
+          0.0,
+          -1.2000000476837158,
+          0.0
+        ],
+        "half_height_m": 30.0,
+        "half_width_m": 45.0,
+        "name": "bottom",
+        "origin_world_m": [
+          299195741250.0,
+          0.0,
+          1000.0
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up_body": [
+          0.0,
+          0.0,
+          -1.0
+        ],
+        "view_projection": [
+          2.203556776046753,
+          0.43113064765930176,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.2500312626361847,
+          0.0,
+          -0.2874204218387604,
+          3.30533504486084,
+          0.0,
+          0.0,
+          -0.0,
+          -0.0,
+          -0.7002125978469849,
+          1.0
+        ]
+      },
+      "file": "pioneer-authority-idle-bottom.png"
+    },
+    {
+      "authority": {
+        "definition_revision": 0,
+        "flight": {
+          "acceleration_m_s2": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "orientation": [
+            0.0,
+            -0.9978978933704145,
+            0.0,
+            0.06480582077937998
+          ],
+          "position_m": [
+            299195741250.0,
+            0.0,
+            1000.0
+          ],
+          "updated_at_ms": 1792091069837,
+          "velocity_m_s": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "hull_asset_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+        "location": {
+          "kind": "belt"
+        },
+        "power": {
+          "capacity_j": 240000,
+          "charge_j": 232240,
+          "regen_remainder_mj": 0,
+          "regen_w": 1200,
+          "updated_at_ms": 1792091069837
+        },
+        "simulation_time_ms": 1792091069837,
+        "strobe_outputs": [
+          {
+            "id": "pioneer.exterior.strobe.dorsal",
+            "output": 0.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 0
+            }
+          },
+          {
+            "id": "pioneer.exterior.strobe.ventral",
+            "output": 0.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 500
+            }
+          }
+        ],
+        "system_id": 1,
+        "vessel": {
+          "drive": "idle",
+          "enabled": true,
+          "load_w": 88,
+          "pilot": "PioneerAdoptionQA",
+          "powered": true,
+          "ship_class": "pioneer",
+          "vessel_id": "v1:PioneerAdoptionQA:Pioneer"
+        }
+      },
+      "camera": {
+        "eye_body_m": [
+          -120.0,
+          15.0,
+          0.0
+        ],
+        "eye_scene": [
+          1.1899205446243286,
+          0.15000000596046448,
+          -0.15520702302455902
+        ],
+        "half_height_m": 20.0,
+        "half_width_m": 30.0,
+        "name": "rear",
+        "origin_world_m": [
+          299195741250.0,
+          0.0,
+          1000.0
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up_body": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "view_projection": [
+          -0.43113061785697937,
+          -0.6149644255638123,
+          -0.24601653218269348,
+          0.0,
+          0.0,
+          4.961389064788818,
+          -0.031012559309601784,
+          0.0,
+          -3.3053345680236816,
+          0.08021275699138641,
+          0.03208911418914795,
+          0.0,
+          -0.0,
+          -3.958120942115784e-8,
+          -0.6978776454925537,
+          1.0
+        ]
+      },
+      "file": "pioneer-authority-idle-rear.png"
+    },
+    {
+      "authority": {
+        "definition_revision": 0,
+        "flight": {
+          "acceleration_m_s2": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "orientation": [
+            0.0,
+            -0.9978978933704145,
+            0.0,
+            0.06480582077937998
+          ],
+          "position_m": [
+            299195741250.0,
+            0.0,
+            1000.0
+          ],
+          "updated_at_ms": 1792091070037,
+          "velocity_m_s": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "hull_asset_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+        "location": {
+          "kind": "belt"
+        },
+        "power": {
+          "capacity_j": 240000,
+          "charge_j": 232462,
+          "regen_remainder_mj": 400,
+          "regen_w": 1200,
+          "updated_at_ms": 1792091070037
+        },
+        "simulation_time_ms": 1792091070037,
+        "strobe_outputs": [
+          {
+            "id": "pioneer.exterior.strobe.dorsal",
+            "output": 1.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 0
+            }
+          },
+          {
+            "id": "pioneer.exterior.strobe.ventral",
+            "output": 0.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 500
+            }
+          }
+        ],
+        "system_id": 1,
+        "vessel": {
+          "drive": "idle",
+          "enabled": true,
+          "load_w": 88,
+          "pilot": "PioneerAdoptionQA",
+          "powered": true,
+          "ship_class": "pioneer",
+          "vessel_id": "v1:PioneerAdoptionQA:Pioneer"
+        }
+      },
+      "camera": {
+        "eye_body_m": [
+          0.0,
+          18.299999237060547,
+          -10.0
+        ],
+        "eye_scene": [
+          0.01293391827493906,
+          0.18300001323223114,
+          0.09916004538536072
+        ],
+        "half_height_m": 2.0,
+        "half_width_m": 3.0,
+        "name": "dorsal-strobe-closeup",
+        "origin_world_m": [
+          299195741250.0,
+          0.0,
+          1000.0
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          -8.0,
+          6.300000190734863,
+          0.0
+        ],
+        "up_body": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "view_projection": [
+          28.503578186035156,
+          17.72488784790039,
+          0.09459071606397629,
+          0.0,
+          0.0,
+          36.48518371582031,
+          -0.17096222937107086,
+          0.0,
+          17.28169822692871,
+          -29.23455238342285,
+          -0.15601325035095215,
+          0.0,
+          -2.0823168754577637,
+          -4.007142066955566,
+          -0.9547171592712402,
+          1.0
+        ]
+      },
+      "file": "pioneer-authority-strobe-on.png"
+    },
+    {
+      "authority": {
+        "definition_revision": 0,
+        "flight": {
+          "acceleration_m_s2": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "orientation": [
+            0.0,
+            -0.9978978933704145,
+            0.0,
+            0.06480582077937998
+          ],
+          "position_m": [
+            299195741250.0,
+            0.0,
+            1000.0
+          ],
+          "updated_at_ms": 1792091070037,
+          "velocity_m_s": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "hull_asset_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+        "location": {
+          "kind": "belt"
+        },
+        "power": {
+          "capacity_j": 240000,
+          "charge_j": 232462,
+          "regen_remainder_mj": 400,
+          "regen_w": 1200,
+          "updated_at_ms": 1792091070037
+        },
+        "simulation_time_ms": 1792091070037,
+        "strobe_outputs": [
+          {
+            "id": "pioneer.exterior.strobe.dorsal",
+            "output": 1.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 0
+            }
+          },
+          {
+            "id": "pioneer.exterior.strobe.ventral",
+            "output": 0.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 500
+            }
+          }
+        ],
+        "system_id": 1,
+        "vessel": {
+          "drive": "idle",
+          "enabled": true,
+          "load_w": 88,
+          "pilot": "PioneerAdoptionQA",
+          "powered": true,
+          "ship_class": "pioneer",
+          "vessel_id": "v1:PioneerAdoptionQA:Pioneer"
+        }
+      },
+      "camera": {
+        "eye_body_m": [
+          0.0,
+          18.299999237060547,
+          -10.0
+        ],
+        "eye_scene": [
+          0.01293391827493906,
+          0.18300001323223114,
+          0.09916004538536072
+        ],
+        "half_height_m": 2.0,
+        "half_width_m": 3.0,
+        "name": "dorsal-strobe-closeup",
+        "origin_world_m": [
+          299195741250.0,
+          0.0,
+          1000.0
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          -8.0,
+          6.300000190734863,
+          0.0
+        ],
+        "up_body": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "view_projection": [
+          28.503578186035156,
+          17.72488784790039,
+          0.09459071606397629,
+          0.0,
+          0.0,
+          36.48518371582031,
+          -0.17096222937107086,
+          0.0,
+          17.28169822692871,
+          -29.23455238342285,
+          -0.15601325035095215,
+          0.0,
+          -2.0823168754577637,
+          -4.007142066955566,
+          -0.9547171592712402,
+          1.0
+        ]
+      },
+      "file": "pioneer-authority-strobe-paused.png"
+    },
+    {
+      "authority": {
+        "definition_revision": 0,
+        "flight": {
+          "acceleration_m_s2": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "orientation": [
+            0.0,
+            -0.9978978933704145,
+            0.0,
+            0.06480582077937998
+          ],
+          "position_m": [
+            299195741250.0,
+            0.0,
+            1000.0
+          ],
+          "updated_at_ms": 1792091070087,
+          "velocity_m_s": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "hull_asset_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+        "location": {
+          "kind": "belt"
+        },
+        "power": {
+          "capacity_j": 240000,
+          "charge_j": 232518,
+          "regen_remainder_mj": 0,
+          "regen_w": 1200,
+          "updated_at_ms": 1792091070087
+        },
+        "simulation_time_ms": 1792091070087,
+        "strobe_outputs": [
+          {
+            "id": "pioneer.exterior.strobe.dorsal",
+            "output": 1.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 0
+            }
+          },
+          {
+            "id": "pioneer.exterior.strobe.ventral",
+            "output": 0.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 500
+            }
+          }
+        ],
+        "system_id": 1,
+        "vessel": {
+          "drive": "idle",
+          "enabled": true,
+          "load_w": 88,
+          "pilot": "PioneerAdoptionQA",
+          "powered": true,
+          "ship_class": "pioneer",
+          "vessel_id": "v1:PioneerAdoptionQA:Pioneer"
+        }
+      },
+      "camera": {
+        "eye_body_m": [
+          0.0,
+          18.299999237060547,
+          -10.0
+        ],
+        "eye_scene": [
+          0.01293391827493906,
+          0.18300001323223114,
+          0.09916004538536072
+        ],
+        "half_height_m": 2.0,
+        "half_width_m": 3.0,
+        "name": "dorsal-strobe-closeup",
+        "origin_world_m": [
+          299195741250.0,
+          0.0,
+          1000.0
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          -8.0,
+          6.300000190734863,
+          0.0
+        ],
+        "up_body": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "view_projection": [
+          28.503578186035156,
+          17.72488784790039,
+          0.09459071606397629,
+          0.0,
+          0.0,
+          36.48518371582031,
+          -0.17096222937107086,
+          0.0,
+          17.28169822692871,
+          -29.23455238342285,
+          -0.15601325035095215,
+          0.0,
+          -2.0823168754577637,
+          -4.007142066955566,
+          -0.9547171592712402,
+          1.0
+        ]
+      },
+      "file": "pioneer-authority-strobe-step-50ms.png"
+    },
+    {
+      "authority": {
+        "definition_revision": 0,
+        "flight": {
+          "acceleration_m_s2": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "orientation": [
+            0.0,
+            -0.9978978933704145,
+            0.0,
+            0.06480582077937998
+          ],
+          "position_m": [
+            299195741250.0,
+            0.0,
+            1000.0
+          ],
+          "updated_at_ms": 1792091070137,
+          "velocity_m_s": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "hull_asset_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+        "location": {
+          "kind": "belt"
+        },
+        "power": {
+          "capacity_j": 240000,
+          "charge_j": 232573,
+          "regen_remainder_mj": 600,
+          "regen_w": 1200,
+          "updated_at_ms": 1792091070137
+        },
+        "simulation_time_ms": 1792091070137,
+        "strobe_outputs": [
+          {
+            "id": "pioneer.exterior.strobe.dorsal",
+            "output": 0.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 0
+            }
+          },
+          {
+            "id": "pioneer.exterior.strobe.ventral",
+            "output": 0.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 500
+            }
+          }
+        ],
+        "system_id": 1,
+        "vessel": {
+          "drive": "idle",
+          "enabled": true,
+          "load_w": 88,
+          "pilot": "PioneerAdoptionQA",
+          "powered": true,
+          "ship_class": "pioneer",
+          "vessel_id": "v1:PioneerAdoptionQA:Pioneer"
+        }
+      },
+      "camera": {
+        "eye_body_m": [
+          0.0,
+          18.299999237060547,
+          -10.0
+        ],
+        "eye_scene": [
+          0.01293391827493906,
+          0.18300001323223114,
+          0.09916004538536072
+        ],
+        "half_height_m": 2.0,
+        "half_width_m": 3.0,
+        "name": "dorsal-strobe-closeup",
+        "origin_world_m": [
+          299195741250.0,
+          0.0,
+          1000.0
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          -8.0,
+          6.300000190734863,
+          0.0
+        ],
+        "up_body": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "view_projection": [
+          28.503578186035156,
+          17.72488784790039,
+          0.09459071606397629,
+          0.0,
+          0.0,
+          36.48518371582031,
+          -0.17096222937107086,
+          0.0,
+          17.28169822692871,
+          -29.23455238342285,
+          -0.15601325035095215,
+          0.0,
+          -2.0823168754577637,
+          -4.007142066955566,
+          -0.9547171592712402,
+          1.0
+        ]
+      },
+      "file": "pioneer-authority-strobe-off.png"
+    },
+    {
+      "authority": {
+        "definition_revision": 0,
+        "flight": {
+          "acceleration_m_s2": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "orientation": [
+            0.0,
+            -0.9978978933704145,
+            0.0,
+            0.06480582077937998
+          ],
+          "position_m": [
+            299195741250.0,
+            0.0,
+            1000.0
+          ],
+          "updated_at_ms": 1792091070287,
+          "velocity_m_s": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "hull_asset_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+        "location": {
+          "kind": "belt"
+        },
+        "power": {
+          "capacity_j": 240000,
+          "charge_j": 233574,
+          "regen_remainder_mj": 400,
+          "regen_w": 1200,
+          "updated_at_ms": 1792091071037
+        },
+        "simulation_time_ms": 1792091071037,
+        "strobe_outputs": [
+          {
+            "id": "pioneer.exterior.strobe.dorsal",
+            "output": 1.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 0
+            }
+          },
+          {
+            "id": "pioneer.exterior.strobe.ventral",
+            "output": 0.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 500
+            }
+          }
+        ],
+        "system_id": 1,
+        "vessel": {
+          "drive": "idle",
+          "enabled": true,
+          "load_w": 88,
+          "pilot": "PioneerAdoptionQA",
+          "powered": true,
+          "ship_class": "pioneer",
+          "vessel_id": "v1:PioneerAdoptionQA:Pioneer"
+        }
+      },
+      "camera": {
+        "eye_body_m": [
+          0.0,
+          18.299999237060547,
+          -10.0
+        ],
+        "eye_scene": [
+          0.01293391827493906,
+          0.18300001323223114,
+          0.09916004538536072
+        ],
+        "half_height_m": 2.0,
+        "half_width_m": 3.0,
+        "name": "dorsal-strobe-closeup",
+        "origin_world_m": [
+          299195741250.0,
+          0.0,
+          1000.0
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          -8.0,
+          6.300000190734863,
+          0.0
+        ],
+        "up_body": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "view_projection": [
+          28.503578186035156,
+          17.72488784790039,
+          0.09459071606397629,
+          0.0,
+          0.0,
+          36.48518371582031,
+          -0.17096222937107086,
+          0.0,
+          17.28169822692871,
+          -29.23455238342285,
+          -0.15601325035095215,
+          0.0,
+          -2.0823168754577637,
+          -4.007142066955566,
+          -0.9547171592712402,
+          1.0
+        ]
+      },
+      "file": "pioneer-authority-strobe-next-cycle.png"
+    },
+    {
+      "authority": {
+        "definition_revision": 0,
+        "flight": {
+          "acceleration_m_s2": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "orientation": [
+            0.0,
+            -0.9978978933704145,
+            0.0,
+            0.06480582077937998
+          ],
+          "position_m": [
+            299195741250.0,
+            0.0,
+            1000.0
+          ],
+          "updated_at_ms": 1792091071037,
+          "velocity_m_s": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "hull_asset_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+        "location": {
+          "kind": "belt"
+        },
+        "power": {
+          "capacity_j": 240000,
+          "charge_j": 233574,
+          "regen_remainder_mj": 400,
+          "regen_w": 1200,
+          "updated_at_ms": 1792091071037
+        },
+        "simulation_time_ms": 1792091071037,
+        "strobe_outputs": [
+          {
+            "id": "pioneer.exterior.strobe.dorsal",
+            "output": 1.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 0
+            }
+          },
+          {
+            "id": "pioneer.exterior.strobe.ventral",
+            "output": 0.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 500
+            }
+          }
+        ],
+        "system_id": 1,
+        "vessel": {
+          "drive": "idle",
+          "enabled": true,
+          "load_w": 88,
+          "pilot": "PioneerAdoptionQA",
+          "powered": true,
+          "ship_class": "pioneer",
+          "vessel_id": "v1:PioneerAdoptionQA:Pioneer"
+        }
+      },
+      "camera": {
+        "eye_body_m": [
+          -120.0,
+          15.0,
+          0.0
+        ],
+        "eye_scene": [
+          1.1899205446243286,
+          0.15000000596046448,
+          -0.15520702302455902
+        ],
+        "half_height_m": 20.0,
+        "half_width_m": 30.0,
+        "name": "rear",
+        "origin_world_m": [
+          299195741250.0,
+          0.0,
+          1000.0
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up_body": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "view_projection": [
+          -0.43113061785697937,
+          -0.6149644255638123,
+          -0.24601653218269348,
+          0.0,
+          0.0,
+          4.961389064788818,
+          -0.031012559309601784,
+          0.0,
+          -3.3053345680236816,
+          0.08021275699138641,
+          0.03208911418914795,
+          0.0,
+          -0.0,
+          -3.958120942115784e-8,
+          -0.6978776454925537,
+          1.0
+        ]
+      },
+      "file": "pioneer-authority-pre-thrust-idle.png"
+    },
+    {
+      "authority": {
+        "definition_revision": 0,
+        "flight": {
+          "acceleration_m_s2": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "orientation": [
+            0.0,
+            -0.9978978933704145,
+            0.0,
+            0.06480582077937998
+          ],
+          "position_m": [
+            299195741250.0,
+            0.0,
+            1000.0
+          ],
+          "updated_at_ms": 1792091071037,
+          "velocity_m_s": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "hull_asset_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+        "location": {
+          "kind": "belt"
+        },
+        "power": {
+          "capacity_j": 240000,
+          "charge_j": 233574,
+          "regen_remainder_mj": 400,
+          "regen_w": 1200,
+          "updated_at_ms": 1792091071037
+        },
+        "simulation_time_ms": 1792091071037,
+        "strobe_outputs": [
+          {
+            "id": "pioneer.exterior.strobe.dorsal",
+            "output": 1.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 0
+            }
+          },
+          {
+            "id": "pioneer.exterior.strobe.ventral",
+            "output": 0.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 500
+            }
+          }
+        ],
+        "system_id": 1,
+        "vessel": {
+          "drive": "active",
+          "enabled": true,
+          "load_w": 88,
+          "pilot": "PioneerAdoptionQA",
+          "powered": true,
+          "ship_class": "pioneer",
+          "vessel_id": "v1:PioneerAdoptionQA:Pioneer"
+        }
+      },
+      "camera": {
+        "eye_body_m": [
+          -120.0,
+          15.0,
+          0.0
+        ],
+        "eye_scene": [
+          1.1899205446243286,
+          0.15000000596046448,
+          -0.15520702302455902
+        ],
+        "half_height_m": 20.0,
+        "half_width_m": 30.0,
+        "name": "rear",
+        "origin_world_m": [
+          299195741250.0,
+          0.0,
+          1000.0
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up_body": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "view_projection": [
+          -0.43113061785697937,
+          -0.6149644255638123,
+          -0.24601653218269348,
+          0.0,
+          0.0,
+          4.961389064788818,
+          -0.031012559309601784,
+          0.0,
+          -3.3053345680236816,
+          0.08021275699138641,
+          0.03208911418914795,
+          0.0,
+          -0.0,
+          -3.958120942115784e-8,
+          -0.6978776454925537,
+          1.0
+        ]
+      },
+      "file": "pioneer-authority-thrust-command-accepted.png"
+    },
+    {
+      "authority": {
+        "definition_revision": 0,
+        "flight": {
+          "acceleration_m_s2": [
+            -148.7400616779333,
+            0.0,
+            19.40087761016517
+          ],
+          "orientation": [
+            0.0,
+            -0.9978978933704145,
+            0.0,
+            0.06480582077937998
+          ],
+          "position_m": [
+            299195741249.8141,
+            0.0,
+            1000.0242510970127
+          ],
+          "updated_at_ms": 1792091071087,
+          "velocity_m_s": [
+            -7.437003083896666,
+            0.0,
+            0.9700438805082586
+          ]
+        },
+        "hull_asset_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+        "location": {
+          "kind": "belt"
+        },
+        "power": {
+          "capacity_j": 240000,
+          "charge_j": 233630,
+          "regen_remainder_mj": 0,
+          "regen_w": 1200,
+          "updated_at_ms": 1792091071087
+        },
+        "simulation_time_ms": 1792091071087,
+        "strobe_outputs": [
+          {
+            "id": "pioneer.exterior.strobe.dorsal",
+            "output": 1.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 0
+            }
+          },
+          {
+            "id": "pioneer.exterior.strobe.ventral",
+            "output": 0.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 500
+            }
+          }
+        ],
+        "system_id": 1,
+        "vessel": {
+          "drive": "active",
+          "enabled": true,
+          "load_w": 88,
+          "pilot": "PioneerAdoptionQA",
+          "powered": true,
+          "ship_class": "pioneer",
+          "vessel_id": "v1:PioneerAdoptionQA:Pioneer"
+        }
+      },
+      "camera": {
+        "eye_body_m": [
+          95.0,
+          50.0,
+          -95.0
+        ],
+        "eye_scene": [
+          -0.8191481828689575,
+          0.5000001192092896,
+          1.0648926496505737
+        ],
+        "half_height_m": 36.0,
+        "half_width_m": 54.0,
+        "name": "front-quarter",
+        "origin_world_m": [
+          299195741249.8141,
+          0.0,
+          1000.0242510970127
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up_body": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "view_projection": [
+          1.4678221940994263,
+          0.5907252430915833,
+          0.14287322759628296,
+          0.0,
+          0.0,
+          2.6033358573913574,
+          -0.08720843493938446,
+          0.0,
+          1.129094123840332,
+          -0.7679427266120911,
+          -0.18573518097400665,
+          0.0,
+          -1.103789699641311e-7,
+          -8.278422569674149e-8,
+          -0.6418234705924988,
+          1.0
+        ]
+      },
+      "file": "pioneer-authority-active-front-quarter.png"
+    },
+    {
+      "authority": {
+        "definition_revision": 0,
+        "flight": {
+          "acceleration_m_s2": [
+            -148.7400616779333,
+            0.0,
+            19.40087761016517
+          ],
+          "orientation": [
+            0.0,
+            -0.9978978933704145,
+            0.0,
+            0.06480582077937998
+          ],
+          "position_m": [
+            299195741249.8141,
+            0.0,
+            1000.0242510970127
+          ],
+          "updated_at_ms": 1792091071087,
+          "velocity_m_s": [
+            -7.437003083896666,
+            0.0,
+            0.9700438805082586
+          ]
+        },
+        "hull_asset_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+        "location": {
+          "kind": "belt"
+        },
+        "power": {
+          "capacity_j": 240000,
+          "charge_j": 233630,
+          "regen_remainder_mj": 0,
+          "regen_w": 1200,
+          "updated_at_ms": 1792091071087
+        },
+        "simulation_time_ms": 1792091071087,
+        "strobe_outputs": [
+          {
+            "id": "pioneer.exterior.strobe.dorsal",
+            "output": 1.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 0
+            }
+          },
+          {
+            "id": "pioneer.exterior.strobe.ventral",
+            "output": 0.0,
+            "pulse": {
+              "on_ms": 100,
+              "period_ms": 1000,
+              "phase_ms": 500
+            }
+          }
+        ],
+        "system_id": 1,
+        "vessel": {
+          "drive": "active",
+          "enabled": true,
+          "load_w": 88,
+          "pilot": "PioneerAdoptionQA",
+          "powered": true,
+          "ship_class": "pioneer",
+          "vessel_id": "v1:PioneerAdoptionQA:Pioneer"
+        }
+      },
+      "camera": {
+        "eye_body_m": [
+          -120.0,
+          15.0,
+          0.0
+        ],
+        "eye_scene": [
+          1.1899205446243286,
+          0.15000000596046448,
+          -0.15520702302455902
+        ],
+        "half_height_m": 20.0,
+        "half_width_m": 30.0,
+        "name": "rear",
+        "origin_world_m": [
+          299195741249.8141,
+          0.0,
+          1000.0242510970127
+        ],
+        "projection": "orthographic",
+        "target_body_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up_body": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "view_projection": [
+          -0.43113061785697937,
+          -0.6149644255638123,
+          -0.24601653218269348,
+          0.0,
+          0.0,
+          4.961389064788818,
+          -0.031012559309601784,
+          0.0,
+          -3.3053345680236816,
+          0.08021275699138641,
+          0.03208911418914795,
+          0.0,
+          -0.0,
+          -3.958120942115784e-8,
+          -0.6978776454925537,
+          1.0
+        ]
+      },
+      "file": "pioneer-authority-active-rear.png"
+    }
+  ],
+  "close_bridge_off_idle_changed_pixels": 61813,
+  "drive_comparison_camera": "rear",
+  "drive_comparison_same_simulation_time_ms": 1792091071037,
+  "dynamic_turret_count": 2,
+  "fixture_definition_modified": false,
+  "gl_version": "4.5 (Compatibility Profile) Mesa 25.0.7-2+deb13u1",
+  "graph_binding": {
+    "old_asset_sha256": "f8f8cc65772c678a46606c27abe205d62c4e6ab37c350f79a0f3a4cdc0c6f402",
+    "old_error_phase": "binding",
+    "old_rejected": true,
+    "recovery_applied": true,
+    "recovery_asset_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+    "recovery_graph": "authored_surface_identity",
+    "rejection_pixels_unchanged": true
+  },
+  "idle_active_changed_pixels": 3536,
+  "integrated_active_vs_initial_idle_changed_pixels": 27329,
+  "limitations": [
+    "actual authority plus native engine EGL capture; no OS window or TCP journey",
+    "camera isolates the accepted pilot; unrelated snapshot objects are omitted",
+    "no fixture size, intensity, period or phase changes; no automatic source-part retargeting"
+  ],
+  "off_idle_changed_pixels": 7698,
+  "omitted_snapshot_scene": [
+    "traffic",
+    "asteroids",
+    "gates",
+    "surface_props",
+    "other_pilots"
+  ],
+  "renderer": "llvmpipe (LLVM 19.1.7, 256 bits)",
+  "review_attitude": {
+    "method": "accepted Belt warp and yaw PilotInput with real fixed steps; existing sunlight and shadows unchanged",
+    "step_ms": 50,
+    "warp_arrival_ms": 1792091067837,
+    "warp_started_ms": 1792091049837,
+    "yaw_steps": 39,
+    "zero_input_settle_ms": 50
+  },
+  "reviewed_expected_asset_sha256": "ed5e29cdfc5f21027f251847def5319421aaf1af1eedd81f06b7a7cd4f69ec1a",
+  "source_commit": "df019ca2b12b82991fd65bc2ec5b3dcdc6232c61",
+  "strobe": {
+    "changed_pixels": 100648,
+    "full_cycle_pixels_equal": true,
+    "id": "pioneer.exterior.strobe.dorsal",
+    "off_time_ms": 1792091070137,
+    "on_time_ms": 1792091070037,
+    "paused_pixels_equal": true,
+    "pulse": {
+      "on_ms": 100,
+      "period_ms": 1000,
+      "phase_ms": 0
+    },
+    "steps": [
+      {
+        "delta_ms": 50,
+        "simulation_time_ms": 1792091070087,
+        "step": 1,
+        "strobe_output": 1.0
+      },
+      {
+        "delta_ms": 50,
+        "simulation_time_ms": 1792091070137,
+        "step": 2,
+        "strobe_output": 0.0
+      },
+      {
+        "delta_ms": 50,
+        "simulation_time_ms": 1792091070187,
+        "step": 3,
+        "strobe_output": 0.0
+      },
+      {
+        "delta_ms": 50,
+        "simulation_time_ms": 1792091070237,
+        "step": 4,
+        "strobe_output": 0.0
+      },
+      {
+        "delta_ms": 50,
+        "simulation_time_ms": 1792091070287,
+        "step": 5,
+        "strobe_output": 0.0
+      },
+      {
+        "delta_ms": 50,
+        "simulation_time_ms": 1792091070337,
+        "step": 6,
+        "strobe_output": 0.0
+      },
+      {
+        "delta_ms": 50,
+        "simulation_time_ms": 1792091070387,
+        "step": 7,
+        "strobe_output": 0.0
+      },
+      {
+        "delta_ms": 50,
+        "simulation_time_ms": 1792091070437,
+        "step": 8,
+        "strobe_output": 0.0
+      },
+      {
+        "delta_ms": 50,
+        "simulation_time_ms": 1792091070487,
+        "step": 9,
+        "strobe_output": 0.0
+      },
+      {
+        "delta_ms": 50,
+        "simulation_time_ms": 1792091070537,
+        "step": 10,
+        "strobe_output": 0.0
+      },
+      {
+        "delta_ms": 50,
+        "simulation_time_ms": 1792091070587,
+        "step": 11,
+        "strobe_output": 0.0
+      },
+      {
+        "delta_ms": 50,
+        "simulation_time_ms": 1792091070637,
+        "step": 12,
+        "strobe_output": 0.0
+      },
+      {
+        "delta_ms": 50,
+        "simulation_time_ms": 1792091070687,
+        "step": 13,
+        "strobe_output": 0.0
+      },
+      {
+        "delta_ms": 50,
+        "simulation_time_ms": 1792091070737,
+        "step": 14,
+        "strobe_output": 0.0
+      },
+      {
+        "delta_ms": 50,
+        "simulation_time_ms": 1792091070787,
+        "step": 15,
+        "strobe_output": 0.0
+      },
+      {
+        "delta_ms": 50,
+        "simulation_time_ms": 1792091070837,
+        "step": 16,
+        "strobe_output": 0.0
+      },
+      {
+        "delta_ms": 50,
+        "simulation_time_ms": 1792091070887,
+        "step": 17,
+        "strobe_output": 0.0
+      },
+      {
+        "delta_ms": 50,
+        "simulation_time_ms": 1792091070937,
+        "step": 18,
+        "strobe_output": 0.0
+      },
+      {
+        "delta_ms": 50,
+        "simulation_time_ms": 1792091070987,
+        "step": 19,
+        "strobe_output": 0.0
+      },
+      {
+        "delta_ms": 50,
+        "simulation_time_ms": 1792091071037,
+        "step": 20,
+        "strobe_output": 1.0
+      }
+    ]
+  },
+  "vendor": "Mesa",
+  "viewport": [
+    960,
+    640
+  ]
+}

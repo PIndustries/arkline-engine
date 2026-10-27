@@ -21,7 +21,11 @@ fn legacy_lock_migrates_once_completed_locks_persist_pending_and_drone_cancel() 
             &mut s,
             &mut p,
             Request::Connect {
+                supports_room_controls: false,
+                world_layout_version: 1,
+                supports_fleet_hangar: false,
                 supports_pioneer_interior: true,
+                supports_docked_traversal_v2: false,
                 protocol_version: PROTOCOL_VERSION,
                 pilot: "LegacyLocks".into(),
                 resume_token: None,
@@ -107,7 +111,11 @@ fn drone_last_logout_and_transition_cleanup_preserve_economy() {
         &mut s,
         &mut p,
         Request::Connect {
+            supports_room_controls: false,
+            world_layout_version: 1,
+            supports_fleet_hangar: false,
             supports_pioneer_interior: true,
+            supports_docked_traversal_v2: false,
             protocol_version: PROTOCOL_VERSION,
             pilot: "DronePilot".into(),
             resume_token: None,

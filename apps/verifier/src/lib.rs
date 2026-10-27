@@ -1,4 +1,6 @@
 //! Independent replay of Arkline economic records. No server or database code.
+mod carrier;
+pub mod physical_cargo;
 use anyhow::{bail, ensure, Context, Result};
 use arkline_protocol::*;
 use serde::{Deserialize, Serialize};
@@ -61,6 +63,456 @@ fn cargo(accounts: &BTreeMap<String, Account>, name: &str) -> Result<u64> {
     Ok(accounts.get(name).context("unknown pilot")?.ore)
 }
 
+// These balances are reconstructed only from ledger events, independently of
+// server state transitions. Claims are checked at the snapshot, never minted.
+#[derive(Default)]
+struct ReplayedDrone {
+    ore: u64,
+    last_cycle: u64,
+    last_finished_at: u64,
+    destroyed: bool,
+}
+struct ReplayedTransfer {
+    drone: u64,
+    started: u64,
+    requested: u64,
+    sequence: u64,
+    committed: u64,
+    last_time: u64,
+    receipts: Vec<DroneOreTransferReceipt>,
+}
+#[derive(Default)]
+struct DroneReplay {
+    vessels: BTreeMap<(String, String), BTreeMap<u64, ReplayedDrone>>,
+    transfers: BTreeMap<(String, String, u64), ReplayedTransfer>,
+    last_receiver_batch: BTreeMap<(String, String), (u64, u64)>,
+    lost: u64,
+}
+impl DroneReplay {
+    fn pilot_ore(&self, pilot: &str) -> Result<u64> {
+        self.vessels
+            .iter()
+            .filter(|((p, _), _)| p == pilot)
+            .flat_map(|(_, ds)| ds.values())
+            .try_fold(0, |sum, d| add(sum, d.ore))
+    }
+    fn total(&self) -> Result<u64> {
+        self.vessels
+            .values()
+            .flat_map(|ds| ds.values())
+            .try_fold(0, |sum, d| add(sum, d.ore))
+    }
+    fn apply(
+        &mut self,
+        record: &DroneCargoLedgerEvent,
+        entry: &LedgerEntry,
+        registration: &DroneCargoRegistration,
+        accounts: &mut BTreeMap<String, Account>,
+        belt: &mut u64,
+    ) -> Result<()> {
+        let now = entry.timestamp_ms;
+        match record {
+            DroneCargoLedgerEvent::Initialized {
+                pilot,
+                vessel_id,
+                registration: declared,
+                drone_ids,
+                capacity_units,
+            } => {
+                ensure!(
+                    accounts
+                        .get(pilot)
+                        .context("unknown cargo owner")?
+                        .active_class
+                        == Some(ShipClass::Pioneer),
+                    "cargo requires Pioneer"
+                );
+                ensure!(
+                    !vessel_id.is_empty() && vessel_id.len() <= 256,
+                    "invalid cargo vessel"
+                );
+                ensure!(
+                    declared == registration && *capacity_units == MINING_DRONE_CARGO_CAPACITY,
+                    "cargo registration or capacity mismatch"
+                );
+                ensure!(
+                    drone_ids.len() == DRONE_CLASS_CAP,
+                    "incorrect finite cargo roster"
+                );
+                let mut drones = BTreeMap::new();
+                for id in drone_ids {
+                    ensure!(
+                        *id > 0
+                            && drones
+                                .insert(
+                                    *id,
+                                    ReplayedDrone {
+                                        last_finished_at: now,
+                                        ..ReplayedDrone::default()
+                                    }
+                                )
+                                .is_none(),
+                        "duplicate or zero cargo drone"
+                    );
+                }
+                ensure!(
+                    !self
+                        .vessels
+                        .keys()
+                        .any(|(p, v)| p == pilot || v == vessel_id),
+                    "vessel cargo already initialized"
+                );
+                self.vessels
+                    .insert((pilot.clone(), vessel_id.clone()), drones);
+            }
+            DroneCargoLedgerEvent::Extracted {
+                pilot,
+                vessel_id,
+                drone_id,
+                cycle_id,
+                target_id,
+                cycle_started_at_ms,
+                units,
+                job_id,
+            } => {
+                ensure!(
+                    (1..=DRONE_MINING_YIELD).contains(units),
+                    "invalid drone extraction quantity"
+                );
+                ensure!(
+                    *target_id > 0
+                        && asteroid_catalog(INITIAL_BELT_ORE)
+                            .iter()
+                            .any(|a| a.id == *target_id),
+                    "unknown extraction target"
+                );
+                ensure!(
+                    job_id.is_none_or(|id| id > 0),
+                    "zero extraction job identity"
+                );
+                ensure!(
+                    add(*cycle_started_at_ms, DRONE_MINING_CYCLE_MS)? <= now,
+                    "extraction before declared cycle maturity"
+                );
+                let d = self
+                    .vessels
+                    .get_mut(&(pilot.clone(), vessel_id.clone()))
+                    .context("uninitialized cargo vessel")?
+                    .get_mut(drone_id)
+                    .context("unowned cargo drone")?;
+                ensure!(
+                    !d.destroyed && *cycle_id > d.last_cycle,
+                    "destroyed drone or reused extraction cycle"
+                );
+                ensure!(
+                    *cycle_started_at_ms >= d.last_finished_at,
+                    "overlapping or pre-initialization mining cycle"
+                );
+                d.last_finished_at = now;
+                d.ore = add(d.ore, *units)?;
+                ensure!(
+                    d.ore <= MINING_DRONE_CARGO_CAPACITY,
+                    "drone cargo capacity exceeded"
+                );
+                d.last_cycle = *cycle_id;
+                *belt = sub(*belt, *units)?;
+            }
+            DroneCargoLedgerEvent::Transferred {
+                pilot,
+                vessel_id,
+                drone_id,
+                operation_id,
+                operation_started_at_ms,
+                requested_units,
+                sequence,
+                units,
+            } => {
+                ensure!(
+                    *operation_id > 0 && (1..=DRONE_DROPOFF_BATCH_UNITS).contains(units),
+                    "invalid drop-off batch"
+                );
+                ensure!(
+                    (1..=MINING_DRONE_CARGO_CAPACITY).contains(requested_units),
+                    "invalid drop-off request quantity"
+                );
+                ensure!(
+                    add(*operation_started_at_ms, DRONE_DROPOFF_BATCH_MS)? <= now,
+                    "drop-off before minimum initial spacing"
+                );
+                let d = self
+                    .vessels
+                    .get_mut(&(pilot.clone(), vessel_id.clone()))
+                    .context("uninitialized transfer vessel")?
+                    .get_mut(drone_id)
+                    .context("unowned transfer drone")?;
+                ensure!(!d.destroyed, "destroyed drone cannot transfer");
+                let vessel_key = (pilot.clone(), vessel_id.clone());
+                if let Some((last_operation, last_time)) = self.last_receiver_batch.get(&vessel_key)
+                {
+                    ensure!(
+                        *operation_id >= *last_operation,
+                        "older receiver operation reopened"
+                    );
+                    ensure!(
+                        add(*last_time, DRONE_DROPOFF_BATCH_MS)? <= now,
+                        "receiver batches accelerated across operations"
+                    );
+                }
+                if !self
+                    .transfers
+                    .contains_key(&(pilot.clone(), vessel_id.clone(), *operation_id))
+                {
+                    ensure!(
+                        *requested_units == d.ore,
+                        "first transfer request differs from owned payload"
+                    );
+                }
+                self.last_receiver_batch
+                    .insert(vessel_key, (*operation_id, now));
+                let op = self
+                    .transfers
+                    .entry((pilot.clone(), vessel_id.clone(), *operation_id))
+                    .or_insert(ReplayedTransfer {
+                        drone: *drone_id,
+                        started: *operation_started_at_ms,
+                        requested: *requested_units,
+                        sequence: 0,
+                        committed: 0,
+                        last_time: *operation_started_at_ms,
+                        receipts: vec![],
+                    });
+                ensure!(
+                    op.drone == *drone_id
+                        && op.started == *operation_started_at_ms
+                        && op.requested == *requested_units,
+                    "drop-off operation identity changed"
+                );
+                ensure!(
+                    *sequence == add(op.sequence, 1)?,
+                    "reused or skipped drop-off batch"
+                );
+                ensure!(
+                    add(op.last_time, DRONE_DROPOFF_BATCH_MS)? <= now,
+                    "accelerated drop-off batches"
+                );
+                op.committed = add(op.committed, *units)?;
+                ensure!(
+                    op.committed <= op.requested,
+                    "drop-off exceeds immutable request"
+                );
+                op.sequence = *sequence;
+                op.last_time = now;
+                op.receipts.push(DroneOreTransferReceipt {
+                    sequence: *sequence,
+                    units: *units,
+                    committed_at_ms: now,
+                    ledger_sequence: entry.sequence,
+                    ledger_hash: entry.hash.clone(),
+                });
+                d.ore = sub(d.ore, *units)?;
+                let account = accounts.get_mut(pilot).context("unknown transfer owner")?;
+                ensure!(
+                    account.active_class == Some(ShipClass::Pioneer),
+                    "transfer to wrong active hull"
+                );
+                account.ore = add(account.ore, *units)?;
+            }
+            DroneCargoLedgerEvent::Destroyed {
+                pilot,
+                vessel_id,
+                drone_id,
+                destroyed_at_ms,
+                lost_units,
+            } => {
+                ensure!(*destroyed_at_ms == now, "destroyed timestamp mismatch");
+                let d = self
+                    .vessels
+                    .get_mut(&(pilot.clone(), vessel_id.clone()))
+                    .context("uninitialized destroyed vessel")?
+                    .get_mut(drone_id)
+                    .context("unowned destroyed drone")?;
+                ensure!(
+                    !d.destroyed && d.ore == *lost_units,
+                    "duplicate destruction or incorrect loss"
+                );
+                self.lost = add(self.lost, *lost_units)?;
+                d.ore = 0;
+                d.destroyed = true;
+            }
+        }
+        Ok(())
+    }
+    fn snapshot(&self, snapshot: &Snapshot, registration: &DroneCargoRegistration) -> Result<()> {
+        let totals = snapshot
+            .drone_cargo_totals
+            .as_ref()
+            .context("missing drone cargo totals")?;
+        ensure!(
+            totals.schema_version == DRONE_CARGO_SCHEMA_VERSION
+                && totals.drone_ore_units == self.total()?
+                && totals.lost_ore_units == self.lost,
+            "drone cargo totals mismatch"
+        );
+        let mut seen = BTreeSet::new();
+        for pilot in &snapshot.pilots {
+            let cargo = pilot
+                .drone_cargo
+                .as_ref()
+                .context("cargo world pilot lacks initialization")?;
+            ensure!(
+                cargo.schema_version == DRONE_CARGO_SCHEMA_VERSION
+                    && &cargo.binding.registration == registration,
+                "snapshot cargo registration mismatch"
+            );
+            ensure!(
+                pilot.ship_class == ShipClass::Pioneer,
+                "cargo on non-Pioneer hull"
+            );
+            let key = (pilot.name.clone(), cargo.binding.vessel_id.clone());
+            let drones = self
+                .vessels
+                .get(&key)
+                .context("snapshot cargo was not initialized")?;
+            ensure!(seen.insert(key), "duplicate snapshot cargo vessel");
+            let stock = pilot
+                .drone_bay
+                .as_ref()
+                .context("missing cargo stock identity")?;
+            ensure!(
+                stock.binding == registration.base.bind(cargo.binding.vessel_id.clone()),
+                "cargo stock vessel mismatch"
+            );
+            let actual_vessel = pilot
+                .flight
+                .as_ref()
+                .and_then(|f| f.docking.as_ref())
+                .context("missing physical cargo vessel")?;
+            ensure!(
+                actual_vessel.host_vessel_id == cargo.binding.vessel_id,
+                "cargo actual vessel mismatch"
+            );
+            ensure!(
+                stock.cradles.len() == DRONE_BAY_INITIAL_STOCK,
+                "incomplete finite bay roster"
+            );
+            let mut stock_ids = BTreeSet::new();
+            let mut homes = BTreeSet::new();
+            for cradle in &stock.cradles {
+                let home = usize::from(cradle.home_cradle);
+                ensure!(
+                    cradle.drone_id > 0
+                        && stock_ids.insert(cradle.drone_id)
+                        && homes.insert(home)
+                        && home < DRONE_BAY_INITIAL_STOCK,
+                    "invalid finite bay identity"
+                );
+                let expected = [DroneClass::Recon, DroneClass::Mining, DroneClass::Attack]
+                    [home / DRONE_CLASS_CAP];
+                ensure!(cradle.class == expected, "bay class/home identity mismatch");
+                ensure!(
+                    (cradle.presence == DroneBayPresence::Destroyed) == (cradle.hit_points == 0),
+                    "bay destruction/health mismatch"
+                );
+            }
+            ensure!(
+                cargo.holds.len() == drones.len(),
+                "snapshot cargo roster count mismatch"
+            );
+            let mut ids = BTreeSet::new();
+            let mut incoming = 0;
+            for hold in &cargo.holds {
+                ensure!(ids.insert(hold.drone_id), "duplicate snapshot cargo drone");
+                let d = drones
+                    .get(&hold.drone_id)
+                    .context("snapshot unowned cargo drone")?;
+                let matches: Vec<_> = stock
+                    .cradles
+                    .iter()
+                    .filter(|c| c.drone_id == hold.drone_id)
+                    .collect();
+                ensure!(matches.len() == 1, "ambiguous cargo stock identity");
+                let cradle = matches[0];
+                ensure!(
+                    cradle.class == DroneClass::Mining,
+                    "cargo on non-mining drone"
+                );
+                ensure!(
+                    (cradle.presence == DroneBayPresence::Destroyed) == d.destroyed,
+                    "destroyed cargo identity mismatch"
+                );
+                ensure!(
+                    hold.ore_units == d.ore && hold.capacity_units == MINING_DRONE_CARGO_CAPACITY,
+                    "snapshot drone balance or capacity mismatch"
+                );
+                ensure!(
+                    hold.cycle_reserved_units <= DRONE_MINING_YIELD
+                        && add(hold.ore_units, hold.cycle_reserved_units)?
+                            <= MINING_DRONE_CARGO_CAPACITY,
+                    "invalid cycle claim capacity"
+                );
+                ensure!(
+                    cradle.presence == DroneBayPresence::Active
+                        || (hold.ore_units == 0 && hold.cycle_reserved_units == 0),
+                    "non-active drone retains cargo or claim"
+                );
+                incoming = add(incoming, add(hold.ore_units, hold.cycle_reserved_units)?)?;
+            }
+            let mut operation_ids = BTreeSet::new();
+            for operation in &cargo.operations {
+                ensure!(
+                    operation.operation_id > 0 && operation_ids.insert(operation.operation_id),
+                    "duplicate snapshot drop-off operation"
+                );
+                ensure!(
+                    operation.binding == cargo.binding && drones.contains_key(&operation.drone_id),
+                    "snapshot drop-off owner mismatch"
+                );
+                let replay = self.transfers.get(&(
+                    pilot.name.clone(),
+                    cargo.binding.vessel_id.clone(),
+                    operation.operation_id,
+                ));
+                if let Some(replay) = replay {
+                    ensure!(
+                        operation.drone_id == replay.drone
+                            && operation.accepted_at_ms == replay.started
+                            && operation.requested_units == replay.requested,
+                        "snapshot drop-off intent mismatch"
+                    );
+                    ensure!(
+                        operation.committed_units == replay.committed
+                            && operation.receipts == replay.receipts,
+                        "snapshot drop-off receipt mismatch"
+                    );
+                } else {
+                    ensure!(
+                        operation.committed_units == 0 && operation.receipts.is_empty(),
+                        "snapshot fabricated drop-off receipt"
+                    );
+                }
+                ensure!(
+                    add(operation.committed_units, operation.remaining_units)?
+                        == operation.requested_units,
+                    "snapshot drop-off quantity mismatch"
+                );
+            }
+            ensure!(
+                cargo.incoming_reserved_units == incoming,
+                "incoming cargo claim mismatch"
+            );
+            ensure!(
+                add(pilot.ore, incoming)? <= cargo_capacity(pilot.ship_class),
+                "combined snapshot cargo capacity exceeded"
+            );
+        }
+        ensure!(
+            seen.len() == self.vessels.len(),
+            "initialized cargo vessel missing from snapshot"
+        );
+        Ok(())
+    }
+}
+
 /// Replay from genesis and compare only economic snapshot fields. Locations are
 /// deliberately outside this audit: a valid ledger cannot prove a kill or mining.
 pub fn verify(export: &LedgerExport, pinned: Option<&Checkpoint>) -> Result<Report> {
@@ -84,6 +536,56 @@ pub fn verify(export: &LedgerExport, pinned: Option<&Checkpoint>) -> Result<Repo
             );
         }
     }
+    let carrier_registration = export.snapshot.carrier_inventory_registration.as_ref();
+    if let Some(r) = carrier_registration {
+        ensure!(
+            r.well_formed()
+                && carrier_inventory_geometry::stationary_fixture_for_registration(r).is_some(),
+            "unsupported carrier registration"
+        );
+        ensure!(
+            export.snapshot.drone_cargo_registration.is_none()
+                && export.snapshot.drone_cargo_totals.is_none()
+                && export
+                    .snapshot
+                    .pilots
+                    .iter()
+                    .all(|p| p.drone_cargo.is_none() && p.drone_bay.is_none()),
+            "mixed carrier and legacy cargo world"
+        );
+    } else {
+        ensure!(
+            export
+                .snapshot
+                .pilots
+                .iter()
+                .all(|p| p.carrier_inventory.is_none()),
+            "unregistered carrier snapshot"
+        );
+    }
+    let registration = export.snapshot.drone_cargo_registration.as_ref();
+    if let Some(registration) = registration {
+        ensure!(registration.supported(), "unsupported cargo registration");
+    } else {
+        ensure!(
+            export.snapshot.drone_cargo_totals.is_none()
+                && export
+                    .snapshot
+                    .pilots
+                    .iter()
+                    .all(|p| p.drone_cargo.is_none()),
+            "legacy world contains cargo state"
+        );
+    }
+    let ruleset = if carrier_registration.is_some() {
+        CARRIER_INVENTORY_RULESET_VERSION
+    } else if registration.is_some() {
+        DRONE_CARGO_RULESET_VERSION
+    } else {
+        RULESET_VERSION
+    };
+    let mut drones = DroneReplay::default();
+    let mut carrier = carrier::CarrierReplay::default();
     // Before boarding events existed, hull choice was saved only in the world.
     // Infer that historical starting hull from the first boarding source, or the
     // final snapshot when the pilot has never boarded. Ownership of those free
@@ -124,7 +626,7 @@ pub fn verify(export: &LedgerExport, pinned: Option<&Checkpoint>) -> Result<Repo
                 "missing or reordered sequence"
             );
             ensure!(
-                entry.ruleset_version == RULESET_VERSION,
+                entry.ruleset_version == ruleset,
                 "unsupported ruleset version"
             );
             ensure!(entry.timestamp_ms >= time, "timestamp moved backwards");
@@ -135,6 +637,28 @@ pub fn verify(export: &LedgerExport, pinned: Option<&Checkpoint>) -> Result<Repo
         apply().with_context(|| format!("entry {}", entry.sequence))?;
         let apply_event = || -> Result<()> {
             match &entry.event {
+                EconomicEvent::PhysicalCargo { .. } => {
+                    bail!("physical-volume ruleset requires dedicated physical replay");
+                }
+                EconomicEvent::CarrierInventory { record } => {
+                    carrier.apply(
+                        record,
+                        entry,
+                        carrier_registration.context("carrier event in legacy world")?,
+                        &mut drones,
+                        &mut accounts,
+                        &mut belt,
+                    )?;
+                }
+                EconomicEvent::DroneCargo { record } => {
+                    drones.apply(
+                        record,
+                        entry,
+                        registration.context("cargo event in legacy world")?,
+                        &mut accounts,
+                        &mut belt,
+                    )?;
+                }
                 EconomicEvent::ShipBoarded {
                     pilot,
                     from_ship_class,
@@ -143,6 +667,10 @@ pub fn verify(export: &LedgerExport, pinned: Option<&Checkpoint>) -> Result<Repo
                     stored_units,
                     loaded_units,
                 } => {
+                    ensure!(
+                        registration.is_none() && carrier_registration.is_none(),
+                        "cargo world cannot change owned hull"
+                    );
                     valid_system(*system_id)?;
                     ensure!(
                         from_ship_class != ship_class,
@@ -428,6 +956,18 @@ pub fn verify(export: &LedgerExport, pinned: Option<&Checkpoint>) -> Result<Repo
         let mut apply_event = apply_event;
         apply_event()
             .with_context(|| format!("entry {} economic rule violation", entry.sequence))?;
+        if registration.is_some() || carrier_registration.is_some() {
+            for (name, account) in &accounts {
+                ensure!(
+                    add(account.ore, drones.pilot_ore(name)?)?
+                        <= account
+                            .active_class
+                            .map(cargo_capacity)
+                            .unwrap_or(CARGO_CAPACITY),
+                    "combined ship and drone capacity exceeded"
+                );
+            }
+        }
         sequence = entry.sequence;
         hash = entry.hash.clone();
         time = entry.timestamp_ms;
@@ -509,9 +1049,24 @@ pub fn verify(export: &LedgerExport, pinned: Option<&Checkpoint>) -> Result<Repo
         snapshot.stored_ore == stored_ore,
         "snapshot stored ore mismatch"
     );
-    let total_ore = accounts
-        .values()
-        .try_fold(add(belt, stored_ore)?, |sum, a| add(sum, a.ore))?;
+    if let Some(registration) = registration {
+        ensure!(
+            snapshot.server_time_ms >= time,
+            "cargo snapshot predates ledger"
+        );
+        drones.snapshot(snapshot, registration)?;
+    }
+    if let Some(registration) = carrier_registration {
+        ensure!(
+            snapshot.server_time_ms >= time,
+            "carrier snapshot predates ledger"
+        );
+        carrier.snapshot(snapshot, &drones, registration)?;
+    }
+    let total_ore = accounts.values().try_fold(
+        add(add(belt, stored_ore)?, add(drones.total()?, drones.lost)?)?,
+        |sum, a| add(sum, a.ore),
+    )?;
     let total_ore = orders
         .values()
         .try_fold(total_ore, |sum, o| add(sum, o.units))?;
@@ -685,7 +1240,7 @@ mod tests {
         export.snapshot.asteroids[1].id = export.snapshot.asteroids[0].id;
         assert!(verify(&export, None).is_err());
     }
-    fn fixture() -> LedgerExport {
+    pub(super) fn fixture() -> LedgerExport {
         let events = vec![
             EconomicEvent::PilotCreated {
                 pilot: "Alice".into(),
@@ -731,6 +1286,13 @@ mod tests {
         LedgerExport {
             protocol_version: PROTOCOL_VERSION,
             snapshot: Snapshot {
+                carrier_inventory_registration: None,
+                drone_cargo_registration: None,
+                drone_cargo_totals: None,
+                walk_sprint_v1: false,
+                docked_traversal_capability: None,
+                world_layout: None,
+                exterior: None,
                 remote_controls: vec![],
                 fleet_links: vec![],
                 resource_jobs: vec![],
@@ -742,6 +1304,12 @@ mod tests {
                 server_time_ms: 6000,
                 pilots: vec![
                     PilotView {
+                        carrier_inventory: None,
+                        power_accounting: None,
+                        drone_bay: None,
+                        drone_cargo: None,
+                        cockpit_mechanisms: None,
+                        reactor_configuration: None,
                         station_avatar: None,
                         surface: None,
                         power: None,
@@ -761,6 +1329,12 @@ mod tests {
                         flight: None,
                     },
                     PilotView {
+                        carrier_inventory: None,
+                        power_accounting: None,
+                        drone_bay: None,
+                        drone_cargo: None,
+                        cockpit_mechanisms: None,
+                        reactor_configuration: None,
                         station_avatar: None,
                         surface: None,
                         power: None,

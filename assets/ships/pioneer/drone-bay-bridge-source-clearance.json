@@ -1,0 +1,339 @@
+{
+  "source_blend_sha256": "ee43c05cb1d4ebf907d609b5338b4d8a911b812d8fb05914c96ca48dbb06b1d9",
+  "canonical_glb_sha256": "7970f096a6aac9d95b6250b75cd19ea2e54046c9deb77f3592b82efa879112fd",
+  "registration": 12,
+  "opaque_source_aperture_and_turret_rays": [
+    {
+      "ray": "pilot-front",
+      "hit": null,
+      "distance": null
+    },
+    {
+      "ray": "pilot-port",
+      "hit": null,
+      "distance": null
+    },
+    {
+      "ray": "pilot-starboard",
+      "hit": null,
+      "distance": null
+    },
+    {
+      "ray": "standing-port",
+      "hit": null,
+      "distance": null
+    },
+    {
+      "ray": "standing-starboard",
+      "hit": null,
+      "distance": null
+    },
+    {
+      "ray": "turret-port",
+      "hit": null,
+      "distance": null
+    },
+    {
+      "ray": "turret-starboard",
+      "hit": null,
+      "distance": null
+    },
+    {
+      "ray": "port-boarding-aperture-0.1",
+      "hit": null,
+      "distance": null
+    },
+    {
+      "ray": "port-boarding-aperture-0.8",
+      "hit": null,
+      "distance": null
+    },
+    {
+      "ray": "port-boarding-aperture-1.45",
+      "hit": null,
+      "distance": null
+    }
+  ],
+  "retired_lower_bridge_closure_rays": [
+    {
+      "region": "front",
+      "side": -1,
+      "height_m": -0.7,
+      "z_m": -1.0,
+      "hit": "Forward service closure front panel port"
+    },
+    {
+      "region": "front",
+      "side": -1,
+      "height_m": -0.7,
+      "z_m": -5.0,
+      "hit": "Forward service closure front panel port"
+    },
+    {
+      "region": "front",
+      "side": -1,
+      "height_m": -0.7,
+      "z_m": -6.47,
+      "hit": "Forward service seam port6.47"
+    },
+    {
+      "region": "front",
+      "side": -1,
+      "height_m": -0.7,
+      "z_m": -7.7,
+      "hit": "Forward service seam port7.77"
+    },
+    {
+      "region": "chamfer-wrap",
+      "side": -1,
+      "height_m": -0.7,
+      "hit": "Forward service chamfer return port"
+    },
+    {
+      "region": "front",
+      "side": -1,
+      "height_m": -0.5,
+      "z_m": -1.0,
+      "hit": "Forward service closure front panel port"
+    },
+    {
+      "region": "front",
+      "side": -1,
+      "height_m": -0.5,
+      "z_m": -5.0,
+      "hit": "Forward service closure front panel port"
+    },
+    {
+      "region": "front",
+      "side": -1,
+      "height_m": -0.5,
+      "z_m": -6.47,
+      "hit": "Forward service seam port6.47"
+    },
+    {
+      "region": "front",
+      "side": -1,
+      "height_m": -0.5,
+      "z_m": -7.7,
+      "hit": "Forward service seam port7.77"
+    },
+    {
+      "region": "chamfer-wrap",
+      "side": -1,
+      "height_m": -0.5,
+      "hit": "Forward service chamfer return port"
+    },
+    {
+      "region": "front",
+      "side": -1,
+      "height_m": 0.5,
+      "z_m": -1.0,
+      "hit": "Forward service closure front panel port"
+    },
+    {
+      "region": "front",
+      "side": -1,
+      "height_m": 0.5,
+      "z_m": -5.0,
+      "hit": "Forward service closure front panel port"
+    },
+    {
+      "region": "front",
+      "side": -1,
+      "height_m": 0.5,
+      "z_m": -6.47,
+      "hit": "Forward service seam port6.47"
+    },
+    {
+      "region": "front",
+      "side": -1,
+      "height_m": 0.5,
+      "z_m": -7.7,
+      "hit": "Forward service seam port7.77"
+    },
+    {
+      "region": "chamfer-wrap",
+      "side": -1,
+      "height_m": 0.5,
+      "hit": "Forward service chamfer return port"
+    },
+    {
+      "region": "front",
+      "side": -1,
+      "height_m": 2.7,
+      "z_m": -1.0,
+      "hit": "Forward service closure front panel port"
+    },
+    {
+      "region": "front",
+      "side": -1,
+      "height_m": 2.7,
+      "z_m": -5.0,
+      "hit": "Forward service closure front panel port"
+    },
+    {
+      "region": "front",
+      "side": -1,
+      "height_m": 2.7,
+      "z_m": -6.47,
+      "hit": "Forward service seam port6.47"
+    },
+    {
+      "region": "front",
+      "side": -1,
+      "height_m": 2.7,
+      "z_m": -7.7,
+      "hit": "Forward service seam port7.77"
+    },
+    {
+      "region": "chamfer-wrap",
+      "side": -1,
+      "height_m": 2.7,
+      "hit": "Forward service chamfer return port"
+    },
+    {
+      "region": "front",
+      "side": 1,
+      "height_m": -0.7,
+      "z_m": 1.0,
+      "hit": "Forward service closure front panel starboard"
+    },
+    {
+      "region": "front",
+      "side": 1,
+      "height_m": -0.7,
+      "z_m": 5.0,
+      "hit": "Forward service closure front panel starboard"
+    },
+    {
+      "region": "front",
+      "side": 1,
+      "height_m": -0.7,
+      "z_m": 6.47,
+      "hit": "Forward service seam starboard6.47"
+    },
+    {
+      "region": "front",
+      "side": 1,
+      "height_m": -0.7,
+      "z_m": 7.7,
+      "hit": "Forward service seam starboard7.77"
+    },
+    {
+      "region": "chamfer-wrap",
+      "side": 1,
+      "height_m": -0.7,
+      "hit": "Forward service chamfer return starboard"
+    },
+    {
+      "region": "front",
+      "side": 1,
+      "height_m": -0.5,
+      "z_m": 1.0,
+      "hit": "Forward service closure front panel starboard"
+    },
+    {
+      "region": "front",
+      "side": 1,
+      "height_m": -0.5,
+      "z_m": 5.0,
+      "hit": "Forward service closure front panel starboard"
+    },
+    {
+      "region": "front",
+      "side": 1,
+      "height_m": -0.5,
+      "z_m": 6.47,
+      "hit": "Forward service seam starboard6.47"
+    },
+    {
+      "region": "front",
+      "side": 1,
+      "height_m": -0.5,
+      "z_m": 7.7,
+      "hit": "Forward service seam starboard7.77"
+    },
+    {
+      "region": "chamfer-wrap",
+      "side": 1,
+      "height_m": -0.5,
+      "hit": "Forward service chamfer return starboard"
+    },
+    {
+      "region": "front",
+      "side": 1,
+      "height_m": 0.5,
+      "z_m": 1.0,
+      "hit": "Forward service closure front panel starboard"
+    },
+    {
+      "region": "front",
+      "side": 1,
+      "height_m": 0.5,
+      "z_m": 5.0,
+      "hit": "Forward service closure front panel starboard"
+    },
+    {
+      "region": "front",
+      "side": 1,
+      "height_m": 0.5,
+      "z_m": 6.47,
+      "hit": "Forward service seam starboard6.47"
+    },
+    {
+      "region": "front",
+      "side": 1,
+      "height_m": 0.5,
+      "z_m": 7.7,
+      "hit": "Forward service seam starboard7.77"
+    },
+    {
+      "region": "chamfer-wrap",
+      "side": 1,
+      "height_m": 0.5,
+      "hit": "Forward service chamfer return starboard"
+    },
+    {
+      "region": "front",
+      "side": 1,
+      "height_m": 2.7,
+      "z_m": 1.0,
+      "hit": "Forward service closure front panel starboard"
+    },
+    {
+      "region": "front",
+      "side": 1,
+      "height_m": 2.7,
+      "z_m": 5.0,
+      "hit": "Forward service closure front panel starboard"
+    },
+    {
+      "region": "front",
+      "side": 1,
+      "height_m": 2.7,
+      "z_m": 6.47,
+      "hit": "Forward service seam starboard6.47"
+    },
+    {
+      "region": "front",
+      "side": 1,
+      "height_m": 2.7,
+      "z_m": 7.7,
+      "hit": "Forward service seam starboard7.77"
+    },
+    {
+      "region": "chamfer-wrap",
+      "side": 1,
+      "height_m": 2.7,
+      "hit": "Forward service chamfer return starboard"
+    }
+  ],
+  "route_id": "raised-bridge-three-flight-access-v1",
+  "method": "BVH triangle nearest-distance over full capsule-axis and stair foot-height supercover; .04m path/height and .05m axis spacing; conservative .05m between-sample displacement bound",
+  "scope": "all three flights, landings, lower central foyer entry and upper bridge entry; includes lower foyer and port service passage up to inner hatch; dynamic hatch and exterior lift are separate runtime tests",
+  "capsule_radius_m": 0.3,
+  "capsule_height_m": 1.8,
+  "poses": 4971,
+  "min_sampled_clearance_m": 0.41999998688697815,
+  "violations": []
+}

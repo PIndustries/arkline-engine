@@ -1,15 +1,11 @@
+mod cockpit;
+mod transport;
 use anyhow::{bail, Context, Result};
 use arkline_protocol::{
     Destination, NavigationMode, NavigationTarget, Request, Response, ShipClass, PROTOCOL_VERSION,
 };
 use serde::{Deserialize, Serialize};
-use std::{
-    fs,
-    io::{BufRead, BufReader, Write},
-    net::TcpStream,
-    path::PathBuf,
-    time::Duration,
-};
+use std::{fs, io::Write, path::PathBuf, time::Duration};
 
 #[derive(Serialize, Deserialize)]
 struct Credentials {
@@ -18,15 +14,8 @@ struct Credentials {
     resume_token: String,
 }
 
-fn exchange(stream: &mut BufReader<TcpStream>, request: &Request) -> Result<Response> {
-    let mut wire = serde_json::to_vec(request)?;
-    wire.push(b'\n');
-    stream.get_mut().write_all(&wire)?;
-    let mut line = String::new();
-    if stream.read_line(&mut line)? == 0 {
-        bail!("server disconnected");
-    }
-    let response: Response = serde_json::from_str(&line).context("invalid server response")?;
+fn exchange(stream: &mut transport::Transport, request: &Request) -> Result<Response> {
+    let response = stream.request(request)?;
     if !response.ok {
         bail!("{}", response.message);
     }
@@ -35,7 +24,13 @@ fn exchange(stream: &mut BufReader<TcpStream>, request: &Request) -> Result<Resp
 
 fn main() {
     if let Err(error) = run() {
-        eprintln!("Arkline: {error:#}");
+        eprintln!(
+            "Arkline: {}",
+            format!("{error:#}")
+                .chars()
+                .filter(|c| !c.is_control() || *c == '\n')
+                .collect::<String>()
+        );
         std::process::exit(1);
     }
 }
@@ -43,6 +38,7 @@ fn main() {
 fn run() -> Result<()> {
     let mut args = std::env::args().skip(1);
     let mut server = "127.0.0.1:7777".to_string();
+    let mut explicit_server = false;
     let mut pilot: Option<String> = None;
     let mut credentials_path: Option<PathBuf> = None;
     let mut command = Vec::new();
@@ -52,18 +48,32 @@ fn run() -> Result<()> {
             continue;
         }
         match arg.as_str() {
-            "--server" => server = args.next().context("--server needs HOST:PORT")?,
+            "--server" => {
+                server = args.next().context("--server needs HOST:PORT or WSS URL")?;
+                explicit_server = true;
+            }
             "--pilot" => pilot = Some(args.next().context("--pilot needs a name")?),
             "--credentials" => {
                 credentials_path = Some(args.next().context("--credentials needs a path")?.into())
             }
             "--help" | "-h" => {
-                println!("Arkline command client\n\narkline [--server HOST:PORT] [--pilot NAME] [--credentials PATH] COMMAND\n\nCommands:\n  status                 Read the live universe\n  connect                Create a pilot or resume with saved credentials\n  inventory              Read your ships, station storage and corporation\n  board HULL             Board pioneer|prospector|hauler|vanguard at its station\n  deposit UNITS          Move cargo ore into local personal storage\n  withdraw UNITS         Move local personal ore into active cargo\n  corp-create NAME       Create a corporation (letters, digits, _ or -)\n  corp-invite PILOT      Owner invites an existing pilot\n  corp-accept NAME       Accept a corporation invitation\n  corp-deposit UNITS     Deposit cargo ore into local corporation storage\n  corp-withdraw UNITS    Owner withdraws local corporation ore\n  undock                 Leave the current station\n  warp belt|station|gate:ID Begin distance-based warp (2s warmup)\n  dock                   Dock at the station\n  mine [SECONDS]         Run module 0 on locked target (default 60s)\n  lock ASTEROID_ID       Acquire and wait for a specific asteroid lock\n  unlock                 Cancel acquisition or release target\n  extract ID [SECONDS]   Run module 0 on locked asteroid (default 60s)\n  stop-mining [MODULE]    Stop module 0 or 1 immediately\n  jump GATE_ID           Jump through a nearby local gate\n  stop                   Stop manual navigation\n  approach TARGET SECS   Approach station, belt or pilot:NAME\n  orbit TARGET METERS SECS   Orbit for 1-300 seconds\n  range TARGET METERS SECS   Keep distance for 1-300 seconds\n  fly X Y Z SECS         Fly to meter coordinates for 1-300 seconds\n  sell UNITS PRICE       Escrow ore in a sell order\n  buy ORDER_ID UNITS     Buy ore from another pilot\n  cancel ORDER_ID        Cancel your order and reclaim ore\n  export PATH            Save an economic audit export\n\nCommands return JSON snapshots. Credentials are saved locally with restricted\npermissions. Keep that file to resume the same pilot. This prototype uses\nunencrypted TCP: keep it on loopback or an authenticated private tunnel.");
+                println!("Arkline command client\n\narkline [--server HOST:PORT] [--pilot NAME] [--credentials PATH] COMMAND\n\nCommands:\n  tui                    Interactive terminal cockpit (TCP or WSS)\n  status                 Read the live universe\n  connect                Create a pilot or resume with saved credentials\n  inventory              Read your ships, station storage and corporation\n  board HULL             Board pioneer|prospector|hauler|vanguard at its station\n  deposit UNITS          Move cargo ore into local personal storage\n  withdraw UNITS         Move local personal ore into active cargo\n  corp-create NAME       Create a corporation (letters, digits, _ or -)\n  corp-invite PILOT      Owner invites an existing pilot\n  corp-accept NAME       Accept a corporation invitation\n  corp-deposit UNITS     Deposit cargo ore into local corporation storage\n  corp-withdraw UNITS    Owner withdraws local corporation ore\n  undock                 Leave the current station\n  warp belt|station|gate:ID Begin distance-based warp (2s warmup)\n  dock                   Dock at the station\n  mine [SECONDS]         Run module 0 on locked target (default 60s)\n  lock ASTEROID_ID       Acquire and wait for a specific asteroid lock\n  unlock                 Cancel acquisition or release target\n  extract ID [SECONDS]   Run module 0 on locked asteroid (default 60s)\n  stop-mining [MODULE]    Stop module 0 or 1 immediately\n  jump GATE_ID           Jump through a nearby local gate\n  stop                   Stop manual navigation\n  approach TARGET SECS   Approach station, belt or pilot:NAME\n  orbit TARGET METERS SECS   Orbit for 1-300 seconds\n  range TARGET METERS SECS   Keep distance for 1-300 seconds\n  fly X Y Z SECS         Fly to meter coordinates for 1-300 seconds\n  sell UNITS PRICE       Escrow ore in a sell order\n  buy ORDER_ID UNITS     Buy ore from another pilot\n  cancel ORDER_ID        Cancel your order and reclaim ore\n  export PATH            Save an economic audit export\n\nCommands return JSON snapshots. Credentials are saved locally with restricted\npermissions. Keep that file to resume the same pilot. Remote connections require verified wss:// TLS. Plain TCP/ws:// is restricted\nto loopback. The TUI uses the same authoritative server protocol.");
                 return Ok(());
             }
             x if x.starts_with('-') => bail!("unknown option: {x}"),
             _ => command.push(arg),
         }
+    }
+    if command.first().is_some_and(|c| c == "tui") {
+        return cockpit::run(
+            if explicit_server {
+                server
+            } else {
+                "wss://relay.arkline.network/ws".into()
+            },
+            pilot.context("tui needs --pilot NAME")?,
+            credentials_path,
+        );
     }
     let number = |index: usize| -> Result<u64> {
         command
@@ -233,11 +243,7 @@ fn run() -> Result<()> {
         }
         _ => bail!("unknown command '{verb}'; see --help"),
     };
-    let stream = TcpStream::connect(&server)
-        .with_context(|| format!("cannot connect to {server}; start arkline-server first"))?;
-    stream.set_read_timeout(Some(Duration::from_secs(10)))?;
-    stream.set_write_timeout(Some(Duration::from_secs(10)))?;
-    let mut stream = BufReader::new(stream);
+    let mut stream = transport::Transport::open(&server)?;
     let pilot_name = pilot.clone();
     if let Some(pilot) = pilot {
         if pilot.is_empty()
@@ -266,6 +272,11 @@ fn run() -> Result<()> {
         let response = exchange(
             &mut stream,
             &Request::Connect {
+                supports_docked_traversal_v2: false,
+                supports_room_controls: false,
+                // This command client does not validate or render new scene layouts.
+                world_layout_version: 0,
+                supports_fleet_hangar: false,
                 supports_pioneer_interior: false,
                 protocol_version: PROTOCOL_VERSION,
                 pilot: pilot.clone(),
@@ -312,7 +323,9 @@ fn run() -> Result<()> {
         request = Request::StartMining {
             module_id: 0,
             target_id: own
-                .locked_asteroid
+                .locked_asteroids
+                .first()
+                .copied()
                 .context("lock an asteroid before activating a mining module")?,
         };
     }
@@ -357,14 +370,10 @@ fn run() -> Result<()> {
                         .find(|p| Some(&p.name) == pilot_name.as_ref())
                 })
                 .context("server did not return the targeting pilot")?;
-            if own.locked_asteroid == Some(id) {
+            if own.locked_asteroids.contains(&id) {
                 break;
             }
-            if own
-                .target_lock
-                .as_ref()
-                .is_none_or(|lock| lock.asteroid_id != id)
-            {
+            if !own.target_locks.iter().any(|lock| lock.asteroid_id == id) {
                 bail!("target acquisition was cancelled before confirmation");
             }
             if std::time::Instant::now() >= deadline {

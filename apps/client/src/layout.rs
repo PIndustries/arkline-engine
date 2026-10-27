@@ -6,12 +6,85 @@ use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
 };
+/// Edge-relative HUD placement shared with local authored panels.
+/// Inputs are validated by the owning document before use.
+pub fn panel_geometry(
+    bounds: Rect,
+    anchor: [f32; 2],
+    offset: Vec2,
+    size: Vec2,
+    actual: Vec2,
+) -> (Pos2, Vec2) {
+    let size = size
+        .min(bounds.size() - Vec2::splat(30.0))
+        .max(Vec2::splat(1.0));
+    let actual = actual.min(bounds.size());
+    let origin = bounds.min + Vec2::new(bounds.width() * anchor[0], bounds.height() * anchor[1]);
+    let pos = origin + offset - Vec2::new(actual.x * anchor[0], actual.y * anchor[1]);
+    (
+        Pos2::new(
+            pos.x.clamp(
+                bounds.left(),
+                (bounds.right() - actual.x).max(bounds.left()),
+            ),
+            pos.y
+                .clamp(bounds.top(), (bounds.bottom() - actual.y).max(bounds.top())),
+        ),
+        size,
+    )
+}
+/// egui 0.31 exposes the active drag ID but not a window resize response.
+/// Match only its eight pinned edge/corner IDs, never text/scroll/button drags.
+/// Real pointer regressions cover this contract when egui is upgraded.
+pub fn window_resize_dragged(ctx: &eframe::egui::Context, layer: eframe::egui::LayerId) -> bool {
+    let edge = eframe::egui::Id::new(layer).with("edge_drag");
+    ctx.input(|i| i.pointer.is_decidedly_dragging())
+        && ctx.dragged_id().is_some_and(|id| {
+            [
+                "left",
+                "right",
+                "top",
+                "bottom",
+                "left_top",
+                "left_bottom",
+                "right_top",
+                "right_bottom",
+            ]
+            .iter()
+            .any(|side| id == edge.with(side))
+        })
+}
+
+fn unobscured_region(bounds: Rect, foreground: Rect, desired: Rect) -> Rect {
+    let obstacle = foreground.intersect(bounds);
+    if !obstacle.is_positive() || !desired.intersects(obstacle) {
+        return bounds;
+    }
+    let regions = [
+        Rect::from_min_max(Pos2::new(bounds.left(), obstacle.bottom()), bounds.max),
+        Rect::from_min_max(bounds.min, Pos2::new(bounds.right(), obstacle.top())),
+        Rect::from_min_max(Pos2::new(obstacle.right(), bounds.top()), bounds.max),
+        Rect::from_min_max(bounds.min, Pos2::new(obstacle.left(), bounds.bottom())),
+    ];
+    regions
+        .into_iter()
+        .filter(|r| r.is_positive())
+        .max_by(|a, b| {
+            let usable = |r: &Rect| r.width() >= 260.0 && r.height() >= 180.0;
+            usable(a)
+                .cmp(&usable(b))
+                .then_with(|| a.area().total_cmp(&b.area()))
+        })
+        .unwrap_or(bounds)
+}
+
 #[derive(Clone, Debug)]
 struct Placement {
     anchor: [f32; 2],
     offset: Vec2,
     size: Vec2,
     actual: Vec2,
+    chrome: Vec2,
     touched: bool,
     expected: Option<Pos2>,
 }
@@ -73,6 +146,7 @@ impl Layout {
                                         offset: Vec2::from(offset),
                                         size: Vec2::from(size),
                                         actual: Vec2::from(size) + Vec2::new(16.0, 36.0),
+                                        chrome: Vec2::new(16.0, 36.0),
                                         touched: false,
                                         expected: None,
                                     },
@@ -102,31 +176,60 @@ impl Layout {
             offset,
             size,
             actual: size + Vec2::new(16.0, 36.0),
+            chrome: Vec2::new(16.0, 36.0),
             touched: false,
             expected: None,
         });
-        let size = p
-            .size
-            .min(bounds.size() - Vec2::splat(30.0))
-            .max(Vec2::splat(1.0));
-        let actual = p.actual.min(bounds.size());
-        let origin =
-            bounds.min + Vec2::new(bounds.width() * p.anchor[0], bounds.height() * p.anchor[1]);
-        let pos = origin + p.offset - Vec2::new(actual.x * p.anchor[0], actual.y * p.anchor[1]);
-        let result = (
-            Pos2::new(
-                pos.x.clamp(
-                    bounds.left(),
-                    (bounds.right() - actual.x).max(bounds.left()),
-                ),
-                pos.y
-                    .clamp(bounds.top(), (bounds.bottom() - actual.y).max(bounds.top())),
-            ),
-            size,
-        );
+        let result = panel_geometry(bounds, p.anchor, p.offset, p.size, p.actual);
         p.expected = Some(result.0);
         result
     }
+    /// Constrain a task window around measured foreground authority chrome.
+    /// Use the saved preferred size, not last frame's temporarily clamped size,
+    /// so expanding/collapsing status cannot create a resize/placement oscillation.
+    pub fn avoid_foreground(
+        &mut self,
+        key: &str,
+        bounds: Rect,
+        foreground: Rect,
+        minimum_width: f32,
+    ) -> (Pos2, Vec2, Rect) {
+        let p = self
+            .entries
+            .get_mut(key)
+            .expect("position must register task");
+        let chrome = p.chrome;
+        let preferred = p.size.max(Vec2::new(minimum_width, 1.0));
+        let (desired, _) =
+            panel_geometry(bounds, p.anchor, p.offset, preferred, preferred + chrome);
+        let desired = Rect::from_min_size(desired, (preferred + chrome).min(bounds.size()));
+        let available = unobscured_region(bounds, foreground.expand(8.0), desired);
+        let size = preferred
+            .min(available.size() - chrome)
+            .max(Vec2::splat(1.0));
+        let actual = size + chrome;
+        let pos = Pos2::new(
+            desired.left().clamp(
+                available.left(),
+                (available.right() - actual.x).max(available.left()),
+            ),
+            desired.top().clamp(
+                available.top(),
+                (available.bottom() - actual.y).max(available.top()),
+            ),
+        );
+        p.expected = Some(pos);
+        (pos, size, available)
+    }
+
+    /// Measure only window decoration, never promote a temporary content clamp
+    /// into the user's preferred size. Font/theme metrics need not match defaults.
+    pub fn observe_window_chrome(&mut self, key: &str, rect: Rect, content: Vec2) {
+        if let Some(p) = self.entries.get_mut(key) {
+            p.chrome = (rect.size() - content).max(Vec2::ZERO);
+        }
+    }
+
     pub fn record(
         &mut self,
         key: &str,
@@ -366,6 +469,50 @@ fn read_preferences(path: &Path) -> Result<Vec<u8>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn authority_exclusion_is_stable_and_never_saves_automatic_clamps() {
+        let bounds = Rect::from_min_max(Pos2::new(8., 8.), Pos2::new(892., 598.));
+        let mut layout = Layout::load(&std::env::temp_dir().join("arkline-clearance-no-save"));
+        layout.position(
+            "task",
+            bounds,
+            [1., 0.5],
+            Vec2::new(-16., 0.),
+            Vec2::new(600., 500.),
+        );
+        let original = layout.entries["task"].clone();
+        for obstacle in [
+            Rect::from_min_size(Pos2::new(16., 14.), Vec2::new(490., 50.)),
+            Rect::from_min_size(Pos2::new(16., 14.), Vec2::new(490., 470.)),
+            Rect::from_min_size(Pos2::new(16., 240.), Vec2::new(490., 120.)),
+        ] {
+            let mut previous = None;
+            for _ in 0..10 {
+                layout.begin_frame(bounds);
+                layout.position("task", bounds, [1., 0.5], Vec2::ZERO, Vec2::ZERO);
+                let (pos, size, available) =
+                    layout.avoid_foreground("task", bounds, obstacle, 600.);
+                let rect = Rect::from_min_size(pos, size + Vec2::new(16., 36.));
+                assert!(!rect.intersects(obstacle));
+                assert!(available.contains_rect(rect));
+                if let Some(old) = previous {
+                    assert_eq!((pos, size, available), old);
+                }
+                previous = Some((pos, size, available));
+                layout.record("task", bounds, rect, None, false);
+                assert!(
+                    !layout.changed,
+                    "automatic constraint saved as a user resize"
+                );
+                assert_eq!(layout.entries["task"].offset, original.offset);
+                assert_eq!(layout.entries["task"].size, original.size);
+            }
+        }
+        let disjoint = Rect::from_min_size(Pos2::new(700., 100.), Vec2::new(180., 400.));
+        let obstacle = Rect::from_min_size(Pos2::new(16., 14.), Vec2::new(490., 50.));
+        assert_eq!(unobscured_region(bounds, obstacle, disjoint), bounds);
+    }
+
     #[test]
     fn delayed_save_does_not_block_frames_or_discard_newer_preferences() {
         let dir = std::env::temp_dir().join(format!("arkline-layout-async-{}", std::process::id()));

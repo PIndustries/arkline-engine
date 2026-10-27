@@ -1,13 +1,13 @@
-# Ship computer and resource jobs
+# Mining routine and ship computer
 
-Open **AI** in the cockpit console or the service rail. The computer operates an
+Open **Mining** in the combined editor header or cockpit service launcher. The panel remains readable on foot and while paused; board the selected ship and press Play before starting. The computer operates an
 existing authenticated ship, or an existing worker that explicitly delegated fleet
 control to your pilot. It does not create pilots, spawn worker ships, or grant access
 to another player's inventory.
 
 ## Confirmed multi-trip delivery
 
-Select a ship, choose an ore goal, and press **Start gathering**. No model is needed
+Select a ship, choose an ore goal, and press **Start mining routine**. No model is needed
 for this button. Start docked or in space; orders during warp wait for arrival.
 Deployed drones are recalled before departure. Gate transit must finish before
 assignment. Existing cargo counts toward the total goal, which may be up to 1,000,000 ore.
@@ -30,7 +30,7 @@ low power can pause work before a bounded wait ends in a blocked result. The pan
 retains last-known state when disconnected. Starting jobs and accepting model
 instructions require a fresh server snapshot.
 
-**Cancel job** stops automation. Successful manual actions take control and cancel
+**Cancel routine** stops automation. Successful manual actions take control and cancel
 the job; they do not roll back ore already extracted or deposited. Server restart
 cancels jobs, and reconnect never silently restarts one.
 

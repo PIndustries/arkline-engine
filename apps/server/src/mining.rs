@@ -28,7 +28,28 @@ pub(super) fn stop_all(pilot: &mut Pilot, reason: &str) {
         }
     }
 }
-fn invalid_reason(p: &Pilot, a: Option<&Asteroid>, id: u64) -> Option<&'static str> {
+fn invalid_reason(
+    p: &Pilot,
+    a: Option<&Asteroid>,
+    id: u64,
+    carrier_advertised: bool,
+) -> Option<&'static str> {
+    // Source-proved deployment is not authoritative aim or line-of-fire.
+    // This invalidator preserves pending Ready cycles across body sampling.
+    // Actual extraction separately requires current-clock aim AND ray clearance.
+    if !turret_stow::mining_aim_available(&p.view, carrier_advertised)
+        && !p.view.cockpit_mechanisms.as_ref().is_some_and(|m| {
+            m.turrets.aims.as_ref().is_some_and(|aims| {
+                aims.iter().any(|aim| {
+                    aim.target_id == Some(id)
+                        && aim.status
+                            == arkline_protocol::parallel_turret_aim::TurretAimStatus::Ready
+                })
+            })
+        })
+    {
+        return Some("Carrier turret aim authority unavailable");
+    }
     if !universe::normal(p) {
         return Some("Ship left normal space");
     }
@@ -63,11 +84,23 @@ pub(super) fn start(
         MINING_MODULE_IDS.contains(&module_id),
         "unknown mining module"
     );
+    ensure!(
+        drone_cargo::hold_capacity(world, name) > world.pilots[name].view.ore,
+        "Ship headroom is reserved by mining-drone cargo"
+    );
+    if turret_aim::request(world, name, module_id, target_id, now)? {
+        return Ok(());
+    }
     let p = world.pilots.get(name).context("pilot missing")?;
+    ensure!(
+        turret_stow::can_fire(&p.view, now),
+        "Physical turrets unavailable"
+    );
     if let Some(reason) = invalid_reason(
         p,
         world.asteroids.iter().find(|a| a.id == target_id),
         target_id,
+        world.carrier_inventory_registration.is_some(),
     ) {
         bail!("{reason}");
     }
@@ -89,6 +122,12 @@ pub(super) fn start(
     Ok(())
 }
 pub(super) fn stop(world: &mut World, name: &str, module_id: u8) -> Result<()> {
+    let sample = world
+        .accounts
+        .get(name)
+        .and_then(|a| a.cockpit_mechanisms.as_ref())
+        .map_or(0, |m| m.turrets.updated_at_ms);
+    turret_aim::stop(world, name, module_id, sample);
     let p = world.pilots.get_mut(name).context("pilot missing")?;
     let module = p
         .view
@@ -105,24 +144,86 @@ pub(super) fn invalidate(world: &mut World) {
             let Some(id) = p.view.mining_modules[index].target_id else {
                 continue;
             };
-            if let Some(reason) = invalid_reason(p, world.asteroids.iter().find(|a| a.id == id), id)
-            {
+            if let Some(reason) = invalid_reason(
+                p,
+                world.asteroids.iter().find(|a| a.id == id),
+                id,
+                world.carrier_inventory_registration.is_some(),
+            ) {
                 halt(&mut p.view.mining_modules[index], reason);
             }
         }
     }
 }
 pub(super) fn advance(world: &mut World, now: u64) -> Vec<EconomicEvent> {
+    advance_phase(world, now, false)
+}
+/// New source guns extract only after all source/free bodies reached this tick.
+pub(super) fn advance_source(world: &mut World, now: u64) -> Vec<EconomicEvent> {
+    advance_phase(world, now, true)
+}
+fn advance_phase(world: &mut World, now: u64, source_phase: bool) -> Vec<EconomicEvent> {
     invalidate(world);
+    // Geometry and target are rechecked immediately before the extraction loop;
+    // this loop mutates ore/power only, never positions or source mechanisms.
+    let permissions: std::collections::BTreeMap<(String, u8), bool> = world
+        .pilots
+        .iter()
+        .flat_map(|(name, p)| {
+            p.view
+                .mining_modules
+                .iter()
+                .map(|m| (name.clone(), m.module_id))
+        })
+        .map(|(name, id)| {
+            let ready = turret_aim::extraction_ready(world, &name, usize::from(id), now);
+            ((name, id), ready)
+        })
+        .collect();
     let mut events = Vec::new();
     for (name, p) in &mut world.pilots {
+        let source = !turret_stow::mining_aim_available(
+            &p.view,
+            world.carrier_inventory_registration.is_some(),
+        );
+        if source != source_phase {
+            continue;
+        }
+        let capacity = cargo_capacity(p.view.ship_class).saturating_sub(
+            world.accounts.get(name).map_or(0, |a| {
+                drone_cargo::reserved_for_account(a, p.view.ship_class)
+            }),
+        );
         for index in 0..p.view.mining_modules.len() {
             let Some(id) = p.view.mining_modules[index].target_id else {
                 continue;
             };
+            if !permissions
+                .get(&(name.clone(), p.view.mining_modules[index].module_id))
+                .copied()
+                .unwrap_or(false)
+            {
+                halt(
+                    &mut p.view.mining_modules[index],
+                    "Turret aim/line-of-fire not confirmed",
+                );
+                continue;
+            }
             let a = world.asteroids.iter_mut().find(|a| a.id == id).unwrap();
-            if let Some(reason) = invalid_reason(p, Some(a), id) {
+            if let Some(reason) = invalid_reason(
+                p,
+                Some(a),
+                id,
+                world.carrier_inventory_registration.is_some(),
+            ) {
                 halt(&mut p.view.mining_modules[index], reason);
+                continue;
+            }
+            if p.view.ore >= capacity {
+                halt(
+                    &mut p.view.mining_modules[index],
+                    "Ship headroom reserved by drone cargo",
+                );
                 continue;
             }
             let spec = mining_spec(p.view.ship_class);
@@ -147,10 +248,7 @@ pub(super) fn advance(world: &mut World, now: u64) -> Vec<EconomicEvent> {
                 halt(module, "Insufficient capacitor energy");
                 continue;
             }
-            let units = spec
-                .yield_units
-                .min(a.ore)
-                .min(cargo_capacity(p.view.ship_class) - p.view.ore);
+            let units = spec.yield_units.min(a.ore).min(capacity - p.view.ore);
             a.ore -= units;
             world.belt_ore -= units;
             p.view.ore += units;

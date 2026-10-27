@@ -1,0 +1,367 @@
+{
+  "status": "PASS actual seated all10 connected 168mm-square interface bridges; no pressure seal claim",
+  "drone_glb_sha256": "9363b725e154f7219533461766c2dee2d1a6aaed7d662db38ad1e7c25071cf14",
+  "receiver_glb_sha256": "ede765abf3ff8574aafea10aa412c2707d6c8af2c1724e60a4959c8d5d3cd01c",
+  "receiver_json_sha256": "daa77de93195ab605a4c197f6b4362565c9d109d7b0a08b86db53936880a82ce",
+  "receiver_isolated_proof_sha256": "697371ecc4f6a54d6ff5ee5cc6e85bcc89678a54126f223358a3fc86eea02e0a",
+  "ship_preservation_sha256": "318d293d8ee64f09c6528389986e746734903cd879318c773b72f7571838956f",
+  "routes_sha256": "8ae8f5accf3f899609bff15310bf5b1ab05dd17a49fc643735247614743147a3",
+  "checker_sha256": "1bc59fe094ffadb0a48465e578bb46dfb54ec78e4e5f11a9c546d9b9bb0ee05b",
+  "bays": [
+    {
+      "bay_id": 0,
+      "actual_receiver_tip_drone_x_m": -2.4199992370605514,
+      "actual_drone_reducer_face_x_m": -2.4200000762939453,
+      "positive_axial_contact_overlap_m": 8.392333938900265e-07,
+      "bridge": {
+        "label": "actual all-material interface bridge",
+        "box_m": [
+          [
+            "-243/100",
+            "-21/250",
+            "-21/250"
+          ],
+          [
+            "-241/100",
+            "21/250",
+            "21/250"
+          ]
+        ],
+        "shear": null,
+        "exact_triangle_tests": 0,
+        "hits": [],
+        "material_windings": [
+          {
+            "part": "receiver/new/head170-annulus/component/0",
+            "winding": 3.533949646070574e-17
+          },
+          {
+            "part": "socket/mating-reducer/closed-annulus/component/0",
+            "winding": 6.184411880623505e-17
+          }
+        ],
+        "overlapping_nonclosed_parts": []
+      }
+    },
+    {
+      "bay_id": 1,
+      "actual_receiver_tip_drone_x_m": -2.4199992370605514,
+      "actual_drone_reducer_face_x_m": -2.4200000762939453,
+      "positive_axial_contact_overlap_m": 8.392333938900265e-07,
+      "bridge": {
+        "label": "actual all-material interface bridge",
+        "box_m": [
+          [
+            "-243/100",
+            "-21/250",
+            "-21/250"
+          ],
+          [
+            "-241/100",
+            "21/250",
+            "21/250"
+          ]
+        ],
+        "shear": null,
+        "exact_triangle_tests": 0,
+        "hits": [],
+        "material_windings": [
+          {
+            "part": "receiver/new/head170-annulus/component/0",
+            "winding": 3.533949646070574e-17
+          },
+          {
+            "part": "socket/mating-reducer/closed-annulus/component/0",
+            "winding": 6.184411880623505e-17
+          }
+        ],
+        "overlapping_nonclosed_parts": []
+      }
+    },
+    {
+      "bay_id": 2,
+      "actual_receiver_tip_drone_x_m": -2.4199992370605514,
+      "actual_drone_reducer_face_x_m": -2.4200000762939453,
+      "positive_axial_contact_overlap_m": 8.392333938900265e-07,
+      "bridge": {
+        "label": "actual all-material interface bridge",
+        "box_m": [
+          [
+            "-243/100",
+            "-21/250",
+            "-21/250"
+          ],
+          [
+            "-241/100",
+            "21/250",
+            "21/250"
+          ]
+        ],
+        "shear": null,
+        "exact_triangle_tests": 0,
+        "hits": [],
+        "material_windings": [
+          {
+            "part": "receiver/new/head170-annulus/component/0",
+            "winding": 5.300924469105861e-17
+          },
+          {
+            "part": "socket/mating-reducer/closed-annulus/component/0",
+            "winding": 6.184411880623505e-17
+          }
+        ],
+        "overlapping_nonclosed_parts": []
+      }
+    },
+    {
+      "bay_id": 3,
+      "actual_receiver_tip_drone_x_m": -2.4199992370605514,
+      "actual_drone_reducer_face_x_m": -2.4200000762939453,
+      "positive_axial_contact_overlap_m": 8.392333938900265e-07,
+      "bridge": {
+        "label": "actual all-material interface bridge",
+        "box_m": [
+          [
+            "-243/100",
+            "-21/250",
+            "-21/250"
+          ],
+          [
+            "-241/100",
+            "21/250",
+            "21/250"
+          ]
+        ],
+        "shear": null,
+        "exact_triangle_tests": 0,
+        "hits": [],
+        "material_windings": [
+          {
+            "part": "receiver/new/head170-annulus/component/0",
+            "winding": 5.300924469105861e-17
+          },
+          {
+            "part": "socket/mating-reducer/closed-annulus/component/0",
+            "winding": 6.184411880623505e-17
+          }
+        ],
+        "overlapping_nonclosed_parts": []
+      }
+    },
+    {
+      "bay_id": 4,
+      "actual_receiver_tip_drone_x_m": -2.4199992370605514,
+      "actual_drone_reducer_face_x_m": -2.4200000762939453,
+      "positive_axial_contact_overlap_m": 8.392333938900265e-07,
+      "bridge": {
+        "label": "actual all-material interface bridge",
+        "box_m": [
+          [
+            "-243/100",
+            "-21/250",
+            "-21/250"
+          ],
+          [
+            "-241/100",
+            "21/250",
+            "21/250"
+          ]
+        ],
+        "shear": null,
+        "exact_triangle_tests": 0,
+        "hits": [],
+        "material_windings": [
+          {
+            "part": "receiver/new/head170-annulus/component/0",
+            "winding": 5.300924469105861e-17
+          },
+          {
+            "part": "socket/mating-reducer/closed-annulus/component/0",
+            "winding": 6.184411880623505e-17
+          }
+        ],
+        "overlapping_nonclosed_parts": []
+      }
+    },
+    {
+      "bay_id": 5,
+      "actual_receiver_tip_drone_x_m": -2.4199992370605514,
+      "actual_drone_reducer_face_x_m": -2.4200000762939453,
+      "positive_axial_contact_overlap_m": 8.392333938900265e-07,
+      "bridge": {
+        "label": "actual all-material interface bridge",
+        "box_m": [
+          [
+            "-243/100",
+            "-21/250",
+            "-21/250"
+          ],
+          [
+            "-241/100",
+            "21/250",
+            "21/250"
+          ]
+        ],
+        "shear": null,
+        "exact_triangle_tests": 0,
+        "hits": [],
+        "material_windings": [
+          {
+            "part": "receiver/new/head170-annulus/component/0",
+            "winding": 3.533949646070574e-17
+          },
+          {
+            "part": "socket/mating-reducer/closed-annulus/component/0",
+            "winding": 6.184411880623505e-17
+          }
+        ],
+        "overlapping_nonclosed_parts": []
+      }
+    },
+    {
+      "bay_id": 6,
+      "actual_receiver_tip_drone_x_m": -2.4199992370605514,
+      "actual_drone_reducer_face_x_m": -2.4200000762939453,
+      "positive_axial_contact_overlap_m": 8.392333938900265e-07,
+      "bridge": {
+        "label": "actual all-material interface bridge",
+        "box_m": [
+          [
+            "-243/100",
+            "-21/250",
+            "-21/250"
+          ],
+          [
+            "-241/100",
+            "21/250",
+            "21/250"
+          ]
+        ],
+        "shear": null,
+        "exact_triangle_tests": 0,
+        "hits": [],
+        "material_windings": [
+          {
+            "part": "receiver/new/head170-annulus/component/0",
+            "winding": 3.533949646070574e-17
+          },
+          {
+            "part": "socket/mating-reducer/closed-annulus/component/0",
+            "winding": 6.184411880623505e-17
+          }
+        ],
+        "overlapping_nonclosed_parts": []
+      }
+    },
+    {
+      "bay_id": 7,
+      "actual_receiver_tip_drone_x_m": -2.4199992370605514,
+      "actual_drone_reducer_face_x_m": -2.4200000762939453,
+      "positive_axial_contact_overlap_m": 8.392333938900265e-07,
+      "bridge": {
+        "label": "actual all-material interface bridge",
+        "box_m": [
+          [
+            "-243/100",
+            "-21/250",
+            "-21/250"
+          ],
+          [
+            "-241/100",
+            "21/250",
+            "21/250"
+          ]
+        ],
+        "shear": null,
+        "exact_triangle_tests": 0,
+        "hits": [],
+        "material_windings": [
+          {
+            "part": "receiver/new/head170-annulus/component/0",
+            "winding": 5.300924469105861e-17
+          },
+          {
+            "part": "socket/mating-reducer/closed-annulus/component/0",
+            "winding": 6.184411880623505e-17
+          }
+        ],
+        "overlapping_nonclosed_parts": []
+      }
+    },
+    {
+      "bay_id": 8,
+      "actual_receiver_tip_drone_x_m": -2.4199992370605514,
+      "actual_drone_reducer_face_x_m": -2.4200000762939453,
+      "positive_axial_contact_overlap_m": 8.392333938900265e-07,
+      "bridge": {
+        "label": "actual all-material interface bridge",
+        "box_m": [
+          [
+            "-243/100",
+            "-21/250",
+            "-21/250"
+          ],
+          [
+            "-241/100",
+            "21/250",
+            "21/250"
+          ]
+        ],
+        "shear": null,
+        "exact_triangle_tests": 0,
+        "hits": [],
+        "material_windings": [
+          {
+            "part": "receiver/new/head170-annulus/component/0",
+            "winding": 2.6504622345529306e-17
+          },
+          {
+            "part": "socket/mating-reducer/closed-annulus/component/0",
+            "winding": 6.184411880623505e-17
+          }
+        ],
+        "overlapping_nonclosed_parts": []
+      }
+    },
+    {
+      "bay_id": 9,
+      "actual_receiver_tip_drone_x_m": -2.4199992370605514,
+      "actual_drone_reducer_face_x_m": -2.4200000762939453,
+      "positive_axial_contact_overlap_m": 8.392333938900265e-07,
+      "bridge": {
+        "label": "actual all-material interface bridge",
+        "box_m": [
+          [
+            "-243/100",
+            "-21/250",
+            "-21/250"
+          ],
+          [
+            "-241/100",
+            "21/250",
+            "21/250"
+          ]
+        ],
+        "shear": null,
+        "exact_triangle_tests": 0,
+        "hits": [],
+        "material_windings": [
+          {
+            "part": "receiver/new/head170-annulus/component/0",
+            "winding": 5.300924469105861e-17
+          },
+          {
+            "part": "socket/mating-reducer/closed-annulus/component/0",
+            "winding": 6.184411880623505e-17
+          }
+        ],
+        "overlapping_nonclosed_parts": []
+      }
+    }
+  ],
+  "limits": [
+    "Interface at actual seated archived poses only; whole service motion handled separately.",
+    "Axial contact overlap below10um is quantified, not pressure seal or force rating.",
+    "168mm square passage is conservative minimum, not entire nominal bore/flow capacity."
+  ]
+}

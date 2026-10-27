@@ -4,7 +4,7 @@
 
 Pioneer uses an original embedded GLB hull with an editable Blender source and a reproducible generator. The native and browser clients use its actual triangles for rendering, shadows, camera feeds and selection. Moving mining turrets remain separate engine components. Other ships, stations and cockpit geometry retain their existing Rust-generated geometry.
 
-The first Pioneer asset has seven material batches and 32,284 triangles. Its body measures 72 meters long, 38 meters wide and 18 meters high. This is a detailed exterior foundation, not final concept parity or a completed fleet. The walkable interior remains a separate scene; exterior openings, bridge/cockpit registration and physical systems need further work.
+See the [Pioneer asset record](../assets/ships/pioneer/README.md) for current geometry counts and model history. Its body measures 72 meters long, 38 meters wide and 18 meters high. This is a detailed exterior foundation, not final concept parity or a completed fleet. The walkable interior remains a separate scene; exterior openings, bridge/cockpit registration and physical systems need further work.
 
 - [Embedded model runtime](pioneer-model-runtime.md): supported GLB subset, loading limits, caching and rendering behavior.
 - [Pioneer editable model](../assets/ships/pioneer/README.md): source files, generation instructions, dimensions, hardpoints and known gaps.

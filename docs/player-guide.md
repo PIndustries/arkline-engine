@@ -364,10 +364,18 @@ SQLite's implementation, and build/packaging configuration are not themselves al
 
 ## Build identity and navigation
 
-The header and window title show the same `year.month.day.build` identity as
-`BUILD_VERSION` (for example, `26.10.9.1`). Increment the last component for each
-new packaged build on a day; start at 1 on a new date. Packaging reads this file
-and includes the original Arkline orbital icon.
+The header and window title show the `year.month.day.build` identity stored in
+`BUILD_VERSION` (for example, `26.10.9.1`). Allocate it with
+`python3 tools/build.py -- <cargo command>`. The wrapper uses the America/Chicago
+calendar date, increments the build number for each invocation that can produce
+binaries, and holds a local file lock until Cargo exits. The local macOS package
+scripts also stage the exact binaries and version while that lock is held. An
+ignored checkout-local high-watermark prevents reuse after `BUILD_VERSION` is
+reset; malformed identities or a clock earlier than the ledger stop allocation.
+Release archives use the committed version to keep their tag, source commit and
+package metadata aligned. Direct `cargo` commands bypass allocation; separate
+checkouts and hosts do not coordinate. The package includes the original Arkline
+orbital icon.
 
 Click a station, asteroid or visible ship through the cockpit to select it.
 The overview shows contextual actions. Clicking an asteroid selects that individual
@@ -456,7 +464,7 @@ ship-mounted turrets currently mine rather than fire combat weapons.
 
 ### Ship computer and delegated resource jobs
 
-The cockpit **AI** tab can perform one server-controlled mining haul on your own
+The editor **Mining** button and cockpit **Mining** tab open the server-controlled repeat mining routine on your own
 ship or an existing worker that explicitly granted fleet control. It uses both
 turrets and up to five mining drones, recalls them before return, then deposits
 confirmed ore into that worker's station storage. Watch a permitted worker on the

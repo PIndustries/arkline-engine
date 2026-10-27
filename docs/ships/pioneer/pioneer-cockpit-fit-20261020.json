@@ -1,0 +1,571 @@
+{
+  "schema": "arkline.pioneer-readonly-cockpit-fit/v1",
+  "source_repo": "/Users/thepherm/Documents/Codex/arkline-editor-reconstructed-20261020",
+  "audited_commit": "6fd5b2167af70ad391c68d54a7577bf0809354f3",
+  "source_glb": "assets/ships/pioneer/pioneer.glb",
+  "source_glb_sha256": "8125644f007537437942d34169e527c08ddd2dfaed575c874e2263ff2b7cb123",
+  "frame": "body metres: +X bow,+Y up,+Z starboard",
+  "measured": {
+    "hull_xyz_dimensions_m": [
+      72,
+      18,
+      38
+    ],
+    "central_cavity_rear_x_m": 33.650001525878906,
+    "front_glass_inner_x_m": 35.155,
+    "central_cavity_depth_to_glass_m": 1.505,
+    "cavity_roof_y_m": 2.88,
+    "cavity_floor_y_m": -0.82,
+    "pressure_hull_rear_wall_primitive": 0,
+    "pressure_hull_rear_wall_triangle_starts": [
+      31368,
+      31371
+    ],
+    "candidate_eye_rays_without_navigation_glass": {
+      "eye_m": [
+        33.22,
+        1,
+        3
+      ],
+      "fore_first_hit_m": [
+        33.65,
+        1,
+        3
+      ],
+      "fore_source_triangle_start": 31371,
+      "up_outer_hull_m": [
+        33.22,
+        4.4458,
+        3
+      ],
+      "down_outer_hull_m": [
+        33.22,
+        -4.4901,
+        3
+      ],
+      "port_cavity_wall_z_m": -7.4,
+      "starboard_cavity_wall_z_m": 7.4
+    }
+  },
+  "existing_registered": {
+    "seated_eye_m": [
+      34.22,
+      1,
+      3
+    ],
+    "standing_root_m": [
+      34.54,
+      -0.32,
+      3
+    ],
+    "flight_eye_m": [
+      34.1,
+      1,
+      3
+    ],
+    "crosswalk_x_m": [
+      33.7,
+      34.7
+    ],
+    "port_walkway_x_m": [
+      33.7,
+      34.5
+    ],
+    "floor_y_m": -0.32,
+    "capsule_radius_m": 0.3,
+    "capsule_height_m": 1.8
+  },
+  "limitations": [
+    "Read-only axis rays and source inspection; no mesh-volume, watertightness or engineering certification",
+    "Proposed dimensions are a bounded new interior design, not recovered canonical authored crew dimensions",
+    "No source edit/build/GUI/app input"
+  ],
+  "reference_followup": {
+    "rear_plane_x_m": 31.6,
+    "reason": "Earlier proposed32.4 rear plane leaves only0.3m aft of translated wallplateX32.7; insufficient0.6m avatar diameter.31.6 gives1.1m clear nominal aft aisle before wall thickness/details.",
+    "pressure_hull_axis_rays": [
+      {
+        "point_m": [
+          31.6,
+          1,
+          3
+        ],
+        "fore": [
+          [
+            2.05,
+            31371,
+            33.65
+          ]
+        ],
+        "aft": [
+          [
+            67.6,
+            19311,
+            -36.0
+          ]
+        ],
+        "up": [
+          [
+            3.9333,
+            30258,
+            4.9333
+          ]
+        ],
+        "down": [
+          [
+            5.9967,
+            30024,
+            -4.9967
+          ]
+        ],
+        "port": [
+          [
+            10.4,
+            30567,
+            -7.4
+          ],
+          [
+            15.1007,
+            30693,
+            -12.1007
+          ],
+          [
+            15.1067,
+            30093,
+            -12.1067
+          ]
+        ],
+        "starboard": [
+          [
+            4.4,
+            30582,
+            7.4
+          ],
+          [
+            9.1007,
+            30702,
+            12.1007
+          ],
+          [
+            9.1067,
+            30108,
+            12.1067
+          ]
+        ]
+      },
+      {
+        "point_m": [
+          31.6,
+          2.88,
+          -6.8
+        ],
+        "fore": [
+          [
+            2.0606,
+            31425,
+            33.6606
+          ]
+        ],
+        "aft": [
+          [
+            67.6,
+            19398,
+            -36.0
+          ]
+        ],
+        "up": [
+          [
+            2.0533,
+            30246,
+            4.9333
+          ]
+        ],
+        "down": [
+          [
+            7.8767,
+            30024,
+            -4.9967
+          ]
+        ],
+        "port": [
+          [
+            0.6106,
+            30639,
+            -7.4106
+          ],
+          [
+            5.2894,
+            30621,
+            -12.0894
+          ],
+          [
+            5.3067,
+            30093,
+            -12.1067
+          ]
+        ],
+        "starboard": [
+          [
+            14.2106,
+            30645,
+            7.4106
+          ],
+          [
+            18.8894,
+            30651,
+            12.0894
+          ],
+          [
+            18.9067,
+            30108,
+            12.1067
+          ]
+        ]
+      },
+      {
+        "point_m": [
+          31.6,
+          2.88,
+          5.8
+        ],
+        "fore": [
+          [
+            2.0606,
+            31425,
+            33.6606
+          ]
+        ],
+        "aft": [
+          [
+            67.6,
+            19500,
+            -36.0
+          ]
+        ],
+        "up": [
+          [
+            2.0533,
+            30261,
+            4.9333
+          ]
+        ],
+        "down": [
+          [
+            7.8767,
+            30024,
+            -4.9967
+          ]
+        ],
+        "port": [
+          [
+            13.2106,
+            30639,
+            -7.4106
+          ],
+          [
+            17.8894,
+            30621,
+            -12.0894
+          ],
+          [
+            17.9067,
+            30093,
+            -12.1067
+          ]
+        ],
+        "starboard": [
+          [
+            1.6106,
+            30645,
+            7.4106
+          ],
+          [
+            6.2894,
+            30651,
+            12.0894
+          ],
+          [
+            6.3067,
+            30108,
+            12.1067
+          ]
+        ]
+      },
+      {
+        "point_m": [
+          31.6,
+          -0.32,
+          -6.8
+        ],
+        "fore": [
+          [
+            2.05,
+            31368,
+            33.65
+          ]
+        ],
+        "aft": [
+          [
+            67.6,
+            19275,
+            -36.0
+          ]
+        ],
+        "up": [
+          [
+            5.2533,
+            30246,
+            4.9333
+          ]
+        ],
+        "down": [
+          [
+            4.6767,
+            30024,
+            -4.9967
+          ]
+        ],
+        "port": [
+          [
+            0.6,
+            30570,
+            -7.4
+          ],
+          [
+            5.3007,
+            30693,
+            -12.1007
+          ],
+          [
+            5.3067,
+            30093,
+            -12.1067
+          ]
+        ],
+        "starboard": [
+          [
+            14.2,
+            30579,
+            7.4
+          ],
+          [
+            18.9007,
+            30705,
+            12.1007
+          ],
+          [
+            18.9067,
+            30108,
+            12.1067
+          ]
+        ]
+      },
+      {
+        "point_m": [
+          31.6,
+          -0.32,
+          5.8
+        ],
+        "fore": [
+          [
+            2.05,
+            31371,
+            33.65
+          ]
+        ],
+        "aft": [
+          [
+            67.6,
+            19239,
+            -36.0
+          ]
+        ],
+        "up": [
+          [
+            5.2533,
+            30261,
+            4.9333
+          ]
+        ],
+        "down": [
+          [
+            4.6767,
+            30024,
+            -4.9967
+          ]
+        ],
+        "port": [
+          [
+            13.2,
+            30570,
+            -7.4
+          ],
+          [
+            17.9007,
+            30693,
+            -12.1007
+          ],
+          [
+            17.9067,
+            30093,
+            -12.1067
+          ]
+        ],
+        "starboard": [
+          [
+            1.6,
+            30579,
+            7.4
+          ],
+          [
+            6.3007,
+            30705,
+            12.1007
+          ],
+          [
+            6.3067,
+            30108,
+            12.1067
+          ]
+        ]
+      },
+      {
+        "point_m": [
+          32.1,
+          1,
+          3
+        ],
+        "fore": [
+          [
+            1.55,
+            31371,
+            33.65
+          ]
+        ],
+        "aft": [
+          [
+            68.1,
+            19311,
+            -36.0
+          ]
+        ],
+        "up": [
+          [
+            3.771,
+            31161,
+            4.771
+          ]
+        ],
+        "down": [
+          [
+            5.8664,
+            30927,
+            -4.8664
+          ]
+        ],
+        "port": [
+          [
+            10.4,
+            30567,
+            -7.4
+          ]
+        ],
+        "starboard": [
+          [
+            4.4,
+            30582,
+            7.4
+          ]
+        ]
+      }
+    ],
+    "status": "Measured candidate; exact shared geometry, cut bounds and path validation not implemented"
+  },
+  "initial_proposal_superseded": {
+    "pilot_station_delta_m": [
+      -1,
+      0,
+      0
+    ],
+    "seated_eye_m": [
+      33.22,
+      1,
+      3
+    ],
+    "standing_root_m": [
+      33.54,
+      -0.32,
+      3
+    ],
+    "bay_rear_plane_x_m": 32.4,
+    "supported_floor_xz_min_m": [
+      32.45,
+      -6.8
+    ],
+    "supported_floor_xz_max_m": [
+      34.9,
+      5.8
+    ],
+    "must_change_together": [
+      "chair geometry and stow",
+      "pilot joints and seat anchors",
+      "console geometry and cockpit_screen anchors",
+      "rear wall source clip",
+      "connector wall/roof termination and portal",
+      "bay shared floor/support/perimeter/camera collision",
+      "same derived ship and registered furniture in docked and space views"
+    ],
+    "validation_pending": [
+      "exact clip intersection and caps",
+      "capsule support/collision and full egress route",
+      "ray visibility/enclosure from translated eye",
+      "GPU same ship/camera continuity and material receipts"
+    ]
+  },
+  "proposed_not_authored": {
+    "pilot_station_delta_m": [
+      -1,
+      0,
+      0
+    ],
+    "seated_eye_m": [
+      33.22,
+      1,
+      3
+    ],
+    "standing_root_m": [
+      33.54,
+      -0.32,
+      3
+    ],
+    "bay_rear_plane_x_m": 31.6,
+    "supported_floor_xz_min_m": [
+      31.6,
+      -6.8
+    ],
+    "supported_floor_xz_max_m": [
+      34.9,
+      5.8
+    ],
+    "must_change_together": [
+      "chair geometry and stow",
+      "pilot joints and seat anchors",
+      "console geometry and cockpit_screen anchors",
+      "rear wall source clip",
+      "connector wall/roof termination and portal",
+      "bay shared floor/support/perimeter/camera collision",
+      "same derived ship and registered furniture in docked and space views",
+      "deck-fixed chair base/back-frame replaces implicit old rear-wall mounting; exact footprint and aft aisle must be validated"
+    ],
+    "validation_pending": [
+      "exact clip intersection and caps",
+      "capsule support/collision and full egress route",
+      "ray visibility/enclosure from translated eye",
+      "GPU same ship/camera continuity and material receipts"
+    ],
+    "nominal_clear_aft_aisle_to_translated_wallplate_m": 1.1,
+    "status": "Reference-informed measured candidate, not implemented or accepted",
+    "reason": "Initial rear plane32.4 left0.3m behind translated wallplate32.7, below0.6m capsule diameter; revision31.6 leaves1.1m.",
+    "chair_mount_note": "Existing wallplateX33.70..33.77 is mounted near old hullwall33.65.Whole station translation makes plateX32.70..32.77; deeper rearwall31.6 leaves it unmounted unless a declared deck base/back-frame is added."
+  }
+}

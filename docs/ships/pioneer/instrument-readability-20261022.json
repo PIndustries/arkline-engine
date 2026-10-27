@@ -1,0 +1,156 @@
+{
+  "scope": "All-five actual canonical runtime typography diagnostics, bounded UI fixes; fixture data only",
+  "production_base_git_revision": "c6c1f2b263372d5d1aef46571d00c4105fc57b59",
+  "capability": {
+    "registration_revision": 4,
+    "source_sha256": "8125644f007537437942d34169e527c08ddd2dfaed575c874e2263ff2b7cb123",
+    "version": 2
+  },
+  "measurements": [
+    {
+      "name": "central_speed",
+      "view": "seated actual App",
+      "slot": 3,
+      "before_em_px": 11.535155296325684,
+      "after_em_px": 15.468548774719238,
+      "clear_samples": 5,
+      "ink_clipped": false,
+      "elided": false
+    },
+    {
+      "name": "camera_state",
+      "view": "seated actual App",
+      "slot": 4,
+      "before_em_px": 1.987322211265564,
+      "after_em_px": 12.385458946228027,
+      "clear_samples": 5,
+      "ink_clipped": false,
+      "elided": false
+    },
+    {
+      "name": "radar_title",
+      "view": "seated actual App",
+      "slot": 5,
+      "before_em_px": 2.221334457397461,
+      "after_em_px": 8.579798698425293,
+      "clear_samples": 5,
+      "ink_clipped": false,
+      "elided": false
+    },
+    {
+      "name": "radar_range",
+      "view": "seated actual App",
+      "slot": 5,
+      "before_em_px": 2.2844440937042236,
+      "after_em_px": 8.671525955200195,
+      "clear_samples": 5,
+      "ink_clipped": false,
+      "elided": false
+    },
+    {
+      "name": "standing_map_authority",
+      "view": "standing actual HangarView",
+      "slot": 4,
+      "before_em_px": 3.363175868988037,
+      "after_em_px": 9.560858726501465,
+      "clear_samples": 5,
+      "ink_clipped": false,
+      "elided": false
+    },
+    {
+      "name": "standing_radar_title",
+      "view": "standing actual HangarView",
+      "slot": 5,
+      "before_em_px": 3.043325662612915,
+      "after_em_px": 11.827427864074707,
+      "clear_samples": 5,
+      "ink_clipped": false,
+      "elided": false
+    },
+    {
+      "name": "standing_radar_range",
+      "view": "standing actual HangarView",
+      "slot": 5,
+      "before_em_px": 3.2206642627716064,
+      "after_em_px": 12.226706504821777,
+      "clear_samples": 5,
+      "ink_clipped": false,
+      "elided": false
+    },
+    {
+      "name": "unchanged_missing_power",
+      "view": "seated actual App",
+      "slot": 2,
+      "before_em_px": 4.469484329223633,
+      "after_em_px": 4.469484329223633,
+      "clear_samples": 5,
+      "ink_clipped": false,
+      "elided": false
+    }
+  ],
+  "before_receipt_sha256": "e803ed7501eabb4b9d37109ffae2b3ee3fc40c2229a95ae3242a46e1ac056c9c",
+  "after_receipt_sha256": "062ea5318e8c65f5af432e8fa2ae821987162d60f73c64c3c5fae171b4c83191",
+  "before_directory": "/workspace/scratch/pioneer-five-instruments-before",
+  "after_directory": "/workspace/scratch/pioneer-five-instruments-final",
+  "unchanged_production_sources_sha256": {
+    "crates/arkline-protocol/src/pioneer_docked.rs": "746e85e54e81320df7417fbe7f3889bd0dbbeeb87b55a90b4253bd2411a86c45",
+    "apps/server/src/docked_traversal.rs": "3da7184f243053c03f2b6a1a3d4c775124e66dc64378a84ee31bed11cff74745",
+    "apps/client/src/pioneer_docked_scene.rs": "dd2921a51f805c00a09a6c26506df0d9f8914933bb14503bf531f7a0230d2bbd",
+    "apps/client/src/cockpit_computer.rs": "853b803ee19e9505fefa979940aac0b0476793f3409d94ac2e43d6413f4c4dfd",
+    "apps/client/src/power_instrument.rs": "f41b87d3661184d2eaffcd63bc045a3d5c8b927770415c9ab981e8b1a1466152",
+    "apps/client/src/navigation_instrument.rs": "59c877fa8e1ec8f279cbe4ae9e2a85e2987b120cce92cbb7fff47792e27afb7d"
+  },
+  "fixed_control_rectangles_and_explicit_ids_preserved": true,
+  "automatic_id_followup": "Removed compact guidance reserves its one widget-ID slot. Capture preceded ID-only followup; affected control-ID and real-glass hover tests verify final source. No visual layout change from reservation.",
+  "remaining_limits": [
+    "Radar/secondary labels below 12 px",
+    "Standing lower labels off viewport",
+    "Power display and footer unchanged",
+    "Empty forward field/housing/concept fidelity unresolved",
+    "No full-client suite rerun or remote CI lookup"
+  ],
+  "tests": {
+    "map_text": {
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    },
+    "compact_layout": {
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0
+    },
+    "physical_input": {
+      "passed": 14,
+      "failed": 0,
+      "ignored": 1
+    },
+    "registered_scene": {
+      "passed": 12,
+      "failed": 0,
+      "ignored": 3
+    },
+    "native_five_instrument": {
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    "control_id_followup": {
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    "real_glass_hover_followup": {
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    }
+  },
+  "final_source_files_sha256": {
+    "apps/client/src/lib.rs": "d2b29ff4ccc9312f0e2021a5747933789275043e4865f801ba5b4f402e0d1335",
+    "apps/client/src/cockpit_maps.rs": "a2e30d43787ce34d32e3bc8d90c443eb33fb4f9a02b83af4fa905a6ecafb3d73",
+    "apps/client/src/cockpit_radar.rs": "2ef3fcce5db9c2d6705e059a080b3162924b0db862af4651db77ea4aba8f90b0",
+    "apps/client/src/cockpit_computer_integration_tests.rs": "67d34a35e0a41447eccc185fa21a8affa182727a840ce06478a8826c10a04a33",
+    "apps/client/src/pioneer_docked_gpu_tests.rs": "08ee7a0828953a8a069610d6951347a28987e9883edd15748f260bb345905951"
+  }
+}

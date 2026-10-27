@@ -1,0 +1,41 @@
+{
+  "asset_sha256": "f8f8cc65772c678a46606c27abe205d62c4e6ab37c350f79a0f3a4cdc0c6f402",
+  "build": "26.10.15.7013",
+  "dynamic_turret_count": 2,
+  "edited_material_pixels": {
+    "drive": {
+      "color": 321,
+      "emission_zero": 321
+    },
+    "panel": {
+      "color": 60,
+      "emission_zero": 60
+    },
+    "window": {
+      "color": 3244,
+      "emission_zero": 3244
+    }
+  },
+  "gl_version": "4.5 (Compatibility Profile) Mesa 25.0.7-2+deb13u1",
+  "idle_active_changed_pixels": 699,
+  "illumination_changed_pixels": 2809,
+  "limitations": [
+    "actual engine offscreen EGL capture; no OS interaction or TCP two-client journey",
+    "diagnostic receiver crate uses the existing SurfaceProp path in this capture fixture",
+    "no model adoption or release publication"
+  ],
+  "observer_same_snapshot_equal": true,
+  "off_idle_changed_pixels": 4983,
+  "paused_feed_invalidated": true,
+  "paused_frame_equal": true,
+  "post_graph_off_gate": true,
+  "receiver_changed_pixels": 128,
+  "renderer": "llvmpipe (LLVM 19.1.7, 256 bits)",
+  "step_100_ms_changed": true,
+  "step_50_ms_same_pulse": true,
+  "vendor": "Mesa",
+  "viewport": [
+    960,
+    640
+  ]
+}

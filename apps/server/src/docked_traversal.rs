@@ -1,0 +1,1664 @@
+//! Negotiated, owned-vessel docked traversal in one canonical station-meter frame.
+use super::*;
+use arkline_protocol::pioneer_docked as geometry;
+use std::sync::{Arc, Mutex, OnceLock};
+
+const CONTROL_RANGE_M: f64 = 3.0;
+const SEAT_RANGE_M: f64 = 1.0;
+const STEP_M: f64 = 0.24;
+const LIFT_SPEED_MPS: f64 = 1.0;
+const LIFT_TARGET_EPSILON_M: f64 = 1.0e-8;
+const EPSILON_M: f64 = 0.015;
+
+type CachedGeometry = Option<(String, Arc<PioneerDockedGeometry>)>;
+fn registered(document: Option<&RoomLayoutDocument>) -> Result<Arc<PioneerDockedGeometry>> {
+    let fallback = default_pioneer_room_layout();
+    let document = document.unwrap_or(&fallback);
+    let hash = docked_layout_sha256(document);
+    static CACHE: OnceLock<Mutex<CachedGeometry>> = OnceLock::new();
+    let mut cache = CACHE
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .map_err(|_| anyhow::anyhow!("docked geometry cache unavailable"))?;
+    if let Some((current, geometry)) = &*cache {
+        if current == &hash {
+            return Ok(geometry.clone());
+        }
+    }
+    let geometry = Arc::new(geometry::registered_geometry(document).map_err(anyhow::Error::msg)?);
+    *cache = Some((hash, geometry.clone()));
+    Ok(geometry)
+}
+fn binding(
+    w: &World,
+    name: &str,
+    document: Option<&RoomLayoutDocument>,
+) -> Result<DockedTraversalBinding> {
+    let account = w.accounts.get(name).context("owned account missing")?;
+    let host = account
+        .vessel_id(ShipClass::Pioneer)
+        .context("owned Pioneer missing")?;
+    let fallback = default_pioneer_room_layout();
+    Ok(docked_traversal_binding(
+        host.into(),
+        document.unwrap_or(&fallback),
+        w.scene_layout.definition().fleet_layout,
+        account.fleet_hangar,
+    ))
+}
+fn initial_actuators(binding: DockedTraversalBinding, now: u64) -> Result<DockedVesselActuators> {
+    let pose = docked_binding_pose(&binding).map_err(anyhow::Error::msg)?;
+    let lift = geometry::lift_geometry(pose);
+    Ok(DockedVesselActuators {
+        hatches: None,
+        binding,
+        inner_hatch_open: false,
+        outer_hatch_open: false,
+        lift: DockedLiftState {
+            floor_station_m: lift.ship_floor_m,
+            target: DockedLiftStop::Ship,
+            moving: false,
+            updated_at_ms: now,
+        },
+        service_power_available: true,
+    })
+}
+// Canonical traversal feet are registration-local: the renderer carries this
+// rigid frame with the owned vessel in flight, rather than following station space.
+fn active_owned_job(w: &World, name: &str) -> bool {
+    w.resource_jobs
+        .get(name)
+        .is_some_and(|j| !j.view.phase.is_terminal() && j.view.controller == name)
+}
+fn interior_support(support: DockedSupport) -> bool {
+    matches!(
+        support,
+        DockedSupport::Deck1
+            | DockedSupport::Deck2
+            | DockedSupport::Cockpit
+            | DockedSupport::Connector
+            | DockedSupport::CoreStairs
+    )
+}
+fn projection(state: DockedTraversalState, now: u64) -> StationAvatar {
+    let point = if state.binding.fleet_hangar {
+        fleet_berth_pose(state.binding.fleet_layout, ShipClass::Pioneer).boarding_point
+    } else {
+        hangar_layout(ShipClass::Pioneer).boarding_point
+    };
+    StationAvatar {
+        sprinting: false,
+        docked_traversal: Some(state),
+        onboard_interior: false,
+        interior_deck: 1,
+        jump_started_ms: None,
+        seated: false,
+        position: point,
+        heading: 0.0,
+        moving: false,
+        updated_at_ms: now,
+    }
+}
+fn owned_canonical<'a>(
+    pilot: &'a Pilot,
+    owned_host: Option<&str>,
+) -> Option<&'a DockedTraversalState> {
+    let state = pilot
+        .view
+        .station_avatar
+        .as_ref()?
+        .docked_traversal
+        .as_ref()?;
+    (pilot.view.ship_class == ShipClass::Pioneer
+        && owned_host == Some(state.binding.host_vessel_id.as_str())
+        && state.actuators.binding == state.binding
+        && docked_traversal_deck(state).is_ok())
+    .then_some(state)
+}
+
+/// Equipment access uses the actual bound deck, never the stopped legacy projection.
+/// Stairs, cockpit and boarding equipment do not grant deck-room access.
+pub(super) fn interior_position(pilot: &Pilot, owned_host: Option<&str>) -> Option<(u8, [f64; 3])> {
+    if pilot.view.ship_class != ShipClass::Pioneer {
+        return None;
+    }
+    let avatar = pilot.view.station_avatar.as_ref()?;
+    if avatar.docked_traversal.is_some() {
+        let state = owned_canonical(pilot, owned_host)?;
+        let deck = match state.support {
+            DockedSupport::Deck1 => 1,
+            DockedSupport::Deck2 => 2,
+            _ => return None,
+        };
+        let pose = docked_binding_pose(&state.binding).ok()?;
+        let body = geometry::station_to_body(pose, state.feet_m);
+        Some((
+            deck,
+            [
+                body[0] + 12.0,
+                body[1] - geometry::deck_floor_y(deck)?,
+                body[2] + 7.0,
+            ],
+        ))
+    } else {
+        avatar
+            .onboard_interior
+            .then_some((avatar.interior_deck, avatar.position))
+    }
+}
+
+/// Being inside the registered vessel is distinct from standing on its station lift.
+pub(super) fn aboard(pilot: &Pilot, owned_host: Option<&str>) -> bool {
+    if pilot.view.ship_class != ShipClass::Pioneer {
+        return false;
+    }
+    let Some(avatar) = pilot.view.station_avatar.as_ref() else {
+        return true;
+    };
+    if avatar.docked_traversal.is_some() {
+        owned_canonical(pilot, owned_host).is_some_and(|state| {
+            matches!(
+                state.support,
+                DockedSupport::Deck1
+                    | DockedSupport::Deck2
+                    | DockedSupport::Cockpit
+                    | DockedSupport::Connector
+                    | DockedSupport::CoreStairs
+            )
+        })
+    } else {
+        avatar.onboard_interior
+    }
+}
+
+/// Explicit editor-only placement uses the same registration and collision queries
+/// as gameplay. It never advances the clock or changes vessel modules/actuators.
+pub(super) fn editor_place(
+    world: &mut World,
+    name: &str,
+    scene: EditorSceneState,
+    now: u64,
+    document: &RoomLayoutDocument,
+) -> Result<()> {
+    let pilot = world.pilots.get(name).context("editor pilot missing")?;
+    ensure!(
+        pilot.view.location == Location::Docked && pilot.view.ship_class == ShipClass::Pioneer,
+        "canonical editor placement requires your docked Pioneer"
+    );
+    ensure!(
+        world.accounts[name].docked_traversal_compatible,
+        "all sessions must support canonical traversal placement"
+    );
+    if scene == EditorSceneState::Cockpit {
+        // Explicit sandbox placement may bypass walking, but cannot erase the
+        // equipment interlock and thereby allow an unsafe subsequent undock.
+        can_undock(world, name)?;
+        let pilot = world.pilots.get_mut(name).unwrap();
+        pilot.view.station_avatar = None;
+        pilot.walk_input = None;
+        pilot.controls = None;
+        return Ok(());
+    }
+    let expected = binding(world, name, Some(document))?;
+    let pose = docked_binding_pose(&expected).map_err(anyhow::Error::msg)?;
+    let static_geometry = registered(Some(document))?;
+    let static_geometry =
+        cockpit_mechanisms::with_collision(world, name, &static_geometry, now, Some(document));
+    let mut actuator = world.accounts[name]
+        .docked_actuators
+        .get(&expected.host_vessel_id)
+        .cloned()
+        .unwrap_or(initial_actuators(expected.clone(), now)?);
+    if actuator.binding != expected {
+        ensure!(
+            actuator.binding.host_vessel_id == expected.host_vessel_id
+                && actuator.binding.registration_revision == expected.registration_revision
+                && actuator.binding.fleet_layout == expected.fleet_layout
+                && actuator.binding.fleet_hangar == expected.fleet_hangar,
+            "boarding equipment registration changed; reconnect safely"
+        );
+        // A validated live room edit does not change hatch/lift registration.
+        actuator.binding = expected.clone();
+    }
+    let (feet_m, desired_support) = match scene {
+        EditorSceneState::InteriorDeck1 | EditorSceneState::InteriorDeck2 => {
+            let deck = if scene == EditorSceneState::InteriorDeck1 {
+                1
+            } else {
+                2
+            };
+            let body = geometry::deck_to_body(deck, [12.0, 0.0, 7.0])
+                .context("registered editor deck missing")?;
+            (
+                geometry::body_to_station(pose, body),
+                if deck == 1 {
+                    DockedSupport::Deck1
+                } else {
+                    DockedSupport::Deck2
+                },
+            )
+        }
+        EditorSceneState::StationHangar => (
+            geometry::lift_call_anchors(pose).station_station_m,
+            DockedSupport::Station,
+        ),
+        EditorSceneState::Cockpit => unreachable!(),
+    };
+    let mut state = DockedTraversalState {
+        sprinting: false,
+        version: DOCKED_TRAVERSAL_VERSION,
+        binding: expected.clone(),
+        feet_m,
+        heading: pose.yaw,
+        support: desired_support,
+        surface_id: String::new(),
+        moving: false,
+        grounded: true,
+        vertical_velocity_mps: 0.0,
+        updated_at_ms: now,
+        seat_transition: None,
+        actuators: actuator.clone(),
+    };
+    let dynamic_geometry = geometry::dynamic_geometry(
+        pose,
+        dynamic(&actuator, room_open(world, name), &state, now),
+    )
+    .map_err(anyhow::Error::msg)?;
+    let hit = support(
+        &static_geometry,
+        &dynamic_geometry,
+        pose,
+        &state,
+        feet_m,
+        EPSILON_M,
+    )
+    .context("editor landing has no registered support")?;
+    ensure!(
+        hit.support == desired_support
+            && (hit.height_m - feet_m[1]).abs() <= EPSILON_M
+            && clear(
+                &static_geometry,
+                &dynamic_geometry,
+                pose,
+                &state,
+                feet_m,
+                station_edge_inset(world.scene_layout)
+            ),
+        "editor landing is blocked by the current registered geometry"
+    );
+    state.surface_id = hit.surface_id;
+    let pilot = world.pilots.get_mut(name).unwrap();
+    pilot.view.station_avatar = Some(projection(state, now));
+    pilot.walk_input = None;
+    pilot.controls = None;
+    world
+        .accounts
+        .get_mut(name)
+        .unwrap()
+        .docked_actuators
+        .insert(expected.host_vessel_id, actuator);
+    Ok(())
+}
+
+pub(super) fn stop(pilot: &mut Pilot) {
+    pilot.walk_input = None;
+    if let Some(state) = pilot
+        .view
+        .station_avatar
+        .as_mut()
+        .and_then(|avatar| avatar.docked_traversal.as_mut())
+    {
+        state.moving = false;
+        state.sprinting = false;
+        state.vertical_velocity_mps = 0.0;
+        // A disconnected pilot remains at exactly the same feet position. Gravity
+        // can settle an airborne capsule on a later authoritative tick.
+        state.seat_transition = None;
+    }
+}
+pub(super) fn stop_lifts(w: &mut World, now: u64) {
+    for account in w.accounts.values_mut() {
+        for actuator in account.docked_actuators.values_mut() {
+            actuator.lift.moving = false;
+            actuator.lift.updated_at_ms = now;
+            if let Some(hatches) = &mut actuator.hatches {
+                for hatch in hatches {
+                    hatch.moving = false;
+                    hatch.blocked = hatch.fraction != f64::from(hatch.target_open);
+                    hatch.updated_at_ms = now;
+                }
+            }
+        }
+    }
+    refresh_actuator_views(w);
+}
+fn refresh_actuator_views(w: &mut World) {
+    for (name, pilot) in &mut w.pilots {
+        if let Some(state) = pilot
+            .view
+            .station_avatar
+            .as_mut()
+            .and_then(|avatar| avatar.docked_traversal.as_mut())
+        {
+            if let Some(actuator) = w
+                .accounts
+                .get(name)
+                .and_then(|account| account.docked_actuators.get(&state.binding.host_vessel_id))
+            {
+                state.actuators = actuator.clone();
+            }
+        }
+    }
+}
+pub(super) fn legacy_recovery(w: &mut World, name: &str, now: u64) {
+    let Some(pilot) = w.pilots.get_mut(name) else {
+        return;
+    };
+    let Some(mut state) = pilot
+        .view
+        .station_avatar
+        .as_ref()
+        .and_then(|avatar| avatar.docked_traversal.clone())
+    else {
+        return;
+    };
+    state.moving = false;
+    state.sprinting = false;
+    pilot.view.station_avatar = Some(projection(state, now));
+    pilot.view.station_avatar.as_mut().unwrap().docked_traversal = None;
+    pilot.walk_input = None;
+    if let Some(account) = w.accounts.get_mut(name) {
+        for actuator in account.docked_actuators.values_mut() {
+            // Explicit authenticated compatibility recovery neutralizes boarding
+            // equipment for a client that cannot represent its physical path.
+            if let Ok(pose) = docked_binding_pose(&actuator.binding) {
+                actuator.inner_hatch_open = false;
+                actuator.outer_hatch_open = false;
+                actuator.hatches = None;
+                actuator.lift.floor_station_m = geometry::lift_geometry(pose).ship_floor_m;
+                actuator.lift.target = DockedLiftStop::Ship;
+                actuator.lift.moving = false;
+                actuator.lift.updated_at_ms = now;
+            }
+        }
+    }
+}
+fn dynamic(
+    actuator: &DockedVesselActuators,
+    room_open: bool,
+    state: &DockedTraversalState,
+    now: u64,
+) -> geometry::PioneerDockedActuators {
+    geometry::PioneerDockedActuators {
+        hatch_fractions: Some(actuator.hatch_fractions()),
+        room_door_open: room_open,
+        inner_hatch_open: actuator.inner_hatch_open,
+        outer_hatch_open: actuator.outer_hatch_open,
+        lift_floor_station_m: actuator.lift.floor_station_m,
+        chair_fold: state
+            .seat_transition
+            .as_ref()
+            .map_or(1.0, |phase| phase.chair_fold(now)),
+    }
+}
+fn near(a: [f64; 3], b: [f64; 3], range: f64) -> bool {
+    flight::distance(a, b) <= range
+}
+fn room_open(w: &World, name: &str) -> bool {
+    w.accounts[name]
+        .pioneer_room
+        .as_ref()
+        .is_none_or(|room| room.door_open)
+}
+fn station_clear(binding: &DockedTraversalBinding, feet: [f64; 3]) -> bool {
+    if !feet.iter().all(|v| v.is_finite()) || feet[1] < -EPSILON_M {
+        return false;
+    }
+    let layout = if binding.fleet_hangar {
+        fleet_hangar_layout_for(binding.fleet_layout)
+    } else {
+        hangar_layout(ShipClass::Pioneer)
+    };
+    if feet[0].abs() > layout.half_length - STATION_AVATAR_RADIUS_M
+        || feet[2].abs() > layout.half_width - STATION_AVATAR_RADIUS_M
+    {
+        return false;
+    }
+    if binding.fleet_hangar {
+        if binding.fleet_layout == FleetLayoutRevision::LinearV1 {
+            if feet[2] > 3.0 || !fleet_hull_clear(binding.fleet_layout, feet) {
+                return false;
+            }
+        } else if !fleet_walkable(binding.fleet_layout, feet) {
+            return false;
+        }
+    } else {
+        let spec = ShipClass::Pioneer.spec();
+        if feet[0].abs() < spec.length_m / 2.0 + STATION_AVATAR_RADIUS_M
+            && feet[2].abs() < spec.width_m / 2.0 + STATION_AVATAR_RADIUS_M
+        {
+            return false;
+        }
+    }
+    let obstacles = if binding.fleet_hangar {
+        fleet_station_obstacles()
+    } else {
+        station_obstacles(ShipClass::Pioneer)
+    };
+    !obstacles.iter().any(|obstacle| {
+        let r = STATION_AVATAR_RADIUS_M;
+        feet[0] > obstacle.min[0] - r
+            && feet[0] < obstacle.max[0] + r
+            && feet[2] > obstacle.min[2] - r
+            && feet[2] < obstacle.max[2] + r
+            && feet[1] + AVATAR_HEIGHT_M > obstacle.min[1]
+            && feet[1] < obstacle.max[1]
+    })
+}
+fn support(
+    static_geometry: &PioneerDockedGeometry,
+    dynamic_geometry: &PioneerDockedGeometry,
+    pose: PioneerDockedPose,
+    state: &DockedTraversalState,
+    feet: [f64; 3],
+    max_step: f64,
+) -> Option<geometry::PioneerDockedSupportHit> {
+    if let Some(hit) = geometry::support_at_station(
+        static_geometry,
+        dynamic_geometry,
+        pose,
+        feet,
+        Some(state.support),
+        max_step,
+    ) {
+        return Some(hit);
+    }
+    if feet[1] >= -max_step && feet[1] <= max_step && station_clear(&state.binding, feet) {
+        return Some(geometry::PioneerDockedSupportHit {
+            support: DockedSupport::Station,
+            surface_id: "station.floor".into(),
+            height_m: 0.0,
+        });
+    }
+    None
+}
+/// Legacy worlds retain their original bounds. DockingV1's rail projects inward
+/// from those bounds, so its walking capsule must stop before the inner face.
+fn station_edge_inset(layout: SceneLayoutRevision) -> f64 {
+    if layout == SceneLayoutRevision::DockingV1 {
+        DOCKING_APRON_RAIL_HALF_WIDTH_M
+    } else {
+        0.0
+    }
+}
+fn station_edge_clear(feet: [f64; 3], inset: f64) -> bool {
+    if inset == 0.0 {
+        return true;
+    }
+    let layout = hangar_layout(ShipClass::Pioneer);
+    feet[0].abs() <= layout.half_length - STATION_AVATAR_RADIUS_M - inset
+        && feet[2].abs() <= layout.half_width - STATION_AVATAR_RADIUS_M - inset
+}
+fn clear(
+    static_geometry: &PioneerDockedGeometry,
+    dynamic_geometry: &PioneerDockedGeometry,
+    pose: PioneerDockedPose,
+    state: &DockedTraversalState,
+    feet: [f64; 3],
+    edge_inset: f64,
+) -> bool {
+    if !station_edge_clear(feet, edge_inset) {
+        return false;
+    }
+    // Only explicit registered supports/approaches override the legacy broad
+    // hull exclusion. Other ships and the rest of station walking retain it.
+    let registered = geometry::support_at_station(
+        static_geometry,
+        dynamic_geometry,
+        pose,
+        feet,
+        Some(state.support),
+        1.5,
+    )
+    .is_some_and(|hit| {
+        hit.support != DockedSupport::Station
+            || geometry::is_registered_station_approach(pose, feet)
+    });
+    if registered {
+        geometry::capsule_clear_station(static_geometry, dynamic_geometry, pose, feet)
+    } else {
+        station_clear(&state.binding, feet)
+    }
+}
+/// Check the carried capsule against the actual geometry of the proposed lift
+/// step, including endpoint gates that become solid when the platform departs.
+fn lift_step_clear(
+    static_geometry: &PioneerDockedGeometry,
+    pose: PioneerDockedPose,
+    state: &DockedTraversalState,
+    actuator: &DockedVesselActuators,
+    room_open: bool,
+    next_step: (f64, u64),
+    edge_inset: f64,
+) -> Result<bool> {
+    let (next_floor, now) = next_step;
+    let mut proposed = actuator.clone();
+    proposed.lift.floor_station_m = next_floor;
+    let next_geometry = geometry::dynamic_geometry(pose, dynamic(&proposed, room_open, state, now))
+        .map_err(anyhow::Error::msg)?;
+    let mut feet = state.feet_m;
+    if state.grounded && state.support == DockedSupport::BoardingLift {
+        feet[1] += next_floor - actuator.lift.floor_station_m;
+    }
+    Ok(clear(
+        static_geometry,
+        &next_geometry,
+        pose,
+        state,
+        feet,
+        edge_inset,
+    ))
+}
+
+pub(super) fn can_undock(w: &World, name: &str) -> Result<()> {
+    if let Some(account) = w.accounts.get(name) {
+        if let Some(host) = account.vessel_id(ShipClass::Pioneer) {
+            if let Some(actuator) = account.docked_actuators.get(host) {
+                let pose = docked_binding_pose(&actuator.binding).map_err(anyhow::Error::msg)?;
+                ensure!(
+                    actuator.hatches_closed()
+                        && !actuator.lift.moving
+                        && (actuator.lift.floor_station_m
+                            - geometry::lift_geometry(pose).ship_floor_m)
+                            .abs()
+                            <= EPSILON_M,
+                    "close both boarding hatches and stow the boarding lift before piloting"
+                );
+            }
+        }
+    }
+    Ok(())
+}
+pub(super) fn execute(
+    w: &mut World,
+    name: &str,
+    request: DockedTraversalRequest,
+    now: u64,
+    document: Option<&RoomLayoutDocument>,
+) -> Result<()> {
+    let pilot = w.pilots.get(name).context("pilot missing")?;
+    ensure!(
+        pilot.view.ship_class == ShipClass::Pioneer
+            && (pilot.view.location == Location::Docked
+                || active_owned_job(w, name)
+                || carrier_inventory::world::enclosed_crew_during_deployment(w, name)
+                || pilot
+                    .view
+                    .station_avatar
+                    .as_ref()
+                    .is_some_and(|a| a.docked_traversal.is_some())),
+        "pilot-seat exit in space requires your active owned Pioneer routine"
+    );
+    ensure!(
+        w.accounts[name].docked_traversal_compatible,
+        "all sessions must support docked traversal v2"
+    );
+    ensure!(
+        !w.remote_controls.contains_key(name)
+            && !w.remote_controls.values().any(|worker| worker == name),
+        "end remote control before leaving the pilot seat"
+    );
+    let automatic = active_owned_job(w, name)
+        || carrier_inventory::world::enclosed_crew_during_deployment(w, name);
+    ensure!(
+        w.resource_jobs
+            .get(name)
+            .is_none_or(|job| job.view.phase.is_terminal())
+            || automatic,
+        "only the pilot's own routine permits interior traversal"
+    );
+    let enclosed = pilot.view.location != Location::Docked || automatic;
+    if enclosed {
+        ensure!(
+            !matches!(
+                request,
+                DockedTraversalRequest::SetHatch { .. } | DockedTraversalRequest::CallLift { .. }
+            ),
+            "boarding hatches and lift are locked during spaceflight or automated work"
+        );
+        can_undock(w, name)?;
+    }
+    let expected = binding(w, name, document)?;
+    ensure!(
+        request.binding() == &expected,
+        "docked traversal vessel, registration, layout or berth binding changed"
+    );
+    let pose = docked_binding_pose(&expected).map_err(anyhow::Error::msg)?;
+    let static_geometry = registered(document)?;
+    let static_geometry =
+        cockpit_mechanisms::with_collision(w, name, &static_geometry, now, document);
+    let existing = pilot
+        .view
+        .station_avatar
+        .as_ref()
+        .and_then(|avatar| avatar.docked_traversal.clone());
+    let mut actuator = w.accounts[name]
+        .docked_actuators
+        .get(&expected.host_vessel_id)
+        .cloned()
+        .unwrap_or(initial_actuators(expected.clone(), now)?);
+    if actuator.binding != expected && existing.is_none() {
+        let old_pose = docked_binding_pose(&actuator.binding).map_err(anyhow::Error::msg)?;
+        ensure!(
+            actuator.hatches_closed()
+                && !actuator.lift.moving
+                && (actuator.lift.floor_station_m - geometry::lift_geometry(old_pose).ship_floor_m)
+                    .abs()
+                    <= EPSILON_M,
+            "close and stow boarding equipment before changing its registration"
+        );
+        let service_power_available = actuator.service_power_available;
+        actuator = initial_actuators(expected.clone(), now)?;
+        actuator.service_power_available = service_power_available;
+    }
+    ensure!(
+        actuator.binding == expected,
+        "boarding equipment belongs to an older registration; reconnect safely"
+    );
+    if matches!(request, DockedTraversalRequest::LeaveSeat { .. }) {
+        ensure!(
+            pilot.view.station_avatar.is_none(),
+            "return aboard before leaving the pilot seat"
+        );
+        ensure!(
+            automatic
+                || pilot.view.flight.as_ref().is_none_or(|flight| matches!(
+                    flight.mode,
+                    NavigationMode::Stop | NavigationMode::Manual
+                ) && flight
+                    .velocity
+                    .iter()
+                    .all(|v| v.abs() < 0.001)),
+            "stop vessel automation before leaving the pilot seat"
+        );
+        let anchor = geometry::seat_anchors(pose);
+        let state = DockedTraversalState {
+            sprinting: false,
+            version: DOCKED_TRAVERSAL_VERSION,
+            binding: expected.clone(),
+            feet_m: anchor.root_station_m,
+            heading: anchor.heading,
+            support: DockedSupport::Cockpit,
+            surface_id: "cockpit.floor".into(),
+            moving: false,
+            grounded: true,
+            vertical_velocity_mps: 0.0,
+            updated_at_ms: now,
+            seat_transition: Some(DockedSeatTransition {
+                phase: DockedSeatPhase::Leaving,
+                started_at_ms: now,
+                ends_at_ms: now.saturating_add(DOCKED_SEAT_TRANSITION_MS),
+            }),
+            actuators: actuator.clone(),
+        };
+        let pilot = w.pilots.get_mut(name).unwrap();
+        pilot.controls = None;
+        pilot.walk_input = None;
+        pilot.view.station_avatar = Some(projection(state, now));
+    } else {
+        let mut state =
+            existing.context("leave the pilot seat before docked traversal commands")?;
+        ensure!(
+            state.binding == expected,
+            "active traversal binding changed"
+        );
+        let in_transition = state.seat_transition.is_some();
+        if let DockedTraversalRequest::Walk {
+            forward,
+            strafe,
+            turn,
+            sprint,
+            ..
+        } = &request
+        {
+            ensure!(
+                [*forward, *strafe, *turn]
+                    .iter()
+                    .all(|value| value.is_finite() && value.abs() <= 1.0),
+                "walk inputs must be finite within -1 through 1"
+            );
+            let moving = *forward != 0.0 || *strafe != 0.0 || *turn != 0.0;
+            ensure!(
+                !in_transition || !moving,
+                "finish the pilot-seat transition before walking"
+            );
+            state.moving = moving;
+            state.sprinting = *sprint && (*forward != 0.0 || *strafe != 0.0);
+            let pilot = w.pilots.get_mut(name).unwrap();
+            pilot.walk_input = moving.then_some(station::WalkInput {
+                forward: *forward,
+                strafe: *strafe,
+                turn: *turn,
+                sprint: state.sprinting,
+                accepted_ms: now,
+            });
+        } else {
+            ensure!(!in_transition, "finish the pilot-seat transition first");
+            ensure!(state.grounded, "land before operating docked equipment");
+            w.pilots.get_mut(name).unwrap().walk_input = None;
+            state.moving = false;
+            state.sprinting = false;
+            match request {
+                DockedTraversalRequest::TakeSeat { .. } => {
+                    ensure!(
+                        near(
+                            state.feet_m,
+                            geometry::seat_anchors(pose).root_station_m,
+                            SEAT_RANGE_M
+                        ),
+                        "stand at your pilot seat before reseating"
+                    );
+                    can_undock(w, name)?;
+                    state.seat_transition = Some(DockedSeatTransition {
+                        phase: DockedSeatPhase::Entering,
+                        started_at_ms: now,
+                        ends_at_ms: now.saturating_add(DOCKED_SEAT_TRANSITION_MS),
+                    });
+                }
+                DockedTraversalRequest::Jump { .. } => {
+                    ensure!(
+                        state.support != DockedSupport::BoardingLift || !actuator.lift.moving,
+                        "do not jump from a moving boarding lift"
+                    );
+                    state.grounded = false;
+                    state.vertical_velocity_mps = STATION_JUMP_SPEED_MPS;
+                }
+                DockedTraversalRequest::SetHatch { hatch, open, .. } => {
+                    let anchors = geometry::hatch_anchors(pose);
+                    let (inside, outside, other_open, geometry_hatch) = match hatch {
+                        DockedHatch::Inner => (
+                            anchors.inner_inside_station_m,
+                            anchors.inner_outside_station_m,
+                            !actuator.hatch_closed(1),
+                            geometry::PioneerDockedHatch::Inner,
+                        ),
+                        DockedHatch::Outer => (
+                            anchors.outer_inside_station_m,
+                            anchors.outer_outside_station_m,
+                            !actuator.hatch_closed(0),
+                            geometry::PioneerDockedHatch::Outer,
+                        ),
+                    };
+                    ensure!(
+                        near(state.feet_m, inside, CONTROL_RANGE_M)
+                            || near(state.feet_m, outside, CONTROL_RANGE_M),
+                        "walk to this hatch control first"
+                    );
+                    if open {
+                        ensure!(!other_open, "close the other boarding hatch first");
+                        if hatch == DockedHatch::Outer {
+                            ensure!(!actuator.lift.moving && (actuator.lift.floor_station_m - geometry::lift_geometry(pose).ship_floor_m).abs() <= EPSILON_M, "call and stop the boarding lift at ship level before opening the outer hatch");
+                        }
+                    } else {
+                        let occupied = w
+                            .pilots
+                            .values()
+                            .filter_map(|pilot| {
+                                pilot
+                                    .view
+                                    .station_avatar
+                                    .as_ref()?
+                                    .docked_traversal
+                                    .as_ref()
+                            })
+                            .filter(|occupant| {
+                                occupant.binding.host_vessel_id == expected.host_vessel_id
+                            })
+                            .any(|occupant| {
+                                geometry::hatch_occupied(pose, geometry_hatch, occupant.feet_m)
+                            });
+                        ensure!(!occupied, "boarding hatch doorway is occupied");
+                    }
+                    ensure!(
+                        actuator.service_power_available,
+                        "station docking-service power unavailable; hatch held safely"
+                    );
+                    let index = usize::from(hatch == DockedHatch::Outer);
+                    let fractions = actuator.hatch_fractions();
+                    ensure!(
+                        !hatch_sweep_occupied(
+                            w,
+                            &expected,
+                            pose,
+                            geometry_hatch,
+                            fractions[index],
+                            f64::from(open)
+                        )?,
+                        "boarding hatch sweep is occupied"
+                    );
+                    let states = actuator.hatches.get_or_insert_with(|| {
+                        std::array::from_fn(|i| DockedHatchState {
+                            fraction: fractions[i],
+                            target_open: fractions[i] == 1.0,
+                            moving: false,
+                            blocked: false,
+                            updated_at_ms: now,
+                        })
+                    });
+                    states[index] = DockedHatchState {
+                        fraction: fractions[index],
+                        target_open: open,
+                        moving: fractions[index] != f64::from(open),
+                        blocked: false,
+                        updated_at_ms: now,
+                    };
+                    actuator.inner_hatch_open = states[0].fraction == 1.0;
+                    actuator.outer_hatch_open = states[1].fraction == 1.0;
+                }
+                DockedTraversalRequest::CallLift { stop, .. } => {
+                    let anchors = geometry::lift_call_anchors(pose);
+                    ensure!(
+                        state.support == DockedSupport::BoardingLift
+                            || near(state.feet_m, anchors.station_station_m, CONTROL_RANGE_M)
+                            || near(state.feet_m, anchors.ship_station_m, CONTROL_RANGE_M),
+                        "walk to a boarding-lift control first"
+                    );
+                    ensure!(
+                        actuator.hatches_closed(),
+                        "close both boarding hatches before moving the lift"
+                    );
+                    ensure!(
+                        actuator.service_power_available,
+                        "station docking-service power unavailable; lift held safely"
+                    );
+                    actuator.lift.target = stop;
+                    actuator.lift.updated_at_ms = now;
+                    let lift = geometry::lift_geometry(pose);
+                    let target = match stop {
+                        DockedLiftStop::Ship => lift.ship_floor_m,
+                        DockedLiftStop::Station => lift.station_floor_m,
+                    };
+                    // Complete the physical approach even when already within
+                    // a hatch/control tolerance; no command snaps the platform.
+                    actuator.lift.moving =
+                        (actuator.lift.floor_station_m - target).abs() > LIFT_TARGET_EPSILON_M;
+                    if actuator.lift.moving {
+                        let first_floor = actuator.lift.floor_station_m
+                            + (target - actuator.lift.floor_station_m)
+                                .clamp(-LIFT_SPEED_MPS * 0.025, LIFT_SPEED_MPS * 0.025);
+                        ensure!(
+                            lift_step_clear(&static_geometry, pose, &state, &actuator,
+                                room_open(w, name), (first_floor, now), station_edge_inset(w.scene_layout))?,
+                            "boarding lift gate blocked; move toward the platform centre before calling the lift"
+                        );
+                    }
+                }
+                DockedTraversalRequest::LeaveSeat { .. } | DockedTraversalRequest::Walk { .. } => {
+                    unreachable!()
+                }
+            }
+        }
+        state.updated_at_ms = now;
+        state.actuators = actuator.clone();
+        w.pilots.get_mut(name).unwrap().view.station_avatar = Some(projection(state, now));
+    }
+    w.accounts
+        .get_mut(name)
+        .unwrap()
+        .docked_actuators
+        .insert(expected.host_vessel_id.clone(), actuator);
+    let _ = static_geometry;
+    Ok(())
+}
+
+fn advance_actor(
+    state: &mut DockedTraversalState,
+    actuator: &mut DockedVesselActuators,
+    input: Option<&station::WalkInput>,
+    static_geometry: &PioneerDockedGeometry,
+    room_open: bool,
+    now: u64,
+    edge_inset: f64,
+) -> Result<bool> {
+    let pose = docked_binding_pose(&state.binding).map_err(anyhow::Error::msg)?;
+    let lift_geometry = geometry::lift_geometry(pose);
+    let mut cursor = state.updated_at_ms.min(now);
+    // A complete current lift stroke and jump fit within this bound. Long
+    // offline intervals never create unbounded integration work or extra input.
+    let until = now.min(cursor.saturating_add(20_000));
+    while cursor < until {
+        let input_boundary = input
+            .map(|input| input.accepted_ms.saturating_add(STATION_WALK_LEASE_MS))
+            .filter(|expires| *expires > cursor)
+            .unwrap_or(until);
+        let next = cursor.saturating_add(25).min(until).min(input_boundary);
+        let dt = (next - cursor) as f64 / 1000.0;
+        let old_floor = actuator.lift.floor_station_m;
+        if actuator.lift.moving {
+            if !actuator.service_power_available || !actuator.hatches_closed() {
+                actuator.lift.moving = false;
+            } else {
+                let target = match actuator.lift.target {
+                    DockedLiftStop::Ship => lift_geometry.ship_floor_m,
+                    DockedLiftStop::Station => lift_geometry.station_floor_m,
+                };
+                let delta = (target - old_floor).clamp(-LIFT_SPEED_MPS * dt, LIFT_SPEED_MPS * dt);
+                let next_floor = old_floor + delta;
+                if lift_step_clear(
+                    static_geometry,
+                    pose,
+                    state,
+                    actuator,
+                    room_open,
+                    (next_floor, next),
+                    edge_inset,
+                )? {
+                    actuator.lift.floor_station_m = next_floor;
+                    if (target - next_floor).abs() <= LIFT_TARGET_EPSILON_M {
+                        actuator.lift.floor_station_m = target;
+                        actuator.lift.moving = false;
+                    }
+                } else {
+                    // Hold the last valid platform/capsule pose. A blocked gate
+                    // is an interlock, not a fatal invalid-world transaction.
+                    actuator.lift.moving = false;
+                }
+            }
+        }
+        actuator.lift.updated_at_ms = next;
+        if state.grounded && state.support == DockedSupport::BoardingLift {
+            state.feet_m[1] += actuator.lift.floor_station_m - old_floor;
+        }
+        let dynamic_geometry =
+            geometry::dynamic_geometry(pose, dynamic(actuator, room_open, state, next))
+                .map_err(anyhow::Error::msg)?;
+        if let Some(transition) = state.seat_transition.clone() {
+            if transition.phase == DockedSeatPhase::Entering {
+                let target = geometry::seat_anchors(pose).root_station_m;
+                let arrive = transition
+                    .started_at_ms
+                    .saturating_add(DOCKED_SEAT_TRANSITION_MS / 2);
+                let fraction = (next.saturating_sub(cursor) as f64
+                    / arrive.saturating_sub(cursor).max(1) as f64)
+                    .clamp(0.0, 1.0);
+                let candidate = std::array::from_fn(|index| {
+                    state.feet_m[index] + (target[index] - state.feet_m[index]) * fraction
+                });
+                if near(candidate, state.feet_m, 2.5 * dt + 1.0e-8)
+                    && (cursor >= arrive
+                        || geometry::capsule_clear_station(
+                            static_geometry,
+                            &dynamic_geometry,
+                            pose,
+                            candidate,
+                        ))
+                {
+                    state.feet_m = candidate;
+                } else {
+                    // A blocked approach cancels reseating in place. It never
+                    // completes by snapping the avatar to a distant chair.
+                    state.seat_transition = None;
+                    state.updated_at_ms = now;
+                    state.actuators = actuator.clone();
+                    return Ok(false);
+                }
+            }
+            state.moving = false;
+            state.sprinting = false;
+            if next >= transition.ends_at_ms {
+                if transition.phase == DockedSeatPhase::Entering {
+                    if !near(
+                        state.feet_m,
+                        geometry::seat_anchors(pose).root_station_m,
+                        EPSILON_M,
+                    ) {
+                        state.seat_transition = None;
+                        state.updated_at_ms = now;
+                        state.actuators = actuator.clone();
+                        return Ok(false);
+                    }
+                    state.updated_at_ms = now;
+                    return Ok(true);
+                }
+                state.seat_transition = None;
+            }
+        } else {
+            let active = input
+                .filter(|input| cursor < input.accepted_ms.saturating_add(STATION_WALK_LEASE_MS));
+            let (forward, strafe, turn) = active.map_or((0.0, 0.0, 0.0), |input| {
+                (input.forward, input.strafe, input.turn)
+            });
+            state.heading = (state.heading + turn * 2.0 * dt).rem_euclid(std::f64::consts::TAU);
+            let (sin, cos) = state.heading.sin_cos();
+            let norm = forward.hypot(strafe).max(1.0);
+            let sprinting =
+                active.is_some_and(|input| input.sprint) && (forward != 0.0 || strafe != 0.0);
+            let speed = if sprinting {
+                SPRINT_SPEED_MPS
+            } else {
+                WALK_SPEED_MPS
+            };
+            let delta = [
+                (cos * forward - sin * strafe) / norm * speed * dt,
+                (sin * forward + cos * strafe) / norm * speed * dt,
+            ];
+            for (axis, distance) in [(0, delta[0]), (2, delta[1])] {
+                if distance == 0.0 {
+                    continue;
+                }
+                let mut candidate = state.feet_m;
+                candidate[axis] += distance;
+                if state.grounded {
+                    if let Some(hit) = support(
+                        static_geometry,
+                        &dynamic_geometry,
+                        pose,
+                        state,
+                        candidate,
+                        STEP_M,
+                    ) {
+                        candidate[1] = hit.height_m;
+                        if clear(
+                            static_geometry,
+                            &dynamic_geometry,
+                            pose,
+                            state,
+                            candidate,
+                            edge_inset,
+                        ) {
+                            state.feet_m = candidate;
+                            state.support = hit.support;
+                            state.surface_id = hit.surface_id;
+                        }
+                    }
+                } else if clear(
+                    static_geometry,
+                    &dynamic_geometry,
+                    pose,
+                    state,
+                    candidate,
+                    edge_inset,
+                ) {
+                    state.feet_m = candidate;
+                }
+            }
+            if state.grounded {
+                if let Some(hit) = support(
+                    static_geometry,
+                    &dynamic_geometry,
+                    pose,
+                    state,
+                    state.feet_m,
+                    STEP_M,
+                ) {
+                    state.feet_m[1] = hit.height_m;
+                    state.support = hit.support;
+                    state.surface_id = hit.surface_id;
+                } else {
+                    state.grounded = false;
+                    state.vertical_velocity_mps = 0.0;
+                }
+            }
+            if !state.grounded {
+                let previous_y = state.feet_m[1];
+                state.vertical_velocity_mps -= STATION_GRAVITY_MPS2 * dt;
+                let mut candidate = state.feet_m;
+                candidate[1] += state.vertical_velocity_mps * dt;
+                let mut probe = candidate;
+                probe[1] = previous_y;
+                let landing = support(
+                    static_geometry,
+                    &dynamic_geometry,
+                    pose,
+                    state,
+                    probe,
+                    STEP_M + 0.15,
+                );
+                if let Some(hit) = landing.filter(|hit| {
+                    state.vertical_velocity_mps <= 0.0
+                        && candidate[1] <= hit.height_m + 1.0e-8
+                        && previous_y >= hit.height_m - EPSILON_M
+                }) {
+                    candidate[1] = hit.height_m;
+                    state.grounded = true;
+                    state.vertical_velocity_mps = 0.0;
+                    state.support = hit.support;
+                    state.surface_id = hit.surface_id;
+                    state.feet_m = candidate;
+                } else if clear(
+                    static_geometry,
+                    &dynamic_geometry,
+                    pose,
+                    state,
+                    candidate,
+                    edge_inset,
+                ) {
+                    state.feet_m = candidate;
+                } else {
+                    // A ceiling or solid stops vertical velocity without moving
+                    // the capsule through it. Subsequent gravity settles it.
+                    state.vertical_velocity_mps = state.vertical_velocity_mps.min(0.0);
+                }
+            }
+            state.moving = active.is_some() && (forward != 0.0 || strafe != 0.0 || turn != 0.0);
+            state.sprinting = sprinting;
+        }
+        cursor = next;
+    }
+    state.updated_at_ms = now;
+    if input.is_none_or(|input| now >= input.accepted_ms.saturating_add(STATION_WALK_LEASE_MS)) {
+        state.moving = false;
+        state.sprinting = false;
+    }
+    actuator.lift.updated_at_ms = now;
+    state.actuators = actuator.clone();
+    Ok(false)
+}
+fn hatch_sweep_occupied(
+    w: &World,
+    binding: &DockedTraversalBinding,
+    pose: PioneerDockedPose,
+    hatch: geometry::PioneerDockedHatch,
+    from: f64,
+    to: f64,
+) -> Result<bool> {
+    let sweep = geometry::hatch_leaf_sweep_bounds(hatch, from, to).map_err(anyhow::Error::msg)?;
+    Ok(w.pilots
+        .values()
+        .filter_map(|p| p.view.station_avatar.as_ref()?.docked_traversal.as_ref())
+        .filter(|s| s.binding.host_vessel_id == binding.host_vessel_id)
+        .any(|s| {
+            let feet = geometry::station_to_body(pose, s.feet_m);
+            sweep
+                .iter()
+                .any(|b| geometry::box_intersects_capsule(*b, feet, 1.8, 0.3))
+        }))
+}
+fn advance_hatches(w: &mut World, now: u64) -> Result<()> {
+    let names: Vec<_> = w.accounts.keys().cloned().collect();
+    for name in names {
+        let actuators: Vec<_> = w.accounts[&name]
+            .docked_actuators
+            .values()
+            .cloned()
+            .collect();
+        for mut actuator in actuators {
+            let Some(mut hatches) = actuator.hatches.clone() else {
+                continue;
+            };
+            let pose = docked_binding_pose(&actuator.binding).map_err(anyhow::Error::msg)?;
+            for (index, hatch) in hatches.iter_mut().enumerate() {
+                if !hatch.moving {
+                    continue;
+                }
+                let target = f64::from(hatch.target_open);
+                let step =
+                    now.saturating_sub(hatch.updated_at_ms) as f64 / DOCKED_HATCH_TRAVEL_MS as f64;
+                let mut next = if hatch.target_open {
+                    (hatch.fraction + step).min(target)
+                } else {
+                    (hatch.fraction - step).max(target)
+                };
+                // Fixed ticks can sum to 0.9999999999999999. Snap only the
+                // sub-nanometre endpoint residue so open/closed interlocks settle.
+                if (next - target).abs() < 1.0e-9 {
+                    next = target;
+                }
+                let which = if index == 0 {
+                    geometry::PioneerDockedHatch::Inner
+                } else {
+                    geometry::PioneerDockedHatch::Outer
+                };
+                if !actuator.service_power_available
+                    || hatch_sweep_occupied(
+                        w,
+                        &actuator.binding,
+                        pose,
+                        which,
+                        hatch.fraction,
+                        next,
+                    )?
+                {
+                    hatch.moving = false;
+                    hatch.blocked = true;
+                } else {
+                    hatch.fraction = next;
+                    hatch.moving = next != target;
+                }
+                hatch.updated_at_ms = now;
+            }
+            actuator.inner_hatch_open = hatches[0].fraction == 1.0;
+            actuator.outer_hatch_open = hatches[1].fraction == 1.0;
+            actuator.hatches = Some(hatches);
+            w.accounts
+                .get_mut(&name)
+                .unwrap()
+                .docked_actuators
+                .insert(actuator.binding.host_vessel_id.clone(), actuator);
+        }
+    }
+    refresh_actuator_views(w);
+    Ok(())
+}
+pub(super) fn advance(
+    w: &mut World,
+    now: u64,
+    document: Option<&RoomLayoutDocument>,
+) -> Result<()> {
+    advance_hatches(w, now)?;
+    let names = w
+        .pilots
+        .iter()
+        .filter(|(_, pilot)| {
+            pilot
+                .view
+                .station_avatar
+                .as_ref()
+                .is_some_and(|avatar| avatar.docked_traversal.is_some())
+        })
+        .map(|(name, _)| name.clone())
+        .collect::<Vec<_>>();
+    if names.is_empty() {
+        return Ok(());
+    }
+    let static_geometry = registered(document)?;
+    for name in names {
+        let static_geometry =
+            cockpit_mechanisms::with_collision(w, &name, &static_geometry, now, document);
+        let expected = binding(w, &name, document)?;
+        let pilot = &w.pilots[&name];
+        let mut state = pilot
+            .view
+            .station_avatar
+            .as_ref()
+            .unwrap()
+            .docked_traversal
+            .clone()
+            .unwrap();
+        ensure!(
+            pilot.view.ship_class == ShipClass::Pioneer,
+            "interior traversal cannot follow a swapped vessel"
+        );
+        ensure!(
+            state.binding.host_vessel_id == expected.host_vessel_id
+                && state.binding.registration_revision == expected.registration_revision
+                && state.binding.fleet_layout == expected.fleet_layout
+                && state.binding.fleet_hangar == expected.fleet_hangar,
+            "active docked traversal host or registration changed"
+        );
+        let mut actuator = w.accounts[&name]
+            .docked_actuators
+            .get(&expected.host_vessel_id)
+            .cloned()
+            .context("active boarding equipment missing")?;
+        if state.binding.layout_sha256 != expected.layout_sha256 {
+            // Live layout replacement is validated before publication. Rebind
+            // the same feet, stop input, and never relocate them into new rooms.
+            state.binding = expected.clone();
+            actuator.binding = expected.clone();
+            w.pilots.get_mut(&name).unwrap().walk_input = None;
+            state.moving = false;
+            state.sprinting = false;
+        }
+        if w.pilots[&name].view.location != Location::Docked
+            || active_owned_job(w, &name)
+            || carrier_inventory::world::enclosed_crew_during_deployment(w, &name)
+        {
+            can_undock(w, &name)?;
+            ensure!(
+                interior_support(state.support),
+                "space traversal must remain inside the vessel"
+            );
+        }
+        let input = w.pilots[&name].walk_input.clone();
+        let completed_seat = advance_actor(
+            &mut state,
+            &mut actuator,
+            input.as_ref(),
+            &static_geometry,
+            room_open(w, &name),
+            now,
+            station_edge_inset(w.scene_layout),
+        )?;
+        let pilot = w.pilots.get_mut(&name).unwrap();
+        if completed_seat {
+            pilot.view.station_avatar = None;
+            pilot.walk_input = None;
+        } else {
+            if input
+                .as_ref()
+                .is_some_and(|input| now >= input.accepted_ms.saturating_add(STATION_WALK_LEASE_MS))
+            {
+                pilot.walk_input = None;
+            }
+            pilot.view.station_avatar = Some(projection(state, now));
+        }
+        w.accounts
+            .get_mut(&name)
+            .unwrap()
+            .docked_actuators
+            .insert(expected.host_vessel_id, actuator);
+    }
+    Ok(())
+}
+pub(super) fn validate_room_layout(w: &World, document: &RoomLayoutDocument) -> Result<()> {
+    let static_geometry = registered(Some(document))?;
+    for (name, pilot) in &w.pilots {
+        if let Some(state) = pilot
+            .view
+            .station_avatar
+            .as_ref()
+            .and_then(|avatar| avatar.docked_traversal.as_ref())
+        {
+            ensure!(state.binding.layout_sha256 == docked_layout_sha256(document),
+                "return all affected pilots to their pilot seats before replacing the bound docked layout");
+            let static_geometry = cockpit_mechanisms::with_collision(
+                w,
+                name,
+                &static_geometry,
+                state.updated_at_ms,
+                Some(document),
+            );
+            let pose = docked_binding_pose(&state.binding).map_err(anyhow::Error::msg)?;
+            let dynamic_geometry = geometry::dynamic_geometry(
+                pose,
+                dynamic(
+                    &state.actuators,
+                    room_open(w, name),
+                    state,
+                    state.updated_at_ms,
+                ),
+            )
+            .map_err(anyhow::Error::msg)?;
+            ensure!(
+                state.seat_transition.is_some()
+                    || clear(
+                        &static_geometry,
+                        &dynamic_geometry,
+                        pose,
+                        state,
+                        state.feet_m,
+                        station_edge_inset(w.scene_layout),
+                    ),
+                "new layout overlaps a docked traversal capsule"
+            );
+            ensure!(
+                !state.grounded
+                    || support(
+                        &static_geometry,
+                        &dynamic_geometry,
+                        pose,
+                        state,
+                        state.feet_m,
+                        EPSILON_M
+                    )
+                    .is_some(),
+                "new layout removes occupied docked support"
+            );
+        }
+    }
+    Ok(())
+}
+/// Revision3 ->4 changes only the pilot furniture/forward aperture. Boarding
+/// anchors and every walking support are retained. Rebind only an empty,
+/// closed/stowed vessel; occupied or moving saves still require the old build.
+/// This edits binding identity only, never inventory, jobs, feet or actuators.
+pub(super) fn migrate_stowed_cockpit_v3(w: &mut World) -> Result<()> {
+    if PIONEER_DOCKED_REGISTRATION_REVISION != 4
+        || w.pilots.values().any(|p| p.view.station_avatar.is_some())
+    {
+        return Ok(());
+    }
+    let mut ready = Vec::new();
+    for (name, account) in &w.accounts {
+        if w.resource_jobs
+            .get(name)
+            .is_some_and(|j| !j.view.phase.is_terminal())
+        {
+            continue;
+        }
+        for (host, actuator) in &account.docked_actuators {
+            if actuator.binding.registration_revision != 3 {
+                continue;
+            }
+            let mut upgraded = actuator.binding.clone();
+            upgraded.registration_revision = 4;
+            let pose = docked_binding_pose(&upgraded).map_err(anyhow::Error::msg)?;
+            if actuator.hatches_closed()
+                && !actuator.lift.moving
+                && actuator.lift.target == DockedLiftStop::Ship
+                && (actuator.lift.floor_station_m - geometry::lift_geometry(pose).ship_floor_m)
+                    .abs()
+                    <= EPSILON_M
+                && actuator.hatches.as_ref().is_none_or(|states| {
+                    states
+                        .iter()
+                        .all(|h| !h.moving && !h.target_open && h.fraction == 0.0)
+                })
+            {
+                ready.push((name.clone(), host.clone(), upgraded));
+            }
+        }
+    }
+    for (name, host, binding) in ready {
+        w.accounts
+            .get_mut(&name)
+            .unwrap()
+            .docked_actuators
+            .get_mut(&host)
+            .unwrap()
+            .binding = binding;
+    }
+    Ok(())
+}
+
+pub(super) fn validate(w: &World, document: Option<&RoomLayoutDocument>) -> Result<()> {
+    for (name, account) in &w.accounts {
+        ensure!(
+            account.docked_actuators.len() <= 1,
+            "unexpected per-vessel boarding equipment count"
+        );
+        for (host, actuator) in &account.docked_actuators {
+            ensure!(
+                account.vessel_id(ShipClass::Pioneer) == Some(host.as_str())
+                    && actuator.binding.host_vessel_id == *host,
+                "boarding equipment is not bound to its owned vessel"
+            );
+            let pose = docked_binding_pose(&actuator.binding).map_err(anyhow::Error::msg)?;
+            let lift = geometry::lift_geometry(pose);
+            if let Some(hatches) = &actuator.hatches {
+                ensure!(
+                    hatches
+                        .iter()
+                        .all(|h| h.fraction.is_finite() && (0.0..=1.0).contains(&h.fraction))
+                        && (hatches[0].fraction == 0.0 || hatches[1].fraction == 0.0)
+                        && actuator.inner_hatch_open == (hatches[0].fraction == 1.0)
+                        && actuator.outer_hatch_open == (hatches[1].fraction == 1.0),
+                    "invalid persisted boarding hatch motion"
+                );
+            }
+            ensure!(
+                actuator.lift.floor_station_m.is_finite()
+                    && actuator.lift.floor_station_m >= lift.station_floor_m - EPSILON_M
+                    && actuator.lift.floor_station_m <= lift.ship_floor_m + EPSILON_M
+                    && !(actuator.inner_hatch_open && actuator.outer_hatch_open)
+                    && (!actuator.lift.moving
+                        || (actuator.service_power_available
+                            && !actuator.inner_hatch_open
+                            && !actuator.outer_hatch_open)),
+                "invalid docked boarding actuator state"
+            );
+        }
+        let pilot = &w.pilots[name];
+        if let Some(state) = pilot
+            .view
+            .station_avatar
+            .as_ref()
+            .and_then(|avatar| avatar.docked_traversal.as_ref())
+        {
+            ensure!(
+                state.version == DOCKED_TRAVERSAL_VERSION
+                    && (pilot.view.location == Location::Docked || interior_support(state.support))
+                    && pilot.view.ship_class == ShipClass::Pioneer
+                    && state.feet_m.iter().all(|v| v.is_finite())
+                    && state.heading.is_finite()
+                    && (!state.sprinting || state.moving)
+                    && state.vertical_velocity_mps.is_finite()
+                    && state.vertical_velocity_mps.abs() <= 100.0
+                    && state.feet_m[1] >= -EPSILON_M
+                    && state.feet_m[1] <= 40.0
+                    && state.surface_id.len() <= 128
+                    && state.binding.host_vessel_id
+                        == account.vessel_id(ShipClass::Pioneer).unwrap()
+                    && account.docked_actuators.get(&state.binding.host_vessel_id)
+                        == Some(&state.actuators),
+                "invalid canonical docked traversal avatar"
+            );
+            if let Some(phase) = &state.seat_transition {
+                ensure!(
+                    phase.ends_at_ms.saturating_sub(phase.started_at_ms)
+                        == DOCKED_SEAT_TRANSITION_MS
+                        && state.grounded
+                        && !state.moving,
+                    "invalid pilot-seat transition"
+                );
+            }
+        }
+    }
+    if w.pilots.values().any(|pilot| {
+        pilot
+            .view
+            .station_avatar
+            .as_ref()
+            .is_some_and(|avatar| avatar.docked_traversal.is_some())
+    }) {
+        let fallback = default_pioneer_room_layout();
+        validate_room_layout(w, document.unwrap_or(&fallback))?;
+    }
+    Ok(())
+}
+
+pub(super) fn project_legacy_response(response: &mut Response) {
+    fn snapshot(snapshot: &mut Snapshot) {
+        snapshot.docked_traversal_capability = None;
+        for pilot in &mut snapshot.pilots {
+            if let Some(avatar) = &mut pilot.station_avatar {
+                avatar.docked_traversal = None;
+            }
+        }
+    }
+    if let Some(state) = &mut response.snapshot {
+        snapshot(state);
+    }
+    if let Some(ledger) = &mut response.ledger {
+        snapshot(&mut ledger.snapshot);
+    }
+}
+
+#[cfg(test)]
+mod docking_edge_tests {
+    use super::*;
+
+    #[test]
+    fn docking_rails_stop_capsules_at_the_inner_face_without_changing_legacy_bounds() {
+        let layout = hangar_layout(ShipClass::Pioneer);
+        let inset = DOCKING_APRON_RAIL_HALF_WIDTH_M;
+        for (axis, half) in [(0, layout.half_length), (2, layout.half_width)] {
+            for sign in [-1., 1.] {
+                let mut touching = [0., 0., 0.];
+                touching[axis] = sign * (half - STATION_AVATAR_RADIUS_M - inset);
+                assert!(station_edge_clear(touching, inset));
+                let mut penetrating = touching;
+                penetrating[axis] += sign * 0.001;
+                assert!(!station_edge_clear(penetrating, inset));
+                assert!(station_edge_clear(penetrating, 0.));
+                // The old outer limit would have allowed the full 20 cm intrusion.
+                penetrating[axis] = sign * (half - STATION_AVATAR_RADIUS_M);
+                assert!(!station_edge_clear(penetrating, inset));
+                assert!(station_edge_clear(penetrating, 0.));
+            }
+        }
+        assert_eq!(station_edge_inset(SceneLayoutRevision::OrbitalV1), 0.);
+        assert_eq!(station_edge_inset(SceneLayoutRevision::DockingV1), inset);
+    }
+}
+
+#[cfg(test)]
+mod docking_walk_edge_tests {
+    use super::*;
+    #[test]
+    fn actual_walk_integrator_holds_before_docking_rail_but_keeps_legacy_edge() {
+        let binding = docked_traversal_binding(
+            "v1:Edge:Pioneer".into(),
+            &default_pioneer_room_layout(),
+            FleetLayoutRevision::LinearV1,
+            false,
+        );
+        let pose = docked_binding_pose(&binding).unwrap();
+        let geometry = registered(None).unwrap();
+        let layout = hangar_layout(ShipClass::Pioneer);
+        for inset in [DOCKING_APRON_RAIL_HALF_WIDTH_M, 0.] {
+            let mut actuator = initial_actuators(binding.clone(), 1000).unwrap();
+            let start = [
+                layout.half_length
+                    - STATION_AVATAR_RADIUS_M
+                    - DOCKING_APRON_RAIL_HALF_WIDTH_M
+                    - 0.01,
+                0.,
+                0.,
+            ];
+            let mut state = DockedTraversalState {
+                version: DOCKED_TRAVERSAL_VERSION,
+                binding: binding.clone(),
+                feet_m: start,
+                heading: 0.,
+                support: DockedSupport::Station,
+                surface_id: "station.floor".into(),
+                moving: false,
+                sprinting: false,
+                grounded: true,
+                vertical_velocity_mps: 0.,
+                updated_at_ms: 1000,
+                seat_transition: None,
+                actuators: actuator.clone(),
+            };
+            let input = station::WalkInput {
+                forward: 1.,
+                strafe: 0.,
+                turn: 0.,
+                sprint: false,
+                accepted_ms: 1000,
+            };
+            advance_actor(
+                &mut state,
+                &mut actuator,
+                Some(&input),
+                &geometry,
+                true,
+                1025,
+                inset,
+            )
+            .unwrap();
+            assert_eq!(state.feet_m[1], 0.);
+            if inset > 0. {
+                assert_eq!(
+                    state.feet_m, start,
+                    "hold last valid pose, never snap into rail"
+                );
+            } else {
+                assert!(
+                    state.feet_m[0] > start[0],
+                    "legacy unrailed walking extent retained"
+                );
+            }
+            assert!(clear(
+                &geometry,
+                &geometry::dynamic_geometry(pose, dynamic(&actuator, true, &state, 1025)).unwrap(),
+                pose,
+                &state,
+                state.feet_m,
+                inset
+            ));
+        }
+    }
+}

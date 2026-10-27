@@ -1,0 +1,102 @@
+{
+  "schema": "arkline.physical-cargo-assembly-proof/v1",
+  "status": "UNADMITTED new candidate geometry and motion configuration; not runtime registration or release",
+  "inputs": {
+    "ship_source": {
+      "path": "receiver-integration-new/combined-material-receiver-WIP.blend",
+      "sha256": "1fdeee298023251b6907ff4ba64bda4f8117103f99e65cb31cd7f35ce6d8c718"
+    },
+    "ship_glb": {
+      "path": "receiver-integration-new/combined-material-export/pioneer.glb",
+      "sha256": "08241a77914f7b909b666cde14c4f7efd6f4ed8364e3fe25e8926dee75a2e011"
+    },
+    "ship_export_receipt": {
+      "path": "receiver-integration-new/combined-material-export/receipt.json",
+      "sha256": "c95ef60d79065ea0fd44f39767271346bb751575d3d4bf0607e2673c68f27478"
+    },
+    "ship_manifest": {
+      "path": "receiver-integration-new/combined-material-receiver-WIP.json",
+      "sha256": "7eabc9186d4bf361fde89fd4b921bf4b89f850f13e438c1b52197beabf3293bd"
+    },
+    "source_preservation": {
+      "path": "receiver-integration-new/combined-material-receiver-WIP-preservation.json",
+      "sha256": "318d293d8ee64f09c6528389986e746734903cd879318c773b72f7571838956f"
+    },
+    "export_preservation": {
+      "path": "receiver-integration-new/export-preservation-chain.json",
+      "sha256": "b05f33941942e0fe7256ef9f20604c7ae5060f089898fdaac71685b453ec2097"
+    },
+    "drone_glb": {
+      "path": "drone-material-repair-new/drone-material-CANDIDATE.glb",
+      "sha256": "9363b725e154f7219533461766c2dee2d1a6aaed7d662db38ad1e7c25071cf14"
+    },
+    "drone_source": {
+      "path": "drone-material-repair-new/drone-material-candidate.json",
+      "sha256": "04ef513ff5e0fc89f4909bb3078b6ed899fcc6a3ee9637b5d5de9837c8168237"
+    },
+    "drone_full_cell_path_valve": {
+      "path": "drone-material-repair-new/full-cell-path-valve-proof.json",
+      "sha256": "32762793560eb5f628d50c204b71ebfbdd21ab860e56c7dad9b3c4072c7cbdb9"
+    },
+    "drone_receiver_interface": {
+      "path": "drone-material-repair-new/receiver-interface-proof.json",
+      "sha256": "745230aa1a40e08761a7bae585d3bd159088a1e65d216fdec7be4efd8f5df948"
+    },
+    "receiver_module": {
+      "path": "receiver-integration-new/module-input-v5.json",
+      "sha256": "daa77de93195ab605a4c197f6b4362565c9d109d7b0a08b86db53936880a82ce"
+    },
+    "receiver_glb": {
+      "path": "receiver-new/receiver-module-WIP.glb",
+      "sha256": "ede765abf3ff8574aafea10aa412c2707d6c8af2c1724e60a4959c8d5d3cd01c"
+    },
+    "receiver_isolated_path": {
+      "path": "receiver-new/review-exported-daa77de93195.json",
+      "sha256": "697371ecc4f6a54d6ff5ee5cc6e85bcc89678a54126f223358a3fc86eea02e0a"
+    },
+    "receiver_fixed_joint": {
+      "path": "receiver-integration-new/fixed-joint-proof/fixed-receiver-joint-proof.json",
+      "sha256": "b55e9f81a1b2dcf9c516103faacf4153a433c3f1992c5f916bca1dc57ae1d2bd"
+    },
+    "receiver_motion_contract": {
+      "path": "receiver-integration-new/fixed-joint-proof/new-valve-motion-contract.json",
+      "sha256": "84947c171299cae5b02f7beffe21fb7b5f45cfa8698538401f0216b03e25506c"
+    },
+    "receiver_motion_proof": {
+      "path": "receiver-integration-new/fixed-joint-proof/new-valve-motion-proof.json",
+      "sha256": "5f4b1ac06257fe99fa69b87270ca6788ad2130890cf212fdbbb354c22d4af6f5"
+    },
+    "all20_body_routes": {
+      "path": "receiver-integration-new/all20-body-routes-9363b725e154.json",
+      "sha256": "4ecfeee97868fc0a3fef029b2e17aa444120d6c08e217cd751da66245accb652"
+    },
+    "fixed_network_path": {
+      "path": "ship-tank-new/fixed-bore-whole-network.json",
+      "sha256": "0ec730cfd74870ce7033f8a8c82a836db1822705a9059c62f124c92b517a851a"
+    },
+    "ship_capacity_cells": {
+      "path": "material-void-review/full-capacity-proof/original-counted-cells.json",
+      "sha256": "e50fa208418bde5f05049dbc6a40ce6ffc132281b9d90ed7ee4c556f0f50b114"
+    },
+    "ship_full_capacity_proof": {
+      "path": "material-void-review/full-capacity-proof/original-full-cell-proof.json",
+      "sha256": "4e12b6e298613c74a83a4a1a118dfe0b4515c726d66c2faba4724b2045504e05"
+    }
+  },
+  "motion_precedence": {
+    "receiver_panel_travel_mm": 94,
+    "contract": "receiver-integration-new/fixed-joint-proof/new-valve-motion-contract.json",
+    "policy": "This explicit new configuration overrides nominal95mm only for receiver split-valve panel motion; unchanged geometry hashes. Legacy metadata/evidence remain preserved. Runtime must explicitly opt into this whole versioned configuration."
+  },
+  "capacity": {
+    "drone_geometric_cm3": 893833,
+    "ship_geometric_cm3": 214121238,
+    "ship_status": "PASS full original counted cells, exact signed-material and process-envelope exclusion; no query shrink, no engineering rating"
+  },
+  "scope_limits": [
+    "Geometry only; no active1704 source registration, versioned volume ledger or native playable acceptance.",
+    "Body sweep checks cover20 isolated launch identities and10 loaded reload routes with documented contact boundary; not full concurrent or return/recall validation.",
+    "Static receiver/frame overlap is an explicitly proven fixed material-union joint, not a general surface-separation pass. Original700-overlap failures remain preserved.",
+    "Mass, density, pressure, structural load, seal, flow rating and maintenance access remain unknown."
+  ]
+}

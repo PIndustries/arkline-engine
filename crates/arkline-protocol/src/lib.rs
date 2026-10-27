@@ -1,7 +1,73 @@
 //! Arkline v0.1 wire format and canonical economic event encoding.
 //! One JSON request/response per line over a local TCP connection.
+mod editor_scene;
+pub use editor_scene::*;
+mod world_layout;
+pub use world_layout::*;
+mod fleet_layout;
+pub use fleet_layout::*;
+mod editor_graph;
+pub use editor_graph::*;
+mod power_accounting;
+pub use power_accounting::*;
+mod room_equipment;
+pub use room_equipment::*;
+mod exterior_effects;
+pub use exterior_effects::*;
 mod pioneer_interior;
 pub use pioneer_interior::*;
+pub mod pioneer_docked;
+pub use pioneer_docked::*;
+mod reactor_configuration;
+pub use reactor_configuration::*;
+mod turret_stow;
+pub use turret_stow::*;
+mod cockpit_mechanisms;
+pub mod parallel_turret_aim;
+pub mod parallel_turret_binding;
+pub mod parallel_turret_ray_geometry;
+pub mod turret_stow_geometry;
+pub use cockpit_mechanisms::*;
+pub mod carrier_camera_devices;
+pub mod carrier_exterior;
+mod carrier_inventory;
+pub mod carrier_inventory_geometry;
+mod drone_bay;
+mod drone_bay_batches;
+mod drone_cargo;
+pub mod independent_bay_geometry;
+mod independent_bays;
+pub mod parallel_exterior;
+pub use carrier_inventory::*;
+pub use drone_bay_batches::*;
+pub use drone_cargo::*;
+pub use independent_bays::*;
+pub mod drone_bay_definition;
+pub mod drone_bay_geometry;
+pub mod drone_bay_layout;
+pub mod drone_dropoff_geometry;
+pub use drone_bay::*;
+mod cargo_unloading;
+pub use cargo_unloading::*;
+mod docking;
+pub use docking::*;
+mod docked_traversal;
+pub use docked_traversal::*;
+mod room_layout;
+pub use room_layout::*;
+pub mod material_compile;
+pub mod material_graph;
+pub use material_compile::{
+    lower_material, LoweredMaterial, MaterialCosts, MaterialSourceSpan, MaterialUniformSlot,
+};
+pub use material_graph::{
+    AssetMaterialBinding, MaterialDiagnostic, MaterialDiagnosticCode, MaterialGraphDocument,
+    MaterialNode, MaterialNodeId, MaterialNodeOp, MaterialParameter, MaterialParameterId,
+    MaterialParameterValue, MaterialValueType, PIONEER_MATERIAL_SHA256,
+};
+mod navigation;
+pub use navigation::*;
+
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -11,19 +77,15 @@ pub const MAX_RESOURCE_JOB_UNITS: u64 = 1_000_000;
 pub const BUILD_VERSION: &str = include_str!("../../../BUILD_VERSION");
 
 pub const PROTOCOL_VERSION: u32 = 1;
+// Exterior effects remain additive v1: an optional snapshot advertises support,
+// and its independently versioned definition is required before new commands.
 pub const RULESET_VERSION: u32 = 1;
 pub const STARTER_CREDITS: u64 = 1_000;
 pub const INITIAL_BELT_ORE: u64 = 100_000;
 pub const CARGO_CAPACITY: u64 = 1_000;
 pub const MAX_MINE_UNITS: u64 = 100;
-/// Legacy fixed interval used only when migrating older flight records.
-pub const WARP_DURATION_MS: u64 = 6_000;
-/// Initial part of transit spent charging before visual travel begins.
-pub const WARP_WARMUP_MS: u64 = 2_000;
 /// Authoritative f64 coordinates are meters. Subtract a local origin before f32 rendering.
 pub const AU_METERS: f64 = 149_597_870_700.0;
-pub const MAX_WARP_SPEED: f64 = AU_METERS;
-pub const WARP_ACCELERATION: f64 = AU_METERS * 0.5;
 pub const STATION_POSITION: [f64; 3] = [-4500.0, 0.0, 0.0];
 /// Station geometry surrounds a docking port on its positive-X surface.
 pub const STATION_DIAMETER_M: f64 = 20_000.0;
@@ -32,13 +94,6 @@ pub const STATION_CENTER_POSITION: [f64; 3] =
     [STATION_POSITION[0] - STATION_DIAMETER_M / 2.0, 0.0, 0.0];
 
 pub const BELT_POSITION: [f64; 3] = [2.0 * AU_METERS, 0.0, 0.0];
-pub const MAX_SHIP_SPEED: f64 = 600.0;
-pub const SHIP_ACCELERATION: f64 = 150.0;
-pub const PILOT_INPUT_LEASE_MS: u64 = 500;
-pub const MAX_ANGULAR_SPEED: f64 = std::f64::consts::FRAC_PI_2;
-pub fn identity_orientation() -> [f64; 4] {
-    [0.0, 0.0, 0.0, 1.0]
-}
 pub const DOCK_RANGE: f64 = 1800.0;
 pub const MINING_RANGE: f64 = 4500.0;
 pub const SPACE_BOUND: f64 = 100.0 * AU_METERS;
@@ -154,273 +209,14 @@ pub fn asteroid_catalog(total_ore: u64) -> Vec<Asteroid> {
         .collect()
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum NavigationTarget {
-    Station,
-    Belt,
-    Pilot { pilot: String },
-    Asteroid { id: u64 },
-    Gate { id: u64 },
-}
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "mode", rename_all = "snake_case")]
-pub enum NavigationMode {
-    Stop,
-    Manual,
-    Approach {
-        target: NavigationTarget,
-    },
-    Orbit {
-        target: NavigationTarget,
-        radius: f64,
-    },
-    KeepRange {
-        target: NavigationTarget,
-        distance: f64,
-    },
-    FlyTo {
-        position: [f64; 3],
-    },
-}
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct FlightState {
-    /// Actual thruster acceleration from the last normal-space integration step.
-    #[serde(default)]
-    pub acceleration: [f64; 3],
-    pub position: [f64; 3],
-    pub velocity: [f64; 3],
-    pub heading: [f64; 3],
-    /// Unit quaternion [x,y,z,w], body axes +X forward, +Y up, +Z right.
-    #[serde(default = "identity_orientation")]
-    pub orientation: [f64; 4],
-    /// Body-axis angular velocity (roll X, yaw Y, pitch Z), radians/second.
-    #[serde(default)]
-    pub angular_velocity: [f64; 3],
-    pub mode: NavigationMode,
-    pub updated_at_ms: u64,
-    #[serde(default)]
-    pub warp: Option<WarpTrajectory>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct WarpTrajectory {
-    pub source: [f64; 3],
-    pub target: [f64; 3],
-    pub started_at_ms: u64,
-    pub warmup_ms: u64,
-    pub acceleration_ms: u64,
-    pub cruise_ms: u64,
-    pub arrives_at_ms: u64,
-    #[serde(default)]
-    pub arrival_ms: u64,
-    #[serde(default)]
-    pub arrival_distance_m: f64,
-    #[serde(default)]
-    pub launch_ms: u64,
-    #[serde(default)]
-    pub launch_distance_m: f64,
-    #[serde(default)]
-    pub initial_heading: Option<[f64; 3]>,
-}
-/// A symmetric acceleration/cruise/deceleration trajectory with finite warmup.
-/// Durations round upward; sampling derives speed from the exact distance so
-/// positions meet precisely at the persisted deadline without discontinuity.
-pub fn plan_warp(source: [f64; 3], target: [f64; 3], started_at_ms: u64) -> WarpTrajectory {
-    let distance = source
-        .iter()
-        .zip(target)
-        .map(|(a, b)| (b - a).powi(2))
-        .sum::<f64>()
-        .sqrt();
-    let arrival_ms = if distance > 300_000.0 { 6_000 } else { 0 };
-    let arrival_distance_m = if arrival_ms > 0 { 30_000.0 } else { 0.0 };
-    let launch_ms = arrival_ms;
-    let launch_distance_m = arrival_distance_m;
-    let main_distance = distance - arrival_distance_m - launch_distance_m;
-    let acceleration_seconds = (main_distance / WARP_ACCELERATION)
-        .sqrt()
-        .min(MAX_WARP_SPEED / WARP_ACCELERATION);
-    let acceleration_ms = (acceleration_seconds * 1000.0).ceil().max(1.0) as u64;
-    let cruise_ms =
-        ((main_distance / MAX_WARP_SPEED - acceleration_seconds).max(0.0) * 1000.0).ceil() as u64;
-    let arrives_at_ms = started_at_ms
-        .saturating_add(WARP_WARMUP_MS)
-        .saturating_add(2 * acceleration_ms)
-        .saturating_add(cruise_ms)
-        .saturating_add(arrival_ms)
-        .saturating_add(launch_ms);
-    WarpTrajectory {
-        source,
-        target,
-        started_at_ms,
-        warmup_ms: WARP_WARMUP_MS,
-        acceleration_ms,
-        cruise_ms,
-        arrives_at_ms,
-        arrival_ms,
-        arrival_distance_m,
-        launch_ms,
-        launch_distance_m,
-        initial_heading: None,
-    }
-}
-/// Sample authoritative meters and meters/second without f32 precision loss.
-pub fn sample_warp(path: &WarpTrajectory, now_ms: u64) -> ([f64; 3], [f64; 3]) {
-    if now_ms >= path.arrives_at_ms {
-        return (path.target, [0.0; 3]);
-    }
-    let elapsed = now_ms
-        .saturating_sub(path.started_at_ms)
-        .saturating_sub(path.warmup_ms) as f64
-        / 1000.0;
-    let acceleration = path.acceleration_ms.max(1) as f64 / 1000.0;
-    let cruise = path.cruise_ms as f64 / 1000.0;
-    let total = 2.0 * acceleration + cruise;
-    if path.arrival_ms > 0 && path.arrival_distance_m > 0.0 {
-        let delta: [f64; 3] = std::array::from_fn(|i| path.target[i] - path.source[i]);
-        let distance = delta.iter().map(|v| v * v).sum::<f64>().sqrt();
-        if distance <= 0.0 {
-            return (path.target, [0.0; 3]);
-        }
-        let direction = delta.map(|v| v / distance);
-        let terminal = path.arrival_distance_m.min(distance);
-        let launch = path.launch_distance_m.min((distance - terminal).max(0.0));
-        let launch_duration = path.launch_ms as f64 / 1000.0;
-        let launch_speed = if launch_duration > 0.0 {
-            2.0 * launch / launch_duration
-        } else {
-            0.0
-        };
-        if elapsed < launch_duration {
-            let u = (elapsed / launch_duration).clamp(0.0, 1.0);
-            let traveled = launch * (2.0 * u.powi(3) - u.powi(4));
-            let speed = launch_speed * (3.0 * u * u - 2.0 * u.powi(3));
-            return (
-                std::array::from_fn(|i| path.source[i] + direction[i] * traveled),
-                direction.map(|v| v * speed),
-            );
-        }
-        let elapsed = elapsed - launch_duration;
-        let duration = path.arrival_ms as f64 / 1000.0;
-        let entry_speed = 2.0 * terminal / duration;
-        if elapsed >= total {
-            let u = ((elapsed - total) / duration).clamp(0.0, 1.0);
-            let traveled = terminal * (2.0 * u - 2.0 * u.powi(3) + u.powi(4));
-            let speed = entry_speed * (1.0 - 3.0 * u * u + 2.0 * u.powi(3));
-            // Target-relative computation preserves sub-meter local precision.
-            return (
-                std::array::from_fn(|i| path.target[i] - direction[i] * (terminal - traveled)),
-                direction.map(|v| v * speed),
-            );
-        }
-        let main_distance = distance - terminal - launch;
-        let peak = (main_distance - 0.5 * (entry_speed + launch_speed) * acceleration)
-            / (acceleration + cruise);
-        let (traveled, speed) = if elapsed < acceleration {
-            (
-                launch_speed * elapsed
-                    + 0.5 * (peak - launch_speed) * elapsed * elapsed / acceleration,
-                launch_speed + (peak - launch_speed) * elapsed / acceleration,
-            )
-        } else if elapsed < acceleration + cruise {
-            (
-                0.5 * (peak + launch_speed) * acceleration + peak * (elapsed - acceleration),
-                peak,
-            )
-        } else {
-            let remaining = total - elapsed;
-            let decel = (peak - entry_speed) / acceleration;
-            (
-                main_distance - entry_speed * remaining - 0.5 * decel * remaining * remaining,
-                entry_speed + decel * remaining,
-            )
-        };
-        return (
-            std::array::from_fn(|i| path.source[i] + direction[i] * (launch + traveled)),
-            direction.map(|v| v * speed),
-        );
-    }
-    let (fraction, rate) = if elapsed < acceleration {
-        (
-            0.5 * elapsed * elapsed / acceleration / (acceleration + cruise),
-            elapsed / acceleration / (acceleration + cruise),
-        )
-    } else if elapsed < acceleration + cruise {
-        (
-            (0.5 * acceleration + elapsed - acceleration) / (acceleration + cruise),
-            1.0 / (acceleration + cruise),
-        )
-    } else {
-        let remaining = (total - elapsed).max(0.0);
-        (
-            1.0 - 0.5 * remaining * remaining / acceleration / (acceleration + cruise),
-            remaining / acceleration / (acceleration + cruise),
-        )
-    };
-    let delta: [f64; 3] = std::array::from_fn(|i| path.target[i] - path.source[i]);
-    (
-        std::array::from_fn(|i| path.source[i] + delta[i] * fraction.clamp(0.0, 1.0)),
-        delta.map(|d| d * rate),
-    )
-}
-
-/// Fixed-duration alignment uses a continuous spherical turn, including 180 degrees.
-pub fn sample_warp_heading(path: &WarpTrajectory, now_ms: u64) -> [f64; 3] {
-    fn normalize(v: [f64; 3]) -> [f64; 3] {
-        let n = v.iter().map(|x| x * x).sum::<f64>().sqrt();
-        if n < 1e-12 {
-            [1.0, 0.0, 0.0]
-        } else {
-            v.map(|x| x / n)
-        }
-    }
-    let target = normalize(std::array::from_fn(|i| path.target[i] - path.source[i]));
-    let Some(initial) = path.initial_heading else {
-        return target;
-    };
-    let initial = normalize(initial);
-    let t = (now_ms.saturating_sub(path.started_at_ms) as f64 / path.warmup_ms.max(1) as f64)
-        .clamp(0.0, 1.0);
-    let t = t * t * (3.0 - 2.0 * t);
-    let dot = initial
-        .iter()
-        .zip(target)
-        .map(|(a, b)| a * b)
-        .sum::<f64>()
-        .clamp(-1.0, 1.0);
-    if dot > 0.9995 {
-        return normalize(std::array::from_fn(|i| {
-            initial[i] * (1.0 - t) + target[i] * t
-        }));
-    }
-    if dot < -0.9995 {
-        let basis = if initial[1].abs() < 0.9 {
-            [0.0, 1.0, 0.0]
-        } else {
-            [1.0, 0.0, 0.0]
-        };
-        let perpendicular = normalize([
-            initial[1] * basis[2] - initial[2] * basis[1],
-            initial[2] * basis[0] - initial[0] * basis[2],
-            initial[0] * basis[1] - initial[1] * basis[0],
-        ]);
-        return normalize(std::array::from_fn(|i| {
-            initial[i] * (std::f64::consts::PI * t).cos()
-                + perpendicular[i] * (std::f64::consts::PI * t).sin()
-        }));
-    }
-    let angle = dot.acos();
-    normalize(std::array::from_fn(|i| {
-        (initial[i] * (angle * (1.0 - t)).sin() + target[i] * (angle * t).sin()) / angle.sin()
-    }))
-}
-
 pub const GENESIS_HASH: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "command", rename_all = "snake_case")]
 pub enum Request {
+    DockedTraversal {
+        request: DockedTraversalRequest,
+    },
     StationSit {
         seated: bool,
     },
@@ -436,6 +232,8 @@ pub enum Request {
         forward: f64,
         strafe: f64,
         turn: f64,
+        #[serde(default)]
+        sprint: bool,
     },
     OrbitDrone {
         id: u64,
@@ -471,6 +269,18 @@ pub enum Request {
     },
     RemoveSurfaceProp {
         id: u64,
+    },
+    CarrierInventory {
+        request: CarrierInventoryRequest,
+    },
+    IndependentBays {
+        request: IndependentBayRequest,
+    },
+    DroneBay {
+        request: DroneBayRequest,
+    },
+    DroneCargo {
+        request: DroneCargoRequest,
     },
     LaunchDroneClass {
         class: DroneClass,
@@ -510,6 +320,17 @@ pub enum Request {
     StopMining {
         module_id: u8,
     },
+    StartCargoUnload {
+        operation_id: u64,
+        units: u64,
+        destination: CargoUnloadDestination,
+    },
+    CancelCargoUnload {
+        operation_id: u64,
+    },
+    ResumeCargoUnload {
+        operation_id: u64,
+    },
     DepositOre {
         units: u64,
     },
@@ -531,10 +352,59 @@ pub enum Request {
     WithdrawCorporationOre {
         units: u64,
     },
+    SetPioneerRoom {
+        action: PioneerRoomCommand,
+    },
+    SetTurretDeployment {
+        vessel_id: String,
+        deployed: bool,
+    },
+    SetCockpitScreenMode {
+        vessel_id: String,
+        target: CockpitScreenTarget,
+        mode: CockpitScreenMode,
+    },
+    SetPioneerExterior {
+        enabled: bool,
+        expected_revision: u64,
+    },
+    BoardShip {
+        id: String,
+    },
+    AuthCapabilities,
+    AccountConnect {
+        access_token: String,
+        pilot: String,
+        #[serde(default)]
+        legacy_resume_token: Option<String>,
+        #[serde(default)]
+        link_existing: bool,
+        protocol_version: u32,
+        /// Highest independently versioned world layout this client can render.
+        #[serde(default)]
+        world_layout_version: u32,
+        #[serde(default)]
+        supports_room_controls: bool,
+        #[serde(default)]
+        supports_fleet_hangar: bool,
+        #[serde(default)]
+        supports_pioneer_interior: bool,
+        #[serde(default)]
+        supports_docked_traversal_v2: bool,
+    },
     Connect {
+        /// Missing on older clients, which can only use legacy world geometry.
+        #[serde(default)]
+        world_layout_version: u32,
+        #[serde(default)]
+        supports_room_controls: bool,
+        #[serde(default)]
+        supports_fleet_hangar: bool,
         /// Missing on older clients; only visual clients with interior support opt in.
         #[serde(default)]
         supports_pioneer_interior: bool,
+        #[serde(default)]
+        supports_docked_traversal_v2: bool,
         protocol_version: u32,
         pilot: String,
         resume_token: Option<String>,
@@ -562,6 +432,12 @@ pub enum Request {
         ship_class: ShipClass,
     },
     Undock,
+    CancelDocking {
+        operation_id: u64,
+    },
+    ResumeDocking {
+        operation_id: u64,
+    },
     Warp {
         destination: Destination,
     },
@@ -581,30 +457,6 @@ pub enum Request {
         order_id: u64,
     },
     ExportLedger,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Destination {
-    Station,
-    Belt,
-    Gate { id: u64 },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum Location {
-    Docked,
-    Jumping {
-        gate_id: u64,
-        arrives_at_ms: u64,
-    },
-    Station,
-    Belt,
-    InTransit {
-        destination: Destination,
-        arrives_at_ms: u64,
-    },
 }
 
 /// Prototype hull specifications; movement dynamics are shared for now.
@@ -644,7 +496,7 @@ pub const ALL_SHIP_CLASSES: [ShipClass; 7] = [
 impl ShipClass {
     pub const fn spec(self) -> ShipSpec {
         let (name, length_m, width_m, height_m) = match self {
-            Self::Pioneer => ("Pioneer", 72.0, 38.0, 18.0),
+            Self::Pioneer => ("Pioneer", 72.0, 38.0, 22.8),
             Self::Prospector => ("Prospector", 180.0, 92.0, 64.0),
             Self::Hauler => ("Hauler", 420.0, 180.0, 140.0),
             Self::Vanguard => ("Vanguard", 1100.0, 380.0, 260.0),
@@ -802,6 +654,9 @@ pub enum DroneMode {
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DroneView {
+    /// Full world attitude for source-bound physical drones. Legacy fleets use heading.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub orientation_xyzw: Option<[f64; 4]>,
     #[serde(default)]
     pub id: u64,
     #[serde(default)]
@@ -853,6 +708,22 @@ pub struct MiningModule {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PilotView {
+    /// Source-bound finite carrier locations and confirmed machinery; absent on old worlds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub carrier_inventory: Option<CarrierInventoryPublicState>,
+    /// Fresh cargo-world public payload/receiver projection; absent means unreported.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub drone_cargo: Option<DroneCargoPublicState>,
+    /// Additive response-only accounting of the existing electrical model.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub power_accounting: Option<PowerAccountingView>,
+    /// Additive public body/machinery projection for a source-registered bay.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub drone_bay: Option<DroneBayPublicState>,
+    #[serde(default)]
+    pub cockpit_mechanisms: Option<PioneerCockpitMechanisms>,
+    #[serde(default)]
+    pub reactor_configuration: Option<PioneerReactorConfiguration>,
     #[serde(default)]
     pub station_avatar: Option<StationAvatar>,
     #[serde(default)]
@@ -887,12 +758,16 @@ pub struct PilotView {
 
 pub const AVATAR_HEIGHT_M: f64 = 1.8;
 pub const WALK_SPEED_MPS: f64 = 4.0;
+pub const SPRINT_SPEED_MPS: f64 = 6.0;
 pub const STATION_JUMP_SPEED_MPS: f64 = 4.5;
 pub const STATION_GRAVITY_MPS2: f64 = 9.81;
 pub const STATION_WALK_LEASE_MS: u64 = 500;
 pub const STATION_BOARD_RANGE_M: f64 = 3.0;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct StationAvatar {
+    /// Negotiated canonical station-world feet. Legacy fields remain a stopped hangar projection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub docked_traversal: Option<DockedTraversalState>,
     /// Pioneer deck-one local coordinates when true; private hangar otherwise.
     #[serde(default)]
     pub onboard_interior: bool,
@@ -909,12 +784,14 @@ pub struct StationAvatar {
     /// Radians; zero faces +X, positive turns toward +Z.
     pub heading: f64,
     pub moving: bool,
+    #[serde(default)]
+    pub sprinting: bool,
     pub updated_at_ms: u64,
 }
 fn default_interior_deck() -> u8 {
     1
 }
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct HangarLayout {
     pub half_length: f64,
     pub half_width: f64,
@@ -1002,6 +879,9 @@ pub struct SellOrder {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HangarShip {
+    /// Additive response-only accounting of the existing electrical model.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub power_accounting: Option<PowerAccountingView>,
     #[serde(default)]
     pub power: Option<PowerState>,
     pub ship_class: ShipClass,
@@ -1022,6 +902,25 @@ pub struct CorporationView {
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AssetsView {
+    /// Authenticated owner journal; never borrow this counter for a viewed remote vessel.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub carrier_inventory: Option<CarrierInventoryState>,
+    /// Authenticated owner's cargo journal, never a remote viewed vessel's counter.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub drone_cargo: Option<DroneCargoState>,
+    /// Owned finite stock and accepted operation journal; absent on legacy realms.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub drone_bay: Option<DroneBayState>,
+    /// Additive v1 capability and private receipts; absent on legacy realms.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cargo_unloading: Option<CargoUnloadingState>,
+    #[serde(default)]
+    pub pioneer_room: Option<PioneerRoomState>,
+    /// Host-authoritative, validated room geometry when a project layout is active.
+    #[serde(default)]
+    pub pioneer_room_layout: Option<RoomLayoutState>,
+    #[serde(default)]
+    pub hangar: Option<HangarView>,
     #[serde(default)]
     pub pioneer_interior_available: bool,
     #[serde(default)]
@@ -1035,6 +934,26 @@ pub struct AssetsView {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Snapshot {
+    /// Fresh explicit-roster world marker, including empty worlds; never inferred from a class quota.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub carrier_inventory_registration: Option<CarrierInventoryRegistration>,
+    /// Durable feature advertisement remains present even before any pilot exists.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub drone_cargo_registration: Option<DroneCargoRegistration>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub drone_cargo_totals: Option<DroneOreTotals>,
+    /// Authority supports the additive sprint flag on both walking routes.
+    #[serde(default)]
+    pub walk_sprint_v1: bool,
+    /// Absent on authorities without this exact additive registration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub docked_traversal_capability: Option<DockedTraversalCapability>,
+    /// The authority's immutable realm layout. Absence means exact legacy v1.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub world_layout: Option<WorldLayoutDefinition>,
+    /// Presence advertises additive exterior schema support; older servers omit it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exterior: Option<ExteriorWorldState>,
     #[serde(default)]
     pub remote_controls: Vec<RemoteControlLease>,
     #[serde(default)]
@@ -1063,6 +982,15 @@ pub struct Snapshot {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "event", rename_all = "snake_case")]
 pub enum EconomicEvent {
+    PhysicalCargo {
+        record: physical_cargo::ledger::PhysicalCargoEvent,
+    },
+    CarrierInventory {
+        record: CarrierInventoryLedgerEvent,
+    },
+    DroneCargo {
+        record: DroneCargoLedgerEvent,
+    },
     ShipBoarded {
         from_ship_class: ShipClass,
         pilot: String,
@@ -1164,7 +1092,20 @@ pub struct LedgerExport {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthCapabilities {
+    pub issuer: String,
+    pub audience: String,
+    pub profile: String,
+    pub required_scope: String,
+    pub auth_required: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Response {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub physical_cargo: Option<physical_cargo::control::PhysicalControlPublicView>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auth: Option<AuthCapabilities>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub assets: Option<AssetsView>,
     pub ok: bool,
@@ -1180,6 +1121,8 @@ pub struct Response {
 impl Response {
     pub fn error(message: impl Into<String>) -> Self {
         Self {
+            physical_cargo: None,
+            auth: None,
             assets: None,
             ok: false,
             message: message.into(),
@@ -1206,6 +1149,50 @@ mod compatibility_tests {
         });
         let snapshot: Snapshot = serde_json::from_value(json).unwrap();
         assert!(snapshot.online_pilots.is_empty());
+        assert!(snapshot.exterior.is_none());
+        assert!(snapshot.world_layout.is_none());
+    }
+    #[test]
+    fn old_admission_and_fleet_snapshots_keep_legacy_layout_capabilities() {
+        let connect: Request = serde_json::from_value(serde_json::json!({
+            "command": "connect", "protocol_version": 1,
+            "pilot": "legacy", "resume_token": null
+        }))
+        .unwrap();
+        assert!(matches!(
+            connect,
+            Request::Connect {
+                world_layout_version: 0,
+                ..
+            }
+        ));
+        let account: Request = serde_json::from_value(serde_json::json!({
+            "command": "account_connect", "protocol_version": 1,
+            "pilot": "legacy", "access_token": "disposable-test-token"
+        }))
+        .unwrap();
+        assert!(matches!(
+            account,
+            Request::AccountConnect {
+                world_layout_version: 0,
+                ..
+            }
+        ));
+        let fleet: HangarView = serde_json::from_value(serde_json::json!({
+            "layout": fleet_hangar_layout(), "berths": []
+        }))
+        .unwrap();
+        assert_eq!(fleet.layout_revision, FleetLayoutRevision::LinearV1);
+    }
+    #[test]
+    fn exterior_commands_require_revision_and_are_not_remotely_delegable() {
+        assert!(serde_json::from_value::<Request>(
+            serde_json::json!({"command":"set_pioneer_exterior","enabled":true})
+        )
+        .is_err());
+        let request:Request=serde_json::from_value(serde_json::json!({"command":"set_pioneer_exterior","enabled":true,"expected_revision":0})).unwrap();
+        assert!(!request.is_remote_gameplay());
+        assert_eq!(PROTOCOL_VERSION, 1);
     }
 }
 
@@ -1326,6 +1313,14 @@ pub const MINING_SHIP_CLASSES: [ShipClass; 5] = [
     ShipClass::Stratum,
     ShipClass::Monolith,
 ];
+/// Authored asymmetric body bounds. The class height is a conservative,
+/// origin-centred 22.8m envelope; the actual hull is 20.35m tall.
+pub const PIONEER_BODY_BOUNDS_M: [[f64; 3]; 2] = [[-36.0, -9.0, -19.0], [36.0, 11.35, 19.0]];
+
+/// Raised-bridge refit sockets in body metres, shared by gun and camera poses.
+/// These are geometry anchors, not new weapon or structural simulation.
+pub const PIONEER_MINING_TURRET_MOUNTS_M: [[f64; 3]; 2] = [[10.8, 9.864, -5.2], [10.8, 9.864, 5.2]];
+
 pub const fn cargo_capacity(class: ShipClass) -> u64 {
     match class {
         ShipClass::Pioneer => 1000,
@@ -1463,6 +1458,8 @@ impl ResourceJobPhase {
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ResourceJob {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub drone_cargo: Option<DroneCargoJobProgress>,
     pub controller: String,
     pub id: u64,
     pub pilot: String,
@@ -1493,7 +1490,11 @@ impl Request {
     pub fn is_remote_gameplay(&self) -> bool {
         matches!(
             self,
-            Self::OrbitDrone { .. }
+            Self::CarrierInventory { .. }
+                | Self::IndependentBays { .. }
+                | Self::DroneBay { .. }
+                | Self::DroneCargo { .. }
+                | Self::OrbitDrone { .. }
                 | Self::PilotInput { .. }
                 | Self::Navigate { .. }
                 | Self::Warp { .. }
@@ -1536,3 +1537,185 @@ pub fn ship_acceleration(class: ShipClass, ore: u64) -> f64 {
 pub fn ship_braking_acceleration(class: ShipClass, ore: u64) -> f64 {
     ship_acceleration(class, ore) * 0.4
 }
+
+/// Private, authoritative station inventory. Corporation vessels are not yet supported.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HangarView {
+    /// Missing on old snapshots; their fleet uses the original linear concourse.
+    #[serde(default)]
+    pub layout_revision: FleetLayoutRevision,
+    pub layout: HangarLayout,
+    pub berths: Vec<HangarBerth>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HangarBerth {
+    pub id: String,
+    pub ship_class: ShipClass,
+    pub position: [f64; 3],
+    pub yaw: f64,
+    pub boarding_point: [f64; 3],
+    pub active: bool,
+    pub can_board: bool,
+}
+/// Fixed catalog berths preserve coordinates when boarding or moving a hull elsewhere.
+pub fn fleet_berth(class: ShipClass) -> ([f64; 3], [f64; 3]) {
+    let mut x = 0.0;
+    for current in ALL_SHIP_CLASSES {
+        let spec = current.spec();
+        if current == class {
+            return (
+                [x, spec.height_m / 2.0, spec.width_m / 2.0 + 6.0],
+                [x, 0.0, 0.0],
+            );
+        }
+        x += spec.length_m / 2.0 + 20.0;
+        let next = ALL_SHIP_CLASSES.iter().position(|c| *c == current).unwrap() + 1;
+        if let Some(next) = ALL_SHIP_CLASSES.get(next) {
+            x += next.spec().length_m / 2.0;
+        }
+    }
+    unreachable!()
+}
+pub fn fleet_hangar_layout() -> HangarLayout {
+    let last = ALL_SHIP_CLASSES.last().unwrap();
+    HangarLayout {
+        half_length: fleet_berth(*last).0[0] + last.spec().length_m / 2.0 + 20.0,
+        half_width: 50.0,
+        height: 1500.0,
+        ship_center: fleet_berth(ShipClass::Pioneer).0,
+        boarding_point: fleet_berth(ShipClass::Pioneer).1,
+    }
+}
+/// Quarters use the same human-scale furnishing arrangement translated behind the concourse.
+pub fn fleet_quarters_layout() -> QuartersLayout {
+    let mut q = quarters_layout(ShipClass::Pioneer);
+    let dz = -24.0 - q.max[2];
+    q.min[2] += dz;
+    q.max[2] += dz;
+    q.doorway_center[2] += dz;
+    q.seat_point[2] += dz;
+    q
+}
+pub fn fleet_station_obstacles() -> Vec<StationObstacle> {
+    let dz = -24.0 - quarters_layout(ShipClass::Pioneer).max[2];
+    station_obstacles(ShipClass::Pioneer)
+        .into_iter()
+        .map(|mut o| {
+            o.min[2] += dz;
+            o.max[2] += dz;
+            o
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod navigation_organization_tests {
+    use super::*;
+
+    #[test]
+    #[ignore = "writes exact navigation wire and numeric organization baseline"]
+    fn export_navigation_organization_fingerprint() {
+        use serde_json::json;
+        let targets = [
+            NavigationTarget::Station,
+            NavigationTarget::Belt,
+            NavigationTarget::Pilot {
+                pilot: "fixture-pilot".into(),
+            },
+            NavigationTarget::Asteroid { id: 20 },
+            NavigationTarget::Gate { id: 2 },
+        ];
+        let modes = [
+            NavigationMode::Stop,
+            NavigationMode::Manual,
+            NavigationMode::Approach {
+                target: targets[0].clone(),
+            },
+            NavigationMode::Orbit {
+                target: targets[3].clone(),
+                radius: 500.0,
+            },
+            NavigationMode::KeepRange {
+                target: targets[2].clone(),
+                distance: 1200.0,
+            },
+            NavigationMode::FlyTo {
+                position: [1.0, -2.0, 3.0],
+            },
+        ];
+        let destinations = [
+            Destination::Station,
+            Destination::Belt,
+            Destination::Gate { id: 2 },
+        ];
+        let locations = [
+            Location::Docked,
+            Location::Jumping {
+                gate_id: 2,
+                arrives_at_ms: 5000,
+            },
+            Location::Station,
+            Location::Belt,
+            Location::InTransit {
+                destination: Destination::Gate { id: 2 },
+                arrives_at_ms: 7000,
+            },
+        ];
+        let flight_json = r#"{"position":[1.0,2.0,3.0],"velocity":[4.0,5.0,6.0],"heading":[1.0,0.0,0.0],"mode":{"mode":"stop"},"updated_at_ms":1000}"#;
+        let flight: FlightState = serde_json::from_str(flight_json).unwrap();
+        assert_eq!(flight.orientation, identity_orientation());
+        assert_eq!(flight.acceleration, [0.0; 3]);
+        assert_eq!(flight.angular_velocity, [0.0; 3]);
+        assert!(flight.warp.is_none() && flight.docking.is_none());
+        let old_warp_json = r#"{"source":[0.0,0.0,0.0],"target":[1000.0,0.0,0.0],"started_at_ms":1000,"warmup_ms":2000,"acceleration_ms":1000,"cruise_ms":0,"arrives_at_ms":5000}"#;
+        let old: WarpTrajectory = serde_json::from_str(old_warp_json).unwrap();
+        assert_eq!((old.launch_ms, old.arrival_ms), (0, 0));
+        assert!(old.initial_heading.is_none());
+        let mut paths = vec![old];
+        for (source, target) in [
+            ([0.0; 3], [0.0; 3]),
+            ([0.0; 3], [1.0, 0.0, 0.0]),
+            ([0.0; 3], [30_000.0, 0.0, 0.0]),
+            ([0.0; 3], [2.0 * AU_METERS, 0.0, 0.0]),
+            ([0.0; 3], [12.0 * AU_METERS, 0.0, 0.0]),
+            (
+                [2.0 * AU_METERS, -150.0, 1000.0],
+                [-AU_METERS, 2.0 * AU_METERS, 3000.0],
+            ),
+        ] {
+            for heading in [
+                None,
+                Some([1.0, 0.0, 0.0]),
+                Some([-1.0, 0.0, 0.0]),
+                Some([0.0, 1.0, 0.0]),
+            ] {
+                let mut p = plan_warp(source, target, 1000);
+                p.initial_heading = heading;
+                paths.push(p);
+            }
+        }
+        let trajectories=paths.iter().map(|p| {
+            let start=p.started_at_ms;
+            let warm=start+p.warmup_ms;
+            let launch=warm+p.launch_ms;
+            let accel=launch+p.acceleration_ms;
+            let cruise=accel+p.cruise_ms;
+            let arrival=p.arrives_at_ms.saturating_sub(p.arrival_ms);
+            let boundaries=[start,warm,launch,accel,cruise,arrival,p.arrives_at_ms];
+            let mut times=std::collections::BTreeSet::new();
+            for t in boundaries {times.extend([t.saturating_sub(1),t,t.saturating_add(1)]);}
+            for pair in boundaries.windows(2) {times.insert(pair[0]+pair[1].saturating_sub(pair[0])/2);}
+            let samples=times.into_iter().map(|t|{let (position,velocity)=sample_warp(p,t);json!({"time_ms":t,"position_bits":position.map(f64::to_bits),"velocity_bits":velocity.map(f64::to_bits),"heading_bits":sample_warp_heading(p,t).map(f64::to_bits)})}).collect::<Vec<_>>();
+            json!({"serialized":serde_json::to_string(p).unwrap(),"samples":samples})
+        }).collect::<Vec<_>>();
+        let report = json!({"format":1,"targets":targets.iter().map(|x|serde_json::to_string(x).unwrap()).collect::<Vec<_>>(),"modes":modes.iter().map(|x|serde_json::to_string(x).unwrap()).collect::<Vec<_>>(),"destinations":destinations.iter().map(|x|serde_json::to_string(x).unwrap()).collect::<Vec<_>>(),"locations":locations.iter().map(|x|serde_json::to_string(x).unwrap()).collect::<Vec<_>>(),"legacy_flight_input":flight_json,"legacy_flight_output":serde_json::to_string(&flight).unwrap(),"legacy_warp_input":old_warp_json,"constants":{"warp_duration":WARP_DURATION_MS,"warp_warmup":WARP_WARMUP_MS,"max_warp_speed_bits":MAX_WARP_SPEED.to_bits(),"warp_acceleration_bits":WARP_ACCELERATION.to_bits(),"max_ship_speed_bits":MAX_SHIP_SPEED.to_bits(),"ship_acceleration_bits":SHIP_ACCELERATION.to_bits(),"pilot_lease":PILOT_INPUT_LEASE_MS,"angular_speed_bits":MAX_ANGULAR_SPEED.to_bits()},"trajectories":trajectories});
+        std::fs::write(
+            std::env::var_os("ARKLINE_NAVIGATION_FINGERPRINT").expect("explicit output"),
+            serde_json::to_vec_pretty(&report).unwrap(),
+        )
+        .unwrap();
+    }
+}
+
+/// Fresh measured-volume foundation; no source factory or legacy migration.
+pub mod physical_cargo;

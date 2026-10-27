@@ -27,6 +27,7 @@ fn walk(
             s,
             p,
             Request::StationWalk {
+                sprint: false,
                 forward,
                 strafe,
                 turn: 0.,
@@ -40,6 +41,7 @@ fn walk(
         s,
         p,
         Request::StationWalk {
+            sprint: false,
             forward: 0.,
             strafe: 0.,
             turn: 0.,
@@ -54,7 +56,11 @@ fn setup(path: &std::path::Path) -> (Server, Option<String>, Option<String>) {
         &mut s,
         &mut p,
         Request::Connect {
+            supports_room_controls: false,
+            world_layout_version: 1,
+            supports_fleet_hangar: false,
             supports_pioneer_interior: true,
+            supports_docked_traversal_v2: false,
             protocol_version: PROTOCOL_VERSION,
             pilot: "Resident".into(),
             resume_token: None,
@@ -110,7 +116,11 @@ fn sofa_requires_proximity_survives_reconnect_and_walking_stands_in_place() {
         &mut s,
         &mut p,
         Request::Connect {
+            supports_room_controls: false,
+            world_layout_version: 1,
+            supports_fleet_hangar: false,
             supports_pioneer_interior: true,
+            supports_docked_traversal_v2: false,
             protocol_version: PROTOCOL_VERSION,
             pilot: "Resident".into(),
             resume_token: token,
@@ -122,6 +132,7 @@ fn sofa_requires_proximity_survives_reconnect_and_walking_stands_in_place() {
         &mut s,
         &mut p,
         Request::StationWalk {
+            sprint: false,
             forward: 0.,
             strafe: 1.,
             turn: 0.,

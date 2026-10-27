@@ -1,0 +1,868 @@
+{
+  "status": "PASS bounded intentional fixed/fixed overlap joint and unobstructed interface; original surface-separation FAIL retained",
+  "source_sha256": "1fdeee298023251b6907ff4ba64bda4f8117103f99e65cb31cd7f35ce6d8c718",
+  "glb_sha256": "08241a77914f7b909b666cde14c4f7efd6f4ed8364e3fe25e8926dee75a2e011",
+  "module_sha256": "daa77de93195ab605a4c197f6b4362565c9d109d7b0a08b86db53936880a82ce",
+  "pipe_json_sha256": "5b6c7cdde69750df7d6f24a7f39340a7b3e9d5d5c4539355a2cd73e7e0976286",
+  "checker_sha256": "fa7acc5ddbd3ce55b19ca4d636100287599ee7148a744f81bd24e47f1d0363d2",
+  "pipe_actual_oriented_triangle_multiset_matches_input": true,
+  "pipe_CSG_boundary": {
+    "oriented_planes": 91,
+    "max_area_error_m2": 4.618527782440651e-14,
+    "area_residual_rejection_threshold_m2": 1e-11,
+    "occupied_cells": 4473
+  },
+  "bays": [
+    {
+      "bay": 0,
+      "fixed_group": null,
+      "frame_boundary": {
+        "oriented_planes": 16,
+        "max_area_error_m2": 0.0,
+        "area_residual_rejection_threshold_m2": 1e-11,
+        "occupied_cells": 64
+      },
+      "overlap_cells": 29,
+      "overlap_volume_m3": 0.00021779733061304024,
+      "declared_joint_slab_m": [
+        [
+          -21.225000381469727,
+          -0.5199999809265137,
+          -26.15999984741211
+        ],
+        [
+          -21.219999313354492,
+          -0.11999999731779099,
+          -25.84000015258789
+        ]
+      ],
+      "actual_joint_axial_thickness_m": 0.005001068115234375,
+      "panels": [
+        {
+          "panel": -1,
+          "sweep_box_m": [
+            [
+              -21.23200035095215,
+              -0.5049999964237213,
+              -26.09000015258789
+            ],
+            [
+              -21.22599983215332,
+              -0.3199999928474426,
+              -25.90999984741211
+            ]
+          ],
+          "pipe_x_separation_m": 0.00099945068359375,
+          "frame_endstop_contact_max_depth_m": 1.19209286886246e-09,
+          "frame_endstop_contact_cells": 3,
+          "proposed_exact_slot_endstop_travel_m": 0.0949999988079071,
+          "authored_nominal_travel_m": 0.095,
+          "proposed_safe_sweep_zero_positive_material_overlap": true
+        },
+        {
+          "panel": 1,
+          "sweep_box_m": [
+            [
+              -21.23200035095215,
+              -0.3199999928474426,
+              -26.09000015258789
+            ],
+            [
+              -21.22599983215332,
+              -0.13500000417232513,
+              -25.90999984741211
+            ]
+          ],
+          "pipe_x_separation_m": 0.00099945068359375,
+          "frame_endstop_contact_max_depth_m": 1.1920928966180355e-09,
+          "frame_endstop_contact_cells": 3,
+          "proposed_exact_slot_endstop_travel_m": 0.0949999988079071,
+          "authored_nominal_travel_m": 0.095,
+          "proposed_safe_sweep_zero_positive_material_overlap": true
+        }
+      ],
+      "certified_clear_interface_corridor_m": [
+        [
+          -21.239999771118164,
+          -0.40498000383377075,
+          -26.084980010986328
+        ],
+        [
+          -21.1200008392334,
+          -0.2350199967622757,
+          -25.915019989013672
+        ]
+      ],
+      "certified_square_m": 0.16996
+    },
+    {
+      "bay": 1,
+      "fixed_group": null,
+      "frame_boundary": {
+        "oriented_planes": 16,
+        "max_area_error_m2": 0.0,
+        "area_residual_rejection_threshold_m2": 1e-11,
+        "occupied_cells": 64
+      },
+      "overlap_cells": 52,
+      "overlap_volume_m3": 0.00021777868648425644,
+      "declared_joint_slab_m": [
+        [
+          -13.225000381469727,
+          -0.5199999809265137,
+          -26.15999984741211
+        ],
+        [
+          -13.219999313354492,
+          -0.11999999731779099,
+          -25.84000015258789
+        ]
+      ],
+      "actual_joint_axial_thickness_m": 0.005001068115234375,
+      "panels": [
+        {
+          "panel": -1,
+          "sweep_box_m": [
+            [
+              -13.232000350952148,
+              -0.5049999964237213,
+              -26.09000015258789
+            ],
+            [
+              -13.22599983215332,
+              -0.3199999928474426,
+              -25.90999984741211
+            ]
+          ],
+          "pipe_x_separation_m": 0.00099945068359375,
+          "frame_endstop_contact_max_depth_m": 1.19209286886246e-09,
+          "frame_endstop_contact_cells": 3,
+          "proposed_exact_slot_endstop_travel_m": 0.0949999988079071,
+          "authored_nominal_travel_m": 0.095,
+          "proposed_safe_sweep_zero_positive_material_overlap": true
+        },
+        {
+          "panel": 1,
+          "sweep_box_m": [
+            [
+              -13.232000350952148,
+              -0.3199999928474426,
+              -26.09000015258789
+            ],
+            [
+              -13.22599983215332,
+              -0.13500000417232513,
+              -25.90999984741211
+            ]
+          ],
+          "pipe_x_separation_m": 0.00099945068359375,
+          "frame_endstop_contact_max_depth_m": 1.1920928966180355e-09,
+          "frame_endstop_contact_cells": 3,
+          "proposed_exact_slot_endstop_travel_m": 0.0949999988079071,
+          "authored_nominal_travel_m": 0.095,
+          "proposed_safe_sweep_zero_positive_material_overlap": true
+        }
+      ],
+      "certified_clear_interface_corridor_m": [
+        [
+          -13.239999771118164,
+          -0.40498000383377075,
+          -26.084980010986328
+        ],
+        [
+          -13.120000839233398,
+          -0.2350199967622757,
+          -25.915019989013672
+        ]
+      ],
+      "certified_square_m": 0.16996
+    },
+    {
+      "bay": 2,
+      "fixed_group": null,
+      "frame_boundary": {
+        "oriented_planes": 16,
+        "max_area_error_m2": 0.0,
+        "area_residual_rejection_threshold_m2": 1e-11,
+        "occupied_cells": 64
+      },
+      "overlap_cells": 52,
+      "overlap_volume_m3": 0.00021776724221277756,
+      "declared_joint_slab_m": [
+        [
+          -5.225000381469727,
+          -0.5199999809265137,
+          -26.15999984741211
+        ],
+        [
+          -5.219999313354492,
+          -0.11999999731779099,
+          -25.84000015258789
+        ]
+      ],
+      "actual_joint_axial_thickness_m": 0.005001068115234375,
+      "panels": [
+        {
+          "panel": -1,
+          "sweep_box_m": [
+            [
+              -5.232000350952148,
+              -0.5049999964237213,
+              -26.09000015258789
+            ],
+            [
+              -5.22599983215332,
+              -0.3199999928474426,
+              -25.90999984741211
+            ]
+          ],
+          "pipe_x_separation_m": 0.0009999275207519531,
+          "frame_endstop_contact_max_depth_m": 1.19209286886246e-09,
+          "frame_endstop_contact_cells": 3,
+          "proposed_exact_slot_endstop_travel_m": 0.0949999988079071,
+          "authored_nominal_travel_m": 0.095,
+          "proposed_safe_sweep_zero_positive_material_overlap": true
+        },
+        {
+          "panel": 1,
+          "sweep_box_m": [
+            [
+              -5.232000350952148,
+              -0.3199999928474426,
+              -26.09000015258789
+            ],
+            [
+              -5.22599983215332,
+              -0.13500000417232513,
+              -25.90999984741211
+            ]
+          ],
+          "pipe_x_separation_m": 0.0009999275207519531,
+          "frame_endstop_contact_max_depth_m": 1.1920928966180355e-09,
+          "frame_endstop_contact_cells": 3,
+          "proposed_exact_slot_endstop_travel_m": 0.0949999988079071,
+          "authored_nominal_travel_m": 0.095,
+          "proposed_safe_sweep_zero_positive_material_overlap": true
+        }
+      ],
+      "certified_clear_interface_corridor_m": [
+        [
+          -5.239999771118164,
+          -0.40498000383377075,
+          -26.084980010986328
+        ],
+        [
+          -5.120000839233398,
+          -0.2350199967622757,
+          -25.915019989013672
+        ]
+      ],
+      "certified_square_m": 0.16996
+    },
+    {
+      "bay": 3,
+      "fixed_group": null,
+      "frame_boundary": {
+        "oriented_planes": 16,
+        "max_area_error_m2": 0.0,
+        "area_residual_rejection_threshold_m2": 1e-11,
+        "occupied_cells": 64
+      },
+      "overlap_cells": 52,
+      "overlap_volume_m3": 0.0002177625811805816,
+      "declared_joint_slab_m": [
+        [
+          2.7749996185302734,
+          -0.5199999809265137,
+          -26.15999984741211
+        ],
+        [
+          2.780000686645508,
+          -0.11999999731779099,
+          -25.84000015258789
+        ]
+      ],
+      "actual_joint_axial_thickness_m": 0.005001068115234375,
+      "panels": [
+        {
+          "panel": -1,
+          "sweep_box_m": [
+            [
+              2.7679996490478516,
+              -0.5049999964237213,
+              -26.09000015258789
+            ],
+            [
+              2.7740001678466797,
+              -0.3199999928474426,
+              -25.90999984741211
+            ]
+          ],
+          "pipe_x_separation_m": 0.0009999275207519531,
+          "frame_endstop_contact_max_depth_m": 1.19209286886246e-09,
+          "frame_endstop_contact_cells": 3,
+          "proposed_exact_slot_endstop_travel_m": 0.0949999988079071,
+          "authored_nominal_travel_m": 0.095,
+          "proposed_safe_sweep_zero_positive_material_overlap": true
+        },
+        {
+          "panel": 1,
+          "sweep_box_m": [
+            [
+              2.7679996490478516,
+              -0.3199999928474426,
+              -26.09000015258789
+            ],
+            [
+              2.7740001678466797,
+              -0.13500000417232513,
+              -25.90999984741211
+            ]
+          ],
+          "pipe_x_separation_m": 0.0009999275207519531,
+          "frame_endstop_contact_max_depth_m": 1.1920928966180355e-09,
+          "frame_endstop_contact_cells": 3,
+          "proposed_exact_slot_endstop_travel_m": 0.0949999988079071,
+          "authored_nominal_travel_m": 0.095,
+          "proposed_safe_sweep_zero_positive_material_overlap": true
+        }
+      ],
+      "certified_clear_interface_corridor_m": [
+        [
+          2.760000228881836,
+          -0.40498000383377075,
+          -26.084980010986328
+        ],
+        [
+          2.8799991607666016,
+          -0.2350199967622757,
+          -25.915019989013672
+        ]
+      ],
+      "certified_square_m": 0.16996
+    },
+    {
+      "bay": 4,
+      "fixed_group": null,
+      "frame_boundary": {
+        "oriented_planes": 16,
+        "max_area_error_m2": 0.0,
+        "area_residual_rejection_threshold_m2": 1e-11,
+        "occupied_cells": 64
+      },
+      "overlap_cells": 52,
+      "overlap_volume_m3": 0.00021777868648425644,
+      "declared_joint_slab_m": [
+        [
+          10.774999618530273,
+          -0.5199999809265137,
+          -26.15999984741211
+        ],
+        [
+          10.780000686645508,
+          -0.11999999731779099,
+          -25.84000015258789
+        ]
+      ],
+      "actual_joint_axial_thickness_m": 0.005001068115234375,
+      "panels": [
+        {
+          "panel": -1,
+          "sweep_box_m": [
+            [
+              10.767999649047852,
+              -0.5049999964237213,
+              -26.09000015258789
+            ],
+            [
+              10.77400016784668,
+              -0.3199999928474426,
+              -25.90999984741211
+            ]
+          ],
+          "pipe_x_separation_m": 0.00099945068359375,
+          "frame_endstop_contact_max_depth_m": 1.19209286886246e-09,
+          "frame_endstop_contact_cells": 3,
+          "proposed_exact_slot_endstop_travel_m": 0.0949999988079071,
+          "authored_nominal_travel_m": 0.095,
+          "proposed_safe_sweep_zero_positive_material_overlap": true
+        },
+        {
+          "panel": 1,
+          "sweep_box_m": [
+            [
+              10.767999649047852,
+              -0.3199999928474426,
+              -26.09000015258789
+            ],
+            [
+              10.77400016784668,
+              -0.13500000417232513,
+              -25.90999984741211
+            ]
+          ],
+          "pipe_x_separation_m": 0.00099945068359375,
+          "frame_endstop_contact_max_depth_m": 1.1920928966180355e-09,
+          "frame_endstop_contact_cells": 3,
+          "proposed_exact_slot_endstop_travel_m": 0.0949999988079071,
+          "authored_nominal_travel_m": 0.095,
+          "proposed_safe_sweep_zero_positive_material_overlap": true
+        }
+      ],
+      "certified_clear_interface_corridor_m": [
+        [
+          10.760000228881836,
+          -0.40498000383377075,
+          -26.084980010986328
+        ],
+        [
+          10.879999160766602,
+          -0.2350199967622757,
+          -25.915019989013672
+        ]
+      ],
+      "certified_square_m": 0.16996
+    },
+    {
+      "bay": 5,
+      "fixed_group": null,
+      "frame_boundary": {
+        "oriented_planes": 16,
+        "max_area_error_m2": 0.0,
+        "area_residual_rejection_threshold_m2": 1e-11,
+        "occupied_cells": 64
+      },
+      "overlap_cells": 29,
+      "overlap_volume_m3": 0.00021779733061304024,
+      "declared_joint_slab_m": [
+        [
+          -30.780000686645508,
+          -0.5199999809265137,
+          25.84000015258789
+        ],
+        [
+          -30.774999618530273,
+          -0.11999999731779099,
+          26.15999984741211
+        ]
+      ],
+      "actual_joint_axial_thickness_m": 0.005001068115234375,
+      "panels": [
+        {
+          "panel": -1,
+          "sweep_box_m": [
+            [
+              -30.77400016784668,
+              -0.5049999964237213,
+              25.90999984741211
+            ],
+            [
+              -30.76799964904785,
+              -0.3199999928474426,
+              26.09000015258789
+            ]
+          ],
+          "pipe_x_separation_m": 0.00099945068359375,
+          "frame_endstop_contact_max_depth_m": 1.19209286886246e-09,
+          "frame_endstop_contact_cells": 3,
+          "proposed_exact_slot_endstop_travel_m": 0.0949999988079071,
+          "authored_nominal_travel_m": 0.095,
+          "proposed_safe_sweep_zero_positive_material_overlap": true
+        },
+        {
+          "panel": 1,
+          "sweep_box_m": [
+            [
+              -30.77400016784668,
+              -0.3199999928474426,
+              25.90999984741211
+            ],
+            [
+              -30.76799964904785,
+              -0.13500000417232513,
+              26.09000015258789
+            ]
+          ],
+          "pipe_x_separation_m": 0.00099945068359375,
+          "frame_endstop_contact_max_depth_m": 1.1920928966180355e-09,
+          "frame_endstop_contact_cells": 3,
+          "proposed_exact_slot_endstop_travel_m": 0.0949999988079071,
+          "authored_nominal_travel_m": 0.095,
+          "proposed_safe_sweep_zero_positive_material_overlap": true
+        }
+      ],
+      "certified_clear_interface_corridor_m": [
+        [
+          -30.8799991607666,
+          -0.40498000383377075,
+          25.915019989013672
+        ],
+        [
+          -30.760000228881836,
+          -0.2350199967622757,
+          26.084980010986328
+        ]
+      ],
+      "certified_square_m": 0.16996
+    },
+    {
+      "bay": 6,
+      "fixed_group": null,
+      "frame_boundary": {
+        "oriented_planes": 16,
+        "max_area_error_m2": 0.0,
+        "area_residual_rejection_threshold_m2": 1e-11,
+        "occupied_cells": 64
+      },
+      "overlap_cells": 29,
+      "overlap_volume_m3": 0.00021779733061304024,
+      "declared_joint_slab_m": [
+        [
+          -22.780000686645508,
+          -0.5199999809265137,
+          25.84000015258789
+        ],
+        [
+          -22.774999618530273,
+          -0.11999999731779099,
+          26.15999984741211
+        ]
+      ],
+      "actual_joint_axial_thickness_m": 0.005001068115234375,
+      "panels": [
+        {
+          "panel": -1,
+          "sweep_box_m": [
+            [
+              -22.77400016784668,
+              -0.5049999964237213,
+              25.90999984741211
+            ],
+            [
+              -22.76799964904785,
+              -0.3199999928474426,
+              26.09000015258789
+            ]
+          ],
+          "pipe_x_separation_m": 0.00099945068359375,
+          "frame_endstop_contact_max_depth_m": 1.19209286886246e-09,
+          "frame_endstop_contact_cells": 3,
+          "proposed_exact_slot_endstop_travel_m": 0.0949999988079071,
+          "authored_nominal_travel_m": 0.095,
+          "proposed_safe_sweep_zero_positive_material_overlap": true
+        },
+        {
+          "panel": 1,
+          "sweep_box_m": [
+            [
+              -22.77400016784668,
+              -0.3199999928474426,
+              25.90999984741211
+            ],
+            [
+              -22.76799964904785,
+              -0.13500000417232513,
+              26.09000015258789
+            ]
+          ],
+          "pipe_x_separation_m": 0.00099945068359375,
+          "frame_endstop_contact_max_depth_m": 1.1920928966180355e-09,
+          "frame_endstop_contact_cells": 3,
+          "proposed_exact_slot_endstop_travel_m": 0.0949999988079071,
+          "authored_nominal_travel_m": 0.095,
+          "proposed_safe_sweep_zero_positive_material_overlap": true
+        }
+      ],
+      "certified_clear_interface_corridor_m": [
+        [
+          -22.8799991607666,
+          -0.40498000383377075,
+          25.915019989013672
+        ],
+        [
+          -22.760000228881836,
+          -0.2350199967622757,
+          26.084980010986328
+        ]
+      ],
+      "certified_square_m": 0.16996
+    },
+    {
+      "bay": 7,
+      "fixed_group": null,
+      "frame_boundary": {
+        "oriented_planes": 16,
+        "max_area_error_m2": 0.0,
+        "area_residual_rejection_threshold_m2": 1e-11,
+        "occupied_cells": 64
+      },
+      "overlap_cells": 52,
+      "overlap_volume_m3": 0.00021777868648425644,
+      "declared_joint_slab_m": [
+        [
+          -14.780000686645508,
+          -0.5199999809265137,
+          25.84000015258789
+        ],
+        [
+          -14.774999618530273,
+          -0.11999999731779099,
+          26.15999984741211
+        ]
+      ],
+      "actual_joint_axial_thickness_m": 0.005001068115234375,
+      "panels": [
+        {
+          "panel": -1,
+          "sweep_box_m": [
+            [
+              -14.77400016784668,
+              -0.5049999964237213,
+              25.90999984741211
+            ],
+            [
+              -14.767999649047852,
+              -0.3199999928474426,
+              26.09000015258789
+            ]
+          ],
+          "pipe_x_separation_m": 0.00099945068359375,
+          "frame_endstop_contact_max_depth_m": 1.19209286886246e-09,
+          "frame_endstop_contact_cells": 3,
+          "proposed_exact_slot_endstop_travel_m": 0.0949999988079071,
+          "authored_nominal_travel_m": 0.095,
+          "proposed_safe_sweep_zero_positive_material_overlap": true
+        },
+        {
+          "panel": 1,
+          "sweep_box_m": [
+            [
+              -14.77400016784668,
+              -0.3199999928474426,
+              25.90999984741211
+            ],
+            [
+              -14.767999649047852,
+              -0.13500000417232513,
+              26.09000015258789
+            ]
+          ],
+          "pipe_x_separation_m": 0.00099945068359375,
+          "frame_endstop_contact_max_depth_m": 1.1920928966180355e-09,
+          "frame_endstop_contact_cells": 3,
+          "proposed_exact_slot_endstop_travel_m": 0.0949999988079071,
+          "authored_nominal_travel_m": 0.095,
+          "proposed_safe_sweep_zero_positive_material_overlap": true
+        }
+      ],
+      "certified_clear_interface_corridor_m": [
+        [
+          -14.879999160766602,
+          -0.40498000383377075,
+          25.915019989013672
+        ],
+        [
+          -14.760000228881836,
+          -0.2350199967622757,
+          26.084980010986328
+        ]
+      ],
+      "certified_square_m": 0.16996
+    },
+    {
+      "bay": 8,
+      "fixed_group": null,
+      "frame_boundary": {
+        "oriented_planes": 16,
+        "max_area_error_m2": 0.0,
+        "area_residual_rejection_threshold_m2": 1e-11,
+        "occupied_cells": 64
+      },
+      "overlap_cells": 52,
+      "overlap_volume_m3": 0.00021776724221277754,
+      "declared_joint_slab_m": [
+        [
+          -6.780000686645508,
+          -0.5199999809265137,
+          25.84000015258789
+        ],
+        [
+          -6.774999618530273,
+          -0.11999999731779099,
+          26.15999984741211
+        ]
+      ],
+      "actual_joint_axial_thickness_m": 0.005001068115234375,
+      "panels": [
+        {
+          "panel": -1,
+          "sweep_box_m": [
+            [
+              -6.77400016784668,
+              -0.5049999964237213,
+              25.90999984741211
+            ],
+            [
+              -6.767999649047852,
+              -0.3199999928474426,
+              26.09000015258789
+            ]
+          ],
+          "pipe_x_separation_m": 0.0009999275207519531,
+          "frame_endstop_contact_max_depth_m": 1.19209286886246e-09,
+          "frame_endstop_contact_cells": 3,
+          "proposed_exact_slot_endstop_travel_m": 0.0949999988079071,
+          "authored_nominal_travel_m": 0.095,
+          "proposed_safe_sweep_zero_positive_material_overlap": true
+        },
+        {
+          "panel": 1,
+          "sweep_box_m": [
+            [
+              -6.77400016784668,
+              -0.3199999928474426,
+              25.90999984741211
+            ],
+            [
+              -6.767999649047852,
+              -0.13500000417232513,
+              26.09000015258789
+            ]
+          ],
+          "pipe_x_separation_m": 0.0009999275207519531,
+          "frame_endstop_contact_max_depth_m": 1.1920928966180355e-09,
+          "frame_endstop_contact_cells": 3,
+          "proposed_exact_slot_endstop_travel_m": 0.0949999988079071,
+          "authored_nominal_travel_m": 0.095,
+          "proposed_safe_sweep_zero_positive_material_overlap": true
+        }
+      ],
+      "certified_clear_interface_corridor_m": [
+        [
+          -6.879999160766602,
+          -0.40498000383377075,
+          25.915019989013672
+        ],
+        [
+          -6.760000228881836,
+          -0.2350199967622757,
+          26.084980010986328
+        ]
+      ],
+      "certified_square_m": 0.16996
+    },
+    {
+      "bay": 9,
+      "fixed_group": null,
+      "frame_boundary": {
+        "oriented_planes": 16,
+        "max_area_error_m2": 0.0,
+        "area_residual_rejection_threshold_m2": 1e-11,
+        "occupied_cells": 64
+      },
+      "overlap_cells": 52,
+      "overlap_volume_m3": 0.00021776777276454932,
+      "declared_joint_slab_m": [
+        [
+          1.2199993133544922,
+          -0.5199999809265137,
+          25.84000015258789
+        ],
+        [
+          1.2250003814697266,
+          -0.11999999731779099,
+          26.15999984741211
+        ]
+      ],
+      "actual_joint_axial_thickness_m": 0.005001068115234375,
+      "panels": [
+        {
+          "panel": -1,
+          "sweep_box_m": [
+            [
+              1.2259998321533203,
+              -0.5049999964237213,
+              25.90999984741211
+            ],
+            [
+              1.2320003509521484,
+              -0.3199999928474426,
+              26.09000015258789
+            ]
+          ],
+          "pipe_x_separation_m": 0.0009998083114624023,
+          "frame_endstop_contact_max_depth_m": 1.19209286886246e-09,
+          "frame_endstop_contact_cells": 3,
+          "proposed_exact_slot_endstop_travel_m": 0.0949999988079071,
+          "authored_nominal_travel_m": 0.095,
+          "proposed_safe_sweep_zero_positive_material_overlap": true
+        },
+        {
+          "panel": 1,
+          "sweep_box_m": [
+            [
+              1.2259998321533203,
+              -0.3199999928474426,
+              25.90999984741211
+            ],
+            [
+              1.2320003509521484,
+              -0.13500000417232513,
+              26.09000015258789
+            ]
+          ],
+          "pipe_x_separation_m": 0.0009998083114624023,
+          "frame_endstop_contact_max_depth_m": 1.1920928966180355e-09,
+          "frame_endstop_contact_cells": 3,
+          "proposed_exact_slot_endstop_travel_m": 0.0949999988079071,
+          "authored_nominal_travel_m": 0.095,
+          "proposed_safe_sweep_zero_positive_material_overlap": true
+        }
+      ],
+      "certified_clear_interface_corridor_m": [
+        [
+          1.1200008392333984,
+          -0.40498000383377075,
+          25.915019989013672
+        ],
+        [
+          1.239999771118164,
+          -0.2350199967622757,
+          26.084980010986328
+        ]
+      ],
+      "certified_square_m": 0.16996
+    }
+  ],
+  "negative_controls": [
+    "bay0: escaped joint overlap rejected",
+    "missing actual frame triangle rejected by same full-boundary test",
+    "missing actual frame triangle rejected by same full-boundary test",
+    "bay0: full bore blocker rejected",
+    "bay1: escaped joint overlap rejected",
+    "bay1: full bore blocker rejected",
+    "bay2: escaped joint overlap rejected",
+    "bay2: full bore blocker rejected",
+    "bay3: escaped joint overlap rejected",
+    "bay3: full bore blocker rejected",
+    "bay4: escaped joint overlap rejected",
+    "bay4: full bore blocker rejected",
+    "bay5: escaped joint overlap rejected",
+    "bay5: full bore blocker rejected",
+    "bay6: escaped joint overlap rejected",
+    "bay6: full bore blocker rejected",
+    "bay7: escaped joint overlap rejected",
+    "bay7: full bore blocker rejected",
+    "bay8: escaped joint overlap rejected",
+    "bay8: full bore blocker rejected",
+    "bay9: escaped joint overlap rejected",
+    "bay9: full bore blocker rejected"
+  ],
+  "limits": [
+    "Static shared-body overlapping-material joint, not disjoint parts. Both retain their render surfaces; no invented welded source union or force/pressure/seal rating.",
+    "Actual oriented triangle multisets and complete orthogonal CSG boundaries bind this proof to final float32 export.",
+    "Geometry-only interface corridor excludes valve panels when measuring open path; complete closed/open valve correctness remains separate. Nominal travel against actual rounded frame endpoints has nanometre overshoot reported per panel; zero frame contact is NOT claimed.",
+    "Original Ready/reserve separation reports remain FAIL because they do not model intentional joints. This report qualifies only their fixed-frame/fixed-network intersection, not other pairs.",
+    "No full ship handling, flow, runtime admission or maintenance accessibility claim."
+  ]
+}

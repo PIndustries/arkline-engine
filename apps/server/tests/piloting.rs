@@ -10,7 +10,11 @@ fn create(s: &mut Server) -> (Option<String>, String) {
     let r = s.handle_at(
         &mut p,
         Request::Connect {
+            supports_room_controls: false,
+            world_layout_version: 1,
+            supports_fleet_hangar: false,
             supports_pioneer_interior: true,
+            supports_docked_traversal_v2: false,
             protocol_version: PROTOCOL_VERSION,
             pilot: "Pilot".into(),
             resume_token: None,
@@ -198,7 +202,11 @@ fn logout_and_restart_preserve_full_quaternion_and_do_not_resume_thrust() {
             &mut s,
             &mut p,
             Request::Connect {
+                supports_room_controls: false,
+                world_layout_version: 1,
+                supports_fleet_hangar: false,
                 supports_pioneer_interior: true,
+                supports_docked_traversal_v2: false,
                 protocol_version: PROTOCOL_VERSION,
                 pilot: "Pilot".into(),
                 resume_token: Some(token),

@@ -1,0 +1,90 @@
+@@ -775,2 +775,89 @@
+ #[cfg(test)]
++mod surface_tests {
++    use super::*;
++
++    fn viewport() -> egui::Rect {
++        egui::Rect::from_min_size(egui::pos2(70.0, 40.0), egui::vec2(900.0, 650.0))
++    }
++    fn matrix(eye: Vec3, look: Quat) -> Mat4 {
++        Mat4::perspective_rh_gl(COCKPIT_FOV, viewport().aspect_ratio(), 0.01, 100.0)
++            * Mat4::look_at_rh(eye, eye + look * Vec3::X, look * Vec3::Y)
++    }
++
++    #[test]
++    fn cockpit_surface_tracks_real_mount_camera_headlook_and_roll() {
++        let neutral = CockpitSurface::new(viewport(), matrix(Vec3::ZERO, Quat::IDENTITY), ShipClass::Pioneer, 5, NAV_CANVAS_SIZE).unwrap();
++        let mut centers = Vec::new();
++        for look in [Quat::IDENTITY, Quat::from_rotation_y(-0.25), Quat::from_rotation_x(0.4) * Quat::from_rotation_y(-0.2)] {
++            let surface = CockpitSurface::new(viewport(), matrix(Vec3::ZERO, look), ShipClass::Pioneer, 5, NAV_CANVAS_SIZE).unwrap();
++            let center = surface.project(surface.canvas.center()).unwrap();
++            assert!(surface.contains(center));
++            assert!(surface.unproject(center).unwrap().distance(surface.canvas.center()) < 0.001);
++            centers.push(center);
++        }
++        assert!(centers[0].distance(centers[1]) > 20.0);
++        let mount = Mat4::from_scale_rotation_translation(Vec3::splat(0.7), Quat::IDENTITY, Vec3::new(0.3, 0.0, 0.0));
++        let mounted = CockpitSurface::new(viewport(), matrix(Vec3::ZERO, Quat::IDENTITY) * mount, ShipClass::Pioneer, 5, NAV_CANVAS_SIZE).unwrap();
++        assert!(neutral.bounds().center().distance(mounted.bounds().center()) > 10.0);
++    }
++
++    #[test]
++    fn cockpit_surface_inverse_hit_rejects_bounding_box_outside_actual_quad() {
++        let look = Quat::from_rotation_x(0.5) * Quat::from_rotation_y(-0.2);
++        let surface = CockpitSurface::new(viewport(), matrix(Vec3::ZERO, look), ShipClass::Pioneer, 5, NAV_CANVAS_SIZE).unwrap();
++        let bounds = surface.bounds();
++        let outside = [bounds.left_top(), bounds.right_top(), bounds.left_bottom(), bounds.right_bottom()]
++            .into_iter().any(|point| !surface.contains(point));
++        assert!(outside, "A tilted display is a quad, not its axis-aligned bounding box");
++        for local in [egui::pos2(32.0, 25.0), egui::pos2(220.0, 100.0)] {
++            let point = surface.project(local).unwrap();
++            assert!(surface.unproject(point).unwrap().distance(local) < 0.001);
++        }
++    }
++
++    #[test]
++    fn cockpit_surface_partially_visible_contents_clip_to_viewport_and_bezel() {
++        let look = Quat::from_rotation_y(0.3);
++        let surface = CockpitSurface::new(viewport(), matrix(Vec3::ZERO, look), ShipClass::Pioneer, 5, NAV_CANVAS_SIZE).unwrap();
++        assert!((surface.bounds().right() - viewport().right()).abs() < 0.01);
++        let mut mesh = egui::epaint::Mesh::default();
++        mesh.add_colored_rect(surface.canvas.expand(50.0), egui::Color32::WHITE);
++        let projected = surface.project_mesh(mesh, surface.canvas);
++        assert!(!projected.indices.is_empty());
++        assert!(projected.vertices.iter().all(|v| viewport().expand(0.01).contains(v.pos)));
++        assert!(projected.vertices.iter().all(|v| surface.unproject(v.pos).is_some()));
++        assert!(projected.indices.iter().all(|i| (*i as usize) < projected.vertices.len()));
++    }
++
++    #[test]
++    fn cockpit_surface_naturally_rejects_backface_offscreen_and_near_clipped_mounts() {
++        let canvas = NAV_CANVAS_SIZE;
++        assert!(CockpitSurface::new(viewport(), matrix(Vec3::new(2.0, 0.0, 0.0), Quat::from_rotation_y(std::f32::consts::PI)), ShipClass::Pioneer, 5, canvas).is_none());
++        assert!(CockpitSurface::new(viewport(), matrix(Vec3::ZERO, Quat::from_rotation_y(std::f32::consts::PI)), ShipClass::Pioneer, 5, canvas).is_none());
++        let behind_near = Mat4::perspective_rh_gl(COCKPIT_FOV, viewport().aspect_ratio(), 1.0, 100.0)
++            * Mat4::look_at_rh(Vec3::ZERO, Vec3::X, Vec3::Y);
++        assert!(CockpitSurface::new(viewport(), behind_near, ShipClass::Pioneer, 5, canvas).is_none());
++    }
++
++    #[test]
++    fn cockpit_surface_text_and_shapes_are_real_projected_meshes_without_floating_text() {
++        let surface = CockpitSurface::new(viewport(), matrix(Vec3::ZERO, Quat::from_rotation_y(-0.2)), ShipClass::Pioneer, 5, NAV_CANVAS_SIZE).unwrap();
++        let context = egui::Context::default();
++        let output = context.run(egui::RawInput { screen_rect: Some(viewport()), ..Default::default() }, |ctx| {
++            egui::CentralPanel::default().show(ctx, |ui| {
++                surface.paint(ui, |painter| {
++                    painter.rect_filled(surface.canvas, 0.0, egui::Color32::BLACK);
++                    painter.text(egui::pos2(-20.0, 40.0), egui::Align2::LEFT_TOP,
++                        "RADAR TEXT CROSSES BEZEL", egui::FontId::monospace(12.0), egui::Color32::WHITE);
++                });
++            });
++        });
++        assert!(!output.shapes.iter().any(|s| matches!(&s.shape, egui::Shape::Text(_))));
++        let meshes: Vec<_> = output.shapes.iter().filter_map(|s| match &s.shape { egui::Shape::Mesh(mesh) => Some(mesh), _ => None }).collect();
++        assert!(!meshes.is_empty());
++        assert!(meshes.iter().flat_map(|m| &m.vertices).all(|v| surface.unproject(v.pos).is_some()));
++    }
++}
++
++#[cfg(test)]
+ mod remote_tests {

@@ -1,0 +1,107 @@
+{
+  "scope": "Boundary-contained runtime presentation, not adoption of inward-wall study or migration",
+  "capability": {
+    "registration_revision": 4,
+    "source_sha256": "8125644f007537437942d34169e527c08ddd2dfaed575c874e2263ff2b7cb123",
+    "version": 2
+  },
+  "runtime_source_files_sha256": {
+    "apps/client/src/pioneer_docked_scene.rs": "dd2921a51f805c00a09a6c26506df0d9f8914933bb14503bf531f7a0230d2bbd",
+    "apps/client/src/pioneer_docked_gpu_tests.rs": "e2ced64e5ae34cae7ecafe63358ac3887798bc355239e774a6782f7e13cc39cf",
+    "apps/server/src/docked_traversal_tests.rs": "217a6a9fe362f504f8d6e971654ae589abebf181f62b2fe86705778ec2c4f729"
+  },
+  "native_receipt_sha256": "de640dd5a16705b6c10f27a2534e02910490bcaa8c349e8797f368f8c00e7537",
+  "native_receipt_directory": "/workspace/scratch/pioneer-safe-enclosure-runtime-loaded-saves",
+  "before_receipt_directory": "/workspace/scratch/pioneer-safe-enclosure-runtime-before",
+  "matched_first_four_cameras": true,
+  "loaded_fixture_saves": [
+    {
+      "binding": {
+        "fleet_hangar": false,
+        "fleet_layout": "linear_v1",
+        "host_vessel_id": "v1:Walker:Pioneer",
+        "layout_sha256": "17b93e86765dfe1f0d29a21e59e74821ac140295279bb4ff8ebbffeea215f87e",
+        "registration_revision": 4
+      },
+      "feet_station_m": [
+        31.92,
+        8.68,
+        5.48
+      ],
+      "snapshot_sha256": "9a081eafdb7937c6d6315344a746b3a98bc04af3d9ae324513dcb08496b1904f"
+    },
+    {
+      "binding": {
+        "fleet_hangar": true,
+        "fleet_layout": "linear_v1",
+        "host_vessel_id": "v1:Walker:Pioneer",
+        "layout_sha256": "17b93e86765dfe1f0d29a21e59e74821ac140295279bb4ff8ebbffeea215f87e",
+        "registration_revision": 4
+      },
+      "feet_station_m": [
+        31.92,
+        8.68,
+        30.48
+      ],
+      "snapshot_sha256": "9a267bcc78681491caef2ac31253ef8290f9c92cd6eee93f8308b01eb363bc66"
+    },
+    {
+      "binding": {
+        "fleet_hangar": true,
+        "fleet_layout": "circular_v1",
+        "host_vessel_id": "v1:Walker:Pioneer",
+        "layout_sha256": "17b93e86765dfe1f0d29a21e59e74821ac140295279bb4ff8ebbffeea215f87e",
+        "registration_revision": 4
+      },
+      "feet_station_m": [
+        31.92,
+        12.68,
+        30.48
+      ],
+      "snapshot_sha256": "39a7c28a91d116aa43beab05fe9c5116f6a722a9381a14121ad41fccc478f198"
+    }
+  ],
+  "sqlite_roundtrips": 9,
+  "placements": 3,
+  "clear_supported_boundary_grid_samples": 183,
+  "tests": {
+    "scene": {
+      "passed": 12,
+      "failed": 0,
+      "ignored": 2
+    },
+    "physical_input": {
+      "passed": 13,
+      "failed": 0,
+      "ignored": 1
+    },
+    "server_traversal": {
+      "passed": 19,
+      "failed": 0,
+      "ignored": 1
+    },
+    "loaded_native_runtime": {
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    }
+  },
+  "render_budget": {
+    "candidate_draws_before": 3266,
+    "candidate_draws_after": 3305,
+    "candidate_triangles_before": 247424,
+    "candidate_triangles_after": 247892
+  },
+  "runtime_replaced_panel_ids": [
+    "cockpit/ceiling",
+    "cockpit/canopy/header",
+    "cockpit/canopy/sill"
+  ],
+  "authoritative_geometry_schema_bindings_and_anchors_changed": false,
+  "limits": [
+    "Fixture snapshots and offscreen actual runtime callbacks, not live telemetry or OS input",
+    "Full-width registered room retained; empty forward field and instrument quality unresolved",
+    "No full-client suite rerun; previously evidenced eleven baseline failures remain",
+    "No migration, user saves, deployment, merge, Library upload or denied CI retry"
+  ]
+}

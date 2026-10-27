@@ -11,7 +11,7 @@ otherwise. All five Rust workspace packages inherit the same license metadata.
 Third-party dependencies and embedded third-party assets retain their own terms.
 Branding permissions are described separately in [TRADEMARKS.md](../TRADEMARKS.md).
 
-The repository remains private pending explicit owner approval to publish. This
+The repository is public. This
 operational publication decision is separate from the copyright permissions
 already granted to recipients under the license; it does not add restrictions to
 AGPL. Existing release artifacts are not silently rebuilt or relabeled by this

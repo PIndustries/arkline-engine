@@ -1,0 +1,500 @@
+{
+  "status": "PASS exact full counted cell, closed overlapping material components, connected conservative path and continuous valve sweep",
+  "glb_sha256": "9363b725e154f7219533461766c2dee2d1a6aaed7d662db38ad1e7c25071cf14",
+  "source_sha256": "04ef513ff5e0fc89f4909bb3078b6ed899fcc6a3ee9637b5d5de9837c8168237",
+  "checker_sha256": "cd30776ccc22da5bf4e0990af424daac11d3c09d5bc9b7e070ff70168ff1d0b8",
+  "triangles": 2064,
+  "capacity_cm3": 893833,
+  "material_component_rule": "Exact shared-position connected components; AABB-separated components cannot contain any query point. All overlapping components must be closed and individually exterior; no cross-component winding cancellation.",
+  "capacity_counted_mm3": 893833200,
+  "capacity_inset_m": 0,
+  "capacity": {
+    "label": "full counted cell, zero inset",
+    "box_m": [
+      [
+        "-67/50",
+        "-129/1000",
+        "-639/1000"
+      ],
+      [
+        "-1/25",
+        "409/1000",
+        "639/1000"
+      ]
+    ],
+    "shear": null,
+    "exact_triangle_tests": 0,
+    "hits": [],
+    "material_windings": [
+      {
+        "part": "core/closed-owned-material/component/0",
+        "winding": 2.738810975704695e-16
+      },
+      {
+        "part": "tank/closed-wall-union/component/0",
+        "winding": -1.3652641406108585e-16
+      }
+    ],
+    "overlapping_nonclosed_parts": []
+  },
+  "open_connected_path": [
+    {
+      "label": "throat",
+      "box_m": [
+        [
+          "-241999/100000",
+          "-21/250",
+          "-21/250"
+        ],
+        [
+          "-219/100",
+          "21/250",
+          "21/250"
+        ]
+      ],
+      "shear": null,
+      "exact_triangle_tests": 2,
+      "hits": [],
+      "material_windings": [
+        {
+          "part": "conduit/0/closed-union/component/0",
+          "winding": -1.766974823035287e-17
+        },
+        {
+          "part": "socket/mating-reducer/closed-annulus/component/0",
+          "winding": 1.236882376124701e-16
+        }
+      ],
+      "overlapping_nonclosed_parts": []
+    },
+    {
+      "label": "conduit",
+      "box_m": [
+        [
+          "-221/100",
+          "-21/250",
+          "-21/250"
+        ],
+        [
+          "-149/100",
+          "21/250",
+          "21/250"
+        ]
+      ],
+      "shear": [
+        ".2",
+        ".44"
+      ],
+      "exact_triangle_tests": 6,
+      "hits": [],
+      "material_windings": [
+        {
+          "part": "unchanged/source/batch3/component/2",
+          "winding": 1.4908850069360234e-17
+        },
+        {
+          "part": "conduit/0/closed-union/component/0",
+          "winding": -1.766974823035287e-17
+        },
+        {
+          "part": "socket/mating-reducer/closed-annulus/component/0",
+          "winding": -1.766974823035287e-17
+        },
+        {
+          "part": "core/closed-owned-material/component/0",
+          "winding": 4.8591807633470396e-17
+        },
+        {
+          "part": "tank/closed-wall-union/component/0",
+          "winding": -2.291545473623888e-17
+        }
+      ],
+      "overlapping_nonclosed_parts": []
+    },
+    {
+      "label": "inlet to payload",
+      "box_m": [
+        [
+          "-151/100",
+          "7/125",
+          "-21/250"
+        ],
+        [
+          "-1/20",
+          "28/125",
+          "21/250"
+        ]
+      ],
+      "shear": null,
+      "exact_triangle_tests": 2,
+      "hits": [],
+      "material_windings": [
+        {
+          "part": "conduit/0/closed-union/component/0",
+          "winding": 4.969616689786745e-18
+        },
+        {
+          "part": "core/closed-owned-material/component/0",
+          "winding": 1.236882376124701e-16
+        },
+        {
+          "part": "tank/closed-wall-union/component/0",
+          "winding": 1.740746290505857e-16
+        }
+      ],
+      "overlapping_nonclosed_parts": []
+    }
+  ],
+  "valve_sweeps": [
+    {
+      "label": "whole linear sweep -1",
+      "box_m": [
+        [
+          "-11744051/8388608",
+          "-13421773/134217728",
+          "-32883343/67108864"
+        ],
+        [
+          "-11576279/8388608",
+          "3187671/8388608",
+          "0"
+        ]
+      ],
+      "shear": null,
+      "exact_triangle_tests": 20,
+      "hits": [],
+      "material_windings": [
+        {
+          "part": "tank/inlet-bulkhead/lower/component/0",
+          "winding": -7.454425034680117e-18
+        },
+        {
+          "part": "tank/inlet-bulkhead/upper/component/0",
+          "winding": -3.589167609290427e-18
+        },
+        {
+          "part": "tank/inlet-bulkhead/port/component/0",
+          "winding": 1.0601848938211722e-16
+        },
+        {
+          "part": "valve/guide/lower/base/component/0",
+          "winding": -4.969616689786745e-18
+        },
+        {
+          "part": "valve/guide/upper/base/component/0",
+          "winding": -4.003302333439323e-18
+        },
+        {
+          "part": "core/closed-owned-material/component/0",
+          "winding": 6.626155586382327e-17
+        },
+        {
+          "part": "tank/closed-wall-union/component/0",
+          "winding": 6.073975954183799e-17
+        }
+      ],
+      "overlapping_nonclosed_parts": []
+    },
+    {
+      "label": "whole linear sweep 1",
+      "box_m": [
+        [
+          "-11744051/8388608",
+          "-13421773/134217728",
+          "0"
+        ],
+        [
+          "-11576279/8388608",
+          "3187671/8388608",
+          "32883343/67108864"
+        ]
+      ],
+      "shear": null,
+      "exact_triangle_tests": 20,
+      "hits": [],
+      "material_windings": [
+        {
+          "part": "tank/inlet-bulkhead/lower/component/0",
+          "winding": -9.93923337957349e-18
+        },
+        {
+          "part": "tank/inlet-bulkhead/upper/component/0",
+          "winding": -7.730514850779382e-18
+        },
+        {
+          "part": "tank/inlet-bulkhead/starboard/component/0",
+          "winding": -1.0601848938211722e-16
+        },
+        {
+          "part": "valve/guide/lower/base/component/0",
+          "winding": 7.454425034680117e-18
+        },
+        {
+          "part": "valve/guide/upper/base/component/0",
+          "winding": -4.7763538185172605e-17
+        },
+        {
+          "part": "core/closed-owned-material/component/0",
+          "winding": 1.7669748230352872e-16
+        },
+        {
+          "part": "tank/closed-wall-union/component/0",
+          "winding": 1.1492238595131847e-17
+        }
+      ],
+      "overlapping_nonclosed_parts": []
+    }
+  ],
+  "exact_outer_envelope_coverage": [
+    {
+      "corridor": "throat",
+      "x_interval_m": [
+        "-241999/100000",
+        "-9227469/4194304"
+      ],
+      "actual_enclosing_parts": [
+        "socket/mating-reducer/closed-annulus"
+      ]
+    },
+    {
+      "corridor": "throat",
+      "x_interval_m": [
+        "-9227469/4194304",
+        "-219/100"
+      ],
+      "actual_enclosing_parts": [
+        "conduit/0/closed-union"
+      ]
+    },
+    {
+      "corridor": "conduit",
+      "x_interval_m": [
+        "-221/100",
+        "-9227469/4194304"
+      ],
+      "actual_enclosing_parts": [
+        "socket/mating-reducer/closed-annulus"
+      ]
+    },
+    {
+      "corridor": "conduit",
+      "x_interval_m": [
+        "-9227469/4194304",
+        "-3/2"
+      ],
+      "actual_enclosing_parts": [
+        "conduit/0/closed-union"
+      ]
+    },
+    {
+      "corridor": "conduit",
+      "x_interval_m": [
+        "-3/2",
+        "-149/100"
+      ],
+      "actual_enclosing_parts": [
+        "tank/closed-wall-union"
+      ]
+    },
+    {
+      "corridor": "inlet to payload",
+      "x_interval_m": [
+        "-151/100",
+        "-3/2"
+      ],
+      "actual_enclosing_parts": [
+        "conduit/0/closed-union"
+      ]
+    },
+    {
+      "corridor": "inlet to payload",
+      "x_interval_m": [
+        "-3/2",
+        "-1/20"
+      ],
+      "actual_enclosing_parts": [
+        "tank/closed-wall-union"
+      ]
+    }
+  ],
+  "corridor_connections": [
+    {
+      "between": [
+        "throat",
+        "conduit"
+      ],
+      "x_interval_m": [
+        "-221/100",
+        "-219/100"
+      ],
+      "cross_section_overlap_m": [
+        "21/125",
+        "21/125"
+      ]
+    },
+    {
+      "between": [
+        "conduit",
+        "inlet to payload"
+      ],
+      "x_interval_m": [
+        "-151/100",
+        "-149/100"
+      ],
+      "cross_section_overlap_m": [
+        "21/125",
+        "21/125"
+      ]
+    }
+  ],
+  "closed_full_inlet_coverage_yz_m": [
+    [
+      -0.07999999821186066,
+      -0.2199999988079071
+    ],
+    [
+      0.36000001430511475,
+      0.2199999988079071
+    ]
+  ],
+  "closed_panel_to_inlet_exact_contact": true,
+  "negative_controls": [
+    "contained triangle",
+    "boundary-only triangle is not positive-volume intrusion",
+    "1um-inside counted boundary obstruction",
+    "entire cell contained in closed solid",
+    "missing and reversed owned material faces rejected",
+    "same inlet corridor blocked by actual closed panels"
+  ],
+  "closed_blocking_control": {
+    "label": "closed valve blocks same inlet corridor",
+    "box_m": [
+      [
+        "-151/100",
+        "7/125",
+        "-21/250"
+      ],
+      [
+        "-1/20",
+        "28/125",
+        "21/250"
+      ]
+    ],
+    "shear": null,
+    "exact_triangle_tests": 14,
+    "hits": [
+      {
+        "part": "valve/panel/-1/component/0",
+        "triangle": 0
+      },
+      {
+        "part": "valve/panel/-1/component/0",
+        "triangle": 4
+      },
+      {
+        "part": "valve/panel/-1/component/0",
+        "triangle": 7
+      },
+      {
+        "part": "valve/panel/-1/component/0",
+        "triangle": 8
+      },
+      {
+        "part": "valve/panel/-1/component/0",
+        "triangle": 9
+      },
+      {
+        "part": "valve/panel/-1/component/0",
+        "triangle": 11
+      },
+      {
+        "part": "valve/panel/1/component/0",
+        "triangle": 0
+      },
+      {
+        "part": "valve/panel/1/component/0",
+        "triangle": 1
+      },
+      {
+        "part": "valve/panel/1/component/0",
+        "triangle": 2
+      },
+      {
+        "part": "valve/panel/1/component/0",
+        "triangle": 7
+      },
+      {
+        "part": "valve/panel/1/component/0",
+        "triangle": 9
+      },
+      {
+        "part": "valve/panel/1/component/0",
+        "triangle": 11
+      }
+    ],
+    "material_windings": [
+      {
+        "part": "valve/panel/-1/component/0",
+        "winding": 2.208718528794109e-18
+      },
+      {
+        "part": "valve/panel/1/component/0",
+        "winding": 0.0
+      },
+      {
+        "part": "conduit/0/closed-union/component/0",
+        "winding": 4.969616689786745e-18
+      },
+      {
+        "part": "core/closed-owned-material/component/0",
+        "winding": 1.236882376124701e-16
+      },
+      {
+        "part": "tank/closed-wall-union/component/0",
+        "winding": 1.740746290505857e-16
+      }
+    ],
+    "overlapping_nonclosed_parts": []
+  },
+  "retention": [
+    {
+      "panel": "-1",
+      "guide": "lower",
+      "back_gap_m": 0.001999974250793457,
+      "front_gap_m": 0.001999974250793457,
+      "vertical_capture_overlap_m": 0.020000003278255463,
+      "base_exact_contact": true
+    },
+    {
+      "panel": "-1",
+      "guide": "upper",
+      "back_gap_m": 0.001999974250793457,
+      "front_gap_m": 0.001999974250793457,
+      "vertical_capture_overlap_m": 0.019999980926513672,
+      "base_exact_contact": true
+    },
+    {
+      "panel": "1",
+      "guide": "lower",
+      "back_gap_m": 0.001999974250793457,
+      "front_gap_m": 0.001999974250793457,
+      "vertical_capture_overlap_m": 0.020000003278255463,
+      "base_exact_contact": true
+    },
+    {
+      "panel": "1",
+      "guide": "upper",
+      "back_gap_m": 0.001999974250793457,
+      "front_gap_m": 0.001999974250793457,
+      "vertical_capture_overlap_m": 0.019999980926513672,
+      "base_exact_contact": true
+    }
+  ],
+  "failures": [],
+  "material_closure_qualifications": [],
+  "limits": [
+    "Path is conservative positive-overlap 168mm square passage, not entire nominal bore or flow/pressure rating.",
+    "Exact rational SAT proves surface separation; winding material classification requires closed material. Nonclosed inherited components reported, not silently certified.",
+    "Runtime ownership, all-carrier motion, serviceability and ship admission remain separate."
+  ]
+}

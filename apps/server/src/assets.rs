@@ -1,11 +1,53 @@
 use super::*;
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub(super) struct Account {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) carrier_inventory: Option<carrier_inventory::world::OwnedCarrier>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) independent_bays: Option<independent_bays::world::OwnedBays>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(super) drone_cargo: BTreeMap<String, DroneCargoState>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(super) drone_receivers: BTreeMap<String, drone_cargo::Runtime>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(super) drone_bays: BTreeMap<String, DroneBayState>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(super) drone_bay_runtime: BTreeMap<String, drone_bay::Runtime>,
+    #[serde(default)]
+    pub(super) cockpit_mechanisms: Option<PioneerCockpitMechanisms>,
+    #[serde(default)]
+    pub(super) reactor_configuration: Option<PioneerReactorConfiguration>,
+    #[serde(default)]
+    pub(super) docked_traversal_compatible: bool,
+    #[serde(default)]
+    pub(super) docked_actuators: BTreeMap<String, DockedVesselActuators>,
+    /// Legacy and new vessels explicitly start with the exterior branch enabled.
+    #[serde(default = "exterior_enabled_by_default")]
+    pub(super) pioneer_exterior_enabled: bool,
     #[serde(default)]
     hull_catalog_version: u32,
+    #[serde(default)]
+    pub(super) fleet_hangar: bool,
+    #[serde(default)]
+    vessel_ids: Vec<(ShipClass, String)>,
+    #[serde(default)]
+    pub(super) pioneer_room: Option<PioneerRoomState>,
+    #[serde(default)]
+    pub(super) room_compatible: bool,
     pub(super) ships: Vec<HangarShip>,
     storage: BTreeMap<u32, u64>,
     corporation: Option<String>,
+}
+fn exterior_enabled_by_default() -> bool {
+    true
+}
+impl Account {
+    pub(super) fn vessel_id(&self, class: ShipClass) -> Option<&str> {
+        self.vessel_ids
+            .iter()
+            .find(|(c, _)| *c == class)
+            .map(|(_, id)| id.as_str())
+    }
 }
 #[derive(Clone, Serialize, Deserialize)]
 pub(super) struct Corporation {
@@ -20,11 +62,17 @@ pub(super) fn ensure_accounts(world: &mut World) {
             .accounts
             .entry(name.clone())
             .or_insert_with(|| Account {
+                pioneer_exterior_enabled: true,
                 hull_catalog_version: 1,
+                fleet_hangar: false,
+                vessel_ids: Vec::new(),
+                pioneer_room: None,
+                room_compatible: false,
                 ships: ALL_SHIP_CLASSES
                     .into_iter()
                     .filter(|class| *class != p.view.ship_class)
                     .map(|ship_class| HangarShip {
+                        power_accounting: None,
                         power: None,
                         ship_class,
                         system_id: HOME_SYSTEM_ID,
@@ -35,12 +83,19 @@ pub(super) fn ensure_accounts(world: &mut World) {
             });
     }
     for (name, account) in &mut world.accounts {
+        if account.vessel_ids.is_empty() {
+            account.vessel_ids = ALL_SHIP_CLASSES
+                .into_iter()
+                .map(|class| (class, format!("v1:{name}:{class:?}")))
+                .collect();
+        }
         if account.hull_catalog_version == 0 {
             for class in [ShipClass::Borealis, ShipClass::Stratum, ShipClass::Monolith] {
                 if world.pilots[name].view.ship_class != class
                     && !account.ships.iter().any(|s| s.ship_class == class)
                 {
                     account.ships.push(HangarShip {
+                        power_accounting: None,
                         power: None,
                         ship_class: class,
                         system_id: HOME_SYSTEM_ID,
@@ -58,12 +113,33 @@ fn storage_view(storage: &BTreeMap<u32, u64>) -> Vec<StationStorage> {
         .map(|(&system_id, &ore)| StationStorage { system_id, ore })
         .collect()
 }
-pub(super) fn view(world: &World, name: &str) -> Option<AssetsView> {
+pub(super) fn view(world: &World, name: &str, now: u64) -> Option<AssetsView> {
     let a = world.accounts.get(name)?;
     Some(AssetsView {
+        carrier_inventory: carrier_inventory::world::state(world, name)
+            .map(|s| s.inventory.clone()),
+        drone_cargo: drone_cargo::state(world, name).cloned(),
+        drone_bay: drone_bay::state(world, name).cloned(),
+        cargo_unloading: cargo_unloading::view(world, name),
+        pioneer_room_layout: None,
+        pioneer_room: (world.pilots[name].view.ship_class == ShipClass::Pioneer).then(|| {
+            a.pioneer_room
+                .clone()
+                .unwrap_or_else(|| PioneerRoomState::uncommissioned(format!("v1:{name}:Pioneer")))
+        }),
+        hangar: a.fleet_hangar.then(|| hangar_view(world, name)),
         pioneer_interior_available: true,
         pioneer_interior_decks: 2,
-        ships: a.ships.clone(),
+        ships: a
+            .ships
+            .iter()
+            .map(|ship| {
+                let mut view = ship.clone();
+                view.power_accounting =
+                    power::accounting(world, name, ship.ship_class, ship.power.as_ref(), now);
+                view
+            })
+            .collect(),
         storage: storage_view(&a.storage),
         invitations: world
             .corporations
@@ -103,6 +179,20 @@ pub(super) fn validate(world: &World) -> Result<()> {
     );
     let known_system = |id| systems().iter().any(|s| s.id == id);
     for (name, a) in &world.accounts {
+        ensure!(
+            a.vessel_ids.len() == ALL_SHIP_CLASSES.len(),
+            "invalid vessel identity count"
+        );
+        for class in ALL_SHIP_CLASSES {
+            ensure!(
+                a.vessel_ids
+                    .iter()
+                    .filter(|(c, id)| *c == class && *id == format!("v1:{name}:{class:?}"))
+                    .count()
+                    == 1,
+                "invalid vessel identity"
+            );
+        }
         let p = world
             .pilots
             .get(name)
@@ -199,7 +289,7 @@ pub(super) fn execute(
     now: u64,
 ) -> Result<Option<EconomicEvent>> {
     let p = w.pilots.get(name).context("pilot missing")?;
-    let capacity = cargo_capacity(p.view.ship_class);
+    let capacity = drone_cargo::hold_capacity(w, name);
     let system_id = p.view.system_id;
     let docked = p.view.location == Location::Docked;
     let pilot = name.to_string();
@@ -231,6 +321,7 @@ pub(super) fn execute(
                 "stored cargo exceeds capacity"
             );
             account.ships[index] = HangarShip {
+                power_accounting: None,
                 power: p.view.power.take(),
                 ship_class: from_ship_class,
                 system_id,
@@ -394,6 +485,32 @@ pub(super) fn execute(
     };
     Ok(Some(event))
 }
+pub(super) fn unload_destination(
+    w: &World,
+    name: &str,
+    destination: CargoUnloadDestination,
+) -> Result<(String, u64)> {
+    let system = w.pilots[name].view.system_id;
+    match destination {
+        CargoUnloadDestination::Personal => Ok((
+            name.into(),
+            *w.accounts[name].storage.get(&system).unwrap_or(&0),
+        )),
+        CargoUnloadDestination::Corporation => {
+            let owner = w.accounts[name]
+                .corporation
+                .as_ref()
+                .context("not a corporation member")?;
+            let c = &w.corporations[owner];
+            ensure!(
+                c.members.iter().any(|p| p == name),
+                "corporation membership required"
+            );
+            Ok((owner.clone(), *c.storage.get(&system).unwrap_or(&0)))
+        }
+    }
+}
+
 fn transfer(
     cargo: &mut u64,
     stored: &mut u64,
@@ -411,4 +528,82 @@ fn transfer(
         *stored -= units;
     }
     Ok(())
+}
+
+pub(super) fn hangar_view(w: &World, name: &str) -> HangarView {
+    let layout_revision = w.scene_layout.definition().fleet_layout;
+    let a = &w.accounts[name];
+    let p = &w.pilots[name].view;
+    let berths = a
+        .vessel_ids
+        .iter()
+        .filter_map(|(class, id)| {
+            let active = *class == p.ship_class;
+            let here = if active {
+                p.location == Location::Docked
+            } else {
+                a.ships
+                    .iter()
+                    .any(|s| s.ship_class == *class && s.system_id == p.system_id)
+            };
+            here.then(|| {
+                let pose = fleet_berth_pose(layout_revision, *class);
+                HangarBerth {
+                    id: id.clone(),
+                    ship_class: *class,
+                    position: pose.position,
+                    yaw: pose.yaw,
+                    boarding_point: pose.boarding_point,
+                    active,
+                    can_board: p.location == Location::Docked,
+                }
+            })
+        })
+        .collect();
+    HangarView {
+        layout_revision,
+        layout: fleet_hangar_layout_for(layout_revision),
+        berths,
+    }
+}
+pub(super) fn board(
+    w: &mut World,
+    name: &str,
+    id: &str,
+    now: u64,
+) -> Result<Option<EconomicEvent>> {
+    ensure!(
+        w.accounts[name].fleet_hangar,
+        "fleet hangar client required"
+    );
+    let berth = hangar_view(w, name)
+        .berths
+        .into_iter()
+        .find(|b| b.id == id)
+        .context("vessel not owned at this station")?;
+    let p = &w.pilots[name].view;
+    ensure!(p.location == Location::Docked, "boarding requires docking");
+    let avatar = p
+        .station_avatar
+        .as_ref()
+        .context("walk to the vessel boarding marker first")?;
+    ensure!(
+        !avatar.onboard_interior
+            && !avatar.seated
+            && avatar.jump_started_ms.is_none()
+            && flight::distance(avatar.position, berth.boarding_point) <= STATION_BOARD_RANGE_M,
+        "walk to the vessel boarding marker first"
+    );
+    let event = execute(
+        w,
+        name,
+        Request::SelectShip {
+            ship_class: berth.ship_class,
+        },
+        now,
+    )?;
+    let p = w.pilots.get_mut(name).unwrap();
+    p.view.station_avatar = None;
+    p.walk_input = None;
+    Ok(event)
 }

@@ -1,0 +1,99 @@
+{
+  "status": "PASS bounded whole fixed-network lumen geometry; NOT installed material clearance or flow rating",
+  "pipe_json_sha256": "5b6c7cdde69750df7d6f24a7f39340a7b3e9d5d5c4539355a2cd73e7e0976286",
+  "checker_sha256": "e24fc6f9545c357dbb4fa80d93ce0c9d4116813356e28eae41e55b1872f719c9",
+  "actual_f32_triangles": 1304,
+  "inner_boxes_checked_against_actual_triangles": 35,
+  "surface_hits_inside_bore": 0,
+  "ten_inlets_to_both_entries": [
+    {
+      "bay": 0,
+      "both_tank_entries_reached": [
+        true,
+        true
+      ],
+      "connected_bore_boxes": 35
+    },
+    {
+      "bay": 1,
+      "both_tank_entries_reached": [
+        true,
+        true
+      ],
+      "connected_bore_boxes": 35
+    },
+    {
+      "bay": 2,
+      "both_tank_entries_reached": [
+        true,
+        true
+      ],
+      "connected_bore_boxes": 35
+    },
+    {
+      "bay": 3,
+      "both_tank_entries_reached": [
+        true,
+        true
+      ],
+      "connected_bore_boxes": 35
+    },
+    {
+      "bay": 4,
+      "both_tank_entries_reached": [
+        true,
+        true
+      ],
+      "connected_bore_boxes": 35
+    },
+    {
+      "bay": 5,
+      "both_tank_entries_reached": [
+        true,
+        true
+      ],
+      "connected_bore_boxes": 35
+    },
+    {
+      "bay": 6,
+      "both_tank_entries_reached": [
+        true,
+        true
+      ],
+      "connected_bore_boxes": 35
+    },
+    {
+      "bay": 7,
+      "both_tank_entries_reached": [
+        true,
+        true
+      ],
+      "connected_bore_boxes": 35
+    },
+    {
+      "bay": 8,
+      "both_tank_entries_reached": [
+        true,
+        true
+      ],
+      "connected_bore_boxes": 35
+    },
+    {
+      "bay": 9,
+      "both_tank_entries_reached": [
+        true,
+        true
+      ],
+      "connected_bore_boxes": 35
+    }
+  ],
+  "inserted_shared_path_cap_negative_detected": true,
+  "truncated_last_inlet_trunk_negative_detected": true,
+  "minimum_nominal_square_bore_m": 0.17,
+  "pending": [
+    "final combined GLB exact geometry match",
+    "all hull/magazine material removed from full pipe outer footprint",
+    "fixedreceiver valve/module exact contact/closure",
+    "actual pressure/density/flow ratings remain unknown"
+  ]
+}

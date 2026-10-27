@@ -1,0 +1,15 @@
+{
+  "status": "PASS independent exact exported position/normal/winding/material chain",
+  "files": {
+    "ship-tank-new/candidate-corner-verified-export/pioneer.glb": "b62f7aea900cfd61f5455a946d259aee802587edb16b28a116c57c2cf04ca006",
+    "material-subtraction-new/material-export/pioneer.glb": "2ac97e0aed21baf2772eec454d785e0ad86733ac9530d196f89116ff96f0dbf6",
+    "receiver-integration-new/combined-material-export/pioneer.glb": "08241a77914f7b909b666cde14c4f7efd6f4ed8364e3fe25e8926dee75a2e011"
+  },
+  "cavity_original_subsequence_triangles_exact": 194940,
+  "post_receiver_retained_triangles_exact": 193812,
+  "receiver_triangles_removed": 1280,
+  "new_material_faces": 152,
+  "source_preservation_sha256": "318d293d8ee64f09c6528389986e746734903cd879318c773b72f7571838956f",
+  "checker_sha256": "1f40a7fd23ec5032d5b9c519fa6e88f882ab3499ec9a6f272c6f208cb407e2ac",
+  "scope": "Preservation only; original baseline outside-port proof is linked separately, not widened to global watertightness or runtime admission"
+}

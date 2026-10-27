@@ -1,0 +1,382 @@
+{
+  "scope": "Canonical radar primary title/authority layout; fixture snapshots, not live telemetry",
+  "base_git_revision": "f9798db23742c04845661a3e013660d08bc1c51c",
+  "capability": {
+    "registration_revision": 4,
+    "source_sha256": "8125644f007537437942d34169e527c08ddd2dfaed575c874e2263ff2b7cb123",
+    "version": 2
+  },
+  "matched_seated_camera_pose": [
+    [
+      0.3322000205516815,
+      0.013500000350177288,
+      0.029999999329447746
+    ],
+    [
+      0.0,
+      0.0
+    ]
+  ],
+  "all_non_radar_text_rows_match_baseline_exactly": true,
+  "before_directory": "/workspace/scratch/pioneer-five-instruments-final",
+  "after_directory": "/workspace/scratch/pioneer-radar-readable-final",
+  "before_receipt_sha256": "062ea5318e8c65f5af432e8fa2ae821987162d60f73c64c3c5fae171b4c83191",
+  "after_receipt_sha256": "9e57f480fc0ceffede2a02a2f0ec1ca9f8161d3859b34e163f0ffc54fe951638",
+  "after_capture_sha256": {
+    "seated-app.png": "54caafdaaaf9321b77c223c14c4c2c48b50c7cb622b49994bb74f18889c8e3a4",
+    "standing-seat-root.png": "8db417c5c536424781f65f84bc63ba8f57a75fc4b13f5fbd034d3159d3c91ab3"
+  },
+  "radar_text": [
+    {
+      "view": "seated actual App",
+      "rows": [
+        {
+          "canvas_font_em": 65.48060607910156,
+          "clear_samples": 5,
+          "clip_bounds": [
+            0.0,
+            0.0,
+            495.58441162109375,
+            180.0
+          ],
+          "elided": false,
+          "ink_bounds": [
+            12.0,
+            19.0,
+            204.0,
+            67.0
+          ],
+          "ink_clipped": false,
+          "projected_font_em_px": 15.020833015441895,
+          "sample_count": 5,
+          "slot": 5,
+          "text": "RADAR"
+        },
+        {
+          "canvas_font_em": 65.48060607910156,
+          "clear_samples": 5,
+          "clip_bounds": [
+            0.0,
+            0.0,
+            495.58441162109375,
+            180.0
+          ],
+          "elided": false,
+          "ink_bounds": [
+            337.27191162109375,
+            19.0,
+            484.27191162109375,
+            67.0
+          ],
+          "ink_clipped": false,
+          "projected_font_em_px": 15.966241836547852,
+          "sample_count": 5,
+          "slot": 5,
+          "text": "LIVE"
+        },
+        {
+          "canvas_font_em": 34.400001525878906,
+          "clear_samples": 5,
+          "clip_bounds": [
+            0.0,
+            0.0,
+            495.58441162109375,
+            180.0
+          ],
+          "elided": false,
+          "ink_bounds": [
+            216.6613006591797,
+            139.0,
+            359.66131591796875,
+            167.0
+          ],
+          "ink_clipped": false,
+          "projected_font_em_px": 9.002311706542969,
+          "sample_count": 5,
+          "slot": 5,
+          "text": "1000 km"
+        },
+        {
+          "canvas_font_em": 12.90000057220459,
+          "clear_samples": 5,
+          "clip_bounds": [
+            0.0,
+            0.0,
+            495.58441162109375,
+            180.0
+          ],
+          "elided": false,
+          "ink_bounds": [
+            213.6613006591797,
+            119.72000122070312,
+            316.66131591796875,
+            130.72000122070312
+          ],
+          "ink_clipped": false,
+          "projected_font_em_px": 3.2743237018585205,
+          "sample_count": 5,
+          "slot": 5,
+          "text": "SHIP RELATIVE"
+        }
+      ]
+    },
+    {
+      "view": "standing actual HangarView",
+      "rows": [
+        {
+          "canvas_font_em": 65.48060607910156,
+          "clear_samples": 5,
+          "clip_bounds": [
+            0.0,
+            0.0,
+            495.58441162109375,
+            180.0
+          ],
+          "elided": false,
+          "ink_bounds": [
+            12.0,
+            19.0,
+            204.0,
+            67.0
+          ],
+          "ink_clipped": false,
+          "projected_font_em_px": 20.749738693237305,
+          "sample_count": 5,
+          "slot": 5,
+          "text": "RADAR"
+        },
+        {
+          "canvas_font_em": 65.48060607910156,
+          "clear_samples": 5,
+          "clip_bounds": [
+            0.0,
+            0.0,
+            495.58441162109375,
+            180.0
+          ],
+          "elided": false,
+          "ink_bounds": [
+            337.27191162109375,
+            19.0,
+            484.27191162109375,
+            67.0
+          ],
+          "ink_clipped": false,
+          "projected_font_em_px": 22.56064796447754,
+          "sample_count": 5,
+          "slot": 5,
+          "text": "LIVE"
+        },
+        {
+          "canvas_font_em": 34.400001525878906,
+          "clear_samples": 5,
+          "clip_bounds": [
+            0.0,
+            0.0,
+            495.58441162109375,
+            180.0
+          ],
+          "elided": false,
+          "ink_bounds": [
+            216.6613006591797,
+            139.0,
+            359.66131591796875,
+            167.0
+          ],
+          "ink_clipped": false,
+          "projected_font_em_px": 12.884289741516113,
+          "sample_count": 5,
+          "slot": 5,
+          "text": "1000 km"
+        },
+        {
+          "canvas_font_em": 12.90000057220459,
+          "clear_samples": 5,
+          "clip_bounds": [
+            0.0,
+            0.0,
+            495.58441162109375,
+            180.0
+          ],
+          "elided": false,
+          "ink_bounds": [
+            213.6613006591797,
+            119.72000122070312,
+            316.66131591796875,
+            130.72000122070312
+          ],
+          "ink_clipped": false,
+          "projected_font_em_px": 4.649714469909668,
+          "sample_count": 5,
+          "slot": 5,
+          "text": "SHIP RELATIVE"
+        }
+      ]
+    }
+  ],
+  "offline_projection_report_sha256": "1113134219ecb9220d65a719a0d826c33f29f6d8f5b6b3e08f7fc10b4144377b",
+  "offline_projection": {
+    "camera": [
+      [
+        0.3322000205516815,
+        0.013500000350177288,
+        0.029999999329447746
+      ],
+      0.0,
+      0.0
+    ],
+    "scope": "Production radar offline state on unchanged actual App projection",
+    "text": [
+      {
+        "canvas_font_em": 65.48060607910156,
+        "clear_samples": 5,
+        "clip_bounds": [
+          0.0,
+          0.0,
+          495.58441162109375,
+          180.0
+        ],
+        "elided": false,
+        "ink_bounds": [
+          12.0,
+          19.0,
+          204.0,
+          67.0
+        ],
+        "ink_clipped": false,
+        "projected_font_em_px": 15.020833015441895,
+        "sample_count": 5,
+        "slot": 5,
+        "text": "RADAR"
+      },
+      {
+        "canvas_font_em": 65.48060607910156,
+        "clear_samples": 5,
+        "clip_bounds": [
+          0.0,
+          0.0,
+          495.58441162109375,
+          180.0
+        ],
+        "elided": false,
+        "ink_bounds": [
+          217.27191162109375,
+          18.0,
+          484.27191162109375,
+          68.0
+        ],
+        "ink_clipped": false,
+        "projected_font_em_px": 15.73475170135498,
+        "sample_count": 5,
+        "slot": 5,
+        "text": "OFFLINE"
+      },
+      {
+        "canvas_font_em": 34.400001525878906,
+        "clear_samples": 5,
+        "clip_bounds": [
+          0.0,
+          0.0,
+          495.58441162109375,
+          180.0
+        ],
+        "elided": false,
+        "ink_bounds": [
+          216.6613006591797,
+          139.0,
+          359.66131591796875,
+          167.0
+        ],
+        "ink_clipped": false,
+        "projected_font_em_px": 9.002311706542969,
+        "sample_count": 5,
+        "slot": 5,
+        "text": "1000 km"
+      },
+      {
+        "canvas_font_em": 12.90000057220459,
+        "clear_samples": 5,
+        "clip_bounds": [
+          0.0,
+          0.0,
+          495.58441162109375,
+          180.0
+        ],
+        "elided": false,
+        "ink_bounds": [
+          213.6613006591797,
+          119.72000122070312,
+          373.66131591796875,
+          131.72000122070312
+        ],
+        "ink_clipped": false,
+        "projected_font_em_px": 3.2958948612213135,
+        "sample_count": 5,
+        "slot": 5,
+        "text": "SHIP RELATIVE / LAST"
+      }
+    ]
+  },
+  "retained_contact_code_sha256": {
+    "projection": "fa60d32088603fbb5a7d92730cd6f9f1620a41267590a33ae39983ca703bb296",
+    "rings_and_contact_markers": "80f81a4640dc44184c90461412e8ef3149e009514a66a8be4073d375d46fc949",
+    "contact_filtering": "bfe56e9204a5f73d75e81dc5fc28b20a44a6b4b3cf68fd9da15ebfbb5b7de2ab"
+  },
+  "unchanged_production_sources_sha256": {
+    "crates/arkline-protocol/src/pioneer_docked.rs": "746e85e54e81320df7417fbe7f3889bd0dbbeeb87b55a90b4253bd2411a86c45",
+    "apps/server/src/docked_traversal.rs": "3da7184f243053c03f2b6a1a3d4c775124e66dc64378a84ee31bed11cff74745",
+    "apps/client/src/pioneer_docked_scene.rs": "dd2921a51f805c00a09a6c26506df0d9f8914933bb14503bf531f7a0230d2bbd",
+    "apps/client/src/cockpit_computer.rs": "853b803ee19e9505fefa979940aac0b0476793f3409d94ac2e43d6413f4c4dfd",
+    "apps/client/src/power_instrument.rs": "f41b87d3661184d2eaffcd63bc045a3d5c8b927770415c9ab981e8b1a1466152",
+    "apps/client/src/navigation_instrument.rs": "59c877fa8e1ec8f279cbe4ae9e2a85e2987b120cce92cbb7fff47792e27afb7d",
+    "apps/client/src/cockpit_maps.rs": "a2e30d43787ce34d32e3bc8d90c443eb33fb4f9a02b83af4fa905a6ecafb3d73",
+    "apps/client/src/cockpit_computer_integration_tests.rs": "67d34a35e0a41447eccc185fa21a8affa182727a840ce06478a8826c10a04a33"
+  },
+  "tests": {
+    "radar_textfit": {
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "log_sha256": "37ee82339f20c171188e5a2f3739488c59c403467a6249c7619294f05ce1c0d7"
+    },
+    "control_identity_commands": {
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "log_sha256": "4070a3db0a8931da433b2eee4c6cfd0b5616cb5ce36e155e8d468ebf48723aee"
+    },
+    "physical_input": {
+      "passed": 14,
+      "failed": 0,
+      "ignored": 1,
+      "log_sha256": "f7b1b19968a8b7fd590348e873ff624e513e6e6a758d37c387502b7d746dcc4c"
+    },
+    "map_regressions": {
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "log_sha256": "d75f3bf82c312612ebcda3ce76b2bce5b125a71dcfe6d254b3e390a5c965d52f"
+    },
+    "actual_runtime_five_instruments": {
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "log_sha256": "4ffa608d5a6078452434c9578d88a052de83fd1954f3dc69ee6a9c7ca7f792c2"
+    }
+  },
+  "final_source_files_sha256": {
+    "apps/client/src/cockpit_radar.rs": "a0b1e0f456c778ec4f955b5797074a76f6e43497fea7431de2aaeccac98525f1",
+    "apps/client/src/flight3d.rs": "d0a65cbcadcce2ca559e2d78d8149e7aad803320c5e774be6cfc4aaba8ff8c58",
+    "apps/client/src/hangar.rs": "0d2ef72756dc01e4d464679221799cf7b8599e199b560dee2674e0cecf1b8a4e",
+    "apps/client/src/lib.rs": "2947da3507ecd31a3f2adb4b71e539434aab789ae8196020dc645fc177b0e277",
+    "apps/client/src/pioneer_docked_gpu_tests.rs": "34b43f81e2568657d9ffd428ff76a64b27ebc38f912383d5f3b4f07fd1f4a5b5"
+  },
+  "limits": [
+    "Secondary legend 3.27 px seated / 4.65 px standing",
+    "Range 9.00 px seated / 12.88 px standing",
+    "Standing lower instruments partly off viewport",
+    "Exterior/background and concept fidelity unresolved",
+    "Power scope unchanged",
+    "No full-client run or remote CI lookup"
+  ]
+}
